@@ -316,52 +316,90 @@ patients_db = [
     {
         "id": "PAT002",
         "first_name": "Carlos",
-        "last_name": "Hernández López",
+        "paternal_surname": "Hernández",
+        "maternal_surname": "López",
         "full_name": "Carlos Hernández López",
         "date_of_birth": date(1978, 12, 3),
+        "place_of_birth": "Guadalajara, Jalisco",
         "age": 45,
         "gender": "Masculino",
+        "curp": "HELC781203HDFNPR05",
         "phone": "+52 555 234 5678",
         "email": "carlos.hernandez@email.com",
-        "address": "Calle Reforma 456, CDMX",
-        "curp": "HELC781203HDFNPR05",
+        "address": "Calle Reforma 456",
+        "neighborhood": "Centro",
+        "municipality": "Cuauhtémoc",
+        "state": "Ciudad de México",
+        "postal_code": "06000",
+        "civil_status": "casado",
+        "education_level": "secundaria_completa",
+        "occupation": "empleado",
+        "religion": "catolica",
         "insurance_type": "Seguro Popular",
         "insurance_number": "987654321",
+        "emergency_contact_name": "Ana Hernández",
+        "emergency_contact_phone": "+52 555 876 5432",
+        "emergency_contact_relationship": "Esposa",
+        "emergency_contact_address": "Calle Reforma 456, Col. Centro",
         "blood_type": "A+",
         "allergies": "Ninguna conocida",
         "chronic_conditions": "Hipertensión",
         "current_medications": "Losartán 50mg",
-        "emergency_contact_name": "Ana Hernández",
-        "emergency_contact_phone": "+52 555 876 5432",
-        "emergency_contact_relationship": "Esposa",
+        "previous_hospitalizations": "Ninguna",
+        "surgical_history": "Ninguna",
+        "family_history": "Hipertensión arterial (padre), Diabetes (abuela materna)",
+        "personal_pathological_history": "Hipertensión arterial diagnosticada en 2018",
+        "personal_non_pathological_history": "Niega tabaquismo y alcoholismo",
         "created_at": datetime(2024, 2, 10, 9, 15),
         "last_visit": datetime(2024, 8, 18, 11, 30),
+        "last_updated": datetime(2024, 8, 18, 11, 30),
+        "created_by": "Dr. García Martínez",
+        "updated_by": "Dr. García Martínez",
         "total_visits": 3,
         "status": "active"
     },
     {
         "id": "PAT003",
         "first_name": "Ana",
-        "last_name": "Rodríguez Martín",
+        "paternal_surname": "Rodríguez",
+        "maternal_surname": "Martín",
         "full_name": "Ana Rodríguez Martín",
         "date_of_birth": date(1992, 8, 22),
+        "place_of_birth": "Monterrey, Nuevo León",
         "age": 32,
         "gender": "Femenino",
+        "curp": "ROMA920822MDFDRN01",
         "phone": "+52 555 345 6789",
         "email": "ana.rodriguez@email.com",
-        "address": "Col. Roma Norte 789, CDMX",
-        "curp": "ROMA920822MDFDRN01",
+        "address": "Col. Roma Norte 789",
+        "neighborhood": "Roma Norte",
+        "municipality": "Cuauhtémoc",
+        "state": "Ciudad de México",
+        "postal_code": "06700",
+        "civil_status": "soltero",
+        "education_level": "universidad_completa",
+        "occupation": "profesionista",
+        "religion": "catolica",
         "insurance_type": "Privado",
         "insurance_number": "PRV123456",
+        "emergency_contact_name": "Luis Rodríguez",
+        "emergency_contact_phone": "+52 555 765 4321",
+        "emergency_contact_relationship": "Padre",
+        "emergency_contact_address": "Av. Universidad 234, Col. Narvarte",
         "blood_type": "B+",
         "allergies": "Aspirina",
         "chronic_conditions": "Ninguna",
         "current_medications": "Ninguna",
-        "emergency_contact_name": "Luis Rodríguez",
-        "emergency_contact_phone": "+52 555 765 4321",
-        "emergency_contact_relationship": "Padre",
+        "previous_hospitalizations": "Ninguna",
+        "surgical_history": "Ninguna",
+        "family_history": "Ninguna relevante",
+        "personal_pathological_history": "Ninguna",
+        "personal_non_pathological_history": "Niega tabaquismo, alcoholismo social ocasional",
         "created_at": datetime(2024, 3, 5, 16, 20),
         "last_visit": datetime(2024, 8, 15, 10, 15),
+        "last_updated": datetime(2024, 8, 15, 10, 15),
+        "created_by": "Dr. García Martínez",
+        "updated_by": "Dr. García Martínez",
         "total_visits": 2,
         "status": "active"
     }
@@ -681,15 +719,45 @@ async def update_patient(patient_id: str, patient_update: PatientCreate):
     today = date.today()
     age = today.year - patient_update.date_of_birth.year - ((today.month, today.day) < (patient_update.date_of_birth.month, patient_update.date_of_birth.day))
     
+    # Validate NOM-004 compliance
+    patient_data = patient_update.dict()
+    validation_errors = validate_nom_004_patient_data(patient_data)
+    
+    if validation_errors:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Datos no cumplen con NOM-004-SSA3-2012: {'; '.join(validation_errors)}"
+        )
+    
+    # Create full name (NOM-004 format)
+    full_name = f"{patient_update.first_name} {patient_update.paternal_surname}"
+    if patient_update.maternal_surname:
+        full_name += f" {patient_update.maternal_surname}"
+    
     # Update patient record
     updated_patient = {
         **patients_db[patient_index],
-        **patient_update.dict(),
-        "full_name": f"{patient_update.first_name} {patient_update.last_name}",
-        "age": age
+        **patient_data,
+        "full_name": full_name,
+        "age": age,
+        "last_updated": datetime.now(),
+        "updated_by": "Dr. García Martínez"  # In production, get from authenticated user
     }
     
     patients_db[patient_index] = updated_patient
+    
+    # Log audit trail (NOM-024 requirement)
+    log_audit_action(
+        user_id="DR001",
+        user_name="Dr. García Martínez",
+        action="UPDATE",
+        resource_type="PATIENT",
+        resource_id=patient_id,
+        details=f"Paciente actualizado: {full_name}",
+        old_values={"previous_data": patients_db[patient_index]},
+        new_values={"updated_data": updated_patient}
+    )
+    
     return PatientResponse(**updated_patient)
 
 @app.delete("/api/patients/{patient_id}")
@@ -737,24 +805,83 @@ def validate_nom_004_patient_data(patient_data: dict) -> List[str]:
     """Validate patient data against NOM-004-SSA3-2012 requirements"""
     errors = []
     
-    # Mandatory fields per NOM-004
+    # MANDATORY fields per NOM-004-SSA3-2012 Article 10
     required_fields = [
+        # Patient identification (mandatory)
         'first_name', 'paternal_surname', 'date_of_birth', 'gender', 'curp',
-        'phone', 'address', 'emergency_contact_name', 'emergency_contact_phone',
-        'emergency_contact_relationship'
+        
+        # Contact information (mandatory)
+        'phone', 'address',
+        
+        # Emergency contact (mandatory per NOM-004)
+        'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relationship',
+        
+        # Additional mandatory demographic data
+        'place_of_birth', 'civil_status', 'occupation'
     ]
     
     for field in required_fields:
-        if not patient_data.get(field):
-            errors.append(f"Campo obligatorio faltante: {field}")
+        if not patient_data.get(field) or str(patient_data.get(field)).strip() == '':
+            field_name_es = {
+                'first_name': 'Nombre(s)',
+                'paternal_surname': 'Apellido paterno',
+                'date_of_birth': 'Fecha de nacimiento',
+                'gender': 'Sexo',
+                'curp': 'CURP',
+                'phone': 'Teléfono',
+                'address': 'Domicilio',
+                'emergency_contact_name': 'Nombre del responsable',
+                'emergency_contact_phone': 'Teléfono del responsable',
+                'emergency_contact_relationship': 'Parentesco del responsable',
+                'place_of_birth': 'Lugar de nacimiento',
+                'civil_status': 'Estado civil',
+                'occupation': 'Ocupación'
+            }.get(field, field)
+            errors.append(f"Campo obligatorio faltante según NOM-004: {field_name_es}")
     
     # CURP validation (NOM-035 requirement)
-    if patient_data.get('curp') and not validate_curp(patient_data['curp']):
-        errors.append("CURP no válido según formato oficial")
+    if patient_data.get('curp'):
+        if not validate_curp(patient_data['curp']):
+            errors.append("CURP no válido según formato oficial mexicano")
     
-    # Patient identification validation (NOM-035)
+    # Patient identification validation (NOM-035) - Dual identifier requirement
     if not patient_data.get('first_name') or not patient_data.get('date_of_birth'):
-        errors.append("Identificación del paciente incompleta (se requiere nombre completo y fecha de nacimiento)")
+        errors.append("NOM-035: Se requiere identificación dual (nombre completo y fecha de nacimiento)")
+    
+    # Address completeness validation (NOM-004 requirement)
+    address_fields = ['address', 'municipality', 'state']
+    missing_address = [field for field in address_fields if not patient_data.get(field)]
+    if missing_address:
+        errors.append(f"Domicilio incompleto según NOM-004. Faltan: {', '.join(missing_address)}")
+    
+    # Age validation
+    if patient_data.get('date_of_birth'):
+        from datetime import date
+        birth_date = patient_data['date_of_birth']
+        if isinstance(birth_date, str):
+            try:
+                birth_date = datetime.strptime(birth_date, '%Y-%m-%d').date()
+            except ValueError:
+                errors.append("Formato de fecha de nacimiento inválido")
+        
+        if isinstance(birth_date, date):
+            today = date.today()
+            if birth_date > today:
+                errors.append("Fecha de nacimiento no puede ser futura")
+            
+            age = today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
+            if age > 120:
+                errors.append("Edad no válida (mayor a 120 años)")
+    
+    # Gender validation
+    valid_genders = ['Masculino', 'Femenino']
+    if patient_data.get('gender') and patient_data['gender'] not in valid_genders:
+        errors.append("Género debe ser 'Masculino' o 'Femenino'")
+    
+    # Phone validation (basic Mexican format)
+    phone = patient_data.get('phone', '')
+    if phone and not (phone.startswith('+52') or phone.startswith('52') or len(phone.replace(' ', '').replace('-', '')) >= 10):
+        errors.append("Formato de teléfono no válido para México")
     
     return errors
 
@@ -776,6 +903,30 @@ async def get_audit_logs(user_id: Optional[str] = None, action: Optional[str] = 
     logs.sort(key=lambda x: x["timestamp"], reverse=True)
     
     return [AuditLog(**log) for log in logs[:limit]]
+
+@app.get("/api/patients/{patient_id}/nom-validation")
+async def validate_patient_nom_compliance(patient_id: str):
+    """Validate specific patient against NOM requirements"""
+    patient = next((p for p in patients_db if p["id"] == patient_id), None)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Paciente no encontrado")
+    
+    validation_errors = validate_nom_004_patient_data(patient)
+    
+    return {
+        "patient_id": patient_id,
+        "patient_name": patient.get("full_name", ""),
+        "is_compliant": len(validation_errors) == 0,
+        "compliance_percentage": 0 if validation_errors else 100,
+        "validation_errors": validation_errors,
+        "missing_fields": [error.split(": ")[-1] for error in validation_errors if "Campo obligatorio faltante" in error],
+        "validation_date": datetime.now(),
+        "nom_standards": {
+            "nom_004": "Expediente clínico",
+            "nom_024": "Sistemas de información",
+            "nom_035": "Información en salud"
+        }
+    }
 
 @app.get("/api/nom-compliance/validation")
 async def check_nom_compliance():
