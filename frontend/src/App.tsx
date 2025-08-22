@@ -414,6 +414,7 @@ function App() {
     place_of_birth: '',
     birth_state_code: '',
     nationality: 'Mexicana',
+    internal_id: '',
     gender: '',
     curp: '',
     phone: '',
@@ -508,10 +509,11 @@ function App() {
       setPatientDialogOpen(false);
       fetchPatients();
       resetPatientForm();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving patient:', error);
       // Show error to user
-      alert('Error al guardar paciente: ' + (error.response?.data?.detail || error.message));
+      const errorMessage = error.response?.data?.detail || error.message || 'Error desconocido';
+      alert('Error al guardar paciente: ' + errorMessage);
     }
   };
 
@@ -524,6 +526,7 @@ function App() {
       place_of_birth: patient.place_of_birth,
       birth_state_code: patient.birth_state_code,
       nationality: patient.nationality,
+      internal_id: patient.internal_id || '',
       municipality: patient.municipality,
       state: patient.state,
       residence_state_code: patient.residence_state_code,
@@ -564,6 +567,7 @@ function App() {
       place_of_birth: '',
       birth_state_code: '',
       nationality: 'Mexicana',
+      internal_id: '',
       gender: '',
       curp: '',
       phone: '',
