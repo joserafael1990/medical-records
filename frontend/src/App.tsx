@@ -1610,6 +1610,47 @@ const formatDateTime = (dateString: string) => {
                 </FormControl>
               </Grid>
               
+              {/* NOM-024 Mandatory Birth Information */}
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  fullWidth
+                  label="Lugar de Nacimiento"
+                  value={patientFormData.place_of_birth}
+                  onChange={(e) => setPatientFormData({...patientFormData, place_of_birth: e.target.value})}
+                  required
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  fullWidth
+                  label="Código Estado Nacimiento"
+                  value={patientFormData.birth_state_code}
+                  onChange={(e) => setPatientFormData({...patientFormData, birth_state_code: e.target.value})}
+                  helperText="Código de 2 dígitos (ej: 09 para CDMX)"
+                  required
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  fullWidth
+                  label="Nacionalidad"
+                  value={patientFormData.nationality}
+                  onChange={(e) => setPatientFormData({...patientFormData, nationality: e.target.value})}
+                  required
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  fullWidth
+                  label="CURP"
+                  value={patientFormData.curp}
+                  onChange={(e) => setPatientFormData({...patientFormData, curp: e.target.value})}
+                  inputProps={{ maxLength: 18 }}
+                  helperText="Clave Única de Registro de Población"
+                  required
+                />
+              </Grid>
+              
               {/* Contact Information */}
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
@@ -1637,6 +1678,61 @@ const formatDateTime = (dateString: string) => {
                   onChange={(e) => setPatientFormData({...patientFormData, address: e.target.value})}
                   multiline
                   rows={2}
+                />
+              </Grid>
+              
+              {/* NOM-024 Mandatory Address Fields */}
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  fullWidth
+                  label="Municipio"
+                  value={patientFormData.municipality}
+                  onChange={(e) => setPatientFormData({...patientFormData, municipality: e.target.value})}
+                  required
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  fullWidth
+                  label="Estado"
+                  value={patientFormData.state}
+                  onChange={(e) => setPatientFormData({...patientFormData, state: e.target.value})}
+                  required
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  fullWidth
+                  label="Código Estado Residencia"
+                  value={patientFormData.residence_state_code}
+                  onChange={(e) => setPatientFormData({...patientFormData, residence_state_code: e.target.value})}
+                  helperText="Código de 2 dígitos (ej: 09 para CDMX)"
+                  required
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormControl fullWidth required>
+                  <InputLabel>Estado Civil</InputLabel>
+                  <Select
+                    value={patientFormData.civil_status}
+                    onChange={(e) => setPatientFormData({...patientFormData, civil_status: e.target.value})}
+                    label="Estado Civil"
+                  >
+                    <MenuItem value="soltero">Soltero/a</MenuItem>
+                    <MenuItem value="casado">Casado/a</MenuItem>
+                    <MenuItem value="divorciado">Divorciado/a</MenuItem>
+                    <MenuItem value="viudo">Viudo/a</MenuItem>
+                    <MenuItem value="union_libre">Unión Libre</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  fullWidth
+                  label="Ocupación"
+                  value={patientFormData.occupation}
+                  onChange={(e) => setPatientFormData({...patientFormData, occupation: e.target.value})}
+                  required
                 />
               </Grid>
               
