@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import AppBar from '@mui/material/AppBar';
@@ -28,12 +28,13 @@ import TableCell from '@mui/material/TableCell';
 import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
-import Tooltip from '@mui/material/Tooltip';
+
 import MenuItem from '@mui/material/MenuItem';
 import MenuList from '@mui/material/MenuList';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import IconButton from '@mui/material/IconButton';
+
 import Divider from '@mui/material/Divider';
 import {
   MedicalServices as MedicalIcon,
@@ -55,8 +56,7 @@ import {
   CalendarToday as CalendarIcon,
   AccessTime as TimeIcon,
   Edit as EditIcon,
-  Delete as DeleteIcon,
-  Visibility as ViewIcon,
+
   Phone as PhoneIcon,
   Email as EmailIcon,
   LocationOn as LocationIcon,
@@ -66,6 +66,11 @@ import {
   Medication as MedicationIcon
 } from '@mui/icons-material';
 import axios from 'axios';
+
+// Mexican States with Official INEGI Codes
+
+
+
 
 // Modern, elegant medical theme
 const theme = createTheme({
@@ -283,7 +288,6 @@ interface Patient {
   maternal_surname: string;
   full_name: string;
   date_of_birth: string;
-  place_of_birth: string;
   birth_state_code: string;
   nationality: string;
   internal_id?: string;
@@ -296,13 +300,12 @@ interface Patient {
   neighborhood?: string;
   municipality: string;
   state: string;
-  residence_state_code: string;
   postal_code?: string;
   civil_status?: string;
   education_level?: string;
   occupation?: string;
   religion?: string;
-  insurance_type: string;
+  insurance_type?: string;
   insurance_number?: string;
   emergency_contact_name: string;
   emergency_contact_phone: string;
@@ -314,9 +317,9 @@ interface Patient {
   blood_type?: string;
   previous_hospitalizations?: string;
   surgical_history?: string;
-  family_history?: string;
-  personal_pathological_history?: string;
-  personal_non_pathological_history?: string;
+  family_history: string;  // OBLIGATORIO NOM-004
+  personal_pathological_history: string;  // OBLIGATORIO NOM-004
+  personal_non_pathological_history: string;  // OBLIGATORIO NOM-004
   created_at: string;
   last_visit?: string;
   total_visits: number;
@@ -406,38 +409,62 @@ function App() {
   const [isEditingPatient, setIsEditingPatient] = useState(false);
   const [patientSearchTerm, setPatientSearchTerm] = useState('');
   const [selectedPatientData, setSelectedPatientData] = useState<CompletePatientData | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{[key: string]: string}>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [patientFormData, setPatientFormData] = useState({
+    // ===== CAMPOS OBLIGATORIOS NOM-004 =====
     first_name: '',
     paternal_surname: '',
     maternal_surname: '',
     date_of_birth: '',
-    place_of_birth: '',
+    gender: '',
+    address: '',
+    family_history: '',
+    personal_pathological_history: '',
+    personal_non_pathological_history: '',
+    
+    // ===== CAMPOS OPCIONALES =====
+    // Identificación adicional
     birth_state_code: '',
     nationality: 'Mexicana',
-    internal_id: '',
-    gender: '',
     curp: '',
+    internal_id: '',
+    
+    // Contacto adicional
     phone: '',
     email: '',
-    address: '',
+    neighborhood: '',
     municipality: '',
     state: '',
-    residence_state_code: '',
+    postal_code: '',
+    
+    // Datos sociodemográficos
     civil_status: '',
+    education_level: '',
     occupation: '',
-    insurance_type: 'Ninguno',
+    religion: '',
+    
+    // Seguro médico
+    insurance_type: '',
     insurance_number: '',
+    
+    // Contacto de emergencia
     emergency_contact_name: '',
     emergency_contact_phone: '',
     emergency_contact_relationship: '',
+    emergency_contact_address: '',
+    
+    // Historial médico adicional
     allergies: '',
     chronic_conditions: '',
     current_medications: '',
-    blood_type: ''
+    blood_type: '',
+    previous_hospitalizations: '',
+    surgical_history: ''
   });
 
   // Patient management functions
-  const fetchPatients = async () => {
+  const fetchPatients = useCallback(async () => {
     try {
       const response = await axios.get('http://localhost:8000/api/patients', {
         params: { search: patientSearchTerm }
@@ -461,12 +488,10 @@ function App() {
           first_name: 'María',
           paternal_surname: 'González',
           maternal_surname: 'Pérez',
-          place_of_birth: 'Ciudad de México, CDMX',
-          birth_state_code: '09',
+          birth_state_code: 'Ciudad de México',
           nationality: 'Mexicana',
           municipality: 'Benito Juárez',
           state: 'Ciudad de México',
-          residence_state_code: '09',
           full_name: 'María González Pérez',
           date_of_birth: '1985-05-15',
           age: 39,
@@ -484,6 +509,9 @@ function App() {
           emergency_contact_name: 'Juan González',
           emergency_contact_phone: '+52 555 987 6543',
           emergency_contact_relationship: 'Esposo',
+          family_history: 'Diabetes mellitus tipo 2 (madre), Hipertensión arterial (padre)',
+          personal_pathological_history: 'Diabetes mellitus tipo 2 diagnosticada en 2020',
+          personal_non_pathological_history: 'Niega tabaquismo, alcoholismo ocasional',
           created_at: '2024-01-15T10:30:00',
           last_visit: '2024-08-20T14:45:00',
           total_visits: 5,
@@ -491,66 +519,11 @@ function App() {
         }
       ]);
     }
-  };
+  }, [patientSearchTerm]);
 
-  const handlePatientSubmit = async () => {
-    try {
-      // Generate internal_id if creating new patient
-      const submitData = { ...patientFormData };
-      if (!isEditingPatient && !submitData.internal_id) {
-        submitData.internal_id = `INT${Date.now()}`;
-      }
-      
-      if (isEditingPatient && selectedPatient) {
-        await axios.put(`http://localhost:8000/api/patients/${selectedPatient.id}`, submitData);
-      } else {
-        await axios.post('http://localhost:8000/api/patients', submitData);
-      }
-      setPatientDialogOpen(false);
-      fetchPatients();
-      resetPatientForm();
-    } catch (error: any) {
-      console.error('Error saving patient:', error);
-      // Show error to user
-      const errorMessage = error.response?.data?.detail || error.message || 'Error desconocido';
-      alert('Error al guardar paciente: ' + errorMessage);
-    }
-  };
 
-  const handleEditPatient = (patient: Patient) => {
-    setSelectedPatient(patient);
-    setPatientFormData({
-      first_name: patient.first_name,
-      paternal_surname: patient.paternal_surname,
-      maternal_surname: patient.maternal_surname,
-      place_of_birth: patient.place_of_birth,
-      birth_state_code: patient.birth_state_code,
-      nationality: patient.nationality,
-      internal_id: patient.internal_id || '',
-      municipality: patient.municipality,
-      state: patient.state,
-      residence_state_code: patient.residence_state_code,
-      civil_status: patient.civil_status || '',
-      occupation: patient.occupation || '',
-      date_of_birth: patient.date_of_birth,
-      gender: patient.gender,
-      phone: patient.phone,
-      email: patient.email || '',
-      address: patient.address || '',
-      curp: patient.curp || '',
-      insurance_type: patient.insurance_type,
-      insurance_number: patient.insurance_number || '',
-      emergency_contact_name: patient.emergency_contact_name || '',
-      emergency_contact_phone: patient.emergency_contact_phone || '',
-      emergency_contact_relationship: patient.emergency_contact_relationship || '',
-      allergies: patient.allergies || '',
-      chronic_conditions: patient.chronic_conditions || '',
-      current_medications: patient.current_medications || '',
-      blood_type: patient.blood_type || ''
-    });
-    setIsEditingPatient(true);
-    setPatientDialogOpen(true);
-  };
+
+
 
   const handleNewPatient = () => {
     resetPatientForm();
@@ -559,37 +532,61 @@ function App() {
   };
 
   const resetPatientForm = () => {
-        setPatientFormData({
+    setPatientFormData({
+      // ===== CAMPOS OBLIGATORIOS NOM-004 =====
       first_name: '',
       paternal_surname: '',
       maternal_surname: '',
       date_of_birth: '',
-      place_of_birth: '',
+      gender: '',
+      address: '',
+      family_history: '',
+      personal_pathological_history: '',
+      personal_non_pathological_history: '',
+      
+      // ===== CAMPOS OPCIONALES =====
+      // Identificación adicional
       birth_state_code: '',
       nationality: 'Mexicana',
-      internal_id: '',
-      gender: '',
       curp: '',
+      internal_id: '',
+      
+      // Contacto adicional
       phone: '',
       email: '',
-      address: '',
+      neighborhood: '',
       municipality: '',
       state: '',
-      residence_state_code: '',
+      postal_code: '',
+      
+      // Datos sociodemográficos
       civil_status: '',
+      education_level: '',
       occupation: '',
-      insurance_type: 'Ninguno',
+      religion: '',
+      
+      // Seguro médico
+      insurance_type: '',
       insurance_number: '',
+      
+      // Contacto de emergencia
       emergency_contact_name: '',
       emergency_contact_phone: '',
       emergency_contact_relationship: '',
+      emergency_contact_address: '',
+      
+      // Historial médico adicional
       allergies: '',
       chronic_conditions: '',
       current_medications: '',
-      blood_type: ''
+      blood_type: '',
+      previous_hospitalizations: '',
+      surgical_history: ''
     });
-  setSelectedPatient(null);
-};
+    setSelectedPatient(null);
+    setFieldErrors({});
+    setIsSubmitting(false);
+  };
 
 // Fetch complete patient data
 const fetchCompletePatientData = async (patientId: string) => {
@@ -606,6 +603,183 @@ const handleViewPatientDetails = (patient: Patient) => {
   setSelectedPatient(patient);
   setActiveView('patient-detail');
   fetchCompletePatientData(patient.id);
+};
+
+// Validation function for required fields
+const validatePatientForm = () => {
+  const errors: {[key: string]: string} = {};
+  
+  // Mandatory fields according to NOM-004
+  if (!patientFormData.first_name.trim()) errors.first_name = 'Este campo es obligatorio';
+  if (!patientFormData.paternal_surname.trim()) errors.paternal_surname = 'Este campo es obligatorio';
+  if (!patientFormData.maternal_surname.trim()) errors.maternal_surname = 'Este campo es obligatorio';
+  if (!patientFormData.date_of_birth) errors.date_of_birth = 'Este campo es obligatorio';
+  if (!patientFormData.gender) errors.gender = 'Este campo es obligatorio';
+  if (!patientFormData.phone.trim()) errors.phone = 'Este campo es obligatorio';
+  if (!patientFormData.address.trim()) errors.address = 'Este campo es obligatorio';
+  if (!patientFormData.family_history.trim()) errors.family_history = 'Este campo es obligatorio';
+  if (!patientFormData.personal_pathological_history.trim()) errors.personal_pathological_history = 'Este campo es obligatorio';
+  if (!patientFormData.personal_non_pathological_history.trim()) errors.personal_non_pathological_history = 'Este campo es obligatorio';
+  
+  return errors;
+};
+
+// Clear error for a specific field when user starts typing
+const clearFieldError = (fieldName: string) => {
+  if (fieldErrors[fieldName]) {
+    setFieldErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[fieldName];
+      return newErrors;
+    });
+  }
+};
+
+// Handle patient form submission
+const handlePatientSubmit = async () => {
+  // Set submitting state
+  setIsSubmitting(true);
+  
+  // Validate required fields
+  const validationErrors = validatePatientForm();
+  setFieldErrors(validationErrors);
+  
+  if (Object.keys(validationErrors).length > 0) {
+    setIsSubmitting(false);
+    // No alert, errors are shown inline in the form
+    return;
+  }
+  
+  try {
+    // Prepare patient data for backend (only fields expected by PatientBase model)
+    const patientData = {
+      first_name: patientFormData.first_name,
+      paternal_surname: patientFormData.paternal_surname,
+      maternal_surname: patientFormData.maternal_surname,
+      date_of_birth: patientFormData.date_of_birth,
+      gender: patientFormData.gender,
+      place_of_birth: null, // Not included in frontend form
+      birth_state_code: patientFormData.birth_state_code || null,
+      nationality: patientFormData.nationality || "Mexicana",
+      curp: patientFormData.curp || null,
+      internal_id: patientFormData.internal_id || null,
+      phone: patientFormData.phone,
+      address: patientFormData.address,
+      email: patientFormData.email || null,
+      neighborhood: patientFormData.neighborhood || null,
+      municipality: patientFormData.municipality || null,
+      state: patientFormData.state || null,
+      postal_code: patientFormData.postal_code || null,
+      civil_status: patientFormData.civil_status || null,
+      education_level: patientFormData.education_level || null,
+      occupation: patientFormData.occupation || null,
+      religion: patientFormData.religion || null,
+      insurance_type: patientFormData.insurance_type || null,
+      insurance_number: patientFormData.insurance_number || null,
+      emergency_contact_name: patientFormData.emergency_contact_name || null,
+      emergency_contact_phone: patientFormData.emergency_contact_phone || null,
+      emergency_contact_relationship: patientFormData.emergency_contact_relationship || null,
+      emergency_contact_address: patientFormData.emergency_contact_address || null,
+      allergies: patientFormData.allergies || null,
+      chronic_conditions: patientFormData.chronic_conditions || null,
+      current_medications: patientFormData.current_medications || null,
+      blood_type: patientFormData.blood_type || null,
+      family_history: patientFormData.family_history,
+      personal_pathological_history: patientFormData.personal_pathological_history,
+      personal_non_pathological_history: patientFormData.personal_non_pathological_history,
+      previous_hospitalizations: patientFormData.previous_hospitalizations || null,
+      surgical_history: patientFormData.surgical_history || null
+    };
+    
+    if (isEditingPatient && selectedPatient) {
+      // Update existing patient
+      const response = await axios.put(`http://localhost:8000/api/patients/${selectedPatient.id}`, patientData);
+      if (response.status === 200) {
+        alert('✅ Paciente actualizado exitosamente');
+        fetchPatients();
+        setPatientDialogOpen(false);
+        resetPatientForm();
+        setFieldErrors({});
+      }
+    } else {
+      // Create new patient
+      const response = await axios.post('http://localhost:8000/api/patients', patientData);
+      if (response.status === 201) {
+        alert('✅ Paciente creado exitosamente');
+        fetchPatients();
+        setPatientDialogOpen(false);
+        resetPatientForm();
+        setFieldErrors({});
+      }
+    }
+  } catch (error: any) {
+    console.error('Error saving patient:', error);
+    const errorMessage = error.response?.data?.detail || 'Error al guardar el paciente. Por favor, verifica los datos e intenta nuevamente.';
+    alert(`❌ Error: ${errorMessage}`);
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+
+// Handle edit patient
+const handleEditPatient = (patient: Patient) => {
+  setPatientFormData({
+    // ===== CAMPOS OBLIGATORIOS NOM-004 =====
+    first_name: patient.first_name,
+    paternal_surname: patient.paternal_surname,
+    maternal_surname: patient.maternal_surname,
+    date_of_birth: patient.date_of_birth,
+    gender: patient.gender,
+    phone: patient.phone,
+    address: patient.address,
+    family_history: patient.family_history,
+    personal_pathological_history: patient.personal_pathological_history,
+    personal_non_pathological_history: patient.personal_non_pathological_history,
+    
+    // ===== CAMPOS OPCIONALES =====
+    // Identificación adicional
+    birth_state_code: patient.birth_state_code || '',
+    nationality: patient.nationality || '',
+    curp: patient.curp || '',
+    internal_id: patient.internal_id || '',
+    
+    // Contacto adicional
+    neighborhood: patient.neighborhood || '',
+    
+    // Datos demográficos
+    municipality: patient.municipality || '',
+    state: patient.state || '',
+    postal_code: patient.postal_code || '',
+    civil_status: patient.civil_status || '',
+    education_level: patient.education_level || '',
+    occupation: patient.occupation || '',
+    religion: patient.religion || '',
+    
+    // Seguro médico
+    insurance_type: patient.insurance_type || '',
+    insurance_number: patient.insurance_number || '',
+    
+    // Contacto de emergencia
+    emergency_contact_name: patient.emergency_contact_name || '',
+    emergency_contact_phone: patient.emergency_contact_phone || '',
+    emergency_contact_relationship: patient.emergency_contact_relationship || '',
+    emergency_contact_address: patient.emergency_contact_address || '',
+    
+    // Información médica adicional
+    blood_type: patient.blood_type || '',
+    allergies: patient.allergies || '',
+    chronic_conditions: patient.chronic_conditions || '',
+    current_medications: patient.current_medications || '',
+    previous_hospitalizations: patient.previous_hospitalizations || '',
+    surgical_history: patient.surgical_history || '',
+    
+    // Otros campos
+    email: patient.email || ''
+  });
+  
+  setSelectedPatient(patient);
+  setIsEditingPatient(true);
+  setPatientDialogOpen(true);
 };
 
 // Format date and time for display
@@ -659,7 +833,18 @@ const formatDateTime = (dateString: string) => {
     if (activeView === 'patients') {
       fetchPatients();
     }
-  }, [activeView, patientSearchTerm, fetchPatients]);
+  }, [activeView, fetchPatients]);
+
+  // Search patients with debounce
+  useEffect(() => {
+    if (activeView === 'patients') {
+      const timeoutId = setTimeout(() => {
+        fetchPatients();
+      }, 300); // 300ms debounce
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [patientSearchTerm, activeView, fetchPatients]);
 
   return (
     <ThemeProvider theme={theme}>
@@ -1250,12 +1435,16 @@ const formatDateTime = (dateString: string) => {
                             <TableCell sx={{ fontWeight: 600 }}>Seguro</TableCell>
                             <TableCell sx={{ fontWeight: 600 }}>Última Visita</TableCell>
                             <TableCell sx={{ fontWeight: 600 }}>Estado</TableCell>
-                            <TableCell align="center" sx={{ fontWeight: 600 }}>Acciones</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
                           {patients && Array.isArray(patients) && patients.map((patient) => (
-                            <TableRow key={patient.id} hover>
+                            <TableRow 
+                              key={patient.id} 
+                              hover
+                              onClick={() => handleEditPatient(patient)}
+                              sx={{ cursor: 'pointer' }}
+                            >
                               <TableCell>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                   <Avatar sx={{ bgcolor: 'primary.main' }}>
@@ -1287,10 +1476,12 @@ const formatDateTime = (dateString: string) => {
                               </TableCell>
                               <TableCell>
                                 <Chip 
-                                  label={patient.insurance_type}
+                                  label={patient.insurance_type || 'Sin seguro'}
                                   size="small"
                                   color={patient.insurance_type === 'IMSS' ? 'primary' : 
-                                         patient.insurance_type === 'Privado' ? 'success' : 'default'}
+                                         patient.insurance_type === 'Privado' ? 'success' : 
+                                         patient.insurance_type === 'ISSSTE' ? 'secondary' :
+                                         patient.insurance_type ? 'info' : 'default'}
                                   variant="outlined"
                                 />
                               </TableCell>
@@ -1312,38 +1503,11 @@ const formatDateTime = (dateString: string) => {
                                   color={patient.status === 'active' ? 'success' : 'default'}
                                 />
                               </TableCell>
-                              <TableCell align="center">
-                                <Box sx={{ display: 'flex', gap: 1 }}>
-                                  <Tooltip title="Ver detalles">
-                                    <IconButton 
-                                      size="small" 
-                                      color="primary"
-                                      onClick={() => handleViewPatientDetails(patient)}
-                                    >
-                                      <ViewIcon />
-                                    </IconButton>
-                                  </Tooltip>
-                                  <Tooltip title="Editar">
-                                    <IconButton 
-                                      size="small" 
-                                      color="secondary"
-                                      onClick={() => handleEditPatient(patient)}
-                                    >
-                                      <EditIcon />
-                                    </IconButton>
-                                  </Tooltip>
-                                  <Tooltip title="Eliminar">
-                                    <IconButton size="small" color="error">
-                                      <DeleteIcon />
-                                    </IconButton>
-                                  </Tooltip>
-                                </Box>
-                              </TableCell>
                             </TableRow>
                           ))}
                           {(!patients || !Array.isArray(patients) || patients.length === 0) && (
                             <TableRow>
-                              <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                              <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
                                 <Typography variant="body1" color="text.secondary">
                                   No hay pacientes registrados
                                 </Typography>
@@ -1374,7 +1538,7 @@ const formatDateTime = (dateString: string) => {
                       </Typography>
                       <Typography variant="body1" color="text.secondary">
                         {selectedPatientData.patient.age} años • {selectedPatientData.patient.gender} • 
-                        {selectedPatientData.patient.insurance_type} • 
+                        {selectedPatientData.patient.insurance_type || 'Sin seguro'} • 
                         {selectedPatientData.patient.total_visits} visitas
                       </Typography>
                     </Box>
@@ -1569,13 +1733,23 @@ const formatDateTime = (dateString: string) => {
           </DialogTitle>
           <DialogContent>
             <Grid container spacing={2} sx={{ mt: 1 }}>
-              {/* Basic Information */}
+              {/* SECCIÓN: INFORMACIÓN PERSONAL OBLIGATORIA - NOM-004 */}
+              <Grid size={{ xs: 12 }}>
+                <Typography variant="h6" sx={{ color: '#d32f2f', fontWeight: 'bold', mb: 2 }}>
+                  📋 DATOS OBLIGATORIOS
+                </Typography>
+              </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
-                  label="Nombre"
+                  label="Nombre(s)"
                   value={patientFormData.first_name}
-                  onChange={(e) => setPatientFormData({...patientFormData, first_name: e.target.value})}
+                  onChange={(e) => {
+                    setPatientFormData({...patientFormData, first_name: e.target.value});
+                    clearFieldError('first_name');
+                  }}
+                  error={!!fieldErrors.first_name}
+                  helperText={fieldErrors.first_name}
                   required
                 />
               </Grid>
@@ -1584,7 +1758,12 @@ const formatDateTime = (dateString: string) => {
                   fullWidth
                   label="Apellido Paterno"
                   value={patientFormData.paternal_surname}
-                  onChange={(e) => setPatientFormData({...patientFormData, paternal_surname: e.target.value})}
+                  onChange={(e) => {
+                    setPatientFormData({...patientFormData, paternal_surname: e.target.value});
+                    clearFieldError('paternal_surname');
+                  }}
+                  error={!!fieldErrors.paternal_surname}
+                  helperText={fieldErrors.paternal_surname}
                   required
                 />
               </Grid>
@@ -1593,7 +1772,12 @@ const formatDateTime = (dateString: string) => {
                   fullWidth
                   label="Apellido Materno"
                   value={patientFormData.maternal_surname}
-                  onChange={(e) => setPatientFormData({...patientFormData, maternal_surname: e.target.value})}
+                  onChange={(e) => {
+                    setPatientFormData({...patientFormData, maternal_surname: e.target.value});
+                    clearFieldError('maternal_surname');
+                  }}
+                  error={!!fieldErrors.maternal_surname}
+                  helperText={fieldErrors.maternal_surname}
                   required
                 />
               </Grid>
@@ -1603,170 +1787,254 @@ const formatDateTime = (dateString: string) => {
                   label="Fecha de Nacimiento"
                   type="date"
                   value={patientFormData.date_of_birth}
-                  onChange={(e) => setPatientFormData({...patientFormData, date_of_birth: e.target.value})}
+                  onChange={(e) => {
+                    setPatientFormData({...patientFormData, date_of_birth: e.target.value});
+                    clearFieldError('date_of_birth');
+                  }}
                   InputLabelProps={{ shrink: true }}
+                  error={!!fieldErrors.date_of_birth}
+                  helperText={fieldErrors.date_of_birth}
                   required
                 />
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
-                <FormControl fullWidth required>
+                <FormControl fullWidth required error={!!fieldErrors.gender}>
                   <InputLabel>Género</InputLabel>
                   <Select
                     value={patientFormData.gender}
-                    onChange={(e) => setPatientFormData({...patientFormData, gender: e.target.value})}
+                    onChange={(e) => {
+                      setPatientFormData({...patientFormData, gender: e.target.value});
+                      clearFieldError('gender');
+                    }}
                     label="Género"
                   >
                     <MenuItem value="Masculino">Masculino</MenuItem>
                     <MenuItem value="Femenino">Femenino</MenuItem>
                   </Select>
+                  {fieldErrors.gender && (
+                    <Typography variant="caption" color="error" sx={{ mt: 0.5, ml: 1.75 }}>
+                      {fieldErrors.gender}
+                    </Typography>
+                  )}
                 </FormControl>
               </Grid>
-              
-              {/* NOM-024 Mandatory Birth Information */}
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <TextField
-                  fullWidth
-                  label="Lugar de Nacimiento"
-                  value={patientFormData.place_of_birth}
-                  onChange={(e) => setPatientFormData({...patientFormData, place_of_birth: e.target.value})}
-                  required
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <TextField
-                  fullWidth
-                  label="Código Estado Nacimiento"
-                  value={patientFormData.birth_state_code}
-                  onChange={(e) => setPatientFormData({...patientFormData, birth_state_code: e.target.value})}
-                  helperText="Código de 2 dígitos (ej: 09 para CDMX)"
-                  required
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <TextField
-                  fullWidth
-                  label="Nacionalidad"
-                  value={patientFormData.nationality}
-                  onChange={(e) => setPatientFormData({...patientFormData, nationality: e.target.value})}
-                  required
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <TextField
-                  fullWidth
-                  label="CURP"
-                  value={patientFormData.curp}
-                  onChange={(e) => setPatientFormData({...patientFormData, curp: e.target.value})}
-                  inputProps={{ maxLength: 18 }}
-                  helperText="Clave Única de Registro de Población"
-                  required
-                />
-              </Grid>
-              
-              {/* Contact Information */}
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
                   label="Teléfono"
                   value={patientFormData.phone}
-                  onChange={(e) => setPatientFormData({...patientFormData, phone: e.target.value})}
+                  onChange={(e) => {
+                    setPatientFormData({...patientFormData, phone: e.target.value});
+                    clearFieldError('phone');
+                  }}
+                  error={!!fieldErrors.phone}
+                  helperText={fieldErrors.phone || "Requerido para notificaciones de WhatsApp"}
                   required
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <TextField
-                  fullWidth
-                  label="Email"
-                  type="email"
-                  value={patientFormData.email}
-                  onChange={(e) => setPatientFormData({...patientFormData, email: e.target.value})}
                 />
               </Grid>
               <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
-                  label="Dirección"
+                  label="Domicilio de Residencia"
                   value={patientFormData.address}
-                  onChange={(e) => setPatientFormData({...patientFormData, address: e.target.value})}
+                  onChange={(e) => {
+                    setPatientFormData({...patientFormData, address: e.target.value});
+                    clearFieldError('address');
+                  }}
                   multiline
                   rows={2}
+                  error={!!fieldErrors.address}
+                  helperText={fieldErrors.address || "Dirección completa donde reside actualmente (calle, número, colonia, localidad, municipio, estado)"}
+                  required
                 />
               </Grid>
               
-              {/* NOM-024 Mandatory Address Fields */}
-              <Grid size={{ xs: 12, sm: 6 }}>
+              {/* Antecedentes Médicos - NOM-004 Obligatorio */}
+              <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
-                  label="Municipio"
-                  value={patientFormData.municipality}
-                  onChange={(e) => setPatientFormData({...patientFormData, municipality: e.target.value})}
+                  label="Antecedentes Heredofamiliares"
+                  value={patientFormData.family_history}
+                  onChange={(e) => {
+                    setPatientFormData({...patientFormData, family_history: e.target.value});
+                    clearFieldError('family_history');
+                  }}
+                  multiline
+                  rows={3}
+                  error={!!fieldErrors.family_history}
+                  helperText={fieldErrors.family_history || "Enfermedades presentes en familiares directos"}
                   required
                 />
               </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
+              <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
-                  label="Estado"
-                  value={patientFormData.state}
-                  onChange={(e) => setPatientFormData({...patientFormData, state: e.target.value})}
+                  label="Antecedentes Personales Patológicos"
+                  value={patientFormData.personal_pathological_history}
+                  onChange={(e) => {
+                    setPatientFormData({...patientFormData, personal_pathological_history: e.target.value});
+                    clearFieldError('personal_pathological_history');
+                  }}
+                  multiline
+                  rows={3}
+                  error={!!fieldErrors.personal_pathological_history}
+                  helperText={fieldErrors.personal_pathological_history || "Enfermedades, cirugías, hospitalizaciones previas"}
                   required
                 />
               </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
+              <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
-                  label="Código Estado Residencia"
-                  value={patientFormData.residence_state_code}
-                  onChange={(e) => setPatientFormData({...patientFormData, residence_state_code: e.target.value})}
-                  helperText="Código de 2 dígitos (ej: 09 para CDMX)"
+                  label="Antecedentes Personales No Patológicos"
+                  value={patientFormData.personal_non_pathological_history}
+                  onChange={(e) => {
+                    setPatientFormData({...patientFormData, personal_non_pathological_history: e.target.value});
+                    clearFieldError('personal_non_pathological_history');
+                  }}
+                  multiline
+                  rows={3}
+                  error={!!fieldErrors.personal_non_pathological_history}
+                  helperText={fieldErrors.personal_non_pathological_history || "Hábitos: tabaquismo, alcoholismo, ejercicio, alimentación"}
                   required
                 />
               </Grid>
+              
+              {/* SECCIÓN: INFORMACIÓN OPCIONAL */}
+              <Grid size={{ xs: 12 }}>
+                <Typography variant="h6" sx={{ color: '#1976d2', fontWeight: 'bold', mt: 3, mb: 2 }}>
+                  📝 DATOS OPCIONALES
+                </Typography>
+              </Grid>
+
+              {/* Identificación Adicional */}
+              <Grid size={{ xs: 12 }}>
+                <Typography variant="subtitle1" sx={{ color: '#1976d2', fontWeight: 'bold', mb: 1 }}>
+                  Identificación Adicional
+                </Typography>
+              </Grid>
+              
+              {/* 1. Nacionalidad */}
               <Grid size={{ xs: 12, sm: 6 }}>
-                <FormControl fullWidth required>
-                  <InputLabel>Estado Civil</InputLabel>
+                <FormControl fullWidth>
+                  <InputLabel>Nacionalidad</InputLabel>
                   <Select
-                    value={patientFormData.civil_status}
-                    onChange={(e) => setPatientFormData({...patientFormData, civil_status: e.target.value})}
-                    label="Estado Civil"
+                    value={patientFormData.nationality}
+                    onChange={(e) => setPatientFormData({...patientFormData, nationality: e.target.value})}
+                    label="Nacionalidad"
                   >
-                    <MenuItem value="soltero">Soltero/a</MenuItem>
-                    <MenuItem value="casado">Casado/a</MenuItem>
-                    <MenuItem value="divorciado">Divorciado/a</MenuItem>
-                    <MenuItem value="viudo">Viudo/a</MenuItem>
-                    <MenuItem value="union_libre">Unión Libre</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <FormControl fullWidth required>
-                  <InputLabel>Ocupación</InputLabel>
-                  <Select
-                    value={patientFormData.occupation}
-                    onChange={(e) => setPatientFormData({...patientFormData, occupation: e.target.value})}
-                    label="Ocupación"
-                  >
-                    <MenuItem value="desempleado">Desempleado</MenuItem>
-                    <MenuItem value="estudiante">Estudiante</MenuItem>
-                    <MenuItem value="ama_de_casa">Ama de Casa</MenuItem>
-                    <MenuItem value="empleado">Empleado</MenuItem>
-                    <MenuItem value="profesionista">Profesionista</MenuItem>
-                    <MenuItem value="empresario">Empresario</MenuItem>
-                    <MenuItem value="jubilado">Jubilado</MenuItem>
-                    <MenuItem value="otro">Otro</MenuItem>
+                    <MenuItem value="Mexicana">Mexicana</MenuItem>
+                    <MenuItem value="Extranjera">Extranjera</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
               
-              {/* Medical Information */}
+              {/* 2. Estado de Nacimiento */}
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormControl fullWidth>
+                  <InputLabel>Estado de Nacimiento</InputLabel>
+                  <Select
+                    value={patientFormData.birth_state_code}
+                    onChange={(e) => setPatientFormData({...patientFormData, birth_state_code: e.target.value})}
+                    label="Estado de Nacimiento"
+                  >
+                    <MenuItem value="">--Seleccionar--</MenuItem>
+                    <MenuItem value="Aguascalientes">Aguascalientes</MenuItem>
+                    <MenuItem value="Baja California">Baja California</MenuItem>
+                    <MenuItem value="Baja California Sur">Baja California Sur</MenuItem>
+                    <MenuItem value="Campeche">Campeche</MenuItem>
+                    <MenuItem value="Chiapas">Chiapas</MenuItem>
+                    <MenuItem value="Chihuahua">Chihuahua</MenuItem>
+                    <MenuItem value="Ciudad de México">Ciudad de México</MenuItem>
+                    <MenuItem value="Coahuila">Coahuila</MenuItem>
+                    <MenuItem value="Colima">Colima</MenuItem>
+                    <MenuItem value="Durango">Durango</MenuItem>
+                    <MenuItem value="Estado de México">Estado de México</MenuItem>
+                    <MenuItem value="Guanajuato">Guanajuato</MenuItem>
+                    <MenuItem value="Guerrero">Guerrero</MenuItem>
+                    <MenuItem value="Hidalgo">Hidalgo</MenuItem>
+                    <MenuItem value="Jalisco">Jalisco</MenuItem>
+                    <MenuItem value="Michoacán">Michoacán</MenuItem>
+                    <MenuItem value="Morelos">Morelos</MenuItem>
+                    <MenuItem value="Nayarit">Nayarit</MenuItem>
+                    <MenuItem value="Nuevo León">Nuevo León</MenuItem>
+                    <MenuItem value="Oaxaca">Oaxaca</MenuItem>
+                    <MenuItem value="Puebla">Puebla</MenuItem>
+                    <MenuItem value="Querétaro">Querétaro</MenuItem>
+                    <MenuItem value="Quintana Roo">Quintana Roo</MenuItem>
+                    <MenuItem value="San Luis Potosí">San Luis Potosí</MenuItem>
+                    <MenuItem value="Sinaloa">Sinaloa</MenuItem>
+                    <MenuItem value="Sonora">Sonora</MenuItem>
+                    <MenuItem value="Tabasco">Tabasco</MenuItem>
+                    <MenuItem value="Tamaulipas">Tamaulipas</MenuItem>
+                    <MenuItem value="Tlaxcala">Tlaxcala</MenuItem>
+                    <MenuItem value="Veracruz">Veracruz</MenuItem>
+                    <MenuItem value="Yucatán">Yucatán</MenuItem>
+                    <MenuItem value="Zacatecas">Zacatecas</MenuItem>
+                    <MenuItem value="Extranjero">Extranjero</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              
+              {/* 3. Estado de Residencia */}
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormControl fullWidth>
+                  <InputLabel>Estado de Residencia</InputLabel>
+                  <Select
+                    value={patientFormData.state}
+                    onChange={(e) => setPatientFormData({...patientFormData, state: e.target.value})}
+                    label="Estado de Residencia"
+                  >
+                    <MenuItem value="Aguascalientes">Aguascalientes</MenuItem>
+                    <MenuItem value="Baja California">Baja California</MenuItem>
+                    <MenuItem value="Baja California Sur">Baja California Sur</MenuItem>
+                    <MenuItem value="Campeche">Campeche</MenuItem>
+                    <MenuItem value="Chiapas">Chiapas</MenuItem>
+                    <MenuItem value="Chihuahua">Chihuahua</MenuItem>
+                    <MenuItem value="Ciudad de México">Ciudad de México</MenuItem>
+                    <MenuItem value="Coahuila">Coahuila</MenuItem>
+                    <MenuItem value="Colima">Colima</MenuItem>
+                    <MenuItem value="Durango">Durango</MenuItem>
+                    <MenuItem value="Estado de México">Estado de México</MenuItem>
+                    <MenuItem value="Guanajuato">Guanajuato</MenuItem>
+                    <MenuItem value="Guerrero">Guerrero</MenuItem>
+                    <MenuItem value="Hidalgo">Hidalgo</MenuItem>
+                    <MenuItem value="Jalisco">Jalisco</MenuItem>
+                    <MenuItem value="Michoacán">Michoacán</MenuItem>
+                    <MenuItem value="Morelos">Morelos</MenuItem>
+                    <MenuItem value="Nayarit">Nayarit</MenuItem>
+                    <MenuItem value="Nuevo León">Nuevo León</MenuItem>
+                    <MenuItem value="Oaxaca">Oaxaca</MenuItem>
+                    <MenuItem value="Puebla">Puebla</MenuItem>
+                    <MenuItem value="Querétaro">Querétaro</MenuItem>
+                    <MenuItem value="Quintana Roo">Quintana Roo</MenuItem>
+                    <MenuItem value="San Luis Potosí">San Luis Potosí</MenuItem>
+                    <MenuItem value="Sinaloa">Sinaloa</MenuItem>
+                    <MenuItem value="Sonora">Sonora</MenuItem>
+                    <MenuItem value="Tabasco">Tabasco</MenuItem>
+                    <MenuItem value="Tamaulipas">Tamaulipas</MenuItem>
+                    <MenuItem value="Tlaxcala">Tlaxcala</MenuItem>
+                    <MenuItem value="Veracruz">Veracruz</MenuItem>
+                    <MenuItem value="Yucatán">Yucatán</MenuItem>
+                    <MenuItem value="Zacatecas">Zacatecas</MenuItem>
+                  </Select>
+                  <Typography variant="caption" sx={{ mt: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+                    Estado donde reside actualmente
+                  </Typography>
+                </FormControl>
+              </Grid>
+              
+              {/* 4. CURP */}
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
                   label="CURP"
                   value={patientFormData.curp}
                   onChange={(e) => setPatientFormData({...patientFormData, curp: e.target.value})}
+                  helperText="Clave Única de Registro de Población"
                 />
               </Grid>
+
+              {/* 5. Tipo de Seguro */}
               <Grid size={{ xs: 12, sm: 6 }}>
                 <FormControl fullWidth>
                   <InputLabel>Tipo de Seguro</InputLabel>
@@ -1775,32 +2043,92 @@ const formatDateTime = (dateString: string) => {
                     onChange={(e) => setPatientFormData({...patientFormData, insurance_type: e.target.value})}
                     label="Tipo de Seguro"
                   >
-                    <MenuItem value="Ninguno">Ninguno</MenuItem>
-                    <MenuItem value="IMSS">IMSS</MenuItem>
+                    <MenuItem value="">--Sin seguro--</MenuItem>
+                    <MenuItem value="IMSS">IMSS (Instituto Mexicano del Seguro Social)</MenuItem>
+                    <MenuItem value="ISSSTE">ISSSTE (Instituto de Seguridad y Servicios Sociales de los Trabajadores del Estado)</MenuItem>
+                    <MenuItem value="PEMEX">PEMEX</MenuItem>
+                    <MenuItem value="SEDENA">SEDENA (Secretaría de la Defensa Nacional)</MenuItem>
+                    <MenuItem value="SEMAR">SEMAR (Secretaría de Marina)</MenuItem>
                     <MenuItem value="Seguro Popular">Seguro Popular</MenuItem>
-                    <MenuItem value="Privado">Privado</MenuItem>
+                    <MenuItem value="INSABI">INSABI (Instituto de Salud para el Bienestar)</MenuItem>
+                    <MenuItem value="Privado">Seguro Privado</MenuItem>
+                    <MenuItem value="Otro">Otro</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              {/* Contacto de Emergencia */}
+              <Grid size={{ xs: 12 }}>
+                <Typography variant="subtitle1" sx={{ color: '#1976d2', fontWeight: 'bold', mt: 2, mb: 1 }}>
+                  Contacto de Emergencia
+                </Typography>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  fullWidth
+                  label="Nombre del Contacto"
+                  value={patientFormData.emergency_contact_name}
+                  onChange={(e) => setPatientFormData({...patientFormData, emergency_contact_name: e.target.value})}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  fullWidth
+                  label="Teléfono del Contacto"
+                  value={patientFormData.emergency_contact_phone}
+                  onChange={(e) => setPatientFormData({...patientFormData, emergency_contact_phone: e.target.value})}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormControl fullWidth>
+                  <InputLabel>Relación</InputLabel>
+                  <Select
+                    value={patientFormData.emergency_contact_relationship}
+                    onChange={(e) => setPatientFormData({...patientFormData, emergency_contact_relationship: e.target.value})}
+                    label="Relación"
+                  >
+                    <MenuItem value="Padre">Padre</MenuItem>
+                    <MenuItem value="Madre">Madre</MenuItem>
+                    <MenuItem value="Esposo">Esposo</MenuItem>
+                    <MenuItem value="Esposa">Esposa</MenuItem>
+                    <MenuItem value="Hijo">Hijo</MenuItem>
+                    <MenuItem value="Hija">Hija</MenuItem>
+                    <MenuItem value="Hermano">Hermano</MenuItem>
+                    <MenuItem value="Hermana">Hermana</MenuItem>
+                    <MenuItem value="Abuelo">Abuelo</MenuItem>
+                    <MenuItem value="Abuela">Abuela</MenuItem>
+                    <MenuItem value="Amigo">Amigo</MenuItem>
+                    <MenuItem value="Otro">Otro</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              {/* Información Médica Adicional */}
+              <Grid size={{ xs: 12 }}>
+                <Typography variant="subtitle1" sx={{ color: '#1976d2', fontWeight: 'bold', mt: 2, mb: 1 }}>
+                  Información Médica Adicional
+                </Typography>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormControl fullWidth>
+                  <InputLabel>Tipo de Sangre</InputLabel>
+                  <Select
+                    value={patientFormData.blood_type}
+                    onChange={(e) => setPatientFormData({...patientFormData, blood_type: e.target.value})}
+                    label="Tipo de Sangre"
+                  >
+                    <MenuItem value="A+">A+</MenuItem>
+                    <MenuItem value="A-">A-</MenuItem>
+                    <MenuItem value="B+">B+</MenuItem>
+                    <MenuItem value="B-">B-</MenuItem>
+                    <MenuItem value="AB+">AB+</MenuItem>
+                    <MenuItem value="AB-">AB-</MenuItem>
+                    <MenuItem value="O+">O+</MenuItem>
+                    <MenuItem value="O-">O-</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
-                <TextField
-                  fullWidth
-                  label="Número de Seguro"
-                  value={patientFormData.insurance_number}
-                  onChange={(e) => setPatientFormData({...patientFormData, insurance_number: e.target.value})}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <TextField
-                  fullWidth
-                  label="Tipo de Sangre"
-                  value={patientFormData.blood_type}
-                  onChange={(e) => setPatientFormData({...patientFormData, blood_type: e.target.value})}
-                />
-              </Grid>
-              
-              {/* Medical History */}
-              <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
                   label="Alergias"
@@ -1810,65 +2138,25 @@ const formatDateTime = (dateString: string) => {
                   rows={2}
                 />
               </Grid>
-              <Grid size={{ xs: 12 }}>
-                <TextField
-                  fullWidth
-                  label="Condiciones Crónicas"
-                  value={patientFormData.chronic_conditions}
-                  onChange={(e) => setPatientFormData({...patientFormData, chronic_conditions: e.target.value})}
-                  multiline
-                  rows={2}
-                />
-              </Grid>
-              <Grid size={{ xs: 12 }}>
-                <TextField
-                  fullWidth
-                  label="Medicamentos Actuales"
-                  value={patientFormData.current_medications}
-                  onChange={(e) => setPatientFormData({...patientFormData, current_medications: e.target.value})}
-                  multiline
-                  rows={2}
-                />
-              </Grid>
-              
-              {/* Emergency Contact */}
-              <Grid size={{ xs: 12 }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600, mt: 2, mb: 1 }}>
-                  Contacto de Emergencia
-                </Typography>
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <TextField
-                  fullWidth
-                  label="Nombre"
-                  value={patientFormData.emergency_contact_name}
-                  onChange={(e) => setPatientFormData({...patientFormData, emergency_contact_name: e.target.value})}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <TextField
-                  fullWidth
-                  label="Teléfono"
-                  value={patientFormData.emergency_contact_phone}
-                  onChange={(e) => setPatientFormData({...patientFormData, emergency_contact_phone: e.target.value})}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <TextField
-                  fullWidth
-                  label="Relación"
-                  value={patientFormData.emergency_contact_relationship}
-                  onChange={(e) => setPatientFormData({...patientFormData, emergency_contact_relationship: e.target.value})}
-                />
-              </Grid>
+
             </Grid>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setPatientDialogOpen(false)}>
+            <Button 
+              onClick={() => {
+                setPatientDialogOpen(false);
+                setFieldErrors({});
+              }}
+              disabled={isSubmitting}
+            >
               Cancelar
             </Button>
-            <Button onClick={handlePatientSubmit} variant="contained">
-              {isEditingPatient ? 'Actualizar' : 'Crear'} Paciente
+            <Button 
+              onClick={handlePatientSubmit} 
+              variant="contained"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Guardando...' : (isEditingPatient ? 'Actualizar' : 'Crear')} Paciente
             </Button>
           </DialogActions>
         </Dialog>
