@@ -58,4 +58,8 @@ build/
 # Temporary files
 tmp/
 temp/
+
+# Additional exclusions
 frontend/node_modules/
+backend/__pycache__/
+backend/**/__pycache__/

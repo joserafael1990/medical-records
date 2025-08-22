@@ -11,16 +11,13 @@ import Paper from '@mui/material/Paper';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import Button from '@mui/material/Button';
-import TextField from '@mui/material/TextField';
 import Chip from '@mui/material/Chip';
-import Alert from '@mui/material/Alert';
 import Avatar from '@mui/material/Avatar';
 import LinearProgress from '@mui/material/LinearProgress';
 import MenuItem from '@mui/material/MenuItem';
 import MenuList from '@mui/material/MenuList';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
-import Divider from '@mui/material/Divider';
 import IconButton from '@mui/material/IconButton';
 import {
   MedicalServices as MedicalIcon,
@@ -28,28 +25,19 @@ import {
   Description as DocumentIcon,
   People as PatientIcon,
   WhatsApp as WhatsAppIcon,
-  SmartToy as AIIcon,
   AccountCircle as ProfileIcon,
-  Mic as MicIcon,
-  Save as SaveIcon,
-  Send as SendIcon,
   CheckCircle as CheckIcon,
   Schedule as ScheduleIcon,
   Analytics as AnalyticsIcon,
   TrendingUp as TrendingUpIcon,
   Speed as SpeedIcon,
-  Assignment as AssignmentIcon,
   PersonAdd as PersonAddIcon,
   MessageOutlined as MessageIcon,
   NotificationsNone as NotificationIcon,
   SearchOutlined as SearchIcon,
   Add as AddIcon,
-  FilterList as FilterIcon,
-  MoreVert as MoreIcon,
   CalendarToday as CalendarIcon,
-  AccessTime as TimeIcon,
-  Place as LocationIcon,
-  Phone as PhoneIcon
+  AccessTime as TimeIcon
 } from '@mui/icons-material';
 import axios from 'axios';
 
@@ -245,15 +233,7 @@ const theme = createTheme({
         },
       },
     },
-    MuiTextField: {
-      styleOverrides: {
-        root: {
-          '& .MuiOutlinedInput-root': {
-            borderRadius: '12px',
-          },
-        },
-      },
-    },
+
   },
 });
 
