@@ -494,16 +494,24 @@ function App() {
 
   const handlePatientSubmit = async () => {
     try {
+      // Generate internal_id if creating new patient
+      const submitData = { ...patientFormData };
+      if (!isEditingPatient && !submitData.internal_id) {
+        submitData.internal_id = `INT${Date.now()}`;
+      }
+      
       if (isEditingPatient && selectedPatient) {
-        await axios.put(`http://localhost:8000/api/patients/${selectedPatient.id}`, patientFormData);
+        await axios.put(`http://localhost:8000/api/patients/${selectedPatient.id}`, submitData);
       } else {
-        await axios.post('http://localhost:8000/api/patients', patientFormData);
+        await axios.post('http://localhost:8000/api/patients', submitData);
       }
       setPatientDialogOpen(false);
       fetchPatients();
       resetPatientForm();
     } catch (error) {
       console.error('Error saving patient:', error);
+      // Show error to user
+      alert('Error al guardar paciente: ' + (error.response?.data?.detail || error.message));
     }
   };
 
@@ -1727,13 +1735,23 @@ const formatDateTime = (dateString: string) => {
                 </FormControl>
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
-                <TextField
-                  fullWidth
-                  label="Ocupación"
-                  value={patientFormData.occupation}
-                  onChange={(e) => setPatientFormData({...patientFormData, occupation: e.target.value})}
-                  required
-                />
+                <FormControl fullWidth required>
+                  <InputLabel>Ocupación</InputLabel>
+                  <Select
+                    value={patientFormData.occupation}
+                    onChange={(e) => setPatientFormData({...patientFormData, occupation: e.target.value})}
+                    label="Ocupación"
+                  >
+                    <MenuItem value="desempleado">Desempleado</MenuItem>
+                    <MenuItem value="estudiante">Estudiante</MenuItem>
+                    <MenuItem value="ama_de_casa">Ama de Casa</MenuItem>
+                    <MenuItem value="empleado">Empleado</MenuItem>
+                    <MenuItem value="profesionista">Profesionista</MenuItem>
+                    <MenuItem value="empresario">Empresario</MenuItem>
+                    <MenuItem value="jubilado">Jubilado</MenuItem>
+                    <MenuItem value="otro">Otro</MenuItem>
+                  </Select>
+                </FormControl>
               </Grid>
               
               {/* Medical Information */}
