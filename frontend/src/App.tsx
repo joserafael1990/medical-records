@@ -279,28 +279,51 @@ interface DashboardData {
 interface Patient {
   id: string;
   first_name: string;
-  last_name: string;
+  paternal_surname: string;
+  maternal_surname: string;
   full_name: string;
   date_of_birth: string;
+  place_of_birth: string;
+  birth_state_code: string;
+  nationality: string;
+  internal_id?: string;
   age: number;
   gender: string;
+  curp: string;
   phone: string;
   email?: string;
-  address?: string;
-  curp?: string;
+  address: string;
+  neighborhood?: string;
+  municipality: string;
+  state: string;
+  residence_state_code: string;
+  postal_code?: string;
+  civil_status?: string;
+  education_level?: string;
+  occupation?: string;
+  religion?: string;
   insurance_type: string;
   insurance_number?: string;
-  emergency_contact_name?: string;
-  emergency_contact_phone?: string;
-  emergency_contact_relationship?: string;
+  emergency_contact_name: string;
+  emergency_contact_phone: string;
+  emergency_contact_relationship: string;
+  emergency_contact_address?: string;
   allergies?: string;
   chronic_conditions?: string;
   current_medications?: string;
   blood_type?: string;
+  previous_hospitalizations?: string;
+  surgical_history?: string;
+  family_history?: string;
+  personal_pathological_history?: string;
+  personal_non_pathological_history?: string;
   created_at: string;
   last_visit?: string;
   total_visits: number;
   status: string;
+  last_updated?: string;
+  created_by?: string;
+  updated_by?: string;
 }
 
 // Medical record interfaces
@@ -385,13 +408,22 @@ function App() {
   const [selectedPatientData, setSelectedPatientData] = useState<CompletePatientData | null>(null);
   const [patientFormData, setPatientFormData] = useState({
     first_name: '',
-    last_name: '',
+    paternal_surname: '',
+    maternal_surname: '',
     date_of_birth: '',
+    place_of_birth: '',
+    birth_state_code: '',
+    nationality: 'Mexicana',
     gender: '',
+    curp: '',
     phone: '',
     email: '',
     address: '',
-    curp: '',
+    municipality: '',
+    state: '',
+    residence_state_code: '',
+    civil_status: '',
+    occupation: '',
     insurance_type: 'Ninguno',
     insurance_number: '',
     emergency_contact_name: '',
@@ -426,7 +458,14 @@ function App() {
         {
           id: 'PAT001',
           first_name: 'María',
-          last_name: 'González Pérez',
+          paternal_surname: 'González',
+          maternal_surname: 'Pérez',
+          place_of_birth: 'Ciudad de México, CDMX',
+          birth_state_code: '09',
+          nationality: 'Mexicana',
+          municipality: 'Benito Juárez',
+          state: 'Ciudad de México',
+          residence_state_code: '09',
           full_name: 'María González Pérez',
           date_of_birth: '1985-05-15',
           age: 39,
@@ -472,7 +511,16 @@ function App() {
     setSelectedPatient(patient);
     setPatientFormData({
       first_name: patient.first_name,
-      last_name: patient.last_name,
+      paternal_surname: patient.paternal_surname,
+      maternal_surname: patient.maternal_surname,
+      place_of_birth: patient.place_of_birth,
+      birth_state_code: patient.birth_state_code,
+      nationality: patient.nationality,
+      municipality: patient.municipality,
+      state: patient.state,
+      residence_state_code: patient.residence_state_code,
+      civil_status: patient.civil_status || '',
+      occupation: patient.occupation || '',
       date_of_birth: patient.date_of_birth,
       gender: patient.gender,
       phone: patient.phone,
@@ -500,15 +548,24 @@ function App() {
   };
 
   const resetPatientForm = () => {
-    setPatientFormData({
+        setPatientFormData({
       first_name: '',
-      last_name: '',
+      paternal_surname: '',
+      maternal_surname: '',
       date_of_birth: '',
+      place_of_birth: '',
+      birth_state_code: '',
+      nationality: 'Mexicana',
       gender: '',
+      curp: '',
       phone: '',
       email: '',
       address: '',
-      curp: '',
+      municipality: '',
+      state: '',
+      residence_state_code: '',
+      civil_status: '',
+      occupation: '',
       insurance_type: 'Ninguno',
       insurance_number: '',
       emergency_contact_name: '',
@@ -518,7 +575,7 @@ function App() {
       chronic_conditions: '',
       current_medications: '',
       blood_type: ''
-      });
+    });
   setSelectedPatient(null);
 };
 
@@ -1190,7 +1247,7 @@ const formatDateTime = (dateString: string) => {
                               <TableCell>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                   <Avatar sx={{ bgcolor: 'primary.main' }}>
-                                    {patient.first_name[0]}{patient.last_name[0]}
+                                    {patient.first_name[0]}{patient.paternal_surname[0]}
                                   </Avatar>
                                   <Box>
                                     <Typography variant="body1" sx={{ fontWeight: 500 }}>
@@ -1513,9 +1570,18 @@ const formatDateTime = (dateString: string) => {
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
-                  label="Apellidos"
-                  value={patientFormData.last_name}
-                  onChange={(e) => setPatientFormData({...patientFormData, last_name: e.target.value})}
+                  label="Apellido Paterno"
+                  value={patientFormData.paternal_surname}
+                  onChange={(e) => setPatientFormData({...patientFormData, paternal_surname: e.target.value})}
+                  required
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  fullWidth
+                  label="Apellido Materno"
+                  value={patientFormData.maternal_surname}
+                  onChange={(e) => setPatientFormData({...patientFormData, maternal_surname: e.target.value})}
                   required
                 />
               </Grid>
