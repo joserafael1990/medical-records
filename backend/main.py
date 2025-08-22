@@ -79,24 +79,28 @@ class Religion(str, Enum):
     OTHER = "otra"
     NONE = "ninguna"
 
-# Patient Data Models - NOM-004-SSA3-2012 Compliant
+# Patient Data Models - NOM-004/NOM-024-SSA3-2012 Compliant
 class PatientBase(BaseModel):
-    # Mandatory fields per NOM-004-SSA3-2012
+    # Mandatory fields per NOM-004-SSA3-2012 & NOM-024-SSA3-2012
     first_name: str  # Nombre(s)
-    paternal_surname: str  # Apellido paterno
-    maternal_surname: Optional[str] = None  # Apellido materno
+    paternal_surname: str  # Primer apellido (apellido paterno)
+    maternal_surname: str  # Segundo apellido (apellido materno) - MANDATORY per NOM-024
     date_of_birth: date  # Fecha de nacimiento
-    place_of_birth: Optional[str] = None  # Lugar de nacimiento
+    place_of_birth: str  # Lugar de nacimiento - MANDATORY per NOM-024
+    birth_state_code: str  # Clave de la entidad federativa de nacimiento - MANDATORY per NOM-024
     gender: str  # Sexo
+    nationality: str = "Mexicana"  # Nacionalidad - MANDATORY per NOM-024
     curp: str  # CURP (mandatory per NOM-035)
+    internal_id: Optional[str] = None  # Folio o número de identificación interno - MANDATORY per NOM-024
     
     # Contact information
     phone: str  # Teléfono
     email: Optional[str] = None
     address: str  # Domicilio completo
     neighborhood: Optional[str] = None  # Colonia
-    municipality: Optional[str] = None  # Municipio
-    state: Optional[str] = None  # Estado
+    municipality: str  # Municipio - MANDATORY per NOM-024
+    state: str  # Estado - MANDATORY per NOM-024
+    residence_state_code: str  # Clave de la entidad federativa de residencia - MANDATORY per NOM-024
     postal_code: Optional[str] = None  # Código postal
     
     # Sociodemographic data (NOM-004 requirements)
@@ -276,6 +280,9 @@ patients_db = [
         "full_name": "María González Pérez",
         "date_of_birth": date(1985, 5, 15),
         "place_of_birth": "Ciudad de México, CDMX",
+        "birth_state_code": "09",  # Código CDMX
+        "nationality": "Mexicana",
+        "internal_id": "INT001",
         "age": 39,
         "gender": "Femenino",
         "curp": "GOPM850515MDFNTR09",
@@ -285,6 +292,7 @@ patients_db = [
         "neighborhood": "Del Valle",
         "municipality": "Benito Juárez",
         "state": "Ciudad de México",
+        "residence_state_code": "09",  # Código CDMX
         "postal_code": "03100",
         "civil_status": "casado",
         "education_level": "universidad_completa",
@@ -321,6 +329,9 @@ patients_db = [
         "full_name": "Carlos Hernández López",
         "date_of_birth": date(1978, 12, 3),
         "place_of_birth": "Guadalajara, Jalisco",
+        "birth_state_code": "14",  # Código Jalisco
+        "nationality": "Mexicana",
+        "internal_id": "INT002",
         "age": 45,
         "gender": "Masculino",
         "curp": "HELC781203HDFNPR05",
@@ -330,6 +341,7 @@ patients_db = [
         "neighborhood": "Centro",
         "municipality": "Cuauhtémoc",
         "state": "Ciudad de México",
+        "residence_state_code": "09",  # Código CDMX (reside aquí)
         "postal_code": "06000",
         "civil_status": "casado",
         "education_level": "secundaria_completa",
@@ -366,6 +378,9 @@ patients_db = [
         "full_name": "Ana Rodríguez Martín",
         "date_of_birth": date(1992, 8, 22),
         "place_of_birth": "Monterrey, Nuevo León",
+        "birth_state_code": "19",  # Código Nuevo León
+        "nationality": "Mexicana",
+        "internal_id": "INT003",
         "age": 32,
         "gender": "Femenino",
         "curp": "ROMA920822MDFDRN01",
@@ -375,6 +390,7 @@ patients_db = [
         "neighborhood": "Roma Norte",
         "municipality": "Cuauhtémoc",
         "state": "Ciudad de México",
+        "residence_state_code": "09",  # Código CDMX (reside aquí)
         "postal_code": "06700",
         "civil_status": "soltero",
         "education_level": "universidad_completa",
@@ -805,35 +821,45 @@ def validate_nom_004_patient_data(patient_data: dict) -> List[str]:
     """Validate patient data against NOM-004-SSA3-2012 requirements"""
     errors = []
     
-    # MANDATORY fields per NOM-004-SSA3-2012 Article 10
+    # MANDATORY fields per NOM-004-SSA3-2012 & NOM-024-SSA3-2012
     required_fields = [
-        # Patient identification (mandatory)
-        'first_name', 'paternal_surname', 'date_of_birth', 'gender', 'curp',
+        # Patient identification (mandatory per NOM-004 & NOM-024)
+        'first_name', 'paternal_surname', 'maternal_surname', 'date_of_birth', 'gender', 'curp',
+        
+        # NOM-024 mandatory identification fields
+        'place_of_birth', 'birth_state_code', 'nationality', 'internal_id',
         
         # Contact information (mandatory)
-        'phone', 'address',
+        'phone', 'address', 'municipality', 'state', 'residence_state_code',
         
         # Emergency contact (mandatory per NOM-004)
         'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relationship',
         
-        # Additional mandatory demographic data
-        'place_of_birth', 'civil_status', 'occupation'
+        # Additional mandatory demographic data (NOM-004)
+        'civil_status', 'occupation'
     ]
     
     for field in required_fields:
         if not patient_data.get(field) or str(patient_data.get(field)).strip() == '':
             field_name_es = {
                 'first_name': 'Nombre(s)',
-                'paternal_surname': 'Apellido paterno',
+                'paternal_surname': 'Primer apellido (paterno)',
+                'maternal_surname': 'Segundo apellido (materno)',
                 'date_of_birth': 'Fecha de nacimiento',
                 'gender': 'Sexo',
                 'curp': 'CURP',
+                'place_of_birth': 'Lugar de nacimiento',
+                'birth_state_code': 'Clave de entidad federativa de nacimiento',
+                'nationality': 'Nacionalidad',
+                'internal_id': 'Folio de identificación interno',
                 'phone': 'Teléfono',
                 'address': 'Domicilio',
+                'municipality': 'Municipio',
+                'state': 'Estado',
+                'residence_state_code': 'Clave de entidad federativa de residencia',
                 'emergency_contact_name': 'Nombre del responsable',
                 'emergency_contact_phone': 'Teléfono del responsable',
                 'emergency_contact_relationship': 'Parentesco del responsable',
-                'place_of_birth': 'Lugar de nacimiento',
                 'civil_status': 'Estado civil',
                 'occupation': 'Ocupación'
             }.get(field, field)
@@ -848,11 +874,29 @@ def validate_nom_004_patient_data(patient_data: dict) -> List[str]:
     if not patient_data.get('first_name') or not patient_data.get('date_of_birth'):
         errors.append("NOM-035: Se requiere identificación dual (nombre completo y fecha de nacimiento)")
     
-    # Address completeness validation (NOM-004 requirement)
-    address_fields = ['address', 'municipality', 'state']
+    # Address completeness validation (NOM-004 & NOM-024 requirements)
+    address_fields = ['address', 'municipality', 'state', 'residence_state_code']
     missing_address = [field for field in address_fields if not patient_data.get(field)]
     if missing_address:
-        errors.append(f"Domicilio incompleto según NOM-004. Faltan: {', '.join(missing_address)}")
+        field_names = {
+            'address': 'domicilio',
+            'municipality': 'municipio', 
+            'state': 'estado',
+            'residence_state_code': 'clave de entidad federativa de residencia'
+        }
+        missing_names = [field_names.get(field, field) for field in missing_address]
+        errors.append(f"Domicilio incompleto según NOM-004/NOM-024. Faltan: {', '.join(missing_names)}")
+    
+    # Birth place validation (NOM-024 requirement)
+    birth_fields = ['place_of_birth', 'birth_state_code']
+    missing_birth = [field for field in birth_fields if not patient_data.get(field)]
+    if missing_birth:
+        field_names = {
+            'place_of_birth': 'lugar de nacimiento',
+            'birth_state_code': 'clave de entidad federativa de nacimiento'
+        }
+        missing_names = [field_names.get(field, field) for field in missing_birth]
+        errors.append(f"Datos de nacimiento incompletos según NOM-024. Faltan: {', '.join(missing_names)}")
     
     # Age validation
     if patient_data.get('date_of_birth'):
