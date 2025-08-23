@@ -44,6 +44,7 @@ interface UseConsultationManagerReturn {
 
 const initialFormData: ConsultationFormData = {
   patient_id: '',
+  date: '',
   chief_complaint: '',
   history_present_illness: '',
   physical_examination: '',
@@ -154,6 +155,7 @@ export const useConsultationManager = (): UseConsultationManagerReturn => {
     // Populate form with consultation data
     setConsultationFormData({
       patient_id: consultation.patient_id || '',
+      date: consultation.date || '',
       chief_complaint: consultation.chief_complaint || '',
       history_present_illness: consultation.history_present_illness || '',
       physical_examination: consultation.physical_examination || '',

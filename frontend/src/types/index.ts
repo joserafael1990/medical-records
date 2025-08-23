@@ -240,6 +240,7 @@ export interface PatientFormData {
 
 export interface ConsultationFormData {
   patient_id: string;
+  date: string;
   chief_complaint: string;
   history_present_illness: string;
   physical_examination: string;

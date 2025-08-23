@@ -46,6 +46,7 @@ import {
   PatientDialog,
   ConsultationDialog
 } from './components/lazy';
+import { ConsultationDetailView } from './components';
 import { LoadingFallback } from './components';
 import { Patient } from './types';
 import {
@@ -387,6 +388,29 @@ function App() {
   const [consultationSearchTerm, setConsultationSearchTerm] = useState('');
   const [consultationDialogOpen, setConsultationDialogOpen] = useState(false);
   const [isEditingConsultation, setIsEditingConsultation] = useState(false);
+  const [selectedConsultation, setSelectedConsultation] = useState<any>(null);
+  const [consultationDetailView, setConsultationDetailView] = useState(false);
+  const [consultationFormData, setConsultationFormData] = useState({
+    patient_id: '',
+    date: '',
+    chief_complaint: '',
+    history_present_illness: '',
+    physical_examination: '',
+    primary_diagnosis: '',
+    primary_diagnosis_cie10: '',
+    secondary_diagnoses: '',
+    secondary_diagnoses_cie10: '',
+    treatment_plan: '',
+    therapeutic_plan: '',
+    follow_up_instructions: '',
+    prognosis: '',
+    laboratory_results: '',
+    imaging_studies: '',
+    interconsultations: '',
+    doctor_name: '',
+    doctor_professional_license: '',
+    doctor_specialty: ''
+  });
 
   // Agenda management state
   const [appointments, setAppointments] = useState<any[]>([]);
@@ -647,16 +671,207 @@ const handleViewPatientDetails = (patient: Patient) => {
   setActiveView('patient-detail');
 };
 
-// Consultation handlers (basic implementation)
-const handleNewConsultation = () => {
-  setConsultationDialogOpen(true);
+// Consultation handlers (enhanced implementation)
+const handleNewConsultation = useCallback(() => {
+  setSelectedConsultation(null);
   setIsEditingConsultation(false);
-};
-
-const handleEditConsultation = (consultation: any) => {
+  setConsultationFormData({
+    patient_id: '',
+    date: new Date().toISOString().slice(0, 16),
+    chief_complaint: '',
+    history_present_illness: '',
+    physical_examination: '',
+    primary_diagnosis: '',
+    primary_diagnosis_cie10: '',
+    secondary_diagnoses: '',
+    secondary_diagnoses_cie10: '',
+    treatment_plan: '',
+    therapeutic_plan: '',
+    follow_up_instructions: '',
+    prognosis: '',
+    laboratory_results: '',
+    imaging_studies: '',
+    interconsultations: '',
+    doctor_name: '',
+    doctor_professional_license: '',
+    doctor_specialty: ''
+  });
   setConsultationDialogOpen(true);
+  setFormErrorMessage('');
+  setConsultationDetailView(false);
+}, []);
+
+const handleEditConsultation = useCallback((consultation: any) => {
+  setSelectedConsultation(consultation);
   setIsEditingConsultation(true);
-};
+  setConsultationFormData({
+    patient_id: consultation.patient_id || '',
+    date: consultation.date || '',
+    chief_complaint: consultation.chief_complaint || '',
+    history_present_illness: consultation.history_present_illness || '',
+    physical_examination: consultation.physical_examination || '',
+    primary_diagnosis: consultation.primary_diagnosis || '',
+    primary_diagnosis_cie10: consultation.primary_diagnosis_cie10 || '',
+    secondary_diagnoses: consultation.secondary_diagnoses || '',
+    secondary_diagnoses_cie10: consultation.secondary_diagnoses_cie10 || '',
+    treatment_plan: consultation.treatment_plan || '',
+    therapeutic_plan: consultation.therapeutic_plan || '',
+    follow_up_instructions: consultation.follow_up_instructions || '',
+    prognosis: consultation.prognosis || '',
+    laboratory_results: consultation.laboratory_results || '',
+    imaging_studies: consultation.imaging_studies || '',
+    interconsultations: consultation.interconsultations || '',
+    doctor_name: consultation.doctor_name || '',
+    doctor_professional_license: consultation.doctor_professional_license || '',
+    doctor_specialty: consultation.doctor_specialty || ''
+  });
+  setConsultationDialogOpen(true);
+  setFormErrorMessage('');
+  setConsultationDetailView(false);
+}, []);
+
+// Handle view consultation
+const handleViewConsultation = useCallback((consultation: any) => {
+  setSelectedConsultation(consultation);
+  setConsultationDetailView(true);
+}, []);
+
+// Handle print consultation
+const handlePrintConsultation = useCallback((consultation: any) => {
+  // Create a print-friendly version
+  const printWindow = window.open('', '_blank');
+  if (printWindow) {
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Consulta Médica - ${consultation.patient_name}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            .header { text-align: center; margin-bottom: 30px; }
+            .section { margin-bottom: 20px; }
+            .label { font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Consulta Médica</h1>
+            <p>Fecha: ${new Date(consultation.date).toLocaleDateString('es-MX')}</p>
+            <p>Paciente: ${consultation.patient_name}</p>
+          </div>
+          <div class="section">
+            <div class="label">Motivo de Consulta:</div>
+            <p>${consultation.chief_complaint}</p>
+          </div>
+          <div class="section">
+            <div class="label">Historia de la Enfermedad Actual:</div>
+            <p>${consultation.history_present_illness}</p>
+          </div>
+          <div class="section">
+            <div class="label">Exploración Física:</div>
+            <p>${consultation.physical_examination}</p>
+          </div>
+          <div class="section">
+            <div class="label">Diagnóstico Principal:</div>
+            <p>${consultation.primary_diagnosis}</p>
+          </div>
+          <div class="section">
+            <div class="label">Plan de Tratamiento:</div>
+            <p>${consultation.treatment_plan}</p>
+          </div>
+          <div class="section">
+            <div class="label">Instrucciones de Seguimiento:</div>
+            <p>${consultation.follow_up_instructions}</p>
+          </div>
+          <div class="section">
+            <div class="label">Doctor:</div>
+            <p>${consultation.doctor_name} - Cédula: ${consultation.doctor_professional_license}</p>
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+  }
+}, []);
+
+// Fetch consultations from API
+const fetchConsultations = useCallback(async () => {
+  try {
+    const response = await fetch(`http://localhost:8000/api/consultations?patient_search=${consultationSearchTerm}`);
+    if (response.ok) {
+      const data = await response.json();
+      setConsultations(data);
+    } else {
+      console.error('Error fetching consultations:', response.statusText);
+    }
+  } catch (error) {
+    console.error('Error fetching consultations:', error);
+  }
+}, [consultationSearchTerm]);
+
+// Handle delete consultation
+const handleDeleteConsultation = useCallback(async (consultation: any) => {
+  if (!window.confirm(`¿Estás seguro de que deseas eliminar la consulta de ${consultation.patient_name}?`)) {
+    return;
+  }
+  
+  try {
+    // TODO: Implement delete API call when backend is ready
+    console.log('Delete consultation:', consultation);
+    showSuccessMessage(`Consulta de ${consultation.patient_name} eliminada exitosamente`);
+    fetchConsultations(); // Refresh the list
+  } catch (error) {
+    console.error('Error deleting consultation:', error);
+    setFormErrorMessage('Error al eliminar la consulta');
+  }
+}, [fetchConsultations]);
+
+// Handle back from consultation detail
+const handleBackFromConsultationDetail = useCallback(() => {
+  setConsultationDetailView(false);
+  setSelectedConsultation(null);
+}, []);
+
+// Handle consultation form submission
+const handleConsultationSubmit = useCallback(async () => {
+  setIsSubmitting(true);
+  setFormErrorMessage('');
+  
+  try {
+    const url = isEditingConsultation 
+      ? `http://localhost:8000/api/consultations/${selectedConsultation?.id}`
+      : 'http://localhost:8000/api/consultations';
+    
+    const method = isEditingConsultation ? 'PUT' : 'POST';
+    
+    const response = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(consultationFormData),
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      showSuccessMessage(
+        isEditingConsultation 
+          ? 'Consulta actualizada exitosamente' 
+          : 'Consulta creada exitosamente'
+      );
+      setConsultationDialogOpen(false);
+      fetchConsultations(); // Refresh the list
+    } else {
+      const errorData = await response.json();
+      setFormErrorMessage(errorData.detail || 'Error al guardar la consulta');
+    }
+  } catch (error) {
+    console.error('Error saving consultation:', error);
+    setFormErrorMessage('Error de conexión al guardar la consulta');
+  } finally {
+    setIsSubmitting(false);
+  }
+}, [consultationFormData, isEditingConsultation, selectedConsultation, fetchConsultations]);
 
 // Appointment handlers (basic implementation)
 const handleNewAppointment = () => {
@@ -1057,6 +1272,24 @@ const formatDateTime = (dateString: string) => {
     }
   }, [patientSearchTerm, activeView]); // Remove fetchPatients dependency
 
+  // Fetch consultations when view changes to consultations
+  useEffect(() => {
+    if (activeView === 'consultations') {
+      fetchConsultations();
+    }
+  }, [activeView, fetchConsultations]);
+
+  // Debounced consultation search
+  useEffect(() => {
+    if (activeView === 'consultations' && consultationSearchTerm !== undefined) {
+      const timeoutId = setTimeout(() => {
+        fetchConsultations();
+      }, 500); // 500ms debounce
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [consultationSearchTerm, activeView]);
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -1266,6 +1499,54 @@ const formatDateTime = (dateString: string) => {
                   </MenuItem>
                   
                   <MenuItem 
+                    selected={activeView === 'consultations'}
+                    onClick={() => setActiveView('consultations')}
+                      sx={{ 
+                        borderRadius: '12px', 
+                        mb: 1,
+                        '&.Mui-selected': {
+                          backgroundColor: 'primary.main',
+                          color: 'white',
+                          '& .MuiListItemIcon-root': {
+                            color: 'white'
+                          }
+                        }
+                      }}
+                  >
+                    <ListItemIcon>
+                        <MedicalIcon />
+                    </ListItemIcon>
+                      <ListItemText 
+                        primary="Consultas" 
+                        primaryTypographyProps={{ fontWeight: 500 }}
+                      />
+                  </MenuItem>
+                  
+                  <MenuItem 
+                    selected={activeView === 'agenda'}
+                    onClick={() => setActiveView('agenda')}
+                      sx={{ 
+                        borderRadius: '12px', 
+                        mb: 1,
+                        '&.Mui-selected': {
+                          backgroundColor: 'primary.main',
+                          color: 'white',
+                          '& .MuiListItemIcon-root': {
+                            color: 'white'
+                          }
+                        }
+                      }}
+                  >
+                    <ListItemIcon>
+                        <CalendarIcon />
+                    </ListItemIcon>
+                      <ListItemText 
+                        primary="Agenda" 
+                        primaryTypographyProps={{ fontWeight: 500 }}
+                      />
+                  </MenuItem>
+                  
+                  <MenuItem 
                     selected={activeView === 'whatsapp'}
                     onClick={() => setActiveView('whatsapp')}
                       sx={{ 
@@ -1372,7 +1653,7 @@ const formatDateTime = (dateString: string) => {
                 </Suspense>
               )}
 
-              {activeView === 'consultations' && (
+              {activeView === 'consultations' && !consultationDetailView && (
                 <Suspense fallback={<LoadingFallback message="Cargando consultas..." />}>
                   <ConsultationsView
                     consultations={consultations}
@@ -1380,6 +1661,20 @@ const formatDateTime = (dateString: string) => {
                     setConsultationSearchTerm={setConsultationSearchTerm}
                     handleNewConsultation={handleNewConsultation}
                     handleEditConsultation={handleEditConsultation}
+                    handleViewConsultation={handleViewConsultation}
+                    handlePrintConsultation={handlePrintConsultation}
+                    handleDeleteConsultation={handleDeleteConsultation}
+                  />
+                </Suspense>
+              )}
+
+              {activeView === 'consultations' && consultationDetailView && selectedConsultation && (
+                <Suspense fallback={<LoadingFallback message="Cargando detalles..." />}>
+                  <ConsultationDetailView
+                    consultation={selectedConsultation}
+                    onBack={handleBackFromConsultationDetail}
+                    onEdit={handleEditConsultation}
+                    onPrint={handlePrintConsultation}
                   />
                 </Suspense>
               )}
@@ -1667,6 +1962,27 @@ const formatDateTime = (dateString: string) => {
             setFormErrorMessage={setFormErrorMessage}
             isSubmitting={isSubmitting}
             onDelete={isEditingPatient ? handleDeletePatient : undefined}
+          />
+        </Suspense>
+
+        {/* Consultation Dialog */}
+        <Suspense fallback={<LoadingFallback message="Cargando formulario de consulta..." />}>
+          <ConsultationDialog
+            open={consultationDialogOpen}
+            onClose={() => {
+              setConsultationDialogOpen(false);
+              setFormErrorMessage('');
+              setFieldErrors({});
+            }}
+            isEditing={isEditingConsultation}
+            formData={consultationFormData}
+            setFormData={setConsultationFormData}
+            onSubmit={handleConsultationSubmit}
+            patients={patients}
+            formErrorMessage={formErrorMessage}
+            setFormErrorMessage={setFormErrorMessage}
+            isSubmitting={isSubmitting}
+            fieldErrors={fieldErrors}
           />
         </Suspense>
       </Box>

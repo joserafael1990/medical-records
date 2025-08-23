@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -11,8 +11,32 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Typography
+  Typography,
+  Grid,
+  Divider,
+  Chip,
+  Avatar,
+  IconButton,
+  Stepper,
+  Step,
+  StepLabel,
+  StepContent,
+  Paper,
+  Autocomplete,
+  Alert,
+  Collapse
 } from '@mui/material';
+import {
+  Close as CloseIcon,
+  Person as PersonIcon,
+  Assignment as AssignmentIcon,
+  Healing as HealingIcon,
+  Medication as MedicationIcon,
+  Schedule as ScheduleIcon,
+  NavigateNext as NextIcon,
+  NavigateBefore as BackIcon,
+  Save as SaveIcon
+} from '@mui/icons-material';
 import { Patient, ConsultationFormData } from '../../types';
 import { ErrorRibbon } from '../common/ErrorRibbon';
 
@@ -27,6 +51,7 @@ interface ConsultationDialogProps {
   formErrorMessage: string;
   setFormErrorMessage: (message: string) => void;
   isSubmitting: boolean;
+  fieldErrors?: { [key: string]: string };
 }
 
 const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
@@ -39,11 +64,398 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   patients,
   formErrorMessage,
   setFormErrorMessage,
-  isSubmitting
+  isSubmitting,
+  fieldErrors = {}
 }) => {
+  const [activeStep, setActiveStep] = useState(0);
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+
+  const steps = [
+    {
+      label: 'Información del Paciente',
+      icon: <PersonIcon />,
+      description: 'Selecciona el paciente y fecha de consulta'
+    },
+    {
+      label: 'Evaluación Clínica',
+      icon: <AssignmentIcon />,
+      description: 'Motivo de consulta y exploración física'
+    },
+    {
+      label: 'Diagnóstico',
+      icon: <HealingIcon />,
+      description: 'Diagnósticos principal y secundarios'
+    },
+    {
+      label: 'Tratamiento',
+      icon: <MedicationIcon />,
+      description: 'Plan de tratamiento y seguimiento'
+    }
+  ];
+
+  useEffect(() => {
+    if (formData.patient_id) {
+      const patient = patients.find(p => p.id === formData.patient_id);
+      setSelectedPatient(patient || null);
+    }
+  }, [formData.patient_id, patients]);
+
   const handleClose = () => {
     onClose();
     setFormErrorMessage('');
+    setActiveStep(0);
+  };
+
+  const handleNext = () => {
+    setActiveStep((prevActiveStep) => prevActiveStep + 1);
+  };
+
+  const handleBack = () => {
+    setActiveStep((prevActiveStep) => prevActiveStep - 1);
+  };
+
+  const handlePatientChange = (patient: Patient | null) => {
+    if (patient) {
+      setFormData(prev => ({ ...prev, patient_id: patient.id }));
+      setSelectedPatient(patient);
+    }
+  };
+
+  const isStepValid = (step: number) => {
+    switch (step) {
+      case 0:
+        return formData.patient_id && formData.date;
+      case 1:
+        return formData.chief_complaint && formData.history_present_illness && formData.physical_examination;
+      case 2:
+        return formData.primary_diagnosis;
+      case 3:
+        return formData.treatment_plan && formData.follow_up_instructions && formData.doctor_name && formData.doctor_professional_license;
+      default:
+        return false;
+    }
+  };
+
+  const canProceed = isStepValid(activeStep);
+
+  const renderStepContent = (step: number) => {
+    switch (step) {
+      case 0:
+        return (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {/* Patient Selection */}
+            <Autocomplete
+              options={patients}
+              getOptionLabel={(option) => option.full_name}
+              value={selectedPatient}
+              onChange={(_, newValue) => handlePatientChange(newValue)}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Seleccionar Paciente"
+                  required
+                  error={!!fieldErrors.patient_id}
+                  helperText={fieldErrors.patient_id}
+                />
+              )}
+              renderOption={(props, option) => (
+                <Box component="li" {...props}>
+                  <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
+                    {option.first_name[0]}{option.paternal_surname[0]}
+                  </Avatar>
+                  <Box>
+                    <Typography variant="body1">{option.full_name}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {option.phone} • {option.email}
+                    </Typography>
+                  </Box>
+                </Box>
+              )}
+            />
+
+            {/* Selected Patient Info */}
+            {selectedPatient && (
+              <Paper sx={{ p: 2, bgcolor: 'primary.50', border: '1px solid', borderColor: 'primary.200' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Avatar sx={{ bgcolor: 'primary.main', width: 48, height: 48 }}>
+                    {selectedPatient.first_name[0]}{selectedPatient.paternal_surname[0]}
+                  </Avatar>
+                  <Box>
+                    <Typography variant="h6">{selectedPatient.full_name}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {selectedPatient.phone} • {selectedPatient.email}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Paper>
+            )}
+
+            {/* Date and Time */}
+            <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+              <Box sx={{ flex: 1 }}>
+                <TextField
+                  label="Fecha de Consulta"
+                  type="date"
+                  value={formData.date ? formData.date.split('T')[0] : ''}
+                  onChange={(e) => {
+                    const dateValue = e.target.value;
+                    const timeValue = formData.date ? formData.date.split('T')[1] : '09:00:00';
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      date: `${dateValue}T${timeValue}` 
+                    }));
+                  }}
+                  InputLabelProps={{ shrink: true }}
+                  fullWidth
+                  required
+                  error={!!fieldErrors.date}
+                  helperText={fieldErrors.date}
+                />
+              </Box>
+              <Box sx={{ flex: 1 }}>
+                <TextField
+                  label="Hora"
+                  type="time"
+                  value={formData.date ? formData.date.split('T')[1]?.substring(0, 5) : '09:00'}
+                  onChange={(e) => {
+                    const timeValue = e.target.value;
+                    const dateValue = formData.date ? formData.date.split('T')[0] : new Date().toISOString().split('T')[0];
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      date: `${dateValue}T${timeValue}:00` 
+                    }));
+                  }}
+                  InputLabelProps={{ shrink: true }}
+                  fullWidth
+                  required
+                />
+              </Box>
+            </Box>
+          </Box>
+        );
+
+      case 1:
+        return (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <TextField
+              label="Motivo de Consulta"
+              multiline
+              rows={3}
+              value={formData.chief_complaint || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, chief_complaint: e.target.value }))}
+              fullWidth
+              required
+              placeholder="¿Por qué viene el paciente a consulta?"
+              error={!!fieldErrors.chief_complaint}
+              helperText={fieldErrors.chief_complaint || "Describe el motivo principal de la consulta"}
+            />
+
+            <TextField
+              label="Historia de la Enfermedad Actual"
+              multiline
+              rows={4}
+              value={formData.history_present_illness || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, history_present_illness: e.target.value }))}
+              fullWidth
+              required
+              placeholder="Evolución y características de la enfermedad actual..."
+              error={!!fieldErrors.history_present_illness}
+              helperText={fieldErrors.history_present_illness || "Describe cronológicamente la evolución de los síntomas"}
+            />
+
+            <TextField
+              label="Exploración Física"
+              multiline
+              rows={4}
+              value={formData.physical_examination || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, physical_examination: e.target.value }))}
+              fullWidth
+              required
+              placeholder="Hallazgos de la exploración física..."
+              error={!!fieldErrors.physical_examination}
+              helperText={fieldErrors.physical_examination || "Incluye signos vitales, inspección, palpación, percusión y auscultación"}
+            />
+          </Box>
+        );
+
+      case 2:
+        return (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <HealingIcon color="primary" />
+              Diagnóstico Principal
+            </Typography>
+            
+            <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+              <Box sx={{ flex: 2 }}>
+                <TextField
+                  label="Diagnóstico Principal"
+                  value={formData.primary_diagnosis || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, primary_diagnosis: e.target.value }))}
+                  fullWidth
+                  required
+                  placeholder="Diagnóstico principal"
+                  error={!!fieldErrors.primary_diagnosis}
+                  helperText={fieldErrors.primary_diagnosis}
+                />
+              </Box>
+              <Box sx={{ flex: 1 }}>
+                <TextField
+                  label="Código CIE-10"
+                  value={formData.primary_diagnosis_cie10 || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, primary_diagnosis_cie10: e.target.value }))}
+                  fullWidth
+                  placeholder="A00.0"
+                  helperText="Código de clasificación internacional"
+                />
+              </Box>
+            </Box>
+
+            <Divider />
+
+            <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <HealingIcon color="secondary" />
+              Diagnósticos Secundarios (Opcional)
+            </Typography>
+
+            <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+              <Box sx={{ flex: 2 }}>
+                <TextField
+                  label="Diagnósticos Secundarios"
+                  value={formData.secondary_diagnoses || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, secondary_diagnoses: e.target.value }))}
+                  fullWidth
+                  placeholder="Diagnósticos secundarios"
+                  helperText="Condiciones adicionales o comorbilidades"
+                />
+              </Box>
+              <Box sx={{ flex: 1 }}>
+                <TextField
+                  label="Código CIE-10"
+                  value={formData.secondary_diagnoses_cie10 || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, secondary_diagnoses_cie10: e.target.value }))}
+                  fullWidth
+                  placeholder="B00.0"
+                />
+              </Box>
+            </Box>
+
+            <TextField
+              label="Pronóstico"
+              multiline
+              rows={2}
+              value={formData.prognosis || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, prognosis: e.target.value }))}
+              fullWidth
+              placeholder="Pronóstico esperado del paciente..."
+              helperText="Evolución esperada de la condición"
+            />
+          </Box>
+        );
+
+      case 3:
+        return (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <TextField
+              label="Plan de Tratamiento"
+              multiline
+              rows={4}
+              value={formData.treatment_plan || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, treatment_plan: e.target.value }))}
+              fullWidth
+              required
+              placeholder="Medicamentos, dosis, frecuencia, duración..."
+              error={!!fieldErrors.treatment_plan}
+              helperText={fieldErrors.treatment_plan || "Incluye medicamentos, terapias, recomendaciones"}
+            />
+
+            <TextField
+              label="Instrucciones de Seguimiento"
+              multiline
+              rows={3}
+              value={formData.follow_up_instructions || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, follow_up_instructions: e.target.value }))}
+              fullWidth
+              required
+              placeholder="Cuándo regresar, qué vigilar, recomendaciones..."
+              error={!!fieldErrors.follow_up_instructions}
+              helperText={fieldErrors.follow_up_instructions || "Próxima cita, signos de alarma, cuidados"}
+            />
+
+            <Divider />
+
+            <Typography variant="h6">Información del Médico</Typography>
+            
+            <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+              <Box sx={{ flex: 1 }}>
+                <TextField
+                  label="Nombre del Doctor"
+                  value={formData.doctor_name || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, doctor_name: e.target.value }))}
+                  fullWidth
+                  required
+                  error={!!fieldErrors.doctor_name}
+                  helperText={fieldErrors.doctor_name}
+                />
+              </Box>
+              <Box sx={{ flex: 1 }}>
+                <TextField
+                  label="Cédula Profesional"
+                  value={formData.doctor_professional_license || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, doctor_professional_license: e.target.value }))}
+                  fullWidth
+                  required
+                  error={!!fieldErrors.doctor_professional_license}
+                  helperText={fieldErrors.doctor_professional_license}
+                />
+              </Box>
+            </Box>
+
+            <TextField
+              label="Especialidad"
+              value={formData.doctor_specialty || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, doctor_specialty: e.target.value }))}
+              fullWidth
+              placeholder="Medicina General, Cardiología, etc."
+            />
+
+            <Divider />
+
+            <Typography variant="h6">Información Adicional (Opcional)</Typography>
+
+            <TextField
+              label="Resultados de Laboratorio"
+              multiline
+              rows={2}
+              value={formData.laboratory_results || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, laboratory_results: e.target.value }))}
+              fullWidth
+              placeholder="Resultados de estudios de laboratorio..."
+            />
+
+            <TextField
+              label="Estudios de Imagen"
+              multiline
+              rows={2}
+              value={formData.imaging_studies || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, imaging_studies: e.target.value }))}
+              fullWidth
+              placeholder="Resultados de estudios de imagen..."
+            />
+
+            <TextField
+              label="Interconsultas"
+              value={formData.interconsultations || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, interconsultations: e.target.value }))}
+              fullWidth
+              placeholder="Interconsultas solicitadas..."
+            />
+          </Box>
+        );
+
+      default:
+        return null;
+    }
   };
 
   return (
@@ -52,235 +464,134 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       onClose={handleClose}
       maxWidth="lg"
       fullWidth
+      PaperProps={{
+        sx: { borderRadius: '16px', minHeight: '70vh' }
+      }}
     >
-      <DialogTitle>
-        {isEditing ? 'Editar Consulta' : 'Nueva Consulta'}
+      <DialogTitle sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        pb: 2,
+        borderBottom: '1px solid',
+        borderColor: 'divider'
+      }}>
+        <Box>
+          <Typography variant="h5" sx={{ fontWeight: 600 }}>
+            {isEditing ? 'Editar Consulta' : 'Nueva Consulta Médica'}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {steps[activeStep].description}
+          </Typography>
+        </Box>
+        <IconButton onClick={handleClose} sx={{ color: 'text.secondary' }}>
+          <CloseIcon />
+        </IconButton>
       </DialogTitle>
 
-      {/* Error Message Ribbon */}
-      {formErrorMessage && (
-        <ErrorRibbon 
-          message={formErrorMessage} 
-          onClose={() => setFormErrorMessage('')} 
-        />
-      )}
+      <DialogContent sx={{ p: 0 }}>
+        {/* Error Message */}
+        <Collapse in={!!formErrorMessage}>
+          <Alert severity="error" sx={{ m: 3, mb: 0 }}>
+            {formErrorMessage}
+          </Alert>
+        </Collapse>
 
-      <DialogContent>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 2 }}>
-          
-          {/* Patient Selection - Only for new consultations */}
-          {!isEditing && (
-            <FormControl fullWidth>
-              <InputLabel>Paciente</InputLabel>
-              <Select
-                value={formData.patient_id || ''}
-                onChange={(e) => setFormData(prev => ({ ...prev, patient_id: e.target.value }))}
-                label="Paciente"
-              >
-                {patients.map((patient) => (
-                  <MenuItem key={patient.id} value={patient.id}>
-                    {patient.first_name} {patient.paternal_surname} {patient.maternal_surname}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          )}
-
-          {/* NOM-004 Required Fields */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Typography variant="h6" sx={{ color: 'primary.main', fontWeight: 600 }}>
-              Información de la Consulta (NOM-004)
-            </Typography>
-
-            <TextField
-              label="Motivo de la Consulta *"
-              multiline
-              rows={2}
-              value={formData.chief_complaint}
-              onChange={(e) => setFormData(prev => ({ ...prev, chief_complaint: e.target.value }))}
-              fullWidth
-              helperText="Razón principal por la que el paciente acude a consulta"
-            />
-
-            <TextField
-              label="Historia de la Enfermedad Actual *"
-              multiline
-              rows={3}
-              value={formData.history_present_illness}
-              onChange={(e) => setFormData(prev => ({ ...prev, history_present_illness: e.target.value }))}
-              fullWidth
-              helperText="Descripción detallada de los síntomas actuales"
-            />
-
-            <TextField
-              label="Exploración Física *"
-              multiline
-              rows={3}
-              value={formData.physical_examination}
-              onChange={(e) => setFormData(prev => ({ ...prev, physical_examination: e.target.value }))}
-              fullWidth
-              helperText="Hallazgos del examen físico"
-            />
+        <Box sx={{ display: 'flex', minHeight: '500px' }}>
+          {/* Stepper Sidebar */}
+          <Box sx={{ 
+            width: 280, 
+            bgcolor: 'grey.50', 
+            borderRight: '1px solid', 
+            borderColor: 'divider',
+            p: 3
+          }}>
+            <Stepper activeStep={activeStep} orientation="vertical">
+              {steps.map((step, index) => (
+                <Step key={step.label}>
+                  <StepLabel
+                    StepIconComponent={() => (
+                      <Avatar
+                        sx={{
+                          bgcolor: index <= activeStep ? 'primary.main' : 'grey.300',
+                          color: 'white',
+                          width: 32,
+                          height: 32
+                        }}
+                      >
+                        {index < activeStep ? <SaveIcon fontSize="small" /> : step.icon}
+                      </Avatar>
+                    )}
+                  >
+                    <Typography variant="body2" sx={{ fontWeight: index === activeStep ? 600 : 400 }}>
+                      {step.label}
+                    </Typography>
+                  </StepLabel>
+                </Step>
+              ))}
+            </Stepper>
           </Box>
 
-          {/* Diagnosis Section */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Typography variant="h6" sx={{ color: 'primary.main', fontWeight: 600 }}>
-              Diagnóstico
+          {/* Content Area */}
+          <Box sx={{ flex: 1, p: 3 }}>
+            <Typography variant="h6" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
+              {steps[activeStep].icon}
+              {steps[activeStep].label}
             </Typography>
-
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField
-                label="Diagnóstico Principal *"
-                value={formData.primary_diagnosis}
-                onChange={(e) => setFormData(prev => ({ ...prev, primary_diagnosis: e.target.value }))}
-                sx={{ flex: 2 }}
-              />
-              <TextField
-                label="Código CIE-10"
-                value={formData.primary_diagnosis_cie10}
-                onChange={(e) => setFormData(prev => ({ ...prev, primary_diagnosis_cie10: e.target.value }))}
-                sx={{ flex: 1 }}
-                helperText="Ej: G44.2"
-              />
-            </Box>
-
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField
-                label="Diagnósticos Secundarios"
-                value={formData.secondary_diagnoses}
-                onChange={(e) => setFormData(prev => ({ ...prev, secondary_diagnoses: e.target.value }))}
-                sx={{ flex: 2 }}
-              />
-              <TextField
-                label="Códigos CIE-10 Secundarios"
-                value={formData.secondary_diagnoses_cie10}
-                onChange={(e) => setFormData(prev => ({ ...prev, secondary_diagnoses_cie10: e.target.value }))}
-                sx={{ flex: 1 }}
-              />
-            </Box>
-          </Box>
-
-          {/* Treatment Section */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Typography variant="h6" sx={{ color: 'primary.main', fontWeight: 600 }}>
-              Tratamiento y Seguimiento
-            </Typography>
-
-            <TextField
-              label="Plan de Tratamiento *"
-              multiline
-              rows={3}
-              value={formData.treatment_plan}
-              onChange={(e) => setFormData(prev => ({ ...prev, treatment_plan: e.target.value }))}
-              fullWidth
-              helperText="Medicamentos, procedimientos y recomendaciones"
-            />
-
-            <TextField
-              label="Plan Terapéutico"
-              multiline
-              rows={2}
-              value={formData.therapeutic_plan}
-              onChange={(e) => setFormData(prev => ({ ...prev, therapeutic_plan: e.target.value }))}
-              fullWidth
-            />
-
-            <TextField
-              label="Indicaciones de Seguimiento *"
-              multiline
-              rows={2}
-              value={formData.follow_up_instructions}
-              onChange={(e) => setFormData(prev => ({ ...prev, follow_up_instructions: e.target.value }))}
-              fullWidth
-              helperText="Cuándo regresar, signos de alarma, etc."
-            />
-
-            <TextField
-              label="Pronóstico"
-              value={formData.prognosis}
-              onChange={(e) => setFormData(prev => ({ ...prev, prognosis: e.target.value }))}
-              fullWidth
-            />
-          </Box>
-
-          {/* Additional Studies */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Typography variant="h6" sx={{ color: 'primary.main', fontWeight: 600 }}>
-              Estudios Adicionales
-            </Typography>
-
-            <TextField
-              label="Resultados de Laboratorio"
-              multiline
-              rows={2}
-              value={formData.laboratory_results}
-              onChange={(e) => setFormData(prev => ({ ...prev, laboratory_results: e.target.value }))}
-              fullWidth
-            />
-
-            <TextField
-              label="Estudios de Imagen"
-              multiline
-              rows={2}
-              value={formData.imaging_studies}
-              onChange={(e) => setFormData(prev => ({ ...prev, imaging_studies: e.target.value }))}
-              fullWidth
-            />
-
-            <TextField
-              label="Interconsultas"
-              multiline
-              rows={2}
-              value={formData.interconsultations}
-              onChange={(e) => setFormData(prev => ({ ...prev, interconsultations: e.target.value }))}
-              fullWidth
-              helperText="Especialistas consultados o por consultar"
-            />
-          </Box>
-
-          {/* Doctor Information */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Typography variant="h6" sx={{ color: 'primary.main', fontWeight: 600 }}>
-              Información del Médico
-            </Typography>
-
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField
-                label="Nombre del Médico *"
-                value={formData.doctor_name}
-                onChange={(e) => setFormData(prev => ({ ...prev, doctor_name: e.target.value }))}
-                sx={{ flex: 2 }}
-              />
-              <TextField
-                label="Cédula Profesional *"
-                value={formData.doctor_professional_license}
-                onChange={(e) => setFormData(prev => ({ ...prev, doctor_professional_license: e.target.value }))}
-                sx={{ flex: 1 }}
-              />
-            </Box>
-
-            <TextField
-              label="Especialidad *"
-              value={formData.doctor_specialty}
-              onChange={(e) => setFormData(prev => ({ ...prev, doctor_specialty: e.target.value }))}
-              fullWidth
-            />
+            
+            {renderStepContent(activeStep)}
           </Box>
         </Box>
       </DialogContent>
 
-      <DialogActions sx={{ p: 3, justifyContent: 'flex-end', gap: 1 }}>
-        <Button onClick={handleClose} disabled={isSubmitting}>
+      <DialogActions sx={{ 
+        p: 3, 
+        borderTop: '1px solid', 
+        borderColor: 'divider',
+        justifyContent: 'space-between'
+      }}>
+        <Button 
+          onClick={handleClose}
+          disabled={isSubmitting}
+          variant="outlined"
+          sx={{ borderRadius: '8px' }}
+        >
           Cancelar
         </Button>
-        <Button 
-          onClick={onSubmit} 
-          variant="contained"
-          disabled={isSubmitting}
-        >
-          {isEditing ? 'Actualizar Consulta' : 'Crear Consulta'}
-        </Button>
+
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            disabled={activeStep === 0}
+            onClick={handleBack}
+            startIcon={<BackIcon />}
+            variant="outlined"
+            sx={{ borderRadius: '8px' }}
+          >
+            Anterior
+          </Button>
+
+          {activeStep === steps.length - 1 ? (
+            <Button 
+              onClick={onSubmit}
+              disabled={isSubmitting || !canProceed}
+              variant="contained"
+              startIcon={<SaveIcon />}
+              sx={{ borderRadius: '8px', minWidth: 120 }}
+            >
+              {isSubmitting ? 'Guardando...' : (isEditing ? 'Actualizar' : 'Crear')}
+            </Button>
+          ) : (
+            <Button
+              onClick={handleNext}
+              disabled={!canProceed}
+              variant="contained"
+              endIcon={<NextIcon />}
+              sx={{ borderRadius: '8px' }}
+            >
+              Siguiente
+            </Button>
+          )}
+        </Box>
       </DialogActions>
     </Dialog>
   );

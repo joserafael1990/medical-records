@@ -2,6 +2,7 @@
 export { default as DashboardView } from './views/DashboardView';
 export { default as PatientsView } from './views/PatientsView';
 export { default as ConsultationsView } from './views/ConsultationsView';
+export { default as ConsultationDetailView } from './views/ConsultationDetailView';
 export { default as AgendaView } from './views/AgendaView';
 
 // Dialogs
