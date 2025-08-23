@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import AppBar from '@mui/material/AppBar';
@@ -6,7 +6,7 @@ import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import Container from '@mui/material/Container';
 import Box from '@mui/material/Box';
-import Grid from '@mui/material/Grid';
+// Grid removed - using Box with flexbox instead
 import Paper from '@mui/material/Paper';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
@@ -63,7 +63,9 @@ import {
   LocalHospital as HospitalIcon,
   Warning as WarningIcon,
   ArrowBack as ArrowBackIcon,
-  Medication as MedicationIcon
+  Medication as MedicationIcon,
+  Close as CloseIcon,
+  Delete as DeleteIcon
 } from '@mui/icons-material';
 import axios from 'axios';
 
@@ -411,6 +413,9 @@ function App() {
   const [selectedPatientData, setSelectedPatientData] = useState<CompletePatientData | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{[key: string]: string}>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string>('');
+  const [formErrorMessage, setFormErrorMessage] = useState<string>('');
+  const successTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [patientFormData, setPatientFormData] = useState({
     // ===== CAMPOS OBLIGATORIOS NOM-004 =====
     first_name: '',
@@ -462,6 +467,73 @@ function App() {
     previous_hospitalizations: '',
     surgical_history: ''
   });
+
+  // Utility function to calculate age from date of birth
+  const calculateAge = (dateOfBirth: string): number => {
+    const birthDate = new Date(dateOfBirth);
+    const today = new Date();
+    
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    
+    // If the birthday hasn't occurred this year yet, subtract 1 from age
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    
+    return age;
+  };
+
+  // Optimized success message handler
+  const showSuccessMessage = useCallback((message: string) => {
+    // Clear any existing timeout
+    if (successTimeoutRef.current) {
+      clearTimeout(successTimeoutRef.current);
+    }
+    
+    setSuccessMessage(message);
+    
+    // Set new timeout
+    successTimeoutRef.current = setTimeout(() => {
+      setSuccessMessage('');
+      successTimeoutRef.current = null;
+    }, 5000);
+  }, []);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (successTimeoutRef.current) {
+        clearTimeout(successTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Global error handler to catch runtime errors
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      // Filter out extension-related errors
+      if (event.message.includes('runtime.lastError') || 
+          event.message.includes('Extension context invalidated') ||
+          event.message.includes('message channel closed')) {
+        console.warn('Browser extension error (can be ignored):', event.message);
+        return;
+      }
+      console.error('Application error:', event.error);
+    };
+
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      console.error('Unhandled promise rejection:', event.reason);
+    };
+
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+    return () => {
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, []);
 
   // Patient management functions
   const fetchPatients = useCallback(async () => {
@@ -525,13 +597,7 @@ function App() {
 
 
 
-  const handleNewPatient = () => {
-    resetPatientForm();
-    setIsEditingPatient(false);
-    setPatientDialogOpen(true);
-  };
-
-  const resetPatientForm = () => {
+  const resetPatientForm = useCallback(() => {
     setPatientFormData({
       // ===== CAMPOS OBLIGATORIOS NOM-004 =====
       first_name: '',
@@ -585,8 +651,9 @@ function App() {
     });
     setSelectedPatient(null);
     setFieldErrors({});
+    setFormErrorMessage('');
     setIsSubmitting(false);
-  };
+  }, []);
 
 // Fetch complete patient data
 const fetchCompletePatientData = async (patientId: string) => {
@@ -625,20 +692,44 @@ const validatePatientForm = () => {
 };
 
 // Clear error for a specific field when user starts typing
-const clearFieldError = (fieldName: string) => {
+const clearFieldError = useCallback((fieldName: string) => {
+  setFieldErrors(prev => {
+    if (prev[fieldName]) {
+      const newErrors = { ...prev };
+      delete newErrors[fieldName];
+      return newErrors;
+    }
+    return prev; // Return same object if no changes needed
+  });
+}, []);
+
+// Optimized handler for field changes with debouncing
+const handleFieldChange = useCallback((fieldName: string, value: string) => {
+  // Update form data immediately for UI responsiveness
+  setPatientFormData(prev => ({
+    ...prev,
+    [fieldName]: value
+  }));
+  
+  // Clear error if exists (debounced to avoid excessive re-renders)
   if (fieldErrors[fieldName]) {
     setFieldErrors(prev => {
+      if (!prev[fieldName]) return prev; // No change needed
       const newErrors = { ...prev };
       delete newErrors[fieldName];
       return newErrors;
     });
   }
-};
+}, [fieldErrors]);
 
 // Handle patient form submission
 const handlePatientSubmit = async () => {
+  console.log('=== PATIENT SUBMIT STARTED ===');
   // Set submitting state
   setIsSubmitting(true);
+  
+  // Clear any previous form error
+  setFormErrorMessage('');
   
   // Validate required fields
   const validationErrors = validatePatientForm();
@@ -646,7 +737,7 @@ const handlePatientSubmit = async () => {
   
   if (Object.keys(validationErrors).length > 0) {
     setIsSubmitting(false);
-    // No alert, errors are shown inline in the form
+    setFormErrorMessage('Por favor, completa todos los campos obligatorios marcados en rojo.');
     return;
   }
   
@@ -695,28 +786,95 @@ const handlePatientSubmit = async () => {
       // Update existing patient
       const response = await axios.put(`http://localhost:8000/api/patients/${selectedPatient.id}`, patientData);
       if (response.status === 200) {
-        alert('✅ Paciente actualizado exitosamente');
+        const patientName = `${patientFormData.first_name} ${patientFormData.paternal_surname} ${patientFormData.maternal_surname}`;
         fetchPatients();
         setPatientDialogOpen(false);
         resetPatientForm();
         setFieldErrors({});
+        showSuccessMessage(`✅ El paciente ${patientName} fue actualizado exitosamente`);
       }
     } else {
       // Create new patient
+      console.log('Sending patient data:', JSON.stringify(patientData, null, 2));
+      console.log('Full form data:', JSON.stringify(patientFormData, null, 2));
       const response = await axios.post('http://localhost:8000/api/patients', patientData);
-      if (response.status === 201) {
-        alert('✅ Paciente creado exitosamente');
-        fetchPatients();
+      console.log('Response received:', response.status, response.data);
+      console.log('Response status type:', typeof response.status);
+      
+      // Check for both 200 and 201 status codes
+      if (response.status === 201 || response.status === 200) {
+        const patientName = `${patientFormData.first_name} ${patientFormData.paternal_surname} ${patientFormData.maternal_surname}`;
+        console.log('Success! Closing dialog and changing view...');
+        
+        // Immediate UI updates
         setPatientDialogOpen(false);
-        resetPatientForm();
-        setFieldErrors({});
+        setActiveView('patients');
+        
+        // Batch state updates to avoid multiple re-renders
+        setTimeout(() => {
+          setFormErrorMessage('');
+          setFieldErrors({});
+          resetPatientForm();
+          showSuccessMessage(`✅ El paciente ${patientName} fue agregado con éxito`);
+          fetchPatients();
+        }, 10);
+        
+        console.log('Success flow completed');
+      } else {
+        console.log('Unexpected response status:', response.status);
+        console.log('Full response:', response);
+        // Force close dialog even if status is unexpected but patient was created
+        if (response.data && response.data.id) {
+          console.log('Patient was created despite unexpected status, forcing success flow...');
+          const patientName = `${patientFormData.first_name} ${patientFormData.paternal_surname} ${patientFormData.maternal_surname}`;
+          
+          // Immediate UI updates
+          setPatientDialogOpen(false);
+          setActiveView('patients');
+          
+          // Batch other updates
+          setTimeout(() => {
+            setFormErrorMessage('');
+            setFieldErrors({});
+            resetPatientForm();
+            showSuccessMessage(`✅ El paciente ${patientName} fue agregado con éxito`);
+            fetchPatients();
+          }, 10);
+        }
       }
     }
   } catch (error: any) {
     console.error('Error saving patient:', error);
-    const errorMessage = error.response?.data?.detail || 'Error al guardar el paciente. Por favor, verifica los datos e intenta nuevamente.';
-    alert(`❌ Error: ${errorMessage}`);
+    console.error('Error response status:', error.response?.status);
+    console.error('Error response data:', error.response?.data);
+    console.error('Error response headers:', error.response?.headers);
+    console.error('Request config:', error.config);
+    
+    let errorMessage = 'Error al guardar el paciente. Por favor, verifica los datos e intenta nuevamente.';
+    
+    if (error.response?.data) {
+      if (typeof error.response.data === 'string') {
+        errorMessage = error.response.data;
+      } else if (error.response.data.detail) {
+        errorMessage = error.response.data.detail;
+      } else if (error.response.data.message) {
+        errorMessage = error.response.data.message;
+      } else if (Array.isArray(error.response.data)) {
+        // Handle validation error arrays
+        errorMessage = error.response.data.map((err: any) => 
+          err.msg || err.message || JSON.stringify(err)
+        ).join(', ');
+      } else {
+        // If it's an object, try to extract meaningful error info
+        console.error('Unknown error format:', error.response.data);
+        errorMessage = `Error ${error.response.status}: ${JSON.stringify(error.response.data)}`;
+      }
+    }
+    
+    console.error('Final error message:', errorMessage);
+    setFormErrorMessage(errorMessage);
   } finally {
+    console.log('=== PATIENT SUBMIT FINISHED ===');
     setIsSubmitting(false);
   }
 };
@@ -782,6 +940,64 @@ const handleEditPatient = (patient: Patient) => {
   setPatientDialogOpen(true);
 };
 
+// Handle new patient
+const handleNewPatient = useCallback(() => {
+  resetPatientForm();
+  setIsEditingPatient(false);
+  setFormErrorMessage('');
+  setPatientDialogOpen(true);
+}, []);
+
+// Handle delete patient
+const handleDeletePatient = useCallback(async () => {
+  if (!selectedPatient) return;
+  
+  const patientName = `${selectedPatient.first_name} ${selectedPatient.paternal_surname} ${selectedPatient.maternal_surname}`;
+  
+  // Confirmation dialog
+  const confirmDelete = window.confirm(
+    `⚠️ ¿Estás seguro de que deseas eliminar al paciente ${patientName}?\n\n` +
+    `Esta acción NO se puede deshacer y se eliminará:\n` +
+    `• Toda la información del paciente\n` +
+    `• Historial médico\n` +
+    `• Citas programadas\n` +
+    `• Prescripciones\n\n` +
+    `Escribe "ELIMINAR" en el siguiente campo si estás completamente seguro.`
+  );
+  
+  if (!confirmDelete) return;
+  
+  // Additional confirmation
+  const confirmText = window.prompt(
+    `Para confirmar la eliminación del paciente ${patientName}, escribe exactamente: ELIMINAR`
+  );
+  
+  if (confirmText !== 'ELIMINAR') {
+    alert('❌ Eliminación cancelada. El texto no coincide.');
+    return;
+  }
+  
+  try {
+    setIsSubmitting(true);
+    const response = await axios.delete(`http://localhost:8000/api/patients/${selectedPatient.id}`);
+    
+    if (response.status === 200 || response.status === 204) {
+      setPatientDialogOpen(false);
+      resetPatientForm();
+      setFieldErrors({});
+      setActiveView('patients');
+      fetchPatients();
+      showSuccessMessage(`🗑️ El paciente ${patientName} fue eliminado exitosamente`);
+    }
+  } catch (error: any) {
+    console.error('Error deleting patient:', error);
+    const errorMessage = error.response?.data?.detail || 'Error al eliminar el paciente. Por favor, intenta nuevamente.';
+    alert(`❌ Error: ${errorMessage}`);
+  } finally {
+    setIsSubmitting(false);
+  }
+}, [selectedPatient, fetchPatients]);
+
 // Format date and time for display
 const formatDateTime = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('es-MX', {
@@ -833,18 +1049,18 @@ const formatDateTime = (dateString: string) => {
     if (activeView === 'patients') {
       fetchPatients();
     }
-  }, [activeView, fetchPatients]);
+  }, [activeView]); // Remove fetchPatients dependency to avoid loops
 
   // Search patients with debounce
   useEffect(() => {
-    if (activeView === 'patients') {
+    if (activeView === 'patients' && patientSearchTerm !== undefined) {
       const timeoutId = setTimeout(() => {
         fetchPatients();
-      }, 300); // 300ms debounce
+      }, 500); // Increased debounce to 500ms to reduce API calls
       
       return () => clearTimeout(timeoutId);
     }
-  }, [patientSearchTerm, activeView, fetchPatients]);
+  }, [patientSearchTerm, activeView]); // Remove fetchPatients dependency
 
   return (
     <ThemeProvider theme={theme}>
@@ -974,13 +1190,12 @@ const formatDateTime = (dateString: string) => {
         )}
 
         <Container maxWidth="xl" sx={{ mt: 3, mb: 3 }}>
-          <Grid container spacing={3}>
+          <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', md: 'row' } }}>
             {/* Modern Sidebar Navigation */}
-            <Grid size={{ xs: 12, md: 3 }}>
-              <Box sx={{ position: 'sticky', top: 24 }}>
-                <Paper sx={{ p: 3, mb: 2 }}>
-                  <Typography variant="h6" sx={{ mb: 3, color: 'text.primary', fontWeight: 600 }}>
-                    Panel de Control
+            <Box sx={{ width: { xs: '100%', md: '25%' }, position: 'sticky', top: 24 }}>
+              <Paper sx={{ p: 3, mb: 2 }}>
+                <Typography variant="h6" sx={{ mb: 3, color: 'text.primary', fontWeight: 600 }}>
+                  Panel de Control
                 </Typography>
                   <MenuList sx={{ gap: 1 }}>
                   <MenuItem 
@@ -1115,6 +1330,7 @@ const formatDateTime = (dateString: string) => {
                       variant="contained"
                       startIcon={<PersonAddIcon />}
                       fullWidth
+                      onClick={handleNewPatient}
                       sx={{ justifyContent: 'flex-start', py: 1.5 }}
                     >
                       Nuevo Paciente
@@ -1137,11 +1353,10 @@ const formatDateTime = (dateString: string) => {
                     </Button>
                   </Box>
               </Paper>
-              </Box>
-            </Grid>
+            </Box>
 
             {/* Main Content Area */}
-            <Grid size={{ xs: 12, md: 9 }}>
+            <Box sx={{ width: { xs: '100%', md: '75%' } }}>
               {activeView === 'dashboard' && (
                 <Box>
                   {/* Welcome Header */}
@@ -1155,8 +1370,8 @@ const formatDateTime = (dateString: string) => {
                   </Box>
 
                   {/* Key Metrics Row */}
-                  <Grid container spacing={3} sx={{ mb: 4 }}>
-                    <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                  <Box sx={{ display: 'flex', gap: 2, mb: 4, flexWrap: 'wrap' }}>
+                    <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 45%', md: '1 1 22%' } }}>
                       <Card sx={{ 
                         background: 'linear-gradient(135deg, #4285F4 0%, #34A853 100%)',
                         color: 'white',
@@ -1176,9 +1391,9 @@ const formatDateTime = (dateString: string) => {
                           </Box>
                         </CardContent>
                       </Card>
-                    </Grid>
+                    </Box>
                     
-                    <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 45%', md: '1 1 22%' } }}>
                       <Card sx={{ 
                         background: 'linear-gradient(135deg, #34A853 0%, #FBBC04 100%)',
                         color: 'white',
@@ -1198,9 +1413,9 @@ const formatDateTime = (dateString: string) => {
                           </Box>
                         </CardContent>
                       </Card>
-                    </Grid>
+                    </Box>
                     
-                    <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 45%', md: '1 1 22%' } }}>
                       <Card sx={{ 
                         background: 'linear-gradient(135deg, #FBBC04 0%, #EA4335 100%)',
                         color: 'white',
@@ -1220,9 +1435,9 @@ const formatDateTime = (dateString: string) => {
                           </Box>
                         </CardContent>
                       </Card>
-                    </Grid>
+                    </Box>
                     
-                    <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 45%', md: '1 1 22%' } }}>
                       <Card sx={{ 
                         background: 'linear-gradient(135deg, #EA4335 0%, #4285F4 100%)',
                         color: 'white',
@@ -1242,13 +1457,13 @@ const formatDateTime = (dateString: string) => {
                           </Box>
                         </CardContent>
                       </Card>
-                    </Grid>
-                  </Grid>
+                    </Box>
+                  </Box>
 
                   {/* Main Content Row */}
-                  <Grid container spacing={3}>
+                  <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', md: 'row' } }}>
                     {/* Today's Schedule */}
-                    <Grid size={{ xs: 12, md: 8 }}>
+                    <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 65%' } }}>
                       <Card>
                         <CardContent sx={{ p: 3 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
@@ -1312,10 +1527,10 @@ const formatDateTime = (dateString: string) => {
                     </Box>
                         </CardContent>
                       </Card>
-                    </Grid>
+                    </Box>
                     
                     {/* Revenue & Efficiency Panel */}
-                    <Grid size={{ xs: 12, md: 4 }}>
+                    <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 30%' } }}>
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                         {/* Revenue Card */}
                       <Card>
@@ -1384,8 +1599,8 @@ const formatDateTime = (dateString: string) => {
                           </CardContent>
                         </Card>
                       </Box>
-                    </Grid>
-                  </Grid>
+                    </Box>
+                  </Box>
                 </Box>
               )}
 
@@ -1405,6 +1620,38 @@ const formatDateTime = (dateString: string) => {
                       Nuevo Paciente
                     </Button>
                     </Box>
+
+                  {/* Success Message Ribbon */}
+                  {successMessage && (
+                    <Paper 
+                      sx={{ 
+                        p: 2, 
+                        mb: 3, 
+                        backgroundColor: '#d4edda',
+                        borderColor: '#c3e6cb',
+                        color: '#155724',
+                        border: '1px solid #c3e6cb',
+                        borderRadius: 2,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <CheckIcon sx={{ color: '#155724' }} />
+                        <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                          {successMessage}
+                        </Typography>
+                      </Box>
+                      <IconButton 
+                        size="small" 
+                        onClick={() => setSuccessMessage('')}
+                        sx={{ color: '#155724' }}
+                      >
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </Paper>
+                  )}
 
                   {/* Search and Filters */}
                   <Paper sx={{ p: 3, mb: 3 }}>
@@ -1432,7 +1679,6 @@ const formatDateTime = (dateString: string) => {
                           <TableRow>
                             <TableCell sx={{ fontWeight: 600 }}>Paciente</TableCell>
                             <TableCell sx={{ fontWeight: 600 }}>Contacto</TableCell>
-                            <TableCell sx={{ fontWeight: 600 }}>Seguro</TableCell>
                             <TableCell sx={{ fontWeight: 600 }}>Última Visita</TableCell>
                             <TableCell sx={{ fontWeight: 600 }}>Estado</TableCell>
                           </TableRow>
@@ -1452,10 +1698,10 @@ const formatDateTime = (dateString: string) => {
                                   </Avatar>
                                   <Box>
                                     <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                                      {patient.full_name}
+                                      {patient.full_name} ({calculateAge(patient.date_of_birth)})
                                     </Typography>
                                     <Typography variant="body2" color="text.secondary">
-                                      {patient.age} años • {patient.gender}
+                                      {patient.gender}
                                     </Typography>
                                   </Box>
                                 </Box>
@@ -1473,17 +1719,6 @@ const formatDateTime = (dateString: string) => {
                                     </Box>
                                   )}
                                 </Box>
-                              </TableCell>
-                              <TableCell>
-                                <Chip 
-                                  label={patient.insurance_type || 'Sin seguro'}
-                                  size="small"
-                                  color={patient.insurance_type === 'IMSS' ? 'primary' : 
-                                         patient.insurance_type === 'Privado' ? 'success' : 
-                                         patient.insurance_type === 'ISSSTE' ? 'secondary' :
-                                         patient.insurance_type ? 'info' : 'default'}
-                                  variant="outlined"
-                                />
                               </TableCell>
                               <TableCell>
                                 {patient.last_visit ? (
@@ -1507,7 +1742,7 @@ const formatDateTime = (dateString: string) => {
                           ))}
                           {(!patients || !Array.isArray(patients) || patients.length === 0) && (
                             <TableRow>
-                              <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
+                              <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
                                 <Typography variant="body1" color="text.secondary">
                                   No hay pacientes registrados
                                 </Typography>
@@ -1552,8 +1787,8 @@ const formatDateTime = (dateString: string) => {
                   </Box>
 
                   {/* Patient Overview Cards */}
-                  <Grid container spacing={3} sx={{ mb: 4 }}>
-                    <Grid size={{ xs: 12, md: 4 }}>
+                  <Box sx={{ display: 'flex', gap: 3, mb: 4, flexDirection: { xs: 'column', md: 'row' } }}>
+                    <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 30%' } }}>
                       <Card>
                         <CardContent>
                           <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -1591,9 +1826,9 @@ const formatDateTime = (dateString: string) => {
                           </Box>
                         </CardContent>
                       </Card>
-                    </Grid>
+                    </Box>
 
-                    <Grid size={{ xs: 12, md: 4 }}>
+                    <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 30%' } }}>
                       <Card>
                         <CardContent>
                           <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -1635,9 +1870,9 @@ const formatDateTime = (dateString: string) => {
                           </Box>
                         </CardContent>
                       </Card>
-                    </Grid>
+                    </Box>
 
-                    <Grid size={{ xs: 12, md: 4 }}>
+                    <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 30%' } }}>
                       <Card>
                         <CardContent>
                           <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -1668,8 +1903,8 @@ const formatDateTime = (dateString: string) => {
                           )}
                         </CardContent>
                       </Card>
-                    </Grid>
-                  </Grid>
+                    </Box>
+                  </Box>
 
                   <Typography variant="h6" sx={{ mb: 2 }}>
                     Funcionalidad médica completa en desarrollo...
@@ -1717,95 +1952,118 @@ const formatDateTime = (dateString: string) => {
                   </Box>
                 </Box>
               )}
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
         </Container>
 
         {/* Patient Dialog */}
         <Dialog 
           open={patientDialogOpen} 
-          onClose={() => setPatientDialogOpen(false)}
+          onClose={() => {
+            setPatientDialogOpen(false);
+            setFormErrorMessage('');
+            setFieldErrors({});
+          }}
           maxWidth="md"
           fullWidth
         >
           <DialogTitle>
             {isEditingPatient ? 'Editar Paciente' : 'Nuevo Paciente'}
           </DialogTitle>
+
+          {/* Error Message Ribbon */}
+          {formErrorMessage && (
+            <Paper 
+              sx={{ 
+                p: 2, 
+                mx: 3,
+                mb: 2,
+                backgroundColor: '#ffebee',
+                borderColor: '#f44336',
+                color: '#c62828',
+                border: '1px solid #f44336',
+                borderRadius: 2,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <WarningIcon sx={{ color: '#c62828' }} />
+                <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                  {formErrorMessage}
+                </Typography>
+              </Box>
+              <IconButton 
+                size="small" 
+                onClick={() => setFormErrorMessage('')}
+                sx={{ color: '#c62828' }}
+              >
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            </Paper>
+          )}
+
           <DialogContent>
-            <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 1 }}>
               {/* SECCIÓN: INFORMACIÓN PERSONAL OBLIGATORIA - NOM-004 */}
-              <Grid size={{ xs: 12 }}>
+              <Box sx={{ width: '100%' }}>
                 <Typography variant="h6" sx={{ color: '#d32f2f', fontWeight: 'bold', mb: 2 }}>
                   📋 DATOS OBLIGATORIOS
                 </Typography>
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
+              </Box>
+              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
                 <TextField
                   fullWidth
                   label="Nombre(s)"
                   value={patientFormData.first_name}
-                  onChange={(e) => {
-                    setPatientFormData({...patientFormData, first_name: e.target.value});
-                    clearFieldError('first_name');
-                  }}
+                  onChange={(e) => handleFieldChange('first_name', e.target.value)}
                   error={!!fieldErrors.first_name}
                   helperText={fieldErrors.first_name}
                   required
                 />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
+              </Box>
+              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
                 <TextField
                   fullWidth
                   label="Apellido Paterno"
                   value={patientFormData.paternal_surname}
-                  onChange={(e) => {
-                    setPatientFormData({...patientFormData, paternal_surname: e.target.value});
-                    clearFieldError('paternal_surname');
-                  }}
+                  onChange={(e) => handleFieldChange('paternal_surname', e.target.value)}
                   error={!!fieldErrors.paternal_surname}
                   helperText={fieldErrors.paternal_surname}
                   required
                 />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
+              </Box>
+              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
                 <TextField
                   fullWidth
                   label="Apellido Materno"
                   value={patientFormData.maternal_surname}
-                  onChange={(e) => {
-                    setPatientFormData({...patientFormData, maternal_surname: e.target.value});
-                    clearFieldError('maternal_surname');
-                  }}
+                  onChange={(e) => handleFieldChange('maternal_surname', e.target.value)}
                   error={!!fieldErrors.maternal_surname}
                   helperText={fieldErrors.maternal_surname}
                   required
                 />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
+              </Box>
+              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
                 <TextField
                   fullWidth
                   label="Fecha de Nacimiento"
                   type="date"
                   value={patientFormData.date_of_birth}
-                  onChange={(e) => {
-                    setPatientFormData({...patientFormData, date_of_birth: e.target.value});
-                    clearFieldError('date_of_birth');
-                  }}
+                  onChange={(e) => handleFieldChange('date_of_birth', e.target.value)}
                   InputLabelProps={{ shrink: true }}
                   error={!!fieldErrors.date_of_birth}
                   helperText={fieldErrors.date_of_birth}
                   required
                 />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
+              </Box>
+              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
                 <FormControl fullWidth required error={!!fieldErrors.gender}>
                   <InputLabel>Género</InputLabel>
                   <Select
                     value={patientFormData.gender}
-                    onChange={(e) => {
-                      setPatientFormData({...patientFormData, gender: e.target.value});
-                      clearFieldError('gender');
-                    }}
+                    onChange={(e) => handleFieldChange('gender', e.target.value)}
                     label="Género"
                   >
                     <MenuItem value="Masculino">Masculino</MenuItem>
@@ -1817,104 +2075,90 @@ const formatDateTime = (dateString: string) => {
                     </Typography>
                   )}
                 </FormControl>
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
+              </Box>
+              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
                 <TextField
                   fullWidth
                   label="Teléfono"
+                  placeholder="Ej: +52 555 123 4567 o 5551234567"
                   value={patientFormData.phone}
-                  onChange={(e) => {
-                    setPatientFormData({...patientFormData, phone: e.target.value});
-                    clearFieldError('phone');
-                  }}
+                  onChange={(e) => handleFieldChange('phone', e.target.value)}
                   error={!!fieldErrors.phone}
-                  helperText={fieldErrors.phone || "Requerido para notificaciones de WhatsApp"}
+                  helperText={fieldErrors.phone || "Formato México: +52 555 123 4567 o 5551234567 (10 dígitos mínimo)"}
                   required
                 />
-              </Grid>
-              <Grid size={{ xs: 12 }}>
+              </Box>
+              <Box sx={{ width: '100%' }}>
                 <TextField
                   fullWidth
                   label="Domicilio de Residencia"
                   value={patientFormData.address}
-                  onChange={(e) => {
-                    setPatientFormData({...patientFormData, address: e.target.value});
-                    clearFieldError('address');
-                  }}
+                  onChange={(e) => handleFieldChange('address', e.target.value)}
                   multiline
                   rows={2}
                   error={!!fieldErrors.address}
                   helperText={fieldErrors.address || "Dirección completa donde reside actualmente (calle, número, colonia, localidad, municipio, estado)"}
                   required
                 />
-              </Grid>
+              </Box>
               
               {/* Antecedentes Médicos - NOM-004 Obligatorio */}
-              <Grid size={{ xs: 12 }}>
+              <Box sx={{ width: '100%' }}>
                 <TextField
                   fullWidth
                   label="Antecedentes Heredofamiliares"
                   value={patientFormData.family_history}
-                  onChange={(e) => {
-                    setPatientFormData({...patientFormData, family_history: e.target.value});
-                    clearFieldError('family_history');
-                  }}
+                  onChange={(e) => handleFieldChange('family_history', e.target.value)}
                   multiline
                   rows={3}
                   error={!!fieldErrors.family_history}
                   helperText={fieldErrors.family_history || "Enfermedades presentes en familiares directos"}
                   required
                 />
-              </Grid>
-              <Grid size={{ xs: 12 }}>
+              </Box>
+              <Box sx={{ width: '100%' }}>
                 <TextField
                   fullWidth
                   label="Antecedentes Personales Patológicos"
                   value={patientFormData.personal_pathological_history}
-                  onChange={(e) => {
-                    setPatientFormData({...patientFormData, personal_pathological_history: e.target.value});
-                    clearFieldError('personal_pathological_history');
-                  }}
+                  onChange={(e) => handleFieldChange('personal_pathological_history', e.target.value)}
                   multiline
                   rows={3}
                   error={!!fieldErrors.personal_pathological_history}
                   helperText={fieldErrors.personal_pathological_history || "Enfermedades, cirugías, hospitalizaciones previas"}
                   required
                 />
-              </Grid>
-              <Grid size={{ xs: 12 }}>
+              </Box>
+              <Box sx={{ width: '100%' }}>
                 <TextField
                   fullWidth
                   label="Antecedentes Personales No Patológicos"
                   value={patientFormData.personal_non_pathological_history}
-                  onChange={(e) => {
-                    setPatientFormData({...patientFormData, personal_non_pathological_history: e.target.value});
-                    clearFieldError('personal_non_pathological_history');
-                  }}
+                  onChange={(e) => handleFieldChange('personal_non_pathological_history', e.target.value)}
                   multiline
                   rows={3}
                   error={!!fieldErrors.personal_non_pathological_history}
                   helperText={fieldErrors.personal_non_pathological_history || "Hábitos: tabaquismo, alcoholismo, ejercicio, alimentación"}
                   required
                 />
-              </Grid>
+              </Box>
               
               {/* SECCIÓN: INFORMACIÓN OPCIONAL */}
-              <Grid size={{ xs: 12 }}>
+              <Box sx={{ width: '100%' }}>
                 <Typography variant="h6" sx={{ color: '#1976d2', fontWeight: 'bold', mt: 3, mb: 2 }}>
                   📝 DATOS OPCIONALES
                 </Typography>
-              </Grid>
+              </Box>
 
               {/* Identificación Adicional */}
-              <Grid size={{ xs: 12 }}>
+              <Box sx={{ width: '100%' }}>
                 <Typography variant="subtitle1" sx={{ color: '#1976d2', fontWeight: 'bold', mb: 1 }}>
                   Identificación Adicional
                 </Typography>
-              </Grid>
+              </Box>
               
               {/* 1. Nacionalidad */}
-              <Grid size={{ xs: 12, sm: 6 }}>
+              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
                 <FormControl fullWidth>
                   <InputLabel>Nacionalidad</InputLabel>
                   <Select
@@ -1926,10 +2170,10 @@ const formatDateTime = (dateString: string) => {
                     <MenuItem value="Extranjera">Extranjera</MenuItem>
                   </Select>
                 </FormControl>
-              </Grid>
+              </Box>
               
               {/* 2. Estado de Nacimiento */}
-              <Grid size={{ xs: 12, sm: 6 }}>
+              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
                 <FormControl fullWidth>
                   <InputLabel>Estado de Nacimiento</InputLabel>
                   <Select
@@ -1973,10 +2217,10 @@ const formatDateTime = (dateString: string) => {
                     <MenuItem value="Extranjero">Extranjero</MenuItem>
                   </Select>
                 </FormControl>
-              </Grid>
+              </Box>
               
               {/* 3. Estado de Residencia */}
-              <Grid size={{ xs: 12, sm: 6 }}>
+              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
                 <FormControl fullWidth>
                   <InputLabel>Estado de Residencia</InputLabel>
                   <Select
@@ -2021,10 +2265,10 @@ const formatDateTime = (dateString: string) => {
                     Estado donde reside actualmente
                   </Typography>
                 </FormControl>
-              </Grid>
+              </Box>
               
               {/* 4. CURP */}
-              <Grid size={{ xs: 12, sm: 6 }}>
+              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
                 <TextField
                   fullWidth
                   label="CURP"
@@ -2032,10 +2276,10 @@ const formatDateTime = (dateString: string) => {
                   onChange={(e) => setPatientFormData({...patientFormData, curp: e.target.value})}
                   helperText="Clave Única de Registro de Población"
                 />
-              </Grid>
+              </Box>
 
               {/* 5. Tipo de Seguro */}
-              <Grid size={{ xs: 12, sm: 6 }}>
+              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
                 <FormControl fullWidth>
                   <InputLabel>Tipo de Seguro</InputLabel>
                   <Select
@@ -2055,31 +2299,31 @@ const formatDateTime = (dateString: string) => {
                     <MenuItem value="Otro">Otro</MenuItem>
                   </Select>
                 </FormControl>
-              </Grid>
+              </Box>
 
               {/* Contacto de Emergencia */}
-              <Grid size={{ xs: 12 }}>
+              <Box sx={{ width: '100%' }}>
                 <Typography variant="subtitle1" sx={{ color: '#1976d2', fontWeight: 'bold', mt: 2, mb: 1 }}>
                   Contacto de Emergencia
                 </Typography>
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
+              </Box>
+              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
                 <TextField
                   fullWidth
                   label="Nombre del Contacto"
                   value={patientFormData.emergency_contact_name}
                   onChange={(e) => setPatientFormData({...patientFormData, emergency_contact_name: e.target.value})}
                 />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
+              </Box>
+              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
                 <TextField
                   fullWidth
                   label="Teléfono del Contacto"
                   value={patientFormData.emergency_contact_phone}
                   onChange={(e) => setPatientFormData({...patientFormData, emergency_contact_phone: e.target.value})}
                 />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
+              </Box>
+              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
                 <FormControl fullWidth>
                   <InputLabel>Relación</InputLabel>
                   <Select
@@ -2101,15 +2345,15 @@ const formatDateTime = (dateString: string) => {
                     <MenuItem value="Otro">Otro</MenuItem>
                   </Select>
                 </FormControl>
-              </Grid>
+              </Box>
 
               {/* Información Médica Adicional */}
-              <Grid size={{ xs: 12 }}>
+              <Box sx={{ width: '100%' }}>
                 <Typography variant="subtitle1" sx={{ color: '#1976d2', fontWeight: 'bold', mt: 2, mb: 1 }}>
                   Información Médica Adicional
                 </Typography>
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
+              </Box>
+              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
                 <FormControl fullWidth>
                   <InputLabel>Tipo de Sangre</InputLabel>
                   <Select
@@ -2127,8 +2371,8 @@ const formatDateTime = (dateString: string) => {
                     <MenuItem value="O-">O-</MenuItem>
                   </Select>
                 </FormControl>
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
+              </Box>
+              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
                 <TextField
                   fullWidth
                   label="Alergias"
@@ -2137,20 +2381,36 @@ const formatDateTime = (dateString: string) => {
                   multiline
                   rows={2}
                 />
-              </Grid>
+              </Box>
 
-            </Grid>
+            </Box>
           </DialogContent>
-          <DialogActions>
+          <DialogActions sx={{ justifyContent: 'flex-end', gap: 1, p: 3 }}>
+            {/* Delete button - only show when editing existing patient */}
+            {isEditingPatient && selectedPatient && (
+              <Button 
+                onClick={handleDeletePatient}
+                variant="contained"
+                color="error"
+                startIcon={<DeleteIcon />}
+                disabled={isSubmitting}
+              >
+                Eliminar Paciente
+              </Button>
+            )}
+            
             <Button 
               onClick={() => {
                 setPatientDialogOpen(false);
                 setFieldErrors({});
+                setFormErrorMessage('');
               }}
               disabled={isSubmitting}
+              variant="outlined"
             >
               Cancelar
             </Button>
+            
             <Button 
               onClick={handlePatientSubmit} 
               variant="contained"
