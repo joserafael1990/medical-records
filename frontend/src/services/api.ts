@@ -1,0 +1,348 @@
+// ============================================================================
+// API SERVICES - Capa de servicios para comunicación con backend
+// ============================================================================
+
+import axios, { AxiosInstance, AxiosResponse, AxiosError } from 'axios';
+import { API_CONFIG, ERROR_MESSAGES } from '../constants';
+import type { 
+  Patient, 
+  Consultation, 
+  Appointment, 
+  DashboardData, 
+  CompletePatientData,
+  PatientFormData,
+  ConsultationFormData,
+  AppointmentFormData,
+  ApiResponse,
+  ApiError
+} from '../types';
+
+// ============================================================================
+// AXIOS INSTANCE CONFIGURATION
+// ============================================================================
+
+class ApiService {
+  private api: AxiosInstance;
+
+  constructor() {
+    this.api = axios.create({
+      baseURL: API_CONFIG.BASE_URL,
+      timeout: API_CONFIG.TIMEOUT,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    this.setupInterceptors();
+  }
+
+  private setupInterceptors(): void {
+    // Request interceptor
+    this.api.interceptors.request.use(
+      (config) => {
+        // Add auth token if available
+        const token = localStorage.getItem('auth_token');
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+        
+        console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`);
+        return config;
+      },
+      (error) => {
+        console.error('❌ Request Error:', error);
+        return Promise.reject(error);
+      }
+    );
+
+    // Response interceptor
+    this.api.interceptors.response.use(
+      (response) => {
+        console.log(`✅ API Response: ${response.status} ${response.config.url}`);
+        return response;
+      },
+      (error: AxiosError) => {
+        console.error(`❌ API Error: ${error.response?.status} ${error.config?.url}`, error);
+        
+        // Handle specific error cases
+        if (error.response?.status === 401) {
+          // Handle unauthorized - redirect to login
+          localStorage.removeItem('auth_token');
+          window.location.href = '/login';
+        }
+        
+        return Promise.reject(this.handleApiError(error));
+      }
+    );
+  }
+
+  private handleApiError(error: AxiosError): ApiError {
+    if (error.code === 'ECONNABORTED') {
+      return {
+        detail: ERROR_MESSAGES.TIMEOUT,
+        status: 408
+      };
+    }
+
+    if (error.code === 'ERR_NETWORK') {
+      return {
+        detail: ERROR_MESSAGES.NETWORK,
+        status: 0
+      };
+    }
+
+    if (error.response) {
+      return {
+        detail: (error.response.data as any)?.detail || ERROR_MESSAGES.GENERIC,
+        status: error.response.status
+      };
+    }
+
+    return {
+      detail: ERROR_MESSAGES.GENERIC,
+      status: 500
+    };
+  }
+
+  // ============================================================================
+  // HEALTH CHECK
+  // ============================================================================
+
+  async checkHealth(): Promise<{ status: string; service: string }> {
+    const response = await this.api.get(API_CONFIG.ENDPOINTS.HEALTH);
+    return response.data;
+  }
+
+  // ============================================================================
+  // PATIENT SERVICES
+  // ============================================================================
+
+  async getPatients(search?: string): Promise<Patient[]> {
+    const params = search ? { search } : {};
+    const response = await this.api.get<Patient[]>(API_CONFIG.ENDPOINTS.PATIENTS, { params });
+    return Array.isArray(response.data) ? response.data : [];
+  }
+
+  async getPatient(id: string): Promise<Patient> {
+    const response = await this.api.get<Patient>(`${API_CONFIG.ENDPOINTS.PATIENTS}/${id}`);
+    return response.data;
+  }
+
+  async createPatient(patientData: PatientFormData): Promise<Patient> {
+    const response = await this.api.post<Patient>(API_CONFIG.ENDPOINTS.PATIENTS, patientData);
+    return response.data;
+  }
+
+  async updatePatient(id: string, patientData: Partial<PatientFormData>): Promise<Patient> {
+    const response = await this.api.put<Patient>(`${API_CONFIG.ENDPOINTS.PATIENTS}/${id}`, patientData);
+    return response.data;
+  }
+
+  async deletePatient(id: string): Promise<void> {
+    await this.api.delete(`${API_CONFIG.ENDPOINTS.PATIENTS}/${id}`);
+  }
+
+  async getCompletePatientInfo(id: string): Promise<CompletePatientData> {
+    const response = await this.api.get<CompletePatientData>(`${API_CONFIG.ENDPOINTS.PATIENTS}/${id}/complete`);
+    return response.data;
+  }
+
+  // ============================================================================
+  // CONSULTATION SERVICES
+  // ============================================================================
+
+  async getConsultations(filters?: {
+    patient_search?: string;
+    date_from?: string;
+    date_to?: string;
+    doctor_name?: string;
+  }): Promise<Consultation[]> {
+    const response = await this.api.get<Consultation[]>(API_CONFIG.ENDPOINTS.CONSULTATIONS, { 
+      params: filters 
+    });
+    return response.data;
+  }
+
+  async getPatientConsultations(patientId: string): Promise<Consultation[]> {
+    const response = await this.api.get<Consultation[]>(`${API_CONFIG.ENDPOINTS.PATIENTS}/${patientId}/medical-history`);
+    return response.data;
+  }
+
+  async getConsultation(id: string): Promise<Consultation> {
+    const response = await this.api.get<Consultation>(`/api/medical-history/${id}`);
+    return response.data;
+  }
+
+  async createConsultation(patientId: string, consultationData: ConsultationFormData): Promise<Consultation> {
+    const payload = {
+      ...consultationData,
+      date: new Date().toISOString(),
+      created_by: consultationData.doctor_name,
+      created_at: new Date().toISOString()
+    };
+    
+    const response = await this.api.post<Consultation>(
+      `${API_CONFIG.ENDPOINTS.PATIENTS}/${patientId}/medical-history`, 
+      payload
+    );
+    return response.data;
+  }
+
+  async updateConsultation(id: string, consultationData: Partial<ConsultationFormData>): Promise<Consultation> {
+    const payload = {
+      ...consultationData,
+      updated_at: new Date().toISOString()
+    };
+    
+    const response = await this.api.put<Consultation>(`/api/medical-history/${id}`, payload);
+    return response.data;
+  }
+
+  async deleteConsultation(id: string): Promise<void> {
+    await this.api.delete(`/api/medical-history/${id}`);
+  }
+
+  // ============================================================================
+  // APPOINTMENT SERVICES
+  // ============================================================================
+
+  async getAppointments(filters?: {
+    date?: string;
+    status?: string;
+  }): Promise<Appointment[]> {
+    const response = await this.api.get<Appointment[]>(API_CONFIG.ENDPOINTS.APPOINTMENTS, { 
+      params: filters 
+    });
+    return response.data;
+  }
+
+  async getPatientAppointments(patientId: string, status?: string): Promise<Appointment[]> {
+    const params = status ? { status } : {};
+    const response = await this.api.get<Appointment[]>(
+      `${API_CONFIG.ENDPOINTS.PATIENTS}/${patientId}/appointments`, 
+      { params }
+    );
+    return response.data;
+  }
+
+  async getDailyAgenda(targetDate?: string): Promise<Appointment[]> {
+    const params = targetDate ? { target_date: targetDate } : {};
+    const response = await this.api.get<Appointment[]>(API_CONFIG.ENDPOINTS.AGENDA.DAILY, { params });
+    return response.data;
+  }
+
+  async getWeeklyAgenda(startDate?: string): Promise<any> {
+    const params = startDate ? { start_date: startDate } : {};
+    const response = await this.api.get(API_CONFIG.ENDPOINTS.AGENDA.WEEKLY, { params });
+    return response.data;
+  }
+
+  async getAvailableSlots(targetDate: string, durationMinutes = 30): Promise<any[]> {
+    const response = await this.api.get(API_CONFIG.ENDPOINTS.AGENDA.AVAILABLE_SLOTS, {
+      params: { target_date: targetDate, duration_minutes: durationMinutes }
+    });
+    return response.data;
+  }
+
+  async createAppointment(patientId: string, appointmentData: AppointmentFormData): Promise<Appointment> {
+    const response = await this.api.post<Appointment>(
+      `${API_CONFIG.ENDPOINTS.PATIENTS}/${patientId}/appointments`, 
+      appointmentData
+    );
+    return response.data;
+  }
+
+  async updateAppointment(id: string, appointmentData: Partial<AppointmentFormData>): Promise<Appointment> {
+    const response = await this.api.put<Appointment>(`${API_CONFIG.ENDPOINTS.APPOINTMENTS}/${id}/full`, appointmentData);
+    return response.data;
+  }
+
+  async updateAppointmentStatus(id: string, status: string): Promise<Appointment> {
+    const response = await this.api.put<Appointment>(`${API_CONFIG.ENDPOINTS.APPOINTMENTS}/${id}`, { status });
+    return response.data;
+  }
+
+  async cancelAppointment(id: string): Promise<void> {
+    await this.api.delete(`${API_CONFIG.ENDPOINTS.APPOINTMENTS}/${id}`);
+  }
+
+  async bulkUpdateAppointments(updates: any[]): Promise<any> {
+    const response = await this.api.post('/api/appointments/bulk-update', { updates });
+    return response.data;
+  }
+
+  // ============================================================================
+  // DASHBOARD SERVICES
+  // ============================================================================
+
+  async getDashboardData(): Promise<DashboardData> {
+    const response = await this.api.get<DashboardData>(API_CONFIG.ENDPOINTS.DASHBOARD);
+    return response.data;
+  }
+
+  // ============================================================================
+  // RETRY MECHANISM
+  // ============================================================================
+
+  async withRetry<T>(operation: () => Promise<T>, maxRetries = API_CONFIG.RETRY_ATTEMPTS): Promise<T> {
+    let lastError: any;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error;
+        
+        if (attempt === maxRetries) {
+          throw error;
+        }
+        
+        // Wait before retry (exponential backoff)
+        const delay = Math.pow(2, attempt) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        
+        console.log(`🔄 Retry attempt ${attempt}/${maxRetries} after ${delay}ms`);
+      }
+    }
+    
+    throw lastError;
+  }
+}
+
+// ============================================================================
+// SINGLETON INSTANCE
+// ============================================================================
+
+export const apiService = new ApiService();
+
+// ============================================================================
+// CONVENIENCE EXPORTS
+// ============================================================================
+
+export const {
+  checkHealth,
+  getPatients,
+  getPatient,
+  createPatient,
+  updatePatient,
+  deletePatient,
+  getCompletePatientInfo,
+  getConsultations,
+  getPatientConsultations,
+  getConsultation,
+  createConsultation,
+  updateConsultation,
+  deleteConsultation,
+  getAppointments,
+  getPatientAppointments,
+  getDailyAgenda,
+  getWeeklyAgenda,
+  getAvailableSlots,
+  createAppointment,
+  updateAppointment,
+  updateAppointmentStatus,
+  cancelAppointment,
+  bulkUpdateAppointments,
+  getDashboardData,
+  withRetry
+} = apiService;

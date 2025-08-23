@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import AppBar from '@mui/material/AppBar';
@@ -36,6 +36,18 @@ import ListItemText from '@mui/material/ListItemText';
 import IconButton from '@mui/material/IconButton';
 
 import Divider from '@mui/material/Divider';
+
+// Import lazy-loaded components for code splitting
+import {
+  DashboardView,
+  PatientsView,
+  ConsultationsView,
+  AgendaView,
+  PatientDialog,
+  ConsultationDialog
+} from './components/lazy';
+import { LoadingFallback } from './components';
+import { Patient } from './types';
 import {
   MedicalServices as MedicalIcon,
   Dashboard as DashboardIcon,
@@ -282,54 +294,7 @@ interface DashboardData {
   features_ready: string[];
 }
 
-// Patient interface
-interface Patient {
-  id: string;
-  first_name: string;
-  paternal_surname: string;
-  maternal_surname: string;
-  full_name: string;
-  date_of_birth: string;
-  birth_state_code: string;
-  nationality: string;
-  internal_id?: string;
-  age: number;
-  gender: string;
-  curp: string;
-  phone: string;
-  email?: string;
-  address: string;
-  neighborhood?: string;
-  municipality: string;
-  state: string;
-  postal_code?: string;
-  civil_status?: string;
-  education_level?: string;
-  occupation?: string;
-  religion?: string;
-  insurance_type?: string;
-  insurance_number?: string;
-  emergency_contact_name: string;
-  emergency_contact_phone: string;
-  emergency_contact_relationship: string;
-  emergency_contact_address?: string;
-  allergies?: string;
-  chronic_conditions?: string;
-  current_medications?: string;
-  blood_type?: string;
-  previous_hospitalizations?: string;
-  surgical_history?: string;
-  family_history: string;  // OBLIGATORIO NOM-004
-  personal_pathological_history: string;  // OBLIGATORIO NOM-004
-  personal_non_pathological_history: string;  // OBLIGATORIO NOM-004
-  created_at: string;
-  last_visit?: string;
-  total_visits: number;
-  status: string;
-  last_updated?: string;
-  created_by?: string;
-  updated_by?: string;
-}
+// Patient interface imported from types
 
 // Medical record interfaces
 interface VitalSigns {
@@ -416,6 +381,17 @@ function App() {
   const [successMessage, setSuccessMessage] = useState<string>('');
   const [formErrorMessage, setFormErrorMessage] = useState<string>('');
   const successTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Consultations management state
+  const [consultations, setConsultations] = useState<any[]>([]);
+  const [consultationSearchTerm, setConsultationSearchTerm] = useState('');
+  const [consultationDialogOpen, setConsultationDialogOpen] = useState(false);
+  const [isEditingConsultation, setIsEditingConsultation] = useState(false);
+
+  // Agenda management state
+  const [appointments, setAppointments] = useState<any[]>([]);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [agendaView, setAgendaView] = useState<'daily' | 'weekly'>('daily');
   const [patientFormData, setPatientFormData] = useState({
     // ===== CAMPOS OBLIGATORIOS NOM-004 =====
     first_name: '',
@@ -669,7 +645,26 @@ const fetchCompletePatientData = async (patientId: string) => {
 const handleViewPatientDetails = (patient: Patient) => {
   setSelectedPatient(patient);
   setActiveView('patient-detail');
-  fetchCompletePatientData(patient.id);
+};
+
+// Consultation handlers (basic implementation)
+const handleNewConsultation = () => {
+  setConsultationDialogOpen(true);
+  setIsEditingConsultation(false);
+};
+
+const handleEditConsultation = (consultation: any) => {
+  setConsultationDialogOpen(true);
+  setIsEditingConsultation(true);
+};
+
+// Appointment handlers (basic implementation)
+const handleNewAppointment = () => {
+  console.log('New appointment');
+};
+
+const handleEditAppointment = (appointment: any) => {
+  console.log('Edit appointment', appointment);
 };
 
 // Validation function for required fields
@@ -1358,6 +1353,53 @@ const formatDateTime = (dateString: string) => {
             {/* Main Content Area */}
             <Box sx={{ width: { xs: '100%', md: '75%' } }}>
               {activeView === 'dashboard' && (
+                <Suspense fallback={<LoadingFallback message="Cargando dashboard..." />}>
+                  <DashboardView dashboardData={dashboardData} />
+                </Suspense>
+              )}
+
+              {activeView === 'patients' && (
+                <Suspense fallback={<LoadingFallback message="Cargando pacientes..." />}>
+                  <PatientsView
+                    patients={patients}
+                    patientSearchTerm={patientSearchTerm}
+                    setPatientSearchTerm={setPatientSearchTerm}
+                    successMessage={successMessage}
+                    setSuccessMessage={setSuccessMessage}
+                    handleNewPatient={handleNewPatient}
+                    handleEditPatient={handleEditPatient}
+                  />
+                </Suspense>
+              )}
+
+              {activeView === 'consultations' && (
+                <Suspense fallback={<LoadingFallback message="Cargando consultas..." />}>
+                  <ConsultationsView
+                    consultations={consultations}
+                    consultationSearchTerm={consultationSearchTerm}
+                    setConsultationSearchTerm={setConsultationSearchTerm}
+                    handleNewConsultation={handleNewConsultation}
+                    handleEditConsultation={handleEditConsultation}
+                  />
+                </Suspense>
+              )}
+
+              {activeView === 'agenda' && (
+                <Suspense fallback={<LoadingFallback message="Cargando agenda..." />}>
+                  <AgendaView
+                    appointments={appointments}
+                    selectedDate={selectedDate}
+                    setSelectedDate={setSelectedDate}
+                    agendaView={agendaView}
+                    setAgendaView={setAgendaView}
+                    handleNewAppointment={handleNewAppointment}
+                    handleEditAppointment={handleEditAppointment}
+                  />
+                </Suspense>
+              )}
+
+              {/* Keep the rest of the original dashboard content as fallback */}
+              {false && activeView === 'dashboard' && (
                 <Box>
                   {/* Welcome Header */}
                   <Box sx={{ mb: 4 }}>
@@ -1603,823 +1645,30 @@ const formatDateTime = (dateString: string) => {
                   </Box>
                 </Box>
               )}
-
-                            {activeView === 'patients' && (
-                <Box>
-                  {/* Patient Management Header */}
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                    <Typography variant="h4" sx={{ fontWeight: 600 }}>
-                      Gestión de Pacientes
-                    </Typography>
-                    <Button
-                      variant="contained"
-                      startIcon={<PersonAddIcon />}
-                      onClick={handleNewPatient}
-                      size="large"
-                    >
-                      Nuevo Paciente
-                    </Button>
-                    </Box>
-
-                  {/* Success Message Ribbon */}
-                  {successMessage && (
-                    <Paper 
-                      sx={{ 
-                        p: 2, 
-                        mb: 3, 
-                        backgroundColor: '#d4edda',
-                        borderColor: '#c3e6cb',
-                        color: '#155724',
-                        border: '1px solid #c3e6cb',
-                        borderRadius: 2,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <CheckIcon sx={{ color: '#155724' }} />
-                        <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                          {successMessage}
-                        </Typography>
-                      </Box>
-                      <IconButton 
-                        size="small" 
-                        onClick={() => setSuccessMessage('')}
-                        sx={{ color: '#155724' }}
-                      >
-                        <CloseIcon fontSize="small" />
-                      </IconButton>
-                    </Paper>
-                  )}
-
-                  {/* Search and Filters */}
-                  <Paper sx={{ p: 3, mb: 3 }}>
-                    <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                      <TextField
-                        placeholder="Buscar por nombre, teléfono, email, CURP..."
-                        value={patientSearchTerm}
-                        onChange={(e) => setPatientSearchTerm(e.target.value)}
-                        InputProps={{
-                          startAdornment: <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />
-                        }}
-                        sx={{ flexGrow: 1 }}
-                      />
-                      <Button variant="outlined" startIcon={<AddIcon />}>
-                        Filtros
-                      </Button>
-                    </Box>
-                  </Paper>
-
-                  {/* Patients Table */}
-                  <Paper>
-                    <TableContainer>
-                      <Table>
-                        <TableHead>
-                          <TableRow>
-                            <TableCell sx={{ fontWeight: 600 }}>Paciente</TableCell>
-                            <TableCell sx={{ fontWeight: 600 }}>Contacto</TableCell>
-                            <TableCell sx={{ fontWeight: 600 }}>Última Visita</TableCell>
-                            <TableCell sx={{ fontWeight: 600 }}>Estado</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {patients && Array.isArray(patients) && patients.map((patient) => (
-                            <TableRow 
-                              key={patient.id} 
-                              hover
-                              onClick={() => handleEditPatient(patient)}
-                              sx={{ cursor: 'pointer' }}
-                            >
-                              <TableCell>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                  <Avatar sx={{ bgcolor: 'primary.main' }}>
-                                    {patient.first_name[0]}{patient.paternal_surname[0]}
-                                  </Avatar>
-                                  <Box>
-                                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                                      {patient.full_name} ({calculateAge(patient.date_of_birth)})
-                                    </Typography>
-                                    <Typography variant="body2" color="text.secondary">
-                                      {patient.gender}
-                                    </Typography>
-                                  </Box>
-                                </Box>
-                              </TableCell>
-                              <TableCell>
-                                <Box>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                                    <PhoneIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                                    <Typography variant="body2">{patient.phone}</Typography>
-                                  </Box>
-                                  {patient.email && (
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                      <EmailIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                                      <Typography variant="body2">{patient.email}</Typography>
-                                    </Box>
-                                  )}
-                                </Box>
-                              </TableCell>
-                              <TableCell>
-                                {patient.last_visit ? (
-                                  <Typography variant="body2">
-                                    {new Date(patient.last_visit).toLocaleDateString('es-MX')}
-                                  </Typography>
-                                ) : (
-                                  <Typography variant="body2" color="text.secondary">
-                                    Sin visitas
-                                  </Typography>
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                <Chip 
-                                  label={patient.status === 'active' ? 'Activo' : 'Inactivo'}
-                                  size="small"
-                                  color={patient.status === 'active' ? 'success' : 'default'}
-                                />
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                          {(!patients || !Array.isArray(patients) || patients.length === 0) && (
-                            <TableRow>
-                              <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
-                                <Typography variant="body1" color="text.secondary">
-                                  No hay pacientes registrados
-                                </Typography>
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </Paper>
-                </Box>
-              )}
-
-              {activeView === 'patient-detail' && selectedPatientData && (
-                <Box>
-                  {/* Patient Detail Header */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                    <IconButton 
-                      onClick={() => setActiveView('patients')} 
-                      sx={{ mr: 2 }}
-                      color="primary"
-                    >
-                      <ArrowBackIcon />
-                    </IconButton>
-                    <Box sx={{ flexGrow: 1 }}>
-                      <Typography variant="h4" sx={{ fontWeight: 600, mb: 1 }}>
-                        {selectedPatientData.patient.full_name}
-                      </Typography>
-                      <Typography variant="body1" color="text.secondary">
-                        {selectedPatientData.patient.age} años • {selectedPatientData.patient.gender} • 
-                        {selectedPatientData.patient.insurance_type || 'Sin seguro'} • 
-                        {selectedPatientData.patient.total_visits} visitas
-                      </Typography>
-                    </Box>
-                    <Button
-                      variant="outlined"
-                      startIcon={<EditIcon />}
-                      onClick={() => handleEditPatient(selectedPatientData.patient)}
-                    >
-                      Editar Paciente
-                    </Button>
-                  </Box>
-
-                  {/* Patient Overview Cards */}
-                  <Box sx={{ display: 'flex', gap: 3, mb: 4, flexDirection: { xs: 'column', md: 'row' } }}>
-                    <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 30%' } }}>
-                      <Card>
-                        <CardContent>
-                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                            <Avatar sx={{ bgcolor: 'primary.main', mr: 2 }}>
-                              <PatientIcon />
-                            </Avatar>
-                            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                              Información Personal
-                          </Typography>
-                          </Box>
-                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <PhoneIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                              <Typography variant="body2">{selectedPatientData.patient.phone}</Typography>
-                            </Box>
-                            {selectedPatientData.patient.email && (
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <EmailIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                                <Typography variant="body2">{selectedPatientData.patient.email}</Typography>
-                              </Box>
-                            )}
-                            {selectedPatientData.patient.address && (
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <LocationIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                                <Typography variant="body2">{selectedPatientData.patient.address}</Typography>
-                              </Box>
-                            )}
-                            <Divider sx={{ my: 1 }} />
-                            <Typography variant="body2" color="text.secondary">
-                              <strong>CURP:</strong> {selectedPatientData.patient.curp || 'No registrado'}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                              <strong>Tipo de Sangre:</strong> {selectedPatientData.patient.blood_type || 'No registrado'}
-                          </Typography>
-                          </Box>
-                        </CardContent>
-                      </Card>
-                    </Box>
-
-                    <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 30%' } }}>
-                      <Card>
-                        <CardContent>
-                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                            <Avatar sx={{ bgcolor: 'warning.main', mr: 2 }}>
-                              <WarningIcon />
-                            </Avatar>
-                            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                              Alertas Médicas
-                          </Typography>
-                          </Box>
-                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                            {selectedPatientData.patient.allergies && (
-                              <Chip 
-                                icon={<WarningIcon />}
-                                label={`Alergia: ${selectedPatientData.patient.allergies}`}
-                                color="error"
-                                variant="outlined"
-                                size="small"
-                              />
-                            )}
-                            {selectedPatientData.patient.chronic_conditions && (
-                              <Chip 
-                                icon={<HospitalIcon />}
-                                label={`Crónico: ${selectedPatientData.patient.chronic_conditions}`}
-                                color="warning"
-                                variant="outlined"
-                                size="small"
-                              />
-                            )}
-                            {selectedPatientData.active_prescriptions.length > 0 && (
-                              <Chip 
-                                icon={<MedicationIcon />}
-                                label={`${selectedPatientData.active_prescriptions.length} medicamentos activos`}
-                                color="info"
-                                variant="outlined"
-                                size="small"
-                              />
-                            )}
-                          </Box>
-                        </CardContent>
-                      </Card>
-                    </Box>
-
-                    <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 30%' } }}>
-                      <Card>
-                        <CardContent>
-                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                            <Avatar sx={{ bgcolor: 'success.main', mr: 2 }}>
-                              <ScheduleIcon />
-                            </Avatar>
-                            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                              Próximas Citas
-                          </Typography>
-                          </Box>
-                          {selectedPatientData.upcoming_appointments.length > 0 ? (
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                              {selectedPatientData.upcoming_appointments.slice(0, 2).map((appointment) => (
-                                <Box key={appointment.id} sx={{ p: 1, borderRadius: 1, bgcolor: 'grey.50' }}>
-                                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                    {formatDateTime(appointment.date_time)}
-                          </Typography>
-                                  <Typography variant="caption" color="text.secondary">
-                                    {appointment.chief_complaint || appointment.appointment_type}
-                                  </Typography>
-                                </Box>
-                              ))}
-                            </Box>
-                          ) : (
-                            <Typography variant="body2" color="text.secondary">
-                              No hay citas programadas
-                            </Typography>
-                          )}
-                        </CardContent>
-                      </Card>
-                    </Box>
-                  </Box>
-
-                  <Typography variant="h6" sx={{ mb: 2 }}>
-                    Funcionalidad médica completa en desarrollo...
-                  </Typography>
-                </Box>
-              )}
-
-              {activeView !== 'dashboard' && activeView !== 'patients' && activeView !== 'patient-detail' && (
-                <Box>
-                  <Box sx={{ 
-                    display: 'flex', 
-                    flexDirection: 'column', 
-                    alignItems: 'center', 
-                    justifyContent: 'center',
-                    minHeight: '60vh',
-                    textAlign: 'center'
-                  }}>
-                    <Box sx={{ 
-                      width: 120, 
-                      height: 120, 
-                      borderRadius: '50%', 
-                      backgroundColor: 'primary.light',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      mb: 3
-                    }}>
-                      <Typography variant="h2" sx={{ color: 'white' }}>🚧</Typography>
-                    </Box>
-                    <Typography variant="h4" sx={{ mb: 2, fontWeight: 600 }}>
-                      Funcionalidad en Desarrollo
-                  </Typography>
-                    <Typography variant="body1" color="text.secondary" sx={{ mb: 4, maxWidth: 500 }}>
-                      Estamos construyendo esta sección para maximizar tu eficiencia. 
-                      Mientras tanto, puedes usar el dashboard principal para gestionar tu práctica.
-                    </Typography>
-                    <Button 
-                      variant="contained" 
-                      onClick={() => setActiveView('dashboard')}
-                      startIcon={<DashboardIcon />}
-                      size="large"
-                    >
-                      Volver al Dashboard
-                    </Button>
-                  </Box>
-                </Box>
-              )}
             </Box>
           </Box>
         </Container>
 
         {/* Patient Dialog */}
-        <Dialog 
-          open={patientDialogOpen} 
-          onClose={() => {
-            setPatientDialogOpen(false);
-            setFormErrorMessage('');
-            setFieldErrors({});
-          }}
-          maxWidth="md"
-          fullWidth
-        >
-          <DialogTitle>
-            {isEditingPatient ? 'Editar Paciente' : 'Nuevo Paciente'}
-          </DialogTitle>
-
-          {/* Error Message Ribbon */}
-          {formErrorMessage && (
-            <Paper 
-              sx={{ 
-                p: 2, 
-                mx: 3,
-                mb: 2,
-                backgroundColor: '#ffebee',
-                borderColor: '#f44336',
-                color: '#c62828',
-                border: '1px solid #f44336',
-                borderRadius: 2,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between'
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <WarningIcon sx={{ color: '#c62828' }} />
-                <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                  {formErrorMessage}
-                </Typography>
-              </Box>
-              <IconButton 
-                size="small" 
-                onClick={() => setFormErrorMessage('')}
-                sx={{ color: '#c62828' }}
-              >
-                <CloseIcon fontSize="small" />
-              </IconButton>
-            </Paper>
-          )}
-
-          <DialogContent>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 1 }}>
-              {/* SECCIÓN: INFORMACIÓN PERSONAL OBLIGATORIA - NOM-004 */}
-              <Box sx={{ width: '100%' }}>
-                <Typography variant="h6" sx={{ color: '#d32f2f', fontWeight: 'bold', mb: 2 }}>
-                  📋 DATOS OBLIGATORIOS
-                </Typography>
-              </Box>
-              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
-                <TextField
-                  fullWidth
-                  label="Nombre(s)"
-                  value={patientFormData.first_name}
-                  onChange={(e) => handleFieldChange('first_name', e.target.value)}
-                  error={!!fieldErrors.first_name}
-                  helperText={fieldErrors.first_name}
-                  required
-                />
-              </Box>
-              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
-                <TextField
-                  fullWidth
-                  label="Apellido Paterno"
-                  value={patientFormData.paternal_surname}
-                  onChange={(e) => handleFieldChange('paternal_surname', e.target.value)}
-                  error={!!fieldErrors.paternal_surname}
-                  helperText={fieldErrors.paternal_surname}
-                  required
-                />
-              </Box>
-              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
-                <TextField
-                  fullWidth
-                  label="Apellido Materno"
-                  value={patientFormData.maternal_surname}
-                  onChange={(e) => handleFieldChange('maternal_surname', e.target.value)}
-                  error={!!fieldErrors.maternal_surname}
-                  helperText={fieldErrors.maternal_surname}
-                  required
-                />
-              </Box>
-              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
-                <TextField
-                  fullWidth
-                  label="Fecha de Nacimiento"
-                  type="date"
-                  value={patientFormData.date_of_birth}
-                  onChange={(e) => handleFieldChange('date_of_birth', e.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                  error={!!fieldErrors.date_of_birth}
-                  helperText={fieldErrors.date_of_birth}
-                  required
-                />
-              </Box>
-              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
-                <FormControl fullWidth required error={!!fieldErrors.gender}>
-                  <InputLabel>Género</InputLabel>
-                  <Select
-                    value={patientFormData.gender}
-                    onChange={(e) => handleFieldChange('gender', e.target.value)}
-                    label="Género"
-                  >
-                    <MenuItem value="Masculino">Masculino</MenuItem>
-                    <MenuItem value="Femenino">Femenino</MenuItem>
-                  </Select>
-                  {fieldErrors.gender && (
-                    <Typography variant="caption" color="error" sx={{ mt: 0.5, ml: 1.75 }}>
-                      {fieldErrors.gender}
-                    </Typography>
-                  )}
-                </FormControl>
-              </Box>
-              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
-                <TextField
-                  fullWidth
-                  label="Teléfono"
-                  placeholder="Ej: +52 555 123 4567 o 5551234567"
-                  value={patientFormData.phone}
-                  onChange={(e) => handleFieldChange('phone', e.target.value)}
-                  error={!!fieldErrors.phone}
-                  helperText={fieldErrors.phone || "Formato México: +52 555 123 4567 o 5551234567 (10 dígitos mínimo)"}
-                  required
-                />
-              </Box>
-              <Box sx={{ width: '100%' }}>
-                <TextField
-                  fullWidth
-                  label="Domicilio de Residencia"
-                  value={patientFormData.address}
-                  onChange={(e) => handleFieldChange('address', e.target.value)}
-                  multiline
-                  rows={2}
-                  error={!!fieldErrors.address}
-                  helperText={fieldErrors.address || "Dirección completa donde reside actualmente (calle, número, colonia, localidad, municipio, estado)"}
-                  required
-                />
-              </Box>
-              
-              {/* Antecedentes Médicos - NOM-004 Obligatorio */}
-              <Box sx={{ width: '100%' }}>
-                <TextField
-                  fullWidth
-                  label="Antecedentes Heredofamiliares"
-                  value={patientFormData.family_history}
-                  onChange={(e) => handleFieldChange('family_history', e.target.value)}
-                  multiline
-                  rows={3}
-                  error={!!fieldErrors.family_history}
-                  helperText={fieldErrors.family_history || "Enfermedades presentes en familiares directos"}
-                  required
-                />
-              </Box>
-              <Box sx={{ width: '100%' }}>
-                <TextField
-                  fullWidth
-                  label="Antecedentes Personales Patológicos"
-                  value={patientFormData.personal_pathological_history}
-                  onChange={(e) => handleFieldChange('personal_pathological_history', e.target.value)}
-                  multiline
-                  rows={3}
-                  error={!!fieldErrors.personal_pathological_history}
-                  helperText={fieldErrors.personal_pathological_history || "Enfermedades, cirugías, hospitalizaciones previas"}
-                  required
-                />
-              </Box>
-              <Box sx={{ width: '100%' }}>
-                <TextField
-                  fullWidth
-                  label="Antecedentes Personales No Patológicos"
-                  value={patientFormData.personal_non_pathological_history}
-                  onChange={(e) => handleFieldChange('personal_non_pathological_history', e.target.value)}
-                  multiline
-                  rows={3}
-                  error={!!fieldErrors.personal_non_pathological_history}
-                  helperText={fieldErrors.personal_non_pathological_history || "Hábitos: tabaquismo, alcoholismo, ejercicio, alimentación"}
-                  required
-                />
-              </Box>
-              
-              {/* SECCIÓN: INFORMACIÓN OPCIONAL */}
-              <Box sx={{ width: '100%' }}>
-                <Typography variant="h6" sx={{ color: '#1976d2', fontWeight: 'bold', mt: 3, mb: 2 }}>
-                  📝 DATOS OPCIONALES
-                </Typography>
-              </Box>
-
-              {/* Identificación Adicional */}
-              <Box sx={{ width: '100%' }}>
-                <Typography variant="subtitle1" sx={{ color: '#1976d2', fontWeight: 'bold', mb: 1 }}>
-                  Identificación Adicional
-                </Typography>
-              </Box>
-              
-              {/* 1. Nacionalidad */}
-              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
-                <FormControl fullWidth>
-                  <InputLabel>Nacionalidad</InputLabel>
-                  <Select
-                    value={patientFormData.nationality}
-                    onChange={(e) => setPatientFormData({...patientFormData, nationality: e.target.value})}
-                    label="Nacionalidad"
-                  >
-                    <MenuItem value="Mexicana">Mexicana</MenuItem>
-                    <MenuItem value="Extranjera">Extranjera</MenuItem>
-                  </Select>
-                </FormControl>
-              </Box>
-              
-              {/* 2. Estado de Nacimiento */}
-              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
-                <FormControl fullWidth>
-                  <InputLabel>Estado de Nacimiento</InputLabel>
-                  <Select
-                    value={patientFormData.birth_state_code}
-                    onChange={(e) => setPatientFormData({...patientFormData, birth_state_code: e.target.value})}
-                    label="Estado de Nacimiento"
-                  >
-                    <MenuItem value="">--Seleccionar--</MenuItem>
-                    <MenuItem value="Aguascalientes">Aguascalientes</MenuItem>
-                    <MenuItem value="Baja California">Baja California</MenuItem>
-                    <MenuItem value="Baja California Sur">Baja California Sur</MenuItem>
-                    <MenuItem value="Campeche">Campeche</MenuItem>
-                    <MenuItem value="Chiapas">Chiapas</MenuItem>
-                    <MenuItem value="Chihuahua">Chihuahua</MenuItem>
-                    <MenuItem value="Ciudad de México">Ciudad de México</MenuItem>
-                    <MenuItem value="Coahuila">Coahuila</MenuItem>
-                    <MenuItem value="Colima">Colima</MenuItem>
-                    <MenuItem value="Durango">Durango</MenuItem>
-                    <MenuItem value="Estado de México">Estado de México</MenuItem>
-                    <MenuItem value="Guanajuato">Guanajuato</MenuItem>
-                    <MenuItem value="Guerrero">Guerrero</MenuItem>
-                    <MenuItem value="Hidalgo">Hidalgo</MenuItem>
-                    <MenuItem value="Jalisco">Jalisco</MenuItem>
-                    <MenuItem value="Michoacán">Michoacán</MenuItem>
-                    <MenuItem value="Morelos">Morelos</MenuItem>
-                    <MenuItem value="Nayarit">Nayarit</MenuItem>
-                    <MenuItem value="Nuevo León">Nuevo León</MenuItem>
-                    <MenuItem value="Oaxaca">Oaxaca</MenuItem>
-                    <MenuItem value="Puebla">Puebla</MenuItem>
-                    <MenuItem value="Querétaro">Querétaro</MenuItem>
-                    <MenuItem value="Quintana Roo">Quintana Roo</MenuItem>
-                    <MenuItem value="San Luis Potosí">San Luis Potosí</MenuItem>
-                    <MenuItem value="Sinaloa">Sinaloa</MenuItem>
-                    <MenuItem value="Sonora">Sonora</MenuItem>
-                    <MenuItem value="Tabasco">Tabasco</MenuItem>
-                    <MenuItem value="Tamaulipas">Tamaulipas</MenuItem>
-                    <MenuItem value="Tlaxcala">Tlaxcala</MenuItem>
-                    <MenuItem value="Veracruz">Veracruz</MenuItem>
-                    <MenuItem value="Yucatán">Yucatán</MenuItem>
-                    <MenuItem value="Zacatecas">Zacatecas</MenuItem>
-                    <MenuItem value="Extranjero">Extranjero</MenuItem>
-                  </Select>
-                </FormControl>
-              </Box>
-              
-              {/* 3. Estado de Residencia */}
-              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
-                <FormControl fullWidth>
-                  <InputLabel>Estado de Residencia</InputLabel>
-                  <Select
-                    value={patientFormData.state}
-                    onChange={(e) => setPatientFormData({...patientFormData, state: e.target.value})}
-                    label="Estado de Residencia"
-                  >
-                    <MenuItem value="Aguascalientes">Aguascalientes</MenuItem>
-                    <MenuItem value="Baja California">Baja California</MenuItem>
-                    <MenuItem value="Baja California Sur">Baja California Sur</MenuItem>
-                    <MenuItem value="Campeche">Campeche</MenuItem>
-                    <MenuItem value="Chiapas">Chiapas</MenuItem>
-                    <MenuItem value="Chihuahua">Chihuahua</MenuItem>
-                    <MenuItem value="Ciudad de México">Ciudad de México</MenuItem>
-                    <MenuItem value="Coahuila">Coahuila</MenuItem>
-                    <MenuItem value="Colima">Colima</MenuItem>
-                    <MenuItem value="Durango">Durango</MenuItem>
-                    <MenuItem value="Estado de México">Estado de México</MenuItem>
-                    <MenuItem value="Guanajuato">Guanajuato</MenuItem>
-                    <MenuItem value="Guerrero">Guerrero</MenuItem>
-                    <MenuItem value="Hidalgo">Hidalgo</MenuItem>
-                    <MenuItem value="Jalisco">Jalisco</MenuItem>
-                    <MenuItem value="Michoacán">Michoacán</MenuItem>
-                    <MenuItem value="Morelos">Morelos</MenuItem>
-                    <MenuItem value="Nayarit">Nayarit</MenuItem>
-                    <MenuItem value="Nuevo León">Nuevo León</MenuItem>
-                    <MenuItem value="Oaxaca">Oaxaca</MenuItem>
-                    <MenuItem value="Puebla">Puebla</MenuItem>
-                    <MenuItem value="Querétaro">Querétaro</MenuItem>
-                    <MenuItem value="Quintana Roo">Quintana Roo</MenuItem>
-                    <MenuItem value="San Luis Potosí">San Luis Potosí</MenuItem>
-                    <MenuItem value="Sinaloa">Sinaloa</MenuItem>
-                    <MenuItem value="Sonora">Sonora</MenuItem>
-                    <MenuItem value="Tabasco">Tabasco</MenuItem>
-                    <MenuItem value="Tamaulipas">Tamaulipas</MenuItem>
-                    <MenuItem value="Tlaxcala">Tlaxcala</MenuItem>
-                    <MenuItem value="Veracruz">Veracruz</MenuItem>
-                    <MenuItem value="Yucatán">Yucatán</MenuItem>
-                    <MenuItem value="Zacatecas">Zacatecas</MenuItem>
-                  </Select>
-                  <Typography variant="caption" sx={{ mt: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
-                    Estado donde reside actualmente
-                  </Typography>
-                </FormControl>
-              </Box>
-              
-              {/* 4. CURP */}
-              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
-                <TextField
-                  fullWidth
-                  label="CURP"
-                  value={patientFormData.curp}
-                  onChange={(e) => setPatientFormData({...patientFormData, curp: e.target.value})}
-                  helperText="Clave Única de Registro de Población"
-                />
-              </Box>
-
-              {/* 5. Tipo de Seguro */}
-              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
-                <FormControl fullWidth>
-                  <InputLabel>Tipo de Seguro</InputLabel>
-                  <Select
-                    value={patientFormData.insurance_type}
-                    onChange={(e) => setPatientFormData({...patientFormData, insurance_type: e.target.value})}
-                    label="Tipo de Seguro"
-                  >
-                    <MenuItem value="">--Sin seguro--</MenuItem>
-                    <MenuItem value="IMSS">IMSS (Instituto Mexicano del Seguro Social)</MenuItem>
-                    <MenuItem value="ISSSTE">ISSSTE (Instituto de Seguridad y Servicios Sociales de los Trabajadores del Estado)</MenuItem>
-                    <MenuItem value="PEMEX">PEMEX</MenuItem>
-                    <MenuItem value="SEDENA">SEDENA (Secretaría de la Defensa Nacional)</MenuItem>
-                    <MenuItem value="SEMAR">SEMAR (Secretaría de Marina)</MenuItem>
-                    <MenuItem value="Seguro Popular">Seguro Popular</MenuItem>
-                    <MenuItem value="INSABI">INSABI (Instituto de Salud para el Bienestar)</MenuItem>
-                    <MenuItem value="Privado">Seguro Privado</MenuItem>
-                    <MenuItem value="Otro">Otro</MenuItem>
-                  </Select>
-                </FormControl>
-              </Box>
-
-              {/* Contacto de Emergencia */}
-              <Box sx={{ width: '100%' }}>
-                <Typography variant="subtitle1" sx={{ color: '#1976d2', fontWeight: 'bold', mt: 2, mb: 1 }}>
-                  Contacto de Emergencia
-                </Typography>
-              </Box>
-              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
-                <TextField
-                  fullWidth
-                  label="Nombre del Contacto"
-                  value={patientFormData.emergency_contact_name}
-                  onChange={(e) => setPatientFormData({...patientFormData, emergency_contact_name: e.target.value})}
-                />
-              </Box>
-              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
-                <TextField
-                  fullWidth
-                  label="Teléfono del Contacto"
-                  value={patientFormData.emergency_contact_phone}
-                  onChange={(e) => setPatientFormData({...patientFormData, emergency_contact_phone: e.target.value})}
-                />
-              </Box>
-              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
-                <FormControl fullWidth>
-                  <InputLabel>Relación</InputLabel>
-                  <Select
-                    value={patientFormData.emergency_contact_relationship}
-                    onChange={(e) => setPatientFormData({...patientFormData, emergency_contact_relationship: e.target.value})}
-                    label="Relación"
-                  >
-                    <MenuItem value="Padre">Padre</MenuItem>
-                    <MenuItem value="Madre">Madre</MenuItem>
-                    <MenuItem value="Esposo">Esposo</MenuItem>
-                    <MenuItem value="Esposa">Esposa</MenuItem>
-                    <MenuItem value="Hijo">Hijo</MenuItem>
-                    <MenuItem value="Hija">Hija</MenuItem>
-                    <MenuItem value="Hermano">Hermano</MenuItem>
-                    <MenuItem value="Hermana">Hermana</MenuItem>
-                    <MenuItem value="Abuelo">Abuelo</MenuItem>
-                    <MenuItem value="Abuela">Abuela</MenuItem>
-                    <MenuItem value="Amigo">Amigo</MenuItem>
-                    <MenuItem value="Otro">Otro</MenuItem>
-                  </Select>
-                </FormControl>
-              </Box>
-
-              {/* Información Médica Adicional */}
-              <Box sx={{ width: '100%' }}>
-                <Typography variant="subtitle1" sx={{ color: '#1976d2', fontWeight: 'bold', mt: 2, mb: 1 }}>
-                  Información Médica Adicional
-                </Typography>
-              </Box>
-              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
-                <FormControl fullWidth>
-                  <InputLabel>Tipo de Sangre</InputLabel>
-                  <Select
-                    value={patientFormData.blood_type}
-                    onChange={(e) => setPatientFormData({...patientFormData, blood_type: e.target.value})}
-                    label="Tipo de Sangre"
-                  >
-                    <MenuItem value="A+">A+</MenuItem>
-                    <MenuItem value="A-">A-</MenuItem>
-                    <MenuItem value="B+">B+</MenuItem>
-                    <MenuItem value="B-">B-</MenuItem>
-                    <MenuItem value="AB+">AB+</MenuItem>
-                    <MenuItem value="AB-">AB-</MenuItem>
-                    <MenuItem value="O+">O+</MenuItem>
-                    <MenuItem value="O-">O-</MenuItem>
-                  </Select>
-                </FormControl>
-              </Box>
-              <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
-                <TextField
-                  fullWidth
-                  label="Alergias"
-                  value={patientFormData.allergies}
-                  onChange={(e) => setPatientFormData({...patientFormData, allergies: e.target.value})}
-                  multiline
-                  rows={2}
-                />
-              </Box>
-
-            </Box>
-          </DialogContent>
-          <DialogActions sx={{ justifyContent: 'flex-end', gap: 1, p: 3 }}>
-            {/* Delete button - only show when editing existing patient */}
-            {isEditingPatient && selectedPatient && (
-              <Button 
-                onClick={handleDeletePatient}
-                variant="contained"
-                color="error"
-                startIcon={<DeleteIcon />}
-                disabled={isSubmitting}
-              >
-                Eliminar Paciente
-              </Button>
-            )}
-            
-            <Button 
-              onClick={() => {
-                setPatientDialogOpen(false);
-                setFieldErrors({});
-                setFormErrorMessage('');
-              }}
-              disabled={isSubmitting}
-              variant="outlined"
-            >
-              Cancelar
-            </Button>
-            
-            <Button 
-              onClick={handlePatientSubmit} 
-              variant="contained"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Guardando...' : (isEditingPatient ? 'Actualizar' : 'Crear')} Paciente
-            </Button>
-          </DialogActions>
-        </Dialog>
+        <Suspense fallback={<LoadingFallback message="Cargando formulario..." />}>
+          <PatientDialog
+            open={patientDialogOpen}
+            onClose={() => {
+              setPatientDialogOpen(false);
+              setFormErrorMessage('');
+              setFieldErrors({});
+            }}
+            isEditing={isEditingPatient}
+            formData={patientFormData}
+            onFormDataChange={handleFieldChange}
+            onSubmit={handlePatientSubmit}
+            fieldErrors={fieldErrors}
+            formErrorMessage={formErrorMessage}
+            setFormErrorMessage={setFormErrorMessage}
+            isSubmitting={isSubmitting}
+            onDelete={isEditingPatient ? handleDeletePatient : undefined}
+          />
+        </Suspense>
       </Box>
     </ThemeProvider>
   );

@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional, Dict, Any
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from enum import Enum
 import uvicorn
 import uuid
@@ -459,11 +459,26 @@ medical_history_db = [
         "chief_complaint": "Control de hipertensión",
         "history_present_illness": "Paciente acude a control rutinario de hipertensión arterial. Refiere adherencia al tratamiento.",
         "physical_examination": "TA: 125/80 mmHg, FC: 72 lpm, peso: 78kg. Auscultación cardiopulmonar normal.",
-        "diagnosis": "Hipertensión arterial controlada",
+        "primary_diagnosis": "Hipertensión arterial controlada",
+        "primary_diagnosis_cie10": "I10",
+        "secondary_diagnoses": None,
+        "secondary_diagnoses_cie10": None,
         "treatment_plan": "Continuar con Losartán 50mg diario. Control en 3 meses.",
+        "therapeutic_plan": "Manejo farmacológico con IECA. Modificaciones del estilo de vida.",
         "follow_up_instructions": "Mantener dieta hiposódica y ejercicio regular. Monitoreo de TA en casa.",
-        "doctor_notes": "Excelente control de cifras tensionales. Paciente muy adherente al tratamiento.",
-        "vital_signs_id": "VS002"
+        "prognosis": "Excelente con tratamiento adecuado",
+        "laboratory_results": None,
+        "imaging_studies": None,
+        "interconsultations": None,
+        "doctor_name": "Dr. García Martínez",
+        "doctor_professional_license": "1234567",
+        "doctor_specialty": "Medicina General",
+        "created_by": "Dr. García Martínez",
+        "created_at": datetime(2024, 8, 18, 11, 30),
+        "updated_by": None,
+        "updated_at": None,
+        "vital_signs_id": "VS002",
+        "prescription_ids": ["PRES003"]
     }
 ]
 
@@ -1010,6 +1025,82 @@ async def get_medical_history(history_id: str):
     
     return MedicalHistory(**history)
 
+@app.put("/api/medical-history/{history_id}", response_model=MedicalHistory)
+async def update_medical_history(history_id: str, history_update: MedicalHistory):
+    """Update a medical history record"""
+    history_index = next((i for i, h in enumerate(medical_history_db) if h["id"] == history_id), None)
+    if history_index is None:
+        raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
+    
+    # Update the record
+    updated_history = {
+        **medical_history_db[history_index],
+        **history_update.dict(exclude={"id", "patient_id", "created_at", "created_by"}),
+        "updated_at": datetime.now(),
+        "updated_by": history_update.created_by  # In a real app, this would come from auth
+    }
+    
+    medical_history_db[history_index] = updated_history
+    return MedicalHistory(**updated_history)
+
+@app.delete("/api/medical-history/{history_id}")
+async def delete_medical_history(history_id: str):
+    """Delete a medical history record"""
+    history_index = next((i for i, h in enumerate(medical_history_db) if h["id"] == history_id), None)
+    if history_index is None:
+        raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
+    
+    deleted_history = medical_history_db.pop(history_index)
+    return {"message": "Historia clínica eliminada exitosamente", "deleted_id": deleted_history["id"]}
+
+# Response model for consultations with patient name
+class ConsultationResponse(MedicalHistory):
+    patient_name: Optional[str] = None
+
+# Get all medical consultations (for consultation management view)
+@app.get("/api/consultations", response_model=List[ConsultationResponse])
+async def get_all_consultations(
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    doctor_name: Optional[str] = None,
+    patient_search: Optional[str] = None
+):
+    """Get all medical consultations with optional filters"""
+    consultations = medical_history_db.copy()
+    
+    # Filter by date range
+    if date_from:
+        consultations = [c for c in consultations if isinstance(c["date"], datetime) and c["date"].date() >= date_from]
+    if date_to:
+        consultations = [c for c in consultations if isinstance(c["date"], datetime) and c["date"].date() <= date_to]
+    
+    # Filter by doctor
+    if doctor_name:
+        consultations = [c for c in consultations if doctor_name.lower() in c["doctor_name"].lower()]
+    
+    # Filter by patient (search in patient names)
+    if patient_search:
+        patient_ids = []
+        for patient in patients_db:
+            full_name = f"{patient['first_name']} {patient['paternal_surname']} {patient['maternal_surname']}"
+            if patient_search.lower() in full_name.lower():
+                patient_ids.append(patient["id"])
+        consultations = [c for c in consultations if c["patient_id"] in patient_ids]
+    
+    # Enrich consultations with patient names
+    enriched_consultations = []
+    for consultation in sorted(consultations, key=lambda x: x["date"], reverse=True):
+        # Find patient name
+        patient = next((p for p in patients_db if p["id"] == consultation["patient_id"]), None)
+        consultation_copy = consultation.copy()
+        if patient:
+            consultation_copy["patient_name"] = f"{patient['first_name']} {patient['paternal_surname']} {patient['maternal_surname']}"
+        else:
+            consultation_copy["patient_name"] = "Paciente no encontrado"
+        enriched_consultations.append(consultation_copy)
+    
+    return [ConsultationResponse(**record) for record in enriched_consultations]
+
 # Vital Signs Endpoints
 @app.get("/api/patients/{patient_id}/vital-signs", response_model=List[VitalSigns])
 async def get_patient_vital_signs(patient_id: str):
@@ -1155,6 +1246,114 @@ async def cancel_appointment(appointment_id: str):
     appointments_db[appointment_index]["status"] = AppointmentStatus.CANCELLED
     appointments_db[appointment_index]["updated_at"] = datetime.now()
     return {"message": "Cita cancelada exitosamente"}
+
+# Enhanced appointments endpoints for agenda management
+@app.put("/api/appointments/{appointment_id}/full", response_model=Appointment)
+async def update_appointment_full(appointment_id: str, appointment_update: Appointment):
+    """Update an appointment with full data"""
+    appointment_index = next((i for i, a in enumerate(appointments_db) if a["id"] == appointment_id), None)
+    if appointment_index is None:
+        raise HTTPException(status_code=404, detail="Cita no encontrada")
+    
+    updated_appointment = {
+        **appointments_db[appointment_index],
+        **appointment_update.dict(exclude={"id", "patient_id", "created_at"}),
+        "updated_at": datetime.now()
+    }
+    
+    appointments_db[appointment_index] = updated_appointment
+    return Appointment(**updated_appointment)
+
+@app.get("/api/agenda/daily", response_model=List[Appointment])
+async def get_daily_agenda(target_date: Optional[date] = None):
+    """Get daily agenda - all appointments for a specific date"""
+    if not target_date:
+        target_date = date.today()
+    
+    daily_appointments = [a for a in appointments_db if a["date_time"].date() == target_date]
+    return [Appointment(**record) for record in sorted(daily_appointments, key=lambda x: x["date_time"])]
+
+@app.get("/api/agenda/weekly")
+async def get_weekly_agenda(start_date: Optional[date] = None):
+    """Get weekly agenda view"""
+    
+    if not start_date:
+        start_date = date.today()
+    
+    # Get 7 days starting from start_date
+    weekly_appointments = []
+    for i in range(7):
+        current_date = start_date + timedelta(days=i)
+        day_appointments = [a for a in appointments_db if a["date_time"].date() == current_date]
+        weekly_appointments.append({
+            "date": current_date,
+            "appointments": [Appointment(**record) for record in sorted(day_appointments, key=lambda x: x["date_time"])],
+            "total_appointments": len(day_appointments)
+        })
+    
+    return weekly_appointments
+
+@app.get("/api/agenda/available-slots")
+async def get_available_slots(target_date: date, duration_minutes: int = 30):
+    """Get available time slots for a specific date"""
+    
+    # Define working hours (8:00 AM to 6:00 PM)
+    start_hour = 8
+    end_hour = 18
+    
+    # Get existing appointments for the date
+    existing_appointments = [a for a in appointments_db if a["date_time"].date() == target_date and a["status"] not in [AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW]]
+    
+    # Generate all possible slots
+    available_slots = []
+    current_time = datetime.combine(target_date, datetime.min.time().replace(hour=start_hour))
+    end_time = datetime.combine(target_date, datetime.min.time().replace(hour=end_hour))
+    
+    while current_time < end_time:
+        # Check if this slot conflicts with existing appointments
+        slot_end = current_time + timedelta(minutes=duration_minutes)
+        is_available = True
+        
+        for appointment in existing_appointments:
+            app_start = appointment["date_time"]
+            app_end = app_start + timedelta(minutes=appointment.get("duration_minutes", 30))
+            
+            # Check for overlap
+            if (current_time < app_end and slot_end > app_start):
+                is_available = False
+                break
+        
+        if is_available:
+            available_slots.append({
+                "start_time": current_time,
+                "end_time": slot_end,
+                "duration_minutes": duration_minutes
+            })
+        
+        current_time += timedelta(minutes=duration_minutes)
+    
+    return available_slots
+
+@app.post("/api/appointments/bulk-update")
+async def bulk_update_appointments(updates: List[Dict[str, Any]]):
+    """Bulk update multiple appointments (for drag & drop rescheduling)"""
+    updated_appointments = []
+    
+    for update in updates:
+        appointment_id = update.get("id")
+        if not appointment_id:
+            continue
+            
+        appointment_index = next((i for i, a in enumerate(appointments_db) if a["id"] == appointment_id), None)
+        if appointment_index is not None:
+            # Update the appointment
+            appointments_db[appointment_index].update({
+                **update,
+                "updated_at": datetime.now()
+            })
+            updated_appointments.append(Appointment(**appointments_db[appointment_index]))
+    
+    return {"updated_count": len(updated_appointments), "appointments": updated_appointments}
 
 # Comprehensive Patient Details Endpoint
 @app.get("/api/patients/{patient_id}/complete", response_model=Dict[str, Any])

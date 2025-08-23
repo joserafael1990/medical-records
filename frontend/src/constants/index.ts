@@ -1,0 +1,186 @@
+// ============================================================================
+// CONSTANTS - Configuración y constantes del sistema
+// ============================================================================
+
+// API Configuration
+export const API_CONFIG = {
+  BASE_URL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
+  ENDPOINTS: {
+    HEALTH: '/api/health',
+    PATIENTS: '/api/patients',
+    CONSULTATIONS: '/api/consultations',
+    APPOINTMENTS: '/api/appointments',
+    DASHBOARD: '/api/physicians/dashboard',
+    AGENDA: {
+      DAILY: '/api/agenda/daily',
+      WEEKLY: '/api/agenda/weekly',
+      AVAILABLE_SLOTS: '/api/agenda/available-slots'
+    }
+  },
+  TIMEOUT: 10000,
+  RETRY_ATTEMPTS: 3
+} as const;
+
+// UI Configuration
+export const UI_CONFIG = {
+  DEBOUNCE_DELAY: 500,
+  SUCCESS_MESSAGE_DURATION: 5000,
+  PAGINATION: {
+    DEFAULT_PAGE_SIZE: 10,
+    PAGE_SIZE_OPTIONS: [10, 25, 50, 100]
+  },
+  DIALOG: {
+    MAX_WIDTH: 'lg' as const,
+    ANIMATION_DURATION: 300
+  }
+} as const;
+
+// Form Validation
+export const VALIDATION_RULES = {
+  PHONE: {
+    MEXICO_REGEX: /^\+?52\s?\d{10}$/,
+    MIN_LENGTH: 10
+  },
+  CURP: {
+    REGEX: /^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d$/,
+    LENGTH: 18
+  },
+  EMAIL: {
+    REGEX: /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  },
+  NAME: {
+    MIN_LENGTH: 2,
+    MAX_LENGTH: 50
+  },
+  REQUIRED_FIELDS: {
+    PATIENT: [
+      'first_name',
+      'paternal_surname', 
+      'maternal_surname',
+      'date_of_birth',
+      'gender',
+      'address',
+      'family_history',
+      'personal_pathological_history',
+      'personal_non_pathological_history'
+    ],
+    CONSULTATION: [
+      'patient_id',
+      'chief_complaint',
+      'history_present_illness',
+      'physical_examination',
+      'primary_diagnosis',
+      'treatment_plan',
+      'follow_up_instructions',
+      'doctor_name',
+      'doctor_professional_license'
+    ]
+  }
+} as const;
+
+// Medical Constants
+export const MEDICAL_CONSTANTS = {
+  WORKING_HOURS: {
+    START: 8,
+    END: 18
+  },
+  APPOINTMENT_DURATION: {
+    DEFAULT: 30,
+    OPTIONS: [15, 30, 45, 60, 90, 120]
+  },
+  VITAL_SIGNS_RANGES: {
+    SYSTOLIC_BP: { MIN: 90, MAX: 180 },
+    DIASTOLIC_BP: { MIN: 60, MAX: 120 },
+    HEART_RATE: { MIN: 60, MAX: 100 },
+    TEMPERATURE: { MIN: 35, MAX: 42 },
+    OXYGEN_SATURATION: { MIN: 90, MAX: 100 }
+  }
+} as const;
+
+// Feature Flags
+export const FEATURES = {
+  WHATSAPP_INTEGRATION: process.env.REACT_APP_WHATSAPP === 'true',
+  ADVANCED_ANALYTICS: process.env.REACT_APP_ANALYTICS === 'true',
+  OFFLINE_MODE: process.env.REACT_APP_OFFLINE === 'true',
+  DARK_MODE: process.env.REACT_APP_DARK_MODE === 'true'
+} as const;
+
+// Error Messages
+export const ERROR_MESSAGES = {
+  NETWORK: 'Error de conexión. Verifica tu conexión a internet.',
+  VALIDATION: 'Por favor, corrige los errores en el formulario.',
+  UNAUTHORIZED: 'No tienes permisos para realizar esta acción.',
+  NOT_FOUND: 'El recurso solicitado no fue encontrado.',
+  SERVER_ERROR: 'Error interno del servidor. Intenta más tarde.',
+  TIMEOUT: 'La solicitud tardó demasiado tiempo. Intenta nuevamente.',
+  GENERIC: 'Ha ocurrido un error inesperado.'
+} as const;
+
+// Success Messages
+export const SUCCESS_MESSAGES = {
+  PATIENT_CREATED: 'Paciente creado exitosamente',
+  PATIENT_UPDATED: 'Paciente actualizado exitosamente',
+  PATIENT_DELETED: 'Paciente eliminado exitosamente',
+  CONSULTATION_CREATED: 'Consulta creada exitosamente',
+  CONSULTATION_UPDATED: 'Consulta actualizada exitosamente',
+  APPOINTMENT_CREATED: 'Cita creada exitosamente',
+  APPOINTMENT_UPDATED: 'Cita actualizada exitosamente',
+  APPOINTMENT_CANCELLED: 'Cita cancelada exitosamente'
+} as const;
+
+// Mexican States (INEGI Codes)
+export const MEXICAN_STATES = [
+  { code: '01', name: 'Aguascalientes' },
+  { code: '02', name: 'Baja California' },
+  { code: '03', name: 'Baja California Sur' },
+  { code: '04', name: 'Campeche' },
+  { code: '05', name: 'Coahuila' },
+  { code: '06', name: 'Colima' },
+  { code: '07', name: 'Chiapas' },
+  { code: '08', name: 'Chihuahua' },
+  { code: '09', name: 'Ciudad de México' },
+  { code: '10', name: 'Durango' },
+  { code: '11', name: 'Guanajuato' },
+  { code: '12', name: 'Guerrero' },
+  { code: '13', name: 'Hidalgo' },
+  { code: '14', name: 'Jalisco' },
+  { code: '15', name: 'México' },
+  { code: '16', name: 'Michoacán' },
+  { code: '17', name: 'Morelos' },
+  { code: '18', name: 'Nayarit' },
+  { code: '19', name: 'Nuevo León' },
+  { code: '20', name: 'Oaxaca' },
+  { code: '21', name: 'Puebla' },
+  { code: '22', name: 'Querétaro' },
+  { code: '23', name: 'Quintana Roo' },
+  { code: '24', name: 'San Luis Potosí' },
+  { code: '25', name: 'Sinaloa' },
+  { code: '26', name: 'Sonora' },
+  { code: '27', name: 'Tabasco' },
+  { code: '28', name: 'Tamaulipas' },
+  { code: '29', name: 'Tlaxcala' },
+  { code: '30', name: 'Veracruz' },
+  { code: '31', name: 'Yucatán' },
+  { code: '32', name: 'Zacatecas' }
+] as const;
+
+// Theme Configuration
+export const THEME_CONFIG = {
+  COLORS: {
+    PRIMARY: '#0B5394',
+    SECONDARY: '#34A853',
+    ERROR: '#EA4335',
+    WARNING: '#FBBC04',
+    SUCCESS: '#34A853'
+  },
+  BREAKPOINTS: {
+    XS: 0,
+    SM: 600,
+    MD: 900,
+    LG: 1200,
+    XL: 1536
+  },
+  SPACING: {
+    UNIT: 8
+  }
+} as const;

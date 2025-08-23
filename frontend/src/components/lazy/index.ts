@@ -1,0 +1,14 @@
+import { lazy } from 'react';
+
+// Lazy load views for code splitting
+export const DashboardView = lazy(() => import('../views/DashboardView'));
+export const PatientsView = lazy(() => import('../views/PatientsView'));
+export const ConsultationsView = lazy(() => import('../views/ConsultationsView'));
+export const AgendaView = lazy(() => import('../views/AgendaView'));
+
+// Lazy load dialogs
+export const PatientDialog = lazy(() => import('../dialogs/PatientDialog'));
+export const ConsultationDialog = lazy(() => import('../dialogs/ConsultationDialog'));
+
+// Lazy load heavy components
+export const VirtualizedTable = lazy(() => import('../common/VirtualizedTable'));
