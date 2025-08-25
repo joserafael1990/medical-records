@@ -29,16 +29,19 @@ import {
 import {
   Close as CloseIcon,
   Person as PersonIcon,
+  PersonAdd as PersonAddIcon,
   Assignment as AssignmentIcon,
   Healing as HealingIcon,
   Medication as MedicationIcon,
+  Science as ScienceIcon,
   Schedule as ScheduleIcon,
   NavigateNext as NextIcon,
   NavigateBefore as BackIcon,
   Save as SaveIcon
 } from '@mui/icons-material';
-import { Patient, ConsultationFormData } from '../../types';
+import { Patient, ConsultationFormData, ClinicalStudy } from '../../types';
 import { ErrorRibbon } from '../common/ErrorRibbon';
+import ClinicalStudiesSection from '../common/ClinicalStudiesSection';
 
 interface ConsultationDialogProps {
   open: boolean;
@@ -52,6 +55,11 @@ interface ConsultationDialogProps {
   setFormErrorMessage: (message: string) => void;
   isSubmitting: boolean;
   fieldErrors?: { [key: string]: string };
+  onCreateNewPatient?: () => void; // Callback para crear nuevo paciente
+  clinicalStudies?: ClinicalStudy[]; // Estudios clínicos
+  onAddClinicalStudy?: () => void;
+  onEditClinicalStudy?: (study: ClinicalStudy) => void;
+  onDeleteClinicalStudy?: (studyId: string) => void;
 }
 
 const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
@@ -65,7 +73,12 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   formErrorMessage,
   setFormErrorMessage,
   isSubmitting,
-  fieldErrors = {}
+  fieldErrors = {},
+  onCreateNewPatient,
+  clinicalStudies = [],
+  onAddClinicalStudy,
+  onEditClinicalStudy,
+  onDeleteClinicalStudy
 }) => {
   const [activeStep, setActiveStep] = useState(0);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -90,6 +103,11 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       label: 'Tratamiento',
       icon: <MedicationIcon />,
       description: 'Plan de tratamiento y seguimiento'
+    },
+    {
+      label: 'Estudios Clínicos',
+      icon: <ScienceIcon />,
+      description: 'Estudios de laboratorio, radiología y otros'
     }
   ];
 
@@ -126,17 +144,23 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       case 0:
         return formData.patient_id && formData.date;
       case 1:
-        return formData.chief_complaint && formData.history_present_illness && formData.physical_examination;
+        return formData.chief_complaint && formData.history_present_illness && formData.physical_examination && 
+               formData.family_history && formData.personal_pathological_history && formData.personal_non_pathological_history;
       case 2:
         return formData.primary_diagnosis;
       case 3:
-        return formData.treatment_plan && formData.follow_up_instructions && formData.doctor_name && formData.doctor_professional_license;
+        return formData.treatment_plan && formData.follow_up_instructions;
       default:
         return false;
     }
   };
 
   const canProceed = isStepValid(activeStep);
+  
+  // Para el último step, verificar que todos los steps obligatorios estén completos
+  const canSubmit = activeStep === steps.length - 1 
+    ? isStepValid(0) && isStepValid(1) && isStepValid(2) && isStepValid(3)
+    : canProceed;
 
   const renderStepContent = (step: number) => {
     switch (step) {
@@ -144,34 +168,52 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         return (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {/* Patient Selection */}
-            <Autocomplete
-              options={patients}
-              getOptionLabel={(option) => option.full_name}
-              value={selectedPatient}
-              onChange={(_, newValue) => handlePatientChange(newValue)}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Seleccionar Paciente"
-                  required
-                  error={!!fieldErrors.patient_id}
-                  helperText={fieldErrors.patient_id}
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+              <Box sx={{ flex: 1 }}>
+                <Autocomplete
+                  options={patients}
+                  getOptionLabel={(option) => option.full_name}
+                  value={selectedPatient}
+                  onChange={(_, newValue) => handlePatientChange(newValue)}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Seleccionar Paciente"
+                      required
+                      error={!!fieldErrors.patient_id}
+                      helperText={fieldErrors.patient_id}
+                    />
+                  )}
+                  renderOption={(props, option) => (
+                    <Box component="li" {...props}>
+                      <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
+                        {option.first_name[0]}{option.paternal_surname[0]}
+                      </Avatar>
+                      <Box>
+                        <Typography variant="body1">{option.full_name}</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {option.phone} • {option.email}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  )}
                 />
+              </Box>
+              {onCreateNewPatient && (
+                <Button
+                  variant="outlined"
+                  onClick={onCreateNewPatient}
+                  startIcon={<PersonAddIcon />}
+                  sx={{ 
+                    mt: 0.5,
+                    minWidth: 'fit-content',
+                    px: 2
+                  }}
+                >
+                  Nuevo
+                </Button>
               )}
-              renderOption={(props, option) => (
-                <Box component="li" {...props}>
-                  <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
-                    {option.first_name[0]}{option.paternal_surname[0]}
-                  </Avatar>
-                  <Box>
-                    <Typography variant="body1">{option.full_name}</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {option.phone} • {option.email}
-                    </Typography>
-                  </Box>
-                </Box>
-              )}
-            />
+            </Box>
 
             {/* Selected Patient Info */}
             {selectedPatient && (
@@ -275,6 +317,51 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               error={!!fieldErrors.physical_examination}
               helperText={fieldErrors.physical_examination || "Incluye signos vitales, inspección, palpación, percusión y auscultación"}
             />
+
+            <Divider sx={{ my: 2 }}>
+              <Typography variant="subtitle2" color="text.secondary">
+                Antecedentes Médicos
+              </Typography>
+            </Divider>
+
+            <TextField
+              label="Antecedentes Heredofamiliares"
+              multiline
+              rows={3}
+              value={formData.family_history || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, family_history: e.target.value }))}
+              fullWidth
+              required
+              placeholder="Enfermedades familiares relevantes (diabetes, hipertensión, cáncer, etc.)..."
+              error={!!fieldErrors.family_history}
+              helperText={fieldErrors.family_history || "OBLIGATORIO NOM-004: Antecedentes médicos de familiares directos"}
+            />
+
+            <TextField
+              label="Antecedentes Personales Patológicos"
+              multiline
+              rows={3}
+              value={formData.personal_pathological_history || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, personal_pathological_history: e.target.value }))}
+              fullWidth
+              required
+              placeholder="Enfermedades previas, cirugías, hospitalizaciones, uso de sustancias..."
+              error={!!fieldErrors.personal_pathological_history}
+              helperText={fieldErrors.personal_pathological_history || "OBLIGATORIO NOM-004: Historia médica personal (incluyendo tabaco, alcohol, drogas)"}
+            />
+
+            <TextField
+              label="Antecedentes Personales No Patológicos"
+              multiline
+              rows={3}
+              value={formData.personal_non_pathological_history || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, personal_non_pathological_history: e.target.value }))}
+              fullWidth
+              required
+              placeholder="Hábitos: alimentación, ejercicio, sueño, trabajo, vivienda..."
+              error={!!fieldErrors.personal_non_pathological_history}
+              helperText={fieldErrors.personal_non_pathological_history || "OBLIGATORIO NOM-004: Hábitos y estilo de vida del paciente"}
+            />
           </Box>
         );
 
@@ -301,12 +388,12 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               </Box>
               <Box sx={{ flex: 1 }}>
                 <TextField
-                  label="Código CIE-10"
+                  label="Código CIE-10 (Opcional)"
                   value={formData.primary_diagnosis_cie10 || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, primary_diagnosis_cie10: e.target.value }))}
                   fullWidth
-                  placeholder="A00.0"
-                  helperText="Código de clasificación internacional"
+                  placeholder="E11.9"
+                  helperText="Opcional: Código de clasificación internacional (no requerido por NOM-004)"
                 />
               </Box>
             </Box>
@@ -331,11 +418,12 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               </Box>
               <Box sx={{ flex: 1 }}>
                 <TextField
-                  label="Código CIE-10"
+                  label="Código CIE-10 (Opcional)"
                   value={formData.secondary_diagnoses_cie10 || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, secondary_diagnoses_cie10: e.target.value }))}
                   fullWidth
-                  placeholder="B00.0"
+                  placeholder="I10"
+                  helperText="Opcional: Código de clasificación internacional"
                 />
               </Box>
             </Box>
@@ -384,43 +472,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
             <Divider />
 
-            <Typography variant="h6">Información del Médico</Typography>
-            
-            <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
-              <Box sx={{ flex: 1 }}>
-                <TextField
-                  label="Nombre del Doctor"
-                  value={formData.doctor_name || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, doctor_name: e.target.value }))}
-                  fullWidth
-                  required
-                  error={!!fieldErrors.doctor_name}
-                  helperText={fieldErrors.doctor_name}
-                />
-              </Box>
-              <Box sx={{ flex: 1 }}>
-                <TextField
-                  label="Cédula Profesional"
-                  value={formData.doctor_professional_license || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, doctor_professional_license: e.target.value }))}
-                  fullWidth
-                  required
-                  error={!!fieldErrors.doctor_professional_license}
-                  helperText={fieldErrors.doctor_professional_license}
-                />
-              </Box>
-            </Box>
-
-            <TextField
-              label="Especialidad"
-              value={formData.doctor_specialty || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, doctor_specialty: e.target.value }))}
-              fullWidth
-              placeholder="Medicina General, Cardiología, etc."
-            />
-
-            <Divider />
-
             <Typography variant="h6">Información Adicional (Opcional)</Typography>
 
             <TextField
@@ -450,6 +501,35 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               fullWidth
               placeholder="Interconsultas solicitadas..."
             />
+          </Box>
+        );
+
+      case 4:
+        return (
+          <Box sx={{ p: 0 }}>
+            {onAddClinicalStudy && onEditClinicalStudy && onDeleteClinicalStudy ? (
+              <ClinicalStudiesSection
+                consultationId={formData.patient_id} // Temporal - usar consultation id cuando esté disponible
+                patientId={formData.patient_id}
+                studies={clinicalStudies}
+                onAddStudy={onAddClinicalStudy}
+                onEditStudy={onEditClinicalStudy}
+                onDeleteStudy={onDeleteClinicalStudy}
+                onViewFile={(fileUrl) => window.open(fileUrl, '_blank')}
+                onDownloadFile={(fileUrl, fileName) => {
+                  const link = document.createElement('a');
+                  link.href = fileUrl;
+                  link.download = fileName;
+                  link.click();
+                }}
+              />
+            ) : (
+              <Box sx={{ p: 3, textAlign: 'center' }}>
+                <Typography color="text.secondary">
+                  Funcionalidad de estudios clínicos no disponible
+                </Typography>
+              </Box>
+            )}
           </Box>
         );
 
@@ -573,7 +653,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           {activeStep === steps.length - 1 ? (
             <Button 
               onClick={onSubmit}
-              disabled={isSubmitting || !canProceed}
+              disabled={isSubmitting || !canSubmit}
               variant="contained"
               startIcon={<SaveIcon />}
               sx={{ borderRadius: '8px', minWidth: 120 }}

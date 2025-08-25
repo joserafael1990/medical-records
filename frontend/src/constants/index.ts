@@ -16,7 +16,8 @@ export const API_CONFIG = {
       WEEKLY: '/api/agenda/weekly',
       AVAILABLE_SLOTS: '/api/agenda/available-slots'
     },
-    DOCTOR_PROFILE: '/api/doctor/profile'
+    DOCTOR_PROFILE: '/api/doctor/profile',
+    CLINICAL_STUDIES: '/api/clinical-studies'
   },
   TIMEOUT: 10000,
   RETRY_ATTEMPTS: 3
@@ -60,21 +61,21 @@ export const VALIDATION_RULES = {
       'maternal_surname',
       'date_of_birth',
       'gender',
-      'address',
-      'family_history',
-      'personal_pathological_history',
-      'personal_non_pathological_history'
+      'address'
+      // Antecedentes movidos a CONSULTATION según NOM-004 (parte de evaluación clínica)
     ],
     CONSULTATION: [
       'patient_id',
       'chief_complaint',
       'history_present_illness',
+      'family_history',              // OBLIGATORIO NOM-004
+      'personal_pathological_history',    // OBLIGATORIO NOM-004  
+      'personal_non_pathological_history', // OBLIGATORIO NOM-004
       'physical_examination',
       'primary_diagnosis',
       'treatment_plan',
-      'follow_up_instructions',
-      'doctor_name',
-      'doctor_professional_license'
+      'follow_up_instructions'
+      // doctor_name, doctor_professional_license: se obtienen del perfil del usuario
     ]
   }
 } as const;
@@ -156,7 +157,6 @@ export const MEDICAL_SPECIALTIES = [
   
   // Pediatría Especializada
   'Cardiología Pediátrica',
-  'Cirugía Pediátrica',
   'Endocrinología Pediátrica',
   'Gastroenterología Pediátrica',
   'Hematología Pediátrica',
@@ -264,6 +264,87 @@ export const MEXICAN_STATES = [
 
 // Lista simple de nombres de estados para formularios
 export const MEXICAN_STATE_NAMES = MEXICAN_STATES.map(state => state.name);
+
+// ============================================================================
+// CLINICAL STUDIES CONSTANTS - Estudios Clínicos
+// ============================================================================
+
+export const STUDY_TYPES = [
+  { value: 'laboratory', label: 'Estudios de Laboratorio' },
+  { value: 'radiology', label: 'Estudios Radiológicos' },
+  { value: 'pathology', label: 'Estudios de Patología' },
+  { value: 'cardiology', label: 'Estudios Cardiológicos' },
+  { value: 'endoscopy', label: 'Estudios Endoscópicos' },
+  { value: 'biopsy', label: 'Biopsias' },
+  { value: 'cytology', label: 'Citologías' },
+  { value: 'microbiology', label: 'Estudios Microbiológicos' },
+  { value: 'genetics', label: 'Estudios Genéticos' },
+  { value: 'other', label: 'Otros Estudios' }
+] as const;
+
+export const STUDY_STATUS_OPTIONS = [
+  { value: 'pending', label: 'Pendiente', color: '#ffa726' },
+  { value: 'in_progress', label: 'En Proceso', color: '#42a5f5' },
+  { value: 'completed', label: 'Completado', color: '#66bb6a' },
+  { value: 'cancelled', label: 'Cancelado', color: '#ef5350' }
+] as const;
+
+export const URGENCY_LEVELS = [
+  { value: 'normal', label: 'Normal' },
+  { value: 'urgent', label: 'Urgente' },
+  { value: 'stat', label: 'STAT (Inmediato)' }
+] as const;
+
+export const COMMON_STUDY_NAMES = {
+  laboratory: [
+    'Biometría hemática completa',
+    'Química sanguínea',
+    'Perfil lipídico',
+    'Pruebas de función hepática',
+    'Pruebas de función renal',
+    'Examen general de orina',
+    'Hemoglobina glucosilada (HbA1c)',
+    'Perfil tiroideo',
+    'Marcadores tumorales',
+    'Coagulación (TP/TPT)'
+  ],
+  radiology: [
+    'Radiografía de tórax',
+    'Radiografía de abdomen',
+    'Tomografía computarizada (TAC)',
+    'Resonancia magnética (RM)',
+    'Ultrasonido abdominal',
+    'Mamografía',
+    'Densitometría ósea',
+    'Angiografía',
+    'PET Scan',
+    'Radiografías de extremidades'
+  ],
+  cardiology: [
+    'Electrocardiograma (ECG)',
+    'Ecocardiograma',
+    'Prueba de esfuerzo',
+    'Holter de 24 horas',
+    'Cateterismo cardíaco',
+    'Angioplastia',
+    'Monitor de presión arterial',
+    'Ecocardiograma Doppler',
+    'Ergometría',
+    'Estudio electrofisiológico'
+  ],
+  endoscopy: [
+    'Endoscopia digestiva alta',
+    'Colonoscopia',
+    'Rectosigmoidoscopia',
+    'Broncoscopia',
+    'Laparoscopia diagnóstica',
+    'Histeroscopia',
+    'Artroscopia',
+    'Cistoscopia',
+    'CPRE',
+    'Endoscopia con biopsia'
+  ]
+} as const;
 
 // Theme Configuration
 export const THEME_CONFIG = {

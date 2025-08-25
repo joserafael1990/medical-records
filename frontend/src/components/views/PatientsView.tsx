@@ -24,13 +24,14 @@ import {
   Phone as PhoneIcon,
   Email as EmailIcon
 } from '@mui/icons-material';
-import { Patient } from '../../types';
+import { Patient, Consultation } from '../../types';
 import { calculateAge } from '../../utils';
 import { ErrorRibbon } from '../common/ErrorRibbon';
 import { useMemoizedSearch } from '../../hooks/useMemoizedSearch';
 
 interface PatientsViewProps {
   patients: Patient[];
+  consultations: Consultation[];
   patientSearchTerm: string;
   setPatientSearchTerm: (term: string) => void;
   successMessage: string;
@@ -41,6 +42,7 @@ interface PatientsViewProps {
 
 const PatientsView: React.FC<PatientsViewProps> = ({
   patients,
+  consultations,
   patientSearchTerm,
   setPatientSearchTerm,
   successMessage,
@@ -48,6 +50,19 @@ const PatientsView: React.FC<PatientsViewProps> = ({
   handleNewPatient,
   handleEditPatient
 }) => {
+  // Helper function to get the latest consultation reason for a patient
+  const getLatestConsultationReason = (patientId: string): string => {
+    const patientConsultations = consultations.filter(c => c.patient_id === patientId);
+    if (patientConsultations.length === 0) return 'Sin consultas';
+    
+    // Sort by date (most recent first)
+    const sortedConsultations = patientConsultations.sort((a, b) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+    
+    return sortedConsultations[0].chief_complaint || 'No especificado';
+  };
+
   // Memoized search for better performance
   const filteredPatients = useMemoizedSearch(patients, patientSearchTerm, {
     searchFields: ['full_name', 'phone', 'email', 'curp'],
@@ -129,6 +144,7 @@ const PatientsView: React.FC<PatientsViewProps> = ({
                 <TableCell sx={{ fontWeight: 600 }}>Paciente</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Contacto</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Última Visita</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Motivo de la consulta</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Estado</TableCell>
               </TableRow>
             </TableHead>
@@ -179,6 +195,20 @@ const PatientsView: React.FC<PatientsViewProps> = ({
                         Sin visitas
                       </Typography>
                     )}
+                  </TableCell>
+                  <TableCell>
+                    <Typography 
+                      variant="body2" 
+                      sx={{ 
+                        maxWidth: 200, 
+                        overflow: 'hidden', 
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}
+                      title={getLatestConsultationReason(patient.id)}
+                    >
+                      {getLatestConsultationReason(patient.id)}
+                    </Typography>
                   </TableCell>
                   <TableCell>
                     <Chip 

@@ -51,7 +51,8 @@ import {
 } from './components/lazy';
 import { ConsultationDetailView } from './components';
 import { LoadingFallback } from './components';
-import { Patient, DoctorFormData } from './types';
+import { Patient, DoctorFormData, ConsultationFormData } from './types';
+import { API_CONFIG } from './constants';
 import { useDoctorProfile } from './hooks/useDoctorProfile';
 import {
   MedicalServices as MedicalIcon,
@@ -396,13 +397,20 @@ function App() {
   const [consultationSearchTerm, setConsultationSearchTerm] = useState('');
   const [consultationDialogOpen, setConsultationDialogOpen] = useState(false);
   const [isEditingConsultation, setIsEditingConsultation] = useState(false);
+  const [creatingPatientFromConsultation, setCreatingPatientFromConsultation] = useState(false);
   const [selectedConsultation, setSelectedConsultation] = useState<any>(null);
   const [consultationDetailView, setConsultationDetailView] = useState(false);
-  const [consultationFormData, setConsultationFormData] = useState({
+  const [consultationFormData, setConsultationFormData] = useState<ConsultationFormData>({
     patient_id: '',
     date: '',
     chief_complaint: '',
     history_present_illness: '',
+    
+    // Antecedentes (parte de la evaluación clínica)
+    family_history: '',
+    personal_pathological_history: '',
+    personal_non_pathological_history: '',
+    
     physical_examination: '',
     primary_diagnosis: '',
     primary_diagnosis_cie10: '',
@@ -456,9 +464,6 @@ function App() {
     date_of_birth: '',
     gender: '',
     address: '',
-    family_history: '',
-    personal_pathological_history: '',
-    personal_non_pathological_history: '',
     
     // ===== CAMPOS OPCIONALES =====
     // Identificación adicional
@@ -613,9 +618,7 @@ function App() {
           emergency_contact_name: 'Juan González',
           emergency_contact_phone: '+52 555 987 6543',
           emergency_contact_relationship: 'Esposo',
-          family_history: 'Diabetes mellitus tipo 2 (madre), Hipertensión arterial (padre)',
-          personal_pathological_history: 'Diabetes mellitus tipo 2 diagnosticada en 2020',
-          personal_non_pathological_history: 'Niega tabaquismo, alcoholismo ocasional',
+
           created_at: '2024-01-15T10:30:00',
           last_visit: '2024-08-20T14:45:00',
           total_visits: 5,
@@ -638,9 +641,6 @@ function App() {
       date_of_birth: '',
       gender: '',
       address: '',
-      family_history: '',
-      personal_pathological_history: '',
-      personal_non_pathological_history: '',
       
       // ===== CAMPOS OPCIONALES =====
       // Identificación adicional
@@ -712,6 +712,12 @@ const handleNewConsultation = useCallback(() => {
     date: new Date().toISOString().slice(0, 16),
     chief_complaint: '',
     history_present_illness: '',
+    
+    // Antecedentes (parte de la evaluación clínica)
+    family_history: '',
+    personal_pathological_history: '',
+    personal_non_pathological_history: '',
+    
     physical_examination: '',
     primary_diagnosis: '',
     primary_diagnosis_cie10: '',
@@ -741,6 +747,12 @@ const handleEditConsultation = useCallback((consultation: any) => {
     date: consultation.date || '',
     chief_complaint: consultation.chief_complaint || '',
     history_present_illness: consultation.history_present_illness || '',
+    
+    // Antecedentes (parte de la evaluación clínica)
+    family_history: consultation.family_history || '',
+    personal_pathological_history: consultation.personal_pathological_history || '',
+    personal_non_pathological_history: consultation.personal_non_pathological_history || '',
+    
     physical_examination: consultation.physical_examination || '',
     primary_diagnosis: consultation.primary_diagnosis || '',
     primary_diagnosis_cie10: consultation.primary_diagnosis_cie10 || '',
@@ -829,7 +841,7 @@ const handlePrintConsultation = useCallback((consultation: any) => {
 // Fetch consultations from API
 const fetchConsultations = useCallback(async () => {
   try {
-    const response = await fetch(`http://localhost:8000/api/consultations?patient_search=${consultationSearchTerm}`);
+    const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CONSULTATIONS}?patient_search=${consultationSearchTerm}`);
     if (response.ok) {
       const data = await response.json();
       setConsultations(data);
@@ -901,12 +913,24 @@ const handleConsultationSubmit = useCallback(async () => {
     
     const method = isEditingConsultation ? 'PUT' : 'POST';
     
+    // Agregar información del médico desde el perfil del usuario
+    const doctorFullName = doctorProfile 
+      ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name} ${doctorProfile.paternal_surname} ${doctorProfile.maternal_surname || ''}`.trim()
+      : 'Dr. Usuario';
+      
+    const consultationData = {
+      ...consultationFormData,
+      doctor_name: doctorFullName,
+      doctor_professional_license: doctorProfile?.professional_license || '',
+      doctor_specialty: doctorProfile?.specialty || 'Medicina General'
+    };
+    
     const response = await fetch(url, {
       method,
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(consultationFormData),
+      body: JSON.stringify(consultationData),
     });
 
     if (response.ok) {
@@ -928,7 +952,7 @@ const handleConsultationSubmit = useCallback(async () => {
   } finally {
     setIsSubmitting(false);
   }
-}, [consultationFormData, isEditingConsultation, selectedConsultation, fetchConsultations]);
+}, [consultationFormData, isEditingConsultation, selectedConsultation, fetchConsultations, doctorProfile]);
 
 // Appointment handlers (basic implementation)
 const handleNewAppointment = () => {
@@ -951,9 +975,6 @@ const validatePatientForm = () => {
   if (!patientFormData.gender) errors.gender = 'Este campo es obligatorio';
   if (!patientFormData.phone.trim()) errors.phone = 'Este campo es obligatorio';
   if (!patientFormData.address.trim()) errors.address = 'Este campo es obligatorio';
-  if (!patientFormData.family_history.trim()) errors.family_history = 'Este campo es obligatorio';
-  if (!patientFormData.personal_pathological_history.trim()) errors.personal_pathological_history = 'Este campo es obligatorio';
-  if (!patientFormData.personal_non_pathological_history.trim()) errors.personal_non_pathological_history = 'Este campo es obligatorio';
   
   return errors;
 };
@@ -1042,9 +1063,7 @@ const handlePatientSubmit = async () => {
       chronic_conditions: patientFormData.chronic_conditions || null,
       current_medications: patientFormData.current_medications || null,
       blood_type: patientFormData.blood_type || null,
-      family_history: patientFormData.family_history,
-      personal_pathological_history: patientFormData.personal_pathological_history,
-      personal_non_pathological_history: patientFormData.personal_non_pathological_history,
+
       previous_hospitalizations: patientFormData.previous_hospitalizations || null,
       surgical_history: patientFormData.surgical_history || null
     };
@@ -1075,16 +1094,33 @@ const handlePatientSubmit = async () => {
         
         // Immediate UI updates
         setPatientDialogOpen(false);
-        setActiveView('patients');
         
-        // Batch state updates to avoid multiple re-renders
-        setTimeout(() => {
-          setFormErrorMessage('');
-          setFieldErrors({});
-          resetPatientForm();
-          showSuccessMessage(`✅ El paciente ${patientName} fue agregado con éxito`);
-          fetchPatients();
-        }, 10);
+        if (creatingPatientFromConsultation) {
+          // If creating patient from consultation, return to consultation dialog
+          setCreatingPatientFromConsultation(false);
+          setConsultationDialogOpen(true);
+          
+          // Batch state updates to avoid multiple re-renders  
+          setTimeout(() => {
+            setFormErrorMessage('');
+            setFieldErrors({});
+            resetPatientForm();
+            showSuccessMessage(`✅ El paciente ${patientName} fue agregado con éxito. Ahora puedes seleccionarlo en la consulta.`);
+            fetchPatients(); // This will make the new patient available in the consultation dialog
+          }, 10);
+        } else {
+          // Normal patient creation flow
+          setActiveView('patients');
+          
+          // Batch state updates to avoid multiple re-renders
+          setTimeout(() => {
+            setFormErrorMessage('');
+            setFieldErrors({});
+            resetPatientForm();
+            showSuccessMessage(`✅ El paciente ${patientName} fue agregado con éxito`);
+            fetchPatients();
+          }, 10);
+        }
         
         console.log('Success flow completed');
       } else {
@@ -1097,16 +1133,33 @@ const handlePatientSubmit = async () => {
           
           // Immediate UI updates
           setPatientDialogOpen(false);
-          setActiveView('patients');
           
-          // Batch other updates
-          setTimeout(() => {
-            setFormErrorMessage('');
-            setFieldErrors({});
-            resetPatientForm();
-            showSuccessMessage(`✅ El paciente ${patientName} fue agregado con éxito`);
-            fetchPatients();
-          }, 10);
+          if (creatingPatientFromConsultation) {
+            // If creating patient from consultation, return to consultation dialog
+            setCreatingPatientFromConsultation(false);
+            setConsultationDialogOpen(true);
+            
+            // Batch other updates
+            setTimeout(() => {
+              setFormErrorMessage('');
+              setFieldErrors({});
+              resetPatientForm();
+              showSuccessMessage(`✅ El paciente ${patientName} fue agregado con éxito. Ahora puedes seleccionarlo en la consulta.`);
+              fetchPatients();
+            }, 10);
+          } else {
+            // Normal patient creation flow
+            setActiveView('patients');
+            
+            // Batch other updates
+            setTimeout(() => {
+              setFormErrorMessage('');
+              setFieldErrors({});
+              resetPatientForm();
+              showSuccessMessage(`✅ El paciente ${patientName} fue agregado con éxito`);
+              fetchPatients();
+            }, 10);
+          }
         }
       }
     }
@@ -1157,9 +1210,6 @@ const handleEditPatient = (patient: Patient) => {
     gender: patient.gender,
     phone: patient.phone,
     address: patient.address,
-    family_history: patient.family_history,
-    personal_pathological_history: patient.personal_pathological_history,
-    personal_non_pathological_history: patient.personal_non_pathological_history,
     
     // ===== CAMPOS OPCIONALES =====
     // Identificación adicional
@@ -1792,6 +1842,7 @@ const formatDateTime = (dateString: string) => {
                 <Suspense fallback={<LoadingFallback message="Cargando pacientes..." />}>
                   <PatientsView
                     patients={patients}
+                    consultations={consultations}
                     patientSearchTerm={patientSearchTerm}
                     setPatientSearchTerm={setPatientSearchTerm}
                     successMessage={successMessage}
@@ -2149,6 +2200,12 @@ const formatDateTime = (dateString: string) => {
             setFormErrorMessage={setFormErrorMessage}
             isSubmitting={isSubmitting}
             fieldErrors={fieldErrors}
+            onCreateNewPatient={() => {
+              setConsultationDialogOpen(false);
+              setIsEditingPatient(false);
+              setCreatingPatientFromConsultation(true);
+              setPatientDialogOpen(true);
+            }}
           />
         </Suspense>
 

@@ -1,11 +1,40 @@
-from fastapi import FastAPI, HTTPException
+"""
+Historias Clínicas API - Backend with PostgreSQL
+Sistema de gestión de historias clínicas médicas conforme a NOM-004
+"""
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date, timedelta
 from enum import Enum
+from sqlalchemy.orm import Session
+from sqlalchemy import text
 import uvicorn
 import uuid
+import os
+import shutil
+from pathlib import Path
+
+# Database imports
+from database import (
+    get_db, init_db, 
+    Patient as DBPatient, 
+    DoctorProfile as DBDoctorProfile,
+    MedicalHistory as DBMedicalHistory,
+    VitalSigns as DBVitalSigns,
+    ClinicalStudy as DBClinicalStudy,
+    Appointment as DBAppointment
+)
+from db_service import (
+    PatientService, DoctorService, ConsultationService, 
+    ClinicalStudyService, get_dashboard_data
+)
+
+# ============================================================================
+# FASTAPI APP CONFIGURATION
+# ============================================================================
 
 app = FastAPI(title="Historias Clínicas API")
 
@@ -17,7 +46,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Enums for medical data
+# Initialize database on startup
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database tables"""
+    print("🚀 Starting Historias Clínicas API...")
+    init_db()
+    print("✅ Database initialized successfully")
+
+# Configure file uploads for clinical studies
+UPLOAD_DIRECTORY = "uploads/clinical_studies"
+Path(UPLOAD_DIRECTORY).mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+# ============================================================================
+# ENUMS AND DATA MODELS
+# ============================================================================
+
 class AppointmentStatus(str, Enum):
     SCHEDULED = "scheduled"
     CONFIRMED = "confirmed"
@@ -46,613 +91,125 @@ class CivilStatus(str, Enum):
     MARRIED = "casado"
     DIVORCED = "divorciado"
     WIDOWED = "viudo"
-    COMMON_LAW = "union_libre"
+    SEPARATED = "separado"
+    COHABITING = "union_libre"
 
-class EducationLevel(str, Enum):
-    NO_EDUCATION = "sin_estudios"
-    PRIMARY_INCOMPLETE = "primaria_incompleta"
-    PRIMARY_COMPLETE = "primaria_completa"
-    SECONDARY_INCOMPLETE = "secundaria_incompleta"
-    SECONDARY_COMPLETE = "secundaria_completa"
-    HIGH_SCHOOL_INCOMPLETE = "preparatoria_incompleta"
-    HIGH_SCHOOL_COMPLETE = "preparatoria_completa"
-    TECHNICAL = "tecnico"
-    UNIVERSITY_INCOMPLETE = "universidad_incompleta"
-    UNIVERSITY_COMPLETE = "universidad_completa"
-    POSTGRADUATE = "posgrado"
-
-class Occupation(str, Enum):
-    UNEMPLOYED = "desempleado"
-    STUDENT = "estudiante"
-    HOUSEWIFE = "ama_de_casa"
-    EMPLOYEE = "empleado"
-    PROFESSIONAL = "profesionista"
-    BUSINESS_OWNER = "empresario"
-    RETIRED = "jubilado"
+class Gender(str, Enum):
+    MALE = "masculino"
+    FEMALE = "femenino"
     OTHER = "otro"
 
-class Religion(str, Enum):
-    CATHOLIC = "catolica"
-    CHRISTIAN = "cristiana"
-    JEWISH = "judia"
-    MUSLIM = "musulmana"
-    OTHER = "otra"
-    NONE = "ninguna"
+# ============================================================================
+# PYDANTIC MODELS (API Request/Response)
+# ============================================================================
 
-# Patient Data Models - NOM-004/NOM-024-SSA3-2012 Compliant
 class PatientBase(BaseModel):
-    # Mandatory fields per NOM-004-SSA3-2012 (campos realmente obligatorios)
-    first_name: str  # Nombre(s) - OBLIGATORIO NOM-004
-    paternal_surname: str  # Primer apellido (apellido paterno) - OBLIGATORIO NOM-004
-    maternal_surname: str  # Segundo apellido (apellido materno) - OBLIGATORIO NOM-004
-    date_of_birth: date  # Fecha de nacimiento - OBLIGATORIO NOM-004
-    gender: str  # Sexo - OBLIGATORIO NOM-004
+    # NOM-004 Required fields
+    first_name: str
+    paternal_surname: str
+    maternal_surname: Optional[str] = None
     
-    # Optional identification fields (no obligatorios por NOM-004)
-    place_of_birth: Optional[str] = None  # Lugar de nacimiento - OPCIONAL
-    birth_state_code: Optional[str] = None  # Clave de la entidad federativa de nacimiento - OPCIONAL
-    nationality: str = "Mexicana"  # Nacionalidad - OPCIONAL
-    curp: Optional[str] = None  # CURP - OPCIONAL (no obligatorio por NOM-004)
-    internal_id: Optional[str] = None  # Folio o número de identificación interno - OPCIONAL
+    # Personal Information
+    curp: Optional[str] = None
+    birth_date: datetime
+    gender: str
+    civil_status: Optional[str] = None
+    nationality: str = "mexicana"
+    birth_place: Optional[str] = None
     
-    # Contact information (obligatorio NOM-004)
-    phone: str  # Teléfono - OBLIGATORIO NOM-004
-    address: str  # Domicilio completo - OBLIGATORIO NOM-004
-    
-    # Optional contact details (no obligatorios por NOM-004)
+    # Contact Information
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    postal_code: Optional[str] = None
+    country: str = "México"
+    phone: Optional[str] = None
     email: Optional[str] = None
-    neighborhood: Optional[str] = None  # Colonia
-    municipality: Optional[str] = None  # Municipio - OPCIONAL
-    state: Optional[str] = None  # Estado - OPCIONAL
-    postal_code: Optional[str] = None  # Código postal
-    
-    # Sociodemographic data (NOM-004 requirements)
-    civil_status: Optional[CivilStatus] = None  # Estado civil
-    education_level: Optional[EducationLevel] = None  # Escolaridad
-    occupation: Optional[Occupation] = None  # Ocupación
-    religion: Optional[Religion] = None  # Religión
-    
-    # Insurance and identification
-    insurance_type: Optional[str] = None  # Tipo de seguridad social
-    insurance_number: Optional[str] = None  # Número de afiliación
-    
-    # Emergency contact (opcional - no requerido por NOM-004)
-    emergency_contact_name: Optional[str] = None  # Responsable legal
+    emergency_contact_name: Optional[str] = None
     emergency_contact_phone: Optional[str] = None
     emergency_contact_relationship: Optional[str] = None
-    emergency_contact_address: Optional[str] = None
     
-    # Medical history
-    allergies: Optional[str] = None  # Alergias
-    chronic_conditions: Optional[str] = None  # Padecimientos crónicos
-    current_medications: Optional[str] = None  # Medicamentos actuales
-    blood_type: Optional[str] = None  # Tipo sanguíneo
+    # Insurance and Medical
+    insurance_provider: Optional[str] = None
+    insurance_number: Optional[str] = None
+    blood_type: Optional[str] = None
+    allergies: Optional[str] = None
+    chronic_conditions: Optional[str] = None
+    current_medications: Optional[str] = None
     
-    # Medical history (OBLIGATORIO NOM-004)
-    family_history: str  # Antecedentes heredofamiliares - OBLIGATORIO NOM-004
-    personal_pathological_history: str  # Antecedentes personales patológicos - OBLIGATORIO NOM-004  
-    personal_non_pathological_history: str  # Antecedentes personales no patológicos - OBLIGATORIO NOM-004
-    
-    # Additional optional medical fields
-    previous_hospitalizations: Optional[str] = None  # Hospitalizaciones previas
-    surgical_history: Optional[str] = None  # Antecedentes quirúrgicos
-
-# Medical History Models
-class VitalSigns(BaseModel):
-    id: Optional[str] = None
-    patient_id: str
-    date_recorded: datetime
-    weight: Optional[float] = None  # kg
-    height: Optional[float] = None  # cm
-    bmi: Optional[float] = None
-    blood_pressure_systolic: Optional[int] = None
-    blood_pressure_diastolic: Optional[int] = None
-    heart_rate: Optional[int] = None  # bpm
-    temperature: Optional[float] = None  # celsius
-    respiratory_rate: Optional[int] = None  # per minute
-    oxygen_saturation: Optional[int] = None  # percentage
-    notes: Optional[str] = None
-
-class MedicalHistory(BaseModel):
-    id: Optional[str] = None
-    patient_id: str
-    date: datetime
-    
-    # NOM-004 mandatory consultation fields
-    chief_complaint: str  # Motivo de la consulta
-    history_present_illness: str  # Historia de la enfermedad actual
-    physical_examination: str  # Exploraci\u00f3n f\u00edsica
-    
-    # Diagnosis with CIE-10 codes (NOM-024 requirement)
-    primary_diagnosis: str  # Diagn\u00f3stico principal
-    primary_diagnosis_cie10: Optional[str] = None  # C\u00f3digo CIE-10
-    secondary_diagnoses: Optional[str] = None  # Diagn\u00f3sticos secundarios
-    secondary_diagnoses_cie10: Optional[str] = None  # C\u00f3digos CIE-10 secundarios
-    
-    # Treatment and plans
-    treatment_plan: str  # Plan de tratamiento
-    therapeutic_plan: Optional[str] = None  # Plan terap\u00e9utico
-    follow_up_instructions: str  # Indicaciones de seguimiento
-    prognosis: Optional[str] = None  # Pron\u00f3stico
-    
-    # Additional clinical information
-    laboratory_results: Optional[str] = None  # Resultados de laboratorio
-    imaging_studies: Optional[str] = None  # Estudios de imagen
-    interconsultations: Optional[str] = None  # Interconsultas
-    
-    # Doctor information (NOM-004 requirement)
-    doctor_name: str  # Nombre del m\u00e9dico
-    doctor_professional_license: str  # C\u00e9dula profesional
-    doctor_specialty: Optional[str] = None  # Especialidad
-    
-    # Audit trail (NOM-024 requirement)
-    created_by: str  # Usuario que cre\u00f3 la nota
-    created_at: datetime  # Fecha y hora de creaci\u00f3n
-    updated_by: Optional[str] = None  # Usuario que modific\u00f3
-    updated_at: Optional[datetime] = None  # Fecha y hora de modificaci\u00f3n
-    
-    # Links to other records
-    vital_signs_id: Optional[str] = None
-    prescription_ids: Optional[List[str]] = None  # Prescripciones asociadas
-
-# Audit Trail Model (NOM-024 requirement)
-class AuditLog(BaseModel):
-    id: Optional[str] = None
-    user_id: str  # Usuario que realizó la acción
-    user_name: str  # Nombre del usuario
-    action: str  # Acción realizada (CREATE, READ, UPDATE, DELETE)
-    resource_type: str  # Tipo de recurso (PATIENT, MEDICAL_HISTORY, PRESCRIPTION, etc.)
-    resource_id: str  # ID del recurso afectado
-    timestamp: datetime  # Fecha y hora de la acción
-    ip_address: Optional[str] = None  # Dirección IP
-    details: Optional[str] = None  # Detalles adicionales
-    old_values: Optional[Dict[str, Any]] = None  # Valores anteriores (para UPDATE)
-    new_values: Optional[Dict[str, Any]] = None  # Valores nuevos (para CREATE/UPDATE)
-
-class Prescription(BaseModel):
-    id: Optional[str] = None
-    patient_id: str
-    medical_history_id: Optional[str] = None
-    
-    # Medication information
-    medication_name: str  # Nombre del medicamento
-    generic_name: Optional[str] = None  # Nombre genérico
-    presentation: Optional[str] = None  # Presentación
-    dosage: str  # Dosis
-    route_administration: Optional[str] = None  # Vía de administración
-    frequency: str  # Frecuencia
-    duration: str  # Duración del tratamiento
-    quantity: Optional[int] = None  # Cantidad a dispensar
-    
-    # Instructions and notes
-    instructions: str  # Indicaciones de uso
-    contraindications: Optional[str] = None  # Contraindicaciones
-    side_effects: Optional[str] = None  # Efectos secundarios
-    
-    # Prescription details (NOM-004 requirement)
-    prescribed_date: datetime
-    doctor_name: str  # Nombre del médico que prescribe
-    doctor_professional_license: str  # Cédula profesional
-    
-    # Status and tracking
-    status: PrescriptionStatus = PrescriptionStatus.ACTIVE
-    dispensed_date: Optional[datetime] = None  # Fecha de dispensación
-    dispensed_by: Optional[str] = None  # Dispensado por
-    
-    # Audit trail
+    # System fields
     created_by: str
-    created_at: datetime
-    updated_by: Optional[str] = None
-    updated_at: Optional[datetime] = None
-    
-    notes: Optional[str] = None
-
-class Appointment(BaseModel):
-    id: Optional[str] = None
-    patient_id: str
-    date_time: datetime
-    duration: int = 30  # minutes
-    appointment_type: AppointmentType
-    status: AppointmentStatus = AppointmentStatus.SCHEDULED
-    chief_complaint: Optional[str] = None
-    notes: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
 
 class PatientCreate(PatientBase):
+    pass
+
+class PatientUpdate(PatientBase):
     pass
 
 class PatientResponse(PatientBase):
     id: str
     full_name: str
-    age: int
-    created_at: datetime
-    last_visit: Optional[datetime] = None
-    total_visits: int = 0
-    status: str = "active"
-    # NOM compliance tracking
-    last_updated: datetime
-    created_by: str  # Usuario que creó el expediente
-    updated_by: Optional[str] = None  # Último usuario que actualizó
+    is_active: bool
+    total_visits: int
+    created_at: str
+    updated_at: Optional[str] = None
 
-# Mock databases
-patients_db = [
-    {
-        "id": "PAT001",
-        "first_name": "María",
-        "paternal_surname": "González",
-        "maternal_surname": "Pérez",
-        "full_name": "María González Pérez",
-        "date_of_birth": date(1985, 5, 15),
-        "birth_state_code": "Ciudad de México",
-        "nationality": "Mexicana",
-        "internal_id": "INT001",
-        "age": 39,
-        "gender": "Femenino",
-        "curp": "GOPM850515MDFNTR09",
-        "phone": "+52 555 123 4567",
-        "email": "maria.gonzalez@email.com",
-        "address": "Av. Insurgentes Sur 123",
-        "neighborhood": "Del Valle",
-        "municipality": "Benito Juárez",
-        "state": "Ciudad de México",
-        "postal_code": "03100",
-        "civil_status": "casado",
-        "education_level": "universidad_completa",
-        "occupation": "profesionista",
-        "religion": "catolica",
-        "insurance_type": "IMSS",
-        "insurance_number": "123456789",
-        "emergency_contact_name": "Juan González",
-        "emergency_contact_phone": "+52 555 987 6543",
-        "emergency_contact_relationship": "Esposo",
-        "emergency_contact_address": "Av. Insurgentes Sur 123, Col. Del Valle",
-        "blood_type": "O+",
-        "allergies": "Penicilina",
-        "chronic_conditions": "Diabetes tipo 2",
-        "current_medications": "Metformina 500mg",
-        "previous_hospitalizations": "Ninguna",
-        "surgical_history": "Apendicectomía (2010)",
-        "family_history": "Diabetes mellitus tipo 2 (madre), Hipertensión arterial (padre)",
-        "personal_pathological_history": "Diabetes mellitus tipo 2 diagnosticada en 2020",
-        "personal_non_pathological_history": "Niega tabaquismo, alcoholismo ocasional",
-        "created_at": datetime(2024, 1, 15, 10, 30),
-        "last_visit": datetime(2024, 8, 20, 14, 45),
-        "last_updated": datetime(2024, 8, 20, 14, 45),
-        "created_by": "Dr. García Martínez",
-        "updated_by": "Dr. García Martínez",
-        "total_visits": 5,
-        "status": "active"
-    },
-    {
-        "id": "PAT002",
-        "first_name": "Carlos",
-        "paternal_surname": "Hernández",
-        "maternal_surname": "López",
-        "full_name": "Carlos Hernández López",
-        "date_of_birth": date(1978, 12, 3),
-        "birth_state_code": "Jalisco",
-        "nationality": "Mexicana",
-        "internal_id": "INT002",
-        "age": 45,
-        "gender": "Masculino",
-        "curp": "HELC781203HDFNPR05",
-        "phone": "+52 555 234 5678",
-        "email": "carlos.hernandez@email.com",
-        "address": "Calle Reforma 456",
-        "neighborhood": "Centro",
-        "municipality": "Cuauhtémoc",
-        "state": "Ciudad de México",
-
-        "postal_code": "06000",
-        "civil_status": "casado",
-        "education_level": "secundaria_completa",
-        "occupation": "empleado",
-        "religion": "catolica",
-        "insurance_type": "Seguro Popular",
-        "insurance_number": "987654321",
-        "emergency_contact_name": "Ana Hernández",
-        "emergency_contact_phone": "+52 555 876 5432",
-        "emergency_contact_relationship": "Esposa",
-        "emergency_contact_address": "Calle Reforma 456, Col. Centro",
-        "blood_type": "A+",
-        "allergies": "Ninguna conocida",
-        "chronic_conditions": "Hipertensión",
-        "current_medications": "Losartán 50mg",
-        "previous_hospitalizations": "Ninguna",
-        "surgical_history": "Ninguna",
-        "family_history": "Hipertensión arterial (padre), Diabetes (abuela materna)",
-        "personal_pathological_history": "Hipertensión arterial diagnosticada en 2018",
-        "personal_non_pathological_history": "Niega tabaquismo y alcoholismo",
-        "created_at": datetime(2024, 2, 10, 9, 15),
-        "last_visit": datetime(2024, 8, 18, 11, 30),
-        "last_updated": datetime(2024, 8, 18, 11, 30),
-        "created_by": "Dr. García Martínez",
-        "updated_by": "Dr. García Martínez",
-        "total_visits": 3,
-        "status": "active"
-    },
-    {
-        "id": "PAT003",
-        "first_name": "Ana",
-        "paternal_surname": "Rodríguez",
-        "maternal_surname": "Martín",
-        "full_name": "Ana Rodríguez Martín",
-        "date_of_birth": date(1992, 8, 22),
-        "birth_state_code": "Nuevo León",
-        "nationality": "Mexicana",
-        "internal_id": "INT003",
-        "age": 32,
-        "gender": "Femenino",
-        "curp": "ROMA920822MDFDRN01",
-        "phone": "+52 555 345 6789",
-        "email": "ana.rodriguez@email.com",
-        "address": "Col. Roma Norte 789",
-        "neighborhood": "Roma Norte",
-        "municipality": "Cuauhtémoc",
-        "state": "Ciudad de México",
-
-        "postal_code": "06700",
-        "civil_status": "soltero",
-        "education_level": "universidad_completa",
-        "occupation": "profesionista",
-        "religion": "catolica",
-        "insurance_type": "Privado",
-        "insurance_number": "PRV123456",
-        "emergency_contact_name": "Luis Rodríguez",
-        "emergency_contact_phone": "+52 555 765 4321",
-        "emergency_contact_relationship": "Padre",
-        "emergency_contact_address": "Av. Universidad 234, Col. Narvarte",
-        "blood_type": "B+",
-        "allergies": "Aspirina",
-        "chronic_conditions": "Ninguna",
-        "current_medications": "Ninguna",
-        "previous_hospitalizations": "Ninguna",
-        "surgical_history": "Ninguna",
-        "family_history": "Ninguna relevante",
-        "personal_pathological_history": "Ninguna",
-        "personal_non_pathological_history": "Niega tabaquismo, alcoholismo social ocasional",
-        "created_at": datetime(2024, 3, 5, 16, 20),
-        "last_visit": datetime(2024, 8, 15, 10, 15),
-        "last_updated": datetime(2024, 8, 15, 10, 15),
-        "created_by": "Dr. García Martínez",
-        "updated_by": "Dr. García Martínez",
-        "total_visits": 2,
-        "status": "active"
-    }
-]
-
-# Mock databases for medical records
-medical_history_db = [
-    {
-        "id": "MH001",
-        "patient_id": "PAT001",
-        "date": datetime(2024, 8, 20, 14, 45),
-        "chief_complaint": "Dolor de cabeza y mareo",
-        "history_present_illness": "Paciente refiere dolor de cabeza intermitente de 3 días de evolución, acompañado de mareo ocasional. Sin fiebre ni náuseas. Dolor localizado en región frontal, intensidad 6/10, que mejora con reposo.",
-        "physical_examination": "Signos vitales: TA: 130/85 mmHg, FC: 78 lpm, FR: 16 rpm, T: 36.5°C, SpO2: 98%. Paciente consciente, orientada en persona, lugar y tiempo. Campos visuales por confrontación normales. Reflejos pupilares normales. Sin signos meníngeos. Cardiopulmonar sin compromiso. Abdomen blando, depresible, sin dolor.",
-        "primary_diagnosis": "Cefalea tensional",
-        "primary_diagnosis_cie10": "G44.2",
-        "secondary_diagnoses": "Diabetes mellitus tipo 2 en control",
-        "secondary_diagnoses_cie10": "E11.9",
-        "treatment_plan": "1. Paracetamol 500mg vía oral cada 8 horas por 5 días. 2. Continuar metformina 500mg cada 12 horas. 3. Medidas de higiene del sueño. 4. Técnicas de relajación.",
-        "therapeutic_plan": "Manejo integral del dolor. Control glucémico estricto. Evaluación de factores de estrés.",
-        "follow_up_instructions": "Regresar a consulta en 1 semana para evaluación de respuesta al tratamiento. Acudir inmediatamente si presenta: cefalea súbita intensa, alteraciones visuales, vómito, fiebre o signos neurológicos.",
-        "prognosis": "Favorable con manejo adecuado",
-        "laboratory_results": "Glucosa en ayuno: 110 mg/dL, HbA1c: 6.8%",
-        "imaging_studies": "No requeridos en esta consulta",
-        "interconsultations": "No requeridas",
-        "doctor_name": "Dr. García Martínez",
-        "doctor_professional_license": "1234567",
-        "doctor_specialty": "Medicina General",
-        "created_by": "Dr. García Martínez",
-        "created_at": datetime(2024, 8, 20, 14, 45),
-        "updated_by": None,
-        "updated_at": None,
-        "vital_signs_id": "VS001",
-        "prescription_ids": ["PRES001", "PRES002"]
-    },
-    {
-        "id": "MH002",
-        "patient_id": "PAT002",
-        "date": datetime(2024, 8, 18, 11, 30),
-        "chief_complaint": "Control de hipertensión",
-        "history_present_illness": "Paciente acude a control rutinario de hipertensión arterial. Refiere adherencia al tratamiento.",
-        "physical_examination": "TA: 125/80 mmHg, FC: 72 lpm, peso: 78kg. Auscultación cardiopulmonar normal.",
-        "primary_diagnosis": "Hipertensión arterial controlada",
-        "primary_diagnosis_cie10": "I10",
-        "secondary_diagnoses": None,
-        "secondary_diagnoses_cie10": None,
-        "treatment_plan": "Continuar con Losartán 50mg diario. Control en 3 meses.",
-        "therapeutic_plan": "Manejo farmacológico con IECA. Modificaciones del estilo de vida.",
-        "follow_up_instructions": "Mantener dieta hiposódica y ejercicio regular. Monitoreo de TA en casa.",
-        "prognosis": "Excelente con tratamiento adecuado",
-        "laboratory_results": None,
-        "imaging_studies": None,
-        "interconsultations": None,
-        "doctor_name": "Dr. García Martínez",
-        "doctor_professional_license": "1234567",
-        "doctor_specialty": "Medicina General",
-        "created_by": "Dr. García Martínez",
-        "created_at": datetime(2024, 8, 18, 11, 30),
-        "updated_by": None,
-        "updated_at": None,
-        "vital_signs_id": "VS002",
-        "prescription_ids": ["PRES003"]
-    }
-]
-
-vital_signs_db = [
-    {
-        "id": "VS001",
-        "patient_id": "PAT001",
-        "date_recorded": datetime(2024, 8, 20, 14, 45),
-        "weight": 65.5,
-        "height": 165,
-        "bmi": 24.1,
-        "blood_pressure_systolic": 130,
-        "blood_pressure_diastolic": 85,
-        "heart_rate": 78,
-        "temperature": 36.5,
-        "respiratory_rate": 16,
-        "oxygen_saturation": 98,
-        "notes": "Signos vitales estables"
-    },
-    {
-        "id": "VS002",
-        "patient_id": "PAT002",
-        "date_recorded": datetime(2024, 8, 18, 11, 30),
-        "weight": 78.0,
-        "height": 175,
-        "bmi": 25.5,
-        "blood_pressure_systolic": 125,
-        "blood_pressure_diastolic": 80,
-        "heart_rate": 72,
-        "temperature": 36.4,
-        "respiratory_rate": 18,
-        "oxygen_saturation": 99,
-        "notes": "Presión arterial bien controlada"
-    }
-]
-
-prescriptions_db = [
-    {
-        "id": "PRES001",
-        "patient_id": "PAT001",
-        "medical_history_id": "MH001",
-        "medication_name": "Paracetamol",
-        "dosage": "500mg",
-        "frequency": "Cada 8 horas",
-        "duration": "5 días",
-        "instructions": "Tomar con alimentos. Suspender si aparecen efectos adversos.",
-        "prescribed_date": datetime(2024, 8, 20, 14, 45),
-        "status": "active",
-        "notes": "Para dolor de cabeza"
-    },
-    {
-        "id": "PRES002",
-        "patient_id": "PAT001",
-        "medical_history_id": None,
-        "medication_name": "Metformina",
-        "dosage": "500mg",
-        "frequency": "Cada 12 horas",
-        "duration": "Tratamiento crónico",
-        "instructions": "Tomar con el desayuno y la cena. No suspender sin consultar.",
-        "prescribed_date": datetime(2024, 1, 15, 10, 30),
-        "status": "active",
-        "notes": "Control de diabetes mellitus tipo 2"
-    },
-    {
-        "id": "PRES003",
-        "patient_id": "PAT002",
-        "medical_history_id": "MH002",
-        "medication_name": "Losartán",
-        "dosage": "50mg",
-        "frequency": "Una vez al día",
-        "duration": "Tratamiento crónico",
-        "instructions": "Tomar en la mañana, preferiblemente a la misma hora.",
-        "prescribed_date": datetime(2024, 2, 10, 9, 15),
-        "status": "active",
-        "notes": "Control de hipertensión arterial"
-    }
-]
-
-appointments_db = [
-    {
-        "id": "APT001",
-        "patient_id": "PAT001",
-        "date_time": datetime(2024, 8, 25, 10, 0),
-        "duration": 30,
-        "appointment_type": "follow_up",
-        "status": "scheduled",
-        "chief_complaint": "Control de diabetes y seguimiento de cefalea",
-        "notes": "Revisar niveles de glucosa y evolución del dolor de cabeza",
-        "created_at": datetime(2024, 8, 20, 14, 50),
-        "updated_at": datetime(2024, 8, 20, 14, 50)
-    },
-    {
-        "id": "APT002",
-        "patient_id": "PAT002",
-        "date_time": datetime(2024, 11, 18, 11, 30),
-        "duration": 30,
-        "appointment_type": "follow_up",
-        "status": "scheduled",
-        "chief_complaint": "Control de hipertensión arterial",
-        "notes": "Control rutinario trimestral",
-        "created_at": datetime(2024, 8, 18, 11, 35),
-        "updated_at": datetime(2024, 8, 18, 11, 35)
-    },
-    {
-        "id": "APT003",
-        "patient_id": "PAT003",
-        "date_time": datetime(2024, 8, 22, 14, 0),
-        "duration": 45,
-        "appointment_type": "consultation",
-        "status": "scheduled",
-        "chief_complaint": "Consulta general - primera vez",
-        "notes": "Paciente nueva, evaluación inicial completa",
-        "created_at": datetime(2024, 8, 15, 10, 20),
-        "updated_at": datetime(2024, 8, 15, 10, 20)
-    }
-]
-
-# Doctor Profile Models (NOM-004 Compliant)
 class DoctorProfileBase(BaseModel):
-    # Información Personal (NOM-004 requirement for medical professionals)
-    title: str  # Título profesional (Dr., Dra., Lic., Lcda.) - OBLIGATORIO
-    first_name: str  # Nombre(s) - OBLIGATORIO
-    paternal_surname: str  # Apellido paterno - OBLIGATORIO
-    maternal_surname: str  # Apellido materno - OBLIGATORIO
-    email: str  # Correo electrónico personal - OBLIGATORIO
-    phone: str  # Teléfono personal - OBLIGATORIO
-    birth_date: Optional[date] = None  # Fecha de nacimiento - RECOMENDADO
+    # Personal Information (NOM-004 Required)
+    title: str  # Dr., Dra., Lic., Lcda.
+    first_name: str
+    paternal_surname: str
+    maternal_surname: Optional[str] = None
+    email: str
+    phone: str
+    birth_date: datetime
     
-    # Información Profesional (NOM-004 mandatory for medical records)
-    professional_license: str  # Cédula profesional - OBLIGATORIO NOM-004 Art. 5.4.1
-    specialty: str  # Especialidad médica - OBLIGATORIO NOM-004 Art. 5.4.1
-    specialty_license: Optional[str] = None  # Cédula de especialidad - OPCIONAL
-    university: Optional[str] = None  # Universidad de egreso - RECOMENDADO
-    graduation_year: Optional[str] = None  # Año de graduación - RECOMENDADO
-    subspecialty: Optional[str] = None  # Subespecialidad - OPCIONAL
+    # Professional Information (NOM-004 Required)
+    professional_license: str
+    specialty: str
+    specialty_license: Optional[str] = None
+    university: str
+    graduation_year: str
+    subspecialty: Optional[str] = None
     
-    # Contacto Profesional
-    professional_email: Optional[str] = None  # Correo profesional - OPCIONAL
-    office_phone: Optional[str] = None  # Teléfono del consultorio - OPCIONAL
-    mobile_phone: Optional[str] = None  # Teléfono móvil profesional - OPCIONAL
+    # Contact Information
+    professional_email: Optional[str] = None
+    office_phone: Optional[str] = None
+    mobile_phone: Optional[str] = None
     
-    # Dirección del Consultorio (NOM-004 requirement for medical practice)
-    office_address: str  # Dirección del consultorio - OBLIGATORIO
-    office_city: str  # Ciudad - OBLIGATORIO
-    office_state: str  # Estado - OBLIGATORIO
-    office_postal_code: Optional[str] = None  # Código postal - OPCIONAL
-    office_country: str = "México"  # País - DEFAULT México
+    # Office Information (NOM-004 Required)
+    office_address: str
+    office_city: str
+    office_state: str
+    office_postal_code: Optional[str] = None
+    office_country: str = "México"
     
-    # Información Académica Adicional (NOM-004 compliance)
-    medical_school: Optional[str] = None  # Escuela de medicina - RECOMENDADO
-    internship_hospital: Optional[str] = None  # Hospital de internado - OPCIONAL
-    residency_hospital: Optional[str] = None  # Hospital de residencia - OPCIONAL
+    # Academic Information (NOM-004 Optional but recommended)
+    medical_school: Optional[str] = None
+    internship_hospital: Optional[str] = None
+    residency_hospital: Optional[str] = None
     
-    # Certificaciones y Membresías (IMPORTANTE para credibilidad profesional)
-    board_certifications: Optional[List[str]] = None  # Certificaciones del consejo - MUY RECOMENDADO
-    professional_memberships: Optional[List[str]] = None  # Membresías profesionales - MUY RECOMENDADO
+    # Certifications (Arrays for multiple values)
+    board_certifications: Optional[List[str]] = None
+    professional_memberships: Optional[List[str]] = None
     
-    # Digital Identity (Future feature for electronic signatures)
-    digital_signature: Optional[str] = None  # Firma digital - OPCIONAL
-    professional_seal: Optional[str] = None  # Sello profesional - OPCIONAL
+    # Digital files
+    digital_signature: Optional[str] = None
+    professional_seal: Optional[str] = None
     
-    # Status
-    is_active: bool = True  # Estado activo - DEFAULT True
+    # System fields
+    created_by: str
 
 class DoctorProfileCreate(DoctorProfileBase):
     pass
 
 class DoctorProfileUpdate(BaseModel):
-    # All fields optional for updates
+    """Model for updating doctor profile - all fields are optional"""
     title: Optional[str] = None
     first_name: Optional[str] = None
     paternal_surname: Optional[str] = None
     maternal_surname: Optional[str] = None
-    email: Optional[str] = None
+    email: Optional[EmailStr] = None
     phone: Optional[str] = None
     birth_date: Optional[date] = None
     professional_license: Optional[str] = None
@@ -661,7 +218,7 @@ class DoctorProfileUpdate(BaseModel):
     university: Optional[str] = None
     graduation_year: Optional[str] = None
     subspecialty: Optional[str] = None
-    professional_email: Optional[str] = None
+    professional_email: Optional[EmailStr] = None
     office_phone: Optional[str] = None
     mobile_phone: Optional[str] = None
     office_address: Optional[str] = None
@@ -676,1277 +233,470 @@ class DoctorProfileUpdate(BaseModel):
     professional_memberships: Optional[List[str]] = None
     digital_signature: Optional[str] = None
     professional_seal: Optional[str] = None
-    is_active: Optional[bool] = None
+    created_by: Optional[str] = None
 
 class DoctorProfileResponse(DoctorProfileBase):
     id: str
-    full_name: str  # Nombre completo del médico
-    created_at: datetime
-    updated_at: Optional[datetime] = None
+    full_name: str
+    is_active: bool
+    created_at: str
+    updated_at: Optional[str] = None
+
+class MedicalHistoryBase(BaseModel):
+    patient_id: str
+    date: datetime
+    
+    # NOM-004 mandatory consultation fields
+    chief_complaint: str  # Motivo de la consulta
+    history_present_illness: str  # Historia de la enfermedad actual
+    
+    # Medical History (NOM-004 mandatory in clinical evaluation)
+    family_history: str  # Antecedentes heredofamiliares
+    personal_pathological_history: str  # Antecedentes patológicos personales
+    personal_non_pathological_history: str  # Antecedentes no patológicos personales
+    
+    physical_examination: str  # Exploración física
+    
+    # Diagnosis
+    primary_diagnosis: str
+    primary_diagnosis_cie10: Optional[str] = None
+    secondary_diagnoses: Optional[str] = None
+    secondary_diagnoses_cie10: Optional[str] = None
+    differential_diagnosis: Optional[str] = None
+    
+    # Treatment
+    treatment_plan: str
+    prescribed_medications: Optional[str] = None
+    follow_up_instructions: str
+    
+    # Doctor Information (auto-filled from profile)
+    doctor_name: str
+    doctor_professional_license: str
+    doctor_specialty: Optional[str] = None
+    
+    # System fields
     created_by: str
-    updated_by: Optional[str] = None
 
-# Mock databases
-doctor_profiles_db = []
+class MedicalHistoryCreate(MedicalHistoryBase):
+    pass
 
-# Mock audit trail database
-audit_logs_db = []
+class MedicalHistoryUpdate(MedicalHistoryBase):
+    pass
 
-# Audit trail helper function
-def log_audit_action(user_id: str, user_name: str, action: str, resource_type: str, 
-                    resource_id: str, ip_address: str = None, details: str = None,
-                    old_values: Dict[str, Any] = None, new_values: Dict[str, Any] = None):
-    """Log an action to the audit trail (NOM-024 requirement)"""
-    audit_log = {
-        "id": f"AUDIT{len(audit_logs_db) + 1:06d}",
-        "user_id": user_id,
-        "user_name": user_name,
-        "action": action,
-        "resource_type": resource_type,
-        "resource_id": resource_id,
-        "timestamp": datetime.now(),
-        "ip_address": ip_address,
-        "details": details,
-        "old_values": old_values,
-        "new_values": new_values
-    }
-    audit_logs_db.append(audit_log)
-    return audit_log
-
-@app.get("/")
-async def root():
-    return {
-        "message": "🏥 Historias Clínicas - Tech Stack Complete!",
-        "status": "✅ Backend Running",
-        "architecture": {
-            "frontend": "React + TypeScript (port 3000)",
-            "backend": "FastAPI + Python (port 8000)",
-            "database": "PostgreSQL + Redis",
-            "messaging": "WhatsApp Business API",
-            "compliance": "Mexican Healthcare Regulations"
-        }
-    }
+class ConsultationResponse(MedicalHistoryBase):
+    id: str
+    patient_name: Optional[str] = None
+    created_at: str
+    updated_at: Optional[str] = None
+# ============================================================================
+# HEALTH AND SYSTEM ENDPOINTS
+# ============================================================================
 
 @app.get("/health")
-async def health():
-    return {"status": "healthy", "service": "historias-clinicas"}
+async def health(db: Session = Depends(get_db)):
+    """Health check with database connectivity"""
+    try:
+        db.execute(text("SELECT 1"))
+        return {
+            "status": "healthy", 
+            "service": "historias-clinicas",
+            "database": "postgresql-connected"
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy", 
+            "service": "historias-clinicas",
+            "database": f"error: {str(e)}"
+        }
 
 @app.get("/api/health")
-async def api_health():
-    return {"status": "healthy", "service": "historias-clinicas"}
+async def api_health(db: Session = Depends(get_db)):
+    """API Health check with database connectivity"""
+    try:
+        db.execute(text("SELECT 1"))
+        return {
+            "status": "healthy", 
+            "service": "historias-clinicas",
+            "database": "postgresql-connected"
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy", 
+            "service": "historias-clinicas",
+            "database": f"error: {str(e)}"
+        }
 
 @app.get("/api/physicians/dashboard")
-async def dashboard():
-    return {
-        "physician": "Dr. García",
-        "appointments": 8,
-        "compliance_score": 100,
-        "revenue": 45000,
-        "tech_stack": "fully_deployed"
-    }
-
-# Patient Endpoints
-@app.get("/api/patients", response_model=List[PatientResponse])
-async def get_patients(search: Optional[str] = None, limit: int = 100, offset: int = 0):
-    """Get all patients with optional search and pagination"""
-    filtered_patients = patients_db
-    
-    if search:
-        search_lower = search.lower()
-        filtered_patients = [
-            p for p in patients_db 
-            if (search_lower in p["full_name"].lower() or 
-                search_lower in p["phone"] or 
-                search_lower in (p["email"] or "").lower() or
-                search_lower in (p["curp"] or "").lower())
-        ]
-    
-    # Apply pagination
-    paginated_patients = filtered_patients[offset:offset + limit]
-    
-    return [PatientResponse(**patient) for patient in paginated_patients]
-
-@app.get("/api/patients/{patient_id}", response_model=PatientResponse)
-async def get_patient(patient_id: str):
-    """Get a specific patient by ID"""
-    patient = next((p for p in patients_db if p["id"] == patient_id), None)
-    if not patient:
-        raise HTTPException(status_code=404, detail="Paciente no encontrado")
-    
-    return PatientResponse(**patient)
-
-@app.post("/api/patients", response_model=PatientResponse)
-async def create_patient(patient: PatientCreate):
-    """Create a new patient with NOM-004 compliance validation"""
-    # Validate NOM-004 compliance
-    patient_data = patient.dict()
-    validation_errors = validate_nom_004_patient_data(patient_data)
-    
-    if validation_errors:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Datos no cumplen con NOM-004-SSA3-2012: {'; '.join(validation_errors)}"
-        )
-    
-    # Generate new patient ID
-    existing_ids = [int(p["id"][3:]) for p in patients_db]
-    new_id = f"PAT{max(existing_ids) + 1:03d}"
-    
-    # Calculate age
-    today = date.today()
-    age = today.year - patient.date_of_birth.year - ((today.month, today.day) < (patient.date_of_birth.month, patient.date_of_birth.day))
-    
-    # Create full name (NOM-004 format)
-    full_name = f"{patient.first_name} {patient.paternal_surname}"
-    if patient.maternal_surname:
-        full_name += f" {patient.maternal_surname}"
-    
-    now = datetime.now()
-    
-    # Create new patient record
-    new_patient = {
-        "id": new_id,
-        "full_name": full_name,
-        "age": age,
-        "created_at": now,
-        "last_updated": now,
-        "created_by": "Dr. García Martínez",  # In production, get from authenticated user
-        "updated_by": None,
-        "last_visit": None,
-        "total_visits": 0,
-        "status": "active",
-        **patient_data
-    }
-    
-    patients_db.append(new_patient)
-    
-    # Log audit trail (NOM-024 requirement)
-    log_audit_action(
-        user_id="DR001",
-        user_name="Dr. García Martínez",
-        action="CREATE",
-        resource_type="PATIENT",
-        resource_id=new_id,
-        details=f"Nuevo paciente registrado: {full_name}",
-        new_values={"patient_data": new_patient}
-    )
-    
-    return PatientResponse(**new_patient)
-
-@app.put("/api/patients/{patient_id}", response_model=PatientResponse)
-async def update_patient(patient_id: str, patient_update: PatientCreate):
-    """Update an existing patient"""
-    patient_index = next((i for i, p in enumerate(patients_db) if p["id"] == patient_id), None)
-    if patient_index is None:
-        raise HTTPException(status_code=404, detail="Paciente no encontrado")
-    
-    # Calculate age
-    today = date.today()
-    age = today.year - patient_update.date_of_birth.year - ((today.month, today.day) < (patient_update.date_of_birth.month, patient_update.date_of_birth.day))
-    
-    # Validate NOM-004 compliance
-    patient_data = patient_update.dict()
-    validation_errors = validate_nom_004_patient_data(patient_data)
-    
-    if validation_errors:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Datos no cumplen con NOM-004-SSA3-2012: {'; '.join(validation_errors)}"
-        )
-    
-    # Create full name (NOM-004 format)
-    full_name = f"{patient_update.first_name} {patient_update.paternal_surname}"
-    if patient_update.maternal_surname:
-        full_name += f" {patient_update.maternal_surname}"
-    
-    # Update patient record
-    updated_patient = {
-        **patients_db[patient_index],
-        **patient_data,
-        "full_name": full_name,
-        "age": age,
-        "last_updated": datetime.now(),
-        "updated_by": "Dr. García Martínez"  # In production, get from authenticated user
-    }
-    
-    patients_db[patient_index] = updated_patient
-    
-    # Log audit trail (NOM-024 requirement)
-    log_audit_action(
-        user_id="DR001",
-        user_name="Dr. García Martínez",
-        action="UPDATE",
-        resource_type="PATIENT",
-        resource_id=patient_id,
-        details=f"Paciente actualizado: {full_name}",
-        old_values={"previous_data": patients_db[patient_index]},
-        new_values={"updated_data": updated_patient}
-    )
-    
-    return PatientResponse(**updated_patient)
-
-@app.delete("/api/patients/{patient_id}")
-async def delete_patient(patient_id: str):
-    """Delete a patient (mark as inactive)"""
-    patient_index = next((i for i, p in enumerate(patients_db) if p["id"] == patient_id), None)
-    if patient_index is None:
-        raise HTTPException(status_code=404, detail="Paciente no encontrado")
-    
-    patients_db[patient_index]["status"] = "inactive"
-    return {"message": "Paciente marcado como inactivo"}
-
-@app.get("/api/patients/stats")
-async def get_patients_stats():
-    """Get patient statistics"""
-    active_patients = [p for p in patients_db if p["status"] == "active"]
-    
-    return {
-        "total_patients": len(active_patients),
-        "new_this_month": len([p for p in active_patients if p["created_at"].month == datetime.now().month]),
-        "by_insurance": {
-            "IMSS": len([p for p in active_patients if p.get("insurance_type") == "IMSS"]),
-            "ISSSTE": len([p for p in active_patients if p.get("insurance_type") == "ISSSTE"]),
-            "Seguro Popular": len([p for p in active_patients if p.get("insurance_type") == "Seguro Popular"]),
-            "INSABI": len([p for p in active_patients if p.get("insurance_type") == "INSABI"]),
-            "Privado": len([p for p in active_patients if p.get("insurance_type") == "Privado"]),
-            "Sin seguro": len([p for p in active_patients if not p.get("insurance_type")])
-        },
-        "by_gender": {
-            "Masculino": len([p for p in active_patients if p["gender"] == "Masculino"]),
-            "Femenino": len([p for p in active_patients if p["gender"] == "Femenino"])
-        },
-        "average_age": sum(p["age"] for p in active_patients) / len(active_patients) if active_patients else 0
-    }
-
-# NOM Compliance Validation Functions
-def validate_curp(curp: str) -> bool:
-    """Validate CURP format according to Mexican standards"""
-    if not curp or len(curp) != 18:
-        return False
-    # Basic CURP pattern validation
-    import re
-    pattern = r'^[A-Z]{4}[0-9]{6}[HM][A-Z]{5}[0-9]{2}$'
-    return bool(re.match(pattern, curp.upper()))
-
-def validate_nom_004_patient_data(patient_data: dict) -> List[str]:
-    """Validate patient data against NOM-004-SSA3-2012 requirements"""
-    errors = []
-    
-    # MANDATORY fields per NOM-004-SSA3-2012 (campos realmente obligatorios)
-    required_fields = [
-        # Patient identification (mandatory per NOM-004)
-        'first_name', 'paternal_surname', 'maternal_surname', 'date_of_birth', 'gender',
-        
-        # Contact information (mandatory per NOM-004)
-        'phone', 'address',
-        
-        # Medical history (mandatory per NOM-004)
-        'family_history',  # Antecedentes heredofamiliares
-        'personal_pathological_history',  # Antecedentes personales patológicos  
-        'personal_non_pathological_history'  # Antecedentes personales no patológicos
-    ]
-    
-    for field in required_fields:
-        if not patient_data.get(field) or str(patient_data.get(field)).strip() == '':
-            field_name_es = {
-                'first_name': 'Nombre(s)',
-                'paternal_surname': 'Primer apellido (paterno)',
-                'maternal_surname': 'Segundo apellido (materno)',
-                'date_of_birth': 'Fecha de nacimiento',
-                'gender': 'Sexo',
-                'phone': 'Teléfono',
-                'address': 'Domicilio',
-                'family_history': 'Antecedentes heredofamiliares',
-                'personal_pathological_history': 'Antecedentes personales patológicos',
-                'personal_non_pathological_history': 'Antecedentes personales no patológicos'
-            }.get(field, field)
-            errors.append(f"Campo obligatorio faltante según NOM-004: {field_name_es}")
-    
-    # CURP validation (opcional - si se proporciona debe ser válido)
-    if patient_data.get('curp'):
-        if not validate_curp(patient_data['curp']):
-            errors.append("CURP no válido según formato oficial mexicano")
-    
-    # Age validation
-    if patient_data.get('date_of_birth'):
-        from datetime import date
-        birth_date = patient_data['date_of_birth']
-        if isinstance(birth_date, str):
-            try:
-                birth_date = datetime.strptime(birth_date, '%Y-%m-%d').date()
-            except ValueError:
-                errors.append("Formato de fecha de nacimiento inválido")
-        
-        if isinstance(birth_date, date):
-            today = date.today()
-            if birth_date > today:
-                errors.append("Fecha de nacimiento no puede ser futura")
-            
-            age = today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
-            if age > 120:
-                errors.append("Edad no válida (mayor a 120 años)")
-    
-    # Gender validation
-    valid_genders = ['Masculino', 'Femenino']
-    if patient_data.get('gender') and patient_data['gender'] not in valid_genders:
-        errors.append("Género debe ser 'Masculino' o 'Femenino'")
-    
-    # Phone validation (basic Mexican format)
-    phone = patient_data.get('phone', '')
-    if phone and not (phone.startswith('+52') or phone.startswith('52') or len(phone.replace(' ', '').replace('-', '')) >= 10):
-        errors.append("Formato de teléfono no válido para México")
-    
-    return errors
-
-def validate_professional_license(license_number: str) -> bool:
-    """Validate Mexican professional license format"""
-    if not license_number or len(license_number) < 7:
-        return False
-    # Basic validation - Mexican professional licenses are typically 7-8 digits
-    import re
-    pattern = r'^[0-9]{7,8}$'
-    return bool(re.match(pattern, license_number.replace(' ', '').replace('-', '')))
-
-def validate_mexican_states(state: str) -> bool:
-    """Validate Mexican states"""
-    mexican_states = [
-        'Aguascalientes', 'Baja California', 'Baja California Sur', 'Campeche',
-        'Chiapas', 'Chihuahua', 'Ciudad de México', 'Coahuila', 'Colima',
-        'Durango', 'Estado de México', 'Guanajuato', 'Guerrero', 'Hidalgo',
-        'Jalisco', 'Michoacán', 'Morelos', 'Nayarit', 'Nuevo León', 'Oaxaca',
-        'Puebla', 'Querétaro', 'Quintana Roo', 'San Luis Potosí', 'Sinaloa',
-        'Sonora', 'Tabasco', 'Tamaulipas', 'Tlaxcala', 'Veracruz', 'Yucatán', 'Zacatecas'
-    ]
-    return state in mexican_states
-
-def validate_nom_004_doctor_profile(doctor_data: dict) -> List[str]:
-    """Validate doctor profile data against NOM-004-SSA3-2012 requirements for medical professionals"""
-    errors = []
-    
-    # MANDATORY fields per NOM-004-SSA3-2012 for medical professionals
-    # STRICTAMENTE según Artículo 5.4.1 de NOM-004-SSA3-2012
-    required_fields = [
-        # Personal identification (mandatory per NOM-004)
-        'title', 'first_name', 'paternal_surname', 'maternal_surname', 
-        
-        # Professional credentials (OBLIGATORIO por NOM-004 Artículo 5.4.1)
-        'professional_license',  # Cédula profesional - OBLIGATORIO NOM-004
-        'specialty',  # Especialidad médica - OBLIGATORIO NOM-004
-        
-        # Contact information (para efectos de práctica profesional)
-        'email', 'phone',
-        
-        # Practice location (para ubicación del consultorio)
-        'office_address', 'office_city', 'office_state'
-    ]
-    
-    # OPCIONAL fields - NOT required by NOM-004 (purely informational)
-    optional_fields = [
-        'university',  # Universidad de egreso - OPCIONAL
-        'graduation_year',  # Año de graduación - OPCIONAL  
-        'medical_school',  # Escuela de medicina - OPCIONAL
-        'birth_date',  # Fecha de nacimiento - OPCIONAL
-        'internship_hospital',  # Hospital de internado - OPCIONAL
-        'residency_hospital'  # Hospital de residencia - OPCIONAL
-    ]
-    
-    for field in required_fields:
-        if not doctor_data.get(field) or str(doctor_data.get(field)).strip() == '':
-            field_name_es = {
-                'title': 'Título profesional',
-                'first_name': 'Nombre(s)',
-                'paternal_surname': 'Apellido paterno',
-                'maternal_surname': 'Apellido materno',
-                'email': 'Correo electrónico',
-                'phone': 'Teléfono',
-                'professional_license': 'Cédula profesional',
-                'specialty': 'Especialidad médica',
-                'office_address': 'Dirección del consultorio',
-                'office_city': 'Ciudad del consultorio',
-                'office_state': 'Estado del consultorio'
-            }.get(field, field)
-            errors.append(f"Campo obligatorio faltante según NOM-004 Art. 5.4.1: {field_name_es}")
-    
-    # Note: Optional fields are not validated as they are not required by NOM-004
-    # They are purely informational and for practice management convenience
-    
-    # Title validation
-    if doctor_data.get('title'):
-        valid_titles = ['Dr.', 'Dra.', 'Lic.', 'Lcda.']
-        if doctor_data['title'] not in valid_titles:
-            errors.append(f"Título profesional debe ser uno de: {', '.join(valid_titles)}")
-    
-    # Professional license validation
-    if doctor_data.get('professional_license'):
-        if not validate_professional_license(doctor_data['professional_license']):
-            errors.append("Formato de cédula profesional no válido (debe tener 7-8 dígitos)")
-    
-    # Specialty license validation (optional but if provided must be valid)
-    if doctor_data.get('specialty_license'):
-        if not validate_professional_license(doctor_data['specialty_license']):
-            errors.append("Formato de cédula de especialidad no válido (debe tener 7-8 dígitos)")
-    
-    # State validation
-    if doctor_data.get('office_state'):
-        if not validate_mexican_states(doctor_data['office_state']):
-            errors.append("Estado no válido - debe ser un estado de México")
-    
-    # Age validation
-    if doctor_data.get('birth_date'):
-        birth_date = doctor_data['birth_date']
-        if isinstance(birth_date, str):
-            try:
-                birth_date = datetime.strptime(birth_date, '%Y-%m-%d').date()
-            except ValueError:
-                errors.append("Formato de fecha de nacimiento inválido")
-        
-        if isinstance(birth_date, date):
-            today = date.today()
-            if birth_date > today:
-                errors.append("Fecha de nacimiento no puede ser futura")
-            
-            age = today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
-            if age < 24:  # Minimum age for medical degree
-                errors.append("Edad mínima para médico es 24 años")
-            if age > 85:  # Reasonable maximum for active practice
-                errors.append("Edad máxima para práctica activa es 85 años")
-    
-    # Graduation year validation
-    if doctor_data.get('graduation_year'):
-        try:
-            grad_year = int(doctor_data['graduation_year'])
-            current_year = datetime.now().year
-            if grad_year < 1960:  # Reasonable minimum
-                errors.append("Año de graduación no puede ser anterior a 1960")
-            if grad_year > current_year:
-                errors.append("Año de graduación no puede ser futuro")
-        except ValueError:
-            errors.append("Año de graduación debe ser un número válido")
-    
-    # Email validation
-    email = doctor_data.get('email', '')
-    if email:
-        import re
-        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        if not re.match(email_pattern, email):
-            errors.append("Formato de correo electrónico inválido")
-    
-    # Professional email validation (if provided)
-    prof_email = doctor_data.get('professional_email', '')
-    if prof_email:
-        import re
-        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        if not re.match(email_pattern, prof_email):
-            errors.append("Formato de correo profesional inválido")
-    
-    # Phone validation (basic Mexican format)
-    phone = doctor_data.get('phone', '')
-    if phone and not (phone.startswith('+52') or phone.startswith('52') or len(phone.replace(' ', '').replace('-', '')) >= 10):
-        errors.append("Formato de teléfono no válido para México")
-    
-    # Office phone validation (if provided)
-    office_phone = doctor_data.get('office_phone', '')
-    if office_phone and not (office_phone.startswith('+52') or office_phone.startswith('52') or len(office_phone.replace(' ', '').replace('-', '')) >= 10):
-        errors.append("Formato de teléfono del consultorio no válido para México")
-    
-    return errors
-
-def get_nom_004_doctor_profile_optional_fields(doctor_data: dict) -> Dict[str, Any]:
-    """Get information about optional fields for administrative purposes (NOT required by NOM-004)"""
-    
-    # Campos académicos básicos
-    academic_fields = [
-        'university',  # Universidad de egreso
-        'graduation_year',  # Año de graduación  
-        'medical_school',  # Escuela de medicina
-        'birth_date',  # Fecha de nacimiento
-    ]
-    
-    # Campos de formación hospitalaria
-    training_fields = [
-        'internship_hospital',  # Hospital de internado
-        'residency_hospital'  # Hospital de residencia
-    ]
-    
-    # Campos de credibilidad profesional (MUY IMPORTANTES para el médico)
-    professional_credibility_fields = [
-        'board_certifications',  # Certificaciones del consejo
-        'professional_memberships'  # Membresías profesionales
-    ]
-    
-    def process_field_group(fields, field_translations):
-        completed = []
-        missing = []
-        for field in fields:
-            field_name_es = field_translations.get(field, field)
-            if doctor_data.get(field) and str(doctor_data.get(field)).strip() != '':
-                completed.append(field_name_es)
-            else:
-                missing.append(field_name_es)
-        return completed, missing
-    
-    academic_translations = {
-        'university': 'Universidad de egreso',
-        'graduation_year': 'Año de graduación',
-        'medical_school': 'Escuela de medicina',
-        'birth_date': 'Fecha de nacimiento'
-    }
-    
-    training_translations = {
-        'internship_hospital': 'Hospital de internado',
-        'residency_hospital': 'Hospital de residencia'
-    }
-    
-    credibility_translations = {
-        'board_certifications': 'Certificaciones del consejo',
-        'professional_memberships': 'Membresías profesionales'
-    }
-    
-    academic_completed, academic_missing = process_field_group(academic_fields, academic_translations)
-    training_completed, training_missing = process_field_group(training_fields, training_translations)
-    credibility_completed, credibility_missing = process_field_group(professional_credibility_fields, credibility_translations)
-    
-    total_optional = len(academic_fields) + len(training_fields) + len(professional_credibility_fields)
-    total_completed = len(academic_completed) + len(training_completed) + len(credibility_completed)
-    
-    return {
-        'academic_info': {
-            'completed': academic_completed,
-            'missing': academic_missing,
-            'completion_percentage': (len(academic_completed) / len(academic_fields)) * 100
-        },
-        'training_info': {
-            'completed': training_completed,
-            'missing': training_missing,
-            'completion_percentage': (len(training_completed) / len(training_fields)) * 100
-        },
-        'professional_credibility': {
-            'completed': credibility_completed,
-            'missing': credibility_missing,
-            'completion_percentage': (len(credibility_completed) / len(professional_credibility_fields)) * 100,
-            'importance': 'MUY IMPORTANTE para credibilidad y práctica profesional'
-        },
-        'summary': {
-            'total_optional_fields': total_optional,
-            'total_completed': total_completed,
-            'overall_completion_percentage': (total_completed / total_optional) * 100,
-            'credibility_status': 'Completo' if len(credibility_missing) == 0 else 'Incompleto'
-        }
-    }
-
-# Audit Trail Endpoints (NOM-024 requirement)
-@app.get("/api/audit-logs", response_model=List[AuditLog])
-async def get_audit_logs(user_id: Optional[str] = None, action: Optional[str] = None, 
-                        resource_type: Optional[str] = None, limit: int = 100):
-    """Get audit logs with optional filters"""
-    logs = audit_logs_db.copy()
-    
-    if user_id:
-        logs = [log for log in logs if log["user_id"] == user_id]
-    if action:
-        logs = [log for log in logs if log["action"] == action]
-    if resource_type:
-        logs = [log for log in logs if log["resource_type"] == resource_type]
-    
-    # Sort by timestamp (most recent first)
-    logs.sort(key=lambda x: x["timestamp"], reverse=True)
-    
-    return [AuditLog(**log) for log in logs[:limit]]
-
-@app.get("/api/patients/{patient_id}/nom-validation")
-async def validate_patient_nom_compliance(patient_id: str):
-    """Validate specific patient against NOM requirements"""
-    patient = next((p for p in patients_db if p["id"] == patient_id), None)
-    if not patient:
-        raise HTTPException(status_code=404, detail="Paciente no encontrado")
-    
-    validation_errors = validate_nom_004_patient_data(patient)
-    
-    return {
-        "patient_id": patient_id,
-        "patient_name": patient.get("full_name", ""),
-        "is_compliant": len(validation_errors) == 0,
-        "compliance_percentage": 0 if validation_errors else 100,
-        "validation_errors": validation_errors,
-        "missing_fields": [error.split(": ")[-1] for error in validation_errors if "Campo obligatorio faltante" in error],
-        "validation_date": datetime.now(),
-        "nom_standards": {
-            "nom_004": "Expediente clínico",
-            "nom_024": "Sistemas de información",
-            "nom_035": "Información en salud"
-        }
-    }
-
-@app.get("/api/nom-compliance/validation")
-async def check_nom_compliance():
-    """Check overall NOM compliance status"""
-    total_patients = len(patients_db)
-    compliant_patients = 0
-    
-    for patient in patients_db:
-        errors = validate_nom_004_patient_data(patient)
-        if not errors:
-            compliant_patients += 1
-    
-    compliance_percentage = (compliant_patients / total_patients * 100) if total_patients > 0 else 0
-    
-    return {
-        "nom_004_compliance": {
-            "total_patients": total_patients,
-            "compliant_patients": compliant_patients,
-            "compliance_percentage": round(compliance_percentage, 2),
-            "status": "compliant" if compliance_percentage == 100 else "non_compliant"
-        },
-        "nom_024_features": {
-            "audit_trail": "enabled",
-            "data_encryption": "pending", 
-            "user_authentication": "basic",
-            "cie10_integration": "enabled"
-        },
-        "nom_035_features": {
-            "patient_identification": "dual_identifier",
-            "data_confidentiality": "enabled"
-        },
-        "data_retention": {
-            "policy": "5_years_minimum",
-            "status": "compliant"
-        }
-    }
-
-# Medical History Endpoints
-@app.get("/api/patients/{patient_id}/medical-history", response_model=List[MedicalHistory])
-async def get_patient_medical_history(patient_id: str):
-    """Get medical history for a specific patient"""
-    history = [h for h in medical_history_db if h["patient_id"] == patient_id]
-    return [MedicalHistory(**record) for record in sorted(history, key=lambda x: x["date"], reverse=True)]
-
-@app.post("/api/patients/{patient_id}/medical-history", response_model=MedicalHistory)
-async def create_medical_history(patient_id: str, history: MedicalHistory):
-    """Create a new medical history record"""
-    # Verify patient exists
-    if not any(p["id"] == patient_id for p in patients_db):
-        raise HTTPException(status_code=404, detail="Paciente no encontrado")
-    
-    new_id = f"MH{len(medical_history_db) + 1:03d}"
-    new_history = {
-        "id": new_id,
-        "patient_id": patient_id,
-        **history.dict(exclude={"id", "patient_id"})
-    }
-    
-    medical_history_db.append(new_history)
-    
-    # Update patient's last visit
-    for patient in patients_db:
-        if patient["id"] == patient_id:
-            patient["last_visit"] = history.date
-            patient["total_visits"] += 1
-            break
-    
-    return MedicalHistory(**new_history)
-
-@app.get("/api/medical-history/{history_id}", response_model=MedicalHistory)
-async def get_medical_history(history_id: str):
-    """Get a specific medical history record"""
-    history = next((h for h in medical_history_db if h["id"] == history_id), None)
-    if not history:
-        raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
-    
-    return MedicalHistory(**history)
-
-@app.put("/api/medical-history/{history_id}", response_model=MedicalHistory)
-async def update_medical_history(history_id: str, history_update: MedicalHistory):
-    """Update a medical history record"""
-    history_index = next((i for i, h in enumerate(medical_history_db) if h["id"] == history_id), None)
-    if history_index is None:
-        raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
-    
-    # Update the record
-    updated_history = {
-        **medical_history_db[history_index],
-        **history_update.dict(exclude={"id", "patient_id", "created_at", "created_by"}),
-        "updated_at": datetime.now(),
-        "updated_by": history_update.created_by  # In a real app, this would come from auth
-    }
-    
-    medical_history_db[history_index] = updated_history
-    return MedicalHistory(**updated_history)
-
-@app.delete("/api/medical-history/{history_id}")
-async def delete_medical_history(history_id: str):
-    """Delete a medical history record"""
-    history_index = next((i for i, h in enumerate(medical_history_db) if h["id"] == history_id), None)
-    if history_index is None:
-        raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
-    
-    deleted_history = medical_history_db.pop(history_index)
-    return {"message": "Historia clínica eliminada exitosamente", "deleted_id": deleted_history["id"]}
-
-# Response model for consultations with patient name
-class ConsultationResponse(MedicalHistory):
-    patient_name: Optional[str] = None
-
-# Get all medical consultations (for consultation management view)
-@app.get("/api/consultations", response_model=List[ConsultationResponse])
-async def get_all_consultations(
-    date_from: Optional[date] = None,
-    date_to: Optional[date] = None,
-    doctor_name: Optional[str] = None,
-    patient_search: Optional[str] = None
-):
-    """Get all medical consultations with optional filters"""
-    consultations = medical_history_db.copy()
-    
-    # Filter by date range
-    if date_from:
-        consultations = [c for c in consultations if isinstance(c["date"], datetime) and c["date"].date() >= date_from]
-    if date_to:
-        consultations = [c for c in consultations if isinstance(c["date"], datetime) and c["date"].date() <= date_to]
-    
-    # Filter by doctor
-    if doctor_name:
-        consultations = [c for c in consultations if doctor_name.lower() in c["doctor_name"].lower()]
-    
-    # Filter by patient (search in patient names)
-    if patient_search:
-        patient_ids = []
-        for patient in patients_db:
-            full_name = f"{patient['first_name']} {patient['paternal_surname']} {patient['maternal_surname']}"
-            if patient_search.lower() in full_name.lower():
-                patient_ids.append(patient["id"])
-        consultations = [c for c in consultations if c["patient_id"] in patient_ids]
-    
-    # Enrich consultations with patient names
-    enriched_consultations = []
-    for consultation in sorted(consultations, key=lambda x: x["date"], reverse=True):
-        # Find patient name
-        patient = next((p for p in patients_db if p["id"] == consultation["patient_id"]), None)
-        consultation_copy = consultation.copy()
-        if patient:
-            consultation_copy["patient_name"] = f"{patient['first_name']} {patient['paternal_surname']} {patient['maternal_surname']}"
-        else:
-            consultation_copy["patient_name"] = "Paciente no encontrado"
-        enriched_consultations.append(consultation_copy)
-    
-    return [ConsultationResponse(**record) for record in enriched_consultations]
-
-# Vital Signs Endpoints
-@app.get("/api/patients/{patient_id}/vital-signs", response_model=List[VitalSigns])
-async def get_patient_vital_signs(patient_id: str):
-    """Get vital signs for a specific patient"""
-    signs = [vs for vs in vital_signs_db if vs["patient_id"] == patient_id]
-    return [VitalSigns(**record) for record in sorted(signs, key=lambda x: x["date_recorded"], reverse=True)]
-
-@app.post("/api/patients/{patient_id}/vital-signs", response_model=VitalSigns)
-async def create_vital_signs(patient_id: str, vital_signs: VitalSigns):
-    """Create new vital signs record"""
-    # Verify patient exists
-    if not any(p["id"] == patient_id for p in patients_db):
-        raise HTTPException(status_code=404, detail="Paciente no encontrado")
-    
-    new_id = f"VS{len(vital_signs_db) + 1:03d}"
-    
-    # Calculate BMI if weight and height are provided
-    bmi = None
-    if vital_signs.weight and vital_signs.height:
-        height_m = vital_signs.height / 100  # convert cm to meters
-        bmi = round(vital_signs.weight / (height_m ** 2), 1)
-    
-    new_vital_signs = {
-        "id": new_id,
-        "patient_id": patient_id,
-        "bmi": bmi,
-        **vital_signs.dict(exclude={"id", "patient_id", "bmi"})
-    }
-    
-    vital_signs_db.append(new_vital_signs)
-    return VitalSigns(**new_vital_signs)
-
-@app.get("/api/vital-signs/{signs_id}", response_model=VitalSigns)
-async def get_vital_signs(signs_id: str):
-    """Get specific vital signs record"""
-    signs = next((vs for vs in vital_signs_db if vs["id"] == signs_id), None)
-    if not signs:
-        raise HTTPException(status_code=404, detail="Signos vitales no encontrados")
-    
-    return VitalSigns(**signs)
-
-# Prescriptions Endpoints
-@app.get("/api/patients/{patient_id}/prescriptions", response_model=List[Prescription])
-async def get_patient_prescriptions(patient_id: str, status: Optional[PrescriptionStatus] = None):
-    """Get prescriptions for a specific patient"""
-    prescriptions = [p for p in prescriptions_db if p["patient_id"] == patient_id]
-    
-    if status:
-        prescriptions = [p for p in prescriptions if p["status"] == status]
-    
-    return [Prescription(**record) for record in sorted(prescriptions, key=lambda x: x["prescribed_date"], reverse=True)]
-
-@app.post("/api/patients/{patient_id}/prescriptions", response_model=Prescription)
-async def create_prescription(patient_id: str, prescription: Prescription):
-    """Create a new prescription"""
-    # Verify patient exists
-    if not any(p["id"] == patient_id for p in patients_db):
-        raise HTTPException(status_code=404, detail="Paciente no encontrado")
-    
-    new_id = f"PRES{len(prescriptions_db) + 1:03d}"
-    new_prescription = {
-        "id": new_id,
-        "patient_id": patient_id,
-        **prescription.dict(exclude={"id", "patient_id"})
-    }
-    
-    prescriptions_db.append(new_prescription)
-    return Prescription(**new_prescription)
-
-@app.put("/api/prescriptions/{prescription_id}", response_model=Prescription)
-async def update_prescription_status(prescription_id: str, status: PrescriptionStatus):
-    """Update prescription status"""
-    prescription_index = next((i for i, p in enumerate(prescriptions_db) if p["id"] == prescription_id), None)
-    if prescription_index is None:
-        raise HTTPException(status_code=404, detail="Prescripción no encontrada")
-    
-    prescriptions_db[prescription_index]["status"] = status
-    return Prescription(**prescriptions_db[prescription_index])
-
-# Appointments Endpoints
-@app.get("/api/patients/{patient_id}/appointments", response_model=List[Appointment])
-async def get_patient_appointments(patient_id: str, status: Optional[AppointmentStatus] = None):
-    """Get appointments for a specific patient"""
-    appointments = [a for a in appointments_db if a["patient_id"] == patient_id]
-    
-    if status:
-        appointments = [a for a in appointments if a["status"] == status]
-    
-    return [Appointment(**record) for record in sorted(appointments, key=lambda x: x["date_time"])]
-
-@app.get("/api/appointments", response_model=List[Appointment])
-async def get_all_appointments(date: Optional[date] = None, status: Optional[AppointmentStatus] = None):
-    """Get all appointments with optional filters"""
-    appointments = appointments_db.copy()
-    
-    if date:
-        appointments = [a for a in appointments if a["date_time"].date() == date]
-    
-    if status:
-        appointments = [a for a in appointments if a["status"] == status]
-    
-    return [Appointment(**record) for record in sorted(appointments, key=lambda x: x["date_time"])]
-
-@app.post("/api/patients/{patient_id}/appointments", response_model=Appointment)
-async def create_appointment(patient_id: str, appointment: Appointment):
-    """Create a new appointment"""
-    # Verify patient exists
-    if not any(p["id"] == patient_id for p in patients_db):
-        raise HTTPException(status_code=404, detail="Paciente no encontrado")
-    
-    new_id = f"APT{len(appointments_db) + 1:03d}"
-    now = datetime.now()
-    
-    new_appointment = {
-        "id": new_id,
-        "patient_id": patient_id,
-        "created_at": now,
-        "updated_at": now,
-        **appointment.dict(exclude={"id", "patient_id", "created_at", "updated_at"})
-    }
-    
-    appointments_db.append(new_appointment)
-    return Appointment(**new_appointment)
-
-@app.put("/api/appointments/{appointment_id}", response_model=Appointment)
-async def update_appointment_status(appointment_id: str, status: AppointmentStatus):
-    """Update appointment status"""
-    appointment_index = next((i for i, a in enumerate(appointments_db) if a["id"] == appointment_id), None)
-    if appointment_index is None:
-        raise HTTPException(status_code=404, detail="Cita no encontrada")
-    
-    appointments_db[appointment_index]["status"] = status
-    appointments_db[appointment_index]["updated_at"] = datetime.now()
-    return Appointment(**appointments_db[appointment_index])
-
-@app.delete("/api/appointments/{appointment_id}")
-async def cancel_appointment(appointment_id: str):
-    """Cancel an appointment"""
-    appointment_index = next((i for i, a in enumerate(appointments_db) if a["id"] == appointment_id), None)
-    if appointment_index is None:
-        raise HTTPException(status_code=404, detail="Cita no encontrada")
-    
-    appointments_db[appointment_index]["status"] = AppointmentStatus.CANCELLED
-    appointments_db[appointment_index]["updated_at"] = datetime.now()
-    return {"message": "Cita cancelada exitosamente"}
-
-# Enhanced appointments endpoints for agenda management
-@app.put("/api/appointments/{appointment_id}/full", response_model=Appointment)
-async def update_appointment_full(appointment_id: str, appointment_update: Appointment):
-    """Update an appointment with full data"""
-    appointment_index = next((i for i, a in enumerate(appointments_db) if a["id"] == appointment_id), None)
-    if appointment_index is None:
-        raise HTTPException(status_code=404, detail="Cita no encontrada")
-    
-    updated_appointment = {
-        **appointments_db[appointment_index],
-        **appointment_update.dict(exclude={"id", "patient_id", "created_at"}),
-        "updated_at": datetime.now()
-    }
-    
-    appointments_db[appointment_index] = updated_appointment
-    return Appointment(**updated_appointment)
-
-@app.get("/api/agenda/daily", response_model=List[Appointment])
-async def get_daily_agenda(target_date: Optional[date] = None):
-    """Get daily agenda - all appointments for a specific date"""
-    if not target_date:
-        target_date = date.today()
-    
-    daily_appointments = [a for a in appointments_db if a["date_time"].date() == target_date]
-    return [Appointment(**record) for record in sorted(daily_appointments, key=lambda x: x["date_time"])]
-
-@app.get("/api/agenda/weekly")
-async def get_weekly_agenda(start_date: Optional[date] = None):
-    """Get weekly agenda view"""
-    
-    if not start_date:
-        start_date = date.today()
-    
-    # Get 7 days starting from start_date
-    weekly_appointments = []
-    for i in range(7):
-        current_date = start_date + timedelta(days=i)
-        day_appointments = [a for a in appointments_db if a["date_time"].date() == current_date]
-        weekly_appointments.append({
-            "date": current_date,
-            "appointments": [Appointment(**record) for record in sorted(day_appointments, key=lambda x: x["date_time"])],
-            "total_appointments": len(day_appointments)
-        })
-    
-    return weekly_appointments
-
-@app.get("/api/agenda/available-slots")
-async def get_available_slots(target_date: date, duration_minutes: int = 30):
-    """Get available time slots for a specific date"""
-    
-    # Define working hours (8:00 AM to 6:00 PM)
-    start_hour = 8
-    end_hour = 18
-    
-    # Get existing appointments for the date
-    existing_appointments = [a for a in appointments_db if a["date_time"].date() == target_date and a["status"] not in [AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW]]
-    
-    # Generate all possible slots
-    available_slots = []
-    current_time = datetime.combine(target_date, datetime.min.time().replace(hour=start_hour))
-    end_time = datetime.combine(target_date, datetime.min.time().replace(hour=end_hour))
-    
-    while current_time < end_time:
-        # Check if this slot conflicts with existing appointments
-        slot_end = current_time + timedelta(minutes=duration_minutes)
-        is_available = True
-        
-        for appointment in existing_appointments:
-            app_start = appointment["date_time"]
-            app_end = app_start + timedelta(minutes=appointment.get("duration_minutes", 30))
-            
-            # Check for overlap
-            if (current_time < app_end and slot_end > app_start):
-                is_available = False
-                break
-        
-        if is_available:
-            available_slots.append({
-                "start_time": current_time,
-                "end_time": slot_end,
-                "duration_minutes": duration_minutes
-            })
-        
-        current_time += timedelta(minutes=duration_minutes)
-    
-    return available_slots
-
-@app.post("/api/appointments/bulk-update")
-async def bulk_update_appointments(updates: List[Dict[str, Any]]):
-    """Bulk update multiple appointments (for drag & drop rescheduling)"""
-    updated_appointments = []
-    
-    for update in updates:
-        appointment_id = update.get("id")
-        if not appointment_id:
-            continue
-            
-        appointment_index = next((i for i, a in enumerate(appointments_db) if a["id"] == appointment_id), None)
-        if appointment_index is not None:
-            # Update the appointment
-            appointments_db[appointment_index].update({
-                **update,
-                "updated_at": datetime.now()
-            })
-            updated_appointments.append(Appointment(**appointments_db[appointment_index]))
-    
-    return {"updated_count": len(updated_appointments), "appointments": updated_appointments}
-
-# Comprehensive Patient Details Endpoint
-@app.get("/api/patients/{patient_id}/complete", response_model=Dict[str, Any])
-async def get_complete_patient_info(patient_id: str):
-    """Get complete patient information including medical history, vital signs, prescriptions, and appointments"""
-    patient = next((p for p in patients_db if p["id"] == patient_id), None)
-    if not patient:
-        raise HTTPException(status_code=404, detail="Paciente no encontrado")
-    
-    # Get all related data
-    medical_history = [MedicalHistory(**h) for h in medical_history_db if h["patient_id"] == patient_id]
-    vital_signs = [VitalSigns(**vs) for vs in vital_signs_db if vs["patient_id"] == patient_id]
-    prescriptions = [Prescription(**p) for p in prescriptions_db if p["patient_id"] == patient_id]
-    appointments = [Appointment(**a) for a in appointments_db if a["patient_id"] == patient_id]
-    
-    return {
-        "patient": PatientResponse(**patient),
-        "medical_history": sorted(medical_history, key=lambda x: x.date, reverse=True),
-        "vital_signs": sorted(vital_signs, key=lambda x: x.date_recorded, reverse=True),
-        "prescriptions": sorted(prescriptions, key=lambda x: x.prescribed_date, reverse=True),
-        "appointments": sorted(appointments, key=lambda x: x.date_time),
-        "active_prescriptions": [p for p in prescriptions if p.status == PrescriptionStatus.ACTIVE],
-        "upcoming_appointments": [a for a in appointments if a.date_time > datetime.now() and a.status in [AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED]]
-    }
+async def dashboard(db: Session = Depends(get_db)):
+    """Get dashboard data from PostgreSQL"""
+    dashboard_data = get_dashboard_data(db)
+    return dashboard_data
 
 # ============================================================================
-# DOCTOR PROFILE ENDPOINTS
+# PATIENT ENDPOINTS - Essential only
+# ============================================================================
+
+@app.get("/api/patients", response_model=List[PatientResponse])
+async def get_patients(search: Optional[str] = None, limit: int = 100, offset: int = 0, db: Session = Depends(get_db)):
+    """Get all patients with optional search and pagination from PostgreSQL"""
+    try:
+        patients = PatientService.get_patients(db, search or "", offset, limit)
+        
+        patient_responses = []
+        for patient in patients:
+            patient_dict = {
+                "id": patient.id,
+                "full_name": f"{patient.first_name} {patient.paternal_surname} {patient.maternal_surname or ''}".strip(),
+                "first_name": patient.first_name,
+                "paternal_surname": patient.paternal_surname,
+                "maternal_surname": patient.maternal_surname or "",
+                "curp": patient.curp or "",
+                "birth_date": patient.birth_date.isoformat() if patient.birth_date else "",
+                "gender": patient.gender,
+                "civil_status": patient.civil_status or "",
+                "nationality": patient.nationality or "mexicana",
+                "birth_place": patient.birth_place or "",
+                "phone": patient.phone or "",
+                "email": patient.email or "",
+                "address": patient.address or "",
+                "city": patient.city or "",
+                "state": patient.state or "",
+                "postal_code": patient.postal_code or "",
+                "country": patient.country or "México",
+                "emergency_contact_name": patient.emergency_contact_name or "",
+                "emergency_contact_phone": patient.emergency_contact_phone or "",
+                "emergency_contact_relationship": patient.emergency_contact_relationship or "",
+                "insurance_provider": patient.insurance_provider or "",
+                "insurance_number": patient.insurance_number or "",
+                "blood_type": patient.blood_type or "",
+                "allergies": patient.allergies or "",
+                "chronic_conditions": patient.chronic_conditions or "",
+                "current_medications": patient.current_medications or "",
+                "total_visits": patient.total_visits or 0,
+                "is_active": patient.is_active,
+                "created_at": patient.created_at.isoformat() if patient.created_at else "",
+                "updated_at": patient.updated_at.isoformat() if patient.updated_at else None,
+                "created_by": patient.created_by or ""
+            }
+            patient_responses.append(PatientResponse(**patient_dict))
+        
+        return patient_responses
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching patients: {str(e)}")
+
+@app.post("/api/patients", response_model=PatientResponse)
+async def create_patient(patient: PatientCreate, db: Session = Depends(get_db)):
+    """Create a new patient"""
+    try:
+        patient_data = patient.dict()
+        patient_data["created_at"] = datetime.utcnow()
+        
+        new_patient = PatientService.create_patient(db, patient_data)
+        
+        patient_dict = {
+            "id": new_patient.id,
+            "full_name": f"{new_patient.first_name} {new_patient.paternal_surname} {new_patient.maternal_surname or ''}".strip(),
+            "first_name": new_patient.first_name,
+            "paternal_surname": new_patient.paternal_surname,
+            "maternal_surname": new_patient.maternal_surname or "",
+            "curp": new_patient.curp or "",
+            "birth_date": new_patient.birth_date.isoformat() if new_patient.birth_date else "",
+            "gender": new_patient.gender,
+            "civil_status": new_patient.civil_status or "",
+            "nationality": new_patient.nationality or "mexicana",
+            "birth_place": new_patient.birth_place or "",
+            "phone": new_patient.phone or "",
+            "email": new_patient.email or "",
+            "address": new_patient.address or "",
+            "city": new_patient.city or "",
+            "state": new_patient.state or "",
+            "postal_code": new_patient.postal_code or "",
+            "country": new_patient.country or "México",
+            "emergency_contact_name": new_patient.emergency_contact_name or "",
+            "emergency_contact_phone": new_patient.emergency_contact_phone or "",
+            "emergency_contact_relationship": new_patient.emergency_contact_relationship or "",
+            "insurance_provider": new_patient.insurance_provider or "",
+            "insurance_number": new_patient.insurance_number or "",
+            "blood_type": new_patient.blood_type or "",
+            "allergies": new_patient.allergies or "",
+            "chronic_conditions": new_patient.chronic_conditions or "",
+            "current_medications": new_patient.current_medications or "",
+            "total_visits": new_patient.total_visits or 0,
+            "is_active": new_patient.is_active,
+            "created_at": new_patient.created_at.isoformat() if new_patient.created_at else "",
+            "updated_at": new_patient.updated_at.isoformat() if new_patient.updated_at else None,
+            "created_by": new_patient.created_by or ""
+        }
+        
+        return PatientResponse(**patient_dict)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating patient: {str(e)}")
+
+# ============================================================================
+# DOCTOR PROFILE ENDPOINTS - Essential only  
 # ============================================================================
 
 @app.get("/api/doctor/profile", response_model=DoctorProfileResponse)
-async def get_doctor_profile():
+async def get_doctor_profile(db: Session = Depends(get_db)):
     """Get the current doctor's profile"""
-    # In a real application, this would be based on the authenticated user
-    # For now, we'll return the first (and potentially only) doctor profile
-    if not doctor_profiles_db:
+    profile = DoctorService.get_profile(db)
+    if not profile:
         raise HTTPException(status_code=404, detail="Perfil del médico no encontrado")
     
-    profile = doctor_profiles_db[0]  # Get the main doctor profile
-    return DoctorProfileResponse(**profile)
+    profile_dict = {
+        "id": profile.id,
+        "title": profile.title,
+        "first_name": profile.first_name,
+        "paternal_surname": profile.paternal_surname,
+        "maternal_surname": profile.maternal_surname or "",
+        "email": profile.email,
+        "phone": profile.phone,
+        "birth_date": profile.birth_date,
+        "professional_license": profile.professional_license,
+        "specialty": profile.specialty,
+        "specialty_license": profile.specialty_license or "",
+        "university": profile.university,
+        "graduation_year": profile.graduation_year,
+        "subspecialty": profile.subspecialty or "",
+        "professional_email": profile.professional_email or "",
+        "office_phone": profile.office_phone or "",
+        "mobile_phone": profile.mobile_phone or "",
+        "office_address": profile.office_address,
+        "office_city": profile.office_city,
+        "office_state": profile.office_state,
+        "office_postal_code": profile.office_postal_code or "",
+        "office_country": profile.office_country or "México",
+        "medical_school": profile.medical_school or "",
+        "internship_hospital": profile.internship_hospital or "",
+        "residency_hospital": profile.residency_hospital or "",
+        "board_certifications": profile.board_certifications or [],
+        "professional_memberships": profile.professional_memberships or [],
+        "digital_signature": profile.digital_signature,
+        "professional_seal": profile.professional_seal,
+        "full_name": profile.full_name,
+        "is_active": profile.is_active,
+        "created_at": profile.created_at.isoformat() if profile.created_at else "",
+        "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
+        "created_by": profile.created_by or ""
+    }
+    
+    return DoctorProfileResponse(**profile_dict)
 
 @app.post("/api/doctor/profile", response_model=DoctorProfileResponse)
-async def create_doctor_profile(profile: DoctorProfileCreate):
+async def create_doctor_profile(profile: DoctorProfileCreate, db: Session = Depends(get_db)):
     """Create a new doctor profile with NOM-004 compliance validation"""
-    # Check if a profile already exists (for single-doctor practice)
-    if doctor_profiles_db:
-        raise HTTPException(
-            status_code=400, 
-            detail="Ya existe un perfil de médico. Use PUT para actualizar."
-        )
-    
-    # Validate NOM-004 compliance
-    profile_data = profile.dict()
-    validation_errors = validate_nom_004_doctor_profile(profile_data)
-    
-    if validation_errors:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Datos no cumplen con NOM-004-SSA3-2012: {'; '.join(validation_errors)}"
-        )
-    
-    # Generate new profile ID
-    new_id = "DR001"  # For single-doctor practice
-    
-    # Create full name (NOM-004 format with professional title)
-    full_name = f"{profile.title} {profile.first_name} {profile.paternal_surname}"
-    if profile.maternal_surname:
-        full_name += f" {profile.maternal_surname}"
-    
-    now = datetime.now()
-    
-    # Create new doctor profile record
-    new_profile = {
-        "id": new_id,
-        "full_name": full_name,
-        "created_at": now,
-        "updated_at": None,
-        "created_by": f"Dr. {full_name}",  # Self-created profile
-        "updated_by": None,
-        **profile_data
-    }
-    
-    doctor_profiles_db.append(new_profile)
-    
-    # Log audit trail (NOM-024 requirement)
-    log_audit_action(
-        user_id=new_id,
-        user_name=full_name,
-        action="CREATE",
-        resource_type="DOCTOR_PROFILE",
-        resource_id=new_id,
-        details=f"Nuevo perfil de médico creado: {full_name}",
-        new_values={"profile_data": new_profile}
-    )
-    
-    return DoctorProfileResponse(**new_profile)
-
-@app.put("/api/doctor/profile/{profile_id}", response_model=DoctorProfileResponse)
-async def update_doctor_profile(profile_id: str, profile_update: DoctorProfileUpdate):
-    """Update an existing doctor profile"""
-    profile_index = next((i for i, p in enumerate(doctor_profiles_db) if p["id"] == profile_id), None)
-    if profile_index is None:
-        raise HTTPException(status_code=404, detail="Perfil del médico no encontrado")
-    
-    # Get current profile
-    current_profile = doctor_profiles_db[profile_index]
-    
-    # Create updated data by merging current with updates (excluding None values)
-    update_data = {k: v for k, v in profile_update.dict().items() if v is not None}
-    updated_profile_data = {**current_profile, **update_data}
-    
-    # Validate NOM-004 compliance with updated data
-    validation_errors = validate_nom_004_doctor_profile(updated_profile_data)
-    
-    if validation_errors:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Datos actualizados no cumplen con NOM-004-SSA3-2012: {'; '.join(validation_errors)}"
-        )
-    
-    # Update full name if personal info changed
-    if any(field in update_data for field in ['title', 'first_name', 'paternal_surname', 'maternal_surname']):
-        full_name = f"{updated_profile_data['title']} {updated_profile_data['first_name']} {updated_profile_data['paternal_surname']}"
-        if updated_profile_data.get('maternal_surname'):
-            full_name += f" {updated_profile_data['maternal_surname']}"
-        updated_profile_data['full_name'] = full_name
-    
-    # Update timestamps
-    updated_profile_data['updated_at'] = datetime.now()
-    updated_profile_data['updated_by'] = updated_profile_data['full_name']  # Self-updated
-    
-    # Save updated profile
-    doctor_profiles_db[profile_index] = updated_profile_data
-    
-    # Log audit trail (NOM-024 requirement)
-    log_audit_action(
-        user_id=profile_id,
-        user_name=updated_profile_data['full_name'],
-        action="UPDATE",
-        resource_type="DOCTOR_PROFILE",
-        resource_id=profile_id,
-        details=f"Perfil de médico actualizado: {updated_profile_data['full_name']}",
-        old_values={"previous_data": current_profile},
-        new_values={"updated_data": updated_profile_data}
-    )
-    
-    return DoctorProfileResponse(**updated_profile_data)
-
-@app.get("/api/doctor/profile/{profile_id}", response_model=DoctorProfileResponse)
-async def get_doctor_profile_by_id(profile_id: str):
-    """Get a specific doctor profile by ID"""
-    profile = next((p for p in doctor_profiles_db if p["id"] == profile_id), None)
-    if not profile:
-        raise HTTPException(status_code=404, detail="Perfil del médico no encontrado")
-    
-    return DoctorProfileResponse(**profile)
-
-@app.delete("/api/doctor/profile/{profile_id}")
-async def delete_doctor_profile(profile_id: str):
-    """Delete (deactivate) a doctor profile"""
-    profile_index = next((i for i, p in enumerate(doctor_profiles_db) if p["id"] == profile_id), None)
-    if profile_index is None:
-        raise HTTPException(status_code=404, detail="Perfil del médico no encontrado")
-    
-    # Instead of deleting, mark as inactive (NOM-024 compliance for audit trail)
-    doctor_profiles_db[profile_index]["is_active"] = False
-    doctor_profiles_db[profile_index]["updated_at"] = datetime.now()
-    
-    # Log audit trail
-    log_audit_action(
-        user_id=profile_id,
-        user_name=doctor_profiles_db[profile_index]['full_name'],
-        action="DEACTIVATE",
-        resource_type="DOCTOR_PROFILE",
-        resource_id=profile_id,
-        details=f"Perfil de médico desactivado: {doctor_profiles_db[profile_index]['full_name']}"
-    )
-    
-    return {"message": "Perfil del médico desactivado exitosamente"}
-
-@app.get("/api/doctor/profile/{profile_id}/nom-validation")
-async def validate_doctor_profile_nom_compliance(profile_id: str):
-    """Validate specific doctor profile against NOM requirements"""
-    profile = next((p for p in doctor_profiles_db if p["id"] == profile_id), None)
-    if not profile:
-        raise HTTPException(status_code=404, detail="Perfil del médico no encontrado")
-    
-    validation_errors = validate_nom_004_doctor_profile(profile)
-    optional_fields_info = get_nom_004_doctor_profile_optional_fields(profile)
-    
-    return {
-        "profile_id": profile_id,
-        "doctor_name": profile.get("full_name", ""),
-        "professional_license": profile.get("professional_license", ""),
-        "specialty": profile.get("specialty", ""),
-        "is_compliant": len(validation_errors) == 0,
-        "compliance_percentage": 0 if validation_errors else 100,
-        "validation_errors": validation_errors,
-        "missing_mandatory_fields": [error.split(": ")[-1] for error in validation_errors if "Campo obligatorio faltante" in error],
-        "optional_fields": optional_fields_info,
-        "validation_date": datetime.now(),
-        "nom_standards": {
-            "nom_004": "Expediente clínico - Solo requiere: nombre, cédula profesional, especialidad (Art. 5.4.1)",
-            "nom_024": "Sistemas de información - Trazabilidad de acciones",
-            "nom_035": "Información en salud - Identificación profesional"
-        },
-        "professional_status": {
-            "license_valid": profile.get("professional_license") and validate_professional_license(profile.get("professional_license", "")),
-            "specialty_license_valid": not profile.get("specialty_license") or validate_professional_license(profile.get("specialty_license", "")),
-            "practice_location_valid": profile.get("office_state") and validate_mexican_states(profile.get("office_state", ""))
-        },
-        "compliance_summary": {
-            "nom_004_compliant": len(validation_errors) == 0,
-            "mandatory_fields_only": True,
-            "optional_fields_for_admin_only": False,
-            "university_required": False,
-            "medical_school_required": False,
-            "hospitals_required": False,
-            "certifications_recommended": True,
-            "memberships_recommended": True,
-            "credibility_importance": "Las certificaciones del consejo y membresías profesionales son MUY IMPORTANTES para la credibilidad del médico"
+    try:
+        profile_data = profile.dict()
+        if isinstance(profile_data.get("board_certifications"), str):
+            profile_data["board_certifications"] = [cert.strip() for cert in profile_data["board_certifications"].split(",") if cert.strip()]
+        if isinstance(profile_data.get("professional_memberships"), str):
+            profile_data["professional_memberships"] = [member.strip() for member in profile_data["professional_memberships"].split(",") if member.strip()]
+        
+        profile_data["created_at"] = datetime.utcnow()
+        
+        new_profile = DoctorService.create_profile(db, profile_data)
+        
+        profile_dict = {
+            "id": new_profile.id,
+            "title": new_profile.title,
+            "first_name": new_profile.first_name,
+            "paternal_surname": new_profile.paternal_surname,
+            "maternal_surname": new_profile.maternal_surname or "",
+            "email": new_profile.email,
+            "phone": new_profile.phone,
+            "birth_date": new_profile.birth_date,
+            "professional_license": new_profile.professional_license,
+            "specialty": new_profile.specialty,
+            "specialty_license": new_profile.specialty_license or "",
+            "university": new_profile.university,
+            "graduation_year": new_profile.graduation_year,
+            "subspecialty": new_profile.subspecialty or "",
+            "professional_email": new_profile.professional_email or "",
+            "office_phone": new_profile.office_phone or "",
+            "mobile_phone": new_profile.mobile_phone or "",
+            "office_address": new_profile.office_address,
+            "office_city": new_profile.office_city,
+            "office_state": new_profile.office_state,
+            "office_postal_code": new_profile.office_postal_code or "",
+            "office_country": new_profile.office_country or "México",
+            "medical_school": new_profile.medical_school or "",
+            "internship_hospital": new_profile.internship_hospital or "",
+            "residency_hospital": new_profile.residency_hospital or "",
+            "board_certifications": new_profile.board_certifications or [],
+            "professional_memberships": new_profile.professional_memberships or [],
+            "digital_signature": new_profile.digital_signature,
+            "professional_seal": new_profile.professional_seal,
+            "full_name": new_profile.full_name,
+            "is_active": new_profile.is_active,
+            "created_at": new_profile.created_at.isoformat() if new_profile.created_at else "",
+            "updated_at": new_profile.updated_at.isoformat() if new_profile.updated_at else None,
+            "created_by": new_profile.created_by or ""
         }
-    }
+        
+        return DoctorProfileResponse(**profile_dict)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating doctor profile: {str(e)}")
 
-@app.get("/api/doctor/profile/validation/summary")
-async def get_doctor_profile_validation_summary():
-    """Get overall doctor profile validation summary"""
-    if not doctor_profiles_db:
-        return {
-            "total_profiles": 0,
-            "compliant_profiles": 0,
-            "compliance_percentage": 0,
-            "status": "no_profiles",
-            "message": "No hay perfiles de médicos registrados"
+@app.put("/api/doctor/profile", response_model=DoctorProfileResponse)
+async def update_doctor_profile(profile: DoctorProfileUpdate, db: Session = Depends(get_db)):
+    """Update the current doctor's profile with NOM-004 compliance validation"""
+    try:
+        # Get the existing profile
+        existing_profile = DoctorService.get_profile(db)
+        if not existing_profile:
+            raise HTTPException(status_code=404, detail="Perfil del médico no encontrado")
+        
+        # Prepare update data
+        profile_data = profile.dict(exclude_unset=True)
+        
+        # Handle array/string conversion for certifications and memberships
+        if isinstance(profile_data.get("board_certifications"), str):
+            profile_data["board_certifications"] = [cert.strip() for cert in profile_data["board_certifications"].split(",") if cert.strip()]
+        if isinstance(profile_data.get("professional_memberships"), str):
+            profile_data["professional_memberships"] = [member.strip() for member in profile_data["professional_memberships"].split(",") if member.strip()]
+        
+        profile_data["updated_at"] = datetime.utcnow()
+        
+        # Update the profile
+        updated_profile = DoctorService.update_profile(db, existing_profile.id, profile_data)
+        
+        # Prepare response
+        profile_dict = {
+            "id": updated_profile.id,
+            "title": updated_profile.title,
+            "first_name": updated_profile.first_name,
+            "paternal_surname": updated_profile.paternal_surname,
+            "maternal_surname": updated_profile.maternal_surname or "",
+            "email": updated_profile.email,
+            "phone": updated_profile.phone,
+            "birth_date": updated_profile.birth_date,
+            "professional_license": updated_profile.professional_license,
+            "specialty": updated_profile.specialty,
+            "specialty_license": updated_profile.specialty_license or "",
+            "university": updated_profile.university,
+            "graduation_year": updated_profile.graduation_year,
+            "subspecialty": updated_profile.subspecialty or "",
+            "professional_email": updated_profile.professional_email or "",
+            "office_phone": updated_profile.office_phone or "",
+            "mobile_phone": updated_profile.mobile_phone or "",
+            "office_address": updated_profile.office_address,
+            "office_city": updated_profile.office_city,
+            "office_state": updated_profile.office_state,
+            "office_postal_code": updated_profile.office_postal_code or "",
+            "office_country": updated_profile.office_country or "México",
+            "medical_school": updated_profile.medical_school or "",
+            "internship_hospital": updated_profile.internship_hospital or "",
+            "residency_hospital": updated_profile.residency_hospital or "",
+            "board_certifications": updated_profile.board_certifications or [],
+            "professional_memberships": updated_profile.professional_memberships or [],
+            "digital_signature": updated_profile.digital_signature,
+            "professional_seal": updated_profile.professional_seal,
+            "full_name": updated_profile.full_name,
+            "is_active": updated_profile.is_active,
+            "created_at": updated_profile.created_at.isoformat() if updated_profile.created_at else "",
+            "updated_at": updated_profile.updated_at.isoformat() if updated_profile.updated_at else None,
+            "created_by": updated_profile.created_by or ""
         }
-    
-    active_profiles = [p for p in doctor_profiles_db if p.get("is_active", True)]
-    compliant_profiles = 0
-    
-    for profile in active_profiles:
-        errors = validate_nom_004_doctor_profile(profile)
-        if not errors:
-            compliant_profiles += 1
-    
-    compliance_percentage = (compliant_profiles / len(active_profiles) * 100) if active_profiles else 0
-    
-    return {
-        "nom_004_compliance": {
-            "total_profiles": len(active_profiles),
-            "compliant_profiles": compliant_profiles,
-            "compliance_percentage": round(compliance_percentage, 2),
-            "status": "compliant" if compliance_percentage == 100 else "non_compliant"
-        },
-        "professional_credentials": {
-            "profiles_with_license": len([p for p in active_profiles if p.get("professional_license")]),
-            "profiles_with_specialty_license": len([p for p in active_profiles if p.get("specialty_license")]),
-            "profiles_with_valid_location": len([p for p in active_profiles if p.get("office_state") and validate_mexican_states(p.get("office_state", ""))])
-        },
-        "data_quality": {
-            "complete_profiles": compliant_profiles,
-            "incomplete_profiles": len(active_profiles) - compliant_profiles,
-            "quality_score": round(compliance_percentage, 2)
+        
+        return DoctorProfileResponse(**profile_dict)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating doctor profile: {str(e)}")
+
+# ============================================================================
+# CONSULTATION ENDPOINTS - Essential only
+# ============================================================================
+
+@app.get("/api/consultations", response_model=List[ConsultationResponse])
+async def get_consultations(patient_search: Optional[str] = None, db: Session = Depends(get_db)):
+    """Get all consultations with optional patient search"""
+    try:
+        consultations = ConsultationService.get_consultations(db, patient_search or "")
+        
+        consultation_responses = []
+        for consultation_dict in consultations:
+            if '_sa_instance_state' in consultation_dict:
+                del consultation_dict['_sa_instance_state']
+                
+            consultation_response = {
+                "id": consultation_dict.get("id", ""),
+                "patient_id": consultation_dict.get("patient_id", ""),
+                "date": consultation_dict.get("date").isoformat() if consultation_dict.get("date") else "",
+                "chief_complaint": consultation_dict.get("chief_complaint", ""),
+                "history_present_illness": consultation_dict.get("history_present_illness", ""),
+                "family_history": consultation_dict.get("family_history", ""),
+                "personal_pathological_history": consultation_dict.get("personal_pathological_history", ""),
+                "personal_non_pathological_history": consultation_dict.get("personal_non_pathological_history", ""),
+                "physical_examination": consultation_dict.get("physical_examination", ""),
+                "primary_diagnosis": consultation_dict.get("primary_diagnosis", ""),
+                "primary_diagnosis_cie10": consultation_dict.get("primary_diagnosis_cie10", ""),
+                "secondary_diagnoses": consultation_dict.get("secondary_diagnoses", ""),
+                "secondary_diagnoses_cie10": consultation_dict.get("secondary_diagnoses_cie10", ""),
+                "differential_diagnosis": consultation_dict.get("differential_diagnosis", ""),
+                "treatment_plan": consultation_dict.get("treatment_plan", ""),
+                "prescribed_medications": consultation_dict.get("prescribed_medications", ""),
+                "follow_up_instructions": consultation_dict.get("follow_up_instructions", ""),
+                "doctor_name": consultation_dict.get("doctor_name", ""),
+                "doctor_professional_license": consultation_dict.get("doctor_professional_license", ""),
+                "doctor_specialty": consultation_dict.get("doctor_specialty", ""),
+                "patient_name": consultation_dict.get("patient_name", ""),
+                "created_at": consultation_dict.get("created_at").isoformat() if consultation_dict.get("created_at") else "",
+                "updated_at": consultation_dict.get("updated_at").isoformat() if consultation_dict.get("updated_at") else None,
+                "created_by": consultation_dict.get("created_by", "")
+            }
+            consultation_responses.append(ConsultationResponse(**consultation_response))
+        
+        return consultation_responses
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching consultations: {str(e)}")
+
+@app.post("/api/consultations", response_model=ConsultationResponse)
+async def create_consultation(consultation: MedicalHistoryCreate, db: Session = Depends(get_db)):
+    """Create a new consultation"""
+    try:
+        consultation_data = consultation.dict()
+        consultation_data["created_at"] = datetime.utcnow()
+        
+        new_consultation = ConsultationService.create_consultation(db, consultation_data)
+        
+        patient = PatientService.get_patient(db, new_consultation.patient_id)
+        patient_name = f"{patient.first_name} {patient.paternal_surname} {patient.maternal_surname or ''}".strip() if patient else ""
+        
+        consultation_response = {
+            "id": new_consultation.id,
+            "patient_id": new_consultation.patient_id,
+            "date": new_consultation.date,
+            "chief_complaint": new_consultation.chief_complaint,
+            "history_present_illness": new_consultation.history_present_illness,
+            "family_history": new_consultation.family_history,
+            "personal_pathological_history": new_consultation.personal_pathological_history,
+            "personal_non_pathological_history": new_consultation.personal_non_pathological_history,
+            "physical_examination": new_consultation.physical_examination,
+            "primary_diagnosis": new_consultation.primary_diagnosis,
+            "primary_diagnosis_cie10": new_consultation.primary_diagnosis_cie10 or "",
+            "secondary_diagnoses": new_consultation.secondary_diagnoses or "",
+            "secondary_diagnoses_cie10": new_consultation.secondary_diagnoses_cie10 or "",
+            "differential_diagnosis": new_consultation.differential_diagnosis or "",
+            "treatment_plan": new_consultation.treatment_plan,
+            "prescribed_medications": new_consultation.prescribed_medications or "",
+            "follow_up_instructions": new_consultation.follow_up_instructions,
+            "doctor_name": new_consultation.doctor_name,
+            "doctor_professional_license": new_consultation.doctor_professional_license,
+            "doctor_specialty": new_consultation.doctor_specialty or "",
+            "patient_name": patient_name,
+            "created_at": new_consultation.created_at.isoformat() if new_consultation.created_at else "",
+            "updated_at": new_consultation.updated_at.isoformat() if new_consultation.updated_at else None,
+            "created_by": new_consultation.created_by
         }
-    }
+        
+        return ConsultationResponse(**consultation_response)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating consultation: {str(e)}")
+
+# ============================================================================
+# MAIN APPLICATION
+# ============================================================================
 
 if __name__ == "__main__":
-    print("🚀 Starting Historias Clínicas API...")
     uvicorn.run(app, host="0.0.0.0", port=8000)

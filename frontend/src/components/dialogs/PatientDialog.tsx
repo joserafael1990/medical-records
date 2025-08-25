@@ -172,48 +172,9 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
             />
           </Box>
           
-          {/* Antecedentes Médicos - NOM-004 Obligatorio */}
-          <Box sx={{ width: '100%' }}>
-            <TextField
-              fullWidth
-              label="Antecedentes Heredofamiliares"
-              value={formData.family_history}
-              onChange={(e) => onFormDataChange('family_history', e.target.value)}
-              multiline
-              rows={3}
-              error={!!fieldErrors.family_history}
-              helperText={fieldErrors.family_history || "Enfermedades presentes en familiares directos"}
-              required
-            />
-          </Box>
-          
-          <Box sx={{ width: '100%' }}>
-            <TextField
-              fullWidth
-              label="Antecedentes Personales Patológicos"
-              value={formData.personal_pathological_history}
-              onChange={(e) => onFormDataChange('personal_pathological_history', e.target.value)}
-              multiline
-              rows={3}
-              error={!!fieldErrors.personal_pathological_history}
-              helperText={fieldErrors.personal_pathological_history || "Enfermedades, cirugías, hospitalizaciones previas"}
-              required
-            />
-          </Box>
-          
-          <Box sx={{ width: '100%' }}>
-            <TextField
-              fullWidth
-              label="Antecedentes Personales No Patológicos"
-              value={formData.personal_non_pathological_history}
-              onChange={(e) => onFormDataChange('personal_non_pathological_history', e.target.value)}
-              multiline
-              rows={3}
-              error={!!fieldErrors.personal_non_pathological_history}
-              helperText={fieldErrors.personal_non_pathological_history || "Hábitos: tabaquismo, alcoholismo, ejercicio, alimentación"}
-              required
-            />
-          </Box>
+          {/* Antecedentes Médicos movidos a Evaluación Clínica en Consultas */}
+          {/* Los antecedentes heredofamiliares, patológicos y no patológicos */}
+          {/* ahora se capturan durante la consulta médica como parte de la evaluación clínica */}
 
           {/* SECCIÓN: INFORMACIÓN OPCIONAL */}
           <Box sx={{ width: '100%' }}>

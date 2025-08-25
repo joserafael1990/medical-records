@@ -24,9 +24,6 @@ export interface Patient {
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
   emergency_contact_relationship?: string;
-  family_history: string;
-  personal_pathological_history: string;
-  personal_non_pathological_history: string;
   created_at: string;
   last_visit?: string;
   total_visits: number;
@@ -55,6 +52,12 @@ export interface Consultation {
   date: string;
   chief_complaint: string;
   history_present_illness: string;
+  
+  // Antecedentes (parte de la evaluación clínica)
+  family_history?: string; // Antecedentes heredofamiliares
+  personal_pathological_history?: string; // Antecedentes patológicos personales
+  personal_non_pathological_history?: string; // Antecedentes no patológicos personales
+  
   physical_examination: string;
   primary_diagnosis: string;
   primary_diagnosis_cie10?: string;
@@ -207,9 +210,6 @@ export interface PatientFormData {
   date_of_birth: string;
   gender: string;
   address: string;
-  family_history: string;
-  personal_pathological_history: string;
-  personal_non_pathological_history: string;
   birth_state_code: string;
   nationality: string;
   curp: string;
@@ -243,11 +243,17 @@ export interface ConsultationFormData {
   date: string;
   chief_complaint: string;
   history_present_illness: string;
+  
+  // Antecedentes (parte de la evaluación clínica)
+  family_history: string; // Antecedentes heredofamiliares
+  personal_pathological_history: string; // Antecedentes patológicos personales
+  personal_non_pathological_history: string; // Antecedentes no patológicos personales
+  
   physical_examination: string;
-  primary_diagnosis: string;
-  primary_diagnosis_cie10: string;
+  primary_diagnosis: string; // OBLIGATORIO NOM-004
+  primary_diagnosis_cie10: string; // OPCIONAL (buena práctica, no requerido por NOM-004)
   secondary_diagnoses: string;
-  secondary_diagnoses_cie10: string;
+  secondary_diagnoses_cie10: string; // OPCIONAL
   treatment_plan: string;
   therapeutic_plan: string;
   follow_up_instructions: string;
@@ -317,6 +323,7 @@ export interface DialogState {
 
 export interface DoctorProfile {
   id?: string;
+  full_name?: string; // Nombre completo generado por el backend
   // Información Personal
   title: string;
   first_name: string;
@@ -403,4 +410,86 @@ export interface DoctorFormData {
   // Certificaciones
   board_certifications: string;
   professional_memberships: string;
+}
+
+// ============================================================================
+// CLINICAL STUDIES TYPES - Estudios Clínicos  
+// ============================================================================
+
+export type StudyType = 
+  | 'laboratory'        // Estudios de laboratorio
+  | 'radiology'         // Estudios radiológicos
+  | 'pathology'         // Estudios de patología
+  | 'cardiology'        // Estudios cardiológicos
+  | 'endoscopy'         // Estudios endoscópicos
+  | 'biopsy'            // Biopsias
+  | 'cytology'          // Citologías
+  | 'microbiology'      // Estudios microbiológicos
+  | 'genetics'          // Estudios genéticos
+  | 'other';            // Otros estudios
+
+export type StudyStatus = 
+  | 'pending'           // Pendiente
+  | 'in_progress'       // En proceso
+  | 'completed'         // Completado
+  | 'cancelled';        // Cancelado
+
+export interface ClinicalStudy {
+  id: string;
+  consultation_id: string;          // ID de la consulta asociada
+  patient_id: string;               // ID del paciente
+  study_type: StudyType;            // Tipo de estudio
+  study_name: string;               // Nombre del estudio
+  study_description?: string;       // Descripción detallada
+  ordered_date: string;             // Fecha de solicitud (ISO string)
+  performed_date?: string;          // Fecha de realización (ISO string)
+  results_date?: string;            // Fecha de resultados (ISO string)
+  status: StudyStatus;
+
+  // Results and files
+  results_text?: string;            // Resultados en texto
+  interpretation?: string;          // Interpretación médica
+  file_path?: string;               // Ruta del archivo
+  file_name?: string;               // Nombre original del archivo
+  file_type?: string;               // Tipo MIME del archivo
+  file_size?: number;               // Tamaño del archivo en bytes
+
+  // Medical information
+  ordering_doctor: string;          // Médico que solicita el estudio
+  performing_doctor?: string;       // Médico que realiza el estudio
+  institution?: string;             // Institución donde se realiza
+  urgency?: string;                 // Urgencia (Normal, Urgente, STAT)
+
+  // Clinical context
+  clinical_indication?: string;     // Indicación clínica
+  relevant_history?: string;        // Historia clínica relevante
+
+  // Audit trail
+  created_at: string;               // Fecha de creación (ISO string)
+  updated_at?: string;              // Fecha de actualización (ISO string)
+  created_by: string;               // Usuario que crea el registro
+  updated_by?: string;              // Usuario que actualiza
+
+  // Response fields (from backend)
+  patient_name?: string;            // Nombre del paciente
+  consultation_date?: string;       // Fecha de la consulta (ISO string)
+}
+
+export interface ClinicalStudyFormData {
+  consultation_id: string;
+  patient_id: string;
+  study_type: StudyType;
+  study_name: string;
+  study_description: string;
+  ordered_date: string;
+  status: StudyStatus;
+  results_text: string;
+  interpretation: string;
+  ordering_doctor: string;
+  performing_doctor: string;
+  institution: string;
+  urgency: string;
+  clinical_indication: string;
+  relevant_history: string;
+  created_by: string;
 }

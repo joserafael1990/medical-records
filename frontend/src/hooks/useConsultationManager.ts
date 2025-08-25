@@ -47,6 +47,12 @@ const initialFormData: ConsultationFormData = {
   date: '',
   chief_complaint: '',
   history_present_illness: '',
+  
+  // Antecedentes (parte de la evaluación clínica)
+  family_history: '',
+  personal_pathological_history: '',
+  personal_non_pathological_history: '',
+  
   physical_examination: '',
   primary_diagnosis: '',
   primary_diagnosis_cie10: '',
@@ -158,6 +164,12 @@ export const useConsultationManager = (): UseConsultationManagerReturn => {
       date: consultation.date || '',
       chief_complaint: consultation.chief_complaint || '',
       history_present_illness: consultation.history_present_illness || '',
+      
+      // Antecedentes (parte de la evaluación clínica)
+      family_history: consultation.family_history || '',
+      personal_pathological_history: consultation.personal_pathological_history || '',
+      personal_non_pathological_history: consultation.personal_non_pathological_history || '',
+      
       physical_examination: consultation.physical_examination || '',
       primary_diagnosis: consultation.primary_diagnosis || '',
       primary_diagnosis_cie10: consultation.primary_diagnosis_cie10 || '',

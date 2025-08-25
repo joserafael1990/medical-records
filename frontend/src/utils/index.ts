@@ -160,9 +160,8 @@ const getFieldLabel = (field: string): string => {
     physical_examination: 'Exploración física',
     primary_diagnosis: 'Diagnóstico principal',
     treatment_plan: 'Plan de tratamiento',
-    follow_up_instructions: 'Indicaciones de seguimiento',
-    doctor_name: 'Nombre del médico',
-    doctor_professional_license: 'Cédula profesional'
+    follow_up_instructions: 'Indicaciones de seguimiento'
+    // doctor_name, doctor_professional_license: se obtienen automáticamente del perfil
   };
   return labels[field] || field;
 };

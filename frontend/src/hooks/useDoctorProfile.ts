@@ -65,6 +65,22 @@ const initialFormData: DoctorFormData = {
   professional_memberships: ''
 };
 
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+
+const formatDateForInput = (isoDate: string): string => {
+  if (!isoDate) return '';
+  // Convert from "1990-02-10T00:00:00" to "1990-02-10"
+  return isoDate.split('T')[0];
+};
+
+const formatDateForBackend = (inputDate: string): string => {
+  if (!inputDate) return '';
+  // Keep date format as YYYY-MM-DD for backend date field
+  return inputDate.split('T')[0];
+};
+
 export const useDoctorProfile = (): UseDoctorProfileReturn => {
   // ============================================================================
   // STATE
@@ -84,67 +100,109 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
   // VALIDATION
   // ============================================================================
 
-  const validateForm = (data: DoctorFormData): { isValid: boolean; errors: FieldErrors } => {
+  const validateForm = (data: DoctorFormData, isEditMode: boolean = false): { isValid: boolean; errors: FieldErrors } => {
     const errors: FieldErrors = {};
 
-    // Información Personal (Requerida)
-    if (!data.first_name?.trim()) {
-      errors.first_name = 'El nombre es requerido';
-    }
-    if (!data.paternal_surname?.trim()) {
-      errors.paternal_surname = 'El apellido paterno es requerido';
-    }
-    if (!data.maternal_surname?.trim()) {
-      errors.maternal_surname = 'El apellido materno es requerido';
-    }
-    if (!data.email?.trim()) {
-      errors.email = 'El correo electrónico es requerido';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
-      errors.email = 'Formato de correo inválido';
-    }
-    if (!data.phone?.trim()) {
-      errors.phone = 'El teléfono es requerido';
-    }
-    if (!data.birth_date?.trim()) {
-      errors.birth_date = 'La fecha de nacimiento es requerida';
-    }
-
-    // Información Profesional (Requerida)
-    if (!data.professional_license?.trim()) {
-      errors.professional_license = 'La cédula profesional es requerida';
-    }
-    if (!data.university?.trim()) {
-      errors.university = 'La universidad es requerida';
-    }
-    if (!data.graduation_year?.trim()) {
-      errors.graduation_year = 'El año de graduación es requerido';
-    } else {
-      const year = parseInt(data.graduation_year);
-      const currentYear = new Date().getFullYear();
-      if (year < 1950 || year > currentYear) {
-        errors.graduation_year = `El año debe estar entre 1950 y ${currentYear}`;
+    // En modo edición, solo validamos campos que tienen contenido o son críticos
+    // En modo creación, validamos todos los campos requeridos
+    
+    // Información Personal - Solo validar si está presente o en modo creación
+    if (!isEditMode || data.first_name?.trim()) {
+      if (!data.first_name?.trim()) {
+        errors.first_name = 'El nombre es requerido';
       }
     }
-    if (!data.specialty?.trim()) {
-      errors.specialty = 'La especialidad es requerida';
+    
+    if (!isEditMode || data.paternal_surname?.trim()) {
+      if (!data.paternal_surname?.trim()) {
+        errors.paternal_surname = 'El apellido paterno es requerido';
+      }
     }
-    if (!data.medical_school?.trim()) {
-      errors.medical_school = 'La escuela de medicina es requerida';
+    
+    if (!isEditMode || data.maternal_surname?.trim()) {
+      if (!data.maternal_surname?.trim()) {
+        errors.maternal_surname = 'El apellido materno es requerido';
+      }
+    }
+    
+    // Email siempre debe ser válido si está presente
+    if (data.email?.trim()) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
+        errors.email = 'Formato de correo inválido';
+      }
+    } else if (!isEditMode) {
+      errors.email = 'El correo electrónico es requerido';
+    }
+    
+    if (!isEditMode || data.phone?.trim()) {
+      if (!data.phone?.trim()) {
+        errors.phone = 'El teléfono es requerido';
+      }
+    }
+    
+    if (!isEditMode || data.birth_date?.trim()) {
+      if (!data.birth_date?.trim()) {
+        errors.birth_date = 'La fecha de nacimiento es requerida';
+      }
     }
 
-    // Información del Consultorio (Requerida)
-    if (!data.office_address?.trim()) {
-      errors.office_address = 'La dirección del consultorio es requerida';
+    // Información Profesional - Solo validar si está presente o en modo creación
+    if (!isEditMode || data.professional_license?.trim()) {
+      if (!data.professional_license?.trim()) {
+        errors.professional_license = 'La cédula profesional es requerida';
+      }
     }
-    if (!data.office_city?.trim()) {
-      errors.office_city = 'La ciudad es requerida';
+    
+    if (!isEditMode || data.university?.trim()) {
+      if (!data.university?.trim()) {
+        errors.university = 'La universidad es requerida';
+      }
     }
-    if (!data.office_state?.trim()) {
-      errors.office_state = 'El estado es requerido';
+    
+    // Validación especial para año de graduación
+    if (data.graduation_year?.trim()) {
+      const year = parseInt(data.graduation_year);
+      const currentYear = new Date().getFullYear();
+      if (isNaN(year) || year < 1950 || year > currentYear) {
+        errors.graduation_year = `El año debe estar entre 1950 y ${currentYear}`;
+      }
+    } else if (!isEditMode) {
+      errors.graduation_year = 'El año de graduación es requerido';
+    }
+    
+    if (!isEditMode || data.specialty?.trim()) {
+      if (!data.specialty?.trim()) {
+        errors.specialty = 'La especialidad es requerida';
+      }
+    }
+    
+    if (!isEditMode || data.medical_school?.trim()) {
+      if (!data.medical_school?.trim()) {
+        errors.medical_school = 'La escuela de medicina es requerida';
+      }
     }
 
-    // Validaciones adicionales
-    if (data.professional_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.professional_email)) {
+    // Información del Consultorio - Solo validar si está presente o en modo creación
+    if (!isEditMode || data.office_address?.trim()) {
+      if (!data.office_address?.trim()) {
+        errors.office_address = 'La dirección del consultorio es requerida';
+      }
+    }
+    
+    if (!isEditMode || data.office_city?.trim()) {
+      if (!data.office_city?.trim()) {
+        errors.office_city = 'La ciudad es requerida';
+      }
+    }
+    
+    if (!isEditMode || data.office_state?.trim()) {
+      if (!data.office_state?.trim()) {
+        errors.office_state = 'El estado es requerido';
+      }
+    }
+
+    // Validaciones de formato - siempre aplicar si el campo tiene contenido
+    if (data.professional_email?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.professional_email)) {
       errors.professional_email = 'Formato de correo profesional inválido';
     }
 
@@ -181,19 +239,45 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
   }, []);
 
   const saveProfile = async (data: DoctorFormData): Promise<void> => {
-    const url = isEditing ? `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.DOCTOR_PROFILE}/${doctorProfile?.id}` : `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.DOCTOR_PROFILE}`;
+    const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.DOCTOR_PROFILE}`;
     const method = isEditing ? 'PUT' : 'POST';
 
-    // Transform string fields to arrays for backend
-    const transformedData = {
+    // Transform string fields to arrays and format date for backend
+    let transformedData: any = {
       ...data,
+      birth_date: formatDateForBackend(data.birth_date),
       board_certifications: data.board_certifications 
         ? data.board_certifications.split(',').map(cert => cert.trim()).filter(cert => cert.length > 0)
         : [],
       professional_memberships: data.professional_memberships 
         ? data.professional_memberships.split(',').map(membership => membership.trim()).filter(membership => membership.length > 0)
-        : []
+        : [],
+      created_by: doctorProfile 
+        ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name || ''} ${doctorProfile.paternal_surname || ''}`.trim()
+        : "Usuario"
     };
+
+    // En modo edición, solo enviar campos que tienen contenido (edición parcial)
+    if (method === 'PUT') {
+      const fieldsToSend: any = {};
+      
+      // Solo incluir campos que tienen valor
+      Object.keys(transformedData).forEach(key => {
+        const value = transformedData[key];
+        if (value !== null && value !== undefined && value !== '') {
+          // Para arrays, solo incluir si no están vacíos
+          if (Array.isArray(value)) {
+            if (value.length > 0) {
+              fieldsToSend[key] = value;
+            }
+          } else {
+            fieldsToSend[key] = value;
+          }
+        }
+      });
+      
+      transformedData = fieldsToSend;
+    }
 
     const response = await fetch(url, {
       method,
@@ -204,8 +288,25 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.detail || 'Error saving profile');
+      let errorMessage = 'Error saving profile';
+      try {
+        const errorData = await response.json();
+        if (errorData.detail) {
+          if (Array.isArray(errorData.detail)) {
+            // Errores de validación de Pydantic
+            const validationErrors = errorData.detail.map((err: any) => 
+              `${err.loc?.join('.') || 'field'}: ${err.msg}`
+            ).join(', ');
+            errorMessage = `Validation errors: ${validationErrors}`;
+          } else {
+            errorMessage = errorData.detail;
+          }
+        }
+        console.error('Full error response:', errorData);
+      } catch (e) {
+        console.error('Error parsing error response:', e);
+      }
+      throw new Error(errorMessage);
     }
 
     const savedProfile = await response.json();
@@ -232,7 +333,7 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
         maternal_surname: doctorProfile.maternal_surname || '',
         email: doctorProfile.email || '',
         phone: doctorProfile.phone || '',
-        birth_date: doctorProfile.birth_date || '',
+        birth_date: formatDateForInput(doctorProfile.birth_date || ''),
         professional_license: doctorProfile.professional_license || '',
         specialty_license: doctorProfile.specialty_license || '',
         university: doctorProfile.university || '',
@@ -281,8 +382,8 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
     clearMessages();
 
     try {
-      // Validate form
-      const { isValid, errors } = validateForm(formData);
+      // Validate form (más flexible en modo edición)
+      const { isValid, errors } = validateForm(formData, isEditing);
       
       if (!isValid) {
         setFieldErrors(errors);

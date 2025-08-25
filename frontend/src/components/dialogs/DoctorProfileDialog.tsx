@@ -110,6 +110,35 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
   };
 
   const isStepValid = (step: number) => {
+    // En modo edición, ser más flexible - solo validar formato, no campos obligatorios
+    if (isEditing) {
+      switch (step) {
+        case 0:
+          // Solo validar formato de email si está presente
+          if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+            return false;
+          }
+          return true; // Permitir continuar aunque no todos los campos estén llenos
+        case 1:
+          // Validar año de graduación si está presente
+          if (formData.graduation_year) {
+            const year = parseInt(formData.graduation_year);
+            const currentYear = new Date().getFullYear();
+            if (isNaN(year) || year < 1950 || year > currentYear) {
+              return false;
+            }
+          }
+          return true;
+        case 2:
+          return true; // Licencias opcionales en edición
+        case 3:
+          return true; // Dirección opcional en edición
+        default:
+          return true;
+      }
+    }
+    
+    // En modo creación, validar todos los campos requeridos
     switch (step) {
       case 0:
         return formData.title && formData.first_name && formData.paternal_surname && formData.maternal_surname && 
@@ -126,6 +155,38 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
   };
 
   const canProceed = isStepValid(activeStep);
+
+  // Función para verificar si todos los campos obligatorios están completos
+  const areAllRequiredFieldsComplete = () => {
+    // Campos obligatorios para crear/editar un perfil completo
+    const requiredFields = [
+      'title', 'first_name', 'paternal_surname', 'maternal_surname',
+      'email', 'phone', 'birth_date',
+      'professional_license', 'specialty', 'university', 'graduation_year', 'medical_school',
+      'office_address', 'office_city', 'office_state'
+    ];
+
+    // Verificar que todos los campos requeridos tengan valor
+    const allFieldsComplete = requiredFields.every(field => {
+      const value = formData[field as keyof DoctorFormData];
+      return value && value.toString().trim() !== '';
+    });
+
+    // Validar formato de email si está presente
+    const emailValid = !formData.email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email);
+    
+    // Validar año de graduación si está presente
+    let graduationYearValid = true;
+    if (formData.graduation_year) {
+      const year = parseInt(formData.graduation_year);
+      const currentYear = new Date().getFullYear();
+      graduationYearValid = !isNaN(year) && year >= 1950 && year <= currentYear;
+    }
+
+    return allFieldsComplete && emailValid && graduationYearValid;
+  };
+
+  const showUpdateButton = isEditing && areAllRequiredFieldsComplete();
 
   const renderStepContent = (step: number) => {
     switch (step) {
@@ -576,15 +637,40 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
               {isSubmitting ? 'Guardando...' : (isEditing ? 'Actualizar' : 'Crear Perfil')}
             </Button>
           ) : (
-            <Button
-              onClick={handleNext}
-              disabled={!canProceed}
-              variant="contained"
-              endIcon={<NextIcon />}
-              sx={{ borderRadius: '8px' }}
-            >
-              Siguiente
-            </Button>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                onClick={handleNext}
+                disabled={!canProceed}
+                variant="contained"
+                endIcon={<NextIcon />}
+                sx={{ borderRadius: '8px' }}
+              >
+                Siguiente
+              </Button>
+              
+              {/* Botón Actualizar - Solo visible en modo edición con campos completos */}
+              {showUpdateButton && (
+                <Button
+                  onClick={onSubmit}
+                  disabled={isSubmitting}
+                  variant="outlined"
+                  startIcon={<SaveIcon />}
+                  sx={{ 
+                    borderRadius: '8px', 
+                    minWidth: 120,
+                    borderColor: 'success.main',
+                    color: 'success.main',
+                    '&:hover': {
+                      borderColor: 'success.dark',
+                      backgroundColor: 'success.light',
+                      color: 'success.dark'
+                    }
+                  }}
+                >
+                  {isSubmitting ? 'Guardando...' : 'Actualizar'}
+                </Button>
+              )}
+            </Box>
           )}
         </Box>
       </DialogActions>
