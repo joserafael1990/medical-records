@@ -310,3 +310,97 @@ export interface DialogState {
   isEditing: boolean;
   selectedItem: any | null;
 }
+
+// ============================================================================
+// DOCTOR PROFILE INTERFACES (NOM-004 Compliant)
+// ============================================================================
+
+export interface DoctorProfile {
+  id?: string;
+  // Información Personal
+  title: string;
+  first_name: string;
+  paternal_surname: string;
+  maternal_surname: string;
+  email: string;
+  phone: string;
+  birth_date: string;
+  
+  // Información Profesional (NOM-004)
+  professional_license: string; // Cédula profesional
+  specialty_license?: string; // Cédula de especialidad
+  university: string; // Universidad de egreso
+  graduation_year: string;
+  specialty: string;
+  subspecialty?: string;
+  
+  // Contacto Profesional
+  professional_email?: string;
+  office_phone?: string;
+  mobile_phone?: string;
+  
+  // Dirección del Consultorio
+  office_address: string;
+  office_city: string;
+  office_state: string;
+  office_postal_code: string;
+  office_country: string;
+  
+  // Información Adicional NOM-004
+  medical_school: string; // Escuela de medicina
+  internship_hospital?: string; // Hospital de internado
+  residency_hospital?: string; // Hospital de residencia
+  
+  // Certificaciones y Membresías
+  board_certifications?: string[]; // Certificaciones del consejo
+  professional_memberships?: string[]; // Membresías profesionales
+  
+  // Firma Digital y Sello
+  digital_signature?: string;
+  professional_seal?: string;
+  
+  // Configuración
+  created_at?: string;
+  updated_at?: string;
+  is_active: boolean;
+}
+
+export interface DoctorFormData {
+  // Información Personal
+  title: string;
+  first_name: string;
+  paternal_surname: string;
+  maternal_surname: string;
+  email: string;
+  phone: string;
+  birth_date: string;
+  
+  // Información Profesional
+  professional_license: string;
+  specialty_license: string;
+  university: string;
+  graduation_year: string;
+  specialty: string;
+  subspecialty: string;
+  
+  // Contacto Profesional
+  professional_email: string;
+  office_phone: string;
+  mobile_phone: string;
+  
+  // Dirección del Consultorio
+  office_address: string;
+  office_city: string;
+  office_state: string;
+  office_postal_code: string;
+  office_country: string;
+  
+  // Información Adicional
+  medical_school: string;
+  internship_hospital: string;
+  residency_hospital: string;
+  
+  // Certificaciones
+  board_certifications: string;
+  professional_memberships: string;
+}

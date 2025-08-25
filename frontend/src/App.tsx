@@ -31,6 +31,7 @@ import TableRow from '@mui/material/TableRow';
 
 import MenuItem from '@mui/material/MenuItem';
 import MenuList from '@mui/material/MenuList';
+import Menu from '@mui/material/Menu';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import IconButton from '@mui/material/IconButton';
@@ -44,11 +45,14 @@ import {
   ConsultationsView,
   AgendaView,
   PatientDialog,
-  ConsultationDialog
+  ConsultationDialog,
+  DoctorProfileView,
+  DoctorProfileDialog
 } from './components/lazy';
 import { ConsultationDetailView } from './components';
 import { LoadingFallback } from './components';
-import { Patient } from './types';
+import { Patient, DoctorFormData } from './types';
+import { useDoctorProfile } from './hooks/useDoctorProfile';
 import {
   MedicalServices as MedicalIcon,
   Dashboard as DashboardIcon,
@@ -76,9 +80,13 @@ import {
   LocalHospital as HospitalIcon,
   Warning as WarningIcon,
   ArrowBack as ArrowBackIcon,
-  Medication as MedicationIcon,
+  Medication as   MedicationIcon,
   Close as CloseIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  Settings as SettingsIcon,
+  Person as PersonIcon,
+  ExitToApp as LogoutIcon,
+  KeyboardArrowDown as ArrowDownIcon
 } from '@mui/icons-material';
 import axios from 'axios';
 
@@ -415,6 +423,30 @@ function App() {
   // Agenda management state
   const [appointments, setAppointments] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+
+  // User menu state
+  const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
+  const userMenuOpen = Boolean(userMenuAnchor);
+
+  // Doctor profile management
+  const {
+    doctorProfile,
+    isLoading: isDoctorProfileLoading,
+    isEditing: isEditingDoctorProfile,
+    dialogOpen: doctorProfileDialogOpen,
+    formData: doctorProfileFormData,
+    fieldErrors: doctorProfileFieldErrors,
+    formErrorMessage: doctorProfileFormErrorMessage,
+    successMessage: doctorProfileSuccessMessage,
+    isSubmitting: isDoctorProfileSubmitting,
+    setFormData: setDoctorProfileFormData,
+    setFormErrorMessage: setDoctorProfileFormErrorMessage,
+    handleEdit: handleEditDoctorProfile,
+    handleCreate: handleCreateDoctorProfile,
+    handleCancel: handleCancelDoctorProfile,
+    handleSubmit: handleSubmitDoctorProfile,
+    clearMessages: clearDoctorProfileMessages
+  } = useDoctorProfile();
   const [agendaView, setAgendaView] = useState<'daily' | 'weekly'>('daily');
   const [patientFormData, setPatientFormData] = useState({
     // ===== CAMPOS OBLIGATORIOS NOM-004 =====
@@ -830,6 +862,31 @@ const handleDeleteConsultation = useCallback(async (consultation: any) => {
 const handleBackFromConsultationDetail = useCallback(() => {
   setConsultationDetailView(false);
   setSelectedConsultation(null);
+}, []);
+
+// User menu handlers
+const handleUserMenuOpen = useCallback((event: React.MouseEvent<HTMLElement>) => {
+  setUserMenuAnchor(event.currentTarget);
+}, []);
+
+const handleUserMenuClose = useCallback(() => {
+  setUserMenuAnchor(null);
+}, []);
+
+const handleOpenProfile = useCallback(() => {
+  handleUserMenuClose();
+  if (doctorProfile) {
+    handleEditDoctorProfile();
+  } else {
+    handleCreateDoctorProfile();
+  }
+  setActiveView('profile');
+}, [doctorProfile, handleEditDoctorProfile, handleCreateDoctorProfile]);
+
+const handleLogout = useCallback(() => {
+  handleUserMenuClose();
+  // TODO: Implement logout logic
+  console.log('Logout clicked');
 }, []);
 
 // Handle consultation form submission
@@ -1390,25 +1447,117 @@ const formatDateTime = (dateString: string) => {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 1 }}>
                 <Box sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
                   <Typography variant="body2" sx={{ color: 'white', fontWeight: 500 }}>
-                    {dashboardData?.physician || 'Dr. García'}
+                    {doctorProfile 
+                      ? `${doctorProfile.first_name} ${doctorProfile.paternal_surname}` 
+                      : (dashboardData?.physician || 'Dr. García')
+                    }
                   </Typography>
                   <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)' }}>
-                    Médico General
+                    {doctorProfile?.specialty || 'Médico General'}
                   </Typography>
                 </Box>
-                <Avatar 
+                <IconButton
+                  onClick={handleUserMenuOpen}
                   sx={{ 
-                    bgcolor: 'rgba(255,255,255,0.15)', 
-                    border: '2px solid rgba(255,255,255,0.2)',
-                    backdropFilter: 'blur(10px)'
+                    p: 0,
+                    '&:hover': {
+                      backgroundColor: 'rgba(255,255,255,0.1)'
+                    }
                   }}
                 >
-                  <ProfileIcon sx={{ color: 'white' }} />
-              </Avatar>
+                  <Avatar 
+                    sx={{ 
+                      bgcolor: 'rgba(255,255,255,0.15)', 
+                      border: '2px solid rgba(255,255,255,0.2)',
+                      backdropFilter: 'blur(10px)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {doctorProfile ? 
+                      `${doctorProfile.first_name[0]}${doctorProfile.paternal_surname[0]}` :
+                      <ProfileIcon sx={{ color: 'white' }} />
+                    }
+                  </Avatar>
+                </IconButton>
+                <ArrowDownIcon 
+                  sx={{ 
+                    color: 'rgba(255,255,255,0.7)', 
+                    fontSize: 16,
+                    ml: 0.5,
+                    transform: userMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.2s ease'
+                  }} 
+                />
               </Box>
             </Box>
           </Toolbar>
         </AppBar>
+
+        {/* User Menu */}
+        <Menu
+          anchorEl={userMenuAnchor}
+          open={userMenuOpen}
+          onClose={handleUserMenuClose}
+          PaperProps={{
+            sx: {
+              mt: 1.5,
+              minWidth: 220,
+              borderRadius: '12px',
+              boxShadow: '0px 8px 32px rgba(0,0,0,0.12)',
+              border: '1px solid rgba(0,0,0,0.05)'
+            }
+          }}
+          transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+          anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+        >
+          <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+              {doctorProfile 
+                ? `${doctorProfile.first_name} ${doctorProfile.paternal_surname}` 
+                : (dashboardData?.physician || 'Dr. García')
+              }
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {doctorProfile?.specialty || 'Médico General'}
+            </Typography>
+            {doctorProfile?.professional_license && (
+              <Typography variant="caption" color="text.secondary">
+                Cédula: {doctorProfile.professional_license}
+              </Typography>
+            )}
+          </Box>
+          
+          <MenuItem onClick={handleOpenProfile}>
+            <ListItemIcon>
+              <PersonIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>
+              <Typography variant="body2">
+                {doctorProfile ? 'Editar Perfil' : 'Configurar Perfil'}
+              </Typography>
+            </ListItemText>
+          </MenuItem>
+          
+          <MenuItem onClick={() => { handleUserMenuClose(); setActiveView('dashboard'); }}>
+            <ListItemIcon>
+              <SettingsIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>
+              <Typography variant="body2">Configuración</Typography>
+            </ListItemText>
+          </MenuItem>
+          
+          <Divider />
+          
+          <MenuItem onClick={handleLogout} sx={{ color: 'error.main' }}>
+            <ListItemIcon>
+              <LogoutIcon fontSize="small" sx={{ color: 'error.main' }} />
+            </ListItemIcon>
+            <ListItemText>
+              <Typography variant="body2">Cerrar Sesión</Typography>
+            </ListItemText>
+          </MenuItem>
+        </Menu>
 
         {/* Backend Status Banner */}
         {backendStatus === 'loading' && (
@@ -1689,6 +1838,23 @@ const formatDateTime = (dateString: string) => {
                     setAgendaView={setAgendaView}
                     handleNewAppointment={handleNewAppointment}
                     handleEditAppointment={handleEditAppointment}
+                  />
+                </Suspense>
+              )}
+
+              {activeView === 'profile' && (
+                <Suspense fallback={<LoadingFallback message="Cargando perfil..." />}>
+                  <DoctorProfileView
+                    doctorProfile={doctorProfile}
+                    isLoading={isDoctorProfileLoading}
+                    onEdit={handleEditDoctorProfile}
+                    onSave={handleSubmitDoctorProfile}
+                    isEditing={isEditingDoctorProfile}
+                    formData={doctorProfileFormData}
+                    setFormData={setDoctorProfileFormData}
+                    onCancel={handleCancelDoctorProfile}
+                    successMessage={doctorProfileSuccessMessage}
+                    errorMessage={doctorProfileFormErrorMessage}
                   />
                 </Suspense>
               )}
@@ -1983,6 +2149,22 @@ const formatDateTime = (dateString: string) => {
             setFormErrorMessage={setFormErrorMessage}
             isSubmitting={isSubmitting}
             fieldErrors={fieldErrors}
+          />
+        </Suspense>
+
+        {/* Doctor Profile Dialog */}
+        <Suspense fallback={<LoadingFallback message="Cargando perfil..." />}>
+          <DoctorProfileDialog
+            open={doctorProfileDialogOpen}
+            onClose={handleCancelDoctorProfile}
+            isEditing={isEditingDoctorProfile}
+            formData={doctorProfileFormData}
+            setFormData={setDoctorProfileFormData}
+            onSubmit={handleSubmitDoctorProfile}
+            formErrorMessage={doctorProfileFormErrorMessage}
+            setFormErrorMessage={setDoctorProfileFormErrorMessage}
+            isSubmitting={isDoctorProfileSubmitting}
+            fieldErrors={doctorProfileFieldErrors}
           />
         </Suspense>
       </Box>

@@ -596,6 +596,99 @@ appointments_db = [
     }
 ]
 
+# Doctor Profile Models (NOM-004 Compliant)
+class DoctorProfileBase(BaseModel):
+    # Información Personal (NOM-004 requirement for medical professionals)
+    title: str  # Título profesional (Dr., Dra., Lic., Lcda.) - OBLIGATORIO
+    first_name: str  # Nombre(s) - OBLIGATORIO
+    paternal_surname: str  # Apellido paterno - OBLIGATORIO
+    maternal_surname: str  # Apellido materno - OBLIGATORIO
+    email: str  # Correo electrónico personal - OBLIGATORIO
+    phone: str  # Teléfono personal - OBLIGATORIO
+    birth_date: Optional[date] = None  # Fecha de nacimiento - RECOMENDADO
+    
+    # Información Profesional (NOM-004 mandatory for medical records)
+    professional_license: str  # Cédula profesional - OBLIGATORIO NOM-004 Art. 5.4.1
+    specialty: str  # Especialidad médica - OBLIGATORIO NOM-004 Art. 5.4.1
+    specialty_license: Optional[str] = None  # Cédula de especialidad - OPCIONAL
+    university: Optional[str] = None  # Universidad de egreso - RECOMENDADO
+    graduation_year: Optional[str] = None  # Año de graduación - RECOMENDADO
+    subspecialty: Optional[str] = None  # Subespecialidad - OPCIONAL
+    
+    # Contacto Profesional
+    professional_email: Optional[str] = None  # Correo profesional - OPCIONAL
+    office_phone: Optional[str] = None  # Teléfono del consultorio - OPCIONAL
+    mobile_phone: Optional[str] = None  # Teléfono móvil profesional - OPCIONAL
+    
+    # Dirección del Consultorio (NOM-004 requirement for medical practice)
+    office_address: str  # Dirección del consultorio - OBLIGATORIO
+    office_city: str  # Ciudad - OBLIGATORIO
+    office_state: str  # Estado - OBLIGATORIO
+    office_postal_code: Optional[str] = None  # Código postal - OPCIONAL
+    office_country: str = "México"  # País - DEFAULT México
+    
+    # Información Académica Adicional (NOM-004 compliance)
+    medical_school: Optional[str] = None  # Escuela de medicina - RECOMENDADO
+    internship_hospital: Optional[str] = None  # Hospital de internado - OPCIONAL
+    residency_hospital: Optional[str] = None  # Hospital de residencia - OPCIONAL
+    
+    # Certificaciones y Membresías (IMPORTANTE para credibilidad profesional)
+    board_certifications: Optional[List[str]] = None  # Certificaciones del consejo - MUY RECOMENDADO
+    professional_memberships: Optional[List[str]] = None  # Membresías profesionales - MUY RECOMENDADO
+    
+    # Digital Identity (Future feature for electronic signatures)
+    digital_signature: Optional[str] = None  # Firma digital - OPCIONAL
+    professional_seal: Optional[str] = None  # Sello profesional - OPCIONAL
+    
+    # Status
+    is_active: bool = True  # Estado activo - DEFAULT True
+
+class DoctorProfileCreate(DoctorProfileBase):
+    pass
+
+class DoctorProfileUpdate(BaseModel):
+    # All fields optional for updates
+    title: Optional[str] = None
+    first_name: Optional[str] = None
+    paternal_surname: Optional[str] = None
+    maternal_surname: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    birth_date: Optional[date] = None
+    professional_license: Optional[str] = None
+    specialty: Optional[str] = None
+    specialty_license: Optional[str] = None
+    university: Optional[str] = None
+    graduation_year: Optional[str] = None
+    subspecialty: Optional[str] = None
+    professional_email: Optional[str] = None
+    office_phone: Optional[str] = None
+    mobile_phone: Optional[str] = None
+    office_address: Optional[str] = None
+    office_city: Optional[str] = None
+    office_state: Optional[str] = None
+    office_postal_code: Optional[str] = None
+    office_country: Optional[str] = None
+    medical_school: Optional[str] = None
+    internship_hospital: Optional[str] = None
+    residency_hospital: Optional[str] = None
+    board_certifications: Optional[List[str]] = None
+    professional_memberships: Optional[List[str]] = None
+    digital_signature: Optional[str] = None
+    professional_seal: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class DoctorProfileResponse(DoctorProfileBase):
+    id: str
+    full_name: str  # Nombre completo del médico
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    created_by: str
+    updated_by: Optional[str] = None
+
+# Mock databases
+doctor_profiles_db = []
+
 # Mock audit trail database
 audit_logs_db = []
 
@@ -904,6 +997,242 @@ def validate_nom_004_patient_data(patient_data: dict) -> List[str]:
         errors.append("Formato de teléfono no válido para México")
     
     return errors
+
+def validate_professional_license(license_number: str) -> bool:
+    """Validate Mexican professional license format"""
+    if not license_number or len(license_number) < 7:
+        return False
+    # Basic validation - Mexican professional licenses are typically 7-8 digits
+    import re
+    pattern = r'^[0-9]{7,8}$'
+    return bool(re.match(pattern, license_number.replace(' ', '').replace('-', '')))
+
+def validate_mexican_states(state: str) -> bool:
+    """Validate Mexican states"""
+    mexican_states = [
+        'Aguascalientes', 'Baja California', 'Baja California Sur', 'Campeche',
+        'Chiapas', 'Chihuahua', 'Ciudad de México', 'Coahuila', 'Colima',
+        'Durango', 'Estado de México', 'Guanajuato', 'Guerrero', 'Hidalgo',
+        'Jalisco', 'Michoacán', 'Morelos', 'Nayarit', 'Nuevo León', 'Oaxaca',
+        'Puebla', 'Querétaro', 'Quintana Roo', 'San Luis Potosí', 'Sinaloa',
+        'Sonora', 'Tabasco', 'Tamaulipas', 'Tlaxcala', 'Veracruz', 'Yucatán', 'Zacatecas'
+    ]
+    return state in mexican_states
+
+def validate_nom_004_doctor_profile(doctor_data: dict) -> List[str]:
+    """Validate doctor profile data against NOM-004-SSA3-2012 requirements for medical professionals"""
+    errors = []
+    
+    # MANDATORY fields per NOM-004-SSA3-2012 for medical professionals
+    # STRICTAMENTE según Artículo 5.4.1 de NOM-004-SSA3-2012
+    required_fields = [
+        # Personal identification (mandatory per NOM-004)
+        'title', 'first_name', 'paternal_surname', 'maternal_surname', 
+        
+        # Professional credentials (OBLIGATORIO por NOM-004 Artículo 5.4.1)
+        'professional_license',  # Cédula profesional - OBLIGATORIO NOM-004
+        'specialty',  # Especialidad médica - OBLIGATORIO NOM-004
+        
+        # Contact information (para efectos de práctica profesional)
+        'email', 'phone',
+        
+        # Practice location (para ubicación del consultorio)
+        'office_address', 'office_city', 'office_state'
+    ]
+    
+    # OPCIONAL fields - NOT required by NOM-004 (purely informational)
+    optional_fields = [
+        'university',  # Universidad de egreso - OPCIONAL
+        'graduation_year',  # Año de graduación - OPCIONAL  
+        'medical_school',  # Escuela de medicina - OPCIONAL
+        'birth_date',  # Fecha de nacimiento - OPCIONAL
+        'internship_hospital',  # Hospital de internado - OPCIONAL
+        'residency_hospital'  # Hospital de residencia - OPCIONAL
+    ]
+    
+    for field in required_fields:
+        if not doctor_data.get(field) or str(doctor_data.get(field)).strip() == '':
+            field_name_es = {
+                'title': 'Título profesional',
+                'first_name': 'Nombre(s)',
+                'paternal_surname': 'Apellido paterno',
+                'maternal_surname': 'Apellido materno',
+                'email': 'Correo electrónico',
+                'phone': 'Teléfono',
+                'professional_license': 'Cédula profesional',
+                'specialty': 'Especialidad médica',
+                'office_address': 'Dirección del consultorio',
+                'office_city': 'Ciudad del consultorio',
+                'office_state': 'Estado del consultorio'
+            }.get(field, field)
+            errors.append(f"Campo obligatorio faltante según NOM-004 Art. 5.4.1: {field_name_es}")
+    
+    # Note: Optional fields are not validated as they are not required by NOM-004
+    # They are purely informational and for practice management convenience
+    
+    # Title validation
+    if doctor_data.get('title'):
+        valid_titles = ['Dr.', 'Dra.', 'Lic.', 'Lcda.']
+        if doctor_data['title'] not in valid_titles:
+            errors.append(f"Título profesional debe ser uno de: {', '.join(valid_titles)}")
+    
+    # Professional license validation
+    if doctor_data.get('professional_license'):
+        if not validate_professional_license(doctor_data['professional_license']):
+            errors.append("Formato de cédula profesional no válido (debe tener 7-8 dígitos)")
+    
+    # Specialty license validation (optional but if provided must be valid)
+    if doctor_data.get('specialty_license'):
+        if not validate_professional_license(doctor_data['specialty_license']):
+            errors.append("Formato de cédula de especialidad no válido (debe tener 7-8 dígitos)")
+    
+    # State validation
+    if doctor_data.get('office_state'):
+        if not validate_mexican_states(doctor_data['office_state']):
+            errors.append("Estado no válido - debe ser un estado de México")
+    
+    # Age validation
+    if doctor_data.get('birth_date'):
+        birth_date = doctor_data['birth_date']
+        if isinstance(birth_date, str):
+            try:
+                birth_date = datetime.strptime(birth_date, '%Y-%m-%d').date()
+            except ValueError:
+                errors.append("Formato de fecha de nacimiento inválido")
+        
+        if isinstance(birth_date, date):
+            today = date.today()
+            if birth_date > today:
+                errors.append("Fecha de nacimiento no puede ser futura")
+            
+            age = today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
+            if age < 24:  # Minimum age for medical degree
+                errors.append("Edad mínima para médico es 24 años")
+            if age > 85:  # Reasonable maximum for active practice
+                errors.append("Edad máxima para práctica activa es 85 años")
+    
+    # Graduation year validation
+    if doctor_data.get('graduation_year'):
+        try:
+            grad_year = int(doctor_data['graduation_year'])
+            current_year = datetime.now().year
+            if grad_year < 1960:  # Reasonable minimum
+                errors.append("Año de graduación no puede ser anterior a 1960")
+            if grad_year > current_year:
+                errors.append("Año de graduación no puede ser futuro")
+        except ValueError:
+            errors.append("Año de graduación debe ser un número válido")
+    
+    # Email validation
+    email = doctor_data.get('email', '')
+    if email:
+        import re
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, email):
+            errors.append("Formato de correo electrónico inválido")
+    
+    # Professional email validation (if provided)
+    prof_email = doctor_data.get('professional_email', '')
+    if prof_email:
+        import re
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, prof_email):
+            errors.append("Formato de correo profesional inválido")
+    
+    # Phone validation (basic Mexican format)
+    phone = doctor_data.get('phone', '')
+    if phone and not (phone.startswith('+52') or phone.startswith('52') or len(phone.replace(' ', '').replace('-', '')) >= 10):
+        errors.append("Formato de teléfono no válido para México")
+    
+    # Office phone validation (if provided)
+    office_phone = doctor_data.get('office_phone', '')
+    if office_phone and not (office_phone.startswith('+52') or office_phone.startswith('52') or len(office_phone.replace(' ', '').replace('-', '')) >= 10):
+        errors.append("Formato de teléfono del consultorio no válido para México")
+    
+    return errors
+
+def get_nom_004_doctor_profile_optional_fields(doctor_data: dict) -> Dict[str, Any]:
+    """Get information about optional fields for administrative purposes (NOT required by NOM-004)"""
+    
+    # Campos académicos básicos
+    academic_fields = [
+        'university',  # Universidad de egreso
+        'graduation_year',  # Año de graduación  
+        'medical_school',  # Escuela de medicina
+        'birth_date',  # Fecha de nacimiento
+    ]
+    
+    # Campos de formación hospitalaria
+    training_fields = [
+        'internship_hospital',  # Hospital de internado
+        'residency_hospital'  # Hospital de residencia
+    ]
+    
+    # Campos de credibilidad profesional (MUY IMPORTANTES para el médico)
+    professional_credibility_fields = [
+        'board_certifications',  # Certificaciones del consejo
+        'professional_memberships'  # Membresías profesionales
+    ]
+    
+    def process_field_group(fields, field_translations):
+        completed = []
+        missing = []
+        for field in fields:
+            field_name_es = field_translations.get(field, field)
+            if doctor_data.get(field) and str(doctor_data.get(field)).strip() != '':
+                completed.append(field_name_es)
+            else:
+                missing.append(field_name_es)
+        return completed, missing
+    
+    academic_translations = {
+        'university': 'Universidad de egreso',
+        'graduation_year': 'Año de graduación',
+        'medical_school': 'Escuela de medicina',
+        'birth_date': 'Fecha de nacimiento'
+    }
+    
+    training_translations = {
+        'internship_hospital': 'Hospital de internado',
+        'residency_hospital': 'Hospital de residencia'
+    }
+    
+    credibility_translations = {
+        'board_certifications': 'Certificaciones del consejo',
+        'professional_memberships': 'Membresías profesionales'
+    }
+    
+    academic_completed, academic_missing = process_field_group(academic_fields, academic_translations)
+    training_completed, training_missing = process_field_group(training_fields, training_translations)
+    credibility_completed, credibility_missing = process_field_group(professional_credibility_fields, credibility_translations)
+    
+    total_optional = len(academic_fields) + len(training_fields) + len(professional_credibility_fields)
+    total_completed = len(academic_completed) + len(training_completed) + len(credibility_completed)
+    
+    return {
+        'academic_info': {
+            'completed': academic_completed,
+            'missing': academic_missing,
+            'completion_percentage': (len(academic_completed) / len(academic_fields)) * 100
+        },
+        'training_info': {
+            'completed': training_completed,
+            'missing': training_missing,
+            'completion_percentage': (len(training_completed) / len(training_fields)) * 100
+        },
+        'professional_credibility': {
+            'completed': credibility_completed,
+            'missing': credibility_missing,
+            'completion_percentage': (len(credibility_completed) / len(professional_credibility_fields)) * 100,
+            'importance': 'MUY IMPORTANTE para credibilidad y práctica profesional'
+        },
+        'summary': {
+            'total_optional_fields': total_optional,
+            'total_completed': total_completed,
+            'overall_completion_percentage': (total_completed / total_optional) * 100,
+            'credibility_status': 'Completo' if len(credibility_missing) == 0 else 'Incompleto'
+        }
+    }
 
 # Audit Trail Endpoints (NOM-024 requirement)
 @app.get("/api/audit-logs", response_model=List[AuditLog])
@@ -1377,6 +1706,245 @@ async def get_complete_patient_info(patient_id: str):
         "appointments": sorted(appointments, key=lambda x: x.date_time),
         "active_prescriptions": [p for p in prescriptions if p.status == PrescriptionStatus.ACTIVE],
         "upcoming_appointments": [a for a in appointments if a.date_time > datetime.now() and a.status in [AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED]]
+    }
+
+# ============================================================================
+# DOCTOR PROFILE ENDPOINTS
+# ============================================================================
+
+@app.get("/api/doctor/profile", response_model=DoctorProfileResponse)
+async def get_doctor_profile():
+    """Get the current doctor's profile"""
+    # In a real application, this would be based on the authenticated user
+    # For now, we'll return the first (and potentially only) doctor profile
+    if not doctor_profiles_db:
+        raise HTTPException(status_code=404, detail="Perfil del médico no encontrado")
+    
+    profile = doctor_profiles_db[0]  # Get the main doctor profile
+    return DoctorProfileResponse(**profile)
+
+@app.post("/api/doctor/profile", response_model=DoctorProfileResponse)
+async def create_doctor_profile(profile: DoctorProfileCreate):
+    """Create a new doctor profile with NOM-004 compliance validation"""
+    # Check if a profile already exists (for single-doctor practice)
+    if doctor_profiles_db:
+        raise HTTPException(
+            status_code=400, 
+            detail="Ya existe un perfil de médico. Use PUT para actualizar."
+        )
+    
+    # Validate NOM-004 compliance
+    profile_data = profile.dict()
+    validation_errors = validate_nom_004_doctor_profile(profile_data)
+    
+    if validation_errors:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Datos no cumplen con NOM-004-SSA3-2012: {'; '.join(validation_errors)}"
+        )
+    
+    # Generate new profile ID
+    new_id = "DR001"  # For single-doctor practice
+    
+    # Create full name (NOM-004 format with professional title)
+    full_name = f"{profile.title} {profile.first_name} {profile.paternal_surname}"
+    if profile.maternal_surname:
+        full_name += f" {profile.maternal_surname}"
+    
+    now = datetime.now()
+    
+    # Create new doctor profile record
+    new_profile = {
+        "id": new_id,
+        "full_name": full_name,
+        "created_at": now,
+        "updated_at": None,
+        "created_by": f"Dr. {full_name}",  # Self-created profile
+        "updated_by": None,
+        **profile_data
+    }
+    
+    doctor_profiles_db.append(new_profile)
+    
+    # Log audit trail (NOM-024 requirement)
+    log_audit_action(
+        user_id=new_id,
+        user_name=full_name,
+        action="CREATE",
+        resource_type="DOCTOR_PROFILE",
+        resource_id=new_id,
+        details=f"Nuevo perfil de médico creado: {full_name}",
+        new_values={"profile_data": new_profile}
+    )
+    
+    return DoctorProfileResponse(**new_profile)
+
+@app.put("/api/doctor/profile/{profile_id}", response_model=DoctorProfileResponse)
+async def update_doctor_profile(profile_id: str, profile_update: DoctorProfileUpdate):
+    """Update an existing doctor profile"""
+    profile_index = next((i for i, p in enumerate(doctor_profiles_db) if p["id"] == profile_id), None)
+    if profile_index is None:
+        raise HTTPException(status_code=404, detail="Perfil del médico no encontrado")
+    
+    # Get current profile
+    current_profile = doctor_profiles_db[profile_index]
+    
+    # Create updated data by merging current with updates (excluding None values)
+    update_data = {k: v for k, v in profile_update.dict().items() if v is not None}
+    updated_profile_data = {**current_profile, **update_data}
+    
+    # Validate NOM-004 compliance with updated data
+    validation_errors = validate_nom_004_doctor_profile(updated_profile_data)
+    
+    if validation_errors:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Datos actualizados no cumplen con NOM-004-SSA3-2012: {'; '.join(validation_errors)}"
+        )
+    
+    # Update full name if personal info changed
+    if any(field in update_data for field in ['title', 'first_name', 'paternal_surname', 'maternal_surname']):
+        full_name = f"{updated_profile_data['title']} {updated_profile_data['first_name']} {updated_profile_data['paternal_surname']}"
+        if updated_profile_data.get('maternal_surname'):
+            full_name += f" {updated_profile_data['maternal_surname']}"
+        updated_profile_data['full_name'] = full_name
+    
+    # Update timestamps
+    updated_profile_data['updated_at'] = datetime.now()
+    updated_profile_data['updated_by'] = updated_profile_data['full_name']  # Self-updated
+    
+    # Save updated profile
+    doctor_profiles_db[profile_index] = updated_profile_data
+    
+    # Log audit trail (NOM-024 requirement)
+    log_audit_action(
+        user_id=profile_id,
+        user_name=updated_profile_data['full_name'],
+        action="UPDATE",
+        resource_type="DOCTOR_PROFILE",
+        resource_id=profile_id,
+        details=f"Perfil de médico actualizado: {updated_profile_data['full_name']}",
+        old_values={"previous_data": current_profile},
+        new_values={"updated_data": updated_profile_data}
+    )
+    
+    return DoctorProfileResponse(**updated_profile_data)
+
+@app.get("/api/doctor/profile/{profile_id}", response_model=DoctorProfileResponse)
+async def get_doctor_profile_by_id(profile_id: str):
+    """Get a specific doctor profile by ID"""
+    profile = next((p for p in doctor_profiles_db if p["id"] == profile_id), None)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil del médico no encontrado")
+    
+    return DoctorProfileResponse(**profile)
+
+@app.delete("/api/doctor/profile/{profile_id}")
+async def delete_doctor_profile(profile_id: str):
+    """Delete (deactivate) a doctor profile"""
+    profile_index = next((i for i, p in enumerate(doctor_profiles_db) if p["id"] == profile_id), None)
+    if profile_index is None:
+        raise HTTPException(status_code=404, detail="Perfil del médico no encontrado")
+    
+    # Instead of deleting, mark as inactive (NOM-024 compliance for audit trail)
+    doctor_profiles_db[profile_index]["is_active"] = False
+    doctor_profiles_db[profile_index]["updated_at"] = datetime.now()
+    
+    # Log audit trail
+    log_audit_action(
+        user_id=profile_id,
+        user_name=doctor_profiles_db[profile_index]['full_name'],
+        action="DEACTIVATE",
+        resource_type="DOCTOR_PROFILE",
+        resource_id=profile_id,
+        details=f"Perfil de médico desactivado: {doctor_profiles_db[profile_index]['full_name']}"
+    )
+    
+    return {"message": "Perfil del médico desactivado exitosamente"}
+
+@app.get("/api/doctor/profile/{profile_id}/nom-validation")
+async def validate_doctor_profile_nom_compliance(profile_id: str):
+    """Validate specific doctor profile against NOM requirements"""
+    profile = next((p for p in doctor_profiles_db if p["id"] == profile_id), None)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil del médico no encontrado")
+    
+    validation_errors = validate_nom_004_doctor_profile(profile)
+    optional_fields_info = get_nom_004_doctor_profile_optional_fields(profile)
+    
+    return {
+        "profile_id": profile_id,
+        "doctor_name": profile.get("full_name", ""),
+        "professional_license": profile.get("professional_license", ""),
+        "specialty": profile.get("specialty", ""),
+        "is_compliant": len(validation_errors) == 0,
+        "compliance_percentage": 0 if validation_errors else 100,
+        "validation_errors": validation_errors,
+        "missing_mandatory_fields": [error.split(": ")[-1] for error in validation_errors if "Campo obligatorio faltante" in error],
+        "optional_fields": optional_fields_info,
+        "validation_date": datetime.now(),
+        "nom_standards": {
+            "nom_004": "Expediente clínico - Solo requiere: nombre, cédula profesional, especialidad (Art. 5.4.1)",
+            "nom_024": "Sistemas de información - Trazabilidad de acciones",
+            "nom_035": "Información en salud - Identificación profesional"
+        },
+        "professional_status": {
+            "license_valid": profile.get("professional_license") and validate_professional_license(profile.get("professional_license", "")),
+            "specialty_license_valid": not profile.get("specialty_license") or validate_professional_license(profile.get("specialty_license", "")),
+            "practice_location_valid": profile.get("office_state") and validate_mexican_states(profile.get("office_state", ""))
+        },
+        "compliance_summary": {
+            "nom_004_compliant": len(validation_errors) == 0,
+            "mandatory_fields_only": True,
+            "optional_fields_for_admin_only": False,
+            "university_required": False,
+            "medical_school_required": False,
+            "hospitals_required": False,
+            "certifications_recommended": True,
+            "memberships_recommended": True,
+            "credibility_importance": "Las certificaciones del consejo y membresías profesionales son MUY IMPORTANTES para la credibilidad del médico"
+        }
+    }
+
+@app.get("/api/doctor/profile/validation/summary")
+async def get_doctor_profile_validation_summary():
+    """Get overall doctor profile validation summary"""
+    if not doctor_profiles_db:
+        return {
+            "total_profiles": 0,
+            "compliant_profiles": 0,
+            "compliance_percentage": 0,
+            "status": "no_profiles",
+            "message": "No hay perfiles de médicos registrados"
+        }
+    
+    active_profiles = [p for p in doctor_profiles_db if p.get("is_active", True)]
+    compliant_profiles = 0
+    
+    for profile in active_profiles:
+        errors = validate_nom_004_doctor_profile(profile)
+        if not errors:
+            compliant_profiles += 1
+    
+    compliance_percentage = (compliant_profiles / len(active_profiles) * 100) if active_profiles else 0
+    
+    return {
+        "nom_004_compliance": {
+            "total_profiles": len(active_profiles),
+            "compliant_profiles": compliant_profiles,
+            "compliance_percentage": round(compliance_percentage, 2),
+            "status": "compliant" if compliance_percentage == 100 else "non_compliant"
+        },
+        "professional_credentials": {
+            "profiles_with_license": len([p for p in active_profiles if p.get("professional_license")]),
+            "profiles_with_specialty_license": len([p for p in active_profiles if p.get("specialty_license")]),
+            "profiles_with_valid_location": len([p for p in active_profiles if p.get("office_state") and validate_mexican_states(p.get("office_state", ""))])
+        },
+        "data_quality": {
+            "complete_profiles": compliant_profiles,
+            "incomplete_profiles": len(active_profiles) - compliant_profiles,
+            "quality_score": round(compliance_percentage, 2)
+        }
     }
 
 if __name__ == "__main__":

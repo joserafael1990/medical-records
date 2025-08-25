@@ -15,7 +15,8 @@ export const API_CONFIG = {
       DAILY: '/api/agenda/daily',
       WEEKLY: '/api/agenda/weekly',
       AVAILABLE_SLOTS: '/api/agenda/available-slots'
-    }
+    },
+    DOCTOR_PROFILE: '/api/doctor/profile'
   },
   TIMEOUT: 10000,
   RETRY_ATTEMPTS: 3
@@ -97,6 +98,103 @@ export const MEDICAL_CONSTANTS = {
   }
 } as const;
 
+// Lista COMPLETA de especialidades médicas reconocidas en México
+export const MEDICAL_SPECIALTIES = [
+  // Especialidades Básicas
+  'Medicina General',
+  'Medicina Familiar',
+  'Medicina Interna',
+  'Cirugía General',
+  'Pediatría',
+  'Ginecología y Obstetricia',
+  
+  // Especialidades Médicas
+  'Alergia e Inmunología',
+  'Anestesiología',
+  'Cardiología',
+  'Dermatología',
+  'Endocrinología',
+  'Gastroenterología',
+  'Geriatría',
+  'Hematología',
+  'Infectología',
+  'Medicina de Urgencias',
+  'Medicina del Trabajo',
+  'Medicina Nuclear',
+  'Nefrología',
+  'Neumología',
+  'Neurología',
+  'Oncología Médica',
+  'Psiquiatría',
+  'Reumatología',
+  
+  // Especialidades Quirúrgicas
+  'Angiología y Cirugía Vascular',
+  'Cirugía Cardiotorácica',
+  'Cirugía de Cabeza y Cuello',
+  'Cirugía Maxilofacial',
+  'Cirugía Oncológica',
+  'Cirugía Pediátrica',
+  'Cirugía Plástica y Reconstructiva',
+  'Neurocirugía',
+  'Ortopedia y Traumatología',
+  'Urología',
+  
+  // Especialidades de Apoyo al Diagnóstico
+  'Anatomía Patológica',
+  'Imagenología Diagnóstica y Terapéutica',
+  'Medicina de Rehabilitación',
+  'Medicina Legal',
+  'Patología Clínica',
+  'Radiología e Imagen',
+  'Radiología Intervencionista',
+  
+  // Especialidades de Órganos y Sistemas
+  'Oftalmología',
+  'Otorrinolaringología',
+  'Proctología',
+  
+  // Pediatría Especializada
+  'Cardiología Pediátrica',
+  'Cirugía Pediátrica',
+  'Endocrinología Pediátrica',
+  'Gastroenterología Pediátrica',
+  'Hematología Pediátrica',
+  'Infectología Pediátrica',
+  'Nefrología Pediátrica',
+  'Neonatología',
+  'Neumología Pediátrica',
+  'Neurología Pediátrica',
+  'Oncología Pediátrica',
+  'Reumatología Pediátrica',
+  
+  // Ginecología Especializada
+  'Biología de la Reproducción Humana',
+  'Ginecología Oncológica',
+  'Medicina Materno Fetal',
+  
+  // Medicina Interna Especializada
+  'Cardiología Intervencionista',
+  'Electrofisiología Cardíaca',
+  'Gastroenterología y Endoscopia',
+  'Hemodinamia',
+  'Medicina Crítica',
+  'Neurología Vascular',
+  
+  // Especialidades Emergentes
+  'Medicina del Deporte',
+  'Medicina Estética',
+  'Medicina Genómica',
+  'Medicina Paliativa',
+  'Toxicología',
+  
+  // Especialidades Administrativas
+  'Administración de Servicios de Salud',
+  'Calidad de la Atención Médica',
+  'Epidemiología',
+  'Salud Pública'
+] as const;
+
 // Feature Flags
 export const FEATURES = {
   WHATSAPP_INTEGRATION: process.env.REACT_APP_WHATSAPP === 'true',
@@ -163,6 +261,9 @@ export const MEXICAN_STATES = [
   { code: '31', name: 'Yucatán' },
   { code: '32', name: 'Zacatecas' }
 ] as const;
+
+// Lista simple de nombres de estados para formularios
+export const MEXICAN_STATE_NAMES = MEXICAN_STATES.map(state => state.name);
 
 // Theme Configuration
 export const THEME_CONFIG = {
