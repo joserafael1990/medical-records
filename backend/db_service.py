@@ -346,26 +346,26 @@ class AuthService:
     """Service for authentication operations"""
     
     @staticmethod
-    def create_user(db: Session, username: str, email: str, password: str, doctor_id: str) -> User:
+    def create_user(db: Session, email: str, password: str, doctor_id: str) -> User:
         """Create a new user account for a doctor"""
         from auth import get_password_hash
         
         # Check if user already exists
         existing_user = db.query(User).filter(
-            or_(User.username == username, User.email == email, User.doctor_id == doctor_id)
+            or_(User.email == email, User.doctor_id == doctor_id)
         ).first()
         
         if existing_user:
-            raise ValueError("Username, email, or doctor already has an account")
+            raise ValueError("Email or doctor already has an account")
         
         # Verify doctor exists
         doctor = db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first()
         if not doctor:
             raise ValueError("Doctor profile not found")
         
-        # Create user
+        # Create user (using email as username)
         user_data = {
-            'username': username,
+            'username': email,  # Use email as username
             'email': email,
             'hashed_password': get_password_hash(password),
             'doctor_id': doctor_id
@@ -378,11 +378,11 @@ class AuthService:
         return user
     
     @staticmethod
-    def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
-        """Authenticate user with username and password"""
+    def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
+        """Authenticate user with email and password"""
         from auth import verify_password
         
-        user = db.query(User).filter(User.username == username, User.is_active == True).first()
+        user = db.query(User).filter(User.email == email, User.is_active == True).first()
         if not user:
             return None
         

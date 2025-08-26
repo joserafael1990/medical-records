@@ -544,11 +544,11 @@ async def api_health(db: Session = Depends(get_db)):
 async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
     """Authenticate user and return access token"""
     try:
-        user = AuthService.authenticate_user(db, user_credentials.username, user_credentials.password)
+        user = AuthService.authenticate_user(db, user_credentials.email, user_credentials.password)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect username or password",
+                detail="Incorrect email or password",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
@@ -593,7 +593,6 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
     try:
         user = AuthService.create_user(
             db, 
-            user_data.username, 
             user_data.email, 
             user_data.password, 
             user_data.doctor_id

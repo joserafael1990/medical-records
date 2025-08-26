@@ -93,6 +93,9 @@ import {
   ExitToApp as LogoutIcon,
   KeyboardArrowDown as ArrowDownIcon
 } from '@mui/icons-material';
+import AvantLogo from './components/common/AvantLogo';
+import LogoutConfirmDialog from './components/dialogs/LogoutConfirmDialog';
+import { useAuth } from './contexts/AuthContext';
 import axios from 'axios';
 
 // Mexican States with Official INEGI Codes
@@ -100,88 +103,119 @@ import axios from 'axios';
 
 
 
-// Modern, elegant medical theme
+// AVANT Color Palette - Surgical Blue Medical Theme
+const avantColors = {
+  primary: {
+    main: '#1565C0', // Surgical blue - deep medical blue
+    light: '#42A5F5', // Light surgical blue
+    dark: '#0D47A1', // Dark surgical blue
+    contrastText: '#ffffff',
+  },
+  secondary: {
+    main: '#1976D2', // Professional blue
+    light: '#64B5F6', // Light professional blue
+    dark: '#1565C0', // Deep blue
+    contrastText: '#ffffff',
+  },
+  accent: {
+    main: '#90CAF9', // Soft blue for accents
+    light: '#BBDEFB', // Very light blue
+    dark: '#1976D2', // Medium blue
+  },
+  neutral: {
+    50: '#F3F8FF', // Almost white with blue hint
+    100: '#E3F2FD', // Very light blue
+    200: '#BBDEFB', // Light blue
+    300: '#90CAF9', // Medium light blue
+    400: '#64B5F6', // Medium blue
+    500: '#42A5F5', // Base blue
+    600: '#2196F3', // Strong blue
+    700: '#1976D2', // Deep blue
+    800: '#1565C0', // Very deep blue
+    900: '#0D47A1', // Almost navy blue
+  }
+};
+
+// AVANT Theme - Clean, Fresh, Elegant
 const theme = createTheme({
   palette: {
     mode: 'light',
-    primary: {
-      main: '#0B5394', // Professional medical blue
-      light: '#4285F4',
-      dark: '#073763',
-    },
-    secondary: {
-      main: '#34A853', // Medical green
-      light: '#7BC46D',
-      dark: '#1E7E34',
-    },
-    success: {
-      main: '#34A853',
-      light: '#7BC46D',
-    },
-    error: {
-      main: '#EA4335',
-      light: '#FF6B6B',
-    },
-    warning: {
-      main: '#FBBC04',
-      light: '#FFD93D',
-    },
-    info: {
-      main: '#4285F4',
-      light: '#8AB4F8',
-    },
+    primary: avantColors.primary,
+    secondary: avantColors.secondary,
     background: {
-      default: '#F8FAFC', // Clean, modern background
-      paper: '#FFFFFF',
+      default: avantColors.neutral[50], // Clean, fresh background
+      paper: '#ffffff',
     },
     text: {
-      primary: '#1A1A1A',
-      secondary: '#5F6368',
+      primary: avantColors.neutral[800], // Dark teal for text
+      secondary: avantColors.neutral[600], // Medium teal for secondary text
     },
+    success: {
+      main: '#10B981', // Green that complements teal
+      light: '#6EE7B7',
+      dark: '#047857',
+    },
+    error: {
+      main: '#EF4444', // Clean red
+      light: '#FCA5A5',
+      dark: '#B91C1C',
+    },
+    warning: {
+      main: '#F59E0B', // Warm amber
+      light: '#FCD34D',
+      dark: '#D97706',
+    },
+    info: avantColors.secondary,
     grey: {
-      50: '#F8FAFC',
-      100: '#F1F3F4',
-      200: '#E8EAED',
-      300: '#DADCE0',
-      400: '#BDC1C6',
-      500: '#9AA0A6',
-      600: '#80868B',
-      700: '#5F6368',
-      800: '#3C4043',
-      900: '#202124',
+      50: avantColors.neutral[50],
+      100: avantColors.neutral[100],
+      200: avantColors.neutral[200],
+      300: avantColors.neutral[300],
+      400: avantColors.neutral[400],
+      500: avantColors.neutral[500],
+      600: avantColors.neutral[600],
+      700: avantColors.neutral[700],
+      800: avantColors.neutral[800],
+      900: avantColors.neutral[900],
     },
   },
   typography: {
-    fontFamily: '"Inter", "Roboto", -apple-system, BlinkMacSystemFont, sans-serif',
+    fontFamily: '"Inter", "Poppins", "Roboto", -apple-system, BlinkMacSystemFont, sans-serif',
     h1: {
       fontWeight: 700,
       fontSize: '2.5rem',
       lineHeight: 1.2,
+      color: avantColors.primary.main,
     },
     h2: {
-      fontWeight: 600,
+      fontWeight: 700,
       fontSize: '2rem',
       lineHeight: 1.3,
+      color: avantColors.primary.main,
     },
     h3: {
       fontWeight: 600,
       fontSize: '1.75rem',
       lineHeight: 1.3,
+      color: avantColors.primary.main,
     },
     h4: {
       fontWeight: 600,
       fontSize: '1.5rem',
       lineHeight: 1.4,
+      color: avantColors.primary.main,
     },
     h5: {
       fontWeight: 600,
       fontSize: '1.25rem',
       lineHeight: 1.4,
+      color: avantColors.neutral[700],
     },
     h6: {
       fontWeight: 600,
       fontSize: '1.125rem',
       lineHeight: 1.4,
+      color: avantColors.neutral[700],
     },
     body1: {
       fontSize: '0.875rem',
@@ -192,53 +226,54 @@ const theme = createTheme({
       lineHeight: 1.5,
     },
     button: {
-      fontWeight: 500,
+      fontWeight: 600,
       textTransform: 'none',
     },
   },
   shape: {
-    borderRadius: 12,
+    borderRadius: 16, // Rounded, modern look
   },
   shadows: [
     'none',
-    '0px 2px 4px rgba(0, 0, 0, 0.04)',
-    '0px 4px 8px rgba(0, 0, 0, 0.06)',
-    '0px 8px 16px rgba(0, 0, 0, 0.08)',
-    '0px 12px 24px rgba(0, 0, 0, 0.10)',
-    '0px 16px 32px rgba(0, 0, 0, 0.12)',
-    '0px 16px 32px rgba(0, 0, 0, 0.12)',
-    '0px 16px 32px rgba(0, 0, 0, 0.12)',
-    '0px 16px 32px rgba(0, 0, 0, 0.12)',
-    '0px 16px 32px rgba(0, 0, 0, 0.12)',
-    '0px 16px 32px rgba(0, 0, 0, 0.12)',
-    '0px 16px 32px rgba(0, 0, 0, 0.12)',
-    '0px 16px 32px rgba(0, 0, 0, 0.12)',
-    '0px 16px 32px rgba(0, 0, 0, 0.12)',
-    '0px 16px 32px rgba(0, 0, 0, 0.12)',
-    '0px 16px 32px rgba(0, 0, 0, 0.12)',
-    '0px 16px 32px rgba(0, 0, 0, 0.12)',
-    '0px 16px 32px rgba(0, 0, 0, 0.12)',
-    '0px 16px 32px rgba(0, 0, 0, 0.12)',
-    '0px 16px 32px rgba(0, 0, 0, 0.12)',
-    '0px 16px 32px rgba(0, 0, 0, 0.12)',
-    '0px 16px 32px rgba(0, 0, 0, 0.12)',
-    '0px 16px 32px rgba(0, 0, 0, 0.12)',
-    '0px 16px 32px rgba(0, 0, 0, 0.12)',
-    '0px 16px 32px rgba(0, 0, 0, 0.12)',
+    '0px 2px 8px rgba(21, 101, 192, 0.04)',
+    '0px 4px 12px rgba(21, 101, 192, 0.06)',
+    '0px 8px 16px rgba(21, 101, 192, 0.08)',
+    '0px 12px 24px rgba(21, 101, 192, 0.10)',
+    '0px 16px 32px rgba(21, 101, 192, 0.12)',
+    '0px 20px 40px rgba(21, 101, 192, 0.14)',
+    '0px 24px 48px rgba(21, 101, 192, 0.16)',
+    '0px 28px 56px rgba(21, 101, 192, 0.18)',
+    '0px 32px 64px rgba(21, 101, 192, 0.20)',
+    '0px 36px 72px rgba(21, 101, 192, 0.22)',
+    '0px 40px 80px rgba(21, 101, 192, 0.24)',
+    '0px 44px 88px rgba(21, 101, 192, 0.26)',
+    '0px 48px 96px rgba(21, 101, 192, 0.28)',
+    '0px 52px 104px rgba(21, 101, 192, 0.30)',
+    '0px 56px 112px rgba(21, 101, 192, 0.32)',
+    '0px 60px 120px rgba(21, 101, 192, 0.34)',
+    '0px 64px 128px rgba(21, 101, 192, 0.36)',
+    '0px 68px 136px rgba(21, 101, 192, 0.38)',
+    '0px 72px 144px rgba(21, 101, 192, 0.40)',
+    '0px 76px 152px rgba(21, 101, 192, 0.42)',
+    '0px 80px 160px rgba(21, 101, 192, 0.44)',
+    '0px 84px 168px rgba(21, 101, 192, 0.46)',
+    '0px 88px 176px rgba(21, 101, 192, 0.48)',
+    '0px 92px 184px rgba(21, 101, 192, 0.50)',
   ],
   components: {
     MuiCssBaseline: {
       styleOverrides: {
         body: {
-          backgroundColor: '#F8FAFC',
+          backgroundColor: avantColors.neutral[50],
+          color: avantColors.neutral[800],
         },
       },
     },
     MuiAppBar: {
       styleOverrides: {
         root: {
-          background: 'linear-gradient(135deg, #0B5394 0%, #4285F4 100%)',
-          boxShadow: '0px 4px 20px rgba(11, 83, 148, 0.15)',
+          background: `linear-gradient(135deg, ${avantColors.primary.main} 0%, ${avantColors.secondary.main} 100%)`,
+          boxShadow: `0px 4px 20px rgba(21, 101, 192, 0.15)`,
           backdropFilter: 'blur(10px)',
         },
       },
@@ -246,12 +281,12 @@ const theme = createTheme({
     MuiCard: {
       styleOverrides: {
         root: {
-          boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.05)',
-          borderRadius: '16px',
-          border: '1px solid #E8EAED',
+          boxShadow: `0px 8px 32px rgba(21, 101, 192, 0.08)`,
+          borderRadius: '20px',
+          border: `1px solid ${avantColors.neutral[100]}`,
           transition: 'all 0.3s ease-in-out',
           '&:hover': {
-            boxShadow: '0px 8px 24px rgba(0, 0, 0, 0.08)',
+            boxShadow: `0px 12px 40px rgba(21, 101, 192, 0.12)`,
             transform: 'translateY(-2px)',
           },
         },
@@ -262,16 +297,17 @@ const theme = createTheme({
         root: {
           borderRadius: '12px',
           textTransform: 'none',
-          fontWeight: 500,
-          padding: '10px 24px',
-          boxShadow: 'none',
-          '&:hover': {
-            boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.15)',
-          },
+          fontWeight: 600,
+          padding: '12px 24px',
+          transition: 'all 0.3s ease-in-out',
         },
         contained: {
+          background: `linear-gradient(135deg, ${avantColors.primary.main}, ${avantColors.secondary.main})`,
+          boxShadow: `0px 4px 16px rgba(21, 101, 192, 0.3)`,
           '&:hover': {
-            boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.15)',
+            background: `linear-gradient(135deg, ${avantColors.primary.dark}, ${avantColors.secondary.dark})`,
+            boxShadow: `0px 6px 20px rgba(21, 101, 192, 0.4)`,
+            transform: 'translateY(-1px)',
           },
         },
       },
@@ -280,7 +316,23 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: '16px',
-          border: '1px solid #E8EAED',
+          border: `1px solid ${avantColors.neutral[100]}`,
+        },
+      },
+    },
+    MuiTextField: {
+      styleOverrides: {
+        root: {
+          '& .MuiOutlinedInput-root': {
+            borderRadius: '12px',
+            '&:hover .MuiOutlinedInput-notchedOutline': {
+              borderColor: avantColors.primary.light,
+            },
+            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+              borderColor: avantColors.primary.main,
+              borderWidth: '2px',
+            },
+          },
         },
       },
     },
@@ -289,10 +341,15 @@ const theme = createTheme({
         root: {
           borderRadius: '8px',
           fontWeight: 500,
+          backgroundColor: avantColors.neutral[100],
+          color: avantColors.neutral[700],
+          '&.MuiChip-colorPrimary': {
+            backgroundColor: avantColors.primary.main,
+            color: '#ffffff',
         },
       },
     },
-
+    },
   },
 });
 
@@ -378,8 +435,11 @@ interface CompletePatientData {
   upcoming_appointments: Appointment[];
 }
 
-function App() {
-  const [backendStatus, setBackendStatus] = useState<'loading' | 'connected' | 'disconnected'>('loading');
+function AppContent() {
+  // Authentication
+  const { user, logout } = useAuth();
+  
+
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [activeView, setActiveView] = useState('dashboard');
   
@@ -438,6 +498,9 @@ function App() {
   const [appointmentDialogOpen, setAppointmentDialogOpen] = useState(false);
   const [isEditingAppointment, setIsEditingAppointment] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
+  
+  // Logout dialog state
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [appointmentFormData, setAppointmentFormData] = useState<AppointmentFormData>({
     patient_id: '',
     doctor_id: '', // Initialize doctor_id field
@@ -1041,7 +1104,17 @@ const handleOpenProfile = useCallback(() => {
 
 const handleLogout = useCallback(() => {
   handleUserMenuClose();
-  // Logout functionality - to be implemented when authentication is added
+  setLogoutDialogOpen(true);
+}, []);
+
+const confirmLogout = useCallback(() => {
+  setLogoutDialogOpen(false);
+  logout();
+  console.log('✅ Sesión cerrada exitosamente');
+}, [logout]);
+
+const cancelLogout = useCallback(() => {
+  setLogoutDialogOpen(false);
 }, []);
 
 // Handle consultation form submission
@@ -1572,18 +1645,14 @@ const formatDateTime = (dateString: string) => {
   });
 };
 
-  // Check backend connection
+  // Load dashboard data
   useEffect(() => {
-    const checkBackend = async () => {
+    const loadDashboardData = async () => {
       try {
-        await axios.get('http://localhost:8000/api/health');
-        setBackendStatus('connected');
-        
         // Fetch dashboard data
         const dashResponse = await axios.get('http://localhost:8000/api/physicians/dashboard');
         setDashboardData(dashResponse.data);
       } catch (error) {
-        setBackendStatus('disconnected');
         // Mock data for demo
         setDashboardData({
           physician: 'Dr. García Martínez',
@@ -1604,7 +1673,7 @@ const formatDateTime = (dateString: string) => {
       }
     };
 
-    checkBackend();
+    loadDashboardData();
   }, []);
 
   // Fetch patients when view changes to patients
@@ -1644,11 +1713,10 @@ const formatDateTime = (dateString: string) => {
   }, [consultationSearchTerm, activeView]);
 
   return (
-    <AuthProvider>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
         <ProtectedRoute>
-          <Box sx={{ flexGrow: 1, minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
+      <Box sx={{ flexGrow: 1, minHeight: '100vh', backgroundColor: avantColors.neutral[50] }}>
         {/* Modern Medical Header */}
         <AppBar position="static" elevation={0}>
           <Toolbar sx={{ py: 1 }}>
@@ -1665,11 +1733,11 @@ const formatDateTime = (dateString: string) => {
                   backdropFilter: 'blur(10px)',
                 }}
               >
-                <MedicalIcon sx={{ color: 'white', fontSize: 24 }} />
+                <AvantLogo variant="icon" sx={{ color: 'white', fontSize: 24 }} />
               </Box>
               <Box>
-                <Typography variant="h6" component="div" sx={{ color: 'white', fontWeight: 600 }}>
-                  ClinicFlow
+                <Typography variant="h6" component="div" sx={{ color: 'white', fontWeight: 700, letterSpacing: '0.5px' }}>
+                  AVANT
             </Typography>
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.75rem' }}>
                   Sistema Médico Inteligente
@@ -1708,38 +1776,7 @@ const formatDateTime = (dateString: string) => {
                 <NotificationIcon />
               </IconButton>
 
-              {/* Status Indicators */}
-              <Box sx={{ display: { xs: 'none', sm: 'flex' }, gap: 1 }}>
-              <Chip 
-                  icon={<CheckIcon sx={{ fontSize: 16 }} />}
-                  label={backendStatus === 'connected' ? "En línea" : backendStatus === 'loading' ? "Conectando..." : "Sin conexión"} 
-                size="small" 
-                  variant="filled"
-                color={backendStatus === 'connected' ? 'success' : 'error'}
-                  sx={{ 
-                    backgroundColor: backendStatus === 'connected' ? 'rgba(52, 168, 83, 0.9)' : 'rgba(234, 67, 53, 0.9)',
-                    color: 'white',
-                    fontWeight: 500,
-                    '& .MuiChip-icon': {
-                      color: 'white'
-                    }
-                  }}
-              />
-              <Chip 
-                  icon={<CheckIcon sx={{ fontSize: 16 }} />}
-                  label="NOM-004" 
-                size="small" 
-                  variant="filled"
-                  sx={{ 
-                    backgroundColor: 'rgba(52, 168, 83, 0.9)',
-                    color: 'white',
-                    fontWeight: 500,
-                    '& .MuiChip-icon': {
-                      color: 'white'
-                    }
-                  }}
-                />
-              </Box>
+              
 
               {/* Profile */}
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 1 }}>
@@ -1809,19 +1846,63 @@ const formatDateTime = (dateString: string) => {
           anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
         >
           <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-              {doctorProfile 
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+              <Avatar 
+                sx={{ 
+                  bgcolor: 'primary.main', 
+                  width: 40, 
+                  height: 40,
+                  fontSize: '0.875rem',
+                  fontWeight: 600
+                }}
+              >
+                {user ? 
+                  `${user.doctor.first_name[0]}${user.doctor.paternal_surname[0]}` :
+                  (doctorProfile ? 
+                    `${doctorProfile.first_name[0]}${doctorProfile.paternal_surname[0]}` :
+                    'A'
+                  )
+                }
+              </Avatar>
+              <Box sx={{ flex: 1 }}>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
+                  {user?.doctor.full_name || 
+                   (doctorProfile 
                 ? `${doctorProfile.first_name} ${doctorProfile.paternal_surname}` 
                 : (dashboardData?.physician || 'Dr. García')
+                   )
               }
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {doctorProfile?.specialty || 'Médico General'}
+                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.2 }}>
+                  {user?.doctor.specialty || doctorProfile?.specialty || 'Médico General'}
             </Typography>
-            {doctorProfile?.professional_license && (
-              <Typography variant="caption" color="text.secondary">
-                Cédula: {doctorProfile.professional_license}
+                {(user?.doctor.professional_license || doctorProfile?.professional_license) && (
+                  <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
+                    Cédula: {user?.doctor.professional_license || doctorProfile?.professional_license}
               </Typography>
+                )}
+              </Box>
+            </Box>
+            {user && (
+              <Box sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 1, 
+                p: 1, 
+                borderRadius: '8px', 
+                bgcolor: 'success.light',
+                color: 'success.contrastText'
+              }}>
+                <Box sx={{ 
+                  width: 8, 
+                  height: 8, 
+                  borderRadius: '50%', 
+                  bgcolor: 'success.main' 
+                }} />
+                <Typography variant="caption" sx={{ fontWeight: 500 }}>
+                  Conectado - AVANT
+                </Typography>
+              </Box>
             )}
           </Box>
           
@@ -1857,12 +1938,7 @@ const formatDateTime = (dateString: string) => {
           </MenuItem>
         </Menu>
 
-        {/* Backend Status Banner */}
-        {backendStatus === 'loading' && (
-          <Box sx={{ width: '100%' }}>
-            <LinearProgress color="primary" />
-          </Box>
-        )}
+
 
         <Container maxWidth="xl" sx={{ mt: 3, mb: 3 }}>
           <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', md: 'row' } }}>
@@ -1961,7 +2037,7 @@ const formatDateTime = (dateString: string) => {
                       }}
                   >
                     <ListItemIcon>
-                        <MedicalIcon />
+                        <AvantLogo variant="icon" sx={{ fontSize: 20 }} />
                     </ListItemIcon>
                       <ListItemText 
                         primary="Consultas" 
@@ -2101,7 +2177,7 @@ const formatDateTime = (dateString: string) => {
                       }}
                     >
                       <ListItemIcon>
-                        <MedicalIcon />
+                        <AvantLogo variant="icon" sx={{ fontSize: 20 }} />
                       </ListItemIcon>
                       <ListItemText 
                         primary="Nueva Consulta" 
@@ -2555,9 +2631,24 @@ const formatDateTime = (dateString: string) => {
             fieldErrors={doctorProfileFieldErrors}
           />
         </Suspense>
-          </Box>
+
+        {/* Logout Confirmation Dialog */}
+        <LogoutConfirmDialog
+          open={logoutDialogOpen}
+          onClose={cancelLogout}
+          onConfirm={confirmLogout}
+          userName={user?.doctor.full_name || 'Usuario'}
+        />
+      </Box>
         </ProtectedRoute>
-      </ThemeProvider>
+    </ThemeProvider>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
     </AuthProvider>
   );
 }

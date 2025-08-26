@@ -6,18 +6,16 @@ from typing import Optional
 from datetime import datetime
 
 class UserLogin(BaseModel):
-    username: str
+    email: EmailStr
     password: str
 
 class UserCreate(BaseModel):
-    username: str
     email: EmailStr
     password: str
     doctor_id: str
 
 class UserResponse(BaseModel):
     id: str
-    username: str
     email: str
     doctor_id: str
     is_active: bool

@@ -189,17 +189,34 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
       professional_seal: doctorProfile?.professional_seal || ''
     };
 
-    if (isEditing) {
-      await apiService.updateDoctorProfile(transformedData);
-    } else {
-      await apiService.createDoctorProfile(transformedData);
-    }
+    try {
+      if (isEditing) {
+        await apiService.updateDoctorProfile(transformedData);
+      } else {
+        await apiService.createDoctorProfile(transformedData);
+      }
 
-    // Invalidate cache after save
-    cache.timestamp = 0;
-    
-    // Refresh the profile after saving
-    return fetchProfile();
+      // Invalidate cache after save
+      cache.timestamp = 0;
+      
+      // Refresh the profile after saving
+      return fetchProfile();
+    } catch (error: any) {
+      console.error('❌ Error in saveProfile:', error);
+      
+      // Handle specific error types with user-friendly messages
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        throw new Error('La solicitud tardó demasiado tiempo. Verifica tu conexión e intenta nuevamente.');
+      } else if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
+        throw new Error('Error de conexión. Verifica que el servidor esté funcionando.');
+      } else if (error.response?.status === 401) {
+        throw new Error('Sesión expirada. Por favor, vuelve a iniciar sesión.');
+      } else if (error.response?.status >= 500) {
+        throw new Error('Error interno del servidor. Intenta más tarde.');
+      } else {
+        throw new Error(error.response?.data?.detail || error.message || 'Error al guardar el perfil');
+      }
+    }
   };
 
   const handleSubmit = useCallback(async () => {

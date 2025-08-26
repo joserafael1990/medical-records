@@ -13,10 +13,11 @@ import {
   InputAdornment
 } from '@mui/material';
 import { LockOutlined, Visibility, VisibilityOff } from '@mui/icons-material';
+import AvantLogo from '../common/AvantLogo';
 import { useAuth } from '../../contexts/AuthContext';
 
 const LoginView: React.FC = () => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -30,14 +31,14 @@ const LoginView: React.FC = () => {
     e.preventDefault();
     setError('');
 
-    if (!username || !password) {
-      setError('Por favor, ingresa tu usuario y contraseña');
+    if (!email || !password) {
+      setError('Por favor, ingresa tu correo electrónico y contraseña');
       return;
     }
 
-    const success = await login(username, password);
+    const success = await login(email, password);
     if (!success) {
-      setError('Usuario o contraseña incorrectos');
+      setError('Correo electrónico o contraseña incorrectos');
     }
   };
 
@@ -61,17 +62,9 @@ const LoginView: React.FC = () => {
             width: '100%'
           }}
         >
-          <Avatar sx={{ m: 1, bgcolor: 'primary.main' }}>
-            <LockOutlined />
-          </Avatar>
-          
-          <Typography component="h1" variant="h4" gutterBottom>
-            Historias Clínicas
-          </Typography>
-          
-          <Typography component="h2" variant="h6" color="textSecondary" gutterBottom>
-            Iniciar Sesión
-          </Typography>
+          <Box sx={{ mb: 4 }}>
+            <AvantLogo variant="full" sx={{ fontSize: 60, color: 'primary.main' }} />
+          </Box>
 
           {error && (
             <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
@@ -84,13 +77,14 @@ const LoginView: React.FC = () => {
               margin="normal"
               required
               fullWidth
-              id="username"
-              label="Usuario"
-              name="username"
-              autoComplete="username"
+              id="email"
+              label="Correo Electrónico"
+              name="email"
+              type="email"
+              autoComplete="email"
               autoFocus
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               disabled={isLoading}
             />
             
