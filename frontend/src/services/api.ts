@@ -225,23 +225,40 @@ class ApiService {
     return response.data;
   }
 
-  async getDailyAgenda(targetDate?: string): Promise<Appointment[]> {
-    const params = targetDate ? { target_date: targetDate } : {};
-    const response = await this.api.get<Appointment[]>(API_CONFIG.ENDPOINTS.AGENDA.DAILY, { params });
-    return response.data;
-  }
-
-  async getWeeklyAgenda(startDate?: string): Promise<any> {
-    const params = startDate ? { start_date: startDate } : {};
-    const response = await this.api.get(API_CONFIG.ENDPOINTS.AGENDA.WEEKLY, { params });
-    return response.data;
-  }
-
   async getAvailableSlots(targetDate: string, durationMinutes = 30): Promise<any[]> {
     const response = await this.api.get(API_CONFIG.ENDPOINTS.AGENDA.AVAILABLE_SLOTS, {
       params: { target_date: targetDate, duration_minutes: durationMinutes }
     });
     return response.data;
+  }
+
+  // Agenda-specific methods
+  async getDailyAgenda(targetDate?: string): Promise<Appointment[]> {
+    const response = await this.api.get<Appointment[]>(API_CONFIG.ENDPOINTS.AGENDA.DAILY, {
+      params: targetDate ? { target_date: targetDate } : {}
+    });
+    return response.data;
+  }
+
+  async getWeeklyAgenda(startDate?: string): Promise<Appointment[]> {
+    const response = await this.api.get<Appointment[]>(API_CONFIG.ENDPOINTS.AGENDA.WEEKLY, {
+      params: startDate ? { start_date: startDate } : {}
+    });
+    return response.data;
+  }
+
+  async createAgendaAppointment(appointmentData: any): Promise<any> {
+    const response = await this.api.post('/api/agenda/appointments', appointmentData);
+    return response.data;
+  }
+
+  async updateAgendaAppointment(id: string, appointmentData: Partial<AppointmentFormData>): Promise<Appointment> {
+    const response = await this.api.put<Appointment>(`/api/agenda/appointments/${id}`, appointmentData);
+    return response.data;
+  }
+
+  async deleteAgendaAppointment(id: string): Promise<void> {
+    await this.api.delete(`/api/agenda/appointments/${id}`);
   }
 
   async createAppointment(patientId: string, appointmentData: AppointmentFormData): Promise<Appointment> {
@@ -251,6 +268,8 @@ class ApiService {
     );
     return response.data;
   }
+
+
 
   async updateAppointment(id: string, appointmentData: Partial<AppointmentFormData>): Promise<Appointment> {
     const response = await this.api.put<Appointment>(`${API_CONFIG.ENDPOINTS.APPOINTMENTS}/${id}/full`, appointmentData);
@@ -268,6 +287,25 @@ class ApiService {
 
   async bulkUpdateAppointments(updates: any[]): Promise<any> {
     const response = await this.api.post('/api/appointments/bulk-update', { updates });
+    return response.data;
+  }
+
+  // ============================================================================
+  // DOCTOR PROFILE SERVICES
+  // ============================================================================
+
+  async getDoctorProfile(): Promise<any> {
+    const response = await this.api.get(API_CONFIG.ENDPOINTS.DOCTOR_PROFILE);
+    return response.data;
+  }
+
+  async createDoctorProfile(profileData: any): Promise<any> {
+    const response = await this.api.post(API_CONFIG.ENDPOINTS.DOCTOR_PROFILE, profileData);
+    return response.data;
+  }
+
+  async updateDoctorProfile(profileData: any): Promise<any> {
+    const response = await this.api.put(API_CONFIG.ENDPOINTS.DOCTOR_PROFILE, profileData);
     return response.data;
   }
 
@@ -339,10 +377,14 @@ export const {
   getWeeklyAgenda,
   getAvailableSlots,
   createAppointment,
+  createAgendaAppointment,
   updateAppointment,
   updateAppointmentStatus,
   cancelAppointment,
   bulkUpdateAppointments,
+  getDoctorProfile,
+  createDoctorProfile,
+  updateDoctorProfile,
   getDashboardData,
   withRetry
 } = apiService;

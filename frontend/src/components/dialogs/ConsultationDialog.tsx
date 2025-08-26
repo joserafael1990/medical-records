@@ -238,10 +238,10 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 <TextField
                   label="Fecha de Consulta"
                   type="date"
-                  value={formData.date ? formData.date.split('T')[0] : ''}
+                  value={formData.date && formData.date.includes('T') ? formData.date.split('T')[0] : ''}
                   onChange={(e) => {
                     const dateValue = e.target.value;
-                    const timeValue = formData.date ? formData.date.split('T')[1] : '09:00:00';
+                    const timeValue = formData.date && formData.date.includes('T') ? formData.date.split('T')[1] : '09:00';
                     setFormData(prev => ({ 
                       ...prev, 
                       date: `${dateValue}T${timeValue}` 
@@ -250,21 +250,21 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   InputLabelProps={{ shrink: true }}
                   fullWidth
                   required
-                  error={!!fieldErrors.date}
-                  helperText={fieldErrors.date}
+                  error={!!fieldErrors?.date}
+                  helperText={fieldErrors?.date}
                 />
               </Box>
               <Box sx={{ flex: 1 }}>
                 <TextField
                   label="Hora"
                   type="time"
-                  value={formData.date ? formData.date.split('T')[1]?.substring(0, 5) : '09:00'}
+                  value={formData.date && formData.date.includes('T') ? formData.date.split('T')[1]?.substring(0, 5) : '09:00'}
                   onChange={(e) => {
                     const timeValue = e.target.value;
-                    const dateValue = formData.date ? formData.date.split('T')[0] : new Date().toISOString().split('T')[0];
+                    const dateValue = formData.date && formData.date.includes('T') ? formData.date.split('T')[0] : new Date().toISOString().split('T')[0];
                     setFormData(prev => ({ 
                       ...prev, 
-                      date: `${dateValue}T${timeValue}:00` 
+                      date: `${dateValue}T${timeValue}` 
                     }));
                   }}
                   InputLabelProps={{ shrink: true }}

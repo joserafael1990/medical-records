@@ -45,7 +45,7 @@ import { DoctorProfile, DoctorFormData } from '../../types';
 interface DoctorProfileViewProps {
   doctorProfile: DoctorProfile | null;
   isLoading: boolean;
-  onEdit: () => void;
+  onEdit: (section?: string) => void;
   onSave: (data: DoctorFormData) => void;
   isEditing: boolean;
   formData: DoctorFormData;
@@ -146,7 +146,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
         <Button
           variant="contained"
           startIcon={<EditIcon />}
-          onClick={onEdit}
+          onClick={() => onEdit()}
           size="large"
           sx={{ borderRadius: '12px' }}
         >
@@ -169,14 +169,29 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
           </Typography>
         </Box>
         {!isEditing && (
-          <Button
-            variant="contained"
-            startIcon={<EditIcon />}
-            onClick={onEdit}
-            sx={{ borderRadius: '12px' }}
-          >
-            Editar Perfil
-          </Button>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button
+              variant="contained"
+              size="large"
+              startIcon={<EditIcon />}
+              onClick={() => onEdit()}
+              sx={{ 
+                borderRadius: '12px',
+                px: 4,
+                py: 1.5,
+                fontSize: '1.1rem',
+                fontWeight: 600,
+                boxShadow: 3,
+                '&:hover': {
+                  boxShadow: 6,
+                  transform: 'translateY(-2px)'
+                },
+                transition: 'all 0.2s ease-in-out'
+              }}
+            >
+              Editar Datos
+            </Button>
+          </Box>
         )}
       </Box>
 
@@ -216,9 +231,23 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
             </Typography>
             {missingFields.length > 0 && (
               <Box sx={{ mt: 2 }}>
-                <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
-                  Campos faltantes:
-                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    Campos faltantes:
+                  </Typography>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<EditIcon />}
+                    onClick={() => onEdit()}
+                    sx={{ 
+                      borderRadius: '8px',
+                      fontSize: '0.75rem'
+                    }}
+                  >
+                    Completar
+                  </Button>
+                </Box>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                   {missingFields.map((field) => (
                     <Chip
@@ -240,7 +269,26 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
         {/* Personal Information */}
         <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 33%' } }}>
           <Card sx={{ borderRadius: '16px', height: 'fit-content' }}>
-            <CardContent>
+            <CardContent sx={{ position: 'relative' }}>
+              {!isEditing && (
+                <IconButton
+                  onClick={() => onEdit()}
+                  sx={{
+                    position: 'absolute',
+                    top: 8,
+                    right: 8,
+                    backgroundColor: 'rgba(255,255,255,0.9)',
+                    '&:hover': {
+                      backgroundColor: 'primary.main',
+                      color: 'white'
+                    },
+                    transition: 'all 0.2s ease-in-out'
+                  }}
+                  size="small"
+                >
+                  <EditIcon fontSize="small" />
+                </IconButton>
+              )}
               <Box sx={{ textAlign: 'center', mb: 3 }}>
                 <Avatar
                   sx={{
@@ -322,7 +370,26 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
             
             {/* Education */}
             <Card sx={{ borderRadius: '16px' }}>
-              <CardContent>
+              <CardContent sx={{ position: 'relative' }}>
+                {!isEditing && (
+                  <IconButton
+                    onClick={() => onEdit('academic')}
+                    sx={{
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                      backgroundColor: 'rgba(255,255,255,0.9)',
+                      '&:hover': {
+                        backgroundColor: 'primary.main',
+                        color: 'white'
+                      },
+                      transition: 'all 0.2s ease-in-out'
+                    }}
+                    size="small"
+                  >
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                )}
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
                   <SchoolIcon sx={{ color: 'primary.main', mr: 2 }} />
                   <Typography variant="h6" sx={{ fontWeight: 600 }}>
@@ -356,7 +423,26 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
 
             {/* Professional Licenses */}
             <Card sx={{ borderRadius: '16px' }}>
-              <CardContent>
+              <CardContent sx={{ position: 'relative' }}>
+                {!isEditing && (
+                  <IconButton
+                    onClick={() => onEdit('licenses')}
+                    sx={{
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                      backgroundColor: 'rgba(255,255,255,0.9)',
+                      '&:hover': {
+                        backgroundColor: 'primary.main',
+                        color: 'white'
+                      },
+                      transition: 'all 0.2s ease-in-out'
+                    }}
+                    size="small"
+                  >
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                )}
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
                   <BadgeIcon sx={{ color: 'primary.main', mr: 2 }} />
                   <Typography variant="h6" sx={{ fontWeight: 600 }}>
@@ -415,7 +501,26 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
 
             {/* Office Information */}
             <Card sx={{ borderRadius: '16px' }}>
-              <CardContent>
+              <CardContent sx={{ position: 'relative' }}>
+                {!isEditing && (
+                  <IconButton
+                    onClick={() => onEdit('office')}
+                    sx={{
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                      backgroundColor: 'rgba(255,255,255,0.9)',
+                      '&:hover': {
+                        backgroundColor: 'primary.main',
+                        color: 'white'
+                      },
+                      transition: 'all 0.2s ease-in-out'
+                    }}
+                    size="small"
+                  >
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                )}
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
                   <LocationIcon sx={{ color: 'primary.main', mr: 2 }} />
                   <Typography variant="h6" sx={{ fontWeight: 600 }}>
@@ -467,7 +572,26 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
 
             {/* Contact Information */}
             <Card sx={{ borderRadius: '16px' }}>
-              <CardContent>
+              <CardContent sx={{ position: 'relative' }}>
+                {!isEditing && (
+                  <IconButton
+                    onClick={() => onEdit('contact')}
+                    sx={{
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                      backgroundColor: 'rgba(255,255,255,0.9)',
+                      '&:hover': {
+                        backgroundColor: 'primary.main',
+                        color: 'white'
+                      },
+                      transition: 'all 0.2s ease-in-out'
+                    }}
+                    size="small"
+                  >
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                )}
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
                   <ContactIcon sx={{ color: 'primary.main', mr: 2 }} />
                   <Typography variant="h6" sx={{ fontWeight: 600 }}>
@@ -500,6 +624,8 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
           </Box>
         </Box>
       </Box>
+
+
     </Box>
   );
 };

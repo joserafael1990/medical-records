@@ -117,7 +117,7 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
               fullWidth
               label="Fecha de Nacimiento"
               type="date"
-              value={formData.birth_date}
+              value={formData.birth_date ? formData.birth_date.split('T')[0] : ''}
               onChange={(e) => onFormDataChange('birth_date', e.target.value)}
               InputLabelProps={{ shrink: true }}
               error={!!fieldErrors.birth_date}

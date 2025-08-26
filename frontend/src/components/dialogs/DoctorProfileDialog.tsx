@@ -95,6 +95,18 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
   // Usar la lista de estados desde las constantes
   const mexicanStates = MEXICAN_STATE_NAMES;
 
+  // Map section names to step numbers
+  const getSectionStep = (section: string) => {
+    const sectionMap: { [key: string]: number } = {
+      'personal': 0,
+      'academic': 1,
+      'licenses': 2,
+      'office': 3,
+      'contact': 3  // Contact is part of office info step
+    };
+    return sectionMap[section] || 0;
+  };
+
   const handleClose = () => {
     onClose();
     setFormErrorMessage('');
@@ -108,6 +120,19 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
   const handleBack = () => {
     setActiveStep((prevActiveStep) => prevActiveStep - 1);
   };
+
+  // Handle navigation to specific section when dialog opens
+  useEffect(() => {
+    if (open) {
+      // Check if there's a specific section to navigate to
+      const targetSection = (window as any).doctorProfileActiveSection;
+      if (targetSection) {
+        setActiveStep(getSectionStep(targetSection));
+        // Clear the section after using it
+        delete (window as any).doctorProfileActiveSection;
+      }
+    }
+  }, [open]);
 
   const isStepValid = (step: number) => {
     // En modo edición, ser más flexible - solo validar formato, no campos obligatorios
@@ -269,7 +294,7 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
               <TextField
                 label="Fecha de Nacimiento"
                 type="date"
-                value={formData.birth_date || ''}
+                value={formData.birth_date ? formData.birth_date.split('T')[0] : ''}
                 onChange={(e) => setFormData(prev => ({ ...prev, birth_date: e.target.value }))}
                 fullWidth
                 required

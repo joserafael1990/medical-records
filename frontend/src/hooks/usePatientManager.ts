@@ -75,7 +75,8 @@ const initialFormData: PatientFormData = {
   current_medications: '',
   blood_type: '',
   previous_hospitalizations: '',
-  surgical_history: ''
+  surgical_history: '',
+  status: 'active' as 'active' | 'inactive' // All patients are active by default
 };
 
 export const usePatientManager = (): UsePatientManagerReturn => {
@@ -201,7 +202,8 @@ export const usePatientManager = (): UsePatientManagerReturn => {
       current_medications: patient.current_medications || '',
       blood_type: patient.blood_type || '',
       previous_hospitalizations: '',
-      surgical_history: ''
+      surgical_history: '',
+      status: (patient.status || 'active') as 'active' | 'inactive'
     });
     
     setDialogOpen(true);

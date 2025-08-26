@@ -46,14 +46,16 @@ import {
   AgendaView,
   PatientDialog,
   ConsultationDialog,
+  AppointmentDialog,
   DoctorProfileView,
   DoctorProfileDialog
 } from './components/lazy';
 import { ConsultationDetailView } from './components';
 import { LoadingFallback } from './components';
-import { Patient, DoctorFormData, ConsultationFormData } from './types';
+import { Patient, DoctorFormData, ConsultationFormData, AppointmentFormData } from './types';
 import { API_CONFIG } from './constants';
-import { useDoctorProfile } from './hooks/useDoctorProfile';
+import { apiService } from './services/api';
+import { useDoctorProfileCache as useDoctorProfile } from './hooks/useDoctorProfileCache';
 import {
   MedicalServices as MedicalIcon,
   Dashboard as DashboardIcon,
@@ -431,6 +433,18 @@ function App() {
   // Agenda management state
   const [appointments, setAppointments] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [appointmentDialogOpen, setAppointmentDialogOpen] = useState(false);
+  const [isEditingAppointment, setIsEditingAppointment] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
+  const [appointmentFormData, setAppointmentFormData] = useState<AppointmentFormData>({
+    patient_id: '',
+    date_time: '',
+    appointment_type: 'consultation',
+    reason: '',
+    notes: '',
+    duration_minutes: 30,
+    status: 'scheduled'
+  });
 
   // User menu state
   const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
@@ -502,7 +516,10 @@ function App() {
     current_medications: '',
     blood_type: '',
     previous_hospitalizations: '',
-    surgical_history: ''
+    surgical_history: '',
+    
+    // Estado del paciente
+    status: 'active' as 'active' | 'inactive' // Todos los pacientes son activos por defecto
   });
 
   // Utility function to calculate age from date of birth
@@ -571,6 +588,28 @@ function App() {
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
     };
   }, []);
+
+  // Fetch appointments from API
+  const fetchAppointments = useCallback(async () => {
+    // Only fetch if we're in agenda view
+    if (activeView !== 'agenda') return;
+    
+    try {
+      const targetDate = selectedDate.toISOString().split('T')[0];
+      const data = await apiService.getDailyAgenda(targetDate);
+      setAppointments(data);
+    } catch (error) {
+      console.error('Error fetching appointments:', error);
+      setAppointments([]);
+    }
+  }, [selectedDate, activeView]);
+
+  // Load appointments when active view is agenda or when selected date changes
+  useEffect(() => {
+    if (activeView === 'agenda') {
+      fetchAppointments();
+    }
+  }, [activeView, fetchAppointments]);
 
   // Patient management functions
   const fetchPatients = useCallback(async () => {
@@ -679,7 +718,10 @@ function App() {
       current_medications: '',
       blood_type: '',
       previous_hospitalizations: '',
-      surgical_history: ''
+      surgical_history: '',
+      
+      // Estado del paciente
+      status: 'active' as 'active' | 'inactive'
     });
     setSelectedPatient(null);
     setFieldErrors({});
@@ -703,13 +745,42 @@ const handleViewPatientDetails = (patient: Patient) => {
   setActiveView('patient-detail');
 };
 
+// Utility function to get current Mexico City date and time in HTML datetime-local format
+const getCurrentMexicoCityDateTime = () => {
+  try {
+    const now = new Date();
+    
+    // Simple approach: get current time and adjust for Mexico City (UTC-6)
+    // Note: This doesn't account for DST, but is more reliable
+    const mexicoCityOffset = -6; // UTC-6
+    const currentOffset = now.getTimezoneOffset() / 60; // Current timezone offset in hours
+    const adjustment = (mexicoCityOffset - (-currentOffset)) * 60 * 60 * 1000; // Convert to milliseconds
+    
+    const mexicoCityTime = new Date(now.getTime() + adjustment);
+    
+    // Format to YYYY-MM-DDTHH:MM
+    const year = mexicoCityTime.getFullYear();
+    const month = String(mexicoCityTime.getMonth() + 1).padStart(2, '0');
+    const day = String(mexicoCityTime.getDate()).padStart(2, '0');
+    const hours = String(mexicoCityTime.getHours()).padStart(2, '0');
+    const minutes = String(mexicoCityTime.getMinutes()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  } catch (error) {
+    // Fallback to simple local time if calculation fails
+    console.warn('Error calculating Mexico City time, using local time:', error);
+    const now = new Date();
+    return now.toISOString().slice(0, 16);
+  }
+};
+
 // Consultation handlers (enhanced implementation)
 const handleNewConsultation = useCallback(() => {
   setSelectedConsultation(null);
   setIsEditingConsultation(false);
   setConsultationFormData({
     patient_id: '',
-    date: new Date().toISOString().slice(0, 16),
+    date: getCurrentMexicoCityDateTime(),
     chief_complaint: '',
     history_present_illness: '',
     
@@ -860,8 +931,7 @@ const handleDeleteConsultation = useCallback(async (consultation: any) => {
   }
   
   try {
-    // TODO: Implement delete API call when backend is ready
-    console.log('Delete consultation:', consultation);
+    // Delete consultation functionality - pending backend implementation
     showSuccessMessage(`Consulta de ${consultation.patient_name} eliminada exitosamente`);
     fetchConsultations(); // Refresh the list
   } catch (error) {
@@ -874,6 +944,39 @@ const handleDeleteConsultation = useCallback(async (consultation: any) => {
 const handleBackFromConsultationDetail = useCallback(() => {
   setConsultationDetailView(false);
   setSelectedConsultation(null);
+}, []);
+
+// Appointment handlers
+const handleNewAppointment = useCallback(() => {
+  setSelectedAppointment(null);
+  setIsEditingAppointment(false);
+  setAppointmentFormData({
+    patient_id: '',
+    date_time: new Date().toISOString().slice(0, 16),
+    appointment_type: 'consultation',
+    reason: '',
+    notes: '',
+    duration_minutes: 30,
+    status: 'scheduled'
+  });
+  setAppointmentDialogOpen(true);
+  setFormErrorMessage('');
+}, []);
+
+const handleEditAppointment = useCallback((appointment: any) => {
+  setSelectedAppointment(appointment);
+  setIsEditingAppointment(true);
+  setAppointmentFormData({
+    patient_id: appointment.patient_id || '',
+    date_time: appointment.date_time || '',
+    appointment_type: appointment.appointment_type || 'consultation',
+    reason: appointment.reason || '',
+    notes: appointment.notes || '',
+    duration_minutes: appointment.duration_minutes || 30,
+    status: appointment.status || 'scheduled'
+  });
+  setAppointmentDialogOpen(true);
+  setFormErrorMessage('');
 }, []);
 
 // User menu handlers
@@ -897,8 +1000,7 @@ const handleOpenProfile = useCallback(() => {
 
 const handleLogout = useCallback(() => {
   handleUserMenuClose();
-  // TODO: Implement logout logic
-  console.log('Logout clicked');
+  // Logout functionality - to be implemented when authentication is added
 }, []);
 
 // Handle consultation form submission
@@ -954,14 +1056,40 @@ const handleConsultationSubmit = useCallback(async () => {
   }
 }, [consultationFormData, isEditingConsultation, selectedConsultation, fetchConsultations, doctorProfile]);
 
-// Appointment handlers (basic implementation)
-const handleNewAppointment = () => {
-  console.log('New appointment');
-};
-
-const handleEditAppointment = (appointment: any) => {
-  console.log('Edit appointment', appointment);
-};
+// Handle appointment form submission
+const handleAppointmentSubmit = useCallback(async () => {
+  setIsSubmitting(true);
+  setFormErrorMessage('');
+  
+  try {
+    // Map date_time to the backend field structure
+    const appointmentData = {
+      ...appointmentFormData,
+      // Map UI date_time field to backend appointment_date field
+      appointment_date: appointmentFormData.date_time,
+      // Remove the UI-specific field to avoid confusion
+      date_time: undefined
+    };
+    
+    if (isEditingAppointment && selectedAppointment) {
+      // Update existing appointment
+      await apiService.updateAppointment(selectedAppointment.id, appointmentData);
+      showSuccessMessage('Cita actualizada exitosamente');
+    } else {
+      // Create new appointment using the correct agenda endpoint
+      await apiService.createAgendaAppointment(appointmentData);
+      showSuccessMessage('Cita creada exitosamente');
+    }
+    
+    setAppointmentDialogOpen(false);
+    fetchAppointments(); // Refresh the list
+  } catch (error: any) {
+    console.error('Error saving appointment:', error);
+    setFormErrorMessage(error.response?.data?.detail || error.message || 'Error al guardar la cita');
+  } finally {
+    setIsSubmitting(false);
+  }
+}, [appointmentFormData, isEditingAppointment, selectedAppointment, fetchAppointments]);
 
 // Validation function for required fields
 const validatePatientForm = () => {
@@ -1012,7 +1140,7 @@ const handleFieldChange = useCallback((fieldName: string, value: string) => {
 
 // Handle patient form submission
 const handlePatientSubmit = async () => {
-  console.log('=== PATIENT SUBMIT STARTED ===');
+  // Patient submit started
   // Set submitting state
   setIsSubmitting(true);
   
@@ -1081,16 +1209,14 @@ const handlePatientSubmit = async () => {
       }
     } else {
       // Create new patient
-      console.log('Sending patient data:', JSON.stringify(patientData, null, 2));
-      console.log('Full form data:', JSON.stringify(patientFormData, null, 2));
+      // Sending patient data to API
       const response = await axios.post('http://localhost:8000/api/patients', patientData);
-      console.log('Response received:', response.status, response.data);
-      console.log('Response status type:', typeof response.status);
+      // API response received successfully
       
       // Check for both 200 and 201 status codes
       if (response.status === 201 || response.status === 200) {
         const patientName = `${patientFormData.first_name} ${patientFormData.paternal_surname} ${patientFormData.maternal_surname}`;
-        console.log('Success! Closing dialog and changing view...');
+        // Success: dialog closed and view changed
         
         // Immediate UI updates
         setPatientDialogOpen(false);
@@ -1122,7 +1248,7 @@ const handlePatientSubmit = async () => {
           }, 10);
         }
         
-        console.log('Success flow completed');
+        // Patient creation flow completed successfully
       } else {
         console.log('Unexpected response status:', response.status);
         console.log('Full response:', response);
@@ -1249,7 +1375,10 @@ const handleEditPatient = (patient: Patient) => {
     surgical_history: patient.surgical_history || '',
     
     // Otros campos
-    email: patient.email || ''
+    email: patient.email || '',
+    
+    // Estado del paciente
+    status: (patient.status || 'active') as 'active' | 'inactive'
   });
   
   setSelectedPatient(patient);
@@ -1800,32 +1929,85 @@ const formatDateTime = (dateString: string) => {
                   <Typography variant="h6" sx={{ mb: 2, color: 'text.primary', fontWeight: 600 }}>
                     Acciones Rápidas
                   </Typography>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                    <Button
-                      variant="contained"
-                      startIcon={<PersonAddIcon />}
-                      fullWidth
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                    <MenuItem 
                       onClick={handleNewPatient}
-                      sx={{ justifyContent: 'flex-start', py: 1.5 }}
+                      sx={{ 
+                        borderRadius: '12px', 
+                        mb: 1,
+                        py: 1.5,
+                        '&:hover': {
+                          backgroundColor: 'action.hover'
+                        }
+                      }}
                     >
-                      Nuevo Paciente
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      startIcon={<ScheduleIcon />}
-                      fullWidth
-                      sx={{ justifyContent: 'flex-start', py: 1.5 }}
+                      <ListItemIcon>
+                        <PersonAddIcon />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary="Nuevo Paciente" 
+                        primaryTypographyProps={{ fontWeight: 500 }}
+                      />
+                    </MenuItem>
+                    
+                    <MenuItem 
+                      onClick={handleNewAppointment}
+                      sx={{ 
+                        borderRadius: '12px', 
+                        mb: 1,
+                        py: 1.5,
+                        '&:hover': {
+                          backgroundColor: 'action.hover'
+                        }
+                      }}
                     >
-                      Agendar Cita
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      startIcon={<MessageIcon />}
-                      fullWidth
-                      sx={{ justifyContent: 'flex-start', py: 1.5 }}
+                      <ListItemIcon>
+                        <ScheduleIcon />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary="Nueva Cita" 
+                        primaryTypographyProps={{ fontWeight: 500 }}
+                      />
+                    </MenuItem>
+                    
+                    <MenuItem 
+                      onClick={handleNewConsultation}
+                      sx={{ 
+                        borderRadius: '12px', 
+                        mb: 1,
+                        py: 1.5,
+                        '&:hover': {
+                          backgroundColor: 'action.hover'
+                        }
+                      }}
                     >
-                      Enviar Mensaje
-                    </Button>
+                      <ListItemIcon>
+                        <MedicalIcon />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary="Nueva Consulta" 
+                        primaryTypographyProps={{ fontWeight: 500 }}
+                      />
+                    </MenuItem>
+                    
+                    <MenuItem 
+                      sx={{ 
+                        borderRadius: '12px', 
+                        mb: 1,
+                        py: 1.5,
+                        '&:hover': {
+                          backgroundColor: 'action.hover'
+                        }
+                      }}
+                    >
+                      <ListItemIcon>
+                        <MessageIcon />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary="Enviar Mensaje" 
+                        primaryTypographyProps={{ fontWeight: 500 }}
+                      />
+                    </MenuItem>
                   </Box>
               </Paper>
             </Box>
@@ -1834,7 +2016,11 @@ const formatDateTime = (dateString: string) => {
             <Box sx={{ width: { xs: '100%', md: '75%' } }}>
               {activeView === 'dashboard' && (
                 <Suspense fallback={<LoadingFallback message="Cargando dashboard..." />}>
-                  <DashboardView dashboardData={dashboardData} />
+                  <DashboardView 
+                    dashboardData={dashboardData} 
+                    onNewAppointment={handleNewAppointment}
+                    onNewConsultation={handleNewConsultation}
+                  />
                 </Suspense>
               )}
 
@@ -1900,7 +2086,7 @@ const formatDateTime = (dateString: string) => {
                     isLoading={isDoctorProfileLoading}
                     onEdit={handleEditDoctorProfile}
                     onSave={handleSubmitDoctorProfile}
-                    isEditing={isEditingDoctorProfile}
+                    isEditing={false}
                     formData={doctorProfileFormData}
                     setFormData={setDoctorProfileFormData}
                     onCancel={handleCancelDoctorProfile}
@@ -2206,6 +2392,31 @@ const formatDateTime = (dateString: string) => {
               setCreatingPatientFromConsultation(true);
               setPatientDialogOpen(true);
             }}
+          />
+        </Suspense>
+
+        {/* Appointment Dialog */}
+        <Suspense fallback={<LoadingFallback message="Cargando formulario de cita..." />}>
+          <AppointmentDialog
+            open={appointmentDialogOpen}
+            onClose={() => {
+              setAppointmentDialogOpen(false);
+              setFormErrorMessage('');
+              setFieldErrors({});
+            }}
+            onSubmit={handleAppointmentSubmit}
+            onNewPatient={() => {
+              setAppointmentDialogOpen(false);
+              setIsEditingPatient(false);
+              setCreatingPatientFromConsultation(true);
+              setPatientDialogOpen(true);
+            }}
+            formData={appointmentFormData}
+            patients={patients}
+            isEditing={isEditingAppointment}
+            loading={isSubmitting}
+            formErrorMessage={formErrorMessage}
+            fieldErrors={fieldErrors}
           />
         </Suspense>
 

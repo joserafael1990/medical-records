@@ -21,9 +21,15 @@ import { DashboardData } from '../../types';
 
 interface DashboardViewProps {
   dashboardData: DashboardData | null;
+  onNewAppointment?: () => void;
+  onNewConsultation?: () => void;
 }
 
-const DashboardView: React.FC<DashboardViewProps> = ({ dashboardData }) => {
+const DashboardView: React.FC<DashboardViewProps> = ({ 
+  dashboardData, 
+  onNewAppointment, 
+  onNewConsultation 
+}) => {
   return (
     <Box>
       {/* Welcome Header */}
@@ -137,9 +143,25 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dashboardData }) => {
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
                   Agenda de Hoy
                 </Typography>
-                <Button variant="outlined" size="small" startIcon={<AddIcon />}>
-                  Nueva Cita
-                </Button>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button 
+                    variant="outlined" 
+                    size="small" 
+                    startIcon={<AddIcon />}
+                    onClick={onNewAppointment}
+                  >
+                    Nueva Cita
+                  </Button>
+                  <Button 
+                    variant="contained" 
+                    size="small" 
+                    startIcon={<AddIcon />}
+                    onClick={onNewConsultation}
+                    sx={{ bgcolor: 'success.main', '&:hover': { bgcolor: 'success.dark' } }}
+                  >
+                    Nueva Consulta
+                  </Button>
+                </Box>
               </Box>
               
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

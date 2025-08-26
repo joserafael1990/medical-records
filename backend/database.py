@@ -77,6 +77,7 @@ class Patient(Base):
     consultations = relationship("MedicalHistory", back_populates="patient")
     vital_signs = relationship("VitalSigns", back_populates="patient")
     clinical_studies = relationship("ClinicalStudy", back_populates="patient")
+    appointments = relationship("Appointment", back_populates="patient")
 
 class DoctorProfile(Base):
     __tablename__ = "doctor_profiles"
@@ -129,7 +130,11 @@ class DoctorProfile(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, onupdate=datetime.utcnow)
     created_by = Column(String(100))
+    
     updated_by = Column(String(100))
+    
+    # Relationships
+    appointments = relationship("Appointment", back_populates="doctor")
 
 class MedicalHistory(Base):
     __tablename__ = "medical_history"
@@ -255,22 +260,47 @@ class Appointment(Base):
     
     id = Column(String, primary_key=True, default=lambda: f"APT{str(uuid.uuid4())[:8].upper()}")
     patient_id = Column(String, ForeignKey("patients.id"), nullable=False)
+    doctor_id = Column(String, ForeignKey("doctor_profiles.id"), nullable=True)
     
-    # Appointment details
+    # Appointment scheduling
     appointment_date = Column(DateTime, nullable=False)
-    appointment_type = Column(String(50), nullable=False)
-    status = Column(String(20), default="scheduled")
+    end_time = Column(DateTime, nullable=False)  # Calculated from start + duration
     duration_minutes = Column(Integer, default=30)
     
-    # Appointment information
-    reason = Column(Text)
-    notes = Column(Text)
-    doctor_name = Column(String(200))
+    # Appointment details
+    appointment_type = Column(String(50), nullable=False)  # consultation, follow_up, procedure, etc.
+    status = Column(String(20), default="scheduled")  # scheduled, confirmed, in_progress, completed, cancelled, no_show
+    priority = Column(String(20), default="normal")  # urgent, normal, low
+    
+    # Clinical information
+    reason = Column(Text, nullable=False)  # Chief complaint
+    notes = Column(Text)  # Additional notes
+    preparation_instructions = Column(Text)  # Pre-appointment instructions
+    
+    # Contact and reminders
+    reminder_sent = Column(Boolean, default=False)
+    confirmation_required = Column(Boolean, default=False)
+    confirmed_at = Column(DateTime)
+    
+    # Financial
+    estimated_cost = Column(String(20))  # Optional cost estimate
+    insurance_covered = Column(Boolean, default=False)
+    
+    # Location and resources
+    room_number = Column(String(20))
+    equipment_needed = Column(Text)
+    doctor_name = Column(String(200))  # Keep for compatibility
     
     # System fields
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_by = Column(String(100))
+    cancelled_reason = Column(Text)
+    cancelled_at = Column(DateTime)
+    
+    # Relationships
+    patient = relationship("Patient", back_populates="appointments")
+    doctor = relationship("DoctorProfile", back_populates="appointments")
 
 # ============================================================================
 # DATABASE FUNCTIONS

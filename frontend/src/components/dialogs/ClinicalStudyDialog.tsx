@@ -262,7 +262,7 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
               helperText="Información adicional sobre el estudio (opcional)"
             />
 
-            {/* Date and Status */}
+            {/* Dates */}
             <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
               <TextField
                 label="Fecha de Solicitud"
@@ -276,34 +276,61 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
                 fullWidth
                 required
                 error={!!fieldErrors.ordered_date}
-                helperText={fieldErrors.ordered_date}
+                helperText={fieldErrors.ordered_date || 'Fecha en que se solicita el estudio'}
               />
 
-              <FormControl fullWidth>
-                <InputLabel>Estado</InputLabel>
-                <Select
-                  value={formData.status || 'pending'}
-                  onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as StudyStatus }))}
-                  label="Estado"
-                >
-                  {STUDY_STATUS_OPTIONS.map((status) => (
-                    <MenuItem key={status.value} value={status.value}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Box
-                          sx={{
-                            width: 12,
-                            height: 12,
-                            borderRadius: '50%',
-                            backgroundColor: status.color
-                          }}
-                        />
-                        {status.label}
-                      </Box>
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <TextField
+                label="Fecha de Realización"
+                type="date"
+                value={formData.performed_date ? formData.performed_date.split('T')[0] : ''}
+                onChange={(e) => setFormData(prev => ({ 
+                  ...prev, 
+                  performed_date: e.target.value ? `${e.target.value}T09:00:00` : ''
+                }))}
+                InputLabelProps={{ shrink: true }}
+                fullWidth
+                helperText="Fecha en que se realizó el estudio (opcional)"
+              />
+
+              <TextField
+                label="Fecha de Resultados"
+                type="date"
+                value={formData.results_date ? formData.results_date.split('T')[0] : ''}
+                onChange={(e) => setFormData(prev => ({ 
+                  ...prev, 
+                  results_date: e.target.value ? `${e.target.value}T09:00:00` : ''
+                }))}
+                InputLabelProps={{ shrink: true }}
+                fullWidth
+                helperText="Fecha en que se obtuvieron los resultados (opcional)"
+              />
             </Box>
+
+            {/* Status */}
+            <FormControl fullWidth>
+              <InputLabel>Estado del Estudio</InputLabel>
+              <Select
+                value={formData.status || 'pending'}
+                onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as StudyStatus }))}
+                label="Estado del Estudio"
+              >
+                {STUDY_STATUS_OPTIONS.map((status) => (
+                  <MenuItem key={status.value} value={status.value}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box
+                        sx={{
+                          width: 12,
+                          height: 12,
+                          borderRadius: '50%',
+                          backgroundColor: status.color
+                        }}
+                      />
+                      {status.label}
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
             {/* Doctors */}
             <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
@@ -602,3 +629,4 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
 };
 
 export default memo(ClinicalStudyDialog);
+

@@ -23,6 +23,10 @@ class PatientService:
         if 'id' not in patient_data or not patient_data['id']:
             patient_data['id'] = f"PAT{str(uuid.uuid4())[:8].upper()}"
         
+        # Set active status by default
+        if 'is_active' not in patient_data:
+            patient_data['is_active'] = True
+        
         # Convert date strings to date objects
         if isinstance(patient_data.get('birth_date'), str):
             from datetime import date
@@ -301,6 +305,17 @@ class ClinicalStudyService:
         ).order_by(desc(ClinicalStudy.ordered_date)).all()
 
 # Utility functions
+def _get_monthly_consultations(db: Session) -> int:
+    """Get consultations count for the current month"""
+    from datetime import datetime, timedelta
+    
+    now = datetime.utcnow()
+    start_of_month = datetime(now.year, now.month, 1)
+    
+    return db.query(MedicalHistory).filter(
+        MedicalHistory.date >= start_of_month
+    ).count()
+
 def get_dashboard_data(db: Session) -> Dict[str, Any]:
     """Get dashboard statistics"""
     total_patients = db.query(Patient).filter(Patient.is_active == True).count()
@@ -323,6 +338,6 @@ def get_dashboard_data(db: Session) -> Dict[str, Any]:
     return {
         'total_patients': total_patients,
         'total_consultations': total_consultations,
-        'monthly_consultations': total_consultations,  # TODO: Calculate monthly
+        'monthly_consultations': _get_monthly_consultations(db),
         'recent_consultations': consultations_list
     }

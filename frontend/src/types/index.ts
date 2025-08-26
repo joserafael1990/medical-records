@@ -89,14 +89,27 @@ export interface Appointment {
   id: string;
   patient_id: string;
   patient_name?: string;
-  date_time: string;
+  date_time: string; // For UI compatibility - maps to appointment_date in backend
+  appointment_date?: string; // Backend field name
+  end_time?: string;
   appointment_type: AppointmentType;
   reason: string;
   notes?: string;
   duration_minutes: number;
   status: AppointmentStatus;
+  priority?: string;
+  preparation_instructions?: string;
+  confirmation_required?: boolean;
+  confirmed_at?: string;
+  reminder_sent?: boolean;
+  estimated_cost?: string;
+  insurance_covered?: boolean;
+  room_number?: string;
+  equipment_needed?: string;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
+  cancelled_reason?: string;
+  cancelled_at?: string;
 }
 
 export interface DashboardData {
@@ -236,6 +249,7 @@ export interface PatientFormData {
   blood_type: string;
   previous_hospitalizations: string;
   surgical_history: string;
+  status: 'active' | 'inactive'; // Patient status - active by default
 }
 
 export interface ConsultationFormData {
@@ -268,12 +282,19 @@ export interface ConsultationFormData {
 
 export interface AppointmentFormData {
   patient_id: string;
-  date_time: string;
+  date_time: string; // UI field - will be mapped to appointment_date
   appointment_type: string;
   reason: string;
   notes: string;
   duration_minutes: number;
   status: string;
+  priority?: string;
+  preparation_instructions?: string;
+  confirmation_required?: boolean;
+  estimated_cost?: string;
+  insurance_covered?: boolean;
+  room_number?: string;
+  equipment_needed?: string;
 }
 
 // ============================================================================
@@ -478,6 +499,8 @@ export interface ClinicalStudyFormData {
   study_name: string;
   study_description: string;
   ordered_date: string;
+  performed_date?: string;     // Date when study was performed
+  results_date?: string;       // Date when results were obtained
   status: StudyStatus;
   results_text: string;
   interpretation: string;

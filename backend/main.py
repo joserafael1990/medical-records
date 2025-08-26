@@ -9,6 +9,8 @@ from pydantic import BaseModel, EmailStr
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date, timedelta
 from enum import Enum
+import pytz
+from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import uvicorn
@@ -31,13 +33,61 @@ from db_service import (
     PatientService, DoctorService, ConsultationService, 
     ClinicalStudyService, get_dashboard_data
 )
+from appointment_service import AppointmentService
+
+# Error handling imports
+from exceptions import (
+    MedicalSystemException, PatientNotFoundException, ConsultationNotFoundException,
+    AppointmentNotFoundException, ValidationException, NOM004ValidationException,
+    CURPValidationException, DatabaseException, BusinessRuleException,
+    ErrorCode, to_http_exception
+)
+from error_middleware import (
+    ErrorHandlingMiddleware, RequestLoggingMiddleware, 
+    ErrorReporter, health_check_with_error_info
+)
+
+# ============================================================================
+# TIMEZONE CONFIGURATION
+# ============================================================================
+
+# Mexico City timezone configuration
+MEXICO_CITY_TZ = ZoneInfo("America/Mexico_City")
+PYTZ_MEXICO_CITY = pytz.timezone("America/Mexico_City")
+
+def get_mexico_city_now():
+    """Get current datetime in Mexico City timezone"""
+    return datetime.now(MEXICO_CITY_TZ)
+
+def convert_to_mexico_city(dt: datetime):
+    """Convert datetime to Mexico City timezone"""
+    if dt.tzinfo is None:
+        # If naive datetime, assume it's already in Mexico City time
+        return dt.replace(tzinfo=MEXICO_CITY_TZ)
+    return dt.astimezone(MEXICO_CITY_TZ)
+
+def format_mexico_city_datetime(dt: datetime) -> str:
+    """Format datetime for Mexico City timezone"""
+    if dt is None:
+        return ""
+    mexico_dt = convert_to_mexico_city(dt)
+    return mexico_dt.isoformat()
 
 # ============================================================================
 # FASTAPI APP CONFIGURATION
 # ============================================================================
 
-app = FastAPI(title="Historias Clínicas API")
+app = FastAPI(
+    title="Historias Clínicas API",
+    description="Sistema de gestión de historias clínicas médicas conforme a NOM-004",
+    version="1.0.0"
+)
 
+# Add error handling middleware (should be first)
+app.add_middleware(ErrorHandlingMiddleware, debug=True)  # Set to False in production
+app.add_middleware(RequestLoggingMiddleware)
+
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -137,6 +187,9 @@ class PatientBase(BaseModel):
     chronic_conditions: Optional[str] = None
     current_medications: Optional[str] = None
     
+    # Status field (maps to is_active in database)
+    status: Optional[str] = "active"  # 'active' or 'inactive'
+    
     # System fields
     created_by: str
 
@@ -167,12 +220,50 @@ class PatientUpdate(BaseModel):
     allergies: Optional[str] = None
     chronic_conditions: Optional[str] = None
     current_medications: Optional[str] = None
+    status: Optional[str] = None  # 'active' or 'inactive'
     created_by: Optional[str] = None
 
-class PatientResponse(PatientBase):
+class PatientResponse(BaseModel):
+    # Copy of PatientBase but with birth_date as string for API response
+    first_name: str
+    paternal_surname: str
+    maternal_surname: Optional[str] = None
+    birth_date: str  # String format for API response
+    gender: str
+    curp: Optional[str] = None
+    civil_status: Optional[str] = None
+    nationality: str = "mexicana"
+    birth_place: Optional[str] = None
+    address: Optional[str] = None
+    municipality: Optional[str] = None
+    state: Optional[str] = None
+    postal_code: Optional[str] = None
+    country: str = "México"
+    phone: Optional[str] = None
+    email: Optional[str] = None  # Added missing email field
+    emergency_contact_name: Optional[str] = None
+    emergency_contact_phone: Optional[str] = None
+    emergency_contact_relationship: Optional[str] = None
+    
+    # Insurance and Medical fields
+    insurance_provider: Optional[str] = None
+    insurance_number: Optional[str] = None
+    blood_type: Optional[str] = None  # Added missing blood_type field
+    
+    # Medical history fields
+    family_history: Optional[str] = None
+    personal_pathological_history: Optional[str] = None
+    personal_non_pathological_history: Optional[str] = None
+    allergies: Optional[str] = None
+    chronic_conditions: Optional[str] = None
+    current_medications: Optional[str] = None
+    created_by: Optional[str] = None
+    
+    # Response-specific fields
     id: str
     full_name: str
     is_active: bool
+    status: str  # 'active' or 'inactive' - derived from is_active
     total_visits: int
     created_at: str
     updated_at: Optional[str] = None
@@ -223,6 +314,90 @@ class DoctorProfileBase(BaseModel):
 
 class DoctorProfileCreate(DoctorProfileBase):
     pass
+
+# ============================================================================
+# APPOINTMENT MODELS
+# ============================================================================
+
+class AppointmentBase(BaseModel):
+    patient_id: str
+    doctor_id: Optional[str] = None
+    appointment_date: datetime
+    duration_minutes: int = 30
+    appointment_type: AppointmentType
+    status: AppointmentStatus = AppointmentStatus.SCHEDULED
+    priority: Optional[str] = "normal"
+    reason: str
+    notes: Optional[str] = None
+    preparation_instructions: Optional[str] = None
+    confirmation_required: bool = False
+    estimated_cost: Optional[str] = None
+    insurance_covered: bool = False
+    room_number: Optional[str] = None
+    equipment_needed: Optional[str] = None
+
+class AppointmentCreate(AppointmentBase):
+    pass
+
+class AppointmentUpdate(BaseModel):
+    appointment_date: Optional[datetime] = None
+    duration_minutes: Optional[int] = None
+    appointment_type: Optional[AppointmentType] = None
+    status: Optional[AppointmentStatus] = None
+    priority: Optional[str] = None
+    reason: Optional[str] = None
+    notes: Optional[str] = None
+    preparation_instructions: Optional[str] = None
+    confirmation_required: Optional[bool] = None
+    estimated_cost: Optional[str] = None
+    insurance_covered: Optional[bool] = None
+    room_number: Optional[str] = None
+    equipment_needed: Optional[str] = None
+    cancelled_reason: Optional[str] = None
+
+class AppointmentResponse(BaseModel):
+    id: str
+    patient_id: str
+    patient_name: str
+    doctor_id: Optional[str] = None
+    doctor_name: Optional[str] = None
+    appointment_date: str  # ISO format string
+    end_time: str  # ISO format string
+    duration_minutes: int
+    appointment_type: str
+    status: str
+    priority: str
+    reason: str
+    notes: Optional[str] = None
+    preparation_instructions: Optional[str] = None
+    reminder_sent: bool
+    confirmation_required: bool
+    confirmed_at: Optional[str] = None
+    estimated_cost: Optional[str] = None
+    insurance_covered: bool
+    room_number: Optional[str] = None
+    equipment_needed: Optional[str] = None
+    created_at: str
+    updated_at: Optional[str] = None
+    cancelled_reason: Optional[str] = None
+    cancelled_at: Optional[str] = None  # Added missing cancelled_at field
+
+class TimeSlot(BaseModel):
+    time: str  # Format: "HH:MM"
+    available: bool
+    appointment_id: Optional[str] = None
+    patient_name: Optional[str] = None
+    reason: Optional[str] = None
+
+class DaySchedule(BaseModel):
+    date: str  # Format: "YYYY-MM-DD"
+    slots: List[TimeSlot]
+    total_appointments: int
+    available_slots: int
+
+class WeekSchedule(BaseModel):
+    week_start: str  # Format: "YYYY-MM-DD"
+    days: Dict[str, DaySchedule]  # Key: day name (monday, tuesday, etc.)
 
 class DoctorProfileUpdate(BaseModel):
     """Model for updating doctor profile - all fields are optional"""
@@ -330,19 +505,30 @@ async def health(db: Session = Depends(get_db)):
 
 @app.get("/api/health")
 async def api_health(db: Session = Depends(get_db)):
-    """API Health check with database connectivity"""
+    """Enhanced API Health check with error monitoring"""
     try:
+        # Test database connectivity
         db.execute(text("SELECT 1"))
-        return {
-            "status": "healthy", 
+        
+        # Get health info with error stats
+        health_info = await health_check_with_error_info()
+        health_info.update({
             "service": "historias-clinicas",
             "database": "postgresql-connected"
-        }
+        })
+        
+        return health_info
+        
     except Exception as e:
+        # Report critical health check failure
+        ErrorReporter.report_critical_error(e, {"endpoint": "/api/health"})
+        
         return {
             "status": "unhealthy", 
             "service": "historias-clinicas",
-            "database": f"error: {str(e)}"
+            "database": f"error: {str(e)}",
+            "timestamp": get_mexico_city_now().isoformat(),
+            "timezone": "America/Mexico_City"
         }
 
 @app.get("/api/physicians/dashboard")
@@ -393,6 +579,7 @@ async def get_patients(search: Optional[str] = None, limit: int = 100, offset: i
                 "current_medications": patient.current_medications or "",
                 "total_visits": patient.total_visits or 0,
                 "is_active": patient.is_active,
+                "status": "active" if patient.is_active else "inactive",
                 "created_at": patient.created_at.isoformat() if patient.created_at else "",
                 "updated_at": patient.updated_at.isoformat() if patient.updated_at else None,
                 "created_by": patient.created_by or ""
@@ -409,6 +596,11 @@ async def create_patient(patient: PatientCreate, db: Session = Depends(get_db)):
     try:
         patient_data = patient.dict()
         patient_data["created_at"] = datetime.utcnow()
+        
+        # Map status field to is_active
+        if "status" in patient_data:
+            patient_data["is_active"] = patient_data["status"] == "active"
+            del patient_data["status"]  # Remove status from data sent to database
         
         new_patient = PatientService.create_patient(db, patient_data)
         
@@ -442,6 +634,7 @@ async def create_patient(patient: PatientCreate, db: Session = Depends(get_db)):
             "current_medications": new_patient.current_medications or "",
             "total_visits": new_patient.total_visits or 0,
             "is_active": new_patient.is_active,
+            "status": "active" if new_patient.is_active else "inactive",
             "created_at": new_patient.created_at.isoformat() if new_patient.created_at else "",
             "updated_at": new_patient.updated_at.isoformat() if new_patient.updated_at else None,
             "created_by": new_patient.created_by or ""
@@ -486,6 +679,7 @@ async def get_patient(patient_id: str, db: Session = Depends(get_db)):
             "current_medications": patient.current_medications or "",
             "total_visits": patient.total_visits or 0,
             "is_active": patient.is_active,
+            "status": "active" if patient.is_active else "inactive",
             "created_at": patient.created_at.isoformat() if patient.created_at else "",
             "updated_at": patient.updated_at.isoformat() if patient.updated_at else None,
             "created_by": patient.created_by or ""
@@ -509,6 +703,11 @@ async def update_patient(patient_id: str, patient: PatientUpdate, db: Session = 
         # Preparar datos para actualización
         update_data = patient.dict(exclude_unset=True)
         update_data["updated_at"] = datetime.utcnow()
+        
+        # Map status field to is_active
+        if "status" in update_data:
+            update_data["is_active"] = update_data["status"] == "active"
+            del update_data["status"]  # Remove status from data sent to database
         
         # Actualizar paciente
         updated_patient = PatientService.update_patient(db, patient_id, update_data)
@@ -540,6 +739,7 @@ async def update_patient(patient_id: str, patient: PatientUpdate, db: Session = 
             "current_medications": updated_patient.current_medications or "",
             "total_visits": updated_patient.total_visits or 0,
             "is_active": updated_patient.is_active,
+            "status": "active" if updated_patient.is_active else "inactive",
             "created_at": updated_patient.created_at.isoformat() if updated_patient.created_at else "",
             "updated_at": updated_patient.updated_at.isoformat() if updated_patient.updated_at else None,
             "created_by": updated_patient.created_by or ""
@@ -632,11 +832,8 @@ async def create_doctor_profile(profile: DoctorProfileCreate, db: Session = Depe
             "office_state": new_profile.office_state,
             "office_postal_code": new_profile.office_postal_code or "",
             "office_country": new_profile.office_country or "México",
-            "medical_school": new_profile.medical_school or "",
-            "internship_hospital": new_profile.internship_hospital or "",
-            "residency_hospital": new_profile.residency_hospital or "",
-            "board_certifications": new_profile.board_certifications or [],
-            "professional_memberships": new_profile.professional_memberships or [],
+            # medical_school, internship_hospital, residency_hospital removed per user request
+            # board_certifications and professional_memberships removed per user request
             "digital_signature": new_profile.digital_signature,
             "professional_seal": new_profile.professional_seal,
             "full_name": new_profile.full_name,
@@ -694,11 +891,8 @@ async def update_doctor_profile(profile: DoctorProfileUpdate, db: Session = Depe
             "office_state": updated_profile.office_state,
             "office_postal_code": updated_profile.office_postal_code or "",
             "office_country": updated_profile.office_country or "México",
-            "medical_school": updated_profile.medical_school or "",
-            "internship_hospital": updated_profile.internship_hospital or "",
-            "residency_hospital": updated_profile.residency_hospital or "",
-            "board_certifications": updated_profile.board_certifications or [],
-            "professional_memberships": updated_profile.professional_memberships or [],
+            # medical_school, internship_hospital, residency_hospital removed per user request
+            # board_certifications and professional_memberships removed per user request
             "digital_signature": updated_profile.digital_signature,
             "professional_seal": updated_profile.professional_seal,
             "full_name": updated_profile.full_name,
@@ -820,21 +1014,32 @@ async def get_daily_agenda(target_date: Optional[str] = None, db: Session = Depe
         else:
             target_date_obj = date.today()
         
-        # Get appointments for the day
-        appointments = ConsultationService.get_consultations_by_date(db, target_date_obj)
+        # Get appointments for the day using AppointmentService
+        appointments = AppointmentService.get_appointments(
+            db, 
+            start_date=target_date_obj, 
+            end_date=target_date_obj
+        )
         
         agenda_items = []
-        for consultation in appointments:
+        for appointment in appointments:
+            # Get patient name
+            patient_name = f"{appointment.patient.first_name} {appointment.patient.paternal_surname}" if appointment.patient else "Unknown"
+            
             agenda_items.append({
-                "id": consultation.id,
-                "patient_id": consultation.patient_id,
-                "patient_name": consultation.patient_name or "Paciente sin nombre",
-                "date_time": consultation.date.isoformat() if consultation.date else "",
-                "appointment_type": "consulta",
-                "reason": consultation.chief_complaint or "Consulta general",
-                "notes": consultation.history_present_illness or "",
-                "duration_minutes": 30,  # Default duration
-                "status": "programada"
+                "id": appointment.id,
+                "patient_id": appointment.patient_id,
+                "patient_name": patient_name,
+                "date_time": format_mexico_city_datetime(appointment.appointment_date),
+                "appointment_date": format_mexico_city_datetime(appointment.appointment_date),
+                "end_time": format_mexico_city_datetime(appointment.end_time) if appointment.end_time else None,
+                "appointment_type": appointment.appointment_type,
+                "reason": appointment.reason,
+                "notes": appointment.notes or "",
+                "duration_minutes": appointment.duration_minutes,
+                "status": appointment.status,
+                "priority": appointment.priority,
+                "created_at": format_mexico_city_datetime(appointment.created_at)
             })
         
         return agenda_items
@@ -939,35 +1144,53 @@ async def create_appointment(appointment_data: dict, db: Session = Depends(get_d
     try:
         from datetime import datetime
         
-        # Create consultation from appointment data
-        consultation_data = {
+        # Extract appointment date from either field name
+        appointment_date_str = appointment_data.get("appointment_date") or appointment_data.get("date_time")
+        if not appointment_date_str:
+            raise HTTPException(status_code=400, detail="appointment_date or date_time is required")
+        
+        # Parse datetime and convert to Mexico City timezone
+        appointment_date = datetime.fromisoformat(appointment_date_str.replace('Z', '+00:00'))
+        appointment_date = convert_to_mexico_city(appointment_date)
+        
+        # Create appointment using the proper appointment service
+        appointment_create_data = {
             "patient_id": appointment_data.get("patient_id"),
-            "date": datetime.fromisoformat(appointment_data.get("date_time")),
-            "chief_complaint": appointment_data.get("reason", "Cita programada"),
-            "history_present_illness": appointment_data.get("notes", ""),
-            # Campos obligatorios con valores por defecto para citas de agenda
-            "family_history": "Pendiente de evaluación en consulta",
-            "personal_pathological_history": "Pendiente de evaluación en consulta",
-            "personal_non_pathological_history": "Pendiente de evaluación en consulta",
-            "physical_examination": "Pendiente de evaluación en consulta",
-            "primary_diagnosis": "Pendiente de evaluación médica",
-            "treatment_plan": "A determinar durante la consulta",
-            "follow_up_instructions": "Pendiente de definir en consulta",
-            "doctor_name": "Sistema de Agenda - Médico Asignado",
-            "doctor_professional_license": "AGENDA-SYSTEM-001",
-            "created_by": "Sistema de Agenda",
-            "created_at": datetime.utcnow()
+            "appointment_date": appointment_date,
+            "appointment_type": appointment_data.get("appointment_type", "consultation"),
+            "reason": appointment_data.get("reason", "Cita programada"),
+            "notes": appointment_data.get("notes", ""),
+            "duration_minutes": appointment_data.get("duration_minutes", 30),
+            "status": appointment_data.get("status", "scheduled"),
+            "priority": appointment_data.get("priority", "normal"),
+            "preparation_instructions": appointment_data.get("preparation_instructions"),
+            "confirmation_required": appointment_data.get("confirmation_required", False),
+            "estimated_cost": appointment_data.get("estimated_cost"),
+            "insurance_covered": appointment_data.get("insurance_covered", False),
+            "room_number": appointment_data.get("room_number"),
+            "equipment_needed": appointment_data.get("equipment_needed"),
+            "created_by": "Sistema de Agenda"
         }
         
-        new_consultation = ConsultationService.create_consultation(db, consultation_data)
+        new_appointment = AppointmentService.create_appointment(db, appointment_create_data)
+        
+        # Get patient name for response
+        patient_name = f"{new_appointment.patient.first_name} {new_appointment.patient.paternal_surname}" if new_appointment.patient else "Unknown"
         
         return {
-            "id": new_consultation.id,
-            "patient_id": new_consultation.patient_id,
-            "date_time": new_consultation.date.isoformat() if new_consultation.date else "",
-            "reason": new_consultation.chief_complaint,
-            "status": "programada",
-            "created_at": new_consultation.created_at.isoformat() if new_consultation.created_at else ""
+            "id": new_appointment.id,
+            "patient_id": new_appointment.patient_id,
+            "patient_name": patient_name,
+            "date_time": format_mexico_city_datetime(new_appointment.appointment_date),
+            "appointment_date": format_mexico_city_datetime(new_appointment.appointment_date),
+            "end_time": format_mexico_city_datetime(new_appointment.end_time) if new_appointment.end_time else None,
+            "appointment_type": new_appointment.appointment_type,
+            "reason": new_appointment.reason,
+            "notes": new_appointment.notes,
+            "duration_minutes": new_appointment.duration_minutes,
+            "status": new_appointment.status,
+            "priority": new_appointment.priority,
+            "created_at": format_mexico_city_datetime(new_appointment.created_at)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating appointment: {str(e)}")
@@ -978,28 +1201,61 @@ async def update_appointment(appointment_id: str, appointment_data: dict, db: Se
     try:
         from datetime import datetime
         
-        # Update consultation (appointments are stored as consultations)
-        update_data = {
-            "date": datetime.fromisoformat(appointment_data.get("date_time")) if appointment_data.get("date_time") else None,
-            "chief_complaint": appointment_data.get("reason"),
-            "history_present_illness": appointment_data.get("notes"),
-            "updated_at": datetime.utcnow()
-        }
+        # Extract appointment date from either field name
+        appointment_date_str = appointment_data.get("appointment_date") or appointment_data.get("date_time")
         
-        # Remove None values
-        update_data = {k: v for k, v in update_data.items() if v is not None}
+        # Prepare update data for appointment service
+        update_data = {}
         
-        updated_consultation = ConsultationService.update_consultation(db, appointment_id, update_data)
+        if appointment_date_str:
+            appointment_date = datetime.fromisoformat(appointment_date_str.replace('Z', '+00:00'))
+            update_data["appointment_date"] = convert_to_mexico_city(appointment_date)
         
-        if not updated_consultation:
+        if "reason" in appointment_data:
+            update_data["reason"] = appointment_data["reason"]
+        if "notes" in appointment_data:
+            update_data["notes"] = appointment_data["notes"]
+        if "duration_minutes" in appointment_data:
+            update_data["duration_minutes"] = appointment_data["duration_minutes"]
+        if "status" in appointment_data:
+            update_data["status"] = appointment_data["status"]
+        if "priority" in appointment_data:
+            update_data["priority"] = appointment_data["priority"]
+        if "preparation_instructions" in appointment_data:
+            update_data["preparation_instructions"] = appointment_data["preparation_instructions"]
+        if "confirmation_required" in appointment_data:
+            update_data["confirmation_required"] = appointment_data["confirmation_required"]
+        if "estimated_cost" in appointment_data:
+            update_data["estimated_cost"] = appointment_data["estimated_cost"]
+        if "insurance_covered" in appointment_data:
+            update_data["insurance_covered"] = appointment_data["insurance_covered"]
+        if "room_number" in appointment_data:
+            update_data["room_number"] = appointment_data["room_number"]
+        if "equipment_needed" in appointment_data:
+            update_data["equipment_needed"] = appointment_data["equipment_needed"]
+        
+        updated_appointment = AppointmentService.update_appointment(db, appointment_id, update_data)
+        
+        if not updated_appointment:
             raise HTTPException(status_code=404, detail="Appointment not found")
         
+        # Get patient name for response
+        patient_name = f"{updated_appointment.patient.first_name} {updated_appointment.patient.paternal_surname}" if updated_appointment.patient else "Unknown"
+        
         return {
-            "id": updated_consultation.id,
-            "patient_id": updated_consultation.patient_id,
-            "date_time": updated_consultation.date.isoformat() if updated_consultation.date else "",
-            "reason": updated_consultation.chief_complaint,
-            "status": "actualizada"
+            "id": updated_appointment.id,
+            "patient_id": updated_appointment.patient_id,
+            "patient_name": patient_name,
+            "date_time": format_mexico_city_datetime(updated_appointment.appointment_date),
+            "appointment_date": format_mexico_city_datetime(updated_appointment.appointment_date),
+            "end_time": format_mexico_city_datetime(updated_appointment.end_time) if updated_appointment.end_time else None,
+            "appointment_type": updated_appointment.appointment_type,
+            "reason": updated_appointment.reason,
+            "notes": updated_appointment.notes,
+            "duration_minutes": updated_appointment.duration_minutes,
+            "status": updated_appointment.status,
+            "priority": updated_appointment.priority,
+            "updated_at": format_mexico_city_datetime(updated_appointment.updated_at) if updated_appointment.updated_at else None
         }
     except HTTPException:
         raise
@@ -1020,6 +1276,306 @@ async def delete_appointment(appointment_id: str, db: Session = Depends(get_db))
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting appointment: {str(e)}")
+
+# ============================================================================
+# APPOINTMENT/AGENDA ENDPOINTS
+# ============================================================================
+
+@app.get("/api/appointments", response_model=List[AppointmentResponse])
+async def get_appointments(
+    skip: int = 0,
+    limit: int = 100,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    status: Optional[str] = None,
+    patient_id: Optional[str] = None,
+    doctor_id: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Get appointments with filters"""
+    try:
+        # Parse dates
+        start_date_obj = None
+        end_date_obj = None
+        if start_date:
+            start_date_obj = datetime.fromisoformat(start_date).date()
+        if end_date:
+            end_date_obj = datetime.fromisoformat(end_date).date()
+        
+        appointments = AppointmentService.get_appointments(
+            db, skip=skip, limit=limit,
+            start_date=start_date_obj, end_date=end_date_obj,
+            status=status, patient_id=patient_id, doctor_id=doctor_id
+        )
+        
+        # Format response
+        response = []
+        for apt in appointments:
+            patient_name = f"{apt.patient.first_name} {apt.patient.paternal_surname}" if apt.patient else "Unknown"
+            doctor_name = apt.doctor.full_name if apt.doctor else apt.doctor_name or "Not assigned"
+            
+            response.append({
+                "id": apt.id,
+                "patient_id": apt.patient_id,
+                "patient_name": patient_name,
+                "doctor_id": apt.doctor_id,
+                "doctor_name": doctor_name,
+                "appointment_date": apt.appointment_date.isoformat(),
+                "end_time": apt.end_time.isoformat() if apt.end_time else None,
+                "duration_minutes": apt.duration_minutes,
+                "appointment_type": apt.appointment_type,
+                "status": apt.status,
+                "priority": apt.priority or "normal",
+                "reason": apt.reason,
+                "notes": apt.notes,
+                "preparation_instructions": apt.preparation_instructions,
+                "reminder_sent": apt.reminder_sent or False,
+                "confirmation_required": apt.confirmation_required or False,
+                "confirmed_at": apt.confirmed_at.isoformat() if apt.confirmed_at else None,
+                "estimated_cost": apt.estimated_cost,
+                "insurance_covered": apt.insurance_covered or False,
+                "room_number": apt.room_number,
+                "equipment_needed": apt.equipment_needed,
+                "created_at": apt.created_at.isoformat(),
+                "updated_at": apt.updated_at.isoformat() if apt.updated_at else None,
+                "cancelled_reason": apt.cancelled_reason,
+                "cancelled_at": apt.cancelled_at.isoformat() if apt.cancelled_at else None
+            })
+        
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching appointments: {str(e)}")
+
+@app.post("/api/appointments", response_model=AppointmentResponse)
+async def create_appointment_new(appointment: AppointmentCreate, db: Session = Depends(get_db)):
+    """Create a new appointment"""
+    try:
+        appointment_data = appointment.dict()
+        appointment_data["created_at"] = datetime.utcnow()
+        
+        new_appointment = AppointmentService.create_appointment(db, appointment_data)
+        
+        # Get patient name
+        patient_name = f"{new_appointment.patient.first_name} {new_appointment.patient.paternal_surname}" if new_appointment.patient else "Unknown"
+        doctor_name = new_appointment.doctor.full_name if new_appointment.doctor else new_appointment.doctor_name or "Not assigned"
+        
+        return {
+            "id": new_appointment.id,
+            "patient_id": new_appointment.patient_id,
+            "patient_name": patient_name,
+            "doctor_id": new_appointment.doctor_id,
+            "doctor_name": doctor_name,
+            "appointment_date": new_appointment.appointment_date.isoformat(),
+            "end_time": new_appointment.end_time.isoformat() if new_appointment.end_time else None,
+            "duration_minutes": new_appointment.duration_minutes,
+            "appointment_type": new_appointment.appointment_type,
+            "status": new_appointment.status,
+            "priority": new_appointment.priority or "normal",
+            "reason": new_appointment.reason,
+            "notes": new_appointment.notes,
+            "preparation_instructions": new_appointment.preparation_instructions,
+            "reminder_sent": new_appointment.reminder_sent or False,
+            "confirmation_required": new_appointment.confirmation_required or False,
+            "confirmed_at": new_appointment.confirmed_at.isoformat() if new_appointment.confirmed_at else None,
+            "estimated_cost": new_appointment.estimated_cost,
+            "insurance_covered": new_appointment.insurance_covered or False,
+            "room_number": new_appointment.room_number,
+            "equipment_needed": new_appointment.equipment_needed,
+            "created_at": new_appointment.created_at.isoformat(),
+            "updated_at": new_appointment.updated_at.isoformat() if new_appointment.updated_at else None,
+            "cancelled_reason": new_appointment.cancelled_reason,
+            "cancelled_at": new_appointment.cancelled_at.isoformat() if new_appointment.cancelled_at else None
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating appointment: {str(e)}")
+
+@app.get("/api/appointments/{appointment_id}", response_model=AppointmentResponse)
+async def get_appointment(appointment_id: str, db: Session = Depends(get_db)):
+    """Get a specific appointment"""
+    try:
+        appointment = AppointmentService.get_appointment_by_id(db, appointment_id)
+        if not appointment:
+            raise HTTPException(status_code=404, detail="Appointment not found")
+        
+        patient_name = f"{appointment.patient.first_name} {appointment.patient.paternal_surname}" if appointment.patient else "Unknown"
+        doctor_name = appointment.doctor.full_name if appointment.doctor else appointment.doctor_name or "Not assigned"
+        
+        return {
+            "id": appointment.id,
+            "patient_id": appointment.patient_id,
+            "patient_name": patient_name,
+            "doctor_id": appointment.doctor_id,
+            "doctor_name": doctor_name,
+            "appointment_date": appointment.appointment_date.isoformat(),
+            "end_time": appointment.end_time.isoformat() if appointment.end_time else None,
+            "duration_minutes": appointment.duration_minutes,
+            "appointment_type": appointment.appointment_type,
+            "status": appointment.status,
+            "priority": appointment.priority or "normal",
+            "reason": appointment.reason,
+            "notes": appointment.notes,
+            "preparation_instructions": appointment.preparation_instructions,
+            "reminder_sent": appointment.reminder_sent or False,
+            "confirmation_required": appointment.confirmation_required or False,
+            "confirmed_at": appointment.confirmed_at.isoformat() if appointment.confirmed_at else None,
+            "estimated_cost": appointment.estimated_cost,
+            "insurance_covered": appointment.insurance_covered or False,
+            "room_number": appointment.room_number,
+            "equipment_needed": appointment.equipment_needed,
+            "created_at": appointment.created_at.isoformat(),
+            "updated_at": appointment.updated_at.isoformat() if appointment.updated_at else None,
+            "cancelled_reason": appointment.cancelled_reason,
+            "cancelled_at": appointment.cancelled_at.isoformat() if appointment.cancelled_at else None
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching appointment: {str(e)}")
+
+@app.put("/api/appointments/{appointment_id}", response_model=AppointmentResponse)
+async def update_appointment_new(appointment_id: str, appointment: AppointmentUpdate, db: Session = Depends(get_db)):
+    """Update an existing appointment"""
+    try:
+        update_data = appointment.dict(exclude_unset=True)
+        update_data["updated_at"] = datetime.utcnow()
+        
+        updated_appointment = AppointmentService.update_appointment(db, appointment_id, update_data)
+        if not updated_appointment:
+            raise HTTPException(status_code=404, detail="Appointment not found")
+        
+        patient_name = f"{updated_appointment.patient.first_name} {updated_appointment.patient.paternal_surname}" if updated_appointment.patient else "Unknown"
+        doctor_name = updated_appointment.doctor.full_name if updated_appointment.doctor else updated_appointment.doctor_name or "Not assigned"
+        
+        return {
+            "id": updated_appointment.id,
+            "patient_id": updated_appointment.patient_id,
+            "patient_name": patient_name,
+            "doctor_id": updated_appointment.doctor_id,
+            "doctor_name": doctor_name,
+            "appointment_date": updated_appointment.appointment_date.isoformat(),
+            "end_time": updated_appointment.end_time.isoformat() if updated_appointment.end_time else None,
+            "duration_minutes": updated_appointment.duration_minutes,
+            "appointment_type": updated_appointment.appointment_type,
+            "status": updated_appointment.status,
+            "priority": updated_appointment.priority or "normal",
+            "reason": updated_appointment.reason,
+            "notes": updated_appointment.notes,
+            "preparation_instructions": updated_appointment.preparation_instructions,
+            "reminder_sent": updated_appointment.reminder_sent or False,
+            "confirmation_required": updated_appointment.confirmation_required or False,
+            "confirmed_at": updated_appointment.confirmed_at.isoformat() if updated_appointment.confirmed_at else None,
+            "estimated_cost": updated_appointment.estimated_cost,
+            "insurance_covered": updated_appointment.insurance_covered or False,
+            "room_number": updated_appointment.room_number,
+            "equipment_needed": updated_appointment.equipment_needed,
+            "created_at": updated_appointment.created_at.isoformat(),
+            "updated_at": updated_appointment.updated_at.isoformat() if updated_appointment.updated_at else None,
+            "cancelled_reason": updated_appointment.cancelled_reason,
+            "cancelled_at": updated_appointment.cancelled_at.isoformat() if updated_appointment.cancelled_at else None
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating appointment: {str(e)}")
+
+@app.delete("/api/appointments/{appointment_id}")
+async def delete_appointment_new(appointment_id: str, cancelled_reason: Optional[str] = None, db: Session = Depends(get_db)):
+    """Cancel an appointment"""
+    try:
+        # Update with cancellation info
+        cancel_data = {
+            "status": "cancelled",
+            "cancelled_reason": cancelled_reason or "Cancelled by user",
+            "cancelled_at": datetime.utcnow()
+        }
+        
+        success = AppointmentService.update_appointment(db, appointment_id, cancel_data)
+        if not success:
+            raise HTTPException(status_code=404, detail="Appointment not found")
+        
+        return {"message": "Appointment cancelled successfully", "id": appointment_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error cancelling appointment: {str(e)}")
+
+@app.get("/api/schedule/available-slots")
+async def get_available_slots_new(
+    target_date: Optional[str] = None,
+    doctor_id: Optional[str] = None,
+    slot_duration: int = 30,
+    db: Session = Depends(get_db)
+):
+    """Get available time slots for appointments"""
+    try:
+        # Parse target date or use today
+        if target_date:
+            target_date_obj = datetime.fromisoformat(target_date).date()
+        else:
+            target_date_obj = date.today()
+        
+        slots = AppointmentService.get_available_time_slots(
+            db, target_date_obj, doctor_id, slot_duration
+        )
+        
+        return {
+            "date": target_date_obj.isoformat(),
+            "slots": [
+                {
+                    "time": slot["time"],
+                    "available": slot["available"],
+                    "appointment_id": slot["appointment_id"],
+                    "patient_name": slot["patient_name"],
+                    "reason": slot["reason"]
+                }
+                for slot in slots
+            ],
+            "total_slots": len(slots),
+            "available_slots": len([s for s in slots if s["available"]])
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching available slots: {str(e)}")
+
+@app.get("/api/schedule/doctor/{doctor_id}")
+async def get_doctor_schedule(
+    doctor_id: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Get doctor's schedule for a date range"""
+    try:
+        # Default to current week if no dates provided
+        if not start_date:
+            today = date.today()
+            start_date_obj = today - timedelta(days=today.weekday())
+        else:
+            start_date_obj = datetime.fromisoformat(start_date).date()
+        
+        if not end_date:
+            end_date_obj = start_date_obj + timedelta(days=6)
+        else:
+            end_date_obj = datetime.fromisoformat(end_date).date()
+        
+        schedule = AppointmentService.get_doctor_schedule(db, doctor_id, start_date_obj, end_date_obj)
+        
+        return {
+            "doctor_id": doctor_id,
+            "start_date": start_date_obj.isoformat(),
+            "end_date": end_date_obj.isoformat(),
+            "schedule": schedule
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching doctor schedule: {str(e)}")
+
+@app.get("/api/appointments/stats")
+async def get_appointment_stats(doctor_id: Optional[str] = None, db: Session = Depends(get_db)):
+    """Get appointment statistics"""
+    try:
+        stats = AppointmentService.get_appointment_stats(db, doctor_id)
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching appointment stats: {str(e)}")
 
 # ============================================================================
 # MAIN APPLICATION

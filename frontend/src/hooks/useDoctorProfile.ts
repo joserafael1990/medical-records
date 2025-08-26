@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { DoctorProfile, DoctorFormData, FieldErrors } from '../types';
 import { API_CONFIG } from '../constants';
+import { apiService } from '../services/api';
 
 interface UseDoctorProfileReturn {
   // State
@@ -211,26 +212,31 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
   // ============================================================================
 
   const fetchProfile = useCallback(async () => {
+    // Prevent multiple simultaneous requests
+    if (isLoading) return;
+    
     setIsLoading(true);
+    setFormErrorMessage('');
+    
     try {
-      const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.DOCTOR_PROFILE}`);
-      if (response.ok) {
-        const data = await response.json();
-        setDoctorProfile(data);
-      } else if (response.status === 404) {
-        // Profile doesn't exist yet
+      const data = await apiService.getDoctorProfile();
+      setDoctorProfile(data);
+    } catch (error: any) {
+      // Handle 404 specifically (profile doesn't exist yet)
+      if (error.response?.status === 404) {
         setDoctorProfile(null);
       } else {
-        throw new Error('Error fetching profile');
+        // Log error for debugging in development
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Error fetching doctor profile:', error);
+        }
+        setFormErrorMessage('Error al cargar el perfil del médico');
+        setDoctorProfile(null);
       }
-    } catch (error) {
-      console.error('Error fetching doctor profile:', error);
-      // For now, simulate no profile exists
-      setDoctorProfile(null);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, []); // ✅ Empty dependency array - only created once
 
   const saveProfile = async (data: DoctorFormData): Promise<void> => {
     const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.DOCTOR_PROFILE}`;
@@ -400,10 +406,10 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
   // EFFECTS
   // ============================================================================
 
-  // Load profile on component mount
+  // Load profile on component mount (only once)
   useEffect(() => {
     fetchProfile();
-  }, [fetchProfile]);
+  }, []); // ✅ Only run on mount, not when fetchProfile changes
 
   // ============================================================================
   // RETURN
