@@ -59,7 +59,7 @@ export const VALIDATION_RULES = {
       'first_name',
       'paternal_surname', 
       'maternal_surname',
-      'date_of_birth',
+      'birth_date',
       'gender',
       'address'
       // Antecedentes movidos a CONSULTATION según NOM-004 (parte de evaluación clínica)
@@ -99,15 +99,21 @@ export const MEDICAL_CONSTANTS = {
   }
 } as const;
 
-// Lista COMPLETA de especialidades médicas reconocidas en México
+// Lista COMPLETA de especialidades y profesiones de salud reconocidas en México
 export const MEDICAL_SPECIALTIES = [
-  // Especialidades Básicas
+  // Profesiones de Salud Básicas
   'Medicina General',
   'Medicina Familiar',
   'Medicina Interna',
   'Cirugía General',
   'Pediatría',
   'Ginecología y Obstetricia',
+  'Cirujano Dentista',
+  'Psicología',
+  'Fisioterapia',
+  'Terapia Física y Rehabilitación',
+  'Terapia Ocupacional',
+  'Terapia del Lenguaje',
   
   // Especialidades Médicas
   'Alergia e Inmunología',

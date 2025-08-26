@@ -75,7 +75,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
     if (doctorProfile) {
       const requiredFields = [
         'first_name', 'paternal_surname', 'maternal_surname', 'email', 'phone',
-        'professional_license', 'university', 'specialty', 'medical_school',
+        'professional_license', 'university', 'specialty',
         'office_address', 'office_city', 'office_state'
       ];
       
@@ -104,7 +104,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
       'professional_license': 'Cédula Profesional',
       'university': 'Universidad',
       'specialty': 'Especialidad',
-      'medical_school': 'Escuela de Medicina',
+      // 'medical_school': 'Escuela de Medicina', // removed per user request
       'office_address': 'Dirección del Consultorio',
       'office_city': 'Ciudad',
       'office_state': 'Estado'
@@ -349,23 +349,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                     </Typography>
                   </Box>
                   
-                  <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                      Escuela de Medicina
-                    </Typography>
-                    <Typography variant="body1">
-                      {doctorProfile?.medical_school || 'No especificada'}
-                    </Typography>
-                  </Box>
-                  
-                  <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                      Hospital de Internado
-                    </Typography>
-                    <Typography variant="body1">
-                      {doctorProfile?.internship_hospital || 'No especificado'}
-                    </Typography>
-                  </Box>
+                  {/* medical_school and internship_hospital fields removed per user request */}
                 </Box>
               </CardContent>
             </Card>

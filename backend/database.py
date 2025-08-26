@@ -1,7 +1,7 @@
 """
 Database configuration and models for Historias Clínicas
 """
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Boolean, ForeignKey, JSON, ARRAY
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Date, Text, Boolean, ForeignKey, JSON, ARRAY
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -39,7 +39,7 @@ class Patient(Base):
     
     # Personal Information
     curp = Column(String(18), unique=True)
-    birth_date = Column(DateTime, nullable=False)
+    birth_date = Column(Date, nullable=False)
     gender = Column(String(20), nullable=False)
     civil_status = Column(String(20))
     nationality = Column(String(50), default="mexicana")
@@ -90,7 +90,7 @@ class DoctorProfile(Base):
     maternal_surname = Column(String(100))
     email = Column(String(100), nullable=False)
     phone = Column(String(20), nullable=False)
-    birth_date = Column(DateTime, nullable=False)
+    birth_date = Column(Date, nullable=False)
     
     # Professional Information (NOM-004 Required)
     professional_license = Column(String(20), nullable=False, unique=True)
@@ -113,13 +113,11 @@ class DoctorProfile(Base):
     office_country = Column(String(50), default="México")
     
     # Academic Information (NOM-004 Optional but recommended)
-    medical_school = Column(String(200))
-    internship_hospital = Column(String(200))
-    residency_hospital = Column(String(200))
+    # medical_school, internship_hospital, residency_hospital removed per user request
     
-    # Certifications (Arrays for multiple values)
-    board_certifications = Column(ARRAY(String))
-    professional_memberships = Column(ARRAY(String))
+    # Certifications removed per user request
+    # board_certifications = Column(ARRAY(String))
+    # professional_memberships = Column(ARRAY(String))
     
     # Digital files
     digital_signature = Column(String(500))  # Path to file

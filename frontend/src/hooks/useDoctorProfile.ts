@@ -56,13 +56,11 @@ const initialFormData: DoctorFormData = {
   office_country: 'México',
   
   // Información Adicional
-  medical_school: '',
-  internship_hospital: '',
-  residency_hospital: '',
+  // medical_school, internship_hospital, residency_hospital removed per user request
   
-  // Certificaciones
-  board_certifications: '',
-  professional_memberships: ''
+  // Certificaciones removed per user request
+  // board_certifications: '',
+  // professional_memberships: ''
 };
 
 // ============================================================================
@@ -176,11 +174,7 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
       }
     }
     
-    if (!isEditMode || data.medical_school?.trim()) {
-      if (!data.medical_school?.trim()) {
-        errors.medical_school = 'La escuela de medicina es requerida';
-      }
-    }
+    // medical_school validation removed per user request
 
     // Información del Consultorio - Solo validar si está presente o en modo creación
     if (!isEditMode || data.office_address?.trim()) {
@@ -246,12 +240,7 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
     let transformedData: any = {
       ...data,
       birth_date: formatDateForBackend(data.birth_date),
-      board_certifications: data.board_certifications 
-        ? data.board_certifications.split(',').map(cert => cert.trim()).filter(cert => cert.length > 0)
-        : [],
-      professional_memberships: data.professional_memberships 
-        ? data.professional_memberships.split(',').map(membership => membership.trim()).filter(membership => membership.length > 0)
-        : [],
+      // board_certifications and professional_memberships removed per user request
       created_by: doctorProfile 
         ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name || ''} ${doctorProfile.paternal_surname || ''}`.trim()
         : "Usuario"
@@ -348,15 +337,8 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
         office_state: doctorProfile.office_state || '',
         office_postal_code: doctorProfile.office_postal_code || '',
         office_country: doctorProfile.office_country || 'México',
-        medical_school: doctorProfile.medical_school || '',
-        internship_hospital: doctorProfile.internship_hospital || '',
-        residency_hospital: doctorProfile.residency_hospital || '',
-        board_certifications: Array.isArray(doctorProfile.board_certifications) 
-          ? doctorProfile.board_certifications.join(', ') 
-          : doctorProfile.board_certifications || '',
-        professional_memberships: Array.isArray(doctorProfile.professional_memberships) 
-          ? doctorProfile.professional_memberships.join(', ') 
-          : doctorProfile.professional_memberships || ''
+        // medical_school, internship_hospital, residency_hospital removed per user request
+        // board_certifications and professional_memberships removed per user request
       });
       setIsEditing(true);
     }

@@ -111,7 +111,7 @@ class PatientBase(BaseModel):
     
     # Personal Information
     curp: Optional[str] = None
-    birth_date: datetime
+    birth_date: date
     gender: str
     civil_status: Optional[str] = None
     nationality: str = "mexicana"
@@ -143,8 +143,31 @@ class PatientBase(BaseModel):
 class PatientCreate(PatientBase):
     pass
 
-class PatientUpdate(PatientBase):
-    pass
+class PatientUpdate(BaseModel):
+    """Model for updating patient - all fields are optional"""
+    first_name: Optional[str] = None
+    paternal_surname: Optional[str] = None
+    maternal_surname: Optional[str] = None
+    birth_date: Optional[date] = None
+    gender: Optional[str] = None
+    curp: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[EmailStr] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    postal_code: Optional[str] = None
+    country: Optional[str] = None
+    emergency_contact_name: Optional[str] = None
+    emergency_contact_phone: Optional[str] = None
+    emergency_contact_relationship: Optional[str] = None
+    insurance_provider: Optional[str] = None
+    insurance_number: Optional[str] = None
+    blood_type: Optional[str] = None
+    allergies: Optional[str] = None
+    chronic_conditions: Optional[str] = None
+    current_medications: Optional[str] = None
+    created_by: Optional[str] = None
 
 class PatientResponse(PatientBase):
     id: str
@@ -162,7 +185,7 @@ class DoctorProfileBase(BaseModel):
     maternal_surname: Optional[str] = None
     email: str
     phone: str
-    birth_date: datetime
+    birth_date: date
     
     # Professional Information (NOM-004 Required)
     professional_license: str
@@ -185,13 +208,11 @@ class DoctorProfileBase(BaseModel):
     office_country: str = "México"
     
     # Academic Information (NOM-004 Optional but recommended)
-    medical_school: Optional[str] = None
-    internship_hospital: Optional[str] = None
-    residency_hospital: Optional[str] = None
+    # medical_school, internship_hospital, residency_hospital removed per user request
     
-    # Certifications (Arrays for multiple values)
-    board_certifications: Optional[List[str]] = None
-    professional_memberships: Optional[List[str]] = None
+    # Certifications removed per user request
+    # board_certifications: Optional[List[str]] = None
+    # professional_memberships: Optional[List[str]] = None
     
     # Digital files
     digital_signature: Optional[str] = None
@@ -226,11 +247,9 @@ class DoctorProfileUpdate(BaseModel):
     office_state: Optional[str] = None
     office_postal_code: Optional[str] = None
     office_country: Optional[str] = None
-    medical_school: Optional[str] = None
-    internship_hospital: Optional[str] = None
-    residency_hospital: Optional[str] = None
-    board_certifications: Optional[List[str]] = None
-    professional_memberships: Optional[List[str]] = None
+    # medical_school, internship_hospital, residency_hospital removed per user request
+    # board_certifications: Optional[List[str]] = None
+    # professional_memberships: Optional[List[str]] = None
     digital_signature: Optional[str] = None
     professional_seal: Optional[str] = None
     created_by: Optional[str] = None
@@ -432,6 +451,106 @@ async def create_patient(patient: PatientCreate, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating patient: {str(e)}")
 
+@app.get("/api/patients/{patient_id}", response_model=PatientResponse)
+async def get_patient(patient_id: str, db: Session = Depends(get_db)):
+    """Get a patient by ID"""
+    try:
+        patient = PatientService.get_patient(db, patient_id)
+        if not patient:
+            raise HTTPException(status_code=404, detail="Patient not found")
+        
+        patient_dict = {
+            "id": patient.id,
+            "full_name": f"{patient.first_name} {patient.paternal_surname} {patient.maternal_surname or ''}".strip(),
+            "first_name": patient.first_name,
+            "paternal_surname": patient.paternal_surname,
+            "maternal_surname": patient.maternal_surname or "",
+            "birth_date": patient.birth_date.isoformat() if patient.birth_date else "",
+            "gender": patient.gender or "",
+            "curp": patient.curp or "",
+            "phone": patient.phone or "",
+            "email": patient.email or "",
+            "address": patient.address or "",
+            "city": patient.city or "",
+            "state": patient.state or "",
+            "postal_code": patient.postal_code or "",
+            "country": patient.country or "México",
+            "emergency_contact_name": patient.emergency_contact_name or "",
+            "emergency_contact_phone": patient.emergency_contact_phone or "",
+            "emergency_contact_relationship": patient.emergency_contact_relationship or "",
+            "insurance_provider": patient.insurance_provider or "",
+            "insurance_number": patient.insurance_number or "",
+            "blood_type": patient.blood_type or "",
+            "allergies": patient.allergies or "",
+            "chronic_conditions": patient.chronic_conditions or "",
+            "current_medications": patient.current_medications or "",
+            "total_visits": patient.total_visits or 0,
+            "is_active": patient.is_active,
+            "created_at": patient.created_at.isoformat() if patient.created_at else "",
+            "updated_at": patient.updated_at.isoformat() if patient.updated_at else None,
+            "created_by": patient.created_by or ""
+        }
+        
+        return PatientResponse(**patient_dict)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching patient: {str(e)}")
+
+@app.put("/api/patients/{patient_id}", response_model=PatientResponse)
+async def update_patient(patient_id: str, patient: PatientUpdate, db: Session = Depends(get_db)):
+    """Update an existing patient"""
+    try:
+        # Verificar que el paciente existe
+        existing_patient = PatientService.get_patient(db, patient_id)
+        if not existing_patient:
+            raise HTTPException(status_code=404, detail="Patient not found")
+        
+        # Preparar datos para actualización
+        update_data = patient.dict(exclude_unset=True)
+        update_data["updated_at"] = datetime.utcnow()
+        
+        # Actualizar paciente
+        updated_patient = PatientService.update_patient(db, patient_id, update_data)
+        
+        patient_dict = {
+            "id": updated_patient.id,
+            "full_name": f"{updated_patient.first_name} {updated_patient.paternal_surname} {updated_patient.maternal_surname or ''}".strip(),
+            "first_name": updated_patient.first_name,
+            "paternal_surname": updated_patient.paternal_surname,
+            "maternal_surname": updated_patient.maternal_surname or "",
+            "birth_date": updated_patient.birth_date.isoformat() if updated_patient.birth_date else "",
+            "gender": updated_patient.gender or "",
+            "curp": updated_patient.curp or "",
+            "phone": updated_patient.phone or "",
+            "email": updated_patient.email or "",
+            "address": updated_patient.address or "",
+            "city": updated_patient.city or "",
+            "state": updated_patient.state or "",
+            "postal_code": updated_patient.postal_code or "",
+            "country": updated_patient.country or "México",
+            "emergency_contact_name": updated_patient.emergency_contact_name or "",
+            "emergency_contact_phone": updated_patient.emergency_contact_phone or "",
+            "emergency_contact_relationship": updated_patient.emergency_contact_relationship or "",
+            "insurance_provider": updated_patient.insurance_provider or "",
+            "insurance_number": updated_patient.insurance_number or "",
+            "blood_type": updated_patient.blood_type or "",
+            "allergies": updated_patient.allergies or "",
+            "chronic_conditions": updated_patient.chronic_conditions or "",
+            "current_medications": updated_patient.current_medications or "",
+            "total_visits": updated_patient.total_visits or 0,
+            "is_active": updated_patient.is_active,
+            "created_at": updated_patient.created_at.isoformat() if updated_patient.created_at else "",
+            "updated_at": updated_patient.updated_at.isoformat() if updated_patient.updated_at else None,
+            "created_by": updated_patient.created_by or ""
+        }
+        
+        return PatientResponse(**patient_dict)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating patient: {str(e)}")
+
 # ============================================================================
 # DOCTOR PROFILE ENDPOINTS - Essential only  
 # ============================================================================
@@ -466,11 +585,8 @@ async def get_doctor_profile(db: Session = Depends(get_db)):
         "office_state": profile.office_state,
         "office_postal_code": profile.office_postal_code or "",
         "office_country": profile.office_country or "México",
-        "medical_school": profile.medical_school or "",
-        "internship_hospital": profile.internship_hospital or "",
-        "residency_hospital": profile.residency_hospital or "",
-        "board_certifications": profile.board_certifications or [],
-        "professional_memberships": profile.professional_memberships or [],
+        # medical_school, internship_hospital, residency_hospital removed per user request
+        # board_certifications and professional_memberships removed per user request
         "digital_signature": profile.digital_signature,
         "professional_seal": profile.professional_seal,
         "full_name": profile.full_name,
@@ -487,10 +603,7 @@ async def create_doctor_profile(profile: DoctorProfileCreate, db: Session = Depe
     """Create a new doctor profile with NOM-004 compliance validation"""
     try:
         profile_data = profile.dict()
-        if isinstance(profile_data.get("board_certifications"), str):
-            profile_data["board_certifications"] = [cert.strip() for cert in profile_data["board_certifications"].split(",") if cert.strip()]
-        if isinstance(profile_data.get("professional_memberships"), str):
-            profile_data["professional_memberships"] = [member.strip() for member in profile_data["professional_memberships"].split(",") if member.strip()]
+        # board_certifications and professional_memberships processing removed per user request
         
         profile_data["created_at"] = datetime.utcnow()
         
@@ -550,10 +663,7 @@ async def update_doctor_profile(profile: DoctorProfileUpdate, db: Session = Depe
         profile_data = profile.dict(exclude_unset=True)
         
         # Handle array/string conversion for certifications and memberships
-        if isinstance(profile_data.get("board_certifications"), str):
-            profile_data["board_certifications"] = [cert.strip() for cert in profile_data["board_certifications"].split(",") if cert.strip()]
-        if isinstance(profile_data.get("professional_memberships"), str):
-            profile_data["professional_memberships"] = [member.strip() for member in profile_data["professional_memberships"].split(",") if member.strip()]
+        # board_certifications and professional_memberships processing removed per user request
         
         profile_data["updated_at"] = datetime.utcnow()
         
@@ -693,6 +803,223 @@ async def create_consultation(consultation: MedicalHistoryCreate, db: Session = 
         return ConsultationResponse(**consultation_response)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating consultation: {str(e)}")
+
+# ============================================================================
+# AGENDA ENDPOINTS - Medical Scheduling
+# ============================================================================
+
+@app.get("/api/agenda/daily")
+async def get_daily_agenda(target_date: Optional[str] = None, db: Session = Depends(get_db)):
+    """Get daily agenda - all appointments for a specific date"""
+    try:
+        from datetime import datetime, date
+        
+        # Parse target date or use today
+        if target_date:
+            target_date_obj = datetime.fromisoformat(target_date).date()
+        else:
+            target_date_obj = date.today()
+        
+        # Get appointments for the day
+        appointments = ConsultationService.get_consultations_by_date(db, target_date_obj)
+        
+        agenda_items = []
+        for consultation in appointments:
+            agenda_items.append({
+                "id": consultation.id,
+                "patient_id": consultation.patient_id,
+                "patient_name": consultation.patient_name or "Paciente sin nombre",
+                "date_time": consultation.date.isoformat() if consultation.date else "",
+                "appointment_type": "consulta",
+                "reason": consultation.chief_complaint or "Consulta general",
+                "notes": consultation.history_present_illness or "",
+                "duration_minutes": 30,  # Default duration
+                "status": "programada"
+            })
+        
+        return agenda_items
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching daily agenda: {str(e)}")
+
+@app.get("/api/agenda/weekly")
+async def get_weekly_agenda(start_date: Optional[str] = None, db: Session = Depends(get_db)):
+    """Get weekly agenda view"""
+    try:
+        from datetime import datetime, date, timedelta
+        
+        # Parse start date or use this week
+        if start_date:
+            start_date_obj = datetime.fromisoformat(start_date).date()
+        else:
+            today = date.today()
+            start_date_obj = today - timedelta(days=today.weekday())  # Monday of current week
+        
+        end_date_obj = start_date_obj + timedelta(days=6)  # Sunday
+        
+        # Get appointments for the week
+        weekly_agenda = {}
+        current_date = start_date_obj
+        
+        while current_date <= end_date_obj:
+            day_name = current_date.strftime('%A').lower()
+            appointments = ConsultationService.get_consultations_by_date(db, current_date)
+            
+            weekly_agenda[day_name] = {
+                "date": current_date.isoformat(),
+                "appointments": len(appointments),
+                "consultations": [
+                    {
+                        "id": consultation.id,
+                        "patient_name": consultation.patient_name or "Paciente",
+                        "time": "08:00",  # Default time, can be enhanced
+                        "reason": consultation.chief_complaint or "Consulta",
+                        "status": "programada"
+                    }
+                    for consultation in appointments
+                ]
+            }
+            current_date += timedelta(days=1)
+        
+        return weekly_agenda
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching weekly agenda: {str(e)}")
+
+@app.get("/api/agenda/available-slots")
+async def get_available_slots(target_date: Optional[str] = None, db: Session = Depends(get_db)):
+    """Get available time slots for appointments"""
+    try:
+        from datetime import datetime, date, time, timedelta
+        
+        # Parse target date or use today
+        if target_date:
+            target_date_obj = datetime.fromisoformat(target_date).date()
+        else:
+            target_date_obj = date.today()
+        
+        # Define working hours (8 AM to 6 PM)
+        working_hours = []
+        for hour in range(8, 18):  # 8 AM to 5 PM (last slot at 5 PM)
+            for minute in [0, 30]:  # Every 30 minutes
+                slot_time = time(hour, minute)
+                slot_datetime = datetime.combine(target_date_obj, slot_time)
+                
+                working_hours.append({
+                    "time": slot_time.strftime("%H:%M"),
+                    "datetime": slot_datetime.isoformat(),
+                    "available": True,  # For now, all slots are available
+                    "duration_minutes": 30
+                })
+        
+        # Get existing appointments to mark unavailable slots
+        appointments = ConsultationService.get_consultations_by_date(db, target_date_obj)
+        occupied_times = set()
+        
+        for appointment in appointments:
+            if appointment.date:
+                time_str = appointment.date.strftime("%H:%M")
+                occupied_times.add(time_str)
+        
+        # Mark occupied slots as unavailable
+        for slot in working_hours:
+            if slot["time"] in occupied_times:
+                slot["available"] = False
+        
+        return {
+            "date": target_date_obj.isoformat(),
+            "total_slots": len(working_hours),
+            "available_slots": len([s for s in working_hours if s["available"]]),
+            "slots": working_hours
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching available slots: {str(e)}")
+
+@app.post("/api/agenda/appointments")
+async def create_appointment(appointment_data: dict, db: Session = Depends(get_db)):
+    """Create a new appointment in the agenda"""
+    try:
+        from datetime import datetime
+        
+        # Create consultation from appointment data
+        consultation_data = {
+            "patient_id": appointment_data.get("patient_id"),
+            "date": datetime.fromisoformat(appointment_data.get("date_time")),
+            "chief_complaint": appointment_data.get("reason", "Cita programada"),
+            "history_present_illness": appointment_data.get("notes", ""),
+            # Campos obligatorios con valores por defecto para citas de agenda
+            "family_history": "Pendiente de evaluación en consulta",
+            "personal_pathological_history": "Pendiente de evaluación en consulta",
+            "personal_non_pathological_history": "Pendiente de evaluación en consulta",
+            "physical_examination": "Pendiente de evaluación en consulta",
+            "primary_diagnosis": "Pendiente de evaluación médica",
+            "treatment_plan": "A determinar durante la consulta",
+            "follow_up_instructions": "Pendiente de definir en consulta",
+            "doctor_name": "Sistema de Agenda - Médico Asignado",
+            "doctor_professional_license": "AGENDA-SYSTEM-001",
+            "created_by": "Sistema de Agenda",
+            "created_at": datetime.utcnow()
+        }
+        
+        new_consultation = ConsultationService.create_consultation(db, consultation_data)
+        
+        return {
+            "id": new_consultation.id,
+            "patient_id": new_consultation.patient_id,
+            "date_time": new_consultation.date.isoformat() if new_consultation.date else "",
+            "reason": new_consultation.chief_complaint,
+            "status": "programada",
+            "created_at": new_consultation.created_at.isoformat() if new_consultation.created_at else ""
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating appointment: {str(e)}")
+
+@app.put("/api/agenda/appointments/{appointment_id}")
+async def update_appointment(appointment_id: str, appointment_data: dict, db: Session = Depends(get_db)):
+    """Update an existing appointment"""
+    try:
+        from datetime import datetime
+        
+        # Update consultation (appointments are stored as consultations)
+        update_data = {
+            "date": datetime.fromisoformat(appointment_data.get("date_time")) if appointment_data.get("date_time") else None,
+            "chief_complaint": appointment_data.get("reason"),
+            "history_present_illness": appointment_data.get("notes"),
+            "updated_at": datetime.utcnow()
+        }
+        
+        # Remove None values
+        update_data = {k: v for k, v in update_data.items() if v is not None}
+        
+        updated_consultation = ConsultationService.update_consultation(db, appointment_id, update_data)
+        
+        if not updated_consultation:
+            raise HTTPException(status_code=404, detail="Appointment not found")
+        
+        return {
+            "id": updated_consultation.id,
+            "patient_id": updated_consultation.patient_id,
+            "date_time": updated_consultation.date.isoformat() if updated_consultation.date else "",
+            "reason": updated_consultation.chief_complaint,
+            "status": "actualizada"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating appointment: {str(e)}")
+
+@app.delete("/api/agenda/appointments/{appointment_id}")
+async def delete_appointment(appointment_id: str, db: Session = Depends(get_db)):
+    """Delete an appointment"""
+    try:
+        success = ConsultationService.delete_consultation(db, appointment_id)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Appointment not found")
+        
+        return {"message": "Appointment deleted successfully", "id": appointment_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting appointment: {str(e)}")
 
 # ============================================================================
 # MAIN APPLICATION

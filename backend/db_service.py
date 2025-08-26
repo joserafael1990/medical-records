@@ -23,9 +23,11 @@ class PatientService:
         if 'id' not in patient_data or not patient_data['id']:
             patient_data['id'] = f"PAT{str(uuid.uuid4())[:8].upper()}"
         
-        # Convert date strings to datetime objects
+        # Convert date strings to date objects
         if isinstance(patient_data.get('birth_date'), str):
-            patient_data['birth_date'] = datetime.fromisoformat(patient_data['birth_date'].replace('Z', '+00:00'))
+            from datetime import date
+            birth_date_str = patient_data['birth_date'].split('T')[0]  # Take only date part
+            patient_data['birth_date'] = date.fromisoformat(birth_date_str)
         
         patient = Patient(**patient_data)
         db.add(patient)
@@ -64,7 +66,9 @@ class PatientService:
         for key, value in patient_data.items():
             if hasattr(patient, key) and key not in ['id', 'created_at']:
                 if key == 'birth_date' and isinstance(value, str):
-                    value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                    from datetime import date
+                    birth_date_str = value.split('T')[0]  # Take only date part
+                    value = date.fromisoformat(birth_date_str)
                 setattr(patient, key, value)
         
         patient.updated_at = datetime.utcnow()
@@ -95,7 +99,9 @@ class DoctorService:
         
         # Convert date strings
         if isinstance(profile_data.get('birth_date'), str):
-            profile_data['birth_date'] = datetime.fromisoformat(profile_data['birth_date'].replace('Z', '+00:00'))
+            from datetime import date
+            birth_date_str = profile_data['birth_date'].split('T')[0]  # Take only date part
+            profile_data['birth_date'] = date.fromisoformat(birth_date_str)
         
         # Generate full name
         title = profile_data.get('title', 'Dr.')
@@ -130,7 +136,9 @@ class DoctorService:
         for key, value in profile_data.items():
             if hasattr(profile, key) and key not in ['id', 'created_at']:
                 if key == 'birth_date' and isinstance(value, str):
-                    value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                    from datetime import date
+                    birth_date_str = value.split('T')[0]  # Take only date part
+                    value = date.fromisoformat(birth_date_str)
                 setattr(profile, key, value)
         
         # Update full name
@@ -186,6 +194,35 @@ class ConsultationService:
             query = query.filter(search_filter)
         
         results = query.order_by(desc(MedicalHistory.date)).offset(skip).limit(limit).all()
+        
+        consultations = []
+        for consultation, patient in results:
+            consultation_dict = consultation.__dict__.copy()
+            consultation_dict['patient_name'] = f"{patient.first_name} {patient.paternal_surname} {patient.maternal_surname or ''}".strip()
+            consultations.append(consultation_dict)
+        
+        return consultations
+    
+    @staticmethod
+    def get_consultations_by_date(db: Session, target_date) -> List[Dict]:
+        """Get consultations for a specific date"""
+        from datetime import datetime, date
+        
+        # Convert target_date to datetime range for the day
+        if isinstance(target_date, date):
+            start_datetime = datetime.combine(target_date, datetime.min.time())
+            end_datetime = datetime.combine(target_date, datetime.max.time())
+        else:
+            start_datetime = target_date
+            end_datetime = target_date
+        
+        # Query consultations within the date range
+        results = db.query(MedicalHistory, Patient).join(
+            Patient, MedicalHistory.patient_id == Patient.id
+        ).filter(
+            MedicalHistory.date >= start_datetime,
+            MedicalHistory.date <= end_datetime
+        ).order_by(MedicalHistory.date).all()
         
         consultations = []
         for consultation, patient in results:

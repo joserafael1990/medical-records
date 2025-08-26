@@ -80,7 +80,7 @@ export const createMockPatient = (overrides = {}) => ({
   paternal_surname: 'Pérez',
   maternal_surname: 'García',
   full_name: 'Juan Pérez García',
-  date_of_birth: '1990-01-01',
+  birth_date: '1990-01-01',
   age: 34,
   gender: 'Masculino',
   phone: '5551234567',

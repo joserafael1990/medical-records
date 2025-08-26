@@ -461,7 +461,7 @@ function App() {
     first_name: '',
     paternal_surname: '',
     maternal_surname: '',
-    date_of_birth: '',
+    birth_date: '',
     gender: '',
     address: '',
     
@@ -602,7 +602,7 @@ function App() {
           municipality: 'Benito Juárez',
           state: 'Ciudad de México',
           full_name: 'María González Pérez',
-          date_of_birth: '1985-05-15',
+          birth_date: '1985-05-15',
           age: 39,
           gender: 'Femenino',
           phone: '+52 555 123 4567',
@@ -638,7 +638,7 @@ function App() {
       first_name: '',
       paternal_surname: '',
       maternal_surname: '',
-      date_of_birth: '',
+      birth_date: '',
       gender: '',
       address: '',
       
@@ -971,7 +971,7 @@ const validatePatientForm = () => {
   if (!patientFormData.first_name.trim()) errors.first_name = 'Este campo es obligatorio';
   if (!patientFormData.paternal_surname.trim()) errors.paternal_surname = 'Este campo es obligatorio';
   if (!patientFormData.maternal_surname.trim()) errors.maternal_surname = 'Este campo es obligatorio';
-  if (!patientFormData.date_of_birth) errors.date_of_birth = 'Este campo es obligatorio';
+  if (!patientFormData.birth_date) errors.birth_date = 'Este campo es obligatorio';
   if (!patientFormData.gender) errors.gender = 'Este campo es obligatorio';
   if (!patientFormData.phone.trim()) errors.phone = 'Este campo es obligatorio';
   if (!patientFormData.address.trim()) errors.address = 'Este campo es obligatorio';
@@ -1035,7 +1035,7 @@ const handlePatientSubmit = async () => {
       first_name: patientFormData.first_name,
       paternal_surname: patientFormData.paternal_surname,
       maternal_surname: patientFormData.maternal_surname,
-      date_of_birth: patientFormData.date_of_birth,
+      birth_date: patientFormData.birth_date,
       gender: patientFormData.gender,
       place_of_birth: null, // Not included in frontend form
       birth_state_code: patientFormData.birth_state_code || null,
@@ -1206,7 +1206,7 @@ const handleEditPatient = (patient: Patient) => {
     first_name: patient.first_name,
     paternal_surname: patient.paternal_surname,
     maternal_surname: patient.maternal_surname,
-    date_of_birth: patient.date_of_birth,
+    birth_date: patient.birth_date,
     gender: patient.gender,
     phone: patient.phone,
     address: patient.address,

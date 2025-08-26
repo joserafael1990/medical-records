@@ -91,7 +91,7 @@ describe('Validation Utils', () => {
       first_name: 'Juan',
       paternal_surname: 'Pérez',
       maternal_surname: 'García',
-      date_of_birth: '1990-01-01',
+      birth_date: '1990-01-01',
       gender: 'Masculino',
       address: 'Calle Principal 123',
       family_history: 'Sin antecedentes relevantes',

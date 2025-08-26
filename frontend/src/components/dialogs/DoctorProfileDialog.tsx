@@ -144,7 +144,7 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
         return formData.title && formData.first_name && formData.paternal_surname && formData.maternal_surname && 
                formData.email && formData.phone && formData.birth_date;
       case 1:
-        return formData.university && formData.graduation_year && formData.medical_school;
+        return formData.university && formData.graduation_year;
       case 2:
         return formData.professional_license && formData.specialty;
       case 3:
@@ -162,7 +162,7 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
     const requiredFields = [
       'title', 'first_name', 'paternal_surname', 'maternal_surname',
       'email', 'phone', 'birth_date',
-      'professional_license', 'specialty', 'university', 'graduation_year', 'medical_school',
+      'professional_license', 'specialty', 'university', 'graduation_year',
       'office_address', 'office_city', 'office_state'
     ];
 
@@ -301,16 +301,7 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
               placeholder="Universidad Nacional Autónoma de México"
             />
 
-            <TextField
-              label="Escuela de Medicina"
-              value={formData.medical_school || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, medical_school: e.target.value }))}
-              fullWidth
-              required
-              error={!!fieldErrors.medical_school}
-              helperText={fieldErrors.medical_school || "Facultad o escuela específica de medicina"}
-              placeholder="Facultad de Medicina"
-            />
+            {/* medical_school field removed per user request */}
 
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
               <TextField
@@ -324,22 +315,8 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
                 helperText={fieldErrors.graduation_year}
                 inputProps={{ min: 1950, max: new Date().getFullYear() }}
               />
-              <TextField
-                label="Hospital de Internado"
-                value={formData.internship_hospital || ''}
-                onChange={(e) => setFormData(prev => ({ ...prev, internship_hospital: e.target.value }))}
-                fullWidth
-                helperText="Hospital donde realizaste tu internado médico"
-              />
+              {/* internship_hospital and residency_hospital fields removed per user request */}
             </Box>
-
-            <TextField
-              label="Hospital de Residencia"
-              value={formData.residency_hospital || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, residency_hospital: e.target.value }))}
-              fullWidth
-              helperText="Hospital donde realizaste tu residencia (si aplica)"
-            />
           </Box>
         );
 
@@ -399,27 +376,7 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
 
             <Divider />
 
-            <TextField
-              label="Certificaciones del Consejo"
-              multiline
-              rows={2}
-              value={formData.board_certifications || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, board_certifications: e.target.value }))}
-              fullWidth
-              helperText="Certificaciones de consejos médicos (separadas por comas)"
-              placeholder="Consejo Mexicano de Medicina Interna, Consejo de Certificación..."
-            />
-
-            <TextField
-              label="Membresías Profesionales"
-              multiline
-              rows={2}
-              value={formData.professional_memberships || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, professional_memberships: e.target.value }))}
-              fullWidth
-              helperText="Membresías en asociaciones médicas (separadas por comas)"
-              placeholder="Colegio de Médicos, Academia Nacional de Medicina..."
-            />
+            {/* Certificaciones del Consejo y Membresías Profesionales removed per user request */}
           </Box>
         );
 

@@ -148,7 +148,7 @@ const getFieldLabel = (field: string): string => {
     first_name: 'Nombre',
     paternal_surname: 'Apellido paterno',
     maternal_surname: 'Apellido materno',
-    date_of_birth: 'Fecha de nacimiento',
+    birth_date: 'Fecha de nacimiento',
     gender: 'Género',
     address: 'Dirección',
     family_history: 'Antecedentes familiares',

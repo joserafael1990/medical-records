@@ -8,7 +8,7 @@ export interface Patient {
   paternal_surname: string;
   maternal_surname: string;
   full_name: string;
-  date_of_birth: string;
+  birth_date: string;
   age: number;
   gender: string;
   phone: string;
@@ -207,7 +207,7 @@ export interface PatientFormData {
   first_name: string;
   paternal_surname: string;
   maternal_surname: string;
-  date_of_birth: string;
+  birth_date: string;
   gender: string;
   address: string;
   birth_state_code: string;
@@ -354,13 +354,11 @@ export interface DoctorProfile {
   office_country: string;
   
   // Información Adicional NOM-004
-  medical_school: string; // Escuela de medicina
-  internship_hospital?: string; // Hospital de internado
-  residency_hospital?: string; // Hospital de residencia
+  // medical_school, internship_hospital, residency_hospital removed per user request
   
-  // Certificaciones y Membresías
-  board_certifications?: string[]; // Certificaciones del consejo
-  professional_memberships?: string[]; // Membresías profesionales
+  // Certificaciones y Membresías removed per user request
+  // board_certifications?: string[]; // Certificaciones del consejo
+  // professional_memberships?: string[]; // Membresías profesionales
   
   // Firma Digital y Sello
   digital_signature?: string;
@@ -403,13 +401,11 @@ export interface DoctorFormData {
   office_country: string;
   
   // Información Adicional
-  medical_school: string;
-  internship_hospital: string;
-  residency_hospital: string;
+  // medical_school, internship_hospital, residency_hospital removed per user request
   
-  // Certificaciones
-  board_certifications: string;
-  professional_memberships: string;
+  // Certificaciones removed per user request
+  // board_certifications: string;
+  // professional_memberships: string;
 }
 
 // ============================================================================

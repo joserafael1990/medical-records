@@ -117,11 +117,11 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
               fullWidth
               label="Fecha de Nacimiento"
               type="date"
-              value={formData.date_of_birth}
-              onChange={(e) => onFormDataChange('date_of_birth', e.target.value)}
+              value={formData.birth_date}
+              onChange={(e) => onFormDataChange('birth_date', e.target.value)}
               InputLabelProps={{ shrink: true }}
-              error={!!fieldErrors.date_of_birth}
-              helperText={fieldErrors.date_of_birth}
+              error={!!fieldErrors.birth_date}
+              helperText={fieldErrors.birth_date}
               required
             />
           </Box>
