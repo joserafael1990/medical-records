@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { DoctorProfile, DoctorFormData, FieldErrors } from '../types';
 import { apiService } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 interface UseDoctorProfileReturn {
   // State

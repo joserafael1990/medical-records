@@ -10,7 +10,7 @@ import uuid
 
 from database import (
     Patient, DoctorProfile, MedicalHistory, VitalSigns, 
-    ClinicalStudy, Appointment, get_db
+    ClinicalStudy, Appointment, User, get_db
 )
 
 class PatientService:
@@ -341,3 +341,66 @@ def get_dashboard_data(db: Session) -> Dict[str, Any]:
         'monthly_consultations': _get_monthly_consultations(db),
         'recent_consultations': consultations_list
     }
+
+class AuthService:
+    """Service for authentication operations"""
+    
+    @staticmethod
+    def create_user(db: Session, username: str, email: str, password: str, doctor_id: str) -> User:
+        """Create a new user account for a doctor"""
+        from auth import get_password_hash
+        
+        # Check if user already exists
+        existing_user = db.query(User).filter(
+            or_(User.username == username, User.email == email, User.doctor_id == doctor_id)
+        ).first()
+        
+        if existing_user:
+            raise ValueError("Username, email, or doctor already has an account")
+        
+        # Verify doctor exists
+        doctor = db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first()
+        if not doctor:
+            raise ValueError("Doctor profile not found")
+        
+        # Create user
+        user_data = {
+            'username': username,
+            'email': email,
+            'hashed_password': get_password_hash(password),
+            'doctor_id': doctor_id
+        }
+        
+        user = User(**user_data)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return user
+    
+    @staticmethod
+    def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
+        """Authenticate user with username and password"""
+        from auth import verify_password
+        
+        user = db.query(User).filter(User.username == username, User.is_active == True).first()
+        if not user:
+            return None
+        
+        if not verify_password(password, user.hashed_password):
+            return None
+        
+        # Update last login
+        user.last_login = datetime.utcnow()
+        db.commit()
+        
+        return user
+    
+    @staticmethod
+    def get_user_by_username(db: Session, username: str) -> Optional[User]:
+        """Get user by username"""
+        return db.query(User).filter(User.username == username, User.is_active == True).first()
+    
+    @staticmethod
+    def get_user_by_doctor_id(db: Session, doctor_id: str) -> Optional[User]:
+        """Get user by doctor ID"""
+        return db.query(User).filter(User.doctor_id == doctor_id, User.is_active == True).first()

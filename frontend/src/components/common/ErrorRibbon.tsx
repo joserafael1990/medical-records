@@ -64,7 +64,7 @@ export const ErrorRibbon: React.FC<ErrorRibbonProps> = ({
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <IconComponent sx={{ color: config.color }} />
-        <Typography variant="body1" sx={{ fontWeight: 500 }}>
+        <Typography variant="body1" sx={{ fontWeight: 500, whiteSpace: 'pre-line' }}>
           {message}
         </Typography>
       </Box>

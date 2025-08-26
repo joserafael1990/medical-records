@@ -27,9 +27,7 @@ import {
   Schedule as ScheduleIcon,
   AccessTime as TimeIcon,
   Event as EventIcon,
-  Notes as NotesIcon,
-  ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon
+  Notes as NotesIcon
 } from '@mui/icons-material';
 import { Patient, AppointmentFormData } from '../../types';
 import { ErrorRibbon } from '../common/ErrorRibbon';
@@ -45,6 +43,7 @@ interface AppointmentDialogProps {
   loading?: boolean;
   formErrorMessage?: string;
   fieldErrors?: Record<string, string>;
+  onFormDataChange?: (formData: AppointmentFormData) => void;
 }
 
 const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
@@ -57,11 +56,11 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
   isEditing,
   loading = false,
   formErrorMessage = '',
-  fieldErrors = {}
+  fieldErrors = {},
+  onFormDataChange
 }) => {
   const [localFormData, setLocalFormData] = useState<AppointmentFormData>(formData);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Update local form data when props change
   useEffect(() => {
@@ -78,21 +77,58 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | any
   ) => {
     const value = event.target ? event.target.value : event;
-    setLocalFormData(prev => ({
-      ...prev,
+    
+    // Debug: Log field changes
+    if (process.env.NODE_ENV === 'development' && (field === 'patient_id' || field === 'reason')) {
+      console.log(`🔄 Field change - ${field}:`, value);
+    }
+    
+    const newFormData = {
+      ...localFormData,
       [field]: value
-    }));
+    };
+    
+    setLocalFormData(newFormData);
+    
+    // Sync with parent component in real-time
+    if (onFormDataChange) {
+      onFormDataChange(newFormData);
+    }
   };
 
   const handlePatientChange = (patient: Patient | null) => {
+    // Debug: Log patient selection
+    if (process.env.NODE_ENV === 'development') {
+      console.log('👤 Patient selected:', patient?.full_name, 'ID:', patient?.id);
+    }
+    
     setSelectedPatient(patient);
-    setLocalFormData(prev => ({
-      ...prev,
+    const newFormData = {
+      ...localFormData,
       patient_id: patient?.id || ''
-    }));
+    };
+    
+    setLocalFormData(newFormData);
+    
+    // Sync with parent component in real-time
+    if (onFormDataChange) {
+      onFormDataChange(newFormData);
+    }
   };
 
   const handleSubmit = () => {
+    // Debug: Log current form state before submission
+    if (process.env.NODE_ENV === 'development') {
+      console.group('🔍 AppointmentDialog Debug');
+      console.log('📋 localFormData:', localFormData);
+      console.log('👤 selectedPatient:', selectedPatient);
+      console.log('📝 Form validation check:');
+      console.log('  - patient_id:', localFormData.patient_id);
+      console.log('  - reason:', localFormData.reason);
+      console.log('  - date_time:', localFormData.date_time);
+      console.groupEnd();
+    }
+    
     onSubmit(localFormData);
   };
 
@@ -150,6 +186,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
               <PersonIcon sx={{ fontSize: 20 }} />
               Paciente
+              <Typography component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Typography>
             </Typography>
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
               <Autocomplete
@@ -175,8 +212,8 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                     placeholder="Escribe para buscar..."
                     variant="outlined"
                     size="small"
-                    error={hasFieldError('patient_id')}
-                    helperText={getFieldError('patient_id')}
+                    error={hasFieldError('patient_id') || (!localFormData.patient_id || localFormData.patient_id.trim() === '')}
+                    helperText={getFieldError('patient_id') || ((!localFormData.patient_id || localFormData.patient_id.trim() === '') ? 'Campo requerido' : '')}
                   />
                 )}
                 loading={patients.length === 0}
@@ -285,6 +322,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
               <NotesIcon sx={{ fontSize: 20 }} />
               Motivo de la Consulta
+              <Typography component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Typography>
             </Typography>
             <TextField
               fullWidth
@@ -294,8 +332,48 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
               value={localFormData.reason || ''}
               onChange={handleFieldChange('reason')}
               size="small"
-              error={hasFieldError('reason')}
-              helperText={getFieldError('reason')}
+              error={hasFieldError('reason') || (!localFormData.reason || localFormData.reason.trim() === '')}
+              helperText={getFieldError('reason') || ((!localFormData.reason || localFormData.reason.trim() === '') ? 'Campo requerido' : '')}
+              placeholder="Ej: Consulta general, dolor de cabeza, revisión, etc."
+            />
+          </Box>
+
+          {/* Priority */}
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <EventIcon sx={{ fontSize: 20 }} />
+              Prioridad
+            </Typography>
+            <FormControl fullWidth size="small">
+              <InputLabel>Prioridad</InputLabel>
+              <Select
+                value={localFormData.priority || 'normal'}
+                onChange={handleFieldChange('priority')}
+                label="Prioridad"
+              >
+                <MenuItem value="low">Baja</MenuItem>
+                <MenuItem value="normal">Normal</MenuItem>
+                <MenuItem value="high">Alta</MenuItem>
+                <MenuItem value="urgent">Urgente</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+
+          {/* Preparation Instructions */}
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <NotesIcon sx={{ fontSize: 20 }} />
+              Instrucciones de Preparación
+            </Typography>
+            <TextField
+              fullWidth
+              multiline
+              rows={2}
+              label="Instrucciones de preparación"
+              value={localFormData.preparation_instructions || ''}
+              onChange={handleFieldChange('preparation_instructions')}
+              size="small"
+              placeholder="Ej: Ayuno de 12 horas, traer estudios previos..."
             />
           </Box>
 
@@ -315,102 +393,6 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
               error={hasFieldError('notes')}
               helperText={getFieldError('notes')}
             />
-          </Box>
-
-          {/* Advanced Options Toggle */}
-          <Box>
-            <Button
-              variant="text"
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              startIcon={showAdvanced ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-              sx={{ textTransform: 'none' }}
-            >
-              Opciones Avanzadas
-            </Button>
-            
-            <Collapse in={showAdvanced}>
-              <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {/* Priority and Room */}
-                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                  <Box sx={{ flex: 1, minWidth: 200 }}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Prioridad</InputLabel>
-                      <Select
-                        value={localFormData.priority || 'normal'}
-                        onChange={handleFieldChange('priority')}
-                        label="Prioridad"
-                      >
-                        <MenuItem value="low">Baja</MenuItem>
-                        <MenuItem value="normal">Normal</MenuItem>
-                        <MenuItem value="high">Alta</MenuItem>
-                        <MenuItem value="urgent">Urgente</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Box>
-                  
-                  <Box sx={{ flex: 1, minWidth: 200 }}>
-                    <TextField
-                      fullWidth
-                      label="Número de Consultorio"
-                      value={localFormData.room_number || ''}
-                      onChange={handleFieldChange('room_number')}
-                      size="small"
-                    />
-                  </Box>
-                </Box>
-
-                {/* Cost and Insurance */}
-                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                  <Box sx={{ flex: 1, minWidth: 200 }}>
-                    <TextField
-                      fullWidth
-                      type="number"
-                      label="Costo Estimado"
-                      value={localFormData.estimated_cost || ''}
-                      onChange={handleFieldChange('estimated_cost')}
-                      size="small"
-                      inputProps={{ min: 0, step: 0.01 }}
-                    />
-                  </Box>
-                  
-                  <Box sx={{ flex: 1, minWidth: 200 }}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Seguro Cubre</InputLabel>
-                      <Select
-                        value={localFormData.insurance_covered ? 'yes' : 'no'}
-                        onChange={(e) => handleFieldChange('insurance_covered')(e.target.value === 'yes')}
-                        label="Seguro Cubre"
-                      >
-                        <MenuItem value="no">No</MenuItem>
-                        <MenuItem value="yes">Sí</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Box>
-                </Box>
-
-                {/* Preparation Instructions */}
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={2}
-                  label="Instrucciones de Preparación"
-                  value={localFormData.preparation_instructions || ''}
-                  onChange={handleFieldChange('preparation_instructions')}
-                  size="small"
-                  placeholder="Ej: Ayuno de 12 horas, traer estudios previos..."
-                />
-
-                {/* Equipment Needed */}
-                <TextField
-                  fullWidth
-                  label="Equipo Necesario"
-                  value={localFormData.equipment_needed || ''}
-                  onChange={handleFieldChange('equipment_needed')}
-                  size="small"
-                  placeholder="Ej: Electrocardiógrafo, rayos X..."
-                />
-              </Box>
-            </Collapse>
           </Box>
         </Box>
       </DialogContent>

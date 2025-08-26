@@ -455,17 +455,15 @@ const ConsultationsView: React.FC<ConsultationsViewProps> = ({
           </ListItemIcon>
           <ListItemText>Imprimir</ListItemText>
         </MenuItem>
-        {handleDeleteConsultation && (
-          <>
-            <Divider />
-            <MenuItem onClick={() => handleMenuAction('delete')} sx={{ color: 'error.main' }}>
-              <ListItemIcon>
-                <AssignmentIcon fontSize="small" sx={{ color: 'error.main' }} />
-              </ListItemIcon>
-              <ListItemText>Eliminar</ListItemText>
-            </MenuItem>
-          </>
-        )}
+        {handleDeleteConsultation && [
+          <Divider key="divider" />,
+          <MenuItem key="delete" onClick={() => handleMenuAction('delete')} sx={{ color: 'error.main' }}>
+            <ListItemIcon>
+              <AssignmentIcon fontSize="small" sx={{ color: 'error.main' }} />
+            </ListItemIcon>
+            <ListItemText>Eliminar</ListItemText>
+          </MenuItem>
+        ]}
       </Menu>
     </Box>
   );

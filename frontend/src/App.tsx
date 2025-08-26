@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
+import { AuthProvider } from './contexts/AuthContext';
+import ProtectedRoute from './components/auth/ProtectedRoute';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import AppBar from '@mui/material/AppBar';
@@ -438,6 +440,7 @@ function App() {
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
   const [appointmentFormData, setAppointmentFormData] = useState<AppointmentFormData>({
     patient_id: '',
+    doctor_id: '', // Initialize doctor_id field
     date_time: '',
     appointment_type: 'consultation',
     reason: '',
@@ -609,7 +612,7 @@ function App() {
     if (activeView === 'agenda') {
       fetchAppointments();
     }
-  }, [activeView, fetchAppointments]);
+  }, [activeView, selectedDate]); // Remove fetchAppointments dependency to avoid infinite loop
 
   // Patient management functions
   const fetchPatients = useCallback(async () => {
@@ -771,6 +774,34 @@ const getCurrentMexicoCityDateTime = () => {
     console.warn('Error calculating Mexico City time, using local time:', error);
     const now = new Date();
     return now.toISOString().slice(0, 16);
+  }
+};
+
+// Utility function to convert any datetime string to datetime-local format (YYYY-MM-DDTHH:MM)
+const toDateTimeLocalFormat = (dateTimeString: string) => {
+  try {
+    if (!dateTimeString) return '';
+    
+    // Parse the datetime string to a Date object
+    const date = new Date(dateTimeString);
+    
+    // Check if the date is valid
+    if (isNaN(date.getTime())) {
+      console.warn('Invalid date string provided:', dateTimeString);
+      return '';
+    }
+    
+    // Format to YYYY-MM-DDTHH:MM (without seconds and timezone)
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  } catch (error) {
+    console.warn('Error converting datetime to local format:', error);
+    return '';
   }
 };
 
@@ -952,32 +983,42 @@ const handleNewAppointment = useCallback(() => {
   setIsEditingAppointment(false);
   setAppointmentFormData({
     patient_id: '',
-    date_time: new Date().toISOString().slice(0, 16),
+    doctor_id: doctorProfile?.id || '', // Auto-assign current doctor's ID
+    date_time: getCurrentMexicoCityDateTime(),
     appointment_type: 'consultation',
     reason: '',
     notes: '',
     duration_minutes: 30,
     status: 'scheduled'
   });
+  
+  // Load patients when opening appointment dialog
+  fetchPatients();
+  
   setAppointmentDialogOpen(true);
   setFormErrorMessage('');
-}, []);
+}, [doctorProfile, fetchPatients]);
 
 const handleEditAppointment = useCallback((appointment: any) => {
   setSelectedAppointment(appointment);
   setIsEditingAppointment(true);
   setAppointmentFormData({
     patient_id: appointment.patient_id || '',
-    date_time: appointment.date_time || '',
+    doctor_id: appointment.doctor_id || '', // Include doctor_id from appointment
+    date_time: toDateTimeLocalFormat(appointment.date_time || ''), // Convert to datetime-local format
     appointment_type: appointment.appointment_type || 'consultation',
     reason: appointment.reason || '',
     notes: appointment.notes || '',
     duration_minutes: appointment.duration_minutes || 30,
     status: appointment.status || 'scheduled'
   });
+  
+  // Load patients when editing appointment dialog
+  fetchPatients();
+  
   setAppointmentDialogOpen(true);
   setFormErrorMessage('');
-}, []);
+}, [fetchPatients]);
 
 // User menu handlers
 const handleUserMenuOpen = useCallback((event: React.MouseEvent<HTMLElement>) => {
@@ -1062,14 +1103,71 @@ const handleAppointmentSubmit = useCallback(async () => {
   setFormErrorMessage('');
   
   try {
+    // Validate required fields BEFORE sending to backend
+    // Note: doctor_id is auto-assigned by backend if not provided, so not required in validation
+    const requiredFields = ['patient_id', 'date_time', 'appointment_type', 'reason'];
+    const missingFields = requiredFields.filter(field => {
+      const value = appointmentFormData[field as keyof AppointmentFormData];
+      return !value || (typeof value === 'string' && value.trim() === '');
+    });
+    
+    // Debug info in development
+    if (process.env.NODE_ENV === 'development') {
+      console.group('🔍 Appointment Creation Debug');
+      console.log('📋 Form Data:', appointmentFormData);
+      console.log('👨‍⚕️ Doctor Profile:', doctorProfile);
+      console.log('🏥 Current Settings:', { isEditingAppointment, selectedAppointment });
+      
+      if (missingFields.length > 0) {
+        console.error('❌ Missing required fields:', missingFields);
+      }
+      
+      console.groupEnd();
+    }
+    
+    // Stop submission if required fields are missing
+    if (missingFields.length > 0) {
+      let errorMessage = 'Por favor, completa los siguientes campos obligatorios:\n';
+      
+      const fieldLabels: Record<string, string> = {
+        'patient_id': '• Seleccionar un paciente',
+        'date_time': '• Fecha y hora de la cita',
+        'appointment_type': '• Tipo de cita',
+        'reason': '• Motivo de la consulta'
+      };
+      
+      missingFields.forEach(field => {
+        errorMessage += fieldLabels[field] || `• ${field}`;
+        errorMessage += '\n';
+      });
+      
+      setFormErrorMessage(errorMessage);
+      setIsSubmitting(false); // Reset submit state for missing fields
+      return; // Exit early without making API call
+    }
+    
     // Map date_time to the backend field structure
     const appointmentData = {
       ...appointmentFormData,
       // Map UI date_time field to backend appointment_date field
       appointment_date: appointmentFormData.date_time,
+      // Ensure doctor_id is included from current doctor profile
+      doctor_id: (appointmentFormData.doctor_id && appointmentFormData.doctor_id.trim() !== '') 
+                  ? appointmentFormData.doctor_id 
+                  : (doctorProfile?.id || ''),
       // Remove the UI-specific field to avoid confusion
       date_time: undefined
     };
+    
+    // Additional debug for backend payload
+    if (process.env.NODE_ENV === 'development') {
+      console.group('📤 Backend Payload Debug');
+      console.log('📋 appointmentFormData.doctor_id:', appointmentFormData.doctor_id);
+      console.log('👨‍⚕️ doctorProfile?.id:', doctorProfile?.id);
+      console.log('🔄 Final doctor_id:', appointmentData.doctor_id);
+      console.log('📦 Complete Backend Payload:', appointmentData);
+      console.groupEnd();
+    }
     
     if (isEditingAppointment && selectedAppointment) {
       // Update existing appointment
@@ -1084,12 +1182,31 @@ const handleAppointmentSubmit = useCallback(async () => {
     setAppointmentDialogOpen(false);
     fetchAppointments(); // Refresh the list
   } catch (error: any) {
-    console.error('Error saving appointment:', error);
-    setFormErrorMessage(error.response?.data?.detail || error.message || 'Error al guardar la cita');
+    // Enhanced error logging
+    if (process.env.NODE_ENV === 'development') {
+      console.group('❌ Appointment Creation Error');
+      console.error('Error object:', error);
+      console.error('Response data:', error.response?.data);
+      console.error('Response status:', error.response?.status);
+      console.error('Form data that caused error:', appointmentFormData);
+      console.groupEnd();
+    }
+    
+    // User-friendly error message
+    let errorMessage = 'Error al guardar la cita';
+    if (error.response?.data?.detail) {
+      if (typeof error.response.data.detail === 'string') {
+        errorMessage = error.response.data.detail;
+      } else if (error.response.data.detail.includes && error.response.data.detail.includes('foreign key')) {
+        errorMessage = 'Error: Paciente o médico no válido. Por favor, selecciona un paciente válido.';
+      }
+    }
+    
+    setFormErrorMessage(errorMessage);
   } finally {
     setIsSubmitting(false);
   }
-}, [appointmentFormData, isEditingAppointment, selectedAppointment, fetchAppointments]);
+}, [appointmentFormData, isEditingAppointment, selectedAppointment, fetchAppointments, doctorProfile]);
 
 // Validation function for required fields
 const validatePatientForm = () => {
@@ -1527,9 +1644,11 @@ const formatDateTime = (dateString: string) => {
   }, [consultationSearchTerm, activeView]);
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Box sx={{ flexGrow: 1, minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
+    <AuthProvider>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <ProtectedRoute>
+          <Box sx={{ flexGrow: 1, minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
         {/* Modern Medical Header */}
         <AppBar position="static" elevation={0}>
           <Toolbar sx={{ py: 1 }}>
@@ -2417,6 +2536,7 @@ const formatDateTime = (dateString: string) => {
             loading={isSubmitting}
             formErrorMessage={formErrorMessage}
             fieldErrors={fieldErrors}
+            onFormDataChange={setAppointmentFormData}
           />
         </Suspense>
 
@@ -2435,8 +2555,10 @@ const formatDateTime = (dateString: string) => {
             fieldErrors={doctorProfileFieldErrors}
           />
         </Suspense>
-      </Box>
-    </ThemeProvider>
+          </Box>
+        </ProtectedRoute>
+      </ThemeProvider>
+    </AuthProvider>
   );
 }
 

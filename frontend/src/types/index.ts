@@ -282,6 +282,7 @@ export interface ConsultationFormData {
 
 export interface AppointmentFormData {
   patient_id: string;
+  doctor_id?: string; // Add doctor_id field
   date_time: string; // UI field - will be mapped to appointment_date
   appointment_type: string;
   reason: string;

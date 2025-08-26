@@ -79,6 +79,22 @@ class Patient(Base):
     clinical_studies = relationship("ClinicalStudy", back_populates="patient")
     appointments = relationship("Appointment", back_populates="patient")
 
+class User(Base):
+    __tablename__ = "users"
+    
+    id = Column(String, primary_key=True, default=lambda: f"USR{str(uuid.uuid4())[:8].upper()}")
+    username = Column(String(50), unique=True, index=True, nullable=False)
+    email = Column(String(100), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    doctor_id = Column(String, ForeignKey("doctor_profiles.id"), nullable=False, unique=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, onupdate=datetime.utcnow)
+    last_login = Column(DateTime)
+    
+    # Relationships
+    doctor = relationship("DoctorProfile", back_populates="user")
+
 class DoctorProfile(Base):
     __tablename__ = "doctor_profiles"
     
@@ -135,6 +151,7 @@ class DoctorProfile(Base):
     
     # Relationships
     appointments = relationship("Appointment", back_populates="doctor")
+    user = relationship("User", back_populates="doctor", uselist=False)
 
 class MedicalHistory(Base):
     __tablename__ = "medical_history"

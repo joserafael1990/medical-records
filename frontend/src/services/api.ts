@@ -272,7 +272,7 @@ class ApiService {
 
 
   async updateAppointment(id: string, appointmentData: Partial<AppointmentFormData>): Promise<Appointment> {
-    const response = await this.api.put<Appointment>(`${API_CONFIG.ENDPOINTS.APPOINTMENTS}/${id}/full`, appointmentData);
+    const response = await this.api.put<Appointment>(`/api/agenda/appointments/${id}`, appointmentData);
     return response.data;
   }
 

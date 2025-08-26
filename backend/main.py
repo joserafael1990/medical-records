@@ -31,9 +31,14 @@ from database import (
 )
 from db_service import (
     PatientService, DoctorService, ConsultationService, 
-    ClinicalStudyService, get_dashboard_data
+    ClinicalStudyService, AuthService, get_dashboard_data
 )
 from appointment_service import AppointmentService
+
+# Authentication imports
+from auth import get_current_doctor, get_current_doctor_optional, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
+from auth_models import UserLogin, UserCreate, LoginResponse, Token, DoctorInfo
+from datetime import timedelta
 
 # Error handling imports
 from exceptions import (
@@ -530,6 +535,97 @@ async def api_health(db: Session = Depends(get_db)):
             "timestamp": get_mexico_city_now().isoformat(),
             "timezone": "America/Mexico_City"
         }
+
+# ============================================================================
+# AUTHENTICATION ENDPOINTS
+# ============================================================================
+
+@app.post("/api/auth/login", response_model=LoginResponse)
+async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
+    """Authenticate user and return access token"""
+    try:
+        user = AuthService.authenticate_user(db, user_credentials.username, user_credentials.password)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect username or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user.doctor_id}, 
+            expires_delta=access_token_expires
+        )
+        
+        # Get doctor information
+        doctor = DoctorService.get_profile_by_id(db, user.doctor_id)
+        if not doctor:
+            raise HTTPException(status_code=404, detail="Doctor profile not found")
+        
+        doctor_info = DoctorInfo(
+            id=doctor.id,
+            full_name=doctor.full_name,
+            title=doctor.title,
+            first_name=doctor.first_name,
+            paternal_surname=doctor.paternal_surname,
+            maternal_surname=doctor.maternal_surname,
+            email=doctor.email,
+            specialty=doctor.specialty,
+            professional_license=doctor.professional_license
+        )
+        
+        return LoginResponse(
+            access_token=access_token,
+            token_type="bearer",
+            doctor=doctor_info,
+            expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60  # Convert to seconds
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Login error: {str(e)}")
+
+@app.post("/api/auth/register", response_model=Token)
+async def register(user_data: UserCreate, db: Session = Depends(get_db)):
+    """Register a new user account for a doctor"""
+    try:
+        user = AuthService.create_user(
+            db, 
+            user_data.username, 
+            user_data.email, 
+            user_data.password, 
+            user_data.doctor_id
+        )
+        
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user.doctor_id}, 
+            expires_delta=access_token_expires
+        )
+        
+        return Token(access_token=access_token, token_type="bearer")
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Registration error: {str(e)}")
+
+@app.get("/api/auth/me", response_model=DoctorInfo)
+async def get_current_user(current_doctor: DBDoctorProfile = Depends(get_current_doctor)):
+    """Get current authenticated doctor information"""
+    return DoctorInfo(
+        id=current_doctor.id,
+        full_name=current_doctor.full_name,
+        title=current_doctor.title,
+        first_name=current_doctor.first_name,
+        paternal_surname=current_doctor.paternal_surname,
+        maternal_surname=current_doctor.maternal_surname,
+        email=current_doctor.email,
+        specialty=current_doctor.specialty,
+        professional_license=current_doctor.professional_license
+    )
 
 @app.get("/api/physicians/dashboard")
 async def dashboard(db: Session = Depends(get_db)):
@@ -1139,7 +1235,7 @@ async def get_available_slots(target_date: Optional[str] = None, db: Session = D
         raise HTTPException(status_code=500, detail=f"Error fetching available slots: {str(e)}")
 
 @app.post("/api/agenda/appointments")
-async def create_appointment(appointment_data: dict, db: Session = Depends(get_db)):
+async def create_appointment(appointment_data: dict, current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional), db: Session = Depends(get_db)):
     """Create a new appointment in the agenda"""
     try:
         from datetime import datetime
@@ -1153,9 +1249,38 @@ async def create_appointment(appointment_data: dict, db: Session = Depends(get_d
         appointment_date = datetime.fromisoformat(appointment_date_str.replace('Z', '+00:00'))
         appointment_date = convert_to_mexico_city(appointment_date)
         
+        # Auto-assign doctor_id if not provided from system doctor profile
+        doctor_id = appointment_data.get("doctor_id")
+        print(f"🔍 CREATE APPOINTMENT DEBUG:")
+        print(f"   📋 Received doctor_id: '{doctor_id}'")
+        print(f"   📋 doctor_id type: {type(doctor_id)}")
+        print(f"   📋 doctor_id bool: {bool(doctor_id)}")
+        
+        if not doctor_id or doctor_id.strip() == '':
+            # Auto-assign from authenticated doctor or fallback to system profile
+            print(f"   🔄 Auto-assigning doctor...")
+            if current_doctor:
+                doctor_id = current_doctor.id
+                print(f"   ✅ Auto-assigned from authenticated doctor: {doctor_id} ({current_doctor.full_name})")
+            else:
+                # Fallback to system doctor profile if no authentication
+                print(f"   🔄 No authenticated doctor, using system profile...")
+                try:
+                    doctor_profile = DoctorService.get_profile(db)
+                    if doctor_profile:
+                        doctor_id = doctor_profile.id
+                        print(f"   ✅ Auto-assigned from system profile: {doctor_id}")
+                    else:
+                        print(f"   ❌ No doctor profile found in system")
+                except Exception as e:
+                    print(f"   ❌ Warning: Could not auto-assign doctor: {e}")
+        else:
+            print(f"   ✅ Using provided doctor_id: {doctor_id}")
+        
         # Create appointment using the proper appointment service
         appointment_create_data = {
             "patient_id": appointment_data.get("patient_id"),
+            "doctor_id": doctor_id,  # Use auto-assigned or provided doctor_id
             "appointment_date": appointment_date,
             "appointment_type": appointment_data.get("appointment_type", "consultation"),
             "reason": appointment_data.get("reason", "Cita programada"),
@@ -1196,7 +1321,7 @@ async def create_appointment(appointment_data: dict, db: Session = Depends(get_d
         raise HTTPException(status_code=500, detail=f"Error creating appointment: {str(e)}")
 
 @app.put("/api/agenda/appointments/{appointment_id}")
-async def update_appointment(appointment_id: str, appointment_data: dict, db: Session = Depends(get_db)):
+async def update_appointment(appointment_id: str, appointment_data: dict, current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional), db: Session = Depends(get_db)):
     """Update an existing appointment"""
     try:
         from datetime import datetime
@@ -1210,6 +1335,35 @@ async def update_appointment(appointment_id: str, appointment_data: dict, db: Se
         if appointment_date_str:
             appointment_date = datetime.fromisoformat(appointment_date_str.replace('Z', '+00:00'))
             update_data["appointment_date"] = convert_to_mexico_city(appointment_date)
+        
+        # Auto-assign doctor_id if provided, or get from system doctor profile
+        received_doctor_id = appointment_data.get("doctor_id")
+        print(f"🔍 UPDATE APPOINTMENT DEBUG:")
+        print(f"   📋 Received doctor_id: '{received_doctor_id}'")
+        print(f"   📋 doctor_id type: {type(received_doctor_id)}")
+        print(f"   📋 doctor_id bool: {bool(received_doctor_id)}")
+        
+        if "doctor_id" in appointment_data and received_doctor_id and received_doctor_id.strip() != '':
+            update_data["doctor_id"] = received_doctor_id
+            print(f"   ✅ Using provided doctor_id: {received_doctor_id}")
+        else:
+            # Auto-assign from authenticated doctor or fallback to system profile
+            print(f"   🔄 Auto-assigning doctor...")
+            if current_doctor:
+                update_data["doctor_id"] = current_doctor.id
+                print(f"   ✅ Auto-assigned from authenticated doctor: {current_doctor.id} ({current_doctor.full_name})")
+            else:
+                # Fallback to system doctor profile if no authentication
+                print(f"   🔄 No authenticated doctor, using system profile...")
+                try:
+                    doctor_profile = DoctorService.get_profile(db)
+                    if doctor_profile:
+                        update_data["doctor_id"] = doctor_profile.id
+                        print(f"   ✅ Auto-assigned from system profile: {doctor_profile.id}")
+                    else:
+                        print(f"   ❌ No doctor profile found in system")
+                except Exception as e:
+                    print(f"   ❌ Warning: Could not auto-assign doctor: {e}")
         
         if "reason" in appointment_data:
             update_data["reason"] = appointment_data["reason"]
