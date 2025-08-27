@@ -60,13 +60,6 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
 }) => {
   // Filter clinical studies for this consultation
   const consultationStudies = clinicalStudies;
-  
-  console.log('🔍 ConsultationDetailView - Debug estudios recibidos:', {
-    consultationId: consultation.id,
-    clinicalStudiesReceived: clinicalStudies.length,
-    consultationStudies: consultationStudies.length,
-    studies: clinicalStudies
-  });
 
   const getStatusColor = (status: string) => {
     switch (status) {

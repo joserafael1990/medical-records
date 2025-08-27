@@ -513,17 +513,6 @@ function AppContent() {
   const [tempClinicalStudies, setTempClinicalStudies] = useState<ClinicalStudy[]>([]);
 
   // Helper functions for localStorage persistence
-  const inspectStoredStudies = () => {
-    console.log('🔍 localStorage inspection:');
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith('clinical_studies_')) {
-        const value = localStorage.getItem(key);
-        const studies = value ? JSON.parse(value) : [];
-        console.log(`  ${key}: ${studies.length} estudios`, studies);
-      }
-    }
-  };
 
   const saveStudiesToStorage = (consultationId: string, studies: ClinicalStudy[]) => {
     try {
@@ -536,12 +525,6 @@ function AppContent() {
   const loadStudiesFromStorage = (consultationId: string): ClinicalStudy[] => {
     try {
       const stored = localStorage.getItem(`clinical_studies_${consultationId}`);
-      console.log('🔍 loadStudiesFromStorage:', {
-        consultationId,
-        hasStored: !!stored,
-        storedData: stored,
-        parsedCount: stored ? JSON.parse(stored).length : 0
-      });
       return stored ? JSON.parse(stored) : [];
     } catch (error) {
       console.error('Error loading studies from localStorage:', error);
@@ -553,16 +536,12 @@ function AppContent() {
   const getCurrentConsultationStudies = (): ClinicalStudy[] => {
     // If we have a selected consultation (viewing/editing existing), load from localStorage
     if (selectedConsultation?.id) {
-      const storedStudies = loadStudiesFromStorage(selectedConsultation.id);
-      console.log('📋 getCurrentConsultationStudies - Using stored consultation studies:', storedStudies.length);
-      return storedStudies;
+      return loadStudiesFromStorage(selectedConsultation.id);
     }
     // If we're creating a new consultation, use temporary studies
     if (tempConsultationId && !selectedConsultation) {
-      console.log('📋 getCurrentConsultationStudies - Using temporary studies:', tempClinicalStudies.length);
       return tempClinicalStudies;
     }
-    console.log('📋 getCurrentConsultationStudies - No studies found, returning empty array');
     return [];
   };
 
@@ -1111,18 +1090,9 @@ const handleEditConsultation = useCallback((consultation: any) => {
 
 // Handle view consultation
 const handleViewConsultation = useCallback((consultation: any) => {
-  console.log('🔍 View consultation debug:', {
-    consultation,
-    hasStudies: !!consultation.clinical_studies,
-    studiesCount: consultation.clinical_studies?.length || 0
-  });
-  
-  // Inspect localStorage for debugging
-  inspectStoredStudies();
-  
   setSelectedConsultation(consultation);
   setConsultationDetailView(true);
-}, [inspectStoredStudies]);
+}, []);
 
 // Handle print consultation
 const handlePrintConsultation = useCallback((consultation: any) => {
@@ -1187,12 +1157,6 @@ const fetchConsultations = useCallback(async () => {
   try {
     const data = await apiService.getConsultations({ 
       patient_search: consultationSearchTerm 
-    });
-    console.log('📋 fetchConsultations debug:', {
-      consultationsCount: data.length,
-      firstConsultation: data[0],
-      hasStudiesInFirst: !!data[0]?.clinical_studies,
-      studiesCountInFirst: data[0]?.clinical_studies?.length || 0
     });
     setConsultations(data);
   } catch (error) {
@@ -1344,26 +1308,18 @@ const handleConsultationSubmit = useCallback(async () => {
     
     // Update temporary clinical studies with real consultation ID if creating new consultation
     if (!isEditingConsultation && tempConsultationId && tempClinicalStudies.length > 0) {
-      console.log('🔄 Actualizando estudios temporales con ID real:', {
-        tempId: tempConsultationId,
-        realId: result.id,
-        studiesCount: tempClinicalStudies.length
-      });
-      
-      // Update the consultation_id in temporary studies
-      const updatedStudies = tempClinicalStudies.map(study => ({
-        ...study,
-        consultation_id: result.id
-      }));
-      
-      // Save studies to localStorage with real consultation ID
-      saveStudiesToStorage(result.id, updatedStudies);
-      
-      // Clear temporary data
-      setTempConsultationId(null);
-      setTempClinicalStudies([]);
-      
-      console.log('✅ Estudios guardados en localStorage con ID real:', result.id);
+          // Update the consultation_id in temporary studies
+    const updatedStudies = tempClinicalStudies.map(study => ({
+      ...study,
+      consultation_id: result.id
+    }));
+    
+    // Save studies to localStorage with real consultation ID
+    saveStudiesToStorage(result.id, updatedStudies);
+    
+    // Clear temporary data
+    setTempConsultationId(null);
+    setTempClinicalStudies([]);
     }
     
     showSuccessMessage(
@@ -1511,16 +1467,10 @@ const handleDeleteClinicalStudy = useCallback((studyId: string) => {
   const updatedStudies = currentStudies.filter(study => study.id !== studyId);
   updateCurrentConsultationStudies(updatedStudies);
   
-  console.log('✅ Estudio eliminado. Estudios restantes:', updatedStudies.length);
+
 }, [selectedConsultation, getCurrentConsultationStudies, updateCurrentConsultationStudies]);
 
 const handleClinicalStudySubmit = useCallback(async () => {
-  console.log('🚀 handleClinicalStudySubmit - Debug inicial:', {
-    selectedConsultation: selectedConsultation?.id,
-    tempConsultationId,
-    formData: clinicalStudyFormData
-  });
-
   const currentStudies = getCurrentConsultationStudies();
 
   if (!selectedConsultation && !tempConsultationId) {
@@ -1558,16 +1508,6 @@ const handleClinicalStudySubmit = useCallback(async () => {
         return;
       }
       
-      console.log('📝 Datos del formulario detallados:', {
-        study_type: clinicalStudyFormData.study_type,
-        study_name: clinicalStudyFormData.study_name,
-        study_description: clinicalStudyFormData.study_description,
-        ordering_doctor: clinicalStudyFormData.ordering_doctor,
-        urgency: clinicalStudyFormData.urgency,
-        clinical_indication: clinicalStudyFormData.clinical_indication,
-        allFormData: clinicalStudyFormData
-      });
-
       const newStudy: ClinicalStudy = {
         id: `cs_${Date.now()}`, // ID temporal
         consultation_id: consultationId,
@@ -1598,12 +1538,6 @@ const handleClinicalStudySubmit = useCallback(async () => {
       
       const updatedStudies = [...currentStudies, newStudy];
       updateCurrentConsultationStudies(updatedStudies);
-      
-      console.log('📋 App.tsx - Estudios actualizados para consulta:', {
-        consultationId: consultationId,
-        previousCount: currentStudies.length,
-        newCount: updatedStudies.length
-      });
     }
     
     setClinicalStudyDialogOpen(false);
@@ -2636,26 +2570,18 @@ const formatDateTime = (dateString: string) => {
                 </Suspense>
               )}
 
-              {activeView === 'consultations' && consultationDetailView && selectedConsultation && (() => {
-                const studiesForDetailView = getCurrentConsultationStudies();
-                console.log('🔍 Debug - Pasando estudios a ConsultationDetailView:', {
-                  consultationId: selectedConsultation.id,
-                  studiesCount: studiesForDetailView.length,
-                  studies: studiesForDetailView
-                });
-                return (
-                  <Suspense fallback={<LoadingFallback message="Cargando detalles..." />}>
-                    <ConsultationDetailView
-                      consultation={selectedConsultation}
-                      onBack={handleBackFromConsultationDetail}
-                      onEdit={handleEditConsultation}
-                      onPrint={handlePrintConsultation}
-                      clinicalStudies={studiesForDetailView}
-                      onEditClinicalStudy={handleEditClinicalStudy}
-                    />
-                  </Suspense>
-                );
-              })()}
+              {activeView === 'consultations' && consultationDetailView && selectedConsultation && (
+                <Suspense fallback={<LoadingFallback message="Cargando detalles..." />}>
+                  <ConsultationDetailView
+                    consultation={selectedConsultation}
+                    onBack={handleBackFromConsultationDetail}
+                    onEdit={handleEditConsultation}
+                    onPrint={handlePrintConsultation}
+                    clinicalStudies={getCurrentConsultationStudies()}
+                    onEditClinicalStudy={handleEditClinicalStudy}
+                  />
+                </Suspense>
+              )}
 
               {activeView === 'agenda' && (
                 <Suspense fallback={<LoadingFallback message="Cargando agenda..." />}>

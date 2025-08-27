@@ -177,13 +177,7 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
         formData.ordered_date &&
         formData.ordering_doctor
       );
-      console.log('🔍 Order validation:', {
-        isValid,
-        study_type: formData.study_type,
-        study_name: formData.study_name,
-        ordered_date: formData.ordered_date,
-        ordering_doctor: formData.ordering_doctor
-      });
+
       return isValid;
     }
     return false;
@@ -404,13 +398,7 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
         </Button>
 
         <Button
-          onClick={() => {
-            console.log('🚀 ClinicalStudyDialog - Enviando datos:', {
-              formData,
-              isValid: isStepValid(0)
-            });
-            onSubmit();
-          }}
+          onClick={onSubmit}
           variant="contained"
           disabled={isSubmitting || !isStepValid(0)}
           startIcon={<SaveIcon />}
