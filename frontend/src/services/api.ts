@@ -253,6 +253,7 @@ class ApiService {
     const payload = {
       ...cleanData,
       patient_id: patientId, // Ensure patient_id is included
+      // Backend will handle the timezone conversion
       date: new Date().toISOString()
       // Note: doctor fields and created_by are now assigned by the backend
     };

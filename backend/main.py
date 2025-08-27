@@ -450,7 +450,7 @@ class DoctorProfileResponse(DoctorProfileBase):
 
 class MedicalHistoryBase(BaseModel):
     patient_id: str
-    date: datetime
+    date: Optional[datetime] = None
     
     # NOM-004 mandatory consultation fields
     chief_complaint: str  # Motivo de la consulta
@@ -1155,7 +1155,13 @@ async def create_consultation(
     """Create a new consultation"""
     try:
         consultation_data = consultation.dict()
-        consultation_data["created_at"] = datetime.utcnow()
+        # Use Mexico City timezone
+        mexico_tz = ZoneInfo("America/Mexico_City")
+        consultation_data["created_at"] = datetime.now(mexico_tz)
+        
+        # If date is not provided or is in the future, use current Mexico time
+        if not consultation_data.get("date"):
+            consultation_data["date"] = datetime.now(mexico_tz)
         
         # Assign the authenticated doctor
         if current_doctor:
