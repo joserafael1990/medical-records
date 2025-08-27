@@ -126,7 +126,8 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
                         weekday: 'long',
                         year: 'numeric',
                         month: 'long',
-                        day: 'numeric'
+                        day: 'numeric',
+                        timeZone: 'America/Mexico_City'
                       })}
                     </Typography>
                   </Box>
@@ -141,7 +142,8 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
                     <Typography variant="body2" color="text.secondary">
                       {new Date(consultation.date).toLocaleTimeString('es-MX', {
                         hour: '2-digit',
-                        minute: '2-digit'
+                        minute: '2-digit',
+                        timeZone: 'America/Mexico_City'
                       })}
                     </Typography>
                   </Box>

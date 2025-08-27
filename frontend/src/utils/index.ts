@@ -24,19 +24,16 @@ export const calculateAge = (birthDate: string): number => {
 
 export const formatDateTime = (dateString: string): string => {
   return new Date(dateString).toLocaleDateString('es-MX', {
-    timeZone: 'America/Mexico_City',
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
-    minute: '2-digit',
-    hour12: true
+    minute: '2-digit'
   });
 };
 
 export const formatDate = (dateString: string): string => {
   return new Date(dateString).toLocaleDateString('es-MX', {
-    timeZone: 'America/Mexico_City',
     year: 'numeric',
     month: 'long',
     day: 'numeric'
@@ -45,10 +42,8 @@ export const formatDate = (dateString: string): string => {
 
 export const formatTime = (dateString: string): string => {
   return new Date(dateString).toLocaleTimeString('es-MX', {
-    timeZone: 'America/Mexico_City',
     hour: '2-digit',
-    minute: '2-digit',
-    hour12: true
+    minute: '2-digit'
   });
 };
 

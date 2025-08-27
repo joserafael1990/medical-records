@@ -7,12 +7,7 @@ from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 import uuid
 from datetime import datetime
-from zoneinfo import ZoneInfo
 import os
-
-# Helper function for Mexico City timezone
-def mexico_city_now():
-    return datetime.now(ZoneInfo("America/Mexico_City"))
 
 # Database URL - can be configured via environment variable
 DATABASE_URL = os.getenv(
@@ -194,8 +189,8 @@ class MedicalHistory(Base):
     doctor_specialty = Column(String(100))
     
     # System fields
-    created_at = Column(DateTime, default=mexico_city_now)
-    updated_at = Column(DateTime, onupdate=mexico_city_now)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, onupdate=datetime.utcnow)
     created_by = Column(String(100))
     updated_by = Column(String(100))
     
@@ -268,8 +263,8 @@ class ClinicalStudy(Base):
     relevant_history = Column(Text)
     
     # System fields
-    created_at = Column(DateTime, default=mexico_city_now)
-    updated_at = Column(DateTime, onupdate=mexico_city_now)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, onupdate=datetime.utcnow)
     created_by = Column(String(100))
     updated_by = Column(String(100))
     

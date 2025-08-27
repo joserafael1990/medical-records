@@ -311,13 +311,15 @@ const ConsultationsView: React.FC<ConsultationsViewProps> = ({
                         {new Date(consultation.date).toLocaleDateString('es-MX', {
                           day: '2-digit',
                           month: 'short',
-                          year: 'numeric'
+                          year: 'numeric',
+                          timeZone: 'America/Mexico_City'
                         })}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         {new Date(consultation.date).toLocaleTimeString('es-MX', {
                           hour: '2-digit',
-                          minute: '2-digit'
+                          minute: '2-digit',
+                          timeZone: 'America/Mexico_City'
                         })}
                       </Typography>
                     </Box>

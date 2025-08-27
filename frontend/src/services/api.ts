@@ -250,11 +250,18 @@ class ApiService {
     // Extract only the fields needed by the backend, exclude doctor-related fields
     const { doctor_name, doctor_professional_license, doctor_specialty, ...cleanData } = consultationData;
     
+    // Create Mexico City timezone date
+    const getCurrentMexicoCityDateTime = () => {
+      const now = new Date();
+      // Get Mexico City time (UTC-6 standard, UTC-5 daylight saving)
+      const mexicoCityTime = new Date(now.toLocaleString("en-US", {timeZone: "America/Mexico_City"}));
+      return mexicoCityTime.toISOString();
+    };
+    
     const payload = {
       ...cleanData,
       patient_id: patientId, // Ensure patient_id is included
-      // Backend will handle the timezone conversion
-      date: new Date().toISOString()
+      date: getCurrentMexicoCityDateTime()
       // Note: doctor fields and created_by are now assigned by the backend
     };
     
