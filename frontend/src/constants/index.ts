@@ -2,6 +2,9 @@
 // CONSTANTS - Configuración y constantes del sistema
 // ============================================================================
 
+// Import unified validation schemas
+import validationSchemas from '../shared_validation_schemas.json';
+
 // API Configuration
 export const API_CONFIG = {
   BASE_URL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
@@ -19,9 +22,30 @@ export const API_CONFIG = {
     DOCTOR_PROFILE: '/api/doctor/profile',
     CLINICAL_STUDIES: '/api/clinical-studies'
   },
-  TIMEOUT: 10000,
-  RETRY_ATTEMPTS: 3
+  TIMEOUT: Number(process.env.REACT_APP_API_TIMEOUT) || 10000,
+  RETRY_ATTEMPTS: Number(process.env.REACT_APP_API_RETRY_ATTEMPTS) || 3
 } as const;
+
+// Application Configuration
+export const APP_CONFIG = {
+  ENV: process.env.REACT_APP_ENV || 'development',
+  VERSION: process.env.REACT_APP_VERSION || '1.0.0',
+  APP_NAME: process.env.REACT_APP_APP_NAME || 'AVANT - Sistema Médico',
+  TIMEZONE: process.env.REACT_APP_DEFAULT_TIMEZONE || 'America/Mexico_City'
+} as const;
+
+// Feature Flags
+export const FEATURE_FLAGS = {
+  ENABLE_DEBUG_LOGS: process.env.REACT_APP_ENABLE_DEBUG_LOGS === 'true',
+  ENABLE_ERROR_MONITORING: process.env.REACT_APP_ENABLE_ERROR_MONITORING === 'true',
+  ENABLE_ANALYTICS: process.env.REACT_APP_ENABLE_ANALYTICS === 'true',
+  SHOW_BACKEND_STATUS: process.env.REACT_APP_SHOW_BACKEND_STATUS === 'true',
+  ENABLE_DEV_TOOLS: process.env.REACT_APP_ENABLE_DEV_TOOLS === 'true'
+} as const;
+
+// Environment Helpers
+export const isProduction = APP_CONFIG.ENV === 'production';
+export const isDevelopment = APP_CONFIG.ENV === 'development';
 
 // UI Configuration
 export const UI_CONFIG = {
@@ -37,48 +61,45 @@ export const UI_CONFIG = {
   }
 } as const;
 
-// Form Validation
+// Form Validation (now using unified schemas)
 export const VALIDATION_RULES = {
   PHONE: {
-    MEXICO_REGEX: /^\+?52\s?\d{10}$/,
+    MEXICO_REGEX: new RegExp(validationSchemas.patterns.phone_mexico),
     MIN_LENGTH: 10
   },
   CURP: {
-    REGEX: /^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d$/,
+    REGEX: new RegExp(validationSchemas.patterns.curp),
     LENGTH: 18
   },
   EMAIL: {
-    REGEX: /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    REGEX: new RegExp(validationSchemas.patterns.email)
   },
   NAME: {
-    MIN_LENGTH: 2,
-    MAX_LENGTH: 50
+    MIN_LENGTH: validationSchemas.field_constraints.name?.min_length || 2,
+    MAX_LENGTH: validationSchemas.field_constraints.name?.max_length || 50
   },
   REQUIRED_FIELDS: {
-    PATIENT: [
-      'first_name',
-      'paternal_surname', 
-      'maternal_surname',
-      'birth_date',
-      'gender',
-      'address'
-      // Antecedentes movidos a CONSULTATION según NOM-004 (parte de evaluación clínica)
-    ],
-    CONSULTATION: [
-      'patient_id',
-      'chief_complaint',
-      'history_present_illness',
-      'family_history',              // OBLIGATORIO NOM-004
-      'personal_pathological_history',    // OBLIGATORIO NOM-004  
-      'personal_non_pathological_history', // OBLIGATORIO NOM-004
-      'physical_examination',
-      'primary_diagnosis',
-      'treatment_plan',
-      'follow_up_instructions'
-      // doctor_name, doctor_professional_license: se obtienen del perfil del usuario
-    ]
+    PATIENT: validationSchemas.nom004_required_fields.patient,
+    CONSULTATION: validationSchemas.nom004_required_fields.consultation
   }
 } as const;
+
+// Export validation utilities
+export { validationSchemas };
+
+// Export validation patterns
+export const VALIDATION_PATTERNS = {
+  CURP: new RegExp(validationSchemas.patterns.curp),
+  EMAIL: new RegExp(validationSchemas.patterns.email),
+  PHONE: new RegExp(validationSchemas.patterns.phone_mexico),
+  PROFESSIONAL_LICENSE: new RegExp(validationSchemas.patterns.professional_license),
+  POSTAL_CODE: new RegExp(validationSchemas.patterns.postal_code_mexico)
+};
+
+export const NOM004_REQUIRED_FIELDS = {
+  PATIENT: validationSchemas.nom004_required_fields.patient,
+  CONSULTATION: validationSchemas.nom004_required_fields.consultation
+};
 
 // Medical Constants
 export const MEDICAL_CONSTANTS = {

@@ -3,6 +3,8 @@ Validation Functions for Medical Records System
 Funciones de validación para el sistema de historias clínicas conforme a NOM-004
 """
 import re
+import json
+import os
 from datetime import datetime, date
 from typing import Dict, List, Any, Optional
 from exceptions import (
@@ -11,38 +13,48 @@ from exceptions import (
     ErrorCode
 )
 
-# NOM-004 required fields for patient records
-NOM004_REQUIRED_PATIENT_FIELDS = [
-    'first_name',
-    'paternal_surname', 
-    'maternal_surname',
-    'birth_date',
-    'gender',
-    'address'
-]
+# Load shared validation schemas
+def load_validation_schemas():
+    """Load validation schemas from shared JSON file"""
+    schema_path = os.path.join(os.path.dirname(__file__), '../shared_validation_schemas.json')
+    try:
+        with open(schema_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        # Fallback to embedded schemas if file not found
+        return {
+            "patterns": {
+                "curp": "^[A-Z]{4}\\d{6}[HM][A-Z]{5}[A-Z0-9]\\d$",
+                "email": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
+                "phone_mexico": "^(\\+52\\s?)?(\\d{10}|\\d{3}\\s?\\d{3}\\s?\\d{4})$",
+                "professional_license": "^\\d{7,8}$",
+                "postal_code_mexico": "^\\d{5}$"
+            },
+            "nom004_required_fields": {
+                "patient": [
+                    "first_name", "paternal_surname", "maternal_surname",
+                    "birth_date", "gender", "address"
+                ],
+                "consultation": [
+                    "patient_id", "chief_complaint", "history_present_illness",
+                    "family_history", "personal_pathological_history",
+                    "personal_non_pathological_history", "physical_examination",
+                    "primary_diagnosis", "treatment_plan", "follow_up_instructions"
+                ]
+            }
+        }
 
-# NOM-004 required fields for medical consultations
-NOM004_REQUIRED_CONSULTATION_FIELDS = [
-    'patient_id',
-    'chief_complaint',
-    'history_present_illness',
-    'family_history',
-    'personal_pathological_history',
-    'personal_non_pathological_history',
-    'physical_examination',
-    'primary_diagnosis',
-    'treatment_plan',
-    'follow_up_instructions'
-]
+# Load schemas
+VALIDATION_SCHEMAS = load_validation_schemas()
 
-# Validation patterns
+# Extract patterns and required fields
 VALIDATION_PATTERNS = {
-    'curp': re.compile(r'^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d$'),
-    'email': re.compile(r'^[^\s@]+@[^\s@]+\.[^\s@]+$'),
-    'phone': re.compile(r'^(\+52\s?)?(\d{10}|\d{3}\s?\d{3}\s?\d{4})$'),
-    'professional_license': re.compile(r'^\d{7,8}$'),
-    'postal_code': re.compile(r'^\d{5}$')
+    key: re.compile(pattern) 
+    for key, pattern in VALIDATION_SCHEMAS["patterns"].items()
 }
+
+NOM004_REQUIRED_PATIENT_FIELDS = VALIDATION_SCHEMAS["nom004_required_fields"]["patient"]
+NOM004_REQUIRED_CONSULTATION_FIELDS = VALIDATION_SCHEMAS["nom004_required_fields"]["consultation"]
 
 def validate_curp(curp: str) -> bool:
     """Validate Mexican CURP (Clave Única de Registro de Población)"""
@@ -72,7 +84,7 @@ def validate_phone(phone: str) -> bool:
     # Remove spaces and special characters
     clean_phone = re.sub(r'[\s\-\(\)]', '', phone)
     
-    return bool(VALIDATION_PATTERNS['phone'].match(clean_phone))
+    return bool(VALIDATION_PATTERNS['phone_mexico'].match(clean_phone))
 
 def validate_professional_license(license_number: str) -> bool:
     """Validate professional license (cédula profesional)"""

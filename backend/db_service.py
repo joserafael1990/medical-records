@@ -12,6 +12,10 @@ from database import (
     Patient, DoctorProfile, MedicalHistory, VitalSigns, 
     ClinicalStudy, Appointment, User, get_db
 )
+from passlib.context import CryptContext
+
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 class PatientService:
     """Service for patient operations"""
@@ -431,5 +435,218 @@ class AuthService:
     
     @staticmethod
     def get_user_by_doctor_id(db: Session, doctor_id: str) -> Optional[User]:
-        """Get user by doctor ID"""
-        return db.query(User).filter(User.doctor_id == doctor_id, User.is_active == True).first()
+        """Get user by doctor ID - now the user.id is the same as doctor.id"""
+        return db.query(User).filter(User.id == doctor_id, User.is_active == True).first()
+
+
+class ConsultationService:
+    """Service for consultation operations"""
+    
+    @staticmethod
+    def get_consultations(db: Session, patient_search: str = "", doctor_id: Optional[str] = None) -> List[dict]:
+        """Get consultations with optional patient search and doctor filtering"""
+        from sqlalchemy import or_
+        
+        query = db.query(MedicalHistory)
+        
+        # Filter by doctor if provided
+        if doctor_id:
+            query = query.filter(MedicalHistory.created_by == doctor_id)
+        
+        # Add patient search if provided
+        if patient_search:
+            # Join with patients table to search by patient name
+            query = query.join(Patient, MedicalHistory.patient_id == Patient.id)
+            query = query.filter(
+                or_(
+                    Patient.first_name.ilike(f"%{patient_search}%"),
+                    Patient.paternal_surname.ilike(f"%{patient_search}%"),
+                    Patient.maternal_surname.ilike(f"%{patient_search}%")
+                )
+            )
+        
+        consultations = query.order_by(MedicalHistory.created_at.desc()).all()
+        
+        # Convert to dict and add patient names
+        result = []
+        for consultation in consultations:
+            try:
+                # Safe date conversion helper
+                def safe_date_format(date_obj):
+                    if date_obj is None:
+                        return None
+                    if hasattr(date_obj, 'isoformat'):
+                        return date_obj.isoformat()
+                    return str(date_obj)
+                
+                consultation_dict = {
+                    "id": consultation.id,
+                    "patient_id": consultation.patient_id,
+                    "date": safe_date_format(consultation.date),
+                    "chief_complaint": consultation.chief_complaint,
+                    "history_present_illness": consultation.history_present_illness,
+                    "family_history": consultation.family_history,
+                    "personal_pathological_history": consultation.personal_pathological_history,
+                    "personal_non_pathological_history": consultation.personal_non_pathological_history,
+                    "physical_examination": consultation.physical_examination,
+                    "primary_diagnosis": consultation.primary_diagnosis,
+                    "secondary_diagnoses": consultation.secondary_diagnoses,
+                    "differential_diagnosis": consultation.differential_diagnosis,
+                    "treatment_plan": consultation.treatment_plan,
+                    "prescribed_medications": consultation.prescribed_medications,
+                    "follow_up_instructions": consultation.follow_up_instructions,
+                    "doctor_name": consultation.doctor_name,
+                    "doctor_professional_license": consultation.doctor_professional_license,
+                    "doctor_specialty": consultation.doctor_specialty,
+                    "created_by": consultation.created_by,
+                    "created_at": safe_date_format(consultation.created_at),
+                    "updated_at": safe_date_format(consultation.updated_at)
+                }
+                
+                # Get patient name
+                patient = db.query(Patient).filter(Patient.id == consultation.patient_id).first()
+                if patient:
+                    patient_name = f"{patient.first_name} {patient.paternal_surname}"
+                    if patient.maternal_surname:
+                        patient_name += f" {patient.maternal_surname}"
+                    consultation_dict["patient_name"] = patient_name.strip()
+                else:
+                    consultation_dict["patient_name"] = "Paciente no encontrado"
+                
+                result.append(consultation_dict)
+            except Exception as e:
+                print(f"Error processing consultation {consultation.id}: {e}")
+                continue
+        
+        return result
+    
+    @staticmethod
+    def create_consultation(db: Session, consultation_data: dict) -> MedicalHistory:
+        """Create a new consultation"""
+        # Generate ID if not provided
+        if 'id' not in consultation_data or not consultation_data['id']:
+            consultation_data['id'] = f"MH{str(uuid.uuid4())[:8].upper()}"
+        
+        # Ensure required fields have defaults
+        consultation_data.setdefault('secondary_diagnoses', '')
+        consultation_data.setdefault('differential_diagnosis', '')
+        consultation_data.setdefault('prescribed_medications', '')
+        
+        consultation = MedicalHistory(**consultation_data)
+        db.add(consultation)
+        db.commit()
+        db.refresh(consultation)
+        return consultation
+    
+    @staticmethod
+    def get_consultation(db: Session, consultation_id: str) -> Optional[MedicalHistory]:
+        """Get consultation by ID"""
+        return db.query(MedicalHistory).filter(MedicalHistory.id == consultation_id).first()
+
+
+class AuthService:
+    """Service for authentication operations with unified IDs"""
+    
+    @staticmethod
+    def hash_password(password: str) -> str:
+        """Hash a password"""
+        return pwd_context.hash(password)
+    
+    @staticmethod
+    def verify_password(plain_password: str, hashed_password: str) -> bool:
+        """Verify a password"""
+        return pwd_context.verify(plain_password, hashed_password)
+    
+    @staticmethod
+    def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
+        """Authenticate user by email and password"""
+        user = db.query(User).filter(User.email == email, User.is_active == True).first()
+        if not user:
+            return None
+        if not AuthService.verify_password(password, user.hashed_password):
+            return None
+        return user
+    
+    @staticmethod
+    def create_user(db: Session, email: str, password: str, doctor_id: str) -> User:
+        """Create a new user with the same ID as the doctor"""
+        # Check if user already exists
+        if db.query(User).filter(User.email == email).first():
+            raise ValueError("Email already registered")
+        
+        # Check if doctor exists
+        doctor = db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first()
+        if not doctor:
+            raise ValueError("Doctor profile not found")
+        
+        # Check if user already exists for this doctor
+        if db.query(User).filter(User.id == doctor_id).first():
+            raise ValueError("User already exists for this doctor")
+        
+        hashed_password = AuthService.hash_password(password)
+        
+        # Create user with doctor's ID as the user ID
+        user = User(
+            id=doctor_id,  # Same ID as doctor
+            username=email.split('@')[0],  # Use email prefix as username
+            email=email,
+            hashed_password=hashed_password,
+            is_active=True
+        )
+        
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return user
+
+
+# Dashboard function
+def get_dashboard_data(db: Session, doctor_id: Optional[str] = None) -> Dict[str, Any]:
+    """Get dashboard statistics"""
+    try:
+        # Get basic counts
+        total_patients = db.query(Patient).filter(
+            Patient.created_by == doctor_id if doctor_id else True,
+            Patient.is_active == True
+        ).count()
+        
+        total_consultations = db.query(MedicalHistory).filter(
+            MedicalHistory.created_by == doctor_id if doctor_id else True
+        ).count()
+        
+        # Get appointments for today  
+        from datetime import datetime, timedelta
+        from zoneinfo import ZoneInfo
+        today = datetime.now(ZoneInfo("America/Mexico_City")).date()
+        today_appointments = db.query(Appointment).filter(
+            Appointment.doctor_id == doctor_id if doctor_id else True,
+            Appointment.appointment_date >= today,
+            Appointment.appointment_date < today + timedelta(days=1)
+        ).count()
+        
+        # Get recent consultations (last 7 days)
+        week_ago = datetime.now(ZoneInfo("America/Mexico_City")) - timedelta(days=7)
+        recent_consultations = db.query(MedicalHistory).filter(
+            MedicalHistory.created_by == doctor_id if doctor_id else True,
+            MedicalHistory.created_at >= week_ago
+        ).count()
+        
+        return {
+            "total_patients": total_patients,
+            "total_consultations": total_consultations,
+            "today_appointments": today_appointments,
+            "recent_consultations": recent_consultations,
+            "doctor_id": doctor_id,
+            "timestamp": datetime.now(ZoneInfo("America/Mexico_City")).isoformat()
+        }
+        
+    except Exception as e:
+        print(f"Dashboard error: {e}")
+        return {
+            "total_patients": 0,
+            "total_consultations": 0,
+            "today_appointments": 0,
+            "recent_consultations": 0,
+            "doctor_id": doctor_id,
+            "error": str(e)
+        }

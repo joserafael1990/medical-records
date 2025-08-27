@@ -477,9 +477,9 @@ function AppContent() {
     
     physical_examination: '',
     primary_diagnosis: '',
-    primary_diagnosis_cie10: '',
+
     secondary_diagnoses: '',
-    secondary_diagnoses_cie10: '',
+
     treatment_plan: '',
     therapeutic_plan: '',
     follow_up_instructions: '',
@@ -876,9 +876,9 @@ const handleNewConsultation = useCallback(() => {
     
     physical_examination: '',
     primary_diagnosis: '',
-    primary_diagnosis_cie10: '',
+
     secondary_diagnoses: '',
-    secondary_diagnoses_cie10: '',
+
     treatment_plan: '',
     therapeutic_plan: '',
     follow_up_instructions: '',
@@ -911,9 +911,9 @@ const handleEditConsultation = useCallback((consultation: any) => {
     
     physical_examination: consultation.physical_examination || '',
     primary_diagnosis: consultation.primary_diagnosis || '',
-    primary_diagnosis_cie10: consultation.primary_diagnosis_cie10 || '',
+
     secondary_diagnoses: consultation.secondary_diagnoses || '',
-    secondary_diagnoses_cie10: consultation.secondary_diagnoses_cie10 || '',
+
     treatment_plan: consultation.treatment_plan || '',
     therapeutic_plan: consultation.therapeutic_plan || '',
     follow_up_instructions: consultation.follow_up_instructions || '',
@@ -1111,48 +1111,81 @@ const handleConsultationSubmit = useCallback(async () => {
   setFormErrorMessage('');
   
   try {
-    const url = isEditingConsultation 
-      ? `http://localhost:8000/api/consultations/${selectedConsultation?.id}`
-      : 'http://localhost:8000/api/consultations';
-    
-    const method = isEditingConsultation ? 'PUT' : 'POST';
-    
-    // Agregar información del médico desde el perfil del usuario
-    const doctorFullName = doctorProfile 
-      ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name} ${doctorProfile.paternal_surname} ${doctorProfile.maternal_surname || ''}`.trim()
-      : 'Dr. Usuario';
-      
+    // Map frontend data to backend format  
     const consultationData = {
-      ...consultationFormData,
-      doctor_name: doctorFullName,
+      patient_id: consultationFormData.patient_id,
+      date: consultationFormData.date ? new Date(consultationFormData.date).toISOString() : new Date().toISOString(),
+      chief_complaint: consultationFormData.chief_complaint || '',
+      history_present_illness: consultationFormData.history_present_illness || '',
+      family_history: consultationFormData.family_history || '',
+      personal_pathological_history: consultationFormData.personal_pathological_history || '',
+      personal_non_pathological_history: consultationFormData.personal_non_pathological_history || '',
+      physical_examination: consultationFormData.physical_examination || '',
+      primary_diagnosis: consultationFormData.primary_diagnosis || '',
+      secondary_diagnoses: consultationFormData.secondary_diagnoses || '',
+      differential_diagnosis: '',
+      treatment_plan: consultationFormData.treatment_plan || '',
+      prescribed_medications: '',
+      follow_up_instructions: consultationFormData.follow_up_instructions || '',
+      therapeutic_plan: '',
+      prognosis: '',
+      laboratory_results: '',
+      imaging_studies: '',
+      interconsultations: '',
+      doctor_name: doctorProfile 
+        ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name} ${doctorProfile.paternal_surname} ${doctorProfile.maternal_surname || ''}`.trim()
+        : 'Dr. Usuario',
       doctor_professional_license: doctorProfile?.professional_license || '',
       doctor_specialty: doctorProfile?.specialty || 'Medicina General'
     };
     
-    const response = await fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(consultationData),
-    });
-
-    if (response.ok) {
-      const result = await response.json();
-      showSuccessMessage(
-        isEditingConsultation 
-          ? 'Consulta actualizada exitosamente' 
-          : 'Consulta creada exitosamente'
-      );
-      setConsultationDialogOpen(false);
-      fetchConsultations(); // Refresh the list
+    console.log('🔍 Consultation Data Debug:', consultationData);
+    
+    let result;
+    if (isEditingConsultation && selectedConsultation) {
+      result = await apiService.updateConsultation(selectedConsultation.id, consultationData);
     } else {
-      const errorData = await response.json();
-      setFormErrorMessage(errorData.detail || 'Error al guardar la consulta');
+      result = await apiService.createConsultation(consultationFormData.patient_id, consultationData);
     }
-  } catch (error) {
+    
+    showSuccessMessage(
+      isEditingConsultation 
+        ? 'Consulta actualizada exitosamente' 
+        : 'Consulta creada exitosamente'
+    );
+    setConsultationDialogOpen(false);
+    fetchConsultations(); // Refresh the list
+  } catch (error: any) {
     console.error('Error saving consultation:', error);
-    setFormErrorMessage('Error de conexión al guardar la consulta');
+    
+    // Parse API errors properly
+    if (error.response?.data?.detail) {
+      const detail = error.response.data.detail;
+      if (typeof detail === 'string') {
+        setFormErrorMessage(detail);
+      } else if (Array.isArray(detail)) {
+        // Handle Pydantic validation errors
+        const errorMessages = detail.map((err: any) => {
+          const field = err.loc?.[1] || err.loc?.[0] || 'Campo';
+          return `${field}: ${err.msg}`;
+        }).join(', ');
+        setFormErrorMessage(errorMessages);
+        
+        // Set individual field errors
+        const newFieldErrors: {[key: string]: string} = {};
+        detail.forEach((err: any) => {
+          const field = err.loc?.[1] || err.loc?.[0];
+          if (field) {
+            newFieldErrors[field] = err.msg;
+          }
+        });
+        setFieldErrors(newFieldErrors);
+      } else {
+        setFormErrorMessage('Error al guardar la consulta');
+      }
+    } else {
+      setFormErrorMessage('Error de conexión al guardar la consulta');
+    }
   } finally {
     setIsSubmitting(false);
   }
@@ -1344,55 +1377,51 @@ const handlePatientSubmit = async () => {
       birth_date: patientFormData.birth_date,
       gender: patientFormData.gender,
       place_of_birth: null, // Not included in frontend form
-      birth_state_code: patientFormData.birth_state_code || null,
+      birth_state_code: patientFormData.birth_state_code || '',
       nationality: patientFormData.nationality || "Mexicana",
-      curp: patientFormData.curp || null,
-      internal_id: patientFormData.internal_id || null,
+      curp: patientFormData.curp || '',
+      internal_id: patientFormData.internal_id || '',
       phone: patientFormData.phone,
       address: patientFormData.address,
-      email: patientFormData.email || null,
-      neighborhood: patientFormData.neighborhood || null,
-      municipality: patientFormData.municipality || null,
-      state: patientFormData.state || null,
-      postal_code: patientFormData.postal_code || null,
-      civil_status: patientFormData.civil_status || null,
-      education_level: patientFormData.education_level || null,
-      occupation: patientFormData.occupation || null,
-      religion: patientFormData.religion || null,
-      insurance_type: patientFormData.insurance_type || null,
-      insurance_number: patientFormData.insurance_number || null,
-      emergency_contact_name: patientFormData.emergency_contact_name || null,
-      emergency_contact_phone: patientFormData.emergency_contact_phone || null,
-      emergency_contact_relationship: patientFormData.emergency_contact_relationship || null,
-      emergency_contact_address: patientFormData.emergency_contact_address || null,
-      allergies: patientFormData.allergies || null,
-      chronic_conditions: patientFormData.chronic_conditions || null,
-      current_medications: patientFormData.current_medications || null,
-      blood_type: patientFormData.blood_type || null,
+      email: patientFormData.email || '',
+      neighborhood: patientFormData.neighborhood || '',
+      municipality: patientFormData.municipality || '',
+      state: patientFormData.state || '',
+      postal_code: patientFormData.postal_code || '',
+      civil_status: patientFormData.civil_status || '',
+      education_level: patientFormData.education_level || '',
+      occupation: patientFormData.occupation || '',
+      religion: patientFormData.religion || '',
+      insurance_type: patientFormData.insurance_type || '',
+      insurance_number: patientFormData.insurance_number || '',
+      emergency_contact_name: patientFormData.emergency_contact_name || '',
+      emergency_contact_phone: patientFormData.emergency_contact_phone || '',
+      emergency_contact_relationship: patientFormData.emergency_contact_relationship || '',
+      emergency_contact_address: patientFormData.emergency_contact_address || '',
+      allergies: patientFormData.allergies || '',
+      chronic_conditions: patientFormData.chronic_conditions || '',
+      current_medications: patientFormData.current_medications || '',
+      blood_type: patientFormData.blood_type || '',
 
-      previous_hospitalizations: patientFormData.previous_hospitalizations || null,
-      surgical_history: patientFormData.surgical_history || null
+      previous_hospitalizations: patientFormData.previous_hospitalizations || '',
+      surgical_history: patientFormData.surgical_history || '',
+      status: patientFormData.status
     };
     
     if (isEditingPatient && selectedPatient) {
       // Update existing patient
-      const response = await axios.put(`http://localhost:8000/api/patients/${selectedPatient.id}`, patientData);
-      if (response.status === 200) {
-        const patientName = `${patientFormData.first_name} ${patientFormData.paternal_surname} ${patientFormData.maternal_surname}`;
-        fetchPatients();
-        setPatientDialogOpen(false);
-        resetPatientForm();
-        setFieldErrors({});
-        showSuccessMessage(`✅ El paciente ${patientName} fue actualizado exitosamente`);
-      }
+      await apiService.updatePatient(selectedPatient.id, patientData);
+      const patientName = `${patientFormData.first_name} ${patientFormData.paternal_surname} ${patientFormData.maternal_surname}`;
+      fetchPatients();
+      setPatientDialogOpen(false);
+      resetPatientForm();
+      setFieldErrors({});
+      showSuccessMessage(`✅ El paciente ${patientName} fue actualizado exitosamente`);
     } else {
       // Create new patient
       // Sending patient data to API
-      const response = await axios.post('http://localhost:8000/api/patients', patientData);
+      await apiService.createPatient(patientData);
       // API response received successfully
-      
-      // Check for both 200 and 201 status codes
-      if (response.status === 201 || response.status === 200) {
         const patientName = `${patientFormData.first_name} ${patientFormData.paternal_surname} ${patientFormData.maternal_surname}`;
         // Success: dialog closed and view changed
         
@@ -1425,47 +1454,8 @@ const handlePatientSubmit = async () => {
             fetchPatients();
           }, 10);
         }
-        
-        // Patient creation flow completed successfully
-      } else {
-        console.log('Unexpected response status:', response.status);
-        console.log('Full response:', response);
-        // Force close dialog even if status is unexpected but patient was created
-        if (response.data && response.data.id) {
-          console.log('Patient was created despite unexpected status, forcing success flow...');
-          const patientName = `${patientFormData.first_name} ${patientFormData.paternal_surname} ${patientFormData.maternal_surname}`;
-          
-          // Immediate UI updates
-          setPatientDialogOpen(false);
-          
-          if (creatingPatientFromConsultation) {
-            // If creating patient from consultation, return to consultation dialog
-            setCreatingPatientFromConsultation(false);
-            setConsultationDialogOpen(true);
-            
-            // Batch other updates
-            setTimeout(() => {
-              setFormErrorMessage('');
-              setFieldErrors({});
-              resetPatientForm();
-              showSuccessMessage(`✅ El paciente ${patientName} fue agregado con éxito. Ahora puedes seleccionarlo en la consulta.`);
-              fetchPatients();
-            }, 10);
-          } else {
-            // Normal patient creation flow
-            setActiveView('patients');
-            
-            // Batch other updates
-            setTimeout(() => {
-              setFormErrorMessage('');
-              setFieldErrors({});
-              resetPatientForm();
-              showSuccessMessage(`✅ El paciente ${patientName} fue agregado con éxito`);
-              fetchPatients();
-            }, 10);
-          }
-        }
-      }
+
+
     }
   } catch (error: any) {
     console.error('Error saving patient:', error);
@@ -1603,16 +1593,14 @@ const handleDeletePatient = useCallback(async () => {
   
   try {
     setIsSubmitting(true);
-    const response = await axios.delete(`http://localhost:8000/api/patients/${selectedPatient.id}`);
+    await apiService.deletePatient(selectedPatient.id);
     
-    if (response.status === 200 || response.status === 204) {
-      setPatientDialogOpen(false);
-      resetPatientForm();
-      setFieldErrors({});
-      setActiveView('patients');
-      fetchPatients();
-      showSuccessMessage(`🗑️ El paciente ${patientName} fue eliminado exitosamente`);
-    }
+    setPatientDialogOpen(false);
+    resetPatientForm();
+    setFieldErrors({});
+    setActiveView('patients');
+    fetchPatients();
+    showSuccessMessage(`🗑️ El paciente ${patientName} fue eliminado exitosamente`);
   } catch (error: any) {
     console.error('Error deleting patient:', error);
     const errorMessage = error.response?.data?.detail || 'Error al eliminar el paciente. Por favor, intenta nuevamente.';

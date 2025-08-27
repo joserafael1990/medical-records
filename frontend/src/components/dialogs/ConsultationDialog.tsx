@@ -334,7 +334,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               required
               placeholder="Enfermedades familiares relevantes (diabetes, hipertensión, cáncer, etc.)..."
               error={!!fieldErrors.family_history}
-              helperText={fieldErrors.family_history || "OBLIGATORIO NOM-004: Antecedentes médicos de familiares directos"}
+              helperText={fieldErrors.family_history || "Ej: Diabetes tipo 2 (abuelo paterno), hipertensión arterial (madre), cáncer de mama (tía materna)"}
             />
 
             <TextField
@@ -347,7 +347,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               required
               placeholder="Enfermedades previas, cirugías, hospitalizaciones, uso de sustancias..."
               error={!!fieldErrors.personal_pathological_history}
-              helperText={fieldErrors.personal_pathological_history || "OBLIGATORIO NOM-004: Historia médica personal (incluyendo tabaco, alcohol, drogas)"}
+              helperText={fieldErrors.personal_pathological_history || "Ej: Apendicectomía (2018), fractura de radio (2020), fumador 10 cigarrillos/día, 2 copas vino/semana"}
             />
 
             <TextField
@@ -360,7 +360,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               required
               placeholder="Hábitos: alimentación, ejercicio, sueño, trabajo, vivienda..."
               error={!!fieldErrors.personal_non_pathological_history}
-              helperText={fieldErrors.personal_non_pathological_history || "OBLIGATORIO NOM-004: Hábitos y estilo de vida del paciente"}
+              helperText={fieldErrors.personal_non_pathological_history || "Ej: Dieta balanceada, ejercicio 3x/semana, duerme 7hrs, trabaja oficina, vive casa propia, agua potable"}
             />
           </Box>
         );
@@ -386,16 +386,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   helperText={fieldErrors.primary_diagnosis}
                 />
               </Box>
-              <Box sx={{ flex: 1 }}>
-                <TextField
-                  label="Código CIE-10 (Opcional)"
-                  value={formData.primary_diagnosis_cie10 || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, primary_diagnosis_cie10: e.target.value }))}
-                  fullWidth
-                  placeholder="E11.9"
-                  helperText="Opcional: Código de clasificación internacional (no requerido por NOM-004)"
-                />
-              </Box>
+
             </Box>
 
             <Divider />
@@ -416,16 +407,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   helperText="Condiciones adicionales o comorbilidades"
                 />
               </Box>
-              <Box sx={{ flex: 1 }}>
-                <TextField
-                  label="Código CIE-10 (Opcional)"
-                  value={formData.secondary_diagnoses_cie10 || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, secondary_diagnoses_cie10: e.target.value }))}
-                  fullWidth
-                  placeholder="I10"
-                  helperText="Opcional: Código de clasificación internacional"
-                />
-              </Box>
+
             </Box>
 
             <TextField

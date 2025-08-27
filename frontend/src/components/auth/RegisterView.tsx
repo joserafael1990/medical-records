@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { apiService } from '../../services/api';
 import {
   Container,
   Paper,
@@ -231,42 +232,14 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
       // First create the doctor profile
       console.log('📝 Sending doctor profile data:', doctorProfileData);
       
-      const profileResponse = await fetch('http://localhost:8000/api/doctor/profile', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(doctorProfileData),
-      });
-
-      if (!profileResponse.ok) {
-        const errorText = await profileResponse.text();
-        console.error('❌ Profile creation error:', {
-          status: profileResponse.status,
-          statusText: profileResponse.statusText,
-          body: errorText
-        });
-        throw new Error(`Error al crear el perfil profesional: ${errorText}`);
-      }
-
-      const profileData = await profileResponse.json();
+      const profileData = await apiService.createDoctorProfile(doctorProfileData);
       
       // Then register the user account
-      const registerResponse = await fetch('http://localhost:8000/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-          doctor_id: profileData.id
-        }),
+      await apiService.register({
+        email: formData.email,
+        password: formData.password,
+        doctor_id: profileData.id
       });
-
-      if (!registerResponse.ok) {
-        throw new Error('Error al crear la cuenta de usuario');
-      }
 
       // Automatically log in the user
       const success = await login(formData.email, formData.password);

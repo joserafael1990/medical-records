@@ -60,9 +60,7 @@ export interface Consultation {
   
   physical_examination: string;
   primary_diagnosis: string;
-  primary_diagnosis_cie10?: string;
   secondary_diagnoses?: string;
-  secondary_diagnoses_cie10?: string;
   treatment_plan: string;
   therapeutic_plan?: string;
   follow_up_instructions: string;
@@ -265,9 +263,7 @@ export interface ConsultationFormData {
   
   physical_examination: string;
   primary_diagnosis: string; // OBLIGATORIO NOM-004
-  primary_diagnosis_cie10: string; // OPCIONAL (buena práctica, no requerido por NOM-004)
   secondary_diagnoses: string;
-  secondary_diagnoses_cie10: string; // OPCIONAL
   treatment_plan: string;
   therapeutic_plan: string;
   follow_up_instructions: string;

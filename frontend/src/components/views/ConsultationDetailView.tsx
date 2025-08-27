@@ -248,11 +248,7 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
                     {consultation.primary_diagnosis}
                   </Typography>
                 </Box>
-                {consultation.primary_diagnosis_cie10 && (
-                  <Typography variant="body2" color="text.secondary">
-                    CIE-10: {consultation.primary_diagnosis_cie10}
-                  </Typography>
-                )}
+
               </Box>
 
               {consultation.secondary_diagnoses && (
@@ -271,11 +267,7 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
                       {consultation.secondary_diagnoses}
                     </Typography>
                   </Box>
-                  {consultation.secondary_diagnoses_cie10 && (
-                    <Typography variant="body2" color="text.secondary">
-                      CIE-10: {consultation.secondary_diagnoses_cie10}
-                    </Typography>
-                  )}
+
                 </Box>
               )}
             </Paper>

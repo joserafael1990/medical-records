@@ -55,9 +55,9 @@ const initialFormData: ConsultationFormData = {
   
   physical_examination: '',
   primary_diagnosis: '',
-  primary_diagnosis_cie10: '',
+
   secondary_diagnoses: '',
-  secondary_diagnoses_cie10: '',
+
   treatment_plan: '',
   therapeutic_plan: '',
   follow_up_instructions: '',
@@ -172,9 +172,9 @@ export const useConsultationManager = (): UseConsultationManagerReturn => {
       
       physical_examination: consultation.physical_examination || '',
       primary_diagnosis: consultation.primary_diagnosis || '',
-      primary_diagnosis_cie10: consultation.primary_diagnosis_cie10 || '',
+
       secondary_diagnoses: consultation.secondary_diagnoses || '',
-      secondary_diagnoses_cie10: consultation.secondary_diagnoses_cie10 || '',
+
       treatment_plan: consultation.treatment_plan || '',
       therapeutic_plan: consultation.therapeutic_plan || '',
       follow_up_instructions: consultation.follow_up_instructions || '',

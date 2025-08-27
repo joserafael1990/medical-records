@@ -11,11 +11,12 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from database import get_db, DoctorProfile as DBDoctorProfile
 from db_service import DoctorService
+from config import settings
 
-# Security configuration
-SECRET_KEY = "historias_clinicas_secret_key_2025"  # In production, use environment variable
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 hours
+# Security configuration from environment
+SECRET_KEY = settings.JWT_SECRET_KEY
+ALGORITHM = settings.JWT_ALGORITHM
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -47,10 +48,11 @@ def verify_token(token: str) -> Optional[dict]:
     """Verify and decode JWT token"""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        # Now the JWT contains the doctor ID directly (same as user ID)
         doctor_id: str = payload.get("sub")
         if doctor_id is None:
             return None
-        return {"doctor_id": doctor_id}
+        return {"id": doctor_id}  # Return as 'id' since it's the same for user and doctor
     except JWTError:
         return None
 
@@ -68,7 +70,7 @@ async def get_current_doctor(credentials: HTTPAuthorizationCredentials = Depends
     if token_data is None:
         raise credentials_exception
     
-    doctor = DoctorService.get_profile_by_id(db, token_data["doctor_id"])
+    doctor = DoctorService.get_profile_by_id(db, token_data["id"])
     if doctor is None:
         raise credentials_exception
     
@@ -87,7 +89,7 @@ async def get_current_doctor_optional(credentials: Optional[HTTPAuthorizationCre
         if token_data is None:
             return None
         
-        doctor = DoctorService.get_profile_by_id(db, token_data["doctor_id"])
+        doctor = DoctorService.get_profile_by_id(db, token_data["id"])
         return doctor
     except:
         return None

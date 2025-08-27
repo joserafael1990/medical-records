@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { apiService } from '../services/api';
 
 // Types for authentication
 interface DoctorInfo {
@@ -62,19 +63,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoading(true);
     
     try {
-      const response = await fetch('http://localhost:8000/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
+      const data = await apiService.login(email, password);
         
         // Store authentication data
-        localStorage.setItem('auth_token', data.access_token);
+        localStorage.setItem('token', data.access_token);
         localStorage.setItem('doctor_data', JSON.stringify(data.doctor));
         
         setUser({
@@ -84,11 +76,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         setIsLoading(false);
         return true;
-      } else {
-        console.error('Login failed:', response.statusText);
-        setIsLoading(false);
-        return false;
-      }
     } catch (error) {
       console.error('Login error - Backend not available, using fallback mode:', error);
       

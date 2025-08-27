@@ -3,7 +3,7 @@
 // ============================================================================
 
 import axios, { AxiosInstance, AxiosResponse, AxiosError } from 'axios';
-import { API_CONFIG, ERROR_MESSAGES } from '../constants';
+import { API_CONFIG, ERROR_MESSAGES, FEATURE_FLAGS, isProduction } from '../constants';
 import type { 
   Patient, 
   Consultation, 
@@ -41,12 +41,14 @@ class ApiService {
     this.api.interceptors.request.use(
       (config) => {
         // Add auth token if available
-        const token = localStorage.getItem('auth_token');
+        const token = localStorage.getItem('token');
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
         
-        console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`);
+        if (FEATURE_FLAGS.ENABLE_DEBUG_LOGS) {
+          console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`);
+        }
         return config;
       },
       (error) => {
@@ -58,17 +60,26 @@ class ApiService {
     // Response interceptor
     this.api.interceptors.response.use(
       (response) => {
-        console.log(`✅ API Response: ${response.status} ${response.config.url}`);
+        if (FEATURE_FLAGS.ENABLE_DEBUG_LOGS) {
+          console.log(`✅ API Response: ${response.status} ${response.config.url}`);
+        }
         return response;
       },
       (error: AxiosError) => {
-        console.error(`❌ API Error: ${error.response?.status} ${error.config?.url}`, error);
+        if (FEATURE_FLAGS.ENABLE_DEBUG_LOGS) {
+          console.error(`❌ API Error: ${error.response?.status} ${error.config?.url}`, error);
+        }
         
         // Handle specific error cases
         if (error.response?.status === 401) {
           // Handle unauthorized - redirect to login
-          localStorage.removeItem('auth_token');
+          localStorage.removeItem('token');
           window.location.href = '/login';
+        }
+        
+        // Send to error monitoring in production
+        if (FEATURE_FLAGS.ENABLE_ERROR_MONITORING && isProduction) {
+          this.sendToErrorMonitoring(error);
         }
         
         return Promise.reject(this.handleApiError(error));
@@ -93,15 +104,77 @@ class ApiService {
 
     if (error.response) {
       return {
-        detail: (error.response.data as any)?.detail || ERROR_MESSAGES.GENERIC,
+        detail: this.getErrorMessage(error),
         status: error.response.status
       };
     }
 
     return {
       detail: ERROR_MESSAGES.GENERIC,
-      status: 500
+      status: 0
     };
+  }
+
+  private getErrorMessage(error: AxiosError): string {
+    // Check for specific error messages from backend
+    if (error.response?.data && typeof error.response.data === 'object') {
+      const data = error.response.data as any;
+      if (data.detail) {
+        if (typeof data.detail === 'string') {
+          return data.detail;
+        } else if (Array.isArray(data.detail)) {
+          // Handle Pydantic validation errors
+          return data.detail.map((err: any) => {
+            const field = err.loc?.[1] || err.loc?.[0] || 'Campo';
+            return `${field}: ${err.msg}`;
+          }).join(', ');
+        }
+      }
+    }
+
+    // Default error messages by status code
+    switch (error.response?.status) {
+      case 400:
+        return 'Solicitud inválida. Verifica los datos enviados.';
+      case 401:
+        return 'No autorizado. Por favor, inicia sesión nuevamente.';
+      case 403:
+        return 'No tienes permisos para realizar esta acción.';
+      case 404:
+        return 'Recurso no encontrado.';
+      case 408:
+        return 'Tiempo de espera agotado. Intenta nuevamente.';
+      case 422:
+        return 'Datos inválidos. Verifica la información ingresada.';
+      case 500:
+        return 'Error interno del servidor. El equipo técnico ha sido notificado.';
+      case 502:
+      case 503:
+      case 504:
+        return 'Servicio no disponible temporalmente. Intenta más tarde.';
+      default:
+        return ERROR_MESSAGES.GENERIC;
+    }
+  }
+
+  private sendToErrorMonitoring(error: AxiosError): void {
+    // In a real application, you would send to Sentry, LogRocket, etc.
+    const errorReport = {
+      message: error.message,
+      status: error.response?.status,
+      url: error.config?.url,
+      method: error.config?.method,
+      timestamp: new Date().toISOString(),
+      userAgent: navigator.userAgent,
+      data: error.response?.data
+    };
+
+    // For now, just log it (in production you'd send to monitoring service)
+    if (!isProduction) {
+      console.error('🔴 Error Report for Monitoring:', errorReport);
+    }
+    
+    // Example: Sentry.captureException(error, { extra: errorReport });
   }
 
   // ============================================================================
@@ -174,15 +247,18 @@ class ApiService {
   }
 
   async createConsultation(patientId: string, consultationData: ConsultationFormData): Promise<Consultation> {
+    // Extract only the fields needed by the backend, exclude doctor-related fields
+    const { doctor_name, doctor_professional_license, doctor_specialty, ...cleanData } = consultationData;
+    
     const payload = {
-      ...consultationData,
-      date: new Date().toISOString(),
-      created_by: consultationData.doctor_name,
-      created_at: new Date().toISOString()
+      ...cleanData,
+      patient_id: patientId, // Ensure patient_id is included
+      date: new Date().toISOString()
+      // Note: doctor fields and created_by are now assigned by the backend
     };
     
     const response = await this.api.post<Consultation>(
-      `${API_CONFIG.ENDPOINTS.PATIENTS}/${patientId}/medical-history`, 
+      API_CONFIG.ENDPOINTS.CONSULTATIONS, 
       payload
     );
     return response.data;
@@ -310,6 +386,20 @@ class ApiService {
   }
 
   // ============================================================================
+  // AUTHENTICATION SERVICES
+  // ============================================================================
+
+  async login(email: string, password: string): Promise<any> {
+    const response = await this.api.post('/api/auth/login', { email, password });
+    return response.data;
+  }
+
+  async register(userData: any): Promise<any> {
+    const response = await this.api.post('/api/auth/register', userData);
+    return response.data;
+  }
+
+  // ============================================================================
   // DASHBOARD SERVICES
   // ============================================================================
 
@@ -385,6 +475,8 @@ export const {
   getDoctorProfile,
   createDoctorProfile,
   updateDoctorProfile,
+  login,
+  register,
   getDashboardData,
   withRetry
 } = apiService;

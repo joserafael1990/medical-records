@@ -11,6 +11,8 @@ from datetime import datetime, date, timedelta
 from enum import Enum
 import pytz
 from zoneinfo import ZoneInfo
+from config import settings
+from logger import logger, api_logger, db_logger
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import uvicorn
@@ -95,8 +97,8 @@ app.add_middleware(RequestLoggingMiddleware)
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -105,9 +107,14 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     """Initialize database tables"""
-    print("🚀 Starting Historias Clínicas API...")
+    logger.info("Starting AVANT Medical System Backend", 
+                version=settings.APP_VERSION, 
+                environment=settings.APP_ENV)
+    
     init_db()
-    print("✅ Database initialized successfully")
+    db_logger.info("Database initialized successfully")
+    
+    logger.info("✅ AVANT Backend startup completed successfully")
 
 # Configure file uploads for clinical studies
 UPLOAD_DIRECTORY = "uploads/clinical_studies"
@@ -458,9 +465,7 @@ class MedicalHistoryBase(BaseModel):
     
     # Diagnosis
     primary_diagnosis: str
-    primary_diagnosis_cie10: Optional[str] = None
     secondary_diagnoses: Optional[str] = None
-    secondary_diagnoses_cie10: Optional[str] = None
     differential_diagnosis: Optional[str] = None
     
     # Treatment
@@ -469,12 +474,12 @@ class MedicalHistoryBase(BaseModel):
     follow_up_instructions: str
     
     # Doctor Information (auto-filled from profile)
-    doctor_name: str
-    doctor_professional_license: str
+    doctor_name: Optional[str] = None
+    doctor_professional_license: Optional[str] = None
     doctor_specialty: Optional[str] = None
     
-    # System fields
-    created_by: str
+    # System fields (auto-filled by backend)
+    created_by: Optional[str] = None
 
 class MedicalHistoryCreate(MedicalHistoryBase):
     pass
@@ -554,12 +559,12 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
         
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
-            data={"sub": user.doctor_id}, 
+            data={"sub": user.id},  # user.id is now the same as doctor.id
             expires_delta=access_token_expires
         )
         
-        # Get doctor information
-        doctor = DoctorService.get_profile_by_id(db, user.doctor_id)
+        # Get doctor information - user.id is now the doctor.id
+        doctor = DoctorService.get_profile_by_id(db, user.id)
         if not doctor:
             raise HTTPException(status_code=404, detail="Doctor profile not found")
         
@@ -595,12 +600,12 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
             db, 
             user_data.email, 
             user_data.password, 
-            user_data.doctor_id
+            user_data.doctor_id  # This is the doctor ID that will become the user ID
         )
         
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
-            data={"sub": user.doctor_id}, 
+            data={"sub": user.id},  # user.id is now the same as doctor.id
             expires_delta=access_token_expires
         )
         
@@ -632,9 +637,52 @@ async def dashboard(
     current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
 ):
     """Get dashboard data from PostgreSQL, filtered by doctor"""
-    doctor_id = current_doctor.id if current_doctor else None
-    dashboard_data = get_dashboard_data(db, doctor_id)
-    return dashboard_data
+    try:
+        doctor_id = current_doctor.id if current_doctor else None
+        
+        # Get dashboard statistics
+        total_patients = db.query(DBPatient).filter(
+            DBPatient.created_by == doctor_id if doctor_id else True
+        ).count()
+        
+        total_consultations = db.query(DBMedicalHistory).filter(
+            DBMedicalHistory.created_by == doctor_id if doctor_id else True
+        ).count()
+        
+        # Get appointments for today
+        today = datetime.now(ZoneInfo("America/Mexico_City")).date()
+        today_appointments = db.query(DBAppointment).filter(
+            DBAppointment.doctor_id == doctor_id if doctor_id else True,
+            DBAppointment.appointment_date >= today,
+            DBAppointment.appointment_date < today + timedelta(days=1)
+        ).count()
+        
+        # Get recent consultations (last 7 days)
+        week_ago = datetime.now(ZoneInfo("America/Mexico_City")) - timedelta(days=7)
+        recent_consultations = db.query(DBMedicalHistory).filter(
+            DBMedicalHistory.created_by == doctor_id if doctor_id else True,
+            DBMedicalHistory.created_at >= week_ago
+        ).count()
+        
+        return {
+            "total_patients": total_patients,
+            "total_consultations": total_consultations,
+            "today_appointments": today_appointments,
+            "recent_consultations": recent_consultations,
+            "doctor_id": doctor_id,
+            "timestamp": datetime.now(ZoneInfo("America/Mexico_City")).isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Dashboard error: {str(e)}")
+        return {
+            "total_patients": 0,
+            "total_consultations": 0,
+            "today_appointments": 0,
+            "recent_consultations": 0,
+            "doctor_id": doctor_id if 'doctor_id' in locals() else None,
+            "error": "Dashboard data temporarily unavailable"
+        }
 
 # ============================================================================
 # PATIENT ENDPOINTS - Essential only
@@ -710,7 +758,7 @@ async def create_patient(
         
         # Assign the authenticated doctor
         if current_doctor:
-            patient_data["created_by"] = f"{current_doctor.title} {current_doctor.first_name} {current_doctor.paternal_surname}"
+            patient_data["created_by"] = current_doctor.id
         
         # Map status field to is_active
         if "status" in patient_data:
@@ -920,12 +968,12 @@ async def get_doctor_profile(
 async def create_doctor_profile(profile: DoctorProfileCreate, db: Session = Depends(get_db)):
     """Create a new doctor profile with NOM-004 compliance validation"""
     try:
-        print(f"📝 Received profile data: {profile.dict()}")
+        api_logger.info("Creating doctor profile", profile_data=profile.dict())
         profile_data = profile.dict()
         # board_certifications and professional_memberships processing removed per user request
         
         profile_data["created_at"] = datetime.utcnow()
-        print(f"📝 Processing profile data: {profile_data}")
+        api_logger.debug("Processing profile data", profile_data=profile_data)
         
         new_profile = DoctorService.create_profile(db, profile_data)
         
@@ -1071,7 +1119,7 @@ async def get_consultations(
             consultation_response = {
                 "id": consultation_dict.get("id", ""),
                 "patient_id": consultation_dict.get("patient_id", ""),
-                "date": consultation_dict.get("date").isoformat() if consultation_dict.get("date") else "",
+                "date": consultation_dict.get("date", ""),
                 "chief_complaint": consultation_dict.get("chief_complaint", ""),
                 "history_present_illness": consultation_dict.get("history_present_illness", ""),
                 "family_history": consultation_dict.get("family_history", ""),
@@ -1079,9 +1127,7 @@ async def get_consultations(
                 "personal_non_pathological_history": consultation_dict.get("personal_non_pathological_history", ""),
                 "physical_examination": consultation_dict.get("physical_examination", ""),
                 "primary_diagnosis": consultation_dict.get("primary_diagnosis", ""),
-                "primary_diagnosis_cie10": consultation_dict.get("primary_diagnosis_cie10", ""),
                 "secondary_diagnoses": consultation_dict.get("secondary_diagnoses", ""),
-                "secondary_diagnoses_cie10": consultation_dict.get("secondary_diagnoses_cie10", ""),
                 "differential_diagnosis": consultation_dict.get("differential_diagnosis", ""),
                 "treatment_plan": consultation_dict.get("treatment_plan", ""),
                 "prescribed_medications": consultation_dict.get("prescribed_medications", ""),
@@ -1090,8 +1136,8 @@ async def get_consultations(
                 "doctor_professional_license": consultation_dict.get("doctor_professional_license", ""),
                 "doctor_specialty": consultation_dict.get("doctor_specialty", ""),
                 "patient_name": consultation_dict.get("patient_name", ""),
-                "created_at": consultation_dict.get("created_at").isoformat() if consultation_dict.get("created_at") else "",
-                "updated_at": consultation_dict.get("updated_at").isoformat() if consultation_dict.get("updated_at") else None,
+                "created_at": consultation_dict.get("created_at", ""),
+                "updated_at": consultation_dict.get("updated_at"),
                 "created_by": consultation_dict.get("created_by", "")
             }
             consultation_responses.append(ConsultationResponse(**consultation_response))
@@ -1113,7 +1159,17 @@ async def create_consultation(
         
         # Assign the authenticated doctor
         if current_doctor:
-            consultation_data["doctor_id"] = current_doctor.id
+            consultation_data["created_by"] = current_doctor.id
+            # Set doctor information fields
+            consultation_data["doctor_name"] = f"{current_doctor.first_name} {current_doctor.paternal_surname}"
+            consultation_data["doctor_professional_license"] = current_doctor.professional_license
+            consultation_data["doctor_specialty"] = current_doctor.specialty or "General"
+        else:
+            # Fallback if no authenticated doctor
+            consultation_data["created_by"] = "Sistema"
+            consultation_data["doctor_name"] = "Doctor Sistema"
+            consultation_data["doctor_professional_license"] = "N/A"
+            consultation_data["doctor_specialty"] = "General"
         
         new_consultation = ConsultationService.create_consultation(db, consultation_data)
         
@@ -1131,9 +1187,7 @@ async def create_consultation(
             "personal_non_pathological_history": new_consultation.personal_non_pathological_history,
             "physical_examination": new_consultation.physical_examination,
             "primary_diagnosis": new_consultation.primary_diagnosis,
-            "primary_diagnosis_cie10": new_consultation.primary_diagnosis_cie10 or "",
             "secondary_diagnoses": new_consultation.secondary_diagnoses or "",
-            "secondary_diagnoses_cie10": new_consultation.secondary_diagnoses_cie10 or "",
             "differential_diagnosis": new_consultation.differential_diagnosis or "",
             "treatment_plan": new_consultation.treatment_plan,
             "prescribed_medications": new_consultation.prescribed_medications or "",
@@ -1351,7 +1405,7 @@ async def create_appointment(appointment_data: dict, current_doctor: DBDoctorPro
             "insurance_covered": appointment_data.get("insurance_covered", False),
             "room_number": appointment_data.get("room_number"),
             "equipment_needed": appointment_data.get("equipment_needed"),
-            "created_by": "Sistema de Agenda"
+            "created_by": current_doctor.id if current_doctor else "Sistema"
         }
         
         new_appointment = AppointmentService.create_appointment(db, appointment_create_data)
@@ -1562,11 +1616,17 @@ async def get_appointments(
         raise HTTPException(status_code=500, detail=f"Error fetching appointments: {str(e)}")
 
 @app.post("/api/appointments", response_model=AppointmentResponse)
-async def create_appointment_new(appointment: AppointmentCreate, db: Session = Depends(get_db)):
+async def create_appointment_new(appointment: AppointmentCreate, current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional), db: Session = Depends(get_db)):
     """Create a new appointment"""
     try:
         appointment_data = appointment.dict()
         appointment_data["created_at"] = datetime.utcnow()
+        
+        # Assign the authenticated doctor to created_by
+        if current_doctor:
+            appointment_data["created_by"] = current_doctor.id
+        else:
+            appointment_data["created_by"] = "Sistema"
         
         new_appointment = AppointmentService.create_appointment(db, appointment_data)
         

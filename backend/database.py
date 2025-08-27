@@ -82,17 +82,17 @@ class Patient(Base):
 class User(Base):
     __tablename__ = "users"
     
-    id = Column(String, primary_key=True, default=lambda: f"USR{str(uuid.uuid4())[:8].upper()}")
+    # Use the same ID as the doctor profile (DR...)
+    id = Column(String, ForeignKey("doctor_profiles.id"), primary_key=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
     email = Column(String(100), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
-    doctor_id = Column(String, ForeignKey("doctor_profiles.id"), nullable=False, unique=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, onupdate=datetime.utcnow)
     last_login = Column(DateTime)
     
-    # Relationships
+    # Relationships - direct 1:1 relationship using same ID
     doctor = relationship("DoctorProfile", back_populates="user")
 
 class DoctorProfile(Base):
