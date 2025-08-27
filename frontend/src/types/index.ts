@@ -431,9 +431,12 @@ export interface DoctorFormData {
 // ============================================================================
 
 export type StudyType = 
-  | 'laboratory'        // Estudios de laboratorio
-  | 'radiology'         // Estudios radiológicos
-  | 'pathology'         // Estudios de patología
+  | 'hematologia'       // Hematología
+  | 'quimica_clinica'   // Química Clínica
+  | 'microbiologia'     // Microbiología
+  | 'radiologia_simple' // Radiología Simple
+  | 'tomografia'        // Tomografía
+  | 'resonancia'        // Resonancia Magnética
   | 'cardiology'        // Estudios cardiológicos
   | 'endoscopy'         // Estudios endoscópicos
   | 'biopsy'            // Biopsias
@@ -508,4 +511,87 @@ export interface ClinicalStudyFormData {
   clinical_indication: string;
   relevant_history: string;
   created_by: string;
+}
+
+// ============================================================================
+// MEDICAL ORDERS TYPES - Órdenes Médicas
+// ============================================================================
+
+export type OrderType = 
+  | 'laboratorio'         // Laboratorio
+  | 'radiologia'          // Radiología
+  | 'procedimiento'       // Procedimiento
+  | 'interconsulta';      // Interconsulta
+
+export type OrderPriority = 
+  | 'rutina'              // Rutina
+  | 'preferente'          // Preferente
+  | 'urgente';            // Urgente
+
+export type OrderStatus = 
+  | 'pendiente'           // Pendiente
+  | 'en_proceso'          // En proceso
+  | 'completada'          // Completada
+  | 'cancelada';          // Cancelada
+
+export interface MedicalOrder {
+  id: string;
+  consultation_id: string;          // ID de la consulta asociada
+  patient_id: string;               // ID del paciente
+  
+  // Order information
+  order_type: OrderType;            // Tipo de orden
+  study_type: StudyType;            // Tipo de estudio
+  study_name: string;               // Nombre del estudio
+  study_description?: string;       // Descripción detallada
+  
+  // Clinical information (NOM-004 required)
+  clinical_indication: string;      // Indicación clínica (obligatorio)
+  provisional_diagnosis?: string;   // Diagnóstico provisional
+  diagnosis_cie10?: string;         // Código CIE-10
+  relevant_clinical_data?: string;  // Datos clínicos relevantes
+  
+  // Doctor information (auto-filled from session)
+  ordering_doctor_name?: string;    // Médico que solicita
+  ordering_doctor_license?: string; // Cédula profesional
+  ordering_doctor_specialty?: string; // Especialidad
+  
+  // Order details
+  priority: OrderPriority;          // Prioridad
+  requires_preparation: boolean;    // Requiere preparación
+  preparation_instructions?: string; // Instrucciones de preparación
+  
+  // Additional information
+  estimated_cost?: string;          // Costo estimado
+  special_instructions?: string;    // Instrucciones especiales
+  valid_until_date?: string;        // Vigencia de la orden (ISO string)
+  
+  // Status and dates
+  order_date: string;               // Fecha de la orden (ISO string)
+  status: OrderStatus;              // Estado de la orden
+  
+  // Response fields (from backend)
+  patient_name?: string;            // Nombre del paciente
+  created_at: string;               // Fecha de creación (ISO string)
+  updated_at?: string;              // Fecha de actualización (ISO string)
+  created_by?: string;              // Usuario que crea
+}
+
+export interface MedicalOrderFormData {
+  consultation_id: string;
+  patient_id: string;
+  order_type: OrderType;
+  study_type: StudyType;
+  study_name: string;
+  study_description?: string;
+  clinical_indication: string;
+  provisional_diagnosis?: string;
+  diagnosis_cie10?: string;
+  relevant_clinical_data?: string;
+  priority: OrderPriority;
+  requires_preparation: boolean;
+  preparation_instructions?: string;
+  estimated_cost?: string;
+  special_instructions?: string;
+  valid_until_date?: string;
 }

@@ -54,7 +54,7 @@ import {
 } from './components/lazy';
 import { ConsultationDetailView } from './components';
 import { LoadingFallback } from './components';
-import { Patient, DoctorFormData, ConsultationFormData, AppointmentFormData } from './types';
+import { Patient, DoctorFormData, ConsultationFormData, AppointmentFormData, ClinicalStudy } from './types';
 import { API_CONFIG } from './constants';
 import { apiService } from './services/api';
 import { useDoctorProfileCache as useDoctorProfile } from './hooks/useDoctorProfileCache';
@@ -441,6 +441,7 @@ function AppContent() {
   
 
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [todayAppointments, setTodayAppointments] = useState<any[]>([]);
   const [activeView, setActiveView] = useState('dashboard');
   
   // Patient management state
@@ -491,6 +492,9 @@ function AppContent() {
     doctor_professional_license: '',
     doctor_specialty: ''
   });
+
+  // Clinical Studies state
+  const [clinicalStudies, setClinicalStudies] = useState<ClinicalStudy[]>([]);
 
   // Agenda management state
   const [appointments, setAppointments] = useState<any[]>([]);
@@ -1191,6 +1195,22 @@ const handleConsultationSubmit = useCallback(async () => {
   }
 }, [consultationFormData, isEditingConsultation, selectedConsultation, fetchConsultations, doctorProfile]);
 
+// Clinical Studies handlers
+const handleAddClinicalStudy = useCallback(() => {
+  // TODO: Implementar la funcionalidad de agregar estudio clínico
+  console.log('Agregar nuevo estudio clínico');
+}, []);
+
+const handleEditClinicalStudy = useCallback((study: ClinicalStudy) => {
+  // TODO: Implementar la funcionalidad de editar estudio clínico
+  console.log('Editar estudio clínico:', study);
+}, []);
+
+const handleDeleteClinicalStudy = useCallback((studyId: string) => {
+  // TODO: Implementar la funcionalidad de eliminar estudio clínico
+  console.log('Eliminar estudio clínico:', studyId);
+}, []);
+
 // Handle appointment form submission
 const handleAppointmentSubmit = useCallback(async () => {
   setIsSubmitting(true);
@@ -1628,11 +1648,17 @@ const formatDateTime = (dateString: string) => {
         // Fetch dashboard data
         const data = await apiService.getDashboardData();
         setDashboardData(data);
+        
+        // Fetch today's appointments for the agenda
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+        const appointments = await apiService.getDailyAgenda(today);
+        setTodayAppointments(appointments || []);
       } catch (error) {
+        console.log('Dashboard data not available, using mock data');
         // Mock data for demo
         setDashboardData({
           physician: 'Dr. García Martínez',
-          today_appointments: 8,
+          today_appointments: 1,
           pending_records: 15,
           whatsapp_messages: 2,
           compliance_score: 100,
@@ -1646,6 +1672,7 @@ const formatDateTime = (dateString: string) => {
             "Optimización de ingresos"
           ]
         });
+        setTodayAppointments([]);
       }
     };
 
@@ -2165,6 +2192,7 @@ const formatDateTime = (dateString: string) => {
                 <Suspense fallback={<LoadingFallback message="Cargando dashboard..." />}>
                   <DashboardView 
                     dashboardData={dashboardData} 
+                    todayAppointments={todayAppointments}
                     onNewAppointment={handleNewAppointment}
                     onNewConsultation={handleNewConsultation}
                   />
@@ -2539,6 +2567,10 @@ const formatDateTime = (dateString: string) => {
               setCreatingPatientFromConsultation(true);
               setPatientDialogOpen(true);
             }}
+            clinicalStudies={clinicalStudies}
+            onAddClinicalStudy={handleAddClinicalStudy}
+            onEditClinicalStudy={handleEditClinicalStudy}
+            onDeleteClinicalStudy={handleDeleteClinicalStudy}
           />
         </Suspense>
 

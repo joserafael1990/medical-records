@@ -34,7 +34,6 @@ import {
   Healing as HealingIcon,
   Medication as MedicationIcon,
   Science as ScienceIcon,
-  Schedule as ScheduleIcon,
   NavigateNext as NextIcon,
   NavigateBefore as BackIcon,
   Save as SaveIcon
@@ -107,7 +106,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     {
       label: 'Estudios Clínicos',
       icon: <ScienceIcon />,
-      description: 'Estudios de laboratorio, radiología y otros'
+      description: 'Órdenes de estudios, laboratorio, radiología y resultados'
     }
   ];
 
