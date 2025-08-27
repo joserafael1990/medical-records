@@ -5,7 +5,7 @@ Sistema de gestión de historias clínicas médicas conforme a NOM-004
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ValidationError
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date, timedelta
 from enum import Enum
@@ -627,9 +627,13 @@ async def get_current_user(current_doctor: DBDoctorProfile = Depends(get_current
     )
 
 @app.get("/api/physicians/dashboard")
-async def dashboard(db: Session = Depends(get_db)):
-    """Get dashboard data from PostgreSQL"""
-    dashboard_data = get_dashboard_data(db)
+async def dashboard(
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
+):
+    """Get dashboard data from PostgreSQL, filtered by doctor"""
+    doctor_id = current_doctor.id if current_doctor else None
+    dashboard_data = get_dashboard_data(db, doctor_id)
     return dashboard_data
 
 # ============================================================================
@@ -637,10 +641,18 @@ async def dashboard(db: Session = Depends(get_db)):
 # ============================================================================
 
 @app.get("/api/patients", response_model=List[PatientResponse])
-async def get_patients(search: Optional[str] = None, limit: int = 100, offset: int = 0, db: Session = Depends(get_db)):
+async def get_patients(
+    search: Optional[str] = None, 
+    limit: int = 100, 
+    offset: int = 0, 
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
+):
     """Get all patients with optional search and pagination from PostgreSQL"""
     try:
-        patients = PatientService.get_patients(db, search or "", offset, limit)
+        # If doctor is authenticated, filter by doctor_id
+        doctor_id = current_doctor.id if current_doctor else None
+        patients = PatientService.get_patients(db, search or "", offset, limit, doctor_id)
         
         patient_responses = []
         for patient in patients:
@@ -686,11 +698,19 @@ async def get_patients(search: Optional[str] = None, limit: int = 100, offset: i
         raise HTTPException(status_code=500, detail=f"Error fetching patients: {str(e)}")
 
 @app.post("/api/patients", response_model=PatientResponse)
-async def create_patient(patient: PatientCreate, db: Session = Depends(get_db)):
+async def create_patient(
+    patient: PatientCreate, 
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
+):
     """Create a new patient"""
     try:
         patient_data = patient.dict()
         patient_data["created_at"] = datetime.utcnow()
+        
+        # Assign the authenticated doctor
+        if current_doctor:
+            patient_data["created_by"] = f"{current_doctor.title} {current_doctor.first_name} {current_doctor.paternal_surname}"
         
         # Map status field to is_active
         if "status" in patient_data:
@@ -851,9 +871,12 @@ async def update_patient(patient_id: str, patient: PatientUpdate, db: Session = 
 # ============================================================================
 
 @app.get("/api/doctor/profile", response_model=DoctorProfileResponse)
-async def get_doctor_profile(db: Session = Depends(get_db)):
+async def get_doctor_profile(
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor)
+):
     """Get the current doctor's profile"""
-    profile = DoctorService.get_profile(db)
+    profile = current_doctor
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil del médico no encontrado")
     
@@ -897,10 +920,12 @@ async def get_doctor_profile(db: Session = Depends(get_db)):
 async def create_doctor_profile(profile: DoctorProfileCreate, db: Session = Depends(get_db)):
     """Create a new doctor profile with NOM-004 compliance validation"""
     try:
+        print(f"📝 Received profile data: {profile.dict()}")
         profile_data = profile.dict()
         # board_certifications and professional_memberships processing removed per user request
         
         profile_data["created_at"] = datetime.utcnow()
+        print(f"📝 Processing profile data: {profile_data}")
         
         new_profile = DoctorService.create_profile(db, profile_data)
         
@@ -939,15 +964,23 @@ async def create_doctor_profile(profile: DoctorProfileCreate, db: Session = Depe
         }
         
         return DoctorProfileResponse(**profile_dict)
+    except ValidationError as ve:
+        print(f"❌ Validation error: {ve}")
+        raise HTTPException(status_code=422, detail=f"Validation error: {ve}")
     except Exception as e:
+        print(f"❌ General error: {e}")
         raise HTTPException(status_code=500, detail=f"Error creating doctor profile: {str(e)}")
 
 @app.put("/api/doctor/profile", response_model=DoctorProfileResponse)
-async def update_doctor_profile(profile: DoctorProfileUpdate, db: Session = Depends(get_db)):
+async def update_doctor_profile(
+    profile: DoctorProfileUpdate, 
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor)
+):
     """Update the current doctor's profile with NOM-004 compliance validation"""
     try:
-        # Get the existing profile
-        existing_profile = DoctorService.get_profile(db)
+        # Use the authenticated doctor's profile
+        existing_profile = current_doctor
         if not existing_profile:
             raise HTTPException(status_code=404, detail="Perfil del médico no encontrado")
         
@@ -961,6 +994,17 @@ async def update_doctor_profile(profile: DoctorProfileUpdate, db: Session = Depe
         
         # Update the profile
         updated_profile = DoctorService.update_profile(db, existing_profile.id, profile_data)
+        
+        # Synchronize email: if email was updated in profile, update user's login email too
+        if 'email' in profile_data:
+            from database import User
+            user = db.query(User).filter(User.doctor_id == updated_profile.id).first()
+            if user and user.email != updated_profile.email:
+                print(f"🔄 Synchronizing email: {user.email} → {updated_profile.email}")
+                user.email = updated_profile.email
+                user.username = updated_profile.email  # Also update username to match
+                db.commit()
+                print(f"✅ User login email synchronized successfully")
         
         # Prepare response
         profile_dict = {
@@ -1008,10 +1052,16 @@ async def update_doctor_profile(profile: DoctorProfileUpdate, db: Session = Depe
 # ============================================================================
 
 @app.get("/api/consultations", response_model=List[ConsultationResponse])
-async def get_consultations(patient_search: Optional[str] = None, db: Session = Depends(get_db)):
-    """Get all consultations with optional patient search"""
+async def get_consultations(
+    patient_search: Optional[str] = None, 
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
+):
+    """Get all consultations with optional patient search, filtered by doctor"""
     try:
-        consultations = ConsultationService.get_consultations(db, patient_search or "")
+        # If doctor is authenticated, filter by doctor_id
+        doctor_id = current_doctor.id if current_doctor else None
+        consultations = ConsultationService.get_consultations(db, patient_search or "", doctor_id)
         
         consultation_responses = []
         for consultation_dict in consultations:
@@ -1051,11 +1101,19 @@ async def get_consultations(patient_search: Optional[str] = None, db: Session = 
         raise HTTPException(status_code=500, detail=f"Error fetching consultations: {str(e)}")
 
 @app.post("/api/consultations", response_model=ConsultationResponse)
-async def create_consultation(consultation: MedicalHistoryCreate, db: Session = Depends(get_db)):
+async def create_consultation(
+    consultation: MedicalHistoryCreate, 
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
+):
     """Create a new consultation"""
     try:
         consultation_data = consultation.dict()
         consultation_data["created_at"] = datetime.utcnow()
+        
+        # Assign the authenticated doctor
+        if current_doctor:
+            consultation_data["doctor_id"] = current_doctor.id
         
         new_consultation = ConsultationService.create_consultation(db, consultation_data)
         
@@ -1443,7 +1501,8 @@ async def get_appointments(
     status: Optional[str] = None,
     patient_id: Optional[str] = None,
     doctor_id: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
 ):
     """Get appointments with filters"""
     try:
@@ -1455,10 +1514,13 @@ async def get_appointments(
         if end_date:
             end_date_obj = datetime.fromisoformat(end_date).date()
         
+        # Override doctor_id with authenticated doctor if present
+        filtered_doctor_id = current_doctor.id if current_doctor else doctor_id
+        
         appointments = AppointmentService.get_appointments(
             db, skip=skip, limit=limit,
             start_date=start_date_obj, end_date=end_date_obj,
-            status=status, patient_id=patient_id, doctor_id=doctor_id
+            status=status, patient_id=patient_id, doctor_id=filtered_doctor_id
         )
         
         # Format response

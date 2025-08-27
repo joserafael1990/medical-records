@@ -45,9 +45,17 @@ class PatientService:
         return db.query(Patient).filter(Patient.id == patient_id).first()
     
     @staticmethod
-    def get_patients(db: Session, search: str = "", skip: int = 0, limit: int = 100) -> List[Patient]:
-        """Get patients with optional search"""
+    def get_patients(db: Session, search: str = "", skip: int = 0, limit: int = 100, doctor_id: Optional[str] = None) -> List[Patient]:
+        """Get patients with optional search and doctor filtering"""
         query = db.query(Patient).filter(Patient.is_active == True)
+        
+        # Filter by doctor_id if provided (data isolation)
+        if doctor_id:
+            # Find the doctor's name to match with created_by field
+            doctor = db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first()
+            if doctor:
+                doctor_name = f'{doctor.title} {doctor.first_name} {doctor.paternal_surname}'
+                query = query.filter(Patient.created_by.like(f'%{doctor_name}%'))
         
         if search:
             search_filter = or_(
@@ -183,11 +191,15 @@ class ConsultationService:
         return consultation
     
     @staticmethod
-    def get_consultations(db: Session, patient_search: str = "", skip: int = 0, limit: int = 100) -> List[Dict]:
-        """Get consultations with patient names"""
+    def get_consultations(db: Session, patient_search: str = "", skip: int = 0, limit: int = 100, doctor_id: Optional[str] = None) -> List[Dict]:
+        """Get consultations with patient names, filtered by doctor"""
         query = db.query(MedicalHistory, Patient).join(
             Patient, MedicalHistory.patient_id == Patient.id
         )
+        
+        # Filter by doctor if provided
+        if doctor_id:
+            query = query.filter(MedicalHistory.doctor_id == doctor_id)
         
         if patient_search:
             search_filter = or_(
@@ -316,15 +328,32 @@ def _get_monthly_consultations(db: Session) -> int:
         MedicalHistory.date >= start_of_month
     ).count()
 
-def get_dashboard_data(db: Session) -> Dict[str, Any]:
-    """Get dashboard statistics"""
-    total_patients = db.query(Patient).filter(Patient.is_active == True).count()
-    total_consultations = db.query(MedicalHistory).count()
+def get_dashboard_data(db: Session, doctor_id: Optional[str] = None) -> Dict[str, Any]:
+    """Get dashboard statistics, filtered by doctor"""
+    # Filter patients by doctor
+    patient_query = db.query(Patient).filter(Patient.is_active == True)
+    if doctor_id:
+        # Find the doctor's name to match with created_by field
+        doctor = db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first()
+        if doctor:
+            doctor_name = f'{doctor.title} {doctor.first_name} {doctor.paternal_surname}'
+            patient_query = patient_query.filter(Patient.created_by.like(f'%{doctor_name}%'))
+    total_patients = patient_query.count()
     
-    # Recent consultations
-    recent_consultations = db.query(MedicalHistory, Patient).join(
+    # Filter consultations by doctor
+    consultation_query = db.query(MedicalHistory)
+    if doctor_id:
+        consultation_query = consultation_query.filter(MedicalHistory.doctor_id == doctor_id)
+    total_consultations = consultation_query.count()
+    
+    # Recent consultations (filtered by doctor)
+    recent_consultations_query = db.query(MedicalHistory, Patient).join(
         Patient, MedicalHistory.patient_id == Patient.id
-    ).order_by(desc(MedicalHistory.date)).limit(5).all()
+    )
+    if doctor_id:
+        recent_consultations_query = recent_consultations_query.filter(MedicalHistory.doctor_id == doctor_id)
+    
+    recent_consultations = recent_consultations_query.order_by(desc(MedicalHistory.date)).limit(5).all()
     
     consultations_list = []
     for consultation, patient in recent_consultations:

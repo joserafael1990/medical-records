@@ -21,7 +21,7 @@ const LoginView: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const { login, isLoading } = useAuth();
+  const { login, isLoading, setShowRegister } = useAuth();
 
   const handleClickShowPassword = () => {
     setShowPassword(!showPassword);
@@ -125,6 +125,24 @@ const LoginView: React.FC = () => {
               startIcon={isLoading ? <CircularProgress size={20} /> : null}
             >
               {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
+            </Button>
+          </Box>
+
+          <Box sx={{ textAlign: 'center', mt: 3 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              ¿No tienes una cuenta?
+            </Typography>
+            <Button 
+              variant="text" 
+              onClick={() => setShowRegister(true)}
+              sx={{ 
+                color: 'primary.main',
+                fontWeight: 600,
+                textTransform: 'none',
+                fontSize: '0.95rem'
+              }}
+            >
+              Crear Cuenta
             </Button>
           </Box>
 

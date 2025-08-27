@@ -680,17 +680,8 @@ function AppContent() {
   // Patient management functions
   const fetchPatients = useCallback(async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/patients', {
-        params: { search: patientSearchTerm }
-      });
-      // Ensure we always set an array - handle both array and object responses
-      if (Array.isArray(response.data)) {
-        setPatients(response.data);
-      } else if (response.data && Array.isArray(response.data.patients)) {
-        setPatients(response.data.patients);
-      } else {
-        setPatients([]);
-      }
+      const data = await apiService.getPatients(patientSearchTerm);
+      setPatients(data);
     } catch (error) {
       console.error('Error fetching patients:', error);
       // Set empty array to prevent the map error
@@ -798,8 +789,8 @@ function AppContent() {
 // Fetch complete patient data
 const fetchCompletePatientData = async (patientId: string) => {
   try {
-    const response = await axios.get(`http://localhost:8000/api/patients/${patientId}/complete`);
-    setSelectedPatientData(response.data);
+    const data = await apiService.getCompletePatientInfo(patientId);
+    setSelectedPatientData(data as unknown as CompletePatientData);
   } catch (error) {
     console.error('Error fetching complete patient data:', error);
   }
@@ -1006,13 +997,10 @@ const handlePrintConsultation = useCallback((consultation: any) => {
 // Fetch consultations from API
 const fetchConsultations = useCallback(async () => {
   try {
-    const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CONSULTATIONS}?patient_search=${consultationSearchTerm}`);
-    if (response.ok) {
-      const data = await response.json();
-      setConsultations(data);
-    } else {
-      console.error('Error fetching consultations:', response.statusText);
-    }
+    const data = await apiService.getConsultations({ 
+      patient_search: consultationSearchTerm 
+    });
+    setConsultations(data);
   } catch (error) {
     console.error('Error fetching consultations:', error);
   }
@@ -1650,8 +1638,8 @@ const formatDateTime = (dateString: string) => {
     const loadDashboardData = async () => {
       try {
         // Fetch dashboard data
-        const dashResponse = await axios.get('http://localhost:8000/api/physicians/dashboard');
-        setDashboardData(dashResponse.data);
+        const data = await apiService.getDashboardData();
+        setDashboardData(data);
       } catch (error) {
         // Mock data for demo
         setDashboardData({
@@ -1969,30 +1957,6 @@ const formatDateTime = (dateString: string) => {
                     </ListItemIcon>
                       <ListItemText 
                         primary="Panel Principal" 
-                        primaryTypographyProps={{ fontWeight: 500 }}
-                      />
-                  </MenuItem>
-                  
-                  <MenuItem 
-                    selected={activeView === 'clinical-note'}
-                    onClick={() => setActiveView('clinical-note')}
-                      sx={{ 
-                        borderRadius: '12px', 
-                        mb: 1,
-                        '&.Mui-selected': {
-                          backgroundColor: 'primary.main',
-                          color: 'white',
-                          '& .MuiListItemIcon-root': {
-                            color: 'white'
-                          }
-                        }
-                      }}
-                  >
-                    <ListItemIcon>
-                        <DocumentIcon />
-                    </ListItemIcon>
-                      <ListItemText 
-                        primary="Nueva Consulta" 
                         primaryTypographyProps={{ fontWeight: 500 }}
                       />
                   </MenuItem>

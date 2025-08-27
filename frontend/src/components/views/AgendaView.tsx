@@ -139,10 +139,10 @@ const AgendaView: React.FC<AgendaViewProps> = ({
   const formatDateHeader = () => {
     if (agendaView === 'daily') {
       return selectedDate.toLocaleDateString('es-MX', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
+              weekday: 'long', 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric' 
       });
     } else {
       const weekDates = getWeekDates();
@@ -192,8 +192,8 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                     <PersonIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
                     <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                      {appointment.patient_name || 'Paciente'}
-                    </Typography>
+                    {appointment.patient_name || 'Paciente'}
+                  </Typography>
                   </Box>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                     <strong>Motivo:</strong> {appointment.reason || 'No especificado'}
@@ -209,13 +209,13 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                 </Box>
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   <Tooltip title="Editar cita">
-                    <IconButton
-                      onClick={() => handleEditAppointment(appointment)}
-                      size="small"
-                      sx={{ color: 'primary.main' }}
-                    >
-                      <EditIcon />
-                    </IconButton>
+                  <IconButton
+                    onClick={() => handleEditAppointment(appointment)}
+                    size="small"
+                    sx={{ color: 'primary.main' }}
+                  >
+                    <EditIcon />
+                  </IconButton>
                   </Tooltip>
                 </Box>
               </Box>
