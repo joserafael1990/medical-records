@@ -479,6 +479,34 @@ class ApiService {
     
     throw lastError;
   }
+
+  // ============================================================================
+  // CLINICAL STUDIES SERVICES - Estudios Clínicos
+  // ============================================================================
+
+  async createClinicalStudy(studyData: any): Promise<any> {
+    const response = await this.api.post(API_CONFIG.ENDPOINTS.CLINICAL_STUDIES, studyData);
+    return response.data;
+  }
+
+  async getClinicalStudiesByConsultation(consultationId: string): Promise<any[]> {
+    const response = await this.api.get(`${API_CONFIG.ENDPOINTS.CLINICAL_STUDIES}/consultation/${consultationId}`);
+    return Array.isArray(response.data) ? response.data : [];
+  }
+
+  async getClinicalStudiesByPatient(patientId: string): Promise<any[]> {
+    const response = await this.api.get(`${API_CONFIG.ENDPOINTS.CLINICAL_STUDIES}/patient/${patientId}`);
+    return Array.isArray(response.data) ? response.data : [];
+  }
+
+  async updateClinicalStudy(studyId: string, updateData: any): Promise<any> {
+    const response = await this.api.put(`${API_CONFIG.ENDPOINTS.CLINICAL_STUDIES}/${studyId}`, updateData);
+    return response.data;
+  }
+
+  async deleteClinicalStudy(studyId: string): Promise<void> {
+    await this.api.delete(`${API_CONFIG.ENDPOINTS.CLINICAL_STUDIES}/${studyId}`);
+  }
 }
 
 // ============================================================================
@@ -509,6 +537,11 @@ export const {
   getMedicalOrdersByConsultation,
   getMedicalOrdersByPatient,
   updateMedicalOrderStatus,
+  createClinicalStudy,
+  getClinicalStudiesByConsultation,
+  getClinicalStudiesByPatient,
+  updateClinicalStudy,
+  deleteClinicalStudy,
   getAppointments,
   getPatientAppointments,
   getDailyAgenda,

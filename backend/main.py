@@ -553,6 +553,71 @@ class MedicalOrderResponse(MedicalOrderBase):
     updated_at: Optional[str] = None
 
 # ============================================================================
+# CLINICAL STUDIES TYPES - Estudios Clínicos
+# ============================================================================
+
+class ClinicalStudyBase(BaseModel):
+    consultation_id: str
+    patient_id: str
+    
+    # Study information
+    study_type: str  # laboratory, radiology, etc.
+    study_name: str
+    study_description: Optional[str] = None
+    ordered_date: datetime
+    performed_date: Optional[datetime] = None
+    results_date: Optional[datetime] = None
+    status: str = "pending"  # pending, in_progress, completed, cancelled
+    
+    # Results and files
+    results_text: Optional[str] = None
+    interpretation: Optional[str] = None
+    file_path: Optional[str] = None
+    file_name: Optional[str] = None
+    file_type: Optional[str] = None
+    file_size: Optional[int] = None
+    
+    # Medical information
+    ordering_doctor: str
+    performing_doctor: Optional[str] = None
+    institution: Optional[str] = None
+    urgency: Optional[str] = "normal"  # normal, urgent, stat
+    clinical_indication: Optional[str] = None
+    relevant_history: Optional[str] = None
+    
+    # System fields
+    created_by: Optional[str] = None
+    updated_by: Optional[str] = None
+
+class ClinicalStudyCreate(ClinicalStudyBase):
+    pass
+
+class ClinicalStudyUpdate(BaseModel):
+    study_name: Optional[str] = None
+    study_description: Optional[str] = None
+    performed_date: Optional[datetime] = None
+    results_date: Optional[datetime] = None
+    status: Optional[str] = None
+    results_text: Optional[str] = None
+    interpretation: Optional[str] = None
+    file_path: Optional[str] = None
+    file_name: Optional[str] = None
+    file_type: Optional[str] = None
+    file_size: Optional[int] = None
+    performing_doctor: Optional[str] = None
+    institution: Optional[str] = None
+    urgency: Optional[str] = None
+    clinical_indication: Optional[str] = None
+    relevant_history: Optional[str] = None
+    updated_by: Optional[str] = None
+
+class ClinicalStudyResponse(ClinicalStudyBase):
+    id: str
+    created_at: str
+    updated_at: Optional[str] = None
+    patient_name: Optional[str] = None
+
+# ============================================================================
 # HEALTH AND SYSTEM ENDPOINTS
 # ============================================================================
 
@@ -1277,6 +1342,246 @@ async def create_consultation(
         return ConsultationResponse(**consultation_response)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating consultation: {str(e)}")
+
+# ============================================================================
+# CLINICAL STUDIES ENDPOINTS - Estudios Clínicos
+# ============================================================================
+
+@app.post("/api/clinical-studies", response_model=ClinicalStudyResponse)
+async def create_clinical_study(
+    study: ClinicalStudyCreate, 
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
+):
+    """Create a new clinical study"""
+    try:
+        study_data = study.dict()
+        # Use Mexico City timezone for created_at
+        study_data["created_at"] = get_mexico_city_now()
+        
+        # Set created_by from current doctor
+        if current_doctor:
+            study_data["created_by"] = current_doctor.id
+        
+        new_study = ClinicalStudyService.create_study(db, study_data)
+        
+        # Get patient name for response
+        patient = PatientService.get_patient(db, new_study.patient_id)
+        patient_name = f"{patient.first_name} {patient.paternal_surname} {patient.maternal_surname or ''}".strip() if patient else ""
+        
+        study_response = {
+            "id": new_study.id,
+            "consultation_id": new_study.consultation_id,
+            "patient_id": new_study.patient_id,
+            "study_type": new_study.study_type,
+            "study_name": new_study.study_name,
+            "study_description": new_study.study_description or "",
+            "ordered_date": new_study.ordered_date,
+            "performed_date": new_study.performed_date,
+            "results_date": new_study.results_date,
+            "status": new_study.status,
+            "results_text": new_study.results_text or "",
+            "interpretation": new_study.interpretation or "",
+            "file_path": new_study.file_path,
+            "file_name": new_study.file_name,
+            "file_type": new_study.file_type,
+            "file_size": new_study.file_size,
+            "ordering_doctor": new_study.ordering_doctor,
+            "performing_doctor": new_study.performing_doctor,
+            "institution": new_study.institution,
+            "urgency": new_study.urgency or "normal",
+            "clinical_indication": new_study.clinical_indication or "",
+            "relevant_history": new_study.relevant_history or "",
+            "created_by": new_study.created_by,
+            "updated_by": new_study.updated_by,
+            "patient_name": patient_name,
+            "created_at": new_study.created_at.isoformat() if new_study.created_at else "",
+            "updated_at": new_study.updated_at.isoformat() if new_study.updated_at else None
+        }
+        
+        return ClinicalStudyResponse(**study_response)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating clinical study: {str(e)}")
+
+@app.get("/api/clinical-studies/consultation/{consultation_id}", response_model=List[ClinicalStudyResponse])
+async def get_studies_by_consultation(
+    consultation_id: str,
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
+):
+    """Get all clinical studies for a consultation"""
+    try:
+        studies = ClinicalStudyService.get_studies_by_consultation(db, consultation_id)
+        
+        result = []
+        for study in studies:
+            # Get patient name
+            patient = PatientService.get_patient(db, study.patient_id)
+            patient_name = f"{patient.first_name} {patient.paternal_surname} {patient.maternal_surname or ''}".strip() if patient else ""
+            
+            study_response = {
+                "id": study.id,
+                "consultation_id": study.consultation_id,
+                "patient_id": study.patient_id,
+                "study_type": study.study_type,
+                "study_name": study.study_name,
+                "study_description": study.study_description or "",
+                "ordered_date": study.ordered_date,
+                "performed_date": study.performed_date,
+                "results_date": study.results_date,
+                "status": study.status,
+                "results_text": study.results_text or "",
+                "interpretation": study.interpretation or "",
+                "file_path": study.file_path,
+                "file_name": study.file_name,
+                "file_type": study.file_type,
+                "file_size": study.file_size,
+                "ordering_doctor": study.ordering_doctor,
+                "performing_doctor": study.performing_doctor,
+                "institution": study.institution,
+                "urgency": study.urgency or "normal",
+                "clinical_indication": study.clinical_indication or "",
+                "relevant_history": study.relevant_history or "",
+                "created_by": study.created_by,
+                "updated_by": study.updated_by,
+                "patient_name": patient_name,
+                "created_at": study.created_at.isoformat() if study.created_at else "",
+                "updated_at": study.updated_at.isoformat() if study.updated_at else None
+            }
+            result.append(ClinicalStudyResponse(**study_response))
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching clinical studies: {str(e)}")
+
+@app.get("/api/clinical-studies/patient/{patient_id}", response_model=List[ClinicalStudyResponse])
+async def get_studies_by_patient(
+    patient_id: str,
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
+):
+    """Get all clinical studies for a patient"""
+    try:
+        studies = ClinicalStudyService.get_studies_by_patient(db, patient_id)
+        
+        result = []
+        for study in studies:
+            # Get patient name
+            patient = PatientService.get_patient(db, study.patient_id)
+            patient_name = f"{patient.first_name} {patient.paternal_surname} {patient.maternal_surname or ''}".strip() if patient else ""
+            
+            study_response = {
+                "id": study.id,
+                "consultation_id": study.consultation_id,
+                "patient_id": study.patient_id,
+                "study_type": study.study_type,
+                "study_name": study.study_name,
+                "study_description": study.study_description or "",
+                "ordered_date": study.ordered_date,
+                "performed_date": study.performed_date,
+                "results_date": study.results_date,
+                "status": study.status,
+                "results_text": study.results_text or "",
+                "interpretation": study.interpretation or "",
+                "file_path": study.file_path,
+                "file_name": study.file_name,
+                "file_type": study.file_type,
+                "file_size": study.file_size,
+                "ordering_doctor": study.ordering_doctor,
+                "performing_doctor": study.performing_doctor,
+                "institution": study.institution,
+                "urgency": study.urgency or "normal",
+                "clinical_indication": study.clinical_indication or "",
+                "relevant_history": study.relevant_history or "",
+                "created_by": study.created_by,
+                "updated_by": study.updated_by,
+                "patient_name": patient_name,
+                "created_at": study.created_at.isoformat() if study.created_at else "",
+                "updated_at": study.updated_at.isoformat() if study.updated_at else None
+            }
+            result.append(ClinicalStudyResponse(**study_response))
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching patient clinical studies: {str(e)}")
+
+@app.put("/api/clinical-studies/{study_id}", response_model=ClinicalStudyResponse)
+async def update_clinical_study(
+    study_id: str,
+    study_update: ClinicalStudyUpdate,
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
+):
+    """Update a clinical study"""
+    try:
+        # Get existing study
+        existing_study = db.query(DBClinicalStudy).filter(DBClinicalStudy.id == study_id).first()
+        if not existing_study:
+            raise HTTPException(status_code=404, detail="Clinical study not found")
+        
+        # Update fields
+        update_data = study_update.dict(exclude_unset=True)
+        if current_doctor:
+            update_data["updated_by"] = current_doctor.id
+        
+        updated_study = ClinicalStudyService.update_study(db, study_id, update_data)
+        
+        # Get patient name for response
+        patient = PatientService.get_patient(db, updated_study.patient_id)
+        patient_name = f"{patient.first_name} {patient.paternal_surname} {patient.maternal_surname or ''}".strip() if patient else ""
+        
+        study_response = {
+            "id": updated_study.id,
+            "consultation_id": updated_study.consultation_id,
+            "patient_id": updated_study.patient_id,
+            "study_type": updated_study.study_type,
+            "study_name": updated_study.study_name,
+            "study_description": updated_study.study_description or "",
+            "ordered_date": updated_study.ordered_date,
+            "performed_date": updated_study.performed_date,
+            "results_date": updated_study.results_date,
+            "status": updated_study.status,
+            "results_text": updated_study.results_text or "",
+            "interpretation": updated_study.interpretation or "",
+            "file_path": updated_study.file_path,
+            "file_name": updated_study.file_name,
+            "file_type": updated_study.file_type,
+            "file_size": updated_study.file_size,
+            "ordering_doctor": updated_study.ordering_doctor,
+            "performing_doctor": updated_study.performing_doctor,
+            "institution": updated_study.institution,
+            "urgency": updated_study.urgency or "normal",
+            "clinical_indication": updated_study.clinical_indication or "",
+            "relevant_history": updated_study.relevant_history or "",
+            "created_by": updated_study.created_by,
+            "updated_by": updated_study.updated_by,
+            "patient_name": patient_name,
+            "created_at": updated_study.created_at.isoformat() if updated_study.created_at else "",
+            "updated_at": updated_study.updated_at.isoformat() if updated_study.updated_at else None
+        }
+        
+        return ClinicalStudyResponse(**study_response)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating clinical study: {str(e)}")
+
+@app.delete("/api/clinical-studies/{study_id}")
+async def delete_clinical_study(
+    study_id: str,
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
+):
+    """Delete a clinical study"""
+    try:
+        existing_study = db.query(DBClinicalStudy).filter(DBClinicalStudy.id == study_id).first()
+        if not existing_study:
+            raise HTTPException(status_code=404, detail="Clinical study not found")
+        
+        db.delete(existing_study)
+        db.commit()
+        
+        return {"message": "Clinical study deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting clinical study: {str(e)}")
 
 # ============================================================================
 # AGENDA ENDPOINTS - Medical Scheduling

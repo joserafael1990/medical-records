@@ -316,6 +316,27 @@ class ClinicalStudyService:
         return db.query(ClinicalStudy).filter(
             ClinicalStudy.patient_id == patient_id
         ).order_by(desc(ClinicalStudy.ordered_date)).all()
+    
+    @staticmethod
+    def update_study(db: Session, study_id: str, update_data: dict) -> Optional[ClinicalStudy]:
+        """Update clinical study"""
+        study = db.query(ClinicalStudy).filter(ClinicalStudy.id == study_id).first()
+        if not study:
+            return None
+        
+        # Convert date strings
+        for date_field in ['ordered_date', 'performed_date', 'results_date']:
+            if update_data.get(date_field) and isinstance(update_data[date_field], str):
+                update_data[date_field] = datetime.fromisoformat(update_data[date_field].replace('Z', '+00:00'))
+        
+        for key, value in update_data.items():
+            if hasattr(study, key) and key not in ['id', 'created_at']:
+                setattr(study, key, value)
+        
+        study.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(study)
+        return study
 
 class MedicalOrderService:
     """Service for medical orders"""

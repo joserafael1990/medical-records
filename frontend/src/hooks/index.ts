@@ -1,5 +1,6 @@
-export { default as usePatientManager } from './usePatientManager';
-export { default as useConsultationManager } from './useConsultationManager';
+export { usePatientManager } from './usePatientManager';
+export { useConsultationManager } from './useConsultationManager';
+export { useClinicalStudies } from './useClinicalStudies';
 export { default as useDebounce } from './useDebounce';
 export { default as useMedicalOrders } from './useMedicalOrders';
 export { useMemoizedSearch } from './useMemoizedSearch';
