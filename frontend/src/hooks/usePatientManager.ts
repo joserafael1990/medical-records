@@ -18,7 +18,7 @@ export interface UsePatientManagerReturn {
   isPatientSubmitting: boolean;
   patientSearchTerm: string;
   creatingPatientFromConsultation: boolean;
-
+  
   // Actions
   setPatients: (patients: Patient[]) => void;
   setPatientDialogOpen: (open: boolean) => void;
@@ -50,25 +50,82 @@ export const usePatientManager = (): UsePatientManagerReturn => {
   const [isEditingPatient, setIsEditingPatient] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [patientFormData, setPatientFormData] = useState<PatientFormData>({
-    first_name: '',
-    paternal_surname: '',
-    maternal_surname: '',
-    birth_date: '',
-    gender: '',
-    phone: '',
-    email: '',
-    address: '',
-    emergency_contact_name: '',
-    emergency_contact_phone: '',
-    blood_type: '',
-    allergies: '',
-    current_medications: ''
+  first_name: '',
+  paternal_surname: '',
+  maternal_surname: '',
+  birth_date: '',
+  gender: '',
+  address: '',
+  birth_state_code: '',
+  nationality: 'Mexicana',
+  curp: '',
+  internal_id: '',
+  phone: '',
+  email: '',
+  neighborhood: '',
+  municipality: '',
+  state: '',
+  postal_code: '',
+  civil_status: '',
+  education_level: '',
+  occupation: '',
+  religion: '',
+  insurance_type: '',
+  insurance_number: '',
+  emergency_contact_name: '',
+  emergency_contact_phone: '',
+  emergency_contact_relationship: '',
+  emergency_contact_address: '',
+  allergies: '',
+  chronic_conditions: '',
+  current_medications: '',
+  blood_type: '',
+  previous_hospitalizations: '',
+  surgical_history: '',
+    status: 'active'
   });
   const [patientFormErrorMessage, setPatientFormErrorMessage] = useState('');
   const [patientFieldErrors, setPatientFieldErrors] = useState<{[key: string]: string}>({});
   const [isPatientSubmitting, setIsPatientSubmitting] = useState(false);
   const [patientSearchTerm, setPatientSearchTerm] = useState('');
   const [creatingPatientFromConsultation, setCreatingPatientFromConsultation] = useState(false);
+
+  // Helper to create empty form data
+  const createEmptyFormData = (): PatientFormData => ({
+    first_name: '',
+    paternal_surname: '',
+    maternal_surname: '',
+    birth_date: '',
+    gender: '',
+    address: '',
+    birth_state_code: '',
+    nationality: 'Mexicana',
+    curp: '',
+    internal_id: '',
+    phone: '',
+    email: '',
+    neighborhood: '',
+    municipality: '',
+    state: '',
+    postal_code: '',
+    civil_status: '',
+    education_level: '',
+    occupation: '',
+    religion: '',
+    insurance_type: '',
+    insurance_number: '',
+    emergency_contact_name: '',
+    emergency_contact_phone: '',
+    emergency_contact_relationship: '',
+    emergency_contact_address: '',
+    allergies: '',
+    chronic_conditions: '',
+    current_medications: '',
+    blood_type: '',
+    previous_hospitalizations: '',
+    surgical_history: '',
+    status: 'active'
+  });
 
   // Utilities
   const calculateAge = useCallback((birthDate: string): number => {
@@ -115,7 +172,10 @@ export const usePatientManager = (): UsePatientManagerReturn => {
           emergency_contact_phone: '555-0124',
           blood_type: 'O+',
           allergies: 'Ninguna conocida',
-          current_medications: 'Ninguna'
+          current_medications: 'Ninguna',
+          created_at: new Date().toISOString(),
+          total_visits: 3,
+          status: 'active'
         }
       ];
       setPatients(mockPatients);
@@ -126,21 +186,7 @@ export const usePatientManager = (): UsePatientManagerReturn => {
   const handleNewPatient = useCallback(() => {
     setSelectedPatient(null);
     setIsEditingPatient(false);
-    setPatientFormData({
-      first_name: '',
-      paternal_surname: '',
-      maternal_surname: '',
-      birth_date: '',
-      gender: '',
-      phone: '',
-      email: '',
-      address: '',
-      emergency_contact_name: '',
-      emergency_contact_phone: '',
-      blood_type: '',
-      allergies: '',
-      current_medications: ''
-    });
+    setPatientFormData(createEmptyFormData());
     setPatientFormErrorMessage('');
     setPatientFieldErrors({});
     setPatientDialogOpen(true);
@@ -151,6 +197,7 @@ export const usePatientManager = (): UsePatientManagerReturn => {
     setSelectedPatient(patient);
     setIsEditingPatient(true);
     setPatientFormData({
+      ...createEmptyFormData(),
       first_name: patient.first_name,
       paternal_surname: patient.paternal_surname,
       maternal_surname: patient.maternal_surname || '',
@@ -202,21 +249,7 @@ export const usePatientManager = (): UsePatientManagerReturn => {
       await fetchPatients(); // Refresh the list
       
       // Reset form
-      setPatientFormData({
-        first_name: '',
-        paternal_surname: '',
-        maternal_surname: '',
-        birth_date: '',
-        gender: '',
-        phone: '',
-        email: '',
-        address: '',
-        emergency_contact_name: '',
-        emergency_contact_phone: '',
-        blood_type: '',
-        allergies: '',
-        current_medications: ''
-      });
+      setPatientFormData(createEmptyFormData());
       
     } catch (error: any) {
       console.error('Error saving patient:', error);
@@ -266,7 +299,7 @@ export const usePatientManager = (): UsePatientManagerReturn => {
     isPatientSubmitting,
     patientSearchTerm,
     creatingPatientFromConsultation,
-
+    
     // Actions
     setPatients,
     setPatientDialogOpen,

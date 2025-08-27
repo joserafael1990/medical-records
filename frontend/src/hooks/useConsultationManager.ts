@@ -73,13 +73,40 @@ export const useConsultationManager = (): UseConsultationManagerReturn => {
     prognosis: '',
     laboratory_results: '',
     imaging_studies: '',
-    interconsultations: ''
+    interconsultations: '',
+    doctor_name: '',
+    doctor_professional_license: '',
+    doctor_specialty: ''
   });
   const [consultationFormErrorMessage, setConsultationFormErrorMessage] = useState('');
   const [consultationFieldErrors, setConsultationFieldErrors] = useState<{[key: string]: string}>({});
   const [isConsultationSubmitting, setIsConsultationSubmitting] = useState(false);
   const [consultationSearchTerm, setConsultationSearchTerm] = useState('');
   const [consultationDetailView, setConsultationDetailView] = useState(false);
+
+  // Helper to create empty form data
+  const createEmptyConsultationFormData = (): ConsultationFormData => ({
+    patient_id: '',
+    date: new Date().toISOString().split('T')[0],
+    chief_complaint: '',
+    history_present_illness: '',
+    family_history: '',
+    personal_pathological_history: '',
+    personal_non_pathological_history: '',
+    physical_examination: '',
+    primary_diagnosis: '',
+    secondary_diagnoses: '',
+    treatment_plan: '',
+    therapeutic_plan: '',
+    follow_up_instructions: '',
+    prognosis: '',
+    laboratory_results: '',
+    imaging_studies: '',
+    interconsultations: '',
+    doctor_name: '',
+    doctor_professional_license: '',
+    doctor_specialty: ''
+  });
 
   // Fetch consultations from API
   const fetchConsultations = useCallback(async () => {
@@ -97,25 +124,7 @@ export const useConsultationManager = (): UseConsultationManagerReturn => {
   const handleNewConsultation = useCallback((fetchPatients: () => Promise<void>) => {
     setSelectedConsultation(null);
     setIsEditingConsultation(false);
-    setConsultationFormData({
-      patient_id: '',
-      date: new Date().toISOString().split('T')[0],
-      chief_complaint: '',
-      history_present_illness: '',
-      family_history: '',
-      personal_pathological_history: '',
-      personal_non_pathological_history: '',
-      physical_examination: '',
-      primary_diagnosis: '',
-      secondary_diagnoses: '',
-      treatment_plan: '',
-      therapeutic_plan: '',
-      follow_up_instructions: '',
-      prognosis: '',
-      laboratory_results: '',
-      imaging_studies: '',
-      interconsultations: ''
-    });
+    setConsultationFormData(createEmptyConsultationFormData());
     setConsultationFormErrorMessage('');
     setConsultationFieldErrors({});
     fetchPatients();
@@ -128,6 +137,7 @@ export const useConsultationManager = (): UseConsultationManagerReturn => {
     setSelectedConsultation(consultation);
     setIsEditingConsultation(true);
     setConsultationFormData({
+      ...createEmptyConsultationFormData(),
       patient_id: consultation.patient_id || '',
       date: consultation.date || '',
       chief_complaint: consultation.chief_complaint || '',
@@ -144,7 +154,10 @@ export const useConsultationManager = (): UseConsultationManagerReturn => {
       prognosis: consultation.prognosis || '',
       laboratory_results: consultation.laboratory_results || '',
       imaging_studies: consultation.imaging_studies || '',
-      interconsultations: consultation.interconsultations || ''
+      interconsultations: consultation.interconsultations || '',
+      doctor_name: consultation.doctor_name || '',
+      doctor_professional_license: consultation.doctor_professional_license || '',
+      doctor_specialty: consultation.doctor_specialty || ''
     });
     setConsultationFormErrorMessage('');
     setConsultationFieldErrors({});
