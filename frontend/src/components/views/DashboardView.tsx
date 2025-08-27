@@ -21,12 +21,14 @@ import { DashboardData } from '../../types';
 
 interface DashboardViewProps {
   dashboardData: DashboardData | null;
+  todayAppointments?: any[]; // Add today's appointments
   onNewAppointment?: () => void;
   onNewConsultation?: () => void;
 }
 
 const DashboardView: React.FC<DashboardViewProps> = ({ 
   dashboardData, 
+  todayAppointments = [],
   onNewAppointment, 
   onNewConsultation 
 }) => {
@@ -46,15 +48,22 @@ const DashboardView: React.FC<DashboardViewProps> = ({
       <Box sx={{ display: 'flex', gap: 2, mb: 4, flexWrap: 'wrap' }}>
         <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 45%', md: '1 1 22%' } }}>
           <Card sx={{ 
-            background: 'linear-gradient(135deg, #4285F4 0%, #34A853 100%)',
+            background: 'linear-gradient(135deg, #1565C0 0%, #42A5F5 100%)',
             color: 'white',
-            border: 'none'
+            border: 'none',
+            borderRadius: '16px',
+            boxShadow: '0 8px 32px rgba(21, 101, 192, 0.3)',
+            transition: 'all 0.3s ease-in-out',
+            '&:hover': {
+              transform: 'translateY(-4px)',
+              boxShadow: '0 12px 40px rgba(21, 101, 192, 0.4)',
+            }
           }}>
             <CardContent sx={{ pb: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box>
                   <Typography variant="h3" sx={{ fontWeight: 700, mb: 0.5 }}>
-                    {dashboardData?.today_appointments || 8}
+                    {dashboardData?.today_appointments || 1}
                   </Typography>
                   <Typography variant="body2" sx={{ opacity: 0.9 }}>
                     Citas Hoy
@@ -68,9 +77,16 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         
         <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 45%', md: '1 1 22%' } }}>
           <Card sx={{ 
-            background: 'linear-gradient(135deg, #34A853 0%, #FBBC04 100%)',
+            background: 'linear-gradient(135deg, #42A5F5 0%, #90CAF9 100%)',
             color: 'white',
-            border: 'none'
+            border: 'none',
+            borderRadius: '16px',
+            boxShadow: '0 8px 32px rgba(66, 165, 245, 0.3)',
+            transition: 'all 0.3s ease-in-out',
+            '&:hover': {
+              transform: 'translateY(-4px)',
+              boxShadow: '0 12px 40px rgba(66, 165, 245, 0.4)',
+            }
           }}>
             <CardContent sx={{ pb: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -90,9 +106,16 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         
         <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 45%', md: '1 1 22%' } }}>
           <Card sx={{ 
-            background: 'linear-gradient(135deg, #FBBC04 0%, #EA4335 100%)',
+            background: 'linear-gradient(135deg, #1976D2 0%, #64B5F6 100%)',
             color: 'white',
-            border: 'none'
+            border: 'none',
+            borderRadius: '16px',
+            boxShadow: '0 8px 32px rgba(25, 118, 210, 0.3)',
+            transition: 'all 0.3s ease-in-out',
+            '&:hover': {
+              transform: 'translateY(-4px)',
+              boxShadow: '0 12px 40px rgba(25, 118, 210, 0.4)',
+            }
           }}>
             <CardContent sx={{ pb: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -112,9 +135,16 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         
         <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 45%', md: '1 1 22%' } }}>
           <Card sx={{ 
-            background: 'linear-gradient(135deg, #EA4335 0%, #4285F4 100%)',
+            background: 'linear-gradient(135deg, #0D47A1 0%, #1976D2 100%)',
             color: 'white',
-            border: 'none'
+            border: 'none',
+            borderRadius: '16px',
+            boxShadow: '0 8px 32px rgba(13, 71, 161, 0.3)',
+            transition: 'all 0.3s ease-in-out',
+            '&:hover': {
+              transform: 'translateY(-4px)',
+              boxShadow: '0 12px 40px rgba(13, 71, 161, 0.4)',
+            }
           }}>
             <CardContent sx={{ pb: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -137,7 +167,11 @@ const DashboardView: React.FC<DashboardViewProps> = ({
       <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', md: 'row' } }}>
         {/* Today's Schedule */}
         <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 65%' } }}>
-          <Card>
+          <Card sx={{
+            borderRadius: '16px',
+            boxShadow: '0 4px 24px rgba(21, 101, 192, 0.1)',
+            border: '1px solid rgba(21, 101, 192, 0.1)'
+          }}>
             <CardContent sx={{ p: 3 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
@@ -165,12 +199,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               </Box>
               
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {[
-                  { time: '09:00', patient: 'María González', type: 'Consulta General', status: 'confirmed' },
-                  { time: '10:30', patient: 'Carlos Hernández', type: 'Seguimiento', status: 'confirmed' },
-                  { time: '12:00', patient: 'Ana Rodríguez', type: 'Consulta General', status: 'pending' },
-                  { time: '14:00', patient: 'Luis Martínez', type: 'Revisión', status: 'confirmed' },
-                ].map((appointment, index) => (
+                {todayAppointments.length > 0 ? todayAppointments.map((appointment, index) => (
                   <Box
                     key={index}
                     sx={{
@@ -199,20 +228,37 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                     </Box>
                     <Box sx={{ flexGrow: 1 }}>
                       <Typography variant="body1" sx={{ fontWeight: 600, mb: 0.5 }}>
-                        {appointment.time} - {appointment.patient}
+                        {appointment.appointment_date ? new Date(appointment.appointment_date).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : 'Sin hora'} - {appointment.patient_name || 'Paciente desconocido'}
                       </Typography>
                       <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                        {appointment.type}
+                        {appointment.appointment_type || appointment.reason || 'Consulta médica'}
                       </Typography>
                     </Box>
                     <Chip
-                      label={appointment.status === 'confirmed' ? 'Confirmada' : 'Pendiente'}
+                      label={appointment.status === 'confirmed' || appointment.status === 'scheduled' ? 'Confirmada' : 'Pendiente'}
                       size="small"
-                      color={appointment.status === 'confirmed' ? 'success' : 'warning'}
+                      color={appointment.status === 'confirmed' || appointment.status === 'scheduled' ? 'success' : 'warning'}
                       sx={{ fontWeight: 500 }}
                     />
                   </Box>
-                ))}
+                )) : (
+                  <Box sx={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    p: 4,
+                    textAlign: 'center'
+                  }}>
+                    <CalendarIcon sx={{ fontSize: 48, opacity: 0.3, mb: 2 }} />
+                    <Typography variant="h6" sx={{ opacity: 0.6, mb: 1 }}>
+                      No hay citas programadas para hoy
+                    </Typography>
+                    <Typography variant="body2" sx={{ opacity: 0.5 }}>
+                      Usa el botón "Nueva Cita" para programar una consulta
+                    </Typography>
+                  </Box>
+                )}
               </Box>
             </CardContent>
           </Card>
@@ -222,7 +268,11 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 30%' } }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {/* Revenue Card */}
-            <Card>
+            <Card sx={{
+              borderRadius: '16px',
+              boxShadow: '0 4px 24px rgba(21, 101, 192, 0.1)',
+              border: '1px solid rgba(21, 101, 192, 0.1)'
+            }}>
               <CardContent sx={{ p: 3 }}>
                 <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
                   Ingresos del Mes
@@ -243,7 +293,11 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             </Card>
 
             {/* Efficiency Metrics */}
-            <Card>
+            <Card sx={{
+              borderRadius: '16px',
+              boxShadow: '0 4px 24px rgba(21, 101, 192, 0.1)',
+              border: '1px solid rgba(21, 101, 192, 0.1)'
+            }}>
               <CardContent sx={{ p: 3 }}>
                 <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
                   Métricas de Eficiencia

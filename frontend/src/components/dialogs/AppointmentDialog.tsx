@@ -32,6 +32,37 @@ import {
 import { Patient, AppointmentFormData } from '../../types';
 import { ErrorRibbon } from '../common/ErrorRibbon';
 
+// Utility function to calculate age from birth date
+const calculateAge = (birthDate: string): number => {
+  try {
+    const birth = new Date(birthDate);
+    const today = new Date();
+    
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+    
+    // If birthday hasn't occurred this year yet, subtract 1
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    
+    return age;
+  } catch (error) {
+    console.error('Error calculating age:', error);
+    return 0;
+  }
+};
+
+// Function to format patient name with age
+const formatPatientNameWithAge = (patient: Patient): string => {
+  console.log('🧑 Formateando paciente en Appointment:', patient);
+  const age = calculateAge(patient.birth_date);
+  console.log('📅 Edad calculada en Appointment:', age, 'para fecha:', patient.birth_date);
+  const formattedName = `${patient.first_name} ${patient.paternal_surname} ${patient.maternal_surname} (${age} años)`;
+  console.log('✨ Nombre final en Appointment:', formattedName);
+  return formattedName;
+};
+
 interface AppointmentDialogProps {
   open: boolean;
   onClose: () => void;
@@ -194,11 +225,11 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                 options={patients}
                 value={selectedPatient}
                 onChange={(_, value) => handlePatientChange(value)}
-                getOptionLabel={(option) => `${option.full_name} - ${option.phone}`}
+                getOptionLabel={(option) => `${formatPatientNameWithAge(option)} - ${option.phone}`}
                 renderOption={(props, option) => (
                   <Box component="li" {...props} sx={{ flexDirection: 'column', alignItems: 'flex-start' }}>
                     <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                      {option.full_name}
+                      {formatPatientNameWithAge(option)}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       📞 {option.phone} | 🆔 {option.id}

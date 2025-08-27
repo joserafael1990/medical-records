@@ -11,6 +11,7 @@ export const DoctorProfileView = lazy(() => import('../views/DoctorProfileView')
 export const PatientDialog = lazy(() => import('../dialogs/PatientDialog'));
 export const ConsultationDialog = lazy(() => import('../dialogs/ConsultationDialog'));
 export const AppointmentDialog = lazy(() => import('../dialogs/AppointmentDialog'));
+export const ClinicalStudyDialog = lazy(() => import('../dialogs/ClinicalStudyDialog'));
 export const DoctorProfileDialog = lazy(() => import('../dialogs/DoctorProfileDialog'));
 
 // Lazy load heavy components

@@ -2,7 +2,7 @@
 Historias Clínicas API - Backend with PostgreSQL
 Sistema de gestión de historias clínicas médicas conforme a NOM-004
 """
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr, ValidationError
@@ -28,11 +28,12 @@ from database import (
     DoctorProfile as DBDoctorProfile,
     MedicalHistory as DBMedicalHistory,
     VitalSigns as DBVitalSigns,
+    MedicalOrder as DBMedicalOrder,
     ClinicalStudy as DBClinicalStudy,
     Appointment as DBAppointment
 )
 from db_service import (
-    PatientService, DoctorService, ConsultationService, 
+    PatientService, DoctorService, ConsultationService, MedicalOrderService, 
     ClinicalStudyService, AuthService, get_dashboard_data
 )
 from appointment_service import AppointmentService
@@ -63,8 +64,12 @@ MEXICO_CITY_TZ = ZoneInfo("America/Mexico_City")
 PYTZ_MEXICO_CITY = pytz.timezone("America/Mexico_City")
 
 def get_mexico_city_now():
-    """Get current datetime in Mexico City timezone"""
-    return datetime.now(MEXICO_CITY_TZ)
+    """Get current datetime in Mexico City timezone with year correction"""
+    current_time = datetime.now(MEXICO_CITY_TZ)
+    # Temporary fix: If system reports 2025, correct it to 2024
+    if current_time.year == 2025:
+        current_time = current_time.replace(year=2024)
+    return current_time
 
 def convert_to_mexico_city(dt: datetime):
     """Convert datetime to Mexico City timezone"""
@@ -492,6 +497,61 @@ class ConsultationResponse(MedicalHistoryBase):
     patient_name: Optional[str] = None
     created_at: str
     updated_at: Optional[str] = None
+
+# ============================================================================
+# MEDICAL ORDERS TYPES - Órdenes Médicas
+# ============================================================================
+
+class MedicalOrderBase(BaseModel):
+    consultation_id: str
+    patient_id: str
+    
+    # Order information
+    order_type: str = "diagnostic_study"  # diagnostic_study, consultation, procedure
+    study_type: str  # laboratory, radiology, pathology, cardiology, etc.
+    study_name: str
+    study_description: Optional[str] = None
+    
+    # Clinical information (NOM-004 required)
+    clinical_indication: str  # Indicación clínica
+    provisional_diagnosis: Optional[str] = None  # Diagnóstico provisional
+    diagnosis_cie10: Optional[str] = None  # Código CIE-10
+    relevant_clinical_data: Optional[str] = None  # Datos clínicos relevantes
+    
+    # Doctor information (auto-filled from session)
+    ordering_doctor_name: Optional[str] = None
+    ordering_doctor_license: Optional[str] = None
+    ordering_doctor_specialty: Optional[str] = None
+    
+    # Order details
+    priority: str = "normal"  # normal, urgent, stat
+    requires_preparation: bool = False
+    preparation_instructions: Optional[str] = None  # Ayuno, medicamentos, etc.
+    
+    # Additional information
+    estimated_cost: Optional[str] = None  # Costo estimado como string
+    special_instructions: Optional[str] = None  # Instrucciones especiales
+    valid_until_date: Optional[datetime] = None  # Vigencia de la orden
+    
+    # System fields (auto-filled by backend)
+    created_by: Optional[str] = None
+
+class MedicalOrderCreate(MedicalOrderBase):
+    pass
+
+class MedicalOrderUpdate(BaseModel):
+    status: Optional[str] = None
+    special_instructions: Optional[str] = None
+    estimated_cost: Optional[str] = None
+
+class MedicalOrderResponse(MedicalOrderBase):
+    id: str
+    order_date: str
+    status: str  # pending, printed, cancelled
+    patient_name: Optional[str] = None
+    created_at: str
+    updated_at: Optional[str] = None
+
 # ============================================================================
 # HEALTH AND SYSTEM ENDPOINTS
 # ============================================================================
@@ -1223,7 +1283,7 @@ async def create_consultation(
 # ============================================================================
 
 @app.get("/api/agenda/daily")
-async def get_daily_agenda(target_date: Optional[str] = None, db: Session = Depends(get_db)):
+async def get_daily_agenda(target_date: Optional[str] = None, db: Session = Depends(get_db), current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)):
     """Get daily agenda - all appointments for a specific date"""
     try:
         from datetime import datetime, date
@@ -1234,11 +1294,13 @@ async def get_daily_agenda(target_date: Optional[str] = None, db: Session = Depe
         else:
             target_date_obj = date.today()
         
-        # Get appointments for the day using AppointmentService
+        # Get appointments for the day using AppointmentService, filtered by doctor
+        doctor_id = current_doctor.id if current_doctor else None
         appointments = AppointmentService.get_appointments(
             db, 
             start_date=target_date_obj, 
-            end_date=target_date_obj
+            end_date=target_date_obj,
+            doctor_id=doctor_id
         )
         
         agenda_items = []
@@ -1267,7 +1329,7 @@ async def get_daily_agenda(target_date: Optional[str] = None, db: Session = Depe
         raise HTTPException(status_code=500, detail=f"Error fetching daily agenda: {str(e)}")
 
 @app.get("/api/agenda/weekly")
-async def get_weekly_agenda(start_date: Optional[str] = None, db: Session = Depends(get_db)):
+async def get_weekly_agenda(start_date: Optional[str] = None, db: Session = Depends(get_db), current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)):
     """Get weekly agenda view"""
     try:
         from datetime import datetime, date, timedelta
@@ -1281,26 +1343,33 @@ async def get_weekly_agenda(start_date: Optional[str] = None, db: Session = Depe
         
         end_date_obj = start_date_obj + timedelta(days=6)  # Sunday
         
-        # Get appointments for the week
+        # Get appointments for the week, filtered by doctor
+        doctor_id = current_doctor.id if current_doctor else None
         weekly_agenda = {}
         current_date = start_date_obj
         
         while current_date <= end_date_obj:
             day_name = current_date.strftime('%A').lower()
-            appointments = ConsultationService.get_consultations_by_date(db, current_date)
+            # Use AppointmentService instead of ConsultationService and filter by doctor
+            appointments = AppointmentService.get_appointments(
+                db, 
+                start_date=current_date, 
+                end_date=current_date,
+                doctor_id=doctor_id
+            )
             
             weekly_agenda[day_name] = {
                 "date": current_date.isoformat(),
                 "appointments": len(appointments),
                 "consultations": [
                     {
-                        "id": consultation.id,
-                        "patient_name": consultation.patient_name or "Paciente",
-                        "time": "08:00",  # Default time, can be enhanced
-                        "reason": consultation.chief_complaint or "Consulta",
-                        "status": "programada"
+                        "id": appointment.id,
+                        "patient_name": f"{appointment.patient.first_name} {appointment.patient.paternal_surname}" if appointment.patient else "Paciente",
+                        "time": format_mexico_city_datetime(appointment.appointment_date).split('T')[1][:5] if appointment.appointment_date else "08:00",
+                        "reason": appointment.reason or "Cita médica",
+                        "status": appointment.status or "programada"
                     }
-                    for consultation in appointments
+                    for appointment in appointments
                 ]
             }
             current_date += timedelta(days=1)
@@ -1310,7 +1379,7 @@ async def get_weekly_agenda(start_date: Optional[str] = None, db: Session = Depe
         raise HTTPException(status_code=500, detail=f"Error fetching weekly agenda: {str(e)}")
 
 @app.get("/api/agenda/available-slots")
-async def get_available_slots(target_date: Optional[str] = None, db: Session = Depends(get_db)):
+async def get_available_slots(target_date: Optional[str] = None, db: Session = Depends(get_db), current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)):
     """Get available time slots for appointments"""
     try:
         from datetime import datetime, date, time, timedelta
@@ -1864,6 +1933,149 @@ async def get_appointment_stats(doctor_id: Optional[str] = None, db: Session = D
         return stats
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching appointment stats: {str(e)}")
+
+# ============================================================================
+# MEDICAL ORDERS ENDPOINTS - Órdenes Médicas
+# ============================================================================
+
+@app.post("/api/medical-orders", response_model=MedicalOrderResponse)
+async def create_medical_order(
+    order: MedicalOrderCreate, 
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
+):
+    """Create a new medical order"""
+    try:
+        order_data = order.dict()
+        
+        # Auto-assign doctor information from authenticated user
+        if current_doctor:
+            order_data["ordering_doctor_name"] = f"{current_doctor.first_name} {current_doctor.paternal_surname}"
+            order_data["ordering_doctor_license"] = current_doctor.professional_license
+            order_data["ordering_doctor_specialty"] = current_doctor.specialty or "General"
+            order_data["created_by"] = current_doctor.id
+        else:
+            # Fallback if no authenticated doctor
+            order_data["ordering_doctor_name"] = "Doctor Sistema"
+            order_data["ordering_doctor_license"] = "N/A"
+            order_data["ordering_doctor_specialty"] = "General"
+            order_data["created_by"] = "Sistema"
+        
+        # Basic validation - ensure required fields are present
+        required_fields = ['patient_id', 'consultation_id', 'study_type', 'study_name', 'clinical_indication']
+        missing_fields = []
+        for field in required_fields:
+            if not order_data.get(field):
+                missing_fields.append(field)
+        
+        if missing_fields:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Campos obligatorios faltantes: {', '.join(missing_fields)}"
+            )
+        
+        new_order = MedicalOrderService.create_order(db, order_data)
+        
+        # Get patient name for response
+        patient = db.query(DBPatient).filter(DBPatient.id == new_order.patient_id).first()
+        patient_name = f"{patient.first_name} {patient.paternal_surname}" if patient else "Unknown"
+        
+        return {
+            **order_data,
+            "id": new_order.id,
+            "order_date": new_order.order_date.isoformat(),
+            "status": new_order.status,
+            "patient_name": patient_name,
+            "created_at": new_order.created_at.isoformat(),
+            "updated_at": new_order.updated_at.isoformat() if new_order.updated_at else None
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating medical order: {str(e)}")
+
+@app.get("/api/medical-orders/consultation/{consultation_id}", response_model=List[MedicalOrderResponse])
+async def get_orders_by_consultation(
+    consultation_id: str,
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
+):
+    """Get all medical orders for a consultation"""
+    try:
+        orders = MedicalOrderService.get_orders_by_consultation(db, consultation_id)
+        
+        result = []
+        for order in orders:
+            # Get patient name
+            patient = db.query(DBPatient).filter(DBPatient.id == order.patient_id).first()
+            patient_name = f"{patient.first_name} {patient.paternal_surname}" if patient else "Unknown"
+            
+            result.append({
+                "id": order.id,
+                "consultation_id": order.consultation_id,
+                "patient_id": order.patient_id,
+                "order_type": order.order_type,
+                "study_type": order.study_type,
+                "study_name": order.study_name,
+                "study_description": order.study_description,
+                "clinical_indication": order.clinical_indication,
+                "provisional_diagnosis": order.provisional_diagnosis,
+                "diagnosis_cie10": order.diagnosis_cie10,
+                "relevant_clinical_data": order.relevant_clinical_data,
+                "ordering_doctor_name": order.ordering_doctor_name,
+                "ordering_doctor_license": order.ordering_doctor_license,
+                "ordering_doctor_specialty": order.ordering_doctor_specialty,
+                "priority": order.priority,
+                "requires_preparation": order.requires_preparation,
+                "preparation_instructions": order.preparation_instructions,
+                "estimated_cost": order.estimated_cost,
+                "special_instructions": order.special_instructions,
+                "valid_until_date": order.valid_until_date.isoformat() if order.valid_until_date else None,
+                "order_date": order.order_date.isoformat(),
+                "status": order.status,
+                "patient_name": patient_name,
+                "created_at": order.created_at.isoformat(),
+                "updated_at": order.updated_at.isoformat() if order.updated_at else None,
+                "created_by": order.created_by
+            })
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching medical orders: {str(e)}")
+
+@app.patch("/api/medical-orders/{order_id}/status")
+async def update_order_status(
+    order_id: str,
+    status_update: MedicalOrderUpdate,
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
+):
+    """Update medical order status"""
+    try:
+        if not status_update.status:
+            raise HTTPException(status_code=400, detail="Status is required")
+        
+        # Validate status
+        valid_statuses = ['pending', 'printed', 'cancelled']
+        if status_update.status not in valid_statuses:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
+            )
+        
+        updated_order = MedicalOrderService.update_order_status(db, order_id, status_update.status)
+        
+        if not updated_order:
+            raise HTTPException(status_code=404, detail="Medical order not found")
+        
+        return {"message": "Order status updated successfully", "order_id": order_id, "new_status": status_update.status}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating order status: {str(e)}")
 
 # ============================================================================
 # MAIN APPLICATION

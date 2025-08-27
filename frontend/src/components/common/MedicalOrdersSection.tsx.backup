@@ -1,0 +1,317 @@
+// ============================================================================
+// MEDICAL ORDERS SECTION - Sección para mostrar órdenes médicas
+// ============================================================================
+
+import React, { useState } from 'react';
+import {
+  Box,
+  Paper,
+  Typography,
+  Button,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Chip,
+  IconButton,
+  Menu,
+  MenuItem,
+  Tooltip,
+  Divider,
+  Alert
+} from '@mui/material';
+import {
+  Add as AddIcon,
+  Print as PrintIcon,
+  MoreVert as MoreVertIcon,
+  MedicalServices as MedicalIcon,
+  Cancel as CancelIcon,
+  LocalHospital as HospitalIcon
+} from '@mui/icons-material';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { 
+  MedicalOrder, 
+  OrderStatus, 
+  OrderPriority 
+} from '../../types';
+import {
+  ORDER_PRIORITIES,
+  ORDER_STATUS_OPTIONS,
+  STUDY_TYPES
+} from '../../constants';
+
+interface MedicalOrdersSectionProps {
+  orders: MedicalOrder[];
+  onAddOrder: () => void;
+  onPrintOrder: (order: MedicalOrder) => void;
+  onCancelOrder: (orderId: string) => void;
+  onUpdateStatus: (orderId: string, status: OrderStatus) => void;
+  isLoading?: boolean;
+}
+
+const MedicalOrdersSection: React.FC<MedicalOrdersSectionProps> = ({
+  orders,
+  onAddOrder,
+  onPrintOrder,
+  onCancelOrder,
+  onUpdateStatus,
+  isLoading = false
+}) => {
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [selectedOrder, setSelectedOrder] = useState<MedicalOrder | null>(null);
+
+  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, order: MedicalOrder) => {
+    setAnchorEl(event.currentTarget);
+    setSelectedOrder(order);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+    setSelectedOrder(null);
+  };
+
+  const handlePrint = () => {
+    if (selectedOrder) {
+      onPrintOrder(selectedOrder);
+      handleMenuClose();
+    }
+  };
+
+  const handleCancel = () => {
+    if (selectedOrder) {
+      onCancelOrder(selectedOrder.id);
+      handleMenuClose();
+    }
+  };
+
+  const handleMarkAsPrinted = () => {
+    if (selectedOrder) {
+      onUpdateStatus(selectedOrder.id, 'printed');
+      handleMenuClose();
+    }
+  };
+
+  const getStatusColor = (status: OrderStatus) => {
+    const statusOption = ORDER_STATUS_OPTIONS.find(s => s.value === status);
+    return statusOption?.color || '#42a5f5';
+  };
+
+  const getPriorityColor = (priority: OrderPriority) => {
+    const priorityOption = ORDER_PRIORITIES.find(p => p.value === priority);
+    return priorityOption?.color || '#42a5f5';
+  };
+
+  const getStudyTypeLabel = (studyType: string) => {
+    const typeOption = STUDY_TYPES.find(t => t.value === studyType);
+    return typeOption?.label || studyType;
+  };
+
+  const formatDate = (dateString: string) => {
+    try {
+      return format(new Date(dateString), 'dd/MM/yyyy HH:mm', { locale: es });
+    } catch {
+      return 'Fecha inválida';
+    }
+  };
+
+  return (
+    <Paper elevation={1} sx={{ p: 3 }}>
+      {/* Header */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <MedicalIcon color="primary" />
+          <Typography variant="h6" color="primary">
+            Órdenes Médicas
+          </Typography>
+          <Chip 
+            label={orders.length} 
+            size="small" 
+            color="primary" 
+            variant="outlined"
+          />
+        </Box>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={onAddOrder}
+          disabled={isLoading}
+          size="small"
+        >
+          Nueva Orden
+        </Button>
+      </Box>
+
+      <Divider sx={{ mb: 2 }} />
+
+      {/* Content */}
+      {orders.length === 0 ? (
+        <Alert 
+          severity="info" 
+          icon={<HospitalIcon />}
+          sx={{ textAlign: 'center' }}
+        >
+          <Typography variant="body2">
+            No hay órdenes médicas registradas para esta consulta.
+          </Typography>
+          <Button
+            variant="text"
+            startIcon={<AddIcon />}
+            onClick={onAddOrder}
+            sx={{ mt: 1 }}
+          >
+            Generar Primera Orden
+          </Button>
+        </Alert>
+      ) : (
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Estudio</TableCell>
+                <TableCell>Tipo</TableCell>
+                <TableCell>Indicación</TableCell>
+                <TableCell>Prioridad</TableCell>
+                <TableCell>Estado</TableCell>
+                <TableCell>Fecha</TableCell>
+                <TableCell align="center">Acciones</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {orders.map((order) => (
+                <TableRow key={order.id} hover>
+                  {/* Estudio */}
+                  <TableCell>
+                    <Box>
+                      <Typography variant="body2" fontWeight="medium">
+                        {order.study_name}
+                      </Typography>
+                      {order.study_description && (
+                        <Typography variant="caption" color="textSecondary">
+                          {order.study_description}
+                        </Typography>
+                      )}
+                    </Box>
+                  </TableCell>
+
+                  {/* Tipo */}
+                  <TableCell>
+                    <Typography variant="body2">
+                      {getStudyTypeLabel(order.study_type)}
+                    </Typography>
+                  </TableCell>
+
+                  {/* Indicación */}
+                  <TableCell>
+                    <Tooltip title={order.clinical_indication} arrow>
+                      <Typography 
+                        variant="body2" 
+                        sx={{ 
+                          maxWidth: 200, 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        {order.clinical_indication}
+                      </Typography>
+                    </Tooltip>
+                  </TableCell>
+
+                  {/* Prioridad */}
+                  <TableCell>
+                    <Chip
+                      label={ORDER_PRIORITIES.find(p => p.value === order.priority)?.label}
+                      size="small"
+                      sx={{
+                        backgroundColor: getPriorityColor(order.priority),
+                        color: 'white',
+                        fontSize: '0.75rem'
+                      }}
+                    />
+                  </TableCell>
+
+                  {/* Estado */}
+                  <TableCell>
+                    <Chip
+                      label={ORDER_STATUS_OPTIONS.find(s => s.value === order.status)?.label}
+                      size="small"
+                      sx={{
+                        backgroundColor: getStatusColor(order.status),
+                        color: 'white',
+                        fontSize: '0.75rem'
+                      }}
+                    />
+                  </TableCell>
+
+                  {/* Fecha */}
+                  <TableCell>
+                    <Typography variant="body2">
+                      {formatDate(order.order_date)}
+                    </Typography>
+                  </TableCell>
+
+                  {/* Acciones */}
+                  <TableCell align="center">
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      {/* Botón de Imprimir */}
+                      <Tooltip title="Imprimir orden">
+                        <IconButton
+                          size="small"
+                          onClick={() => onPrintOrder(order)}
+                          color="primary"
+                        >
+                          <PrintIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+
+                      {/* Menú de Opciones */}
+                      <IconButton
+                        size="small"
+                        onClick={(e) => handleMenuOpen(e, order)}
+                      >
+                        <MoreVertIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+
+      {/* Menú Contextual */}
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleMenuClose}
+        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+      >
+        <MenuItem onClick={handlePrint}>
+          <PrintIcon fontSize="small" sx={{ mr: 1 }} />
+          Imprimir Orden
+        </MenuItem>
+        
+        {selectedOrder?.status === 'pending' && (
+          <MenuItem onClick={handleMarkAsPrinted}>
+            <HospitalIcon fontSize="small" sx={{ mr: 1 }} />
+            Marcar como Impresa
+          </MenuItem>
+        )}
+        
+        {selectedOrder?.status !== 'cancelled' && (
+          <MenuItem onClick={handleCancel} sx={{ color: 'error.main' }}>
+            <CancelIcon fontSize="small" sx={{ mr: 1 }} />
+            Cancelar Orden
+          </MenuItem>
+        )}
+      </Menu>
+    </Paper>
+  );
+};
+
+export default MedicalOrdersSection;

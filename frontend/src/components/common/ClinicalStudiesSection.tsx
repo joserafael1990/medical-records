@@ -57,9 +57,32 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
 
   useEffect(() => {
     // Filter studies for this consultation
+    console.log('🔍 ClinicalStudiesSection - Filtering studies:', {
+      consultationId,
+      patientId,
+      totalStudies: studies.length,
+      studies: studies.map(s => ({ 
+        id: s.id, 
+        consultation_id: s.consultation_id, 
+        patient_id: s.patient_id,
+        study_name: s.study_name 
+      }))
+    });
+
     const consultationStudies = studies.filter(
       study => study.consultation_id === consultationId && study.patient_id === patientId
     );
+    
+    console.log('✅ ClinicalStudiesSection - Filtered studies:', {
+      filteredCount: consultationStudies.length,
+      filteredStudies: consultationStudies.map(s => ({ 
+        id: s.id, 
+        consultation_id: s.consultation_id, 
+        patient_id: s.patient_id,
+        study_name: s.study_name 
+      }))
+    });
+    
     setFilteredStudies(consultationStudies);
   }, [studies, consultationId, patientId]);
 

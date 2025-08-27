@@ -90,21 +90,12 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
 
+  // Simplified for clinical study ORDER creation (not results review)
   const steps = [
     {
-      label: 'Información Básica',
+      label: 'Orden de Estudio',
       icon: <AssignmentIcon />,
-      description: 'Datos generales del estudio clínico'
-    },
-    {
-      label: 'Detalles Clínicos',
-      icon: <ScienceIcon />,
-      description: 'Información clínica y resultados'
-    },
-    {
-      label: 'Archivos',
-      icon: <AttachmentIcon />,
-      description: 'Cargar documentos y resultados'
+      description: 'Información para generar la orden médica'
     }
   ];
 
@@ -117,6 +108,8 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
   }, [open, setFormErrorMessage]);
 
   const handleNext = () => {
+    console.log('🚀 Intentando avanzar desde step:', activeStep);
+    console.log('🔍 Validación actual:', isStepValid(activeStep));
     if (activeStep < steps.length - 1) {
       setActiveStep(prev => prev + 1);
     }
@@ -175,24 +168,25 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
     event.target.value = '';
   };
 
+  // Simplified validation for clinical study ORDER (single step)
   const isStepValid = (step: number): boolean => {
-    switch (step) {
-      case 0:
-        return !!(
-          formData.study_type &&
-          formData.study_name &&
-          formData.ordered_date &&
-          formData.ordering_doctor
-        );
-      case 1:
-        return !!(
-          formData.clinical_indication
-        );
-      case 2:
-        return true; // File upload is optional
-      default:
-        return false;
+    if (step === 0) {
+      const isValid = !!(
+        formData.study_type &&
+        formData.study_name &&
+        formData.ordered_date &&
+        formData.ordering_doctor
+      );
+      console.log('🔍 Order validation:', {
+        isValid,
+        study_type: formData.study_type,
+        study_name: formData.study_name,
+        ordered_date: formData.ordered_date,
+        ordering_doctor: formData.ordering_doctor
+      });
+      return isValid;
     }
+    return false;
   };
 
   const getStepIcon = (stepIndex: number) => {
@@ -238,6 +232,10 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
               options={formData.study_type ? (COMMON_STUDY_NAMES[formData.study_type as keyof typeof COMMON_STUDY_NAMES] || []) : []}
               value={formData.study_name || ''}
               onChange={(_, newValue) => setFormData(prev => ({ ...prev, study_name: newValue || '' }))}
+              onInputChange={(_, newInputValue) => {
+                console.log('📝 Escribiendo en study_name:', newInputValue);
+                setFormData(prev => ({ ...prev, study_name: newInputValue || '' }));
+              }}
               freeSolo
               renderInput={(params) => (
                 <TextField
@@ -262,274 +260,61 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
               helperText="Información adicional sobre el estudio (opcional)"
             />
 
-            {/* Dates */}
-            <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
-              <TextField
-                label="Fecha de Solicitud"
-                type="date"
-                value={formData.ordered_date ? formData.ordered_date.split('T')[0] : ''}
-                onChange={(e) => setFormData(prev => ({ 
-                  ...prev, 
-                  ordered_date: e.target.value ? `${e.target.value}T09:00:00` : ''
-                }))}
-                InputLabelProps={{ shrink: true }}
-                fullWidth
-                required
-                error={!!fieldErrors.ordered_date}
-                helperText={fieldErrors.ordered_date || 'Fecha en que se solicita el estudio'}
-              />
+            {/* Order Date */}
+            <TextField
+              label="Fecha de Solicitud"
+              type="date"
+              value={formData.ordered_date ? formData.ordered_date.split('T')[0] : ''}
+              onChange={(e) => setFormData(prev => ({ 
+                ...prev, 
+                ordered_date: e.target.value ? `${e.target.value}T09:00:00` : ''
+              }))}
+              InputLabelProps={{ shrink: true }}
+              fullWidth
+              required
+              error={!!fieldErrors.ordered_date}
+              helperText={fieldErrors.ordered_date || 'Fecha en que se solicita el estudio'}
+            />
 
-              <TextField
-                label="Fecha de Realización"
-                type="date"
-                value={formData.performed_date ? formData.performed_date.split('T')[0] : ''}
-                onChange={(e) => setFormData(prev => ({ 
-                  ...prev, 
-                  performed_date: e.target.value ? `${e.target.value}T09:00:00` : ''
-                }))}
-                InputLabelProps={{ shrink: true }}
-                fullWidth
-                helperText="Fecha en que se realizó el estudio (opcional)"
-              />
 
-              <TextField
-                label="Fecha de Resultados"
-                type="date"
-                value={formData.results_date ? formData.results_date.split('T')[0] : ''}
-                onChange={(e) => setFormData(prev => ({ 
-                  ...prev, 
-                  results_date: e.target.value ? `${e.target.value}T09:00:00` : ''
-                }))}
-                InputLabelProps={{ shrink: true }}
-                fullWidth
-                helperText="Fecha en que se obtuvieron los resultados (opcional)"
-              />
-            </Box>
 
-            {/* Status */}
+            {/* Ordering Doctor */}
+            <TextField
+              label="Médico Solicitante"
+              value={formData.ordering_doctor || ''}
+              fullWidth
+              required
+              InputProps={{
+                readOnly: true,
+              }}
+              sx={{
+                '& .MuiInputBase-input': {
+                  backgroundColor: 'grey.50',
+                  color: 'text.primary'
+                }
+              }}
+              error={!!fieldErrors.ordering_doctor}
+              helperText={fieldErrors.ordering_doctor || "Médico que solicita el estudio (auto-asignado)"}
+            />
+
+            {/* Urgency */}
             <FormControl fullWidth>
-              <InputLabel>Estado del Estudio</InputLabel>
+              <InputLabel>Urgencia</InputLabel>
               <Select
-                value={formData.status || 'pending'}
-                onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as StudyStatus }))}
-                label="Estado del Estudio"
+                value={formData.urgency || 'normal'}
+                onChange={(e) => setFormData(prev => ({ ...prev, urgency: e.target.value }))}
+                label="Urgencia"
               >
-                {STUDY_STATUS_OPTIONS.map((status) => (
-                  <MenuItem key={status.value} value={status.value}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Box
-                        sx={{
-                          width: 12,
-                          height: 12,
-                          borderRadius: '50%',
-                          backgroundColor: status.color
-                        }}
-                      />
-                      {status.label}
-                    </Box>
+                {URGENCY_LEVELS.map((level) => (
+                  <MenuItem key={level.value} value={level.value}>
+                    {level.label}
                   </MenuItem>
                 ))}
               </Select>
-            </FormControl>
-
-            {/* Doctors */}
-            <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
-              <TextField
-                label="Médico Solicitante"
-                value={formData.ordering_doctor || ''}
-                onChange={(e) => setFormData(prev => ({ ...prev, ordering_doctor: e.target.value }))}
-                fullWidth
-                required
-                error={!!fieldErrors.ordering_doctor}
-                helperText={fieldErrors.ordering_doctor || "Médico que solicita el estudio"}
-              />
-
-              <TextField
-                label="Médico Realizador"
-                value={formData.performing_doctor || ''}
-                onChange={(e) => setFormData(prev => ({ ...prev, performing_doctor: e.target.value }))}
-                fullWidth
-                helperText="Médico que realiza el estudio (opcional)"
-              />
-            </Box>
-
-            {/* Institution and Urgency */}
-            <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
-              <TextField
-                label="Institución"
-                value={formData.institution || ''}
-                onChange={(e) => setFormData(prev => ({ ...prev, institution: e.target.value }))}
-                fullWidth
-                helperText="Lugar donde se realizará el estudio"
-              />
-
-              <FormControl fullWidth>
-                <InputLabel>Urgencia</InputLabel>
-                <Select
-                  value={formData.urgency || 'normal'}
-                  onChange={(e) => setFormData(prev => ({ ...prev, urgency: e.target.value }))}
-                  label="Urgencia"
-                >
-                  {URGENCY_LEVELS.map((level) => (
-                    <MenuItem key={level.value} value={level.value}>
-                      {level.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Box>
-          </Box>
-        );
-
-      case 1:
-        return (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {/* Clinical Indication */}
-            <TextField
-              label="Indicación Clínica"
-              multiline
-              rows={4}
-              value={formData.clinical_indication || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, clinical_indication: e.target.value }))}
-              fullWidth
-              required
-              placeholder="¿Por qué se solicita este estudio? Síntomas, sospecha diagnóstica..."
-              error={!!fieldErrors.clinical_indication}
-              helperText={fieldErrors.clinical_indication || "Razón médica para solicitar el estudio"}
-            />
-
-            {/* Relevant History */}
-            <TextField
-              label="Historia Clínica Relevante"
-              multiline
-              rows={3}
-              value={formData.relevant_history || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, relevant_history: e.target.value }))}
-              fullWidth
-              placeholder="Antecedentes médicos relevantes para el estudio..."
-              helperText="Historia médica del paciente relacionada con el estudio"
-            />
-
-            <Divider>
-              <Typography variant="subtitle2" color="text.secondary">
-                Resultados (opcional)
+              <Typography variant="caption" sx={{ mt: 1, color: 'text.secondary' }}>
+                Prioridad para la realización del estudio
               </Typography>
-            </Divider>
-
-            {/* Results */}
-            <TextField
-              label="Resultados del Estudio"
-              multiline
-              rows={4}
-              value={formData.results_text || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, results_text: e.target.value }))}
-              fullWidth
-              placeholder="Resultados del estudio en texto..."
-              helperText="Resultados obtenidos del estudio"
-            />
-
-            {/* Interpretation */}
-            <TextField
-              label="Interpretación Médica"
-              multiline
-              rows={3}
-              value={formData.interpretation || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, interpretation: e.target.value }))}
-              fullWidth
-              placeholder="Interpretación médica de los resultados..."
-              helperText="Análisis e interpretación profesional de los resultados"
-            />
-          </Box>
-        );
-
-      case 2:
-        return (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <AttachmentIcon color="primary" />
-              Archivos del Estudio
-            </Typography>
-
-            {/* File Upload */}
-            <Card variant="outlined">
-              <CardContent>
-                <Box sx={{ textAlign: 'center', py: 2 }}>
-                  <input
-                    accept=".pdf,.jpg,.jpeg,.png,.tiff,.dcm"
-                    style={{ display: 'none' }}
-                    id="file-upload"
-                    type="file"
-                    onChange={handleFileUpload}
-                    disabled={!isEditing || isUploading}
-                  />
-                  <label htmlFor="file-upload">
-                    <Button
-                      variant="outlined"
-                      component="span"
-                      startIcon={<UploadIcon />}
-                      disabled={!isEditing || isUploading}
-                      sx={{ mb: 2 }}
-                    >
-                      {isUploading ? 'Cargando...' : 'Seleccionar Archivo'}
-                    </Button>
-                  </label>
-
-                  {isUploading && (
-                    <Box sx={{ width: '100%', mt: 2 }}>
-                      <LinearProgress variant="determinate" value={uploadProgress} />
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                        {uploadProgress}% completado
-                      </Typography>
-                    </Box>
-                  )}
-
-                  <Typography variant="body2" color="text.secondary">
-                    Formatos permitidos: PDF, JPG, PNG, TIFF, DICOM
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Tamaño máximo: 10 MB
-                  </Typography>
-                </Box>
-              </CardContent>
-            </Card>
-
-            {/* Existing File */}
-            {existingFile && (
-              <Card variant="outlined">
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <AttachmentIcon color="primary" />
-                    <Box sx={{ flex: 1 }}>
-                      <Typography variant="subtitle2">
-                        {existingFile.name}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {existingFile.type} • {formatFileSize(existingFile.size)}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-                <CardActions>
-                  <Button
-                    size="small"
-                    startIcon={<ViewIcon />}
-                    onClick={() => window.open(existingFile.url, '_blank')}
-                  >
-                    Ver
-                  </Button>
-                  {isEditing && onFileDelete && (
-                    <Button
-                      size="small"
-                      startIcon={<DeleteIcon />}
-                      color="error"
-                      onClick={() => onFileDelete(formData.consultation_id)}
-                    >
-                      Eliminar
-                    </Button>
-                  )}
-                </CardActions>
-              </Card>
-            )}
+            </FormControl>
           </Box>
         );
 
@@ -560,7 +345,7 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
         <Box>
           <Typography variant="h5" component="div" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <ScienceIcon color="primary" />
-            {isEditing ? 'Editar Estudio Clínico' : 'Nuevo Estudio Clínico'}
+{isEditing ? 'Editar Orden de Estudio' : 'Nueva Orden de Estudio'}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {steps[activeStep].description}
@@ -589,40 +374,49 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
         <Box sx={{ mt: 2 }}>
           {renderStepContent(activeStep)}
         </Box>
+
+        {/* Debug Info - remover en producción */}
+        <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.100', borderRadius: 1, fontSize: '0.8rem' }}>
+          <Typography variant="caption" sx={{ fontWeight: 'bold' }}>🔍 Debug Info:</Typography>
+          <br />
+          Step actual: {activeStep} | Válido: {isStepValid(activeStep) ? '✅' : '❌'}
+          <br />
+          {activeStep === 0 && (
+            <>
+              • study_type: "{formData.study_type}" {formData.study_type ? '✅' : '❌'}
+              <br />
+              • study_name: "{formData.study_name}" {formData.study_name ? '✅' : '❌'}
+              <br />
+              • ordered_date: "{formData.ordered_date}" {formData.ordered_date ? '✅' : '❌'}
+              <br />
+              • ordering_doctor: "{formData.ordering_doctor}" {formData.ordering_doctor ? '✅' : '❌'}
+            </>
+          )}
+        </Box>
       </DialogContent>
 
       <DialogActions sx={{ p: 3, justifyContent: 'space-between' }}>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            onClick={handleBack}
-            disabled={activeStep === 0}
-            startIcon={<BackIcon />}
-          >
-            Anterior
-          </Button>
-        </Box>
+        <Button
+          onClick={onClose}
+          variant="outlined"
+        >
+          Cancelar
+        </Button>
 
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          {activeStep === steps.length - 1 ? (
-            <Button
-              onClick={onSubmit}
-              variant="contained"
-              disabled={isSubmitting || !isStepValid(0) || !isStepValid(1)}
-              startIcon={<SaveIcon />}
-            >
-              {isSubmitting ? 'Guardando...' : (isEditing ? 'Actualizar Estudio' : 'Crear Estudio')}
-            </Button>
-          ) : (
-            <Button
-              onClick={handleNext}
-              variant="contained"
-              disabled={!isStepValid(activeStep)}
-              endIcon={<NextIcon />}
-            >
-              Siguiente
-            </Button>
-          )}
-        </Box>
+        <Button
+          onClick={() => {
+            console.log('🚀 ClinicalStudyDialog - Enviando datos:', {
+              formData,
+              isValid: isStepValid(0)
+            });
+            onSubmit();
+          }}
+          variant="contained"
+          disabled={isSubmitting || !isStepValid(0)}
+          startIcon={<SaveIcon />}
+        >
+          {isSubmitting ? 'Guardando...' : (isEditing ? 'Actualizar Orden' : 'Crear Orden')}
+        </Button>
       </DialogActions>
     </Dialog>
   );

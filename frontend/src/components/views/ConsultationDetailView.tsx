@@ -38,7 +38,7 @@ import {
   Science as ScienceIcon,
   Visibility as VisibilityIcon
 } from '@mui/icons-material';
-import { ConsultationResponse } from '../../types';
+import { ConsultationResponse, ClinicalStudy } from '../../types';
 import { formatDateTime } from '../../utils';
 
 interface ConsultationDetailViewProps {
@@ -46,14 +46,50 @@ interface ConsultationDetailViewProps {
   onBack: () => void;
   onEdit: (consultation: ConsultationResponse) => void;
   onPrint?: (consultation: ConsultationResponse) => void;
+  clinicalStudies?: ClinicalStudy[];
+  onEditClinicalStudy?: (study: ClinicalStudy) => void;
 }
 
 const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
   consultation,
   onBack,
   onEdit,
-  onPrint
+  onPrint,
+  clinicalStudies = [],
+  onEditClinicalStudy
 }) => {
+  // Filter clinical studies for this consultation
+  const consultationStudies = clinicalStudies;
+  
+  console.log('🔍 ConsultationDetailView - Debug estudios recibidos:', {
+    consultationId: consultation.id,
+    clinicalStudiesReceived: clinicalStudies.length,
+    consultationStudies: consultationStudies.length,
+    studies: clinicalStudies
+  });
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return 'warning';
+      case 'in_progress': return 'info';
+      case 'completed': return 'success';
+      case 'cancelled': return 'error';
+      default: return 'default';
+    }
+  };
+
+  const formatDate = (dateString: string): string => {
+    try {
+      return new Date(dateString).toLocaleDateString('es-MX', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
   return (
     <Box>
       {/* Header */}
@@ -298,6 +334,89 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
               <Typography variant="body1" sx={{ lineHeight: 1.6 }}>
                 {consultation.follow_up_instructions}
               </Typography>
+            </Paper>
+
+            {/* Clinical Studies */}
+            <Paper sx={{ p: 3, borderRadius: '16px' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <ScienceIcon sx={{ color: 'primary.main', mr: 1 }} />
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                  Estudios Clínicos
+                </Typography>
+                {consultationStudies.length > 0 && (
+                  <Chip 
+                    size="small" 
+                    label={consultationStudies.length} 
+                    color="primary" 
+                    variant="outlined" 
+                    sx={{ ml: 1 }}
+                  />
+                )}
+              </Box>
+
+              {consultationStudies.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                  No se han solicitado estudios clínicos para esta consulta.
+                </Typography>
+              ) : (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {consultationStudies.map((study) => (
+                    <Card 
+                      key={study.id} 
+                      variant="outlined" 
+                      sx={{ 
+                        borderRadius: '12px',
+                        '&:hover': {
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                          cursor: onEditClinicalStudy ? 'pointer' : 'default'
+                        }
+                      }}
+                      onClick={() => onEditClinicalStudy && onEditClinicalStudy(study)}
+                    >
+                      <CardContent sx={{ p: 2 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                          <Box sx={{ flex: 1 }}>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5 }}>
+                              {study.study_name}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                              {study.study_type} • Solicitado el {formatDate(study.ordered_date)}
+                            </Typography>
+                            {study.study_description && (
+                              <Typography variant="body2" sx={{ mb: 1 }}>
+                                {study.study_description}
+                              </Typography>
+                            )}
+                          </Box>
+                          <Chip
+                            label={study.status === 'pending' ? 'Pendiente' : 
+                                  study.status === 'in_progress' ? 'En Proceso' :
+                                  study.status === 'completed' ? 'Completado' : 
+                                  study.status === 'cancelled' ? 'Cancelado' : study.status}
+                            color={getStatusColor(study.status) as any}
+                            size="small"
+                            variant="outlined"
+                          />
+                        </Box>
+                        
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+                          <Typography variant="caption" color="text.secondary">
+                            <strong>Médico solicitante:</strong> {study.ordering_doctor}
+                          </Typography>
+                          {study.urgency && study.urgency !== 'normal' && (
+                            <Chip
+                              label={study.urgency === 'urgent' ? 'Urgente' : study.urgency === 'stat' ? 'STAT' : study.urgency}
+                              color="error"
+                              size="small"
+                              variant="outlined"
+                            />
+                          )}
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Box>
+              )}
             </Paper>
 
             {/* Additional Information */}

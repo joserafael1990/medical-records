@@ -265,3 +265,5 @@ class AppointmentService:
             "this_week": week_appointments
         }
 
+
+

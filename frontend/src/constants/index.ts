@@ -297,9 +297,12 @@ export const MEXICAN_STATE_NAMES = MEXICAN_STATES.map(state => state.name);
 // ============================================================================
 
 export const STUDY_TYPES = [
-  { value: 'laboratory', label: 'Estudios de Laboratorio' },
-  { value: 'radiology', label: 'Estudios Radiológicos' },
-  { value: 'pathology', label: 'Estudios de Patología' },
+  { value: 'hematologia', label: 'Hematología' },
+  { value: 'quimica_clinica', label: 'Química Clínica' },
+  { value: 'microbiologia', label: 'Microbiología' },
+  { value: 'radiologia_simple', label: 'Radiología Simple' },
+  { value: 'tomografia', label: 'Tomografía' },
+  { value: 'resonancia', label: 'Resonancia Magnética' },
   { value: 'cardiology', label: 'Estudios Cardiológicos' },
   { value: 'endoscopy', label: 'Estudios Endoscópicos' },
   { value: 'biopsy', label: 'Biopsias' },
@@ -370,6 +373,152 @@ export const COMMON_STUDY_NAMES = {
     'Cistoscopia',
     'CPRE',
     'Endoscopia con biopsia'
+  ]
+} as const;
+
+// ============================================================================
+// MEDICAL ORDERS CONSTANTS - Órdenes Médicas
+// ============================================================================
+
+export const ORDER_TYPES = [
+  { value: 'laboratorio', label: 'Laboratorio' },
+  { value: 'radiologia', label: 'Radiología' },
+  { value: 'procedimiento', label: 'Procedimiento' },
+  { value: 'interconsulta', label: 'Interconsulta' }
+] as const;
+
+export const ORDER_PRIORITIES = [
+  { value: 'rutina', label: 'Rutina', color: '#42a5f5' },
+  { value: 'preferente', label: 'Preferente', color: '#ffa726' },
+  { value: 'urgente', label: 'Urgente', color: '#ef5350' }
+] as const;
+
+export const ORDER_STATUS_OPTIONS = [
+  { value: 'pending', label: 'Pendiente', color: '#ffa726' },
+  { value: 'printed', label: 'Impresa', color: '#66bb6a' },
+  { value: 'cancelled', label: 'Cancelada', color: '#ef5350' }
+] as const;
+
+// Estudios comunes por tipo para órdenes médicas
+export const COMMON_DIAGNOSTIC_ORDERS = {
+  laboratory: [
+    'Biometría hemática completa',
+    'Química sanguínea de 6 elementos',
+    'Química sanguínea de 27 elementos',
+    'Perfil lipídico',
+    'Pruebas de función hepática',
+    'Pruebas de función renal',
+    'Examen general de orina',
+    'Urocultivo',
+    'Hemoglobina glucosilada (HbA1c)',
+    'Perfil tiroideo (TSH, T3, T4)',
+    'Insulina basal',
+    'Microalbuminuria',
+    'Proteína C reactiva',
+    'Velocidad de sedimentación globular',
+    'Antígeno prostático específico (PSA)',
+    'Marcadores tumorales',
+    'Perfil TORCH',
+    'Prueba de embarazo en sangre',
+    'Coagulación (TP/TPT/INR)',
+    'Dímero D',
+    'Ferritina',
+    'Vitamina D',
+    'Vitamina B12',
+    'Ácido fólico'
+  ],
+  radiology: [
+    'Radiografía de tórax PA y lateral',
+    'Radiografía de abdomen simple',
+    'Ultrasonido abdominal completo',
+    'Ultrasonido pélvico',
+    'Ultrasonido obstétrico',
+    'Tomografía computarizada de cráneo simple',
+    'Tomografía computarizada de abdomen y pelvis',
+    'Resonancia magnética de cráneo',
+    'Resonancia magnética de columna lumbar',
+    'Mamografía bilateral',
+    'Densitometría ósea',
+    'Radiografía de columna lumbar',
+    'Radiografía de rodilla',
+    'Ultrasonido Doppler venoso',
+    'Ultrasonido de tiroides',
+    'Angiografía por tomografía',
+    'Urografía excretora'
+  ],
+  cardiology: [
+    'Electrocardiograma de reposo',
+    'Ecocardiograma transtorácico',
+    'Prueba de esfuerzo',
+    'Holter de ritmo de 24 horas',
+    'Monitor ambulatorio de presión arterial',
+    'Ecocardiograma Doppler',
+    'Ergometría',
+    'Ecocardiograma de estrés',
+    'Angiografía coronaria',
+    'Estudio electrofisiológico'
+  ],
+  endoscopy: [
+    'Endoscopia digestiva alta',
+    'Colonoscopia',
+    'Rectosigmoidoscopia',
+    'Panendoscopia',
+    'Endoscopia con toma de biopsia',
+    'Colonoscopia con polipectomía',
+    'CPRE (Colangiopancreatografía)',
+    'Gastroscopia'
+  ],
+  pathology: [
+    'Biopsia de piel',
+    'Biopsia de mama',
+    'Biopsia endoscópica',
+    'Citología cervical (Papanicolaou)',
+    'Biopsia de próstata',
+    'Estudio histopatológico',
+    'Inmunohistoquímica',
+    'Citología por aspiración'
+  ],
+  microbiology: [
+    'Cultivo de orina',
+    'Cultivo de exudado faríngeo',
+    'Cultivo de herida',
+    'Hemocultivo',
+    'Coproparasitoscópico',
+    'Coprocultivo',
+    'Cultivo de expectoración',
+    'Antibiograma'
+  ],
+  genetics: [
+    'Cariotipo',
+    'Estudio cromosómico',
+    'Análisis molecular',
+    'Secuenciación genética',
+    'Hibridación in situ'
+  ]
+} as const;
+
+// Instrucciones de preparación comunes
+export const COMMON_PREPARATION_INSTRUCTIONS = {
+  laboratory: [
+    'Ayuno de 8 horas',
+    'Ayuno de 12 horas',
+    'Suspender medicamentos 24 horas antes',
+    'No consumir alcohol 48 horas antes',
+    'Tomar muestra en ayunas'
+  ],
+  radiology: [
+    'Ayuno de 6 horas',
+    'Vejiga llena (tomar 1 litro de agua 1 hora antes)',
+    'No usar desodorante ni talco',
+    'Retirar objetos metálicos',
+    'Suspender medicamentos con metformina'
+  ],
+  endoscopy: [
+    'Ayuno completo 12 horas antes',
+    'Dieta líquida 24 horas antes',
+    'Preparación intestinal',
+    'Suspender anticoagulantes',
+    'Acompañante obligatorio'
   ]
 } as const;
 

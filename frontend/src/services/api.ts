@@ -2,7 +2,7 @@
 // API SERVICES - Capa de servicios para comunicación con backend
 // ============================================================================
 
-import axios, { AxiosInstance, AxiosResponse, AxiosError } from 'axios';
+import axios, { AxiosInstance, AxiosError } from 'axios';
 import { API_CONFIG, ERROR_MESSAGES, FEATURE_FLAGS, isProduction } from '../constants';
 import type { 
   Patient, 
@@ -13,7 +13,9 @@ import type {
   PatientFormData,
   ConsultationFormData,
   AppointmentFormData,
-  ApiResponse,
+  MedicalOrder,
+  MedicalOrderFormData,
+  OrderStatus,
   ApiError
 } from '../types';
 
@@ -71,10 +73,15 @@ class ApiService {
         }
         
         // Handle specific error cases
-        if (error.response?.status === 401) {
-          // Handle unauthorized - redirect to login
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          // Handle unauthorized/forbidden - clear auth data
+          console.log('🔄 Session expired or unauthorized, clearing authentication...');
           localStorage.removeItem('token');
-          window.location.href = '/login';
+          localStorage.removeItem('doctor_data');
+          
+          // Dispatch a custom event to notify the auth context
+          // This avoids forced page reloads that cause blinking
+          window.dispatchEvent(new CustomEvent('auth-expired'));
         }
         
         // Send to error monitoring in production
@@ -250,11 +257,17 @@ class ApiService {
     // Extract only the fields needed by the backend, exclude doctor-related fields
     const { doctor_name, doctor_professional_license, doctor_specialty, ...cleanData } = consultationData;
     
-    // Create Mexico City timezone date
+    // Create Mexico City timezone date with year correction
     const getCurrentMexicoCityDateTime = () => {
       const now = new Date();
       // Get Mexico City time (UTC-6 standard, UTC-5 daylight saving)
       const mexicoCityTime = new Date(now.toLocaleString("en-US", {timeZone: "America/Mexico_City"}));
+      
+      // Temporary fix: If system reports 2025, correct it to 2024
+      if (mexicoCityTime.getFullYear() === 2025) {
+        mexicoCityTime.setFullYear(2024);
+      }
+      
       return mexicoCityTime.toISOString();
     };
     
@@ -284,6 +297,29 @@ class ApiService {
 
   async deleteConsultation(id: string): Promise<void> {
     await this.api.delete(`/api/medical-history/${id}`);
+  }
+
+  // ============================================================================
+  // MEDICAL ORDERS API - Órdenes Médicas
+  // ============================================================================
+
+  async createMedicalOrder(orderData: MedicalOrderFormData): Promise<MedicalOrder> {
+    const response = await this.api.post<MedicalOrder>('/api/medical-orders', orderData);
+    return response.data;
+  }
+
+  async getMedicalOrdersByConsultation(consultationId: string): Promise<MedicalOrder[]> {
+    const response = await this.api.get<MedicalOrder[]>(`/api/medical-orders/consultation/${consultationId}`);
+    return response.data;
+  }
+
+  async getMedicalOrdersByPatient(patientId: string): Promise<MedicalOrder[]> {
+    const response = await this.api.get<MedicalOrder[]>(`/api/medical-orders/patient/${patientId}`);
+    return response.data;
+  }
+
+  async updateMedicalOrderStatus(orderId: string, status: OrderStatus): Promise<void> {
+    await this.api.patch(`/api/medical-orders/${orderId}/status`, { status });
   }
 
   // ============================================================================
@@ -469,6 +505,10 @@ export const {
   createConsultation,
   updateConsultation,
   deleteConsultation,
+  createMedicalOrder,
+  getMedicalOrdersByConsultation,
+  getMedicalOrdersByPatient,
+  updateMedicalOrderStatus,
   getAppointments,
   getPatientAppointments,
   getDailyAgenda,

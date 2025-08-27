@@ -1,10 +1,14 @@
 """
 Database configuration and models for Historias Clínicas
 """
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Date, Text, Boolean, ForeignKey, JSON, ARRAY
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Date, Text, Boolean, ForeignKey, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+try:
+    from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY
+    POSTGRESQL_AVAILABLE = True
+except ImportError:
+    POSTGRESQL_AVAILABLE = False
 import uuid
 from datetime import datetime
 import os
@@ -12,13 +16,29 @@ import os
 # Database URL - can be configured via environment variable
 DATABASE_URL = os.getenv(
     "DATABASE_URL", 
-    "postgresql://historias_user:historias_pass@localhost:5432/historias_clinicas"
+    "sqlite:///./historias_clinicas.db"  # Default to SQLite for development
 )
 
-print(f"🐘 Conectando a PostgreSQL: {DATABASE_URL}")
+# Check if PostgreSQL is available and fallback to SQLite
+if DATABASE_URL.startswith("postgresql://"):
+    print(f"🐘 Intentando conectar a PostgreSQL: {DATABASE_URL}")
+    try:
+        # Test PostgreSQL connection
+        test_engine = create_engine(DATABASE_URL)
+        test_engine.connect()
+        print(f"✅ PostgreSQL conectado exitosamente")
+    except Exception as e:
+        print(f"❌ Error al conectar a PostgreSQL: {e}")
+        print(f"🔄 Cambiando a SQLite para desarrollo...")
+        DATABASE_URL = "sqlite:///./historias_clinicas.db"
+else:
+    print(f"📁 Usando SQLite: {DATABASE_URL}")
 
 # SQLAlchemy setup
-engine = create_engine(DATABASE_URL)
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -77,6 +97,7 @@ class Patient(Base):
     consultations = relationship("MedicalHistory", back_populates="patient")
     vital_signs = relationship("VitalSigns", back_populates="patient")
     clinical_studies = relationship("ClinicalStudy", back_populates="patient")
+    medical_orders = relationship("MedicalOrder", back_populates="patient")
     appointments = relationship("Appointment", back_populates="patient")
 
 class User(Base):
@@ -197,6 +218,7 @@ class MedicalHistory(Base):
     # Relationships
     patient = relationship("Patient", back_populates="consultations")
     clinical_studies = relationship("ClinicalStudy", back_populates="consultation")
+    medical_orders = relationship("MedicalOrder", back_populates="consultation")
 
 class VitalSigns(Base):
     __tablename__ = "vital_signs"
@@ -271,6 +293,54 @@ class ClinicalStudy(Base):
     # Relationships
     consultation = relationship("MedicalHistory", back_populates="clinical_studies")
     patient = relationship("Patient", back_populates="clinical_studies")
+
+class MedicalOrder(Base):
+    __tablename__ = "medical_orders"
+    
+    id = Column(String, primary_key=True, default=lambda: f"MO{str(uuid.uuid4())[:8].upper()}")
+    consultation_id = Column(String, ForeignKey("medical_history.id"), nullable=False)
+    patient_id = Column(String, ForeignKey("patients.id"), nullable=False)
+    
+    # Order information
+    order_type = Column(String(50), nullable=False, default="diagnostic_study")  # diagnostic_study, consultation, procedure
+    study_type = Column(String(50), nullable=False)  # laboratory, radiology, pathology, cardiology, etc.
+    study_name = Column(String(200), nullable=False)
+    study_description = Column(Text)
+    
+    # Clinical information (NOM-004 required)
+    clinical_indication = Column(Text, nullable=False)  # Indicación clínica
+    provisional_diagnosis = Column(String(200))  # Diagnóstico provisional
+    diagnosis_cie10 = Column(String(10))  # Código CIE-10
+    relevant_clinical_data = Column(Text)  # Datos clínicos relevantes
+    
+    # Doctor information (NOM-004 required)
+    ordering_doctor_name = Column(String(200), nullable=False)
+    ordering_doctor_license = Column(String(20), nullable=False)
+    ordering_doctor_specialty = Column(String(100))
+    
+    # Order details
+    priority = Column(String(20), default="normal")  # normal, urgent, stat
+    requires_preparation = Column(Boolean, default=False)
+    preparation_instructions = Column(Text)  # Ayuno, medicamentos, etc.
+    
+    # Status and dates
+    status = Column(String(20), default="pending")  # pending, printed, cancelled
+    order_date = Column(DateTime, nullable=False)
+    valid_until_date = Column(DateTime)  # Vigencia de la orden
+    
+    # Additional information
+    estimated_cost = Column(String(100))  # Costo estimado como string
+    special_instructions = Column(Text)  # Instrucciones especiales
+    
+    # System fields
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, onupdate=datetime.utcnow)
+    created_by = Column(String(100))
+    updated_by = Column(String(100))
+    
+    # Relationships
+    consultation = relationship("MedicalHistory", back_populates="medical_orders")
+    patient = relationship("Patient", back_populates="medical_orders")
 
 class Appointment(Base):
     __tablename__ = "appointments"

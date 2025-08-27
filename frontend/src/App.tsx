@@ -49,12 +49,13 @@ import {
   PatientDialog,
   ConsultationDialog,
   AppointmentDialog,
+  ClinicalStudyDialog,
   DoctorProfileView,
   DoctorProfileDialog
 } from './components/lazy';
 import { ConsultationDetailView } from './components';
 import { LoadingFallback } from './components';
-import { Patient, DoctorFormData, ConsultationFormData, AppointmentFormData, ClinicalStudy } from './types';
+import { Patient, DoctorFormData, ConsultationFormData, AppointmentFormData, ClinicalStudy, ClinicalStudyFormData, StudyType, StudyStatus } from './types';
 import { API_CONFIG } from './constants';
 import { apiService } from './services/api';
 import { useDoctorProfileCache as useDoctorProfile } from './hooks/useDoctorProfileCache';
@@ -436,6 +437,18 @@ interface CompletePatientData {
 }
 
 function AppContent() {
+  // Clean slate - clear any residual clinical studies data
+  useEffect(() => {
+    console.log('🧹 Limpiando datos residuales de estudios clínicos...');
+    // Clear any localStorage items related to clinical studies
+    Object.keys(localStorage).forEach(key => {
+      if (key.includes('clinical') || key.includes('study') || key.includes('studies')) {
+        localStorage.removeItem(key);
+        console.log(`🗑️ Eliminado del localStorage: ${key}`);
+      }
+    });
+  }, []);
+
   // Authentication
   const { user, logout } = useAuth();
   
@@ -493,8 +506,113 @@ function AppContent() {
     doctor_specialty: ''
   });
 
-  // Clinical Studies state
-  const [clinicalStudies, setClinicalStudies] = useState<ClinicalStudy[]>([]);
+  // Clinical Studies are now part of each consultation, not global
+  // Temporary consultation ID for new consultations before they're saved
+  const [tempConsultationId, setTempConsultationId] = useState<string | null>(null);
+  // Temporary clinical studies for new consultations
+  const [tempClinicalStudies, setTempClinicalStudies] = useState<ClinicalStudy[]>([]);
+
+  // Helper functions for localStorage persistence
+  const inspectStoredStudies = () => {
+    console.log('🔍 localStorage inspection:');
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('clinical_studies_')) {
+        const value = localStorage.getItem(key);
+        const studies = value ? JSON.parse(value) : [];
+        console.log(`  ${key}: ${studies.length} estudios`, studies);
+      }
+    }
+  };
+
+  const saveStudiesToStorage = (consultationId: string, studies: ClinicalStudy[]) => {
+    try {
+      localStorage.setItem(`clinical_studies_${consultationId}`, JSON.stringify(studies));
+    } catch (error) {
+      console.error('Error saving studies to localStorage:', error);
+    }
+  };
+
+  const loadStudiesFromStorage = (consultationId: string): ClinicalStudy[] => {
+    try {
+      const stored = localStorage.getItem(`clinical_studies_${consultationId}`);
+      console.log('🔍 loadStudiesFromStorage:', {
+        consultationId,
+        hasStored: !!stored,
+        storedData: stored,
+        parsedCount: stored ? JSON.parse(stored).length : 0
+      });
+      return stored ? JSON.parse(stored) : [];
+    } catch (error) {
+      console.error('Error loading studies from localStorage:', error);
+      return [];
+    }
+  };
+  
+  // Helper function to get clinical studies for current consultation
+  const getCurrentConsultationStudies = (): ClinicalStudy[] => {
+    // If we have a selected consultation (viewing/editing existing), load from localStorage
+    if (selectedConsultation?.id) {
+      const storedStudies = loadStudiesFromStorage(selectedConsultation.id);
+      console.log('📋 getCurrentConsultationStudies - Using stored consultation studies:', storedStudies.length);
+      return storedStudies;
+    }
+    // If we're creating a new consultation, use temporary studies
+    if (tempConsultationId && !selectedConsultation) {
+      console.log('📋 getCurrentConsultationStudies - Using temporary studies:', tempClinicalStudies.length);
+      return tempClinicalStudies;
+    }
+    console.log('📋 getCurrentConsultationStudies - No studies found, returning empty array');
+    return [];
+  };
+
+  // Helper function to update clinical studies for current consultation
+  const updateCurrentConsultationStudies = (studies: ClinicalStudy[]) => {
+    if (selectedConsultation?.id) {
+      // Updating existing consultation - save to localStorage
+      saveStudiesToStorage(selectedConsultation.id, studies);
+      
+      const updatedConsultation = {
+        ...selectedConsultation,
+        clinical_studies: studies
+      };
+      setSelectedConsultation(updatedConsultation);
+      
+      // Also update in consultations list if it exists there
+      setConsultations(prev => prev.map(consultation => 
+        consultation.id === selectedConsultation.id 
+          ? { ...consultation, clinical_studies: studies }
+          : consultation
+      ));
+    } else if (tempConsultationId) {
+      // Updating temporary consultation studies
+      setTempClinicalStudies(studies);
+    }
+  };
+  const [clinicalStudyDialogOpen, setClinicalStudyDialogOpen] = useState(false);
+  const [isEditingClinicalStudy, setIsEditingClinicalStudy] = useState(false);
+  const [selectedClinicalStudy, setSelectedClinicalStudy] = useState<ClinicalStudy | null>(null);
+  const [clinicalStudyFormData, setClinicalStudyFormData] = useState<ClinicalStudyFormData>({
+    consultation_id: '',
+    patient_id: '',
+    study_type: 'hematologia',
+    study_name: '',
+    study_description: '',
+    ordered_date: '',
+    status: 'pending',
+    results_text: '',
+    interpretation: '',
+    ordering_doctor: '',
+    performing_doctor: '',
+    institution: '',
+    urgency: 'normal',
+    clinical_indication: '',
+    relevant_history: '',
+    created_by: ''
+  });
+  const [clinicalStudyFormErrorMessage, setClinicalStudyFormErrorMessage] = useState('');
+  const [clinicalStudyFieldErrors, setClinicalStudyFieldErrors] = useState<{[key: string]: string}>({});
+  const [isClinicalStudySubmitting, setIsClinicalStudySubmitting] = useState(false);
 
   // Agenda management state
   const [appointments, setAppointments] = useState<any[]>([]);
@@ -592,21 +710,7 @@ function AppContent() {
     status: 'active' as 'active' | 'inactive' // Todos los pacientes son activos por defecto
   });
 
-  // Utility function to calculate age from date of birth
-  const calculateAge = (dateOfBirth: string): number => {
-    const birthDate = new Date(dateOfBirth);
-    const today = new Date();
-    
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    
-    // If the birthday hasn't occurred this year yet, subtract 1 from age
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-    
-    return age;
-  };
+
 
   // Optimized success message handler
   const showSuccessMessage = useCallback((message: string) => {
@@ -684,10 +788,13 @@ function AppContent() {
   // Patient management functions
   const fetchPatients = useCallback(async () => {
     try {
+      console.log('🔄 Cargando pacientes...');
       const data = await apiService.getPatients(patientSearchTerm);
+      console.log('✅ Pacientes cargados desde API:', data);
       setPatients(data);
     } catch (error) {
-      console.error('Error fetching patients:', error);
+      console.error('❌ Error fetching patients:', error);
+      console.log('🔄 Cargando datos mock...');
       // Set empty array to prevent the map error
       setPatients([]);
       // Mock data for demo when backend is not available
@@ -703,7 +810,7 @@ function AppContent() {
           state: 'Ciudad de México',
           full_name: 'María González Pérez',
           birth_date: '1985-05-15',
-          age: 39,
+          age: 39, // This will be calculated dynamically now
           gender: 'Femenino',
           phone: '+52 555 123 4567',
           email: 'maria.gonzalez@email.com',
@@ -723,8 +830,41 @@ function AppContent() {
           last_visit: '2024-08-20T14:45:00',
           total_visits: 5,
           status: 'active'
+        },
+        {
+          id: 'PAT002',
+          first_name: 'Carlos',
+          paternal_surname: 'Rodríguez',
+          maternal_surname: 'López',
+          birth_state_code: 'Jalisco',
+          nationality: 'Mexicana',
+          municipality: 'Guadalajara',
+          state: 'Jalisco',
+          full_name: 'Carlos Rodríguez López',
+          birth_date: '1990-12-03',
+          age: 33, // This will be calculated dynamically now
+          gender: 'Masculino',
+          phone: '+52 555 234 5678',
+          email: 'carlos.rodriguez@email.com',
+          address: 'Av. Vallarta 456, Guadalajara',
+          curp: 'ROLC901203HJCDPR08',
+          insurance_type: 'ISSSTE',
+          insurance_number: '987654321',
+          blood_type: 'A+',
+          allergies: 'Ninguna conocida',
+          chronic_conditions: 'Ninguna',
+          current_medications: 'Ninguna',
+          emergency_contact_name: 'Ana López',
+          emergency_contact_phone: '+52 555 876 5432',
+          emergency_contact_relationship: 'Esposa',
+          created_at: '2024-02-10T08:15:00',
+          last_visit: '2024-08-15T16:30:00',
+          total_visits: 3,
+          status: 'active'
         }
       ]);
+      console.log('✅ Datos mock cargados exitosamente');
+      console.log('📝 Recuerda: Los nombres ahora deberían mostrar edad en los dropdowns');
     }
   }, [patientSearchTerm]);
 
@@ -863,6 +1003,33 @@ const toDateTimeLocalFormat = (dateTimeString: string) => {
   }
 };
 
+// Utility function to calculate age from birth date
+const calculateAge = (birthDate: string): number => {
+  try {
+    const birth = new Date(birthDate);
+    const today = new Date();
+    
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+    
+    // If birthday hasn't occurred this year yet, subtract 1
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    
+    return age;
+  } catch (error) {
+    console.error('Error calculating age:', error);
+    return 0;
+  }
+};
+
+// Function to format patient name with age
+const formatPatientNameWithAge = (patient: Patient): string => {
+  const age = calculateAge(patient.birth_date);
+  return `${patient.first_name} ${patient.paternal_surname} ${patient.maternal_surname} (${age} años)`;
+};
+
 // Consultation handlers (enhanced implementation)
 const handleNewConsultation = useCallback(() => {
   setSelectedConsultation(null);
@@ -894,10 +1061,14 @@ const handleNewConsultation = useCallback(() => {
     doctor_professional_license: '',
     doctor_specialty: ''
   });
+  
+  // Load patients when opening consultation dialog
+  fetchPatients();
+  
   setConsultationDialogOpen(true);
   setFormErrorMessage('');
   setConsultationDetailView(false);
-}, []);
+}, [fetchPatients]);
 
 const handleEditConsultation = useCallback((consultation: any) => {
   setSelectedConsultation(consultation);
@@ -929,16 +1100,29 @@ const handleEditConsultation = useCallback((consultation: any) => {
     doctor_professional_license: consultation.doctor_professional_license || '',
     doctor_specialty: consultation.doctor_specialty || ''
   });
+  
+  // Load patients when opening consultation dialog
+  fetchPatients();
+  
   setConsultationDialogOpen(true);
   setFormErrorMessage('');
   setConsultationDetailView(false);
-}, []);
+}, [fetchPatients]);
 
 // Handle view consultation
 const handleViewConsultation = useCallback((consultation: any) => {
+  console.log('🔍 View consultation debug:', {
+    consultation,
+    hasStudies: !!consultation.clinical_studies,
+    studiesCount: consultation.clinical_studies?.length || 0
+  });
+  
+  // Inspect localStorage for debugging
+  inspectStoredStudies();
+  
   setSelectedConsultation(consultation);
   setConsultationDetailView(true);
-}, []);
+}, [inspectStoredStudies]);
 
 // Handle print consultation
 const handlePrintConsultation = useCallback((consultation: any) => {
@@ -1003,6 +1187,12 @@ const fetchConsultations = useCallback(async () => {
   try {
     const data = await apiService.getConsultations({ 
       patient_search: consultationSearchTerm 
+    });
+    console.log('📋 fetchConsultations debug:', {
+      consultationsCount: data.length,
+      firstConsultation: data[0],
+      hasStudiesInFirst: !!data[0]?.clinical_studies,
+      studiesCountInFirst: data[0]?.clinical_studies?.length || 0
     });
     setConsultations(data);
   } catch (error) {
@@ -1145,11 +1335,35 @@ const handleConsultationSubmit = useCallback(async () => {
     
     console.log('🔍 Consultation Data Debug:', consultationData);
     
-    let result;
+    let result: any;
     if (isEditingConsultation && selectedConsultation) {
       result = await apiService.updateConsultation(selectedConsultation.id, consultationData);
     } else {
       result = await apiService.createConsultation(consultationFormData.patient_id, consultationData);
+    }
+    
+    // Update temporary clinical studies with real consultation ID if creating new consultation
+    if (!isEditingConsultation && tempConsultationId && tempClinicalStudies.length > 0) {
+      console.log('🔄 Actualizando estudios temporales con ID real:', {
+        tempId: tempConsultationId,
+        realId: result.id,
+        studiesCount: tempClinicalStudies.length
+      });
+      
+      // Update the consultation_id in temporary studies
+      const updatedStudies = tempClinicalStudies.map(study => ({
+        ...study,
+        consultation_id: result.id
+      }));
+      
+      // Save studies to localStorage with real consultation ID
+      saveStudiesToStorage(result.id, updatedStudies);
+      
+      // Clear temporary data
+      setTempConsultationId(null);
+      setTempClinicalStudies([]);
+      
+      console.log('✅ Estudios guardados en localStorage con ID real:', result.id);
     }
     
     showSuccessMessage(
@@ -1193,23 +1407,216 @@ const handleConsultationSubmit = useCallback(async () => {
   } finally {
     setIsSubmitting(false);
   }
-}, [consultationFormData, isEditingConsultation, selectedConsultation, fetchConsultations, doctorProfile]);
+}, [consultationFormData, isEditingConsultation, selectedConsultation, fetchConsultations, doctorProfile, tempConsultationId, tempClinicalStudies, consultations]);
 
 // Clinical Studies handlers
 const handleAddClinicalStudy = useCallback(() => {
-  // TODO: Implementar la funcionalidad de agregar estudio clínico
-  console.log('Agregar nuevo estudio clínico');
-}, []);
+  let consultationId: string;
+  let patientId: string;
+  
+  if (selectedConsultation) {
+    // Existing consultation
+    consultationId = selectedConsultation.id;
+    patientId = selectedConsultation.patient_id;
+  } else {
+    // New consultation - generate temporary ID if not exists
+    if (!tempConsultationId) {
+      const newTempId = `temp_consultation_${Date.now()}`;
+      setTempConsultationId(newTempId);
+      consultationId = newTempId;
+    } else {
+      consultationId = tempConsultationId;
+    }
+    patientId = consultationFormData.patient_id;
+    
+    if (!patientId) {
+      console.error('❌ No hay paciente seleccionado para agregar estudio');
+      return;
+    }
+  }
+  
+  console.log('📋 Agregando estudio clínico a:', {
+    consultationId,
+    patientId,
+    isNewConsultation: !selectedConsultation
+  });
+  
+  setSelectedClinicalStudy(null);
+  setIsEditingClinicalStudy(false);
+  
+  const orderingDoctor = doctorProfile?.full_name || user?.doctor?.full_name || 'Dr. Usuario Sistema';
+  const orderedDate = new Date().toISOString().split('T')[0];
+  
+  const newFormData: ClinicalStudyFormData = {
+    consultation_id: consultationId,
+    patient_id: patientId,
+    study_type: 'hematologia' as StudyType,
+    study_name: '',
+    study_description: '',
+    ordered_date: orderedDate,
+    status: 'pending' as StudyStatus,
+    results_text: '',
+    interpretation: '',
+    ordering_doctor: orderingDoctor,
+    performing_doctor: '',
+    institution: '',
+    urgency: 'normal',
+    clinical_indication: '',
+    relevant_history: '',
+    created_by: 'current_user'
+  };
+  
+  setClinicalStudyFormData(newFormData);
+  setClinicalStudyFormErrorMessage('');
+  setClinicalStudyFieldErrors({});
+  setClinicalStudyDialogOpen(true);
+}, [selectedConsultation, tempConsultationId, consultationFormData.patient_id, doctorProfile, user]);
 
 const handleEditClinicalStudy = useCallback((study: ClinicalStudy) => {
-  // TODO: Implementar la funcionalidad de editar estudio clínico
-  console.log('Editar estudio clínico:', study);
+  setSelectedClinicalStudy(study);
+  setIsEditingClinicalStudy(true);
+  setClinicalStudyFormData({
+    consultation_id: study.consultation_id,
+    patient_id: study.patient_id,
+    study_type: study.study_type,
+    study_name: study.study_name,
+    study_description: study.study_description || '',
+    ordered_date: study.ordered_date.split('T')[0],
+    performed_date: study.performed_date?.split('T')[0],
+    results_date: study.results_date?.split('T')[0],
+    status: study.status,
+    results_text: study.results_text || '',
+    interpretation: study.interpretation || '',
+    ordering_doctor: study.ordering_doctor,
+    performing_doctor: study.performing_doctor || '',
+    institution: study.institution || '',
+    urgency: study.urgency || 'normal',
+    clinical_indication: study.clinical_indication || '',
+    relevant_history: study.relevant_history || '',
+    created_by: study.created_by
+  });
+  setClinicalStudyFormErrorMessage('');
+  setClinicalStudyFieldErrors({});
+  setClinicalStudyDialogOpen(true);
 }, []);
 
 const handleDeleteClinicalStudy = useCallback((studyId: string) => {
-  // TODO: Implementar la funcionalidad de eliminar estudio clínico
-  console.log('Eliminar estudio clínico:', studyId);
-}, []);
+  if (!selectedConsultation) {
+    console.error('❌ No hay consulta seleccionada para eliminar estudio');
+    return;
+  }
+  
+  console.log('🗑️ Eliminando estudio clínico:', studyId, 'de consulta:', selectedConsultation.id);
+  const currentStudies = getCurrentConsultationStudies();
+  const updatedStudies = currentStudies.filter(study => study.id !== studyId);
+  updateCurrentConsultationStudies(updatedStudies);
+  
+  console.log('✅ Estudio eliminado. Estudios restantes:', updatedStudies.length);
+}, [selectedConsultation, getCurrentConsultationStudies, updateCurrentConsultationStudies]);
+
+const handleClinicalStudySubmit = useCallback(async () => {
+  console.log('🚀 handleClinicalStudySubmit - Debug inicial:', {
+    selectedConsultation: selectedConsultation?.id,
+    tempConsultationId,
+    formData: clinicalStudyFormData
+  });
+
+  const currentStudies = getCurrentConsultationStudies();
+
+  if (!selectedConsultation && !tempConsultationId) {
+    console.error('❌ No hay consulta seleccionada ni ID temporal');
+    setClinicalStudyFormErrorMessage('Error: No hay consulta disponible');
+    return;
+  }
+
+  setIsClinicalStudySubmitting(true);
+  setClinicalStudyFormErrorMessage('');
+  
+  try {
+    
+    if (isEditingClinicalStudy && selectedClinicalStudy) {
+      // Actualizar estudio existente
+      const updatedStudy: ClinicalStudy = {
+        ...selectedClinicalStudy,
+        ...clinicalStudyFormData,
+        updated_at: new Date().toISOString(),
+        updated_by: 'current_user'
+      };
+      
+      const updatedStudies = currentStudies.map(study => 
+        study.id === selectedClinicalStudy.id ? updatedStudy : study
+      );
+      updateCurrentConsultationStudies(updatedStudies);
+    } else {
+      // Crear nuevo estudio
+      const consultationId = selectedConsultation?.id || tempConsultationId;
+      const patientId = selectedConsultation?.patient_id || clinicalStudyFormData.patient_id;
+      
+      if (!consultationId) {
+        console.error('❌ No se pudo determinar el ID de consulta');
+        setClinicalStudyFormErrorMessage('Error: No se pudo asociar el estudio a la consulta');
+        return;
+      }
+      
+      console.log('📝 Datos del formulario detallados:', {
+        study_type: clinicalStudyFormData.study_type,
+        study_name: clinicalStudyFormData.study_name,
+        study_description: clinicalStudyFormData.study_description,
+        ordering_doctor: clinicalStudyFormData.ordering_doctor,
+        urgency: clinicalStudyFormData.urgency,
+        clinical_indication: clinicalStudyFormData.clinical_indication,
+        allFormData: clinicalStudyFormData
+      });
+
+      const newStudy: ClinicalStudy = {
+        id: `cs_${Date.now()}`, // ID temporal
+        consultation_id: consultationId,
+        patient_id: patientId,
+        study_type: clinicalStudyFormData.study_type,
+        study_name: clinicalStudyFormData.study_name,
+        study_description: clinicalStudyFormData.study_description,
+        ordered_date: clinicalStudyFormData.ordered_date,
+        performed_date: clinicalStudyFormData.performed_date,
+        results_date: clinicalStudyFormData.results_date,
+        status: clinicalStudyFormData.status,
+        results_text: clinicalStudyFormData.results_text,
+        interpretation: clinicalStudyFormData.interpretation,
+        ordering_doctor: clinicalStudyFormData.ordering_doctor,
+        performing_doctor: clinicalStudyFormData.performing_doctor,
+        institution: clinicalStudyFormData.institution,
+        urgency: clinicalStudyFormData.urgency,
+        clinical_indication: clinicalStudyFormData.clinical_indication,
+        relevant_history: clinicalStudyFormData.relevant_history,
+        created_at: new Date().toISOString(),
+        created_by: clinicalStudyFormData.created_by
+      };
+      
+      console.log('🏥 App.tsx - Creando nuevo estudio clínico:', {
+        newStudy,
+        consultationId: consultationId
+      });
+      
+      const updatedStudies = [...currentStudies, newStudy];
+      updateCurrentConsultationStudies(updatedStudies);
+      
+      console.log('📋 App.tsx - Estudios actualizados para consulta:', {
+        consultationId: consultationId,
+        previousCount: currentStudies.length,
+        newCount: updatedStudies.length
+      });
+    }
+    
+    setClinicalStudyDialogOpen(false);
+    setSelectedClinicalStudy(null);
+    setIsEditingClinicalStudy(false);
+    
+  } catch (error) {
+    console.error('Error al guardar estudio clínico:', error);
+    setClinicalStudyFormErrorMessage('Error al guardar el estudio clínico');
+  } finally {
+    setIsClinicalStudySubmitting(false);
+  }
+}, [isEditingClinicalStudy, selectedClinicalStudy, clinicalStudyFormData, selectedConsultation, tempConsultationId, getCurrentConsultationStudies, updateCurrentConsultationStudies]);
 
 // Handle appointment form submission
 const handleAppointmentSubmit = useCallback(async () => {
@@ -2229,16 +2636,26 @@ const formatDateTime = (dateString: string) => {
                 </Suspense>
               )}
 
-              {activeView === 'consultations' && consultationDetailView && selectedConsultation && (
-                <Suspense fallback={<LoadingFallback message="Cargando detalles..." />}>
-                  <ConsultationDetailView
-                    consultation={selectedConsultation}
-                    onBack={handleBackFromConsultationDetail}
-                    onEdit={handleEditConsultation}
-                    onPrint={handlePrintConsultation}
-                  />
-                </Suspense>
-              )}
+              {activeView === 'consultations' && consultationDetailView && selectedConsultation && (() => {
+                const studiesForDetailView = getCurrentConsultationStudies();
+                console.log('🔍 Debug - Pasando estudios a ConsultationDetailView:', {
+                  consultationId: selectedConsultation.id,
+                  studiesCount: studiesForDetailView.length,
+                  studies: studiesForDetailView
+                });
+                return (
+                  <Suspense fallback={<LoadingFallback message="Cargando detalles..." />}>
+                    <ConsultationDetailView
+                      consultation={selectedConsultation}
+                      onBack={handleBackFromConsultationDetail}
+                      onEdit={handleEditConsultation}
+                      onPrint={handlePrintConsultation}
+                      clinicalStudies={studiesForDetailView}
+                      onEditClinicalStudy={handleEditClinicalStudy}
+                    />
+                  </Suspense>
+                );
+              })()}
 
               {activeView === 'agenda' && (
                 <Suspense fallback={<LoadingFallback message="Cargando agenda..." />}>
@@ -2567,10 +2984,12 @@ const formatDateTime = (dateString: string) => {
               setCreatingPatientFromConsultation(true);
               setPatientDialogOpen(true);
             }}
-            clinicalStudies={clinicalStudies}
+            clinicalStudies={getCurrentConsultationStudies()}
             onAddClinicalStudy={handleAddClinicalStudy}
             onEditClinicalStudy={handleEditClinicalStudy}
             onDeleteClinicalStudy={handleDeleteClinicalStudy}
+            selectedConsultation={selectedConsultation}
+            tempConsultationId={tempConsultationId}
           />
         </Suspense>
 
@@ -2613,6 +3032,28 @@ const formatDateTime = (dateString: string) => {
             setFormErrorMessage={setDoctorProfileFormErrorMessage}
             isSubmitting={isDoctorProfileSubmitting}
             fieldErrors={doctorProfileFieldErrors}
+          />
+        </Suspense>
+
+        {/* Clinical Study Dialog */}
+        <Suspense fallback={<LoadingFallback message="Cargando formulario de estudio clínico..." />}>
+          <ClinicalStudyDialog
+            open={clinicalStudyDialogOpen}
+            onClose={() => {
+              setClinicalStudyDialogOpen(false);
+              setSelectedClinicalStudy(null);
+              setIsEditingClinicalStudy(false);
+              setClinicalStudyFormErrorMessage('');
+              setClinicalStudyFieldErrors({});
+            }}
+            isEditing={isEditingClinicalStudy}
+            formData={clinicalStudyFormData}
+            setFormData={setClinicalStudyFormData}
+            onSubmit={handleClinicalStudySubmit}
+            formErrorMessage={clinicalStudyFormErrorMessage}
+            setFormErrorMessage={setClinicalStudyFormErrorMessage}
+            isSubmitting={isClinicalStudySubmitting}
+            fieldErrors={clinicalStudyFieldErrors}
           />
         </Suspense>
 

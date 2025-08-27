@@ -10,7 +10,7 @@ import uuid
 
 from database import (
     Patient, DoctorProfile, MedicalHistory, VitalSigns, 
-    ClinicalStudy, Appointment, User, get_db
+    ClinicalStudy, Appointment, MedicalOrder, User, get_db
 )
 from passlib.context import CryptContext
 
@@ -55,11 +55,8 @@ class PatientService:
         
         # Filter by doctor_id if provided (data isolation)
         if doctor_id:
-            # Find the doctor's name to match with created_by field
-            doctor = db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first()
-            if doctor:
-                doctor_name = f'{doctor.title} {doctor.first_name} {doctor.paternal_surname}'
-                query = query.filter(Patient.created_by.like(f'%{doctor_name}%'))
+            # Filter directly by doctor_id stored in created_by field
+            query = query.filter(Patient.created_by == doctor_id)
         
         if search:
             search_filter = or_(
@@ -320,6 +317,55 @@ class ClinicalStudyService:
             ClinicalStudy.patient_id == patient_id
         ).order_by(desc(ClinicalStudy.ordered_date)).all()
 
+class MedicalOrderService:
+    """Service for medical orders"""
+    
+    @staticmethod
+    def create_order(db: Session, order_data: dict) -> MedicalOrder:
+        """Create medical order"""
+        if 'id' not in order_data or not order_data['id']:
+            order_data['id'] = f"MO{str(uuid.uuid4())[:8].upper()}"
+        
+        # Convert date strings
+        for date_field in ['order_date', 'valid_until_date']:
+            if order_data.get(date_field) and isinstance(order_data[date_field], str):
+                order_data[date_field] = datetime.fromisoformat(order_data[date_field].replace('Z', '+00:00'))
+        
+        # Set order_date if not provided
+        if 'order_date' not in order_data or not order_data['order_date']:
+            order_data['order_date'] = datetime.utcnow()
+        
+        order = MedicalOrder(**order_data)
+        db.add(order)
+        db.commit()
+        db.refresh(order)
+        return order
+    
+    @staticmethod
+    def get_orders_by_consultation(db: Session, consultation_id: str) -> List[MedicalOrder]:
+        """Get orders for a consultation"""
+        return db.query(MedicalOrder).filter(
+            MedicalOrder.consultation_id == consultation_id
+        ).order_by(desc(MedicalOrder.order_date)).all()
+    
+    @staticmethod
+    def get_orders_by_patient(db: Session, patient_id: str) -> List[MedicalOrder]:
+        """Get all orders for a patient"""
+        return db.query(MedicalOrder).filter(
+            MedicalOrder.patient_id == patient_id
+        ).order_by(desc(MedicalOrder.order_date)).all()
+    
+    @staticmethod
+    def update_order_status(db: Session, order_id: str, status: str) -> Optional[MedicalOrder]:
+        """Update order status"""
+        order = db.query(MedicalOrder).filter(MedicalOrder.id == order_id).first()
+        if order:
+            order.status = status
+            order.updated_at = datetime.utcnow()
+            db.commit()
+            db.refresh(order)
+        return order
+
 # Utility functions
 def _get_monthly_consultations(db: Session) -> int:
     """Get consultations count for the current month"""
@@ -337,11 +383,8 @@ def get_dashboard_data(db: Session, doctor_id: Optional[str] = None) -> Dict[str
     # Filter patients by doctor
     patient_query = db.query(Patient).filter(Patient.is_active == True)
     if doctor_id:
-        # Find the doctor's name to match with created_by field
-        doctor = db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first()
-        if doctor:
-            doctor_name = f'{doctor.title} {doctor.first_name} {doctor.paternal_surname}'
-            patient_query = patient_query.filter(Patient.created_by.like(f'%{doctor_name}%'))
+        # Filter directly by doctor_id stored in created_by field
+        patient_query = patient_query.filter(Patient.created_by == doctor_id)
     total_patients = patient_query.count()
     
     # Filter consultations by doctor

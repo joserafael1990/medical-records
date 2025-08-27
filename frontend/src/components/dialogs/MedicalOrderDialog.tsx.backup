@@ -1,0 +1,441 @@
+// ============================================================================
+// MEDICAL ORDER DIALOG - Diálogo para crear órdenes médicas
+// ============================================================================
+
+import React, { useState, useEffect } from 'react';
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  FormControlLabel,
+  Switch,
+  Box,
+  Autocomplete,
+  Typography,
+  Chip,
+  IconButton
+} from '@mui/material';
+import { Grid } from '@mui/material';
+import {
+  Close as CloseIcon,
+  MedicalServices as MedicalIcon,
+  LocalHospital as HospitalIcon
+} from '@mui/icons-material';
+import { 
+  MedicalOrderFormData, 
+  OrderType, 
+  OrderPriority, 
+  StudyType 
+} from '../../types';
+import {
+  ORDER_TYPES,
+  ORDER_PRIORITIES,
+  STUDY_TYPES,
+  COMMON_DIAGNOSTIC_ORDERS,
+  COMMON_PREPARATION_INSTRUCTIONS
+} from '../../constants';
+
+interface MedicalOrderDialogProps {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (orderData: MedicalOrderFormData) => void;
+  consultationId: string;
+  patientId: string;
+  isLoading?: boolean;
+}
+
+const initialFormData: Omit<MedicalOrderFormData, 'consultation_id' | 'patient_id'> = {
+  order_type: 'diagnostic_study',
+  study_type: 'laboratory',
+  study_name: '',
+  study_description: '',
+  clinical_indication: '',
+  provisional_diagnosis: '',
+  diagnosis_cie10: '',
+  relevant_clinical_data: '',
+  priority: 'normal',
+  requires_preparation: false,
+  preparation_instructions: '',
+  estimated_cost: '',
+  special_instructions: '',
+  valid_until_date: ''
+};
+
+const MedicalOrderDialog: React.FC<MedicalOrderDialogProps> = ({
+  open,
+  onClose,
+  onSubmit,
+  consultationId,
+  patientId,
+  isLoading = false
+}) => {
+  const [formData, setFormData] = useState(initialFormData);
+  const [availableStudies, setAvailableStudies] = useState<string[]>([]);
+  const [availablePreparations, setAvailablePreparations] = useState<string[]>([]);
+
+  // Update available studies when study type changes
+  useEffect(() => {
+    const studyType = formData.study_type as keyof typeof COMMON_DIAGNOSTIC_ORDERS;
+    if (COMMON_DIAGNOSTIC_ORDERS[studyType]) {
+      setAvailableStudies([...COMMON_DIAGNOSTIC_ORDERS[studyType]]);
+    } else {
+      setAvailableStudies([]);
+    }
+
+    // Update available preparations
+    const prepType = formData.study_type as keyof typeof COMMON_PREPARATION_INSTRUCTIONS;
+    if (COMMON_PREPARATION_INSTRUCTIONS[prepType]) {
+      setAvailablePreparations([...COMMON_PREPARATION_INSTRUCTIONS[prepType]]);
+    } else {
+      setAvailablePreparations([]);
+    }
+  }, [formData.study_type]);
+
+  // Reset form when dialog closes
+  useEffect(() => {
+    if (!open) {
+      setFormData(initialFormData);
+    }
+  }, [open]);
+
+  const handleInputChange = (field: keyof typeof formData) => (
+    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: event.target.value
+    }));
+  };
+
+  const handleSelectChange = (field: keyof typeof formData) => (
+    event: any
+  ) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: event.target.value
+    }));
+  };
+
+  const handleSwitchChange = (field: keyof typeof formData) => (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: event.target.checked
+    }));
+  };
+
+  const handleAutocompleteChange = (field: keyof typeof formData) => (
+    event: any,
+    newValue: string | null
+  ) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: newValue || ''
+    }));
+  };
+
+  const handleSubmit = () => {
+    // Validate required fields
+    if (!formData.study_name.trim()) {
+      alert('El nombre del estudio es obligatorio');
+      return;
+    }
+    if (!formData.clinical_indication.trim()) {
+      alert('La indicación clínica es obligatoria');
+      return;
+    }
+
+    // Create complete form data
+    const completeFormData: MedicalOrderFormData = {
+      ...formData,
+      consultation_id: consultationId,
+      patient_id: patientId
+    };
+
+    onSubmit(completeFormData);
+  };
+
+  const getPriorityColor = (priority: OrderPriority) => {
+    const priorityOption = ORDER_PRIORITIES.find(p => p.value === priority);
+    return priorityOption?.color || '#42a5f5';
+  };
+
+  return (
+    <Dialog 
+      open={open} 
+      onClose={onClose}
+      maxWidth="md"
+      fullWidth
+      PaperProps={{
+        sx: { minHeight: '600px' }
+      }}
+    >
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <MedicalIcon color="primary" />
+          <Typography variant="h6">Nueva Orden Médica</Typography>
+        </Box>
+        <IconButton onClick={onClose} size="small">
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
+
+      <DialogContent dividers>
+        <Grid container spacing={3}>
+          {/* Tipo de Orden */}
+          <Grid xs={12} sm={6}>
+            <FormControl fullWidth>
+              <InputLabel>Tipo de Orden</InputLabel>
+              <Select
+                value={formData.order_type}
+                onChange={handleSelectChange('order_type')}
+                label="Tipo de Orden"
+              >
+                {ORDER_TYPES.map(type => (
+                  <MenuItem key={type.value} value={type.value}>
+                    {type.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          {/* Tipo de Estudio */}
+          <Grid xs={12} sm={6}>
+            <FormControl fullWidth>
+              <InputLabel>Tipo de Estudio</InputLabel>
+              <Select
+                value={formData.study_type}
+                onChange={handleSelectChange('study_type')}
+                label="Tipo de Estudio"
+              >
+                {STUDY_TYPES.map(type => (
+                  <MenuItem key={type.value} value={type.value}>
+                    {type.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          {/* Nombre del Estudio */}
+          <Grid xs={12}>
+            <Autocomplete
+              freeSolo
+              options={availableStudies}
+              value={formData.study_name}
+              onChange={handleAutocompleteChange('study_name')}
+              onInputChange={(event, newInputValue) => {
+                setFormData(prev => ({ ...prev, study_name: newInputValue }));
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Nombre del Estudio *"
+                  fullWidth
+                  placeholder="Escriba o seleccione un estudio..."
+                  error={!formData.study_name.trim()}
+                  helperText={!formData.study_name.trim() ? 'Campo obligatorio' : ''}
+                />
+              )}
+            />
+          </Grid>
+
+          {/* Descripción del Estudio */}
+          <Grid xs={12}>
+            <TextField
+              label="Descripción del Estudio"
+              multiline
+              rows={2}
+              fullWidth
+              value={formData.study_description}
+              onChange={handleInputChange('study_description')}
+              placeholder="Descripción detallada del estudio..."
+            />
+          </Grid>
+
+          {/* Indicación Clínica */}
+          <Grid xs={12}>
+            <TextField
+              label="Indicación Clínica *"
+              multiline
+              rows={3}
+              fullWidth
+              value={formData.clinical_indication}
+              onChange={handleInputChange('clinical_indication')}
+              placeholder="Motivo médico por el cual se solicita el estudio..."
+              error={!formData.clinical_indication.trim()}
+              helperText={!formData.clinical_indication.trim() ? 'Campo obligatorio según NOM-004' : ''}
+            />
+          </Grid>
+
+          {/* Diagnóstico Provisional */}
+          <Grid xs={12} sm={8}>
+            <TextField
+              label="Diagnóstico Provisional"
+              fullWidth
+              value={formData.provisional_diagnosis}
+              onChange={handleInputChange('provisional_diagnosis')}
+              placeholder="Diagnóstico preliminar..."
+            />
+          </Grid>
+
+          {/* Código CIE-10 */}
+          <Grid xs={12} sm={4}>
+            <TextField
+              label="Código CIE-10"
+              fullWidth
+              value={formData.diagnosis_cie10}
+              onChange={handleInputChange('diagnosis_cie10')}
+              placeholder="Ej: K29.7"
+              inputProps={{ style: { textTransform: 'uppercase' } }}
+            />
+          </Grid>
+
+          {/* Prioridad */}
+          <Grid xs={12} sm={6}>
+            <FormControl fullWidth>
+              <InputLabel>Prioridad</InputLabel>
+              <Select
+                value={formData.priority}
+                onChange={handleSelectChange('priority')}
+                label="Prioridad"
+                renderValue={(value) => (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Chip 
+                      size="small" 
+                      label={ORDER_PRIORITIES.find(p => p.value === value)?.label}
+                      sx={{ 
+                        backgroundColor: getPriorityColor(value as OrderPriority),
+                        color: 'white'
+                      }}
+                    />
+                  </Box>
+                )}
+              >
+                {ORDER_PRIORITIES.map(priority => (
+                  <MenuItem key={priority.value} value={priority.value}>
+                    <Chip 
+                      size="small" 
+                      label={priority.label}
+                      sx={{ 
+                        backgroundColor: priority.color,
+                        color: 'white',
+                        mr: 1
+                      }}
+                    />
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          {/* Costo Estimado */}
+          <Grid xs={12} sm={6}>
+            <TextField
+              label="Costo Estimado"
+              fullWidth
+              value={formData.estimated_cost}
+              onChange={handleInputChange('estimated_cost')}
+              placeholder="Ej: $500 - $800 pesos"
+            />
+          </Grid>
+
+          {/* Requiere Preparación */}
+          <Grid xs={12}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={formData.requires_preparation}
+                  onChange={handleSwitchChange('requires_preparation')}
+                  color="primary"
+                />
+              }
+              label="Requiere preparación especial"
+            />
+          </Grid>
+
+          {/* Instrucciones de Preparación */}
+          {formData.requires_preparation && (
+            <Grid xs={12}>
+              <Autocomplete
+                freeSolo
+                options={availablePreparations}
+                value={formData.preparation_instructions}
+                onChange={handleAutocompleteChange('preparation_instructions')}
+                onInputChange={(event, newInputValue) => {
+                  setFormData(prev => ({ ...prev, preparation_instructions: newInputValue }));
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Instrucciones de Preparación"
+                    multiline
+                    rows={2}
+                    fullWidth
+                    placeholder="Instrucciones para el paciente..."
+                  />
+                )}
+              />
+            </Grid>
+          )}
+
+          {/* Datos Clínicos Relevantes */}
+          <Grid xs={12}>
+            <TextField
+              label="Datos Clínicos Relevantes"
+              multiline
+              rows={2}
+              fullWidth
+              value={formData.relevant_clinical_data}
+              onChange={handleInputChange('relevant_clinical_data')}
+              placeholder="Información adicional relevante para el estudio..."
+            />
+          </Grid>
+
+          {/* Instrucciones Especiales */}
+          <Grid xs={12}>
+            <TextField
+              label="Instrucciones Especiales"
+              multiline
+              rows={2}
+              fullWidth
+              value={formData.special_instructions}
+              onChange={handleInputChange('special_instructions')}
+              placeholder="Instrucciones adicionales para el laboratorio..."
+            />
+          </Grid>
+        </Grid>
+      </DialogContent>
+
+      <DialogActions sx={{ p: 2, gap: 1 }}>
+        <Button 
+          onClick={onClose} 
+          variant="outlined"
+          disabled={isLoading}
+        >
+          Cancelar
+        </Button>
+        <Button 
+          onClick={handleSubmit} 
+          variant="contained"
+          startIcon={<HospitalIcon />}
+          disabled={isLoading || !formData.study_name.trim() || !formData.clinical_indication.trim()}
+          sx={{ minWidth: 120 }}
+        >
+          {isLoading ? 'Generando...' : 'Generar Orden'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
+export default MedicalOrderDialog;

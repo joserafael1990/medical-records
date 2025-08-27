@@ -42,21 +42,42 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Check for existing authentication on app start
   useEffect(() => {
-    const token = localStorage.getItem('auth_token');
-    const doctorData = localStorage.getItem('doctor_data');
-    
-    if (token && doctorData) {
-      try {
-        const doctor = JSON.parse(doctorData);
-        setUser({ doctor, token });
-      } catch (error) {
-        console.error('Error parsing stored auth data:', error);
-        localStorage.removeItem('auth_token');
-        localStorage.removeItem('doctor_data');
+    const checkAuthState = async () => {
+      const token = localStorage.getItem('token'); // Changed from 'auth_token' to 'token'
+      const doctorData = localStorage.getItem('doctor_data');
+      
+      if (token && doctorData) {
+        try {
+          const doctor = JSON.parse(doctorData);
+          setUser({ doctor, token });
+        } catch (error) {
+          console.error('Error parsing stored auth data:', error);
+          localStorage.removeItem('token');
+          localStorage.removeItem('doctor_data');
+        }
       }
-    }
+      
+      // Add a minimum loading time to prevent blinking
+      await new Promise(resolve => setTimeout(resolve, 300));
+      setIsLoading(false);
+    };
     
-    setIsLoading(false);
+    checkAuthState();
+  }, []);
+
+  // Listen for auth expiration events from API interceptor
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      console.log('🔄 Auth expired event received, logging out user...');
+      setUser(null);
+      setShowRegister(false);
+    };
+
+    window.addEventListener('auth-expired', handleAuthExpired);
+    
+    return () => {
+      window.removeEventListener('auth-expired', handleAuthExpired);
+    };
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
@@ -94,7 +115,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         };
         
         // Store fallback authentication data
-        localStorage.setItem('auth_token', 'fallback_token');
+        localStorage.setItem('token', 'fallback_token'); // Changed from 'auth_token' to 'token'
         localStorage.setItem('doctor_data', JSON.stringify(fallbackDoctor));
         
         setUser({
@@ -112,7 +133,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = () => {
-    localStorage.removeItem('auth_token');
+    localStorage.removeItem('token'); // Changed from 'auth_token' to 'token'
     localStorage.removeItem('doctor_data');
     setUser(null);
   };

@@ -1,32 +1,23 @@
 #!/usr/bin/env python3
 """
-Simple script to start the backend server without uvicorn issues
+Script de arranque directo del servidor FastAPI
 """
-import sys
-import os
+import uvicorn
+from main import app
 
-# Add current directory to Python path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-try:
-    import uvicorn
-    from main import app
-    
-    print("🚀 Starting Historias Clínicas Backend Server...")
-    print("📡 Server will be available at: http://localhost:8000")
-    print("📚 API docs will be available at: http://localhost:8000/docs")
-    print("🔄 Press Ctrl+C to stop")
+if __name__ == "__main__":
+    print("🚀 Arrancando servidor FastAPI...")
+    print("📋 Configuración:")
+    print("   - Host: 127.0.0.1")
+    print("   - Puerto: 8000")
+    print("   - Reload: True")
+    print("   - Workers: 1")
     
     uvicorn.run(
-        app,
-        host="0.0.0.0",
+        "main:app",
+        host="127.0.0.1",
         port=8000,
         reload=True,
+        workers=1,
         log_level="info"
     )
-    
-except ImportError as e:
-    print(f"❌ Import error: {e}")
-    print("Make sure all dependencies are installed")
-except Exception as e:
-    print(f"❌ Server error: {e}")

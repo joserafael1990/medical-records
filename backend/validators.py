@@ -330,6 +330,69 @@ def validate_clinical_study_data(study_data: Dict[str, Any]) -> None:
             field_errors={**{field: "Campo obligatorio" for field in missing_fields}, **invalid_fields}
         )
 
+def validate_medical_order_data(order_data: Dict[str, Any]) -> None:
+    """Validate medical order data according to NOM-004"""
+    missing_fields = []
+    invalid_fields = {}
+    
+    # Required fields according to NOM-004
+    required_fields = [
+        'patient_id', 'consultation_id', 'study_type', 'study_name', 
+        'clinical_indication', 'ordering_doctor_name', 'ordering_doctor_license'
+    ]
+    
+    for field in required_fields:
+        if field not in order_data or not order_data[field]:
+            missing_fields.append(field)
+    
+    # Validate dates
+    date_fields = ['order_date', 'valid_until_date']
+    for field in date_fields:
+        if field in order_data and order_data[field]:
+            if isinstance(order_data[field], str):
+                if not validate_date_string(order_data[field]):
+                    invalid_fields[field] = f'Formato de fecha inválido en {field}'
+    
+    # Validate study type
+    if 'study_type' in order_data and order_data['study_type']:
+        valid_types = ['laboratory', 'radiology', 'pathology', 'cardiology', 'endoscopy', 'biopsy', 'cytology', 'microbiology', 'genetics', 'other']
+        if order_data['study_type'] not in valid_types:
+            invalid_fields['study_type'] = f'Tipo de estudio debe ser uno de: {", ".join(valid_types)}'
+    
+    # Validate priority
+    if 'priority' in order_data and order_data['priority']:
+        valid_priorities = ['normal', 'urgent', 'stat']
+        if order_data['priority'] not in valid_priorities:
+            invalid_fields['priority'] = f'Prioridad debe ser una de: {", ".join(valid_priorities)}'
+    
+    # Validate status
+    if 'status' in order_data and order_data['status']:
+        valid_statuses = ['pending', 'printed', 'cancelled']
+        if order_data['status'] not in valid_statuses:
+            invalid_fields['status'] = f'Estado debe ser uno de: {", ".join(valid_statuses)}'
+    
+    # Validate professional license
+    if 'ordering_doctor_license' in order_data and order_data['ordering_doctor_license']:
+        if not validate_professional_license(order_data['ordering_doctor_license']):
+            invalid_fields['ordering_doctor_license'] = 'Cédula profesional inválida'
+    
+    # Validate minimum content length for critical fields
+    min_length_fields = {
+        'clinical_indication': 10,
+        'study_name': 3
+    }
+    
+    for field, min_length in min_length_fields.items():
+        if field in order_data and order_data[field]:
+            if len(str(order_data[field]).strip()) < min_length:
+                invalid_fields[field] = f'Debe tener al menos {min_length} caracteres'
+    
+    if missing_fields or invalid_fields:
+        raise ValidationException(
+            message="Datos de la orden médica inválidos",
+            field_errors={**{field: "Campo obligatorio" for field in missing_fields}, **invalid_fields}
+        )
+
 # Business rule validators
 def validate_appointment_time_conflict(db, appointment_date: datetime, appointment_id: Optional[str] = None):
     """Check for appointment time conflicts"""

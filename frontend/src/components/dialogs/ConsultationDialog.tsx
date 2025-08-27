@@ -42,6 +42,37 @@ import { Patient, ConsultationFormData, ClinicalStudy } from '../../types';
 import { ErrorRibbon } from '../common/ErrorRibbon';
 import ClinicalStudiesSection from '../common/ClinicalStudiesSection';
 
+// Utility function to calculate age from birth date
+const calculateAge = (birthDate: string): number => {
+  try {
+    const birth = new Date(birthDate);
+    const today = new Date();
+    
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+    
+    // If birthday hasn't occurred this year yet, subtract 1
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    
+    return age;
+  } catch (error) {
+    console.error('Error calculating age:', error);
+    return 0;
+  }
+};
+
+// Function to format patient name with age
+const formatPatientNameWithAge = (patient: Patient): string => {
+  console.log('🧑 Formateando paciente:', patient);
+  const age = calculateAge(patient.birth_date);
+  console.log('📅 Edad calculada:', age, 'para fecha:', patient.birth_date);
+  const formattedName = `${patient.first_name} ${patient.paternal_surname} ${patient.maternal_surname} (${age} años)`;
+  console.log('✨ Nombre final:', formattedName);
+  return formattedName;
+};
+
 interface ConsultationDialogProps {
   open: boolean;
   onClose: () => void;
@@ -59,6 +90,8 @@ interface ConsultationDialogProps {
   onAddClinicalStudy?: () => void;
   onEditClinicalStudy?: (study: ClinicalStudy) => void;
   onDeleteClinicalStudy?: (studyId: string) => void;
+  selectedConsultation?: any; // ID de la consulta actual
+  tempConsultationId?: string | null; // ID temporal para consultas nuevas
 }
 
 const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
@@ -77,7 +110,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   clinicalStudies = [],
   onAddClinicalStudy,
   onEditClinicalStudy,
-  onDeleteClinicalStudy
+  onDeleteClinicalStudy,
+  selectedConsultation,
+  tempConsultationId
 }) => {
   const [activeStep, setActiveStep] = useState(0);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -171,7 +206,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               <Box sx={{ flex: 1 }}>
                 <Autocomplete
                   options={patients}
-                  getOptionLabel={(option) => option.full_name}
+                  getOptionLabel={(option) => formatPatientNameWithAge(option)}
                   value={selectedPatient}
                   onChange={(_, newValue) => handlePatientChange(newValue)}
                   renderInput={(params) => (
@@ -189,7 +224,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                         {option.first_name[0]}{option.paternal_surname[0]}
                       </Avatar>
                       <Box>
-                        <Typography variant="body1">{option.full_name}</Typography>
+                        <Typography variant="body1">{formatPatientNameWithAge(option)}</Typography>
                         <Typography variant="body2" color="text.secondary">
                           {option.phone} • {option.email}
                         </Typography>
@@ -490,7 +525,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           <Box sx={{ p: 0 }}>
             {onAddClinicalStudy && onEditClinicalStudy && onDeleteClinicalStudy ? (
               <ClinicalStudiesSection
-                consultationId={formData.patient_id} // Temporal - usar consultation id cuando esté disponible
+                consultationId={selectedConsultation?.id || tempConsultationId || 'new_consultation'}
                 patientId={formData.patient_id}
                 studies={clinicalStudies}
                 onAddStudy={onAddClinicalStudy}

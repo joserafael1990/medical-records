@@ -77,6 +77,9 @@ export interface Consultation {
   updated_at?: string;
   vital_signs_id?: string;
   prescription_ids?: string[];
+  
+  // Clinical studies associated with this consultation
+  clinical_studies?: ClinicalStudy[];
 }
 
 export interface ConsultationResponse extends Consultation {
