@@ -172,11 +172,11 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
   const isStepValid = (step: number): boolean => {
     if (step === 0) {
       const isValid = !!(
-        formData.study_type &&
-        formData.study_name &&
-        formData.ordered_date &&
-        formData.ordering_doctor
-      );
+          formData.study_type &&
+          formData.study_name &&
+          formData.ordered_date &&
+          formData.ordering_doctor
+        );
 
       return isValid;
     }
@@ -255,29 +255,29 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
             />
 
             {/* Order Date */}
-            <TextField
-              label="Fecha de Solicitud"
-              type="date"
-              value={formData.ordered_date ? formData.ordered_date.split('T')[0] : ''}
-              onChange={(e) => setFormData(prev => ({ 
-                ...prev, 
-                ordered_date: e.target.value ? `${e.target.value}T09:00:00` : ''
-              }))}
-              InputLabelProps={{ shrink: true }}
-              fullWidth
-              required
-              error={!!fieldErrors.ordered_date}
-              helperText={fieldErrors.ordered_date || 'Fecha en que se solicita el estudio'}
-            />
+              <TextField
+                label="Fecha de Solicitud"
+                type="date"
+                value={formData.ordered_date ? formData.ordered_date.split('T')[0] : ''}
+                onChange={(e) => setFormData(prev => ({ 
+                  ...prev, 
+                  ordered_date: e.target.value ? `${e.target.value}T09:00:00` : ''
+                }))}
+                InputLabelProps={{ shrink: true }}
+                fullWidth
+                required
+                error={!!fieldErrors.ordered_date}
+                helperText={fieldErrors.ordered_date || 'Fecha en que se solicita el estudio'}
+              />
 
 
 
             {/* Ordering Doctor */}
-            <TextField
-              label="Médico Solicitante"
-              value={formData.ordering_doctor || ''}
-              fullWidth
-              required
+              <TextField
+                label="Médico Solicitante"
+                value={formData.ordering_doctor || ''}
+                fullWidth
+                required
               InputProps={{
                 readOnly: true,
               }}
@@ -287,24 +287,24 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
                   color: 'text.primary'
                 }
               }}
-              error={!!fieldErrors.ordering_doctor}
+                error={!!fieldErrors.ordering_doctor}
               helperText={fieldErrors.ordering_doctor || "Médico que solicita el estudio (auto-asignado)"}
             />
 
             {/* Urgency */}
-            <FormControl fullWidth>
-              <InputLabel>Urgencia</InputLabel>
-              <Select
-                value={formData.urgency || 'normal'}
-                onChange={(e) => setFormData(prev => ({ ...prev, urgency: e.target.value }))}
-                label="Urgencia"
-              >
-                {URGENCY_LEVELS.map((level) => (
-                  <MenuItem key={level.value} value={level.value}>
-                    {level.label}
-                  </MenuItem>
-                ))}
-              </Select>
+              <FormControl fullWidth>
+                <InputLabel>Urgencia</InputLabel>
+                <Select
+                  value={formData.urgency || 'normal'}
+                  onChange={(e) => setFormData(prev => ({ ...prev, urgency: e.target.value }))}
+                  label="Urgencia"
+                >
+                  {URGENCY_LEVELS.map((level) => (
+                    <MenuItem key={level.value} value={level.value}>
+                      {level.label}
+                    </MenuItem>
+                  ))}
+                </Select>
               <Typography variant="caption" sx={{ mt: 1, color: 'text.secondary' }}>
                 Prioridad para la realización del estudio
               </Typography>
@@ -390,21 +390,21 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
       </DialogContent>
 
       <DialogActions sx={{ p: 3, justifyContent: 'space-between' }}>
-        <Button
+          <Button
           onClick={onClose}
           variant="outlined"
-        >
+          >
           Cancelar
-        </Button>
+          </Button>
 
-        <Button
-          onClick={onSubmit}
-          variant="contained"
+            <Button
+              onClick={onSubmit}
+              variant="contained"
           disabled={isSubmitting || !isStepValid(0)}
-          startIcon={<SaveIcon />}
-        >
+              startIcon={<SaveIcon />}
+            >
           {isSubmitting ? 'Guardando...' : (isEditing ? 'Actualizar Orden' : 'Crear Orden')}
-        </Button>
+            </Button>
       </DialogActions>
     </Dialog>
   );

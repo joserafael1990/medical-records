@@ -103,7 +103,7 @@ const PatientsViewSmart: React.FC<PatientsViewSmartProps> = ({
   const handleFilterClick = () => {
     // Agregar filtro dinámico basado en el estado actual
     if (enrichedPatients.length > 0) {
-      const totalActive = enrichedPatients.filter(p => p.status === 'Activo').length;
+      const totalActive = enrichedPatients.filter(p => (p.status as any) === 'active' || (p.status as any) === 'Activo').length;
       addFilter({
         key: 'active_count',
         label: 'Pacientes Activos',
@@ -150,7 +150,7 @@ const PatientsViewSmart: React.FC<PatientsViewSmartProps> = ({
           <Box sx={{ mb: 3 }}>
             <ErrorRibbon 
               message={successMessage} 
-              severity="success" 
+              severity="info" 
               onClose={() => setSuccessMessage('')}
             />
           </Box>
@@ -198,7 +198,7 @@ const PatientsViewSmart: React.FC<PatientsViewSmartProps> = ({
       {/* Tabla Inteligente */}
       <Paper sx={{ borderRadius: 2, overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
         <SmartTable
-          data={enrichedPatients}
+          data={enrichedPatients as unknown as Patient[]}
           columns={patientColumns}
           isLoading={isLoading}
           emptyMessage={
@@ -237,7 +237,7 @@ const PatientsViewSmart: React.FC<PatientsViewSmartProps> = ({
           
           <Box>
             <Typography variant="h4" sx={{ fontWeight: 700, color: 'success.main' }}>
-              {enrichedPatients.filter(p => p.status === 'Activo').length}
+              {enrichedPatients.filter(p => (p.status as any) === 'active' || (p.status as any) === 'Activo').length}
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Pacientes Activos

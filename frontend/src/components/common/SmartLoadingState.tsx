@@ -7,7 +7,7 @@ import {
   Button,
   Alert
 } from '@mui/material';
-import { RefreshIcon } from '@mui/icons-material';
+import { Refresh as RefreshIcon } from '@mui/icons-material';
 
 interface SmartLoadingStateProps {
   isLoading: boolean;

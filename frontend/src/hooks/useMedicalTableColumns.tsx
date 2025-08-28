@@ -59,7 +59,7 @@ export const useMedicalTableColumns = () => {
       width: '12%',
       render: (value) => (
         <Chip 
-          label={value} 
+          label={String(value)} 
           size="small" 
           color={value === 'Masculino' ? 'info' : 'secondary'}
           variant="outlined"
@@ -98,7 +98,7 @@ export const useMedicalTableColumns = () => {
       width: '12%',
       render: (value) => value ? (
         <Chip 
-          label={value} 
+          label={String(value)} 
           size="small" 
           color="error"
           variant="filled"
@@ -147,7 +147,7 @@ export const useMedicalTableColumns = () => {
       width: '12%',
       render: (value) => (
         <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
-          {value}
+          {String(value)}
         </Typography>
       )
     },
@@ -159,7 +159,7 @@ export const useMedicalTableColumns = () => {
       render: (value, consultation) => (
         <Box>
           <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            {value || 'Paciente No Identificado'}
+            {String(value || 'Paciente No Identificado')}
           </Typography>
           <Typography variant="caption" color="text.secondary">
             ID: {consultation.patient_id}
@@ -173,12 +173,12 @@ export const useMedicalTableColumns = () => {
       sortable: true,
       width: '15%',
       render: (value) => {
-        const date = new Date(value);
+        const date = new Date(String(value));
         const isToday = date.toDateString() === new Date().toDateString();
         return (
           <Box>
             <Typography variant="body2">
-              {formatDate(value)}
+              {formatDate(String(value))}
             </Typography>
             {isToday && (
               <Chip label="Hoy" size="small" color="primary" variant="filled" />
@@ -203,7 +203,7 @@ export const useMedicalTableColumns = () => {
             WebkitBoxOrient: 'vertical'
           }}
         >
-          {value || 'Sin especificar'}
+          {String(value || 'Sin especificar')}
         </Typography>
       )
     },
@@ -214,7 +214,7 @@ export const useMedicalTableColumns = () => {
       width: '23%',
       render: (value) => value ? (
         <Chip 
-          label={value} 
+          label={String(value)} 
           size="small" 
           color="info"
           variant="outlined"
@@ -262,7 +262,7 @@ export const useMedicalTableColumns = () => {
       label: 'Teléfono',
       sortable: false,
       render: (value) => (
-        <Typography variant="body2">{value || '-'}</Typography>
+        <Typography variant="body2">{String(value || '-')}</Typography>
       )
     }
   ];
@@ -274,7 +274,7 @@ export const useMedicalTableColumns = () => {
       sortable: true,
       render: (value) => (
         <Typography variant="body2">
-          {formatDate(value)}
+          {formatDate(String(value))}
         </Typography>
       )
     },
@@ -284,7 +284,7 @@ export const useMedicalTableColumns = () => {
       sortable: true,
       render: (value) => (
         <Typography variant="body2" sx={{ fontWeight: 600 }}>
-          {value || 'Sin nombre'}
+          {String(value || 'Sin nombre')}
         </Typography>
       )
     },
@@ -299,7 +299,7 @@ export const useMedicalTableColumns = () => {
           whiteSpace: 'nowrap',
           maxWidth: 200
         }}>
-          {value || 'Sin especificar'}
+          {String(value || 'Sin especificar')}
         </Typography>
       )
     }

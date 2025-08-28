@@ -3,7 +3,6 @@ import {
   Box,
   Typography,
   Paper,
-  Grid,
   Button,
   Divider,
   Card,
@@ -82,9 +81,9 @@ const UXDemoView: React.FC = () => {
         Demostración de los nuevos componentes para mejorar la experiencia de usuario
       </Typography>
 
-      <Grid container spacing={3}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 3, mb: 3 }}>
         {/* 1. Búsqueda Inteligente */}
-        <Grid item xs={12} md={6}>
+        <Box>
           <Card sx={{ height: '100%' }}>
             <CardHeader
               avatar={<SearchIcon color="primary" />}
@@ -121,10 +120,10 @@ const UXDemoView: React.FC = () => {
               </Box>
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
 
         {/* 2. Estados de Carga */}
-        <Grid item xs={12} md={6}>
+        <Box>
           <Card sx={{ height: '100%' }}>
             <CardHeader
               avatar={<LoadIcon color="primary" />}
@@ -167,19 +166,20 @@ const UXDemoView: React.FC = () => {
               </Paper>
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
+      </Box>
 
-        {/* 3. Notificaciones Toast */}
-        <Grid item xs={12}>
-          <Card>
+      {/* 3. Notificaciones Toast */}
+      <Box sx={{ mb: 3 }}>
+        <Card>
             <CardHeader
               avatar={<NotifyIcon color="primary" />}
               title="🔔 Sistema de Notificaciones"
               subheader="Toast notifications con auto-dismiss y acciones"
             />
             <CardContent>
-              <Grid container spacing={2}>
-                <Grid xs={12} sm={6} md={3}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 2, mb: 2 }}>
+                <Box>
                   <Button
                     fullWidth
                     variant="contained"
@@ -188,8 +188,8 @@ const UXDemoView: React.FC = () => {
                   >
                     ✅ Success
                   </Button>
-                </Grid>
-                <Grid xs={12} sm={6} md={3}>
+                </Box>
+                <Box>
                   <Button
                     fullWidth
                     variant="contained"
@@ -198,8 +198,8 @@ const UXDemoView: React.FC = () => {
                   >
                     ❌ Error
                   </Button>
-                </Grid>
-                <Grid xs={12} sm={6} md={3}>
+                </Box>
+                <Box>
                   <Button
                     fullWidth
                     variant="contained"
@@ -208,8 +208,8 @@ const UXDemoView: React.FC = () => {
                   >
                     ⚠️ Warning
                   </Button>
-                </Grid>
-                <Grid xs={12} sm={6} md={3}>
+                </Box>
+                <Box>
                   <Button
                     fullWidth
                     variant="contained"
@@ -218,8 +218,8 @@ const UXDemoView: React.FC = () => {
                   >
                     ℹ️ Info
                   </Button>
-                </Grid>
-              </Grid>
+                </Box>
+              </Box>
 
               <Divider sx={{ my: 2 }} />
 
@@ -240,46 +240,45 @@ const UXDemoView: React.FC = () => {
               </Button>
             </CardContent>
           </Card>
-        </Grid>
+      </Box>
 
-        {/* 4. Información de Implementación */}
-        <Grid xs={12}>
-          <Paper sx={{ p: 3, bgcolor: 'primary.50', borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ mb: 2, color: 'primary.main' }}>
-              💡 Cómo Implementar en tu Aplicación
-            </Typography>
+      {/* 4. Información de Implementación */}
+      <Box>
+        <Paper sx={{ p: 3, bgcolor: 'primary.50', borderRadius: 2 }}>
+          <Typography variant="h6" sx={{ mb: 2, color: 'primary.main' }}>
+            💡 Cómo Implementar en tu Aplicación
+          </Typography>
+          
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 2 }}>
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                1. Búsqueda Inteligente
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                <code>useIntelligentSearch()</code> para gestión completa de búsqueda y filtros
+              </Typography>
+            </Box>
             
-            <Grid container spacing={2}>
-              <Grid xs={12} md={4}>
-                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                  1. Búsqueda Inteligente
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  <code>useIntelligentSearch()</code> para gestión completa de búsqueda y filtros
-                </Typography>
-              </Grid>
-              
-              <Grid xs={12} md={4}>
-                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                  2. Estados de Carga
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  <code>useSmartLoading()</code> para wrapper automático de estados
-                </Typography>
-              </Grid>
-              
-              <Grid xs={12} md={4}>
-                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                  3. Notificaciones
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  <code>useSimpleToast()</code> para notificaciones rápidas
-                </Typography>
-              </Grid>
-            </Grid>
-          </Paper>
-        </Grid>
-      </Grid>
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                2. Estados de Carga
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                <code>useSmartLoading()</code> para wrapper automático de estados
+              </Typography>
+            </Box>
+            
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                3. Notificaciones
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                <code>useSimpleToast()</code> para notificaciones rápidas
+              </Typography>
+            </Box>
+          </Box>
+        </Paper>
+      </Box>
     </Box>
   );
 };

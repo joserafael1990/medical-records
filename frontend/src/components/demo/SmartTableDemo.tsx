@@ -3,7 +3,6 @@ import {
   Box,
   Typography,
   Paper,
-  Grid,
   Button,
   Card,
   CardContent,
@@ -15,7 +14,7 @@ import {
   Slider
 } from '@mui/material';
 import {
-  Table as TableIcon,
+  TableChart as TableIcon,
   Sort as SortIcon,
   ViewList as ViewIcon
 } from '@mui/icons-material';
@@ -40,7 +39,7 @@ const mockPatients: Patient[] = [
     address: 'Av. Principal 123',
     blood_type: 'O+',
     total_visits: 8,
-    status: 'Activo',
+    status: 'active' as any,
     emergency_contact_name: 'Juan González',
     emergency_contact_phone: '555-0124',
     allergies: 'Ninguna',
@@ -61,7 +60,7 @@ const mockPatients: Patient[] = [
     address: 'Calle Secundaria 456',
     blood_type: 'A+',
     total_visits: 15,
-    status: 'Activo',
+    status: 'active' as any,
     emergency_contact_name: 'Ana Rodríguez',
     emergency_contact_phone: '555-0457',
     allergies: 'Penicilina',
@@ -82,7 +81,7 @@ const mockPatients: Patient[] = [
     address: 'Plaza Central 789',
     blood_type: 'B-',
     total_visits: 3,
-    status: 'Activo',
+    status: 'active' as any,
     emergency_contact_name: 'Luis Fernández',
     emergency_contact_phone: '555-0790',
     allergies: 'Mariscos',
@@ -102,7 +101,11 @@ const mockConsultations: Consultation[] = [
     history_present_illness: 'Dolor de cabeza desde hace 3 días',
     physical_examination: 'Normal',
     treatment_plan: 'Analgésicos y descanso',
-    follow_up_instructions: 'Control en 1 semana'
+    follow_up_instructions: 'Control en 1 semana',
+    doctor_name: 'Dr. Juan Pérez',
+    doctor_professional_license: 'MP12345',
+    created_by: 'system',
+    created_at: '2024-08-28'
   },
   {
     id: 'CONS002',
@@ -114,7 +117,11 @@ const mockConsultations: Consultation[] = [
     history_present_illness: 'Control rutinario',
     physical_examination: 'Estable',
     treatment_plan: 'Continuar medicación',
-    follow_up_instructions: 'Control en 3 meses'
+    follow_up_instructions: 'Control en 3 meses',
+    doctor_name: 'Dr. Juan Pérez',
+    doctor_professional_license: 'MP12345',
+    created_by: 'system',
+    created_at: '2024-08-27'
   }
 ];
 
@@ -142,15 +149,15 @@ const SmartTableDemo: React.FC = () => {
   // Filtrar datos basado en búsqueda
   const filteredPatients = mockPatients.filter(patient =>
     !debouncedSearchTerm || 
-    patient.full_name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-    patient.phone.includes(debouncedSearchTerm) ||
-    patient.email.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+    patient.full_name?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+    patient.phone?.includes(debouncedSearchTerm) ||
+    patient.email?.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
   );
 
   const filteredConsultations = mockConsultations.filter(consultation =>
     !debouncedSearchTerm ||
-    consultation.patient_name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-    consultation.chief_complaint.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+    consultation.patient_name?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+    consultation.chief_complaint?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
     consultation.primary_diagnosis?.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
   );
 
@@ -173,9 +180,9 @@ const SmartTableDemo: React.FC = () => {
         Demostración de SmartTable con sorting, búsqueda, y configuraciones avanzadas
       </Typography>
 
-      <Grid container spacing={3}>
+      <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
         {/* Panel de Control */}
-        <Grid xs={12} md={4}>
+        <Box sx={{ flex: '1 1 400px', minWidth: 300 }}>
           <Card>
             <CardHeader
               avatar={<ViewIcon color="primary" />}
@@ -289,10 +296,10 @@ const SmartTableDemo: React.FC = () => {
               </Button>
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
 
         {/* Tabla Principal */}
-        <Grid xs={12} md={8}>
+        <Box sx={{ flex: '2 1 600px', minWidth: 600 }}>
           <Paper sx={{ p: 3 }}>
             {/* Búsqueda */}
             <Box sx={{ mb: 3 }}>
@@ -328,17 +335,22 @@ const SmartTableDemo: React.FC = () => {
               />
             )}
           </Paper>
-        </Grid>
+        </Box>
+      </Box>
 
-        {/* Información de Características */}
-        <Grid xs={12}>
-          <Paper sx={{ p: 3, bgcolor: 'info.50', borderRadius: 2 }}>
+      {/* Información de Características */}
+      <Box sx={{ mt: 3 }}>
+        <Paper sx={{ p: 3, bgcolor: 'info.50', borderRadius: 2 }}>
             <Typography variant="h6" sx={{ mb: 2, color: 'info.main' }}>
               🚀 Características de SmartTable
             </Typography>
             
-            <Grid container spacing={2}>
-              <Grid xs={12} md={3}>
+            <Box sx={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+              gap: 2 
+            }}>
+              <Box>
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
                   🔄 Ordenamiento
                 </Typography>
@@ -348,9 +360,9 @@ const SmartTableDemo: React.FC = () => {
                   • Tercer click para quitar orden<br/>
                   • Soporte para múltiples tipos de datos
                 </Typography>
-              </Grid>
+              </Box>
               
-              <Grid xs={12} md={3}>
+              <Box>
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
                   📱 Estados Inteligentes
                 </Typography>
@@ -360,9 +372,9 @@ const SmartTableDemo: React.FC = () => {
                   • Manejo de errores con retry<br/>
                   • Feedback visual consistente
                 </Typography>
-              </Grid>
+              </Box>
               
-              <Grid xs={12} md={3}>
+              <Box>
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
                   🎨 Personalización
                 </Typography>
@@ -372,9 +384,9 @@ const SmartTableDemo: React.FC = () => {
                   • Formateo automático<br/>
                   • Temas y estilos flexibles
                 </Typography>
-              </Grid>
+              </Box>
               
-              <Grid xs={12} md={3}>
+              <Box>
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
                   ⚡ Performance
                 </Typography>
@@ -384,11 +396,10 @@ const SmartTableDemo: React.FC = () => {
                   • Memoización automática<br/>
                   • Scroll virtual para listas grandes
                 </Typography>
-              </Grid>
-            </Grid>
+              </Box>
+            </Box>
           </Paper>
-        </Grid>
-      </Grid>
+      </Box>
     </Box>
   );
 };

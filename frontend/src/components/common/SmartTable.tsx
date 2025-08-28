@@ -78,6 +78,7 @@ export const SmartTable = <T extends Record<string, any>>({
   // Hook de ordenamiento
   const {
     sortedData,
+    sortConfig,
     handleSort,
     getSortDirection,
     isSorted,
@@ -163,7 +164,7 @@ export const SmartTable = <T extends Record<string, any>>({
           }}>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <Typography variant="body2" color="text.secondary">
-                Ordenado por: <strong>{columns.find(col => col.key === sortedData.length > 0 ? Object.keys(sortedData[0]).find(k => k === getSortDirection(columns[0].key)) : '')?.label || 'columna'}</strong>
+                Ordenado por: <strong>{columns.find(col => col.key === sortConfig.field)?.label || 'columna'}</strong>
               </Typography>
               <Tooltip title="Limpiar ordenamiento">
                 <IconButton size="small" onClick={resetSort}>
