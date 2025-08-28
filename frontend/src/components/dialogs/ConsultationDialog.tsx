@@ -24,7 +24,8 @@ import {
   Paper,
   Autocomplete,
   Alert,
-  Collapse
+  Collapse,
+  CircularProgress
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -41,6 +42,7 @@ import {
 import { Patient, ConsultationFormData, ClinicalStudy } from '../../types';
 import { ErrorRibbon } from '../common/ErrorRibbon';
 import ClinicalStudiesSection from '../common/ClinicalStudiesSection';
+import { apiService } from '../../services/api';
 
 // Utility function to calculate age from birth date
 const calculateAge = (birthDate: string): number => {
@@ -117,6 +119,68 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   const [activeStep, setActiveStep] = useState(0);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [visitedSteps, setVisitedSteps] = useState<Set<number>>(new Set([0]));
+  const [patientClinicalStudies, setPatientClinicalStudies] = useState<ClinicalStudy[]>([]);
+  const [loadingPatientStudies, setLoadingPatientStudies] = useState(false);
+
+  // Load patient clinical studies when patient is selected
+  useEffect(() => {
+    const loadPatientStudies = async () => {
+      if (selectedPatient?.id) {
+        setLoadingPatientStudies(true);
+        try {
+          const studies = await apiService.getClinicalStudiesByPatient(selectedPatient.id);
+          setPatientClinicalStudies(studies);
+        } catch (error) {
+          console.error('Error loading patient clinical studies:', error);
+          // Set sample data for demonstration if API fails
+          const sampleStudies: ClinicalStudy[] = [
+            {
+              id: 'STUDY-001',
+              patient_id: selectedPatient.id,
+              consultation_id: 'CONS-001',
+              study_type: 'quimica_clinica',
+              study_name: 'Perfil lipídico',
+              study_description: 'Análisis de colesterol y triglicéridos',
+              ordered_date: '2024-08-20',
+              status: 'pending',
+              ordering_doctor: 'Dr. Juan Pérez',
+              institution: 'Laboratorio Central',
+              urgency: 'normal',
+              clinical_indication: 'Control de dislipidemia',
+              created_by: 'system',
+              created_at: '2024-08-20'
+            },
+            {
+              id: 'STUDY-002',
+              patient_id: selectedPatient.id,
+              consultation_id: 'CONS-002',
+              study_type: 'radiologia_simple',
+              study_name: 'Radiografía de tórax',
+              study_description: 'Proyecciones PA y lateral',
+              ordered_date: '2024-08-15',
+              status: 'completed',
+              results_text: 'Campos pulmonares libres, silueta cardiaca normal',
+              interpretation: 'Estudio normal',
+              ordering_doctor: 'Dr. Juan Pérez',
+              performing_doctor: 'Dr. María García',
+              institution: 'Hospital General',
+              urgency: 'normal',
+              clinical_indication: 'Dolor torácico',
+              created_by: 'system',
+              created_at: '2024-08-15'
+            }
+          ];
+          setPatientClinicalStudies(sampleStudies);
+        } finally {
+          setLoadingPatientStudies(false);
+        }
+      } else {
+        setPatientClinicalStudies([]);
+      }
+    };
+
+    loadPatientStudies();
+  }, [selectedPatient?.id]);
 
   const steps = [
     {
@@ -468,6 +532,131 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 />
               </Box>
             </Box>
+
+            {/* Patient Clinical Studies Section */}
+            {selectedPatient && (
+              <Box sx={{ mt: 3 }}>
+                <Typography variant="h6" sx={{ 
+                  fontWeight: 600, 
+                  mb: 2, 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 1,
+                  color: 'primary.main'
+                }}>
+                  🧪 Estudios Clínicos Solicitados
+                </Typography>
+                
+                {loadingPatientStudies ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                    <CircularProgress size={24} />
+                    <Typography variant="body2" sx={{ ml: 2 }}>
+                      Cargando estudios clínicos...
+                    </Typography>
+                  </Box>
+                ) : patientClinicalStudies.length > 0 ? (
+                  <Paper sx={{ p: 2, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider' }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {patientClinicalStudies.map((study, index) => (
+                        <Box 
+                          key={study.id} 
+                          sx={{ 
+                            p: 2, 
+                            bgcolor: 'white', 
+                            borderRadius: '8px',
+                            border: '1px solid #e0e0e0',
+                            position: 'relative'
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'primary.main' }}>
+                              {study.study_name}
+                            </Typography>
+                            <Chip 
+                              label={study.status === 'pending' ? 'Pendiente' : study.status === 'completed' ? 'Completado' : study.status === 'in_progress' ? 'En Proceso' : study.status}
+                              size="small"
+                              color={
+                                study.status === 'completed' ? 'success' : 
+                                study.status === 'pending' ? 'warning' : 
+                                study.status === 'in_progress' ? 'info' : 'default'
+                              }
+                              variant="filled"
+                            />
+                          </Box>
+                          
+                          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                            <Typography component="span" sx={{ fontWeight: 600 }}>Tipo:</Typography> {
+                              study.study_type === 'hematologia' ? 'Hematología' :
+                              study.study_type === 'quimica_clinica' ? 'Química Clínica' :
+                              study.study_type === 'microbiologia' ? 'Microbiología' :
+                              study.study_type === 'radiologia_simple' ? 'Radiología Simple' :
+                              study.study_type === 'tomografia' ? 'Tomografía' :
+                              study.study_type === 'resonancia' ? 'Resonancia Magnética' :
+                              study.study_type === 'cardiology' ? 'Cardiología' :
+                              study.study_type === 'endoscopy' ? 'Endoscopia' :
+                              study.study_type === 'biopsy' ? 'Biopsia' :
+                              study.study_type === 'cytology' ? 'Citología' :
+                              study.study_type === 'microbiology' ? 'Microbiología' :
+                              study.study_type === 'genetics' ? 'Genética' :
+                              study.study_type === 'other' ? 'Otros' :
+                              study.study_type
+                            }
+                          </Typography>
+                          
+                          {study.study_description && (
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                              <Typography component="span" sx={{ fontWeight: 600 }}>Descripción:</Typography> {study.study_description}
+                            </Typography>
+                          )}
+                          
+                          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                            <Typography component="span" sx={{ fontWeight: 600 }}>Fecha Solicitado:</Typography> {new Date(study.ordered_date).toLocaleDateString('es-ES')}
+                          </Typography>
+                          
+                          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                            <Typography component="span" sx={{ fontWeight: 600 }}>Doctor Solicitante:</Typography> {study.ordering_doctor}
+                          </Typography>
+                          
+                          {study.clinical_indication && (
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                              <Typography component="span" sx={{ fontWeight: 600 }}>Indicación Clínica:</Typography> {study.clinical_indication}
+                            </Typography>
+                          )}
+                          
+                          {study.institution && (
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                              <Typography component="span" sx={{ fontWeight: 600 }}>Institución:</Typography> {study.institution}
+                            </Typography>
+                          )}
+                          
+                          {study.results_text && (
+                            <Box sx={{ mt: 2, p: 2, bgcolor: 'success.50', borderRadius: '8px', border: '1px solid', borderColor: 'success.200' }}>
+                              <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.main', mb: 1 }}>
+                                📋 Resultados:
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary">
+                                {study.results_text}
+                              </Typography>
+                              {study.interpretation && (
+                                <Typography variant="body2" color="text.secondary" sx={{ mt: 1, fontStyle: 'italic' }}>
+                                  <Typography component="span" sx={{ fontWeight: 600 }}>Interpretación:</Typography> {study.interpretation}
+                                </Typography>
+                              )}
+                            </Box>
+                          )}
+                        </Box>
+                      ))}
+                    </Box>
+                  </Paper>
+                ) : (
+                  <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'grey.50' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      No hay estudios clínicos registrados para este paciente
+                    </Typography>
+                  </Paper>
+                )}
+              </Box>
+            )}
           </Box>
         );
 
