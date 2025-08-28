@@ -59,7 +59,17 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
   onEditClinicalStudy
 }) => {
   // Filter clinical studies for this consultation
-  const consultationStudies = clinicalStudies;
+  const consultationStudies = clinicalStudies.filter(study => 
+    study.consultation_id === consultation.id
+  );
+  
+  console.log('🔍 ConsultationDetailView - Filtering studies:', {
+    consultation_id: consultation.id,
+    total_studies: clinicalStudies.length,
+    filtered_studies: consultationStudies.length,
+    all_studies: clinicalStudies,
+    filtered: consultationStudies
+  });
 
   const getStatusColor = (status: string) => {
     switch (status) {

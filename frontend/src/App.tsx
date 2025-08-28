@@ -537,29 +537,88 @@ function AppContent() {
 
   // Helper function to get clinical studies for current consultation
   const getCurrentConsultationStudies = (): ClinicalStudy[] => {
+    console.log('📋 getCurrentConsultationStudies called:', {
+      selectedConsultation: selectedConsultation?.id,
+      consultationStudies: consultationStudies.length,
+      tempConsultationId,
+      tempClinicalStudies: tempClinicalStudies.length
+    });
+    
     // If we have a selected consultation (viewing/editing existing), return loaded studies from backend
     if (selectedConsultation?.id) {
+      console.log('📋 Returning consultation studies:', consultationStudies);
       return consultationStudies;
     }
     // If we're creating a new consultation, use temporary studies
     if (tempConsultationId && !selectedConsultation) {
+      console.log('📋 Returning temp studies:', tempClinicalStudies);
       return tempClinicalStudies;
     }
+    console.log('📋 Returning empty array');
     return [];
   };
 
   // Load clinical studies from backend for selected consultation
   const loadConsultationStudies = useCallback(async (consultationId: string) => {
+    console.log('🔍 Loading studies for consultation:', consultationId);
     try {
       const studies = await apiService.getClinicalStudiesByConsultation(consultationId);
-      setConsultationStudies(studies);
+      console.log('✅ Studies loaded from backend:', studies);
+      
+      // If no studies in backend, check localStorage and migrate them
+      if (studies.length === 0) {
+        const storedStudies = loadStudiesFromStorage(consultationId);
+        console.log('📦 Found in localStorage:', storedStudies);
+        
+        if (storedStudies.length > 0) {
+          console.log('🔄 Migrating studies from localStorage to backend...');
+          // Try to migrate studies to backend
+          for (const study of storedStudies) {
+            try {
+              const studyData = {
+                consultation_id: consultationId,
+                patient_id: study.patient_id,
+                study_type: study.study_type,
+                study_name: study.study_name,
+                study_description: study.study_description || '',
+                ordered_date: new Date(study.ordered_date).toISOString(),
+                status: study.status,
+                results_text: study.results_text || '',
+                interpretation: study.interpretation || '',
+                ordering_doctor: study.ordering_doctor,
+                performing_doctor: study.performing_doctor || '',
+                institution: study.institution || '',
+                urgency: study.urgency || 'normal',
+                clinical_indication: study.clinical_indication || '',
+                relevant_history: study.relevant_history || '',
+                created_by: study.created_by || doctorProfile?.id || ''
+              };
+              
+              await apiService.createClinicalStudy(studyData);
+              console.log('✅ Migrated study:', study.study_name);
+            } catch (migrationError) {
+              console.error('❌ Failed to migrate study:', study.study_name, migrationError);
+            }
+          }
+          
+          // Reload studies from backend after migration
+          const updatedStudies = await apiService.getClinicalStudiesByConsultation(consultationId);
+          console.log('🔄 Studies after migration:', updatedStudies);
+          setConsultationStudies(updatedStudies);
+        } else {
+          setConsultationStudies([]);
+        }
+      } else {
+        setConsultationStudies(studies);
+      }
     } catch (error) {
-      console.error('Error loading clinical studies:', error);
+      console.error('❌ Error loading clinical studies from backend:', error);
       // Fallback to localStorage
       const storedStudies = loadStudiesFromStorage(consultationId);
+      console.log('📦 Fallback to localStorage studies:', storedStudies);
       setConsultationStudies(storedStudies);
     }
-  }, []);
+  }, [doctorProfile]);
 
   // Helper function to update clinical studies for current consultation
   const updateCurrentConsultationStudies = (studies: ClinicalStudy[]) => {
