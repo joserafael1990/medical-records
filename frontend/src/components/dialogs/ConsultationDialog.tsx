@@ -1,4 +1,4 @@
-import React, { memo, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -46,7 +46,9 @@ import {
   Warning as WarningIcon,
   CheckCircle as CheckCircleIcon,
   Schedule as ScheduleIcon,
-  Info as InfoIcon
+  Info as InfoIcon,
+  CalendarToday as CalendarIcon,
+  AccessTime as ClockIcon
 } from '@mui/icons-material';
 import { Patient, ConsultationFormData, ClinicalStudy } from '../../types';
 import { ErrorRibbon } from '../common/ErrorRibbon';
@@ -130,6 +132,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   const [visitedSteps, setVisitedSteps] = useState<Set<number>>(new Set([0]));
   const [patientClinicalStudies, setPatientClinicalStudies] = useState<ClinicalStudy[]>([]);
   const [loadingPatientStudies, setLoadingPatientStudies] = useState(false);
+  const [showScheduleFollowUp, setShowScheduleFollowUp] = useState(false);
 
   // Load patient clinical studies when patient is selected
   useEffect(() => {
@@ -859,34 +862,19 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
             <Divider />
 
-            <Typography variant="h6">Información Adicional (Opcional)</Typography>
+            <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'primary.main' }}>
+              <InfoIcon sx={{ fontSize: 20 }} />
+              Notas Adicionales (Opcional)
+            </Typography>
 
             <TextField
-              label="Resultados de Laboratorio"
+              label="Notas del Médico"
               multiline
-              rows={2}
-              value={formData.laboratory_results || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, laboratory_results: e.target.value }))}
-              fullWidth
-              placeholder="Resultados de estudios de laboratorio..."
-            />
-
-            <TextField
-              label="Estudios de Imagen"
-              multiline
-              rows={2}
-              value={formData.imaging_studies || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, imaging_studies: e.target.value }))}
-              fullWidth
-              placeholder="Resultados de estudios de imagen..."
-            />
-
-            <TextField
-              label="Interconsultas"
+              rows={3}
               value={formData.interconsultations || ''}
               onChange={(e) => setFormData(prev => ({ ...prev, interconsultations: e.target.value }))}
               fullWidth
-              placeholder="Interconsultas solicitadas..."
+              placeholder="Observaciones adicionales, recomendaciones especiales, etc..."
             />
           </Box>
         );
@@ -895,21 +883,107 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         return (
           <Box sx={{ p: 0 }}>
             {onAddClinicalStudy && onEditClinicalStudy && onDeleteClinicalStudy ? (
-              <ClinicalStudiesSection
-                consultationId={selectedConsultation?.id || tempConsultationId || 'new_consultation'}
-                patientId={formData.patient_id}
-                studies={clinicalStudies}
-                onAddStudy={onAddClinicalStudy}
-                onEditStudy={onEditClinicalStudy}
-                onDeleteStudy={onDeleteClinicalStudy}
-                onViewFile={(fileUrl) => window.open(fileUrl, '_blank')}
-                onDownloadFile={(fileUrl, fileName) => {
-                  const link = document.createElement('a');
-                  link.href = fileUrl;
-                  link.download = fileName;
-                  link.click();
-                }}
-              />
+              <>
+                <ClinicalStudiesSection
+                  consultationId={selectedConsultation?.id || tempConsultationId || 'new_consultation'}
+                  patientId={formData.patient_id}
+                  studies={clinicalStudies}
+                  onAddStudy={onAddClinicalStudy}
+                  onEditStudy={onEditClinicalStudy}
+                  onDeleteStudy={onDeleteClinicalStudy}
+                  onViewFile={(fileUrl) => window.open(fileUrl, '_blank')}
+                  onDownloadFile={(fileUrl, fileName) => {
+                    const link = document.createElement('a');
+                    link.href = fileUrl;
+                    link.download = fileName;
+                    link.click();
+                  }}
+                />
+                
+                {/* Sección para programar consulta de seguimiento */}
+                <Box sx={{ p: 3, mt: 2, bgcolor: 'primary.50', borderRadius: '12px', border: '1px solid', borderColor: 'primary.200' }}>
+                  <Typography variant="h6" sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 1, 
+                    mb: 2,
+                    color: 'primary.main' 
+                  }}>
+                    <CalendarIcon sx={{ fontSize: 20 }} />
+                    Consulta de Seguimiento
+                  </Typography>
+                  
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                    Programa una cita para revisar los resultados de los estudios clínicos solicitados.
+                  </Typography>
+                  
+                  <Collapse in={showScheduleFollowUp}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: 2, bgcolor: 'white', borderRadius: '8px' }}>
+                      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                        <TextField
+                          label="Fecha de Seguimiento"
+                          type="date"
+                          InputLabelProps={{ shrink: true }}
+                          fullWidth
+                          helperText="Fecha recomendada para revisar resultados"
+                        />
+                        <TextField
+                          label="Hora"
+                          type="time"
+                          InputLabelProps={{ shrink: true }}
+                          fullWidth
+                          helperText="Hora preferida"
+                        />
+                      </Box>
+                      
+                      <TextField
+                        label="Motivo de la Consulta de Seguimiento"
+                        multiline
+                        rows={2}
+                        placeholder="Ej: Revisión de resultados de laboratorio, evaluación de respuesta al tratamiento..."
+                        fullWidth
+                      />
+                      
+                      <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+                        <Button 
+                          variant="outlined" 
+                          onClick={() => setShowScheduleFollowUp(false)}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button 
+                          variant="contained" 
+                          startIcon={<CalendarIcon />}
+                          onClick={() => {
+                            // TODO: Implementar lógica para programar cita
+                            setShowScheduleFollowUp(false);
+                            // Aquí se podría abrir el AppointmentDialog o navegar a la agenda
+                          }}
+                        >
+                          Programar Cita
+                        </Button>
+                      </Box>
+                    </Box>
+                  </Collapse>
+                  
+                  {!showScheduleFollowUp && (
+                    <Button
+                      variant="outlined"
+                      startIcon={<ClockIcon />}
+                      onClick={() => setShowScheduleFollowUp(true)}
+                      sx={{ 
+                        bgcolor: 'white', 
+                        borderColor: 'primary.main',
+                        '&:hover': {
+                          bgcolor: 'primary.50'
+                        }
+                      }}
+                    >
+                      Programar Consulta de Seguimiento
+                    </Button>
+                  )}
+                </Box>
+              </>
             ) : (
               <Box sx={{ p: 3, textAlign: 'center' }}>
                 <Typography color="text.secondary">
@@ -1118,4 +1192,4 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   );
 };
 
-export default memo(ConsultationDialog);
+export default ConsultationDialog;
