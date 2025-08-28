@@ -6,7 +6,10 @@ import {
   CardContent,
   Button,
   Chip,
-  LinearProgress
+  LinearProgress,
+
+  useTheme,
+  alpha
 } from '@mui/material';
 import {
   CalendarToday as CalendarIcon,
@@ -15,9 +18,28 @@ import {
   Check as CheckIcon,
   Add as AddIcon,
   AccessTime as TimeIcon,
-  TrendingUp as TrendingUpIcon
+  TrendingUp as TrendingUpIcon,
+  PersonAdd as PersonAddIcon,
+  EventNote as EventNoteIcon,
+  Assignment as AssignmentIcon,
+  LocalHospital as LocalHospitalIcon,
+  Schedule as ScheduleIcon,
+  People as PeopleIcon,
+  Notifications as NotificationsIcon,
+  Assessment as AssessmentIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { DashboardData } from '../../types';
+import {
+  StatWidget,
+  ActivityWidget,
+  ProgressWidget,
+  QuickActionsWidget,
+  MedicalDashboardWidgets
+} from '../common/DashboardWidgets';
+import { useDashboardData, useRecentActivities, usePendingTasks } from '../../hooks/useDashboardData';
+import { DashboardSkeleton } from '../common/SkeletonComponents';
+import { LoadingState } from '../common/LoadingStates';
 
 interface DashboardViewProps {
   dashboardData: DashboardData | null;
@@ -32,148 +54,206 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   onNewAppointment, 
   onNewConsultation 
 }) => {
+  const theme = useTheme();
+  
+  // Use new dashboard data hooks
+  const { 
+    data: dashboardDataNew, 
+    isLoading, 
+    error, 
+    refreshData,
+    lastRefresh
+  } = useDashboardData();
+  
+  const { activities } = useRecentActivities();
+  const { tasks } = usePendingTasks();
+
+  // Use new data if available, fallback to old prop data
+  const stats = dashboardDataNew?.stats || {
+    todayAppointments: dashboardData?.today_appointments || 0,
+    totalPatients: 150,
+    pendingStudies: 8,
+    completedConsultations: 45,
+    newPatientsThisMonth: 12,
+    appointmentsTrend: 8.5,
+    patientsTrend: 15.2,
+    revenue: 0,
+    revenueTrend: 0
+  };
+
+  // Quick actions configuration
+  const quickActions = [
+    {
+      id: 'new-patient',
+      label: 'Nuevo Paciente',
+      icon: <PersonAddIcon />,
+      color: 'primary' as const,
+      onClick: () => console.log('New patient')
+    },
+    {
+      id: 'new-appointment',
+      label: 'Nueva Cita',
+      icon: <EventNoteIcon />,
+      color: 'secondary' as const,
+      onClick: onNewAppointment || (() => console.log('New appointment'))
+    },
+    {
+      id: 'new-consultation',
+      label: 'Nueva Consulta',
+      icon: <LocalHospitalIcon />,
+      color: 'success' as const,
+      onClick: onNewConsultation || (() => console.log('New consultation'))
+    },
+    {
+      id: 'review-studies',
+      label: 'Revisar Estudios',
+      icon: <AssignmentIcon />,
+      color: 'warning' as const,
+      onClick: () => console.log('Review studies'),
+      badge: stats.pendingStudies
+    }
+  ];
   return (
+    <LoadingState
+      isLoading={isLoading}
+      error={error}
+      loadingComponent={<DashboardSkeleton />}
+      onRetry={refreshData}
+    >
     <Box>
       {/* Welcome Header */}
       <Box sx={{ mb: 4 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
+            <Box>
         <Typography variant="h4" sx={{ mb: 1, fontWeight: 600 }}>
           Buenos días, {dashboardData?.physician || 'Dr. García'}
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Aquí tienes un resumen de tu día y métricas de eficiencia.
+                Aquí tienes un resumen de tu día y métricas actualizadas.
         </Typography>
-      </Box>
+              {lastRefresh && (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                  Última actualización: {lastRefresh.toLocaleTimeString('es-MX')}
+                  </Typography>
+              )}
+                </Box>
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={refreshData}
+              size="small"
+            >
+              Actualizar
+            </Button>
+              </Box>
+        </Box>
+        
+        {/* Key Metrics Row */}
+        <Box 
+          sx={{ 
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr 1fr' },
+            gap: 3,
+            mb: 4
+          }}
+        >
+          <MedicalDashboardWidgets.TodayAppointments
+            title="Citas Hoy"
+            value={stats.todayAppointments}
+            change={stats.appointmentsTrend}
+            changeLabel="vs ayer"
+            trend={stats.appointmentsTrend > 0 ? 'up' : 'down'}
+            onRefresh={refreshData}
+          />
+          <MedicalDashboardWidgets.TotalPatients
+            title="Total Pacientes"
+            value={stats.totalPatients}
+            change={stats.patientsTrend}
+            changeLabel="este mes"
+            trend="up"
+            subtitle={`${stats.newPatientsThisMonth} nuevos este mes`}
+            onRefresh={refreshData}
+          />
+          <MedicalDashboardWidgets.PendingStudies
+            title="Estudios Pendientes"
+            value={stats.pendingStudies}
+            subtitle="Requieren revisión"
+            onRefresh={refreshData}
+          />
+          <MedicalDashboardWidgets.CompletedConsultations
+            title="Consultas Completadas"
+            value={stats.completedConsultations}
+            subtitle="Este mes"
+            onRefresh={refreshData}
+          />
+        </Box>
 
-      {/* Key Metrics Row */}
-      <Box sx={{ display: 'flex', gap: 2, mb: 4, flexWrap: 'wrap' }}>
-        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 45%', md: '1 1 22%' } }}>
-          <Card sx={{ 
-            background: 'linear-gradient(135deg, #1565C0 0%, #42A5F5 100%)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '16px',
-            boxShadow: '0 8px 32px rgba(21, 101, 192, 0.3)',
-            transition: 'all 0.3s ease-in-out',
-            '&:hover': {
-              transform: 'translateY(-4px)',
-              boxShadow: '0 12px 40px rgba(21, 101, 192, 0.4)',
-            }
-          }}>
-            <CardContent sx={{ pb: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography variant="h3" sx={{ fontWeight: 700, mb: 0.5 }}>
-                    {dashboardData?.today_appointments || 1}
-                  </Typography>
-                  <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                    Citas Hoy
-                  </Typography>
-                </Box>
-                <CalendarIcon sx={{ fontSize: 40, opacity: 0.8 }} />
-              </Box>
-            </CardContent>
-          </Card>
-        </Box>
-        
-        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 45%', md: '1 1 22%' } }}>
-          <Card sx={{ 
-            background: 'linear-gradient(135deg, #42A5F5 0%, #90CAF9 100%)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '16px',
-            boxShadow: '0 8px 32px rgba(66, 165, 245, 0.3)',
-            transition: 'all 0.3s ease-in-out',
-            '&:hover': {
-              transform: 'translateY(-4px)',
-              boxShadow: '0 12px 40px rgba(66, 165, 245, 0.4)',
-            }
-          }}>
-            <CardContent sx={{ pb: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography variant="h3" sx={{ fontWeight: 700, mb: 0.5 }}>
-                    {dashboardData?.ai_time_saved || 2.5}h
-                  </Typography>
-                  <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                    Tiempo Ahorrado
-                  </Typography>
-                </Box>
-                <SpeedIcon sx={{ fontSize: 40, opacity: 0.8 }} />
-              </Box>
-            </CardContent>
-          </Card>
-        </Box>
-        
-        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 45%', md: '1 1 22%' } }}>
-          <Card sx={{ 
-            background: 'linear-gradient(135deg, #1976D2 0%, #64B5F6 100%)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '16px',
-            boxShadow: '0 8px 32px rgba(25, 118, 210, 0.3)',
-            transition: 'all 0.3s ease-in-out',
-            '&:hover': {
-              transform: 'translateY(-4px)',
-              boxShadow: '0 12px 40px rgba(25, 118, 210, 0.4)',
-            }
-          }}>
-            <CardContent sx={{ pb: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography variant="h3" sx={{ fontWeight: 700, mb: 0.5 }}>
-                    {dashboardData?.whatsapp_messages || 2}
-                  </Typography>
-                  <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                    Mensajes Pendientes
-                  </Typography>
-                </Box>
-                <MessageIcon sx={{ fontSize: 40, opacity: 0.8 }} />
-              </Box>
-            </CardContent>
-          </Card>
-        </Box>
-        
-        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 45%', md: '1 1 22%' } }}>
-          <Card sx={{ 
-            background: 'linear-gradient(135deg, #0D47A1 0%, #1976D2 100%)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '16px',
-            boxShadow: '0 8px 32px rgba(13, 71, 161, 0.3)',
-            transition: 'all 0.3s ease-in-out',
-            '&:hover': {
-              transform: 'translateY(-4px)',
-              boxShadow: '0 12px 40px rgba(13, 71, 161, 0.4)',
-            }
-          }}>
-            <CardContent sx={{ pb: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography variant="h3" sx={{ fontWeight: 700, mb: 0.5 }}>
-                    {dashboardData?.compliance_score || 100}%
-                  </Typography>
-                  <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                    Cumplimiento
-                  </Typography>
-                </Box>
-                <CheckIcon sx={{ fontSize: 40, opacity: 0.8 }} />
-              </Box>
-            </CardContent>
-          </Card>
-        </Box>
-      </Box>
+        {/* Main Content Grid */}
+        <Box 
+          sx={{ 
+            display: 'grid',
+            gridTemplateColumns: { 
+              xs: '1fr', 
+              md: '1fr 1fr', 
+              lg: '1fr 1fr 1fr' 
+            },
+            gap: 3,
+            mb: 3
+          }}
+        >
+          {/* Quick Actions */}
+          <QuickActionsWidget
+            title="Acciones Rápidas"
+            actions={quickActions}
+            layout="grid"
+          />
 
-      {/* Main Content Row */}
-      <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', md: 'row' } }}>
-        {/* Today's Schedule */}
-        <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 65%' } }}>
-          <Card sx={{
-            borderRadius: '16px',
-            boxShadow: '0 4px 24px rgba(21, 101, 192, 0.1)',
-            border: '1px solid rgba(21, 101, 192, 0.1)'
-          }}>
-            <CardContent sx={{ p: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+          {/* Recent Activity */}
+          <ActivityWidget
+            title="Actividad Reciente"
+            activities={activities}
+            maxItems={5}
+            showViewAll={true}
+            onRefresh={refreshData}
+          />
+
+          {/* Performance Progress */}
+          <ProgressWidget
+            title="Productividad Diaria"
+            progress={dashboardDataNew?.performanceMetrics?.consultationsPerDay || 12}
+            target={15}
+            unit=" consultas"
+            color="primary"
+            subtitle="Meta diaria de consultas"
+            details={[
+              { 
+                label: 'Tiempo promedio', 
+                value: dashboardDataNew?.performanceMetrics?.averageConsultationTime || 25,
+                color: theme.palette.info.main 
+              },
+              { 
+                label: 'Satisfacción', 
+                value: Math.round(dashboardDataNew?.performanceMetrics?.patientSatisfaction || 92),
+                color: theme.palette.success.main 
+              }
+            ]}
+            onRefresh={refreshData}
+          />
+        </Box>
+
+        {/* Bottom Grid */}
+        <Box 
+          sx={{ 
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' },
+            gap: 3
+          }}
+        >
+          {/* Today's Appointments */}
+          <Box>
+            <Card sx={{ height: '100%' }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
                   Agenda de Hoy
                 </Typography>
@@ -191,7 +271,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                     size="small" 
                     startIcon={<AddIcon />}
                     onClick={onNewConsultation}
-                    sx={{ bgcolor: 'success.main', '&:hover': { bgcolor: 'success.dark' } }}
+                      color="success"
                   >
                     Nueva Consulta
                   </Button>
@@ -206,21 +286,25 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                       display: 'flex',
                       alignItems: 'center',
                       p: 2,
-                      borderRadius: '12px',
-                      backgroundColor: index === 1 ? 'primary.light' : 'grey.50',
-                      color: index === 1 ? 'white' : 'text.primary',
-                      border: index === 1 ? 'none' : '1px solid',
-                      borderColor: 'grey.200'
+                        borderRadius: 2,
+                        backgroundColor: index === 0 ? alpha(theme.palette.primary.main, 0.1) : 'grey.50',
+                        border: '1px solid',
+                        borderColor: index === 0 ? 'primary.main' : 'grey.200',
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                          transform: 'translateY(-1px)',
+                          boxShadow: 2
+                        }
                     }}
                   >
                     <Box sx={{ 
                       display: 'flex', 
                       alignItems: 'center', 
                       justifyContent: 'center',
-                      width: 60,
-                      height: 60,
-                      borderRadius: '12px',
-                      backgroundColor: index === 1 ? 'rgba(255,255,255,0.2)' : 'primary.main',
+                        width: 48,
+                        height: 48,
+                        borderRadius: 1.5,
+                        backgroundColor: index === 0 ? 'primary.main' : 'grey.400',
                       color: 'white',
                       mr: 2
                     }}>
@@ -228,9 +312,11 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                     </Box>
                     <Box sx={{ flexGrow: 1 }}>
                       <Typography variant="body1" sx={{ fontWeight: 600, mb: 0.5 }}>
-                        {appointment.appointment_date ? new Date(appointment.appointment_date).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : 'Sin hora'} - {appointment.patient_name || 'Paciente desconocido'}
+                          {appointment.appointment_date ? 
+                            new Date(appointment.appointment_date).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) 
+                            : 'Sin hora'} - {appointment.patient_name || 'Paciente desconocido'}
                       </Typography>
-                      <Typography variant="body2" sx={{ opacity: 0.8 }}>
+                        <Typography variant="body2" color="text.secondary">
                         {appointment.appointment_type || appointment.reason || 'Consulta médica'}
                       </Typography>
                     </Box>
@@ -238,7 +324,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                       label={appointment.status === 'confirmed' || appointment.status === 'scheduled' ? 'Confirmada' : 'Pendiente'}
                       size="small"
                       color={appointment.status === 'confirmed' || appointment.status === 'scheduled' ? 'success' : 'warning'}
-                      sx={{ fontWeight: 500 }}
+                        variant="outlined"
                     />
                   </Box>
                 )) : (
@@ -248,13 +334,14 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                     alignItems: 'center', 
                     justifyContent: 'center',
                     p: 4,
-                    textAlign: 'center'
+                      textAlign: 'center',
+                      minHeight: 200
                   }}>
                     <CalendarIcon sx={{ fontSize: 48, opacity: 0.3, mb: 2 }} />
-                    <Typography variant="h6" sx={{ opacity: 0.6, mb: 1 }}>
+                      <Typography variant="h6" color="text.secondary" sx={{ mb: 1 }}>
                       No hay citas programadas para hoy
                     </Typography>
-                    <Typography variant="body2" sx={{ opacity: 0.5 }}>
+                      <Typography variant="body2" color="text.secondary">
                       Usa el botón "Nueva Cita" para programar una consulta
                     </Typography>
                   </Box>
@@ -262,89 +349,63 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               </Box>
             </CardContent>
           </Card>
-        </Box>
-        
-        {/* Revenue & Efficiency Panel */}
-        <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 30%' } }}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {/* Revenue Card */}
-            <Card sx={{
-              borderRadius: '16px',
-              boxShadow: '0 4px 24px rgba(21, 101, 192, 0.1)',
-              border: '1px solid rgba(21, 101, 192, 0.1)'
-            }}>
-              <CardContent sx={{ p: 3 }}>
-                <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                  Ingresos del Mes
-                </Typography>
-                <Typography variant="h3" color="success.main" sx={{ fontWeight: 700, mb: 1 }}>
-                  ${dashboardData?.monthly_revenue?.toLocaleString() || '45,000'}
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                  <TrendingUpIcon color="success" sx={{ fontSize: 20 }} />
-                  <Typography variant="body2" color="success.main" sx={{ fontWeight: 500 }}>
-                    +25% vs mes anterior
-                  </Typography>
-                </Box>
-                <Typography variant="body2" color="text.secondary">
-                  Optimización automática de facturación activa
-                </Typography>
-              </CardContent>
-            </Card>
+          </Box>
 
-            {/* Efficiency Metrics */}
-            <Card sx={{
-              borderRadius: '16px',
-              boxShadow: '0 4px 24px rgba(21, 101, 192, 0.1)',
-              border: '1px solid rgba(21, 101, 192, 0.1)'
-            }}>
-              <CardContent sx={{ p: 3 }}>
-                <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                  Métricas de Eficiencia
+          {/* Pending Tasks */}
+          <Box>
+            <Card sx={{ height: '100%' }}>
+              <CardContent>
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                  Tareas Pendientes
                 </Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                      <Typography variant="body2">Tiempo promedio por consulta</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>18 min</Typography>
+                  {tasks.map((task) => (
+                    <Box
+                      key={task.id}
+                      sx={{
+                        p: 2,
+                        borderRadius: 1.5,
+                        border: '1px solid',
+                        borderColor: 'grey.200',
+                        backgroundColor: task.priority === 'high' ? alpha(theme.palette.error.main, 0.05) : 'background.paper',
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                          borderColor: task.priority === 'high' ? 'error.main' : 'primary.main',
+                          transform: 'translateY(-1px)'
+                        }
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, flex: 1 }}>
+                          {task.title}
+                        </Typography>
+                        <Chip
+                          label={task.priority}
+                          size="small"
+                          color={task.priority === 'high' ? 'error' : task.priority === 'medium' ? 'warning' : 'default'}
+                          variant="outlined"
+                        />
+                      </Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Vence: {new Date(task.dueDate).toLocaleDateString('es-MX')}
+                      </Typography>
                     </Box>
-                    <LinearProgress 
-                      variant="determinate" 
-                      value={75} 
-                      sx={{ borderRadius: '4px', height: 6 }}
-                    />
-                  </Box>
-                  <Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                      <Typography variant="body2">Eficiencia documental</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>94%</Typography>
+                  ))}
+                  {tasks.length === 0 && (
+                    <Box sx={{ textAlign: 'center', py: 3 }}>
+                      <CheckIcon sx={{ fontSize: 48, opacity: 0.3, mb: 1 }} />
+                      <Typography variant="body2" color="text.secondary">
+                        ¡No hay tareas pendientes!
+                      </Typography>
                     </Box>
-                    <LinearProgress 
-                      variant="determinate" 
-                      value={94} 
-                      color="success"
-                      sx={{ borderRadius: '4px', height: 6 }}
-                    />
-                  </Box>
-                  <Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                      <Typography variant="body2">Satisfacción del paciente</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>4.8/5</Typography>
-                    </Box>
-                    <LinearProgress 
-                      variant="determinate" 
-                      value={96} 
-                      color="info"
-                      sx={{ borderRadius: '4px', height: 6 }}
-                    />
-                  </Box>
+                  )}
                 </Box>
               </CardContent>
             </Card>
           </Box>
         </Box>
       </Box>
-    </Box>
+    </LoadingState>
   );
 };
 
