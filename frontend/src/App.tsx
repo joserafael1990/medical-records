@@ -532,11 +532,14 @@ function AppContent() {
     }
   };
   
+  // State for clinical studies from backend
+  const [consultationStudies, setConsultationStudies] = useState<ClinicalStudy[]>([]);
+
   // Helper function to get clinical studies for current consultation
   const getCurrentConsultationStudies = (): ClinicalStudy[] => {
-    // If we have a selected consultation (viewing/editing existing), load from localStorage
+    // If we have a selected consultation (viewing/editing existing), return loaded studies from backend
     if (selectedConsultation?.id) {
-      return loadStudiesFromStorage(selectedConsultation.id);
+      return consultationStudies;
     }
     // If we're creating a new consultation, use temporary studies
     if (tempConsultationId && !selectedConsultation) {
@@ -544,6 +547,19 @@ function AppContent() {
     }
     return [];
   };
+
+  // Load clinical studies from backend for selected consultation
+  const loadConsultationStudies = useCallback(async (consultationId: string) => {
+    try {
+      const studies = await apiService.getClinicalStudiesByConsultation(consultationId);
+      setConsultationStudies(studies);
+    } catch (error) {
+      console.error('Error loading clinical studies:', error);
+      // Fallback to localStorage
+      const storedStudies = loadStudiesFromStorage(consultationId);
+      setConsultationStudies(storedStudies);
+    }
+  }, []);
 
   // Helper function to update clinical studies for current consultation
   const updateCurrentConsultationStudies = (studies: ClinicalStudy[]) => {
@@ -1013,6 +1029,10 @@ const formatPatientNameWithAge = (patient: Patient): string => {
 const handleNewConsultation = useCallback(() => {
   setSelectedConsultation(null);
   setIsEditingConsultation(false);
+  
+  // Clear clinical studies when starting new consultation
+  setConsultationStudies([]);
+  
   setConsultationFormData({
     patient_id: '',
     date: getCurrentMexicoCityDateTime(),
@@ -1049,7 +1069,7 @@ const handleNewConsultation = useCallback(() => {
   setConsultationDetailView(false);
 }, [fetchPatients]);
 
-const handleEditConsultation = useCallback((consultation: any) => {
+const handleEditConsultation = useCallback(async (consultation: any) => {
   setSelectedConsultation(consultation);
   setIsEditingConsultation(true);
   setConsultationFormData({
@@ -1083,16 +1103,26 @@ const handleEditConsultation = useCallback((consultation: any) => {
   // Load patients when opening consultation dialog
   fetchPatients();
   
+  // Load clinical studies for this consultation when editing
+  if (consultation?.id) {
+    await loadConsultationStudies(consultation.id);
+  }
+  
   setConsultationDialogOpen(true);
   setFormErrorMessage('');
   setConsultationDetailView(false);
-}, [fetchPatients]);
+}, [fetchPatients, loadConsultationStudies]);
 
 // Handle view consultation
-const handleViewConsultation = useCallback((consultation: any) => {
+const handleViewConsultation = useCallback(async (consultation: any) => {
   setSelectedConsultation(consultation);
   setConsultationDetailView(true);
-}, []);
+  
+  // Load clinical studies for this consultation
+  if (consultation?.id) {
+    await loadConsultationStudies(consultation.id);
+  }
+}, [loadConsultationStudies]);
 
 // Handle print consultation
 const handlePrintConsultation = useCallback((consultation: any) => {
@@ -1471,8 +1501,6 @@ const handleDeleteClinicalStudy = useCallback((studyId: string) => {
 }, [selectedConsultation, getCurrentConsultationStudies, updateCurrentConsultationStudies]);
 
 const handleClinicalStudySubmit = useCallback(async () => {
-  const currentStudies = getCurrentConsultationStudies();
-
   if (!selectedConsultation && !tempConsultationId) {
     console.error('❌ No hay consulta seleccionada ni ID temporal');
     setClinicalStudyFormErrorMessage('Error: No hay consulta disponible');
@@ -1483,61 +1511,84 @@ const handleClinicalStudySubmit = useCallback(async () => {
   setClinicalStudyFormErrorMessage('');
   
   try {
+    const consultationId = selectedConsultation?.id || tempConsultationId;
+    const patientId = selectedConsultation?.patient_id || clinicalStudyFormData.patient_id;
+    
+    if (!consultationId) {
+      console.error('❌ No se pudo determinar el ID de consulta');
+      setClinicalStudyFormErrorMessage('Error: No se pudo asociar el estudio a la consulta');
+      return;
+    }
+
+    // Prepare study data for backend
+    const studyData = {
+      consultation_id: consultationId,
+      patient_id: patientId,
+      study_type: clinicalStudyFormData.study_type,
+      study_name: clinicalStudyFormData.study_name,
+      study_description: clinicalStudyFormData.study_description || '',
+      ordered_date: new Date(clinicalStudyFormData.ordered_date).toISOString(),
+      status: clinicalStudyFormData.status,
+      results_text: clinicalStudyFormData.results_text || '',
+      interpretation: clinicalStudyFormData.interpretation || '',
+      ordering_doctor: clinicalStudyFormData.ordering_doctor,
+      performing_doctor: clinicalStudyFormData.performing_doctor || '',
+      institution: clinicalStudyFormData.institution || '',
+      urgency: clinicalStudyFormData.urgency || 'normal',
+      clinical_indication: clinicalStudyFormData.clinical_indication || '',
+      relevant_history: clinicalStudyFormData.relevant_history || '',
+      created_by: clinicalStudyFormData.created_by || doctorProfile?.id || ''
+    };
     
     if (isEditingClinicalStudy && selectedClinicalStudy) {
-      // Actualizar estudio existente
-      const updatedStudy: ClinicalStudy = {
-        ...selectedClinicalStudy,
-        ...clinicalStudyFormData,
-        updated_at: new Date().toISOString(),
-        updated_by: 'current_user'
-      };
-      
-      const updatedStudies = currentStudies.map(study => 
-        study.id === selectedClinicalStudy.id ? updatedStudy : study
-      );
-      updateCurrentConsultationStudies(updatedStudies);
-    } else {
-      // Crear nuevo estudio
-      const consultationId = selectedConsultation?.id || tempConsultationId;
-      const patientId = selectedConsultation?.patient_id || clinicalStudyFormData.patient_id;
-      
-      if (!consultationId) {
-        console.error('❌ No se pudo determinar el ID de consulta');
-        setClinicalStudyFormErrorMessage('Error: No se pudo asociar el estudio a la consulta');
-        return;
+      // Update existing study via backend
+      try {
+        await apiService.updateClinicalStudy(selectedClinicalStudy.id, studyData);
+        console.log('✅ Estudio clínico actualizado en backend');
+      } catch (error) {
+        console.error('Error updating via backend, using localStorage fallback:', error);
+        // Fallback to localStorage
+        const currentStudies = getCurrentConsultationStudies();
+        const updatedStudy = { ...selectedClinicalStudy, ...studyData, updated_at: new Date().toISOString() };
+        const updatedStudies = currentStudies.map(study => 
+          study.id === selectedClinicalStudy.id ? updatedStudy : study
+        );
+        updateCurrentConsultationStudies(updatedStudies);
       }
-      
-      const newStudy: ClinicalStudy = {
-        id: `cs_${Date.now()}`, // ID temporal
-        consultation_id: consultationId,
-        patient_id: patientId,
-        study_type: clinicalStudyFormData.study_type,
-        study_name: clinicalStudyFormData.study_name,
-        study_description: clinicalStudyFormData.study_description,
-        ordered_date: clinicalStudyFormData.ordered_date,
-        performed_date: clinicalStudyFormData.performed_date,
-        results_date: clinicalStudyFormData.results_date,
-        status: clinicalStudyFormData.status,
-        results_text: clinicalStudyFormData.results_text,
-        interpretation: clinicalStudyFormData.interpretation,
-        ordering_doctor: clinicalStudyFormData.ordering_doctor,
-        performing_doctor: clinicalStudyFormData.performing_doctor,
-        institution: clinicalStudyFormData.institution,
-        urgency: clinicalStudyFormData.urgency,
-        clinical_indication: clinicalStudyFormData.clinical_indication,
-        relevant_history: clinicalStudyFormData.relevant_history,
-        created_at: new Date().toISOString(),
-        created_by: clinicalStudyFormData.created_by
-      };
-      
-      console.log('🏥 App.tsx - Creando nuevo estudio clínico:', {
-        newStudy,
-        consultationId: consultationId
-      });
-      
-      const updatedStudies = [...currentStudies, newStudy];
-      updateCurrentConsultationStudies(updatedStudies);
+    } else {
+      // Create new study
+      if (selectedConsultation?.id) {
+        // Existing consultation - use backend
+        try {
+          const newStudy = await apiService.createClinicalStudy(studyData);
+          console.log('✅ Estudio clínico creado en backend:', newStudy);
+          
+          // Reload studies from backend to get updated list
+          await loadConsultationStudies(selectedConsultation.id);
+        } catch (error) {
+          console.error('Error creating via backend, using localStorage fallback:', error);
+          // Fallback to localStorage
+          const currentStudies = getCurrentConsultationStudies();
+          const newStudy: ClinicalStudy = {
+            id: `cs_${Date.now()}`,
+            ...studyData,
+            created_at: new Date().toISOString()
+          };
+          const updatedStudies = [...currentStudies, newStudy];
+          updateCurrentConsultationStudies(updatedStudies);
+        }
+      } else {
+        // New consultation with temporary ID - use localStorage for now
+        const currentStudies = getCurrentConsultationStudies();
+        const newStudy: ClinicalStudy = {
+          id: `cs_${Date.now()}`,
+          ...studyData,
+          created_at: new Date().toISOString()
+        };
+        const updatedStudies = [...currentStudies, newStudy];
+        updateCurrentConsultationStudies(updatedStudies);
+        console.log('💾 Estudio clínico guardado temporalmente (nueva consulta)');
+      }
     }
     
     setClinicalStudyDialogOpen(false);
@@ -1550,7 +1601,7 @@ const handleClinicalStudySubmit = useCallback(async () => {
   } finally {
     setIsClinicalStudySubmitting(false);
   }
-}, [isEditingClinicalStudy, selectedClinicalStudy, clinicalStudyFormData, selectedConsultation, tempConsultationId, getCurrentConsultationStudies, updateCurrentConsultationStudies]);
+}, [isEditingClinicalStudy, selectedClinicalStudy, clinicalStudyFormData, selectedConsultation, tempConsultationId, doctorProfile, getCurrentConsultationStudies, updateCurrentConsultationStudies, loadConsultationStudies]);
 
 // Handle appointment form submission
 const handleAppointmentSubmit = useCallback(async () => {
