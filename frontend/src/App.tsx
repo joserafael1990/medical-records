@@ -2760,29 +2760,7 @@ const formatDateTime = (dateString: string) => {
                       />
                   </MenuItem>
                   
-                  <MenuItem 
-                      selected={activeView === 'demo'}
-                      onClick={() => setActiveView('demo')}
-                      sx={{ 
-                        borderRadius: '12px', 
-                        mb: 1,
-                        '&.Mui-selected': {
-                          backgroundColor: 'primary.main',
-                          color: 'white',
-                          '& .MuiListItemIcon-root': {
-                            color: 'white'
-                          }
-                        }
-                      }}
-                  >
-                    <ListItemIcon>
-                        <DocumentIcon />
-                    </ListItemIcon>
-                      <ListItemText 
-                        primary="Smart Table Demo" 
-                        primaryTypographyProps={{ fontWeight: 500 }}
-                      />
-                  </MenuItem>
+
                 </MenuList>
                 </Paper>
 

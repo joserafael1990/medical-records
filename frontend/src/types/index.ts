@@ -210,7 +210,8 @@ export enum BackendStatus {
 
 export enum AgendaView {
   DAILY = 'daily',
-  WEEKLY = 'weekly'
+  WEEKLY = 'weekly',
+  MONTHLY = 'monthly'
 }
 
 // ============================================================================

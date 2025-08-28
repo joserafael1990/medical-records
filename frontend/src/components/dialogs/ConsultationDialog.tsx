@@ -106,6 +106,7 @@ interface ConsultationDialogProps {
   isSubmitting: boolean;
   fieldErrors?: { [key: string]: string };
   onCreateNewPatient?: () => void; // Callback para crear nuevo paciente
+  onEditPatient?: (patient: Patient) => void; // Callback para editar paciente
   clinicalStudies?: ClinicalStudy[]; // Estudios clínicos
   onAddClinicalStudy?: () => void;
   onEditClinicalStudy?: (study: ClinicalStudy) => void;
@@ -128,6 +129,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   isSubmitting,
   fieldErrors = {},
   onCreateNewPatient,
+  onEditPatient,
   clinicalStudies = [],
   onAddClinicalStudy,
   onEditClinicalStudy,
@@ -496,6 +498,23 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                       </Typography>
                     </Box>
                   </Box>
+                  {onEditPatient && (
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<EditIcon />}
+                      onClick={() => onEditPatient(selectedPatient)}
+                      sx={{
+                        borderColor: 'primary.main',
+                        color: 'primary.main',
+                        '&:hover': {
+                          bgcolor: 'primary.50'
+                        }
+                      }}
+                    >
+                      Editar Datos
+                    </Button>
+                  )}
                 </Box>
 
                 {/* Medical Information Grid */}
