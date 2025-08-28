@@ -3,7 +3,9 @@ import { lazy } from 'react';
 // Lazy load views for code splitting
 export const DashboardView = lazy(() => import('../views/DashboardView'));
 export const PatientsView = lazy(() => import('../views/PatientsView'));
+export const PatientsViewSmart = lazy(() => import('../views/PatientsViewSmart'));
 export const ConsultationsView = lazy(() => import('../views/ConsultationsView'));
+export const ConsultationsViewSmart = lazy(() => import('../views/ConsultationsViewSmart'));
 export const AgendaView = lazy(() => import('../views/AgendaView'));
 export const DoctorProfileView = lazy(() => import('../views/DoctorProfileView'));
 

@@ -9,7 +9,7 @@ import { Warning as WarningIcon, Close as CloseIcon } from '@mui/icons-material'
 interface ErrorRibbonProps {
   message: string;
   onClose?: () => void;
-  severity?: 'error' | 'warning' | 'info';
+  severity?: 'error' | 'warning' | 'info' | 'success';
   sx?: any;
 }
 
@@ -30,6 +30,12 @@ const severityConfig = {
     backgroundColor: '#e3f2fd',
     borderColor: '#2196f3',
     color: '#1565c0',
+    icon: WarningIcon
+  },
+  success: {
+    backgroundColor: '#e8f5e8',
+    borderColor: '#4caf50',
+    color: '#2e7d32',
     icon: WarningIcon
   }
 };

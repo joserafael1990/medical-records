@@ -43,8 +43,8 @@ import Divider from '@mui/material/Divider';
 // Import lazy-loaded components for code splitting
 import {
   DashboardView,
-  PatientsView,
-  ConsultationsView,
+  PatientsViewSmart,
+  ConsultationsViewSmart,
   AgendaView,
   PatientDialog,
   ConsultationDialog,
@@ -2677,30 +2677,28 @@ const formatDateTime = (dateString: string) => {
 
               {activeView === 'patients' && (
                 <Suspense fallback={<LoadingFallback message="Cargando pacientes..." />}>
-                  <PatientsView
+                  <PatientsViewSmart
                     patients={patients}
                     consultations={consultations}
-                    patientSearchTerm={patientSearchTerm}
-                    setPatientSearchTerm={setPatientSearchTerm}
                     successMessage={successMessage}
                     setSuccessMessage={setSuccessMessage}
                     handleNewPatient={handleNewPatient}
                     handleEditPatient={handleEditPatient}
+                    isLoading={false}
                   />
                 </Suspense>
               )}
 
               {activeView === 'consultations' && !consultationDetailView && (
                 <Suspense fallback={<LoadingFallback message="Cargando consultas..." />}>
-                  <ConsultationsView
+                  <ConsultationsViewSmart
                     consultations={consultations}
-                    consultationSearchTerm={consultationSearchTerm}
-                    setConsultationSearchTerm={setConsultationSearchTerm}
+                    patients={patients}
+                    successMessage={successMessage}
+                    setSuccessMessage={setSuccessMessage}
                     handleNewConsultation={handleNewConsultation}
                     handleEditConsultation={handleEditConsultation}
-                    handleViewConsultation={handleViewConsultation}
-                    handlePrintConsultation={handlePrintConsultation}
-                    handleDeleteConsultation={handleDeleteConsultation}
+                    isLoading={false}
                   />
                 </Suspense>
               )}
