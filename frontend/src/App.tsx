@@ -618,7 +618,7 @@ function AppContent() {
       console.log('📦 Fallback to localStorage studies:', storedStudies);
       setConsultationStudies(storedStudies);
     }
-  }, [doctorProfile]);
+  }, []);
 
   // Helper function to update clinical studies for current consultation
   const updateCurrentConsultationStudies = (studies: ClinicalStudy[]) => {
