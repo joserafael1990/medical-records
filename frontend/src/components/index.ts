@@ -23,3 +23,4 @@ export { default as MedicalOrderPrintFormat } from './common/MedicalOrderPrintFo
 export { SmartLoadingState, useSmartLoading } from './common/SmartLoadingState';
 export { IntelligentSearch, useIntelligentSearch } from './common/IntelligentSearch';
 export { ToastProvider, useToast, useSimpleToast } from './common/ToastNotification';
+export { SmartTable, useSmartTable } from './common/SmartTable';

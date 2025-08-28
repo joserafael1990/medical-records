@@ -179,7 +179,7 @@ const UXDemoView: React.FC = () => {
             />
             <CardContent>
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6} md={3}>
+                <Grid xs={12} sm={6} md={3}>
                   <Button
                     fullWidth
                     variant="contained"
@@ -189,7 +189,7 @@ const UXDemoView: React.FC = () => {
                     ✅ Success
                   </Button>
                 </Grid>
-                <Grid item xs={12} sm={6} md={3}>
+                <Grid xs={12} sm={6} md={3}>
                   <Button
                     fullWidth
                     variant="contained"
@@ -199,7 +199,7 @@ const UXDemoView: React.FC = () => {
                     ❌ Error
                   </Button>
                 </Grid>
-                <Grid item xs={12} sm={6} md={3}>
+                <Grid xs={12} sm={6} md={3}>
                   <Button
                     fullWidth
                     variant="contained"
@@ -209,7 +209,7 @@ const UXDemoView: React.FC = () => {
                     ⚠️ Warning
                   </Button>
                 </Grid>
-                <Grid item xs={12} sm={6} md={3}>
+                <Grid xs={12} sm={6} md={3}>
                   <Button
                     fullWidth
                     variant="contained"
@@ -243,14 +243,14 @@ const UXDemoView: React.FC = () => {
         </Grid>
 
         {/* 4. Información de Implementación */}
-        <Grid item xs={12}>
+        <Grid xs={12}>
           <Paper sx={{ p: 3, bgcolor: 'primary.50', borderRadius: 2 }}>
             <Typography variant="h6" sx={{ mb: 2, color: 'primary.main' }}>
               💡 Cómo Implementar en tu Aplicación
             </Typography>
             
             <Grid container spacing={2}>
-              <Grid item xs={12} md={4}>
+              <Grid xs={12} md={4}>
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
                   1. Búsqueda Inteligente
                 </Typography>
@@ -259,7 +259,7 @@ const UXDemoView: React.FC = () => {
                 </Typography>
               </Grid>
               
-              <Grid item xs={12} md={4}>
+              <Grid xs={12} md={4}>
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
                   2. Estados de Carga
                 </Typography>
@@ -268,7 +268,7 @@ const UXDemoView: React.FC = () => {
                 </Typography>
               </Grid>
               
-              <Grid item xs={12} md={4}>
+              <Grid xs={12} md={4}>
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
                   3. Notificaciones
                 </Typography>
