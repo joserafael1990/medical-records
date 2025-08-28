@@ -591,7 +591,7 @@ function AppContent() {
                 urgency: study.urgency || 'normal',
                 clinical_indication: study.clinical_indication || '',
                 relevant_history: study.relevant_history || '',
-                created_by: study.created_by || doctorProfile?.id || ''
+                created_by: study.created_by || ''
               };
               
               await apiService.createClinicalStudy(studyData);
