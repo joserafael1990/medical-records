@@ -40,7 +40,7 @@ export const useMedicalTableColumns = () => {
       align: 'center',
       width: '10%',
       render: (value: Patient[keyof Patient], patient: Patient, index: number) => {
-        const age = patient.age || calculateAge(patient.birth_date);
+        const age = calculateAge(patient.birth_date);
         return (
           <Chip 
             label={`${age} años`} 
@@ -253,7 +253,7 @@ export const useMedicalTableColumns = () => {
       sortable: true,
       align: 'center',
       render: (value: Patient[keyof Patient], patient: Patient, index: number) => {
-        const age = patient.age || calculateAge(patient.birth_date);
+        const age = calculateAge(patient.birth_date);
         return <Typography variant="body2">{age} años</Typography>;
       }
     },

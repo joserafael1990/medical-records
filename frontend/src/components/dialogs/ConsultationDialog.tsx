@@ -372,7 +372,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                       Información Demográfica
                     </Typography>
                     <Typography variant="body2" sx={{ mb: 0.5 }}>
-                      <Typography component="span" sx={{ fontWeight: 600 }}>Edad:</Typography> {selectedPatient.age ? `${selectedPatient.age} años` : 'No registrada'}
+                      <Typography component="span" sx={{ fontWeight: 600 }}>Edad:</Typography> {selectedPatient.birth_date ? `${calculateAge(selectedPatient.birth_date)} años` : 'No registrada'}
                     </Typography>
                     <Typography variant="body2" sx={{ mb: 0.5 }}>
                       <Typography component="span" sx={{ fontWeight: 600 }}>Género:</Typography> {selectedPatient.gender || 'No especificado'}
@@ -480,11 +480,11 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                     color={selectedPatient.status === 'active' ? 'success' : 'default'} 
                     variant="filled"
                   />
-                  {selectedPatient.age && (
+                  {selectedPatient.birth_date && (
                     <Chip 
-                      label={selectedPatient.age < 18 ? 'Menor de Edad' : 'Adulto'} 
+                      label={calculateAge(selectedPatient.birth_date) < 18 ? 'Menor de Edad' : 'Adulto'} 
                       size="small" 
-                      color={selectedPatient.age < 18 ? 'warning' : 'info'} 
+                      color={calculateAge(selectedPatient.birth_date) < 18 ? 'warning' : 'info'} 
                       variant="outlined"
                     />
                   )}

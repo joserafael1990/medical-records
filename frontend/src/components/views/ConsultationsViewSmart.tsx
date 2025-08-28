@@ -14,6 +14,7 @@ import { ErrorRibbon } from '../common/ErrorRibbon';
 import { IntelligentSearch, useIntelligentSearch } from '../common/IntelligentSearch';
 import { SmartTable } from '../common/SmartTable';
 import { useMedicalTableColumns } from '../../hooks/useMedicalTableColumns';
+import { calculateAge } from '../../utils';
 
 interface ConsultationsViewSmartProps {
   consultations: Consultation[];
@@ -90,7 +91,7 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
         patient_name: patient?.full_name || 'Paciente No Identificado',
         patient_phone: patient?.phone,
         patient_email: patient?.email,
-        patient_age: patient?.age,
+        patient_age: patient?.birth_date ? calculateAge(patient.birth_date) : undefined,
         status: 'Programada'
       };
     });

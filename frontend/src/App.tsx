@@ -2417,27 +2417,7 @@ const formatDateTime = (dateString: string) => {
                 )}
               </Box>
             </Box>
-            {user && (
-              <Box sx={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 1, 
-                p: 1, 
-                borderRadius: '8px', 
-                bgcolor: 'success.light',
-                color: 'success.contrastText'
-              }}>
-                <Box sx={{ 
-                  width: 8, 
-                  height: 8, 
-                  borderRadius: '50%', 
-                  bgcolor: 'success.main' 
-                }} />
-                <Typography variant="caption" sx={{ fontWeight: 500 }}>
-                  Conectado - AVANT
-                </Typography>
-              </Box>
-            )}
+
           </Box>
           
           <MenuItem onClick={handleOpenProfile}>
