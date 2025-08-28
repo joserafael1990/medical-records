@@ -17,7 +17,7 @@ export const useMedicalTableColumns = () => {
       label: 'Paciente',
       sortable: true,
       width: '25%',
-      render: (value, patient) => (
+      render: (value: Patient[keyof Patient], patient: Patient, index: number) => (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Avatar sx={{ width: 40, height: 40, bgcolor: 'primary.main' }}>
             {patient.first_name?.charAt(0)?.toUpperCase()}
@@ -39,7 +39,7 @@ export const useMedicalTableColumns = () => {
       sortable: true,
       align: 'center',
       width: '10%',
-      render: (value, patient) => {
+      render: (value: Patient[keyof Patient], patient: Patient, index: number) => {
         const age = patient.age || calculateAge(patient.birth_date);
         return (
           <Chip 
@@ -57,7 +57,7 @@ export const useMedicalTableColumns = () => {
       sortable: true,
       align: 'center',
       width: '12%',
-      render: (value) => (
+      render: (value: Patient[keyof Patient], row: Patient, index: number) => (
         <Chip 
           label={String(value)} 
           size="small" 
@@ -71,7 +71,7 @@ export const useMedicalTableColumns = () => {
       label: 'Contacto',
       sortable: false,
       width: '20%',
-      render: (value, patient) => (
+      render: (value: Patient[keyof Patient], patient: Patient, index: number) => (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
           {patient.phone && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -96,7 +96,7 @@ export const useMedicalTableColumns = () => {
       sortable: true,
       align: 'center',
       width: '12%',
-      render: (value) => value ? (
+      render: (value: Patient[keyof Patient]) => value ? (
         <Chip 
           label={String(value)} 
           size="small" 
@@ -112,11 +112,11 @@ export const useMedicalTableColumns = () => {
       sortable: true,
       align: 'center',
       width: '12%',
-      render: (value) => (
+      render: (value: Patient[keyof Patient], row: Patient, index: number) => (
         <Chip 
-          label={value || 0} 
+          label={String(value || 0)} 
           size="small" 
-          color={!value || value === 0 ? 'default' : value < 5 ? 'info' : 'success'}
+          color={!value || value === 0 ? 'default' : (Number(value) as number) < 5 ? 'info' : 'success'}
           variant="outlined"
         />
       )
@@ -127,9 +127,9 @@ export const useMedicalTableColumns = () => {
       sortable: true,
       align: 'center',
       width: '9%',
-      render: (value) => (
+      render: (value: Patient[keyof Patient], row: Patient, index: number) => (
         <Chip 
-          label={value || 'Activo'} 
+          label={String(value || 'Activo')} 
           size="small" 
           color={value === 'Activo' ? 'success' : value === 'Inactivo' ? 'default' : 'warning'}
           variant="filled"
@@ -142,10 +142,10 @@ export const useMedicalTableColumns = () => {
   const consultationColumns: TableColumn<Consultation>[] = [
     {
       key: 'id',
-      label: 'ID Consulta',
+      label: 'ID',
       sortable: true,
       width: '12%',
-      render: (value) => (
+      render: (value: Consultation[keyof Consultation], row: Consultation, index: number) => (
         <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
           {String(value)}
         </Typography>
@@ -156,7 +156,7 @@ export const useMedicalTableColumns = () => {
       label: 'Paciente',
       sortable: true,
       width: '25%',
-      render: (value, consultation) => (
+      render: (value: Consultation[keyof Consultation], consultation: Consultation, index: number) => (
         <Box>
           <Typography variant="body2" sx={{ fontWeight: 600 }}>
             {String(value || 'Paciente No Identificado')}
@@ -172,7 +172,7 @@ export const useMedicalTableColumns = () => {
       label: 'Fecha',
       sortable: true,
       width: '15%',
-      render: (value) => {
+      render: (value: Consultation[keyof Consultation], row: Consultation, index: number) => {
         const date = new Date(String(value));
         const isToday = date.toDateString() === new Date().toDateString();
         return (
@@ -192,7 +192,7 @@ export const useMedicalTableColumns = () => {
       label: 'Motivo Consulta',
       sortable: false,
       width: '25%',
-      render: (value) => (
+      render: (value: Consultation[keyof Consultation], row: Consultation, index: number) => (
         <Typography 
           variant="body2" 
           sx={{ 
@@ -212,7 +212,7 @@ export const useMedicalTableColumns = () => {
       label: 'Diagnóstico',
       sortable: false,
       width: '23%',
-      render: (value) => value ? (
+      render: (value: Consultation[keyof Consultation]) => value ? (
         <Chip 
           label={String(value)} 
           size="small" 
@@ -239,9 +239,9 @@ export const useMedicalTableColumns = () => {
   const compactPatientColumns: TableColumn<Patient>[] = [
     {
       key: 'full_name',
-      label: 'Nombre',
+      label: 'Paciente',
       sortable: true,
-      render: (value, patient) => (
+      render: (value: Patient[keyof Patient], patient: Patient, index: number) => (
         <Typography variant="body2" sx={{ fontWeight: 600 }}>
           {patient.full_name || `${patient.first_name} ${patient.paternal_surname}`}
         </Typography>
@@ -252,7 +252,7 @@ export const useMedicalTableColumns = () => {
       label: 'Edad',
       sortable: true,
       align: 'center',
-      render: (value, patient) => {
+      render: (value: Patient[keyof Patient], patient: Patient, index: number) => {
         const age = patient.age || calculateAge(patient.birth_date);
         return <Typography variant="body2">{age} años</Typography>;
       }
@@ -261,7 +261,7 @@ export const useMedicalTableColumns = () => {
       key: 'phone',
       label: 'Teléfono',
       sortable: false,
-      render: (value) => (
+      render: (value: Patient[keyof Patient], row: Patient, index: number) => (
         <Typography variant="body2">{String(value || '-')}</Typography>
       )
     }
@@ -272,7 +272,7 @@ export const useMedicalTableColumns = () => {
       key: 'date',
       label: 'Fecha',
       sortable: true,
-      render: (value) => (
+      render: (value: Consultation[keyof Consultation], row: Consultation, index: number) => (
         <Typography variant="body2">
           {formatDate(String(value))}
         </Typography>
@@ -282,7 +282,7 @@ export const useMedicalTableColumns = () => {
       key: 'patient_name',
       label: 'Paciente',
       sortable: true,
-      render: (value) => (
+      render: (value: Consultation[keyof Consultation], row: Consultation, index: number) => (
         <Typography variant="body2" sx={{ fontWeight: 600 }}>
           {String(value || 'Sin nombre')}
         </Typography>
@@ -292,7 +292,7 @@ export const useMedicalTableColumns = () => {
       key: 'chief_complaint',
       label: 'Motivo',
       sortable: false,
-      render: (value) => (
+      render: (value: Consultation[keyof Consultation], row: Consultation, index: number) => (
         <Typography variant="body2" sx={{ 
           overflow: 'hidden',
           textOverflow: 'ellipsis',
