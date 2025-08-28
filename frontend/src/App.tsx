@@ -55,6 +55,7 @@ import {
 } from './components/lazy';
 import { ConsultationDetailView } from './components';
 import { LoadingFallback } from './components';
+import SmartTableDemo from './components/demo/SmartTableDemo';
 import { Patient, DoctorFormData, ConsultationFormData, AppointmentFormData, ClinicalStudy, ClinicalStudyFormData, StudyType, StudyStatus } from './types';
 import { API_CONFIG } from './constants';
 import { apiService } from './services/api';
@@ -2546,6 +2547,30 @@ const formatDateTime = (dateString: string) => {
                         primaryTypographyProps={{ fontWeight: 500 }}
                       />
                   </MenuItem>
+                  
+                  <MenuItem 
+                      selected={activeView === 'demo'}
+                      onClick={() => setActiveView('demo')}
+                      sx={{ 
+                        borderRadius: '12px', 
+                        mb: 1,
+                        '&.Mui-selected': {
+                          backgroundColor: 'primary.main',
+                          color: 'white',
+                          '& .MuiListItemIcon-root': {
+                            color: 'white'
+                          }
+                        }
+                      }}
+                  >
+                    <ListItemIcon>
+                        <DocumentIcon />
+                    </ListItemIcon>
+                      <ListItemText 
+                        primary="Smart Table Demo" 
+                        primaryTypographyProps={{ fontWeight: 500 }}
+                      />
+                  </MenuItem>
                 </MenuList>
                 </Paper>
 
@@ -2721,6 +2746,12 @@ const formatDateTime = (dateString: string) => {
                     successMessage={doctorProfileSuccessMessage}
                     errorMessage={doctorProfileFormErrorMessage}
                   />
+                </Suspense>
+              )}
+
+              {activeView === 'demo' && (
+                <Suspense fallback={<LoadingFallback message="Cargando demo..." />}>
+                  <SmartTableDemo />
                 </Suspense>
               )}
 
