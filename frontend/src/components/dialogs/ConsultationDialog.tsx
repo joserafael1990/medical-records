@@ -261,19 +261,168 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               )}
             </Box>
 
-            {/* Selected Patient Info */}
+            {/* Enhanced Selected Patient Info */}
             {selectedPatient && (
-              <Paper sx={{ p: 2, bgcolor: 'primary.50', border: '1px solid', borderColor: 'primary.200' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <Avatar sx={{ bgcolor: 'primary.main', width: 48, height: 48 }}>
+              <Paper sx={{ p: 3, bgcolor: 'primary.50', border: '1px solid', borderColor: 'primary.200', borderRadius: '12px' }}>
+                {/* Header with Patient Basic Info */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+                  <Avatar sx={{ bgcolor: 'primary.main', width: 56, height: 56, fontSize: '1.5rem' }}>
                     {selectedPatient.first_name[0]}{selectedPatient.paternal_surname[0]}
                   </Avatar>
-                  <Box>
-                    <Typography variant="h6">{selectedPatient.full_name}</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {selectedPatient.phone} • {selectedPatient.email}
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
+                      {selectedPatient.full_name}
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                      <Typography variant="body2" color="text.secondary">
+                        📞 {selectedPatient.phone || 'No registrado'}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        📧 {selectedPatient.email || 'No registrado'}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        🆔 {selectedPatient.id}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
+
+                {/* Medical Information Grid */}
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2, mb: 2 }}>
+                  {/* Demographic Info */}
+                  <Box sx={{ bgcolor: 'white', p: 2, borderRadius: '8px', border: '1px solid #e0e0e0' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'primary.main', mb: 1 }}>
+                      📊 Información Demográfica
+                    </Typography>
+                    <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      <Typography component="span" sx={{ fontWeight: 600 }}>Edad:</Typography> {selectedPatient.age ? `${selectedPatient.age} años` : 'No registrada'}
+                    </Typography>
+                    <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      <Typography component="span" sx={{ fontWeight: 600 }}>Género:</Typography> {selectedPatient.gender || 'No especificado'}
+                    </Typography>
+                    <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      <Typography component="span" sx={{ fontWeight: 600 }}>Fecha Nac:</Typography> {selectedPatient.birth_date ? new Date(selectedPatient.birth_date).toLocaleDateString('es-ES') : 'No registrada'}
+                    </Typography>
+                    <Typography variant="body2">
+                      <Typography component="span" sx={{ fontWeight: 600 }}>CURP:</Typography> {selectedPatient.curp || 'No registrada'}
                     </Typography>
                   </Box>
+
+                  {/* Medical Info */}
+                  <Box sx={{ bgcolor: 'white', p: 2, borderRadius: '8px', border: '1px solid #e0e0e0' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'error.main', mb: 1 }}>
+                      🩸 Información Médica
+                    </Typography>
+                    <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      <Typography component="span" sx={{ fontWeight: 600 }}>Tipo de Sangre:</Typography> 
+                      {selectedPatient.blood_type ? (
+                        <Chip 
+                          label={selectedPatient.blood_type} 
+                          size="small" 
+                          color="error" 
+                          variant="filled" 
+                          sx={{ ml: 1, fontWeight: 600 }}
+                        />
+                      ) : ' No registrado'}
+                    </Typography>
+                    <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      <Typography component="span" sx={{ fontWeight: 600 }}>Alergias:</Typography> {selectedPatient.allergies || 'Ninguna registrada'}
+                    </Typography>
+                    <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      <Typography component="span" sx={{ fontWeight: 600 }}>Cond. Crónicas:</Typography> {selectedPatient.chronic_conditions || 'Ninguna registrada'}
+                    </Typography>
+                    <Typography variant="body2">
+                      <Typography component="span" sx={{ fontWeight: 600 }}>Medicamentos:</Typography> {selectedPatient.current_medications || 'Ninguno registrado'}
+                    </Typography>
+                  </Box>
+
+                  {/* Contact & Emergency */}
+                  <Box sx={{ bgcolor: 'white', p: 2, borderRadius: '8px', border: '1px solid #e0e0e0' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'warning.main', mb: 1 }}>
+                      🚨 Contacto de Emergencia
+                    </Typography>
+                    <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      <Typography component="span" sx={{ fontWeight: 600 }}>Nombre:</Typography> {selectedPatient.emergency_contact_name || 'No registrado'}
+                    </Typography>
+                    <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      <Typography component="span" sx={{ fontWeight: 600 }}>Teléfono:</Typography> {selectedPatient.emergency_contact_phone || 'No registrado'}
+                    </Typography>
+                    <Typography variant="body2">
+                      <Typography component="span" sx={{ fontWeight: 600 }}>Relación:</Typography> {selectedPatient.emergency_contact_relationship || 'No especificada'}
+                    </Typography>
+                  </Box>
+
+                  {/* Insurance & Address */}
+                  <Box sx={{ bgcolor: 'white', p: 2, borderRadius: '8px', border: '1px solid #e0e0e0' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'info.main', mb: 1 }}>
+                      🏥 Seguro y Ubicación
+                    </Typography>
+                    <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      <Typography component="span" sx={{ fontWeight: 600 }}>Seguro:</Typography> {selectedPatient.insurance_type || 'No registrado'}
+                    </Typography>
+                    <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      <Typography component="span" sx={{ fontWeight: 600 }}>No. Seguro:</Typography> {selectedPatient.insurance_number || 'N/A'}
+                    </Typography>
+                    <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      <Typography component="span" sx={{ fontWeight: 600 }}>Dirección:</Typography> {selectedPatient.address || 'No registrada'}
+                    </Typography>
+                    <Typography variant="body2">
+                      <Typography component="span" sx={{ fontWeight: 600 }}>Estado Civil:</Typography> {selectedPatient.civil_status || 'No especificado'}
+                    </Typography>
+                  </Box>
+                </Box>
+
+                {/* Medical History Expandable */}
+                {(selectedPatient.previous_hospitalizations || selectedPatient.surgical_history) && (
+                  <Box sx={{ bgcolor: 'white', p: 2, borderRadius: '8px', border: '1px solid #e0e0e0', mt: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'secondary.main', mb: 1 }}>
+                      📋 Historial Médico
+                    </Typography>
+                    {selectedPatient.previous_hospitalizations && (
+                      <Typography variant="body2" sx={{ mb: 0.5 }}>
+                        <Typography component="span" sx={{ fontWeight: 600 }}>Hospitalizaciones Previas:</Typography> {selectedPatient.previous_hospitalizations}
+                      </Typography>
+                    )}
+                    {selectedPatient.surgical_history && (
+                      <Typography variant="body2">
+                        <Typography component="span" sx={{ fontWeight: 600 }}>Historial Quirúrgico:</Typography> {selectedPatient.surgical_history}
+                      </Typography>
+                    )}
+                  </Box>
+                )}
+
+                {/* Quick Actions */}
+                <Box sx={{ display: 'flex', gap: 1, mt: 2, pt: 2, borderTop: '1px solid #e0e0e0' }}>
+                  <Chip 
+                    label={`Estado: ${selectedPatient.status === 'active' ? 'Activo' : 'Inactivo'}`} 
+                    size="small" 
+                    color={selectedPatient.status === 'active' ? 'success' : 'default'} 
+                    variant="filled"
+                  />
+                  {selectedPatient.age && (
+                    <Chip 
+                      label={selectedPatient.age < 18 ? 'Menor de Edad' : 'Adulto'} 
+                      size="small" 
+                      color={selectedPatient.age < 18 ? 'warning' : 'info'} 
+                      variant="outlined"
+                    />
+                  )}
+                  {selectedPatient.allergies && (
+                    <Chip 
+                      label="⚠️ Alergias" 
+                      size="small" 
+                      color="error" 
+                      variant="outlined"
+                    />
+                  )}
+                  {selectedPatient.chronic_conditions && (
+                    <Chip 
+                      label="📊 Cond. Crónicas" 
+                      size="small" 
+                      color="warning" 
+                      variant="outlined"
+                    />
+                  )}
                 </Box>
               </Paper>
             )}
