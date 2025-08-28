@@ -18,7 +18,8 @@ import {
   IconButton,
   Autocomplete,
   Alert,
-  Collapse
+  Collapse,
+  Paper
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -27,7 +28,12 @@ import {
   Schedule as ScheduleIcon,
   AccessTime as TimeIcon,
   Event as EventIcon,
-  Notes as NotesIcon
+  Notes as NotesIcon,
+  Edit as EditIcon,
+  Phone as PhoneIcon,
+  Email as EmailIcon,
+  Badge as BadgeIcon,
+  LocalHospital as HospitalIcon
 } from '@mui/icons-material';
 import { Patient, AppointmentFormData } from '../../types';
 import { ErrorRibbon } from '../common/ErrorRibbon';
@@ -68,6 +74,7 @@ interface AppointmentDialogProps {
   onClose: () => void;
   onSubmit: (formData: AppointmentFormData) => void;
   onNewPatient: () => void;
+  onEditPatient?: (patient: Patient) => void;
   formData: AppointmentFormData;
   patients: Patient[];
   isEditing: boolean;
@@ -82,6 +89,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
   onClose,
   onSubmit,
   onNewPatient,
+  onEditPatient,
   formData,
   patients,
   isEditing,
@@ -262,6 +270,165 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
               </Button>
             </Box>
           </Box>
+
+          {/* Selected Patient Information */}
+          {selectedPatient && (
+            <Paper sx={{ 
+              p: 3, 
+              bgcolor: 'primary.50', 
+              border: '1px solid', 
+              borderColor: 'primary.200', 
+              borderRadius: '12px' 
+            }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                <Typography variant="h6" sx={{ 
+                  fontWeight: 600, 
+                  color: 'primary.main',
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 1 
+                }}>
+                  <PersonIcon sx={{ fontSize: 20 }} />
+                  Datos del Paciente
+                </Typography>
+                {onEditPatient && (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<EditIcon />}
+                    onClick={() => onEditPatient(selectedPatient)}
+                    sx={{
+                      bgcolor: 'white',
+                      borderColor: 'primary.main',
+                      color: 'primary.main',
+                      '&:hover': {
+                        bgcolor: 'primary.100'
+                      }
+                    }}
+                  >
+                    Editar Datos
+                  </Button>
+                )}
+              </Box>
+              
+              {/* Patient Header */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                <Avatar sx={{ bgcolor: 'primary.main', width: 48, height: 48, fontSize: '1.2rem' }}>
+                  {selectedPatient.first_name[0]}{selectedPatient.paternal_surname[0]}
+                </Avatar>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                    {selectedPatient.full_name}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {selectedPatient.birth_date ? `${calculateAge(selectedPatient.birth_date)} años` : 'Edad no registrada'}
+                  </Typography>
+                </Box>
+              </Box>
+
+              {/* Patient Details Grid */}
+              <Box sx={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                gap: 2 
+              }}>
+                <Box sx={{ bgcolor: 'white', p: 2, borderRadius: '8px' }}>
+                  <Typography variant="body2" sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 1,
+                    mb: 0.5,
+                    fontWeight: 600,
+                    color: 'text.secondary'
+                  }}>
+                    <PhoneIcon sx={{ fontSize: 16 }} />
+                    Contacto
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    <strong>Teléfono:</strong> {selectedPatient.phone || 'No registrado'}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Email:</strong> {selectedPatient.email || 'No registrado'}
+                  </Typography>
+                </Box>
+
+                <Box sx={{ bgcolor: 'white', p: 2, borderRadius: '8px' }}>
+                  <Typography variant="body2" sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 1,
+                    mb: 0.5,
+                    fontWeight: 600,
+                    color: 'text.secondary'
+                  }}>
+                    <BadgeIcon sx={{ fontSize: 16 }} />
+                    Identificación
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                    <strong>ID:</strong> {selectedPatient.id}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>CURP:</strong> {selectedPatient.curp || 'No registrada'}
+                  </Typography>
+                </Box>
+
+                {(selectedPatient.blood_type || selectedPatient.insurance_type) && (
+                  <Box sx={{ bgcolor: 'white', p: 2, borderRadius: '8px' }}>
+                    <Typography variant="body2" sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 1,
+                      mb: 0.5,
+                      fontWeight: 600,
+                      color: 'text.secondary'
+                    }}>
+                      <HospitalIcon sx={{ fontSize: 16 }} />
+                      Información Médica
+                    </Typography>
+                    {selectedPatient.blood_type && (
+                      <Typography variant="body2" sx={{ mb: 0.5 }}>
+                        <strong>Tipo de Sangre:</strong> 
+                        <Chip 
+                          label={selectedPatient.blood_type} 
+                          size="small" 
+                          color="error" 
+                          variant="filled" 
+                          sx={{ ml: 1, fontWeight: 600 }} 
+                        />
+                      </Typography>
+                    )}
+                    {selectedPatient.insurance_type && (
+                      <Typography variant="body2">
+                        <strong>Seguro:</strong> {selectedPatient.insurance_type}
+                      </Typography>
+                    )}
+                  </Box>
+                )}
+              </Box>
+
+              {/* Allergies and Conditions Alert */}
+              {(selectedPatient.allergies || selectedPatient.chronic_conditions) && (
+                <Alert 
+                  severity="warning" 
+                  sx={{ mt: 2, bgcolor: 'warning.50', borderColor: 'warning.200' }}
+                >
+                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                    ⚠️ Información Médica Importante:
+                  </Typography>
+                  {selectedPatient.allergies && (
+                    <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      <strong>Alergias:</strong> {selectedPatient.allergies}
+                    </Typography>
+                  )}
+                  {selectedPatient.chronic_conditions && (
+                    <Typography variant="body2">
+                      <strong>Condiciones Crónicas:</strong> {selectedPatient.chronic_conditions}
+                    </Typography>
+                  )}
+                </Alert>
+              )}
+            </Paper>
+          )}
 
           {/* Date and Time Row */}
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>

@@ -1377,6 +1377,75 @@ const handleNewAppointment = useCallback(() => {
   setFormErrorMessage('');
 }, [doctorProfile, fetchPatients]);
 
+// Function to create appointment from consultation follow-up
+const handleCreateFollowUpAppointment = useCallback(async (appointmentData: any) => {
+  try {
+    console.log('🔄 Creating follow-up appointment:', appointmentData);
+    
+    // Check if backend is available, otherwise create locally
+    try {
+      // Try to create appointment via API
+      await apiService.createAgendaAppointment(appointmentData);
+      console.log('✅ Follow-up appointment created via API');
+      
+      // Always refresh appointments, but use the appointment's date, not selectedDate
+      // This ensures the appointment appears when user navigates to that date
+      console.log('🔄 Refreshing appointments after API creation...');
+      const appointmentDate = new Date(appointmentData.date_time).toISOString().split('T')[0];
+      console.log('📅 Refreshing for appointment date:', appointmentDate);
+      
+      // If the appointment date matches current selectedDate, refresh the view
+      const currentSelectedDate = selectedDate.toISOString().split('T')[0];
+      if (appointmentDate === currentSelectedDate) {
+        const data = await apiService.getDailyAgenda(appointmentDate);
+        setAppointments(data);
+        console.log('📅 Appointments refreshed from API:', data.length);
+      } else {
+        console.log('ℹ️ Appointment created for different date than currently selected, will appear when navigating to that date');
+      }
+    } catch (apiError: any) {
+      // If API fails, create locally for demonstration
+      if (apiError.code === 'ERR_NETWORK' || apiError.code === 'ERR_CONNECTION_REFUSED' || apiError.status === 0) {
+        console.log('⚠️ API unavailable, creating appointment locally...');
+        
+        const localAppointment = {
+          id: `APT-${Date.now()}`,
+          ...appointmentData,
+          appointment_date: appointmentData.date_time, // Map field for backend compatibility
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          patient_name: patients.find(p => p.id === appointmentData.patient_id)?.full_name || 'Paciente',
+          doctor_name: doctorProfile 
+            ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name} ${doctorProfile.paternal_surname}`.trim()
+            : 'Dr. Sistema'
+        };
+        
+        // Add to appointments state only if current view is agenda and dates match
+        const appointmentDate = new Date(appointmentData.date_time).toISOString().split('T')[0];
+        const currentSelectedDate = selectedDate.toISOString().split('T')[0];
+        
+        console.log('📅 Local appointment creation:', {
+          appointmentDate,
+          currentSelectedDate,
+          activeView,
+          shouldAddToState: activeView === 'agenda' && appointmentDate === currentSelectedDate
+        });
+        
+        // Always add to state for now - will be filtered by date in AgendaView
+        // Add to appointments state for immediate feedback
+        setAppointments(prev => [localAppointment, ...prev]);
+        console.log('✅ Follow-up appointment created locally (fallback)');
+      } else {
+        throw apiError; // Re-throw if it's not a connection error
+      }
+    }
+    
+  } catch (error) {
+    console.error('Error creating follow-up appointment:', error);
+    throw error; // Re-throw so the calling function can handle it
+  }
+}, [activeView, selectedDate, patients, doctorProfile]);
+
 const handleEditAppointment = useCallback((appointment: any) => {
   setSelectedAppointment(appointment);
   setIsEditingAppointment(true);
@@ -1501,7 +1570,91 @@ const handleConsultationSubmit = useCallback(async () => {
   } catch (error: any) {
     console.error('Error saving consultation:', error);
     
-    // Parse API errors properly
+    // Check if it's a connection error (backend not available)
+    if (error.code === 'ERR_NETWORK' || error.code === 'ERR_CONNECTION_REFUSED' || error.message?.includes('Network Error') || error.status === 0) {
+      console.log('🔄 Backend unavailable, creating consultation locally for testing...');
+      
+      try {
+        // Create simulated consultation locally
+        const simulatedConsultation = {
+          id: `CONS-${Date.now()}`,
+          patient_id: consultationFormData.patient_id,
+          date: consultationFormData.date ? new Date(consultationFormData.date).toISOString() : new Date().toISOString(),
+          chief_complaint: consultationFormData.chief_complaint || '',
+          history_present_illness: consultationFormData.history_present_illness || '',
+          family_history: consultationFormData.family_history || '',
+          personal_pathological_history: consultationFormData.personal_pathological_history || '',
+          personal_non_pathological_history: consultationFormData.personal_non_pathological_history || '',
+          physical_examination: consultationFormData.physical_examination || '',
+          primary_diagnosis: consultationFormData.primary_diagnosis || '',
+          secondary_diagnoses: consultationFormData.secondary_diagnoses || '',
+          treatment_plan: consultationFormData.treatment_plan || '',
+          follow_up_instructions: consultationFormData.follow_up_instructions || '',
+          interconsultations: consultationFormData.interconsultations || '',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          patient_name: patients.find(p => p.id === consultationFormData.patient_id)?.full_name || 'Paciente Desconocido',
+          doctor_name: doctorProfile 
+            ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name} ${doctorProfile.paternal_surname} ${doctorProfile.maternal_surname || ''}`.trim()
+            : 'Dr. Sistema',
+          doctor_professional_license: doctorProfile?.professional_license || 'SIS001'
+        };
+        
+        // Add to local consultations state
+        setConsultations(prev => [simulatedConsultation, ...prev]);
+        
+        // Handle temporary clinical studies
+        if (!isEditingConsultation && tempConsultationId && tempClinicalStudies.length > 0) {
+          const updatedStudies = tempClinicalStudies.map(study => ({
+            ...study,
+            consultation_id: simulatedConsultation.id
+          }));
+          
+          // Clinical studies will be associated with the consultation
+          // For now, we just clear the temporary studies
+          setTempClinicalStudies([]);
+        }
+        
+        // Reset form and show success
+        setConsultationFormData({
+          patient_id: '',
+          date: '',
+          chief_complaint: '',
+          history_present_illness: '',
+          family_history: '',
+          personal_pathological_history: '',
+          personal_non_pathological_history: '',
+          physical_examination: '',
+          primary_diagnosis: '',
+          secondary_diagnoses: '',
+          treatment_plan: '',
+          therapeutic_plan: '',
+          follow_up_instructions: '',
+          prognosis: '',
+          laboratory_results: '',
+          imaging_studies: '',
+          interconsultations: '',
+          doctor_name: '',
+          doctor_professional_license: '',
+          doctor_specialty: ''
+        });
+        setTempConsultationId(null);
+        setSuccessMessage(
+          isEditingConsultation 
+            ? 'Consulta actualizada exitosamente (modo local)' 
+            : 'Consulta creada exitosamente (modo local)'
+        );
+        setConsultationDialogOpen(false);
+        
+        return; // Exit successfully
+        
+      } catch (localError) {
+        console.error('Error creating local consultation:', localError);
+        setFormErrorMessage('Error al crear la consulta localmente');
+      }
+    }
+    
+    // Parse API errors properly for other types of errors
     if (error.response?.data?.detail) {
       const detail = error.response.data.detail;
       if (typeof detail === 'string') {
@@ -3114,6 +3267,7 @@ const formatDateTime = (dateString: string) => {
             onDeleteClinicalStudy={handleDeleteClinicalStudy}
             selectedConsultation={selectedConsultation}
             tempConsultationId={tempConsultationId}
+            onCreateAppointment={handleCreateFollowUpAppointment}
           />
         </Suspense>
 

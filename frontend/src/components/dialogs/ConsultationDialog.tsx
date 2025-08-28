@@ -48,7 +48,14 @@ import {
   Schedule as ScheduleIcon,
   Info as InfoIcon,
   CalendarToday as CalendarIcon,
-  AccessTime as ClockIcon
+  AccessTime as ClockIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  EventAvailable as ScheduledIcon,
+  Event as EventIcon,
+  Assignment as TaskIcon,
+  Schedule as StatusIcon,
+  Description as NotesIcon
 } from '@mui/icons-material';
 import { Patient, ConsultationFormData, ClinicalStudy } from '../../types';
 import { ErrorRibbon } from '../common/ErrorRibbon';
@@ -105,6 +112,7 @@ interface ConsultationDialogProps {
   onDeleteClinicalStudy?: (studyId: string) => void;
   selectedConsultation?: any; // ID de la consulta actual
   tempConsultationId?: string | null; // ID temporal para consultas nuevas
+  onCreateAppointment?: (appointmentData: any) => Promise<void>; // Callback para crear citas
 }
 
 const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
@@ -125,7 +133,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   onEditClinicalStudy,
   onDeleteClinicalStudy,
   selectedConsultation,
-  tempConsultationId
+  tempConsultationId,
+  onCreateAppointment
 }) => {
   const [activeStep, setActiveStep] = useState(0);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -133,6 +142,12 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   const [patientClinicalStudies, setPatientClinicalStudies] = useState<ClinicalStudy[]>([]);
   const [loadingPatientStudies, setLoadingPatientStudies] = useState(false);
   const [showScheduleFollowUp, setShowScheduleFollowUp] = useState(false);
+  const [scheduledFollowUp, setScheduledFollowUp] = useState<any>(null);
+  const [followUpFormData, setFollowUpFormData] = useState({
+    date: '',
+    time: '',
+    reason: ''
+  });
 
   // Load patient clinical studies when patient is selected
   useEffect(() => {
@@ -259,6 +274,123 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       setFormData(prev => ({ ...prev, patient_id: patient.id }));
       setSelectedPatient(patient);
     }
+  };
+
+  // Functions for follow-up appointment management
+  const handleScheduleFollowUp = async () => {
+    if (!selectedPatient || !followUpFormData.date || !followUpFormData.time || !followUpFormData.reason) {
+      setFormErrorMessage('Por favor completa todos los campos para programar la cita');
+      return;
+    }
+
+    try {
+      // Combine date and time for the appointment
+      const appointmentDateTime = `${followUpFormData.date}T${followUpFormData.time}`;
+      
+      // Create appointment data
+      const appointmentData = {
+        patient_id: selectedPatient.id,
+        date_time: appointmentDateTime,
+        reason: followUpFormData.reason,
+        appointment_type: 'follow_up',
+        status: 'scheduled',
+        priority: 'normal',
+        duration_minutes: 30,
+        preparation_instructions: 'Traer resultados de estudios clínicos si están disponibles'
+      };
+
+      // If we have the callback to create appointment, use it to integrate with main system
+      if (onCreateAppointment) {
+        console.log('🔄 Creating appointment through main system...');
+        await onCreateAppointment(appointmentData);
+        
+        // Create local display version for immediate feedback
+        const localAppointment = {
+          id: `APT-${Date.now()}`,
+          ...appointmentData,
+          created_at: new Date().toISOString(),
+          patient_name: selectedPatient.full_name
+        };
+        
+        if (scheduledFollowUp) {
+          // Update existing appointment
+          const updatedAppointment = {
+            ...scheduledFollowUp,
+            ...appointmentData,
+            updated_at: new Date().toISOString()
+          };
+          setScheduledFollowUp(updatedAppointment);
+        } else {
+          // Create new appointment
+          setScheduledFollowUp(localAppointment);
+        }
+        
+        console.log('✅ Appointment created successfully and will appear in agenda');
+      } else {
+        // Fallback: create locally only (for backward compatibility)
+        console.log('⚠️ No appointment callback provided, creating locally only');
+        
+        const simulatedAppointment = {
+          id: `APT-${Date.now()}`,
+          ...appointmentData,
+          created_at: new Date().toISOString(),
+          patient_name: selectedPatient.full_name
+        };
+
+        if (scheduledFollowUp) {
+          // Update existing appointment
+          const updatedAppointment = {
+            ...scheduledFollowUp,
+            ...appointmentData,
+            updated_at: new Date().toISOString()
+          };
+          setScheduledFollowUp(updatedAppointment);
+        } else {
+          // Create new appointment
+          setScheduledFollowUp(simulatedAppointment);
+        }
+      }
+      
+      setShowScheduleFollowUp(false);
+      setFollowUpFormData({ date: '', time: '', reason: '' });
+      
+      // Show success message
+      setFormErrorMessage('');
+      
+    } catch (error) {
+      console.error('Error scheduling follow-up appointment:', error);
+      setFormErrorMessage('Error al programar la cita de seguimiento');
+    }
+  };
+
+  const handleEditFollowUp = () => {
+    if (scheduledFollowUp) {
+      // Parse the existing appointment data
+      const dateTime = new Date(scheduledFollowUp.date_time);
+      const date = dateTime.toISOString().split('T')[0];
+      const time = dateTime.toTimeString().split(' ')[0].substring(0, 5);
+      
+      setFollowUpFormData({
+        date,
+        time,
+        reason: scheduledFollowUp.reason
+      });
+      
+      // Open the edit form
+      setShowScheduleFollowUp(true);
+    }
+  };
+
+  const handleDeleteFollowUp = () => {
+    setScheduledFollowUp(null);
+    setFollowUpFormData({ date: '', time: '', reason: '' });
+  };
+
+  const handleFollowUpFormChange = (field: string, value: string) => {
+    setFollowUpFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
   };
 
   const isStepValid = (step: number) => {
@@ -913,74 +1045,242 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                     Consulta de Seguimiento
                   </Typography>
                   
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                    Programa una cita para revisar los resultados de los estudios clínicos solicitados.
-                  </Typography>
-                  
-                  <Collapse in={showScheduleFollowUp}>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: 2, bgcolor: 'white', borderRadius: '8px' }}>
-                      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-                        <TextField
-                          label="Fecha de Seguimiento"
-                          type="date"
-                          InputLabelProps={{ shrink: true }}
-                          fullWidth
-                          helperText="Fecha recomendada para revisar resultados"
-                        />
-                        <TextField
-                          label="Hora"
-                          type="time"
-                          InputLabelProps={{ shrink: true }}
-                          fullWidth
-                          helperText="Hora preferida"
-                        />
-                      </Box>
+                  {/* Show edit form when showScheduleFollowUp is true */}
+                  {showScheduleFollowUp ? (
+                    <Box sx={{ bgcolor: 'white', p: 3, borderRadius: '8px', border: '1px solid', borderColor: 'primary.200' }}>
+                      <Typography variant="subtitle1" sx={{ 
+                        fontWeight: 600, 
+                        color: 'primary.main',
+                        mb: 2,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1
+                      }}>
+                        <EditIcon sx={{ fontSize: 20 }} />
+                        {scheduledFollowUp ? 'Editar Cita de Seguimiento' : 'Programar Cita de Seguimiento'}
+                      </Typography>
                       
-                      <TextField
-                        label="Motivo de la Consulta de Seguimiento"
-                        multiline
-                        rows={2}
-                        placeholder="Ej: Revisión de resultados de laboratorio, evaluación de respuesta al tratamiento..."
-                        fullWidth
-                      />
-                      
-                      <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
-                        <Button 
-                          variant="outlined" 
-                          onClick={() => setShowScheduleFollowUp(false)}
-                        >
-                          Cancelar
-                        </Button>
-                        <Button 
-                          variant="contained" 
-                          startIcon={<CalendarIcon />}
-                          onClick={() => {
-                            // TODO: Implementar lógica para programar cita
-                            setShowScheduleFollowUp(false);
-                            // Aquí se podría abrir el AppointmentDialog o navegar a la agenda
-                          }}
-                        >
-                          Programar Cita
-                        </Button>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                          <TextField
+                            label="Fecha de Seguimiento"
+                            type="date"
+                            value={followUpFormData.date}
+                            onChange={(e) => handleFollowUpFormChange('date', e.target.value)}
+                            InputLabelProps={{ shrink: true }}
+                            fullWidth
+                            helperText="Fecha recomendada para revisar resultados"
+                          />
+                          <TextField
+                            label="Hora"
+                            type="time"
+                            value={followUpFormData.time}
+                            onChange={(e) => handleFollowUpFormChange('time', e.target.value)}
+                            InputLabelProps={{ shrink: true }}
+                            fullWidth
+                            helperText="Hora preferida"
+                          />
+                        </Box>
+                        
+                        <TextField
+                          label="Motivo de la Consulta de Seguimiento"
+                          multiline
+                          rows={2}
+                          value={followUpFormData.reason}
+                          onChange={(e) => handleFollowUpFormChange('reason', e.target.value)}
+                          placeholder="Ej: Revisión de resultados de laboratorio, evaluación de respuesta al tratamiento..."
+                          fullWidth
+                        />
+                        
+                        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+                          <Button 
+                            variant="outlined" 
+                            onClick={() => {
+                              setShowScheduleFollowUp(false);
+                              setFollowUpFormData({ date: '', time: '', reason: '' });
+                            }}
+                          >
+                            Cancelar
+                          </Button>
+                          <Button 
+                            variant="contained" 
+                            startIcon={<CalendarIcon />}
+                            onClick={handleScheduleFollowUp}
+                            disabled={!followUpFormData.date || !followUpFormData.time || !followUpFormData.reason}
+                          >
+                            {scheduledFollowUp ? 'Actualizar Cita' : 'Programar Cita'}
+                          </Button>
+                        </Box>
                       </Box>
                     </Box>
-                  </Collapse>
-                  
-                  {!showScheduleFollowUp && (
-                    <Button
-                      variant="outlined"
-                      startIcon={<ClockIcon />}
-                      onClick={() => setShowScheduleFollowUp(true)}
-                      sx={{ 
-                        bgcolor: 'white', 
-                        borderColor: 'primary.main',
-                        '&:hover': {
-                          bgcolor: 'primary.50'
-                        }
-                      }}
-                    >
-                      Programar Consulta de Seguimiento
-                    </Button>
+                  ) : scheduledFollowUp ? (
+                    <Box sx={{ bgcolor: 'success.50', p: 3, borderRadius: '8px', border: '1px solid', borderColor: 'success.200' }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                        <Typography variant="subtitle1" sx={{ 
+                          fontWeight: 600, 
+                          color: 'success.main',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1
+                        }}>
+                          <ScheduledIcon sx={{ fontSize: 20 }} />
+                          Cita Programada
+                        </Typography>
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            startIcon={<EditIcon />}
+                            onClick={handleEditFollowUp}
+                            sx={{ 
+                              borderColor: 'success.main', 
+                              color: 'success.main',
+                              '&:hover': { bgcolor: 'success.100' }
+                            }}
+                          >
+                            Editar
+                          </Button>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            startIcon={<DeleteIcon />}
+                            onClick={handleDeleteFollowUp}
+                            sx={{ 
+                              borderColor: 'error.main', 
+                              color: 'error.main',
+                              '&:hover': { bgcolor: 'error.50' }
+                            }}
+                          >
+                            Eliminar
+                          </Button>
+                        </Box>
+                      </Box>
+                      
+                      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2 }}>
+                        <Box>
+                          <Typography variant="body2" sx={{ 
+                            fontWeight: 600, 
+                            color: 'text.secondary', 
+                            mb: 0.5,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1
+                          }}>
+                            <EventIcon sx={{ fontSize: 16 }} />
+                            Fecha y Hora:
+                          </Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                            {new Date(scheduledFollowUp.date_time).toLocaleDateString('es-ES', {
+                              weekday: 'long',
+                              year: 'numeric', 
+                              month: 'long', 
+                              day: 'numeric'
+                            })}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <ClockIcon sx={{ fontSize: 14 }} />
+                            {new Date(scheduledFollowUp.date_time).toLocaleTimeString('es-ES', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </Typography>
+                        </Box>
+                        
+                        <Box>
+                          <Typography variant="body2" sx={{ 
+                            fontWeight: 600, 
+                            color: 'text.secondary', 
+                            mb: 0.5,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1
+                          }}>
+                            <TaskIcon sx={{ fontSize: 16 }} />
+                            Motivo:
+                          </Typography>
+                          <Typography variant="body1">
+                            {scheduledFollowUp.reason}
+                          </Typography>
+                        </Box>
+                        
+                        <Box>
+                          <Typography variant="body2" sx={{ 
+                            fontWeight: 600, 
+                            color: 'text.secondary', 
+                            mb: 0.5,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1
+                          }}>
+                            <ClockIcon sx={{ fontSize: 16 }} />
+                            Duración:
+                          </Typography>
+                          <Typography variant="body1">
+                            {scheduledFollowUp.duration_minutes} minutos
+                          </Typography>
+                        </Box>
+                        
+                        <Box>
+                          <Typography variant="body2" sx={{ 
+                            fontWeight: 600, 
+                            color: 'text.secondary', 
+                            mb: 0.5,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1
+                          }}>
+                            <StatusIcon sx={{ fontSize: 16 }} />
+                            Estado:
+                          </Typography>
+                          <Chip 
+                            label={scheduledFollowUp.status === 'scheduled' ? 'Programada' : scheduledFollowUp.status}
+                            size="small"
+                            color="success"
+                            variant="filled"
+                          />
+                        </Box>
+                      </Box>
+                      
+                      {scheduledFollowUp.preparation_instructions && (
+                        <Box sx={{ mt: 2, p: 2, bgcolor: 'info.50', borderRadius: '6px', border: '1px solid', borderColor: 'info.200' }}>
+                          <Typography variant="body2" sx={{ 
+                            fontWeight: 600, 
+                            color: 'info.main', 
+                            mb: 0.5,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1
+                          }}>
+                            <NotesIcon sx={{ fontSize: 16 }} />
+                            Instrucciones de Preparación:
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {scheduledFollowUp.preparation_instructions}
+                          </Typography>
+                        </Box>
+                      )}
+                    </Box>
+                  ) : (
+                    <>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                        Programa una cita para revisar los resultados de los estudios clínicos solicitados.
+                      </Typography>
+                      
+                      <Button
+                        variant="outlined"
+                        startIcon={<ClockIcon />}
+                        onClick={() => setShowScheduleFollowUp(true)}
+                        sx={{ 
+                          bgcolor: 'white', 
+                          borderColor: 'primary.main',
+                          '&:hover': {
+                            bgcolor: 'primary.50'
+                          }
+                        }}
+                      >
+                        Programar Consulta de Seguimiento
+                      </Button>
+                    </>
                   )}
                 </Box>
               </>

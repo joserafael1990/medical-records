@@ -62,6 +62,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
     } else {
       newDate.setDate(selectedDate.getDate() + (direction === 'next' ? 7 : -7));
     }
+
     setSelectedDate(newDate);
   };
 
