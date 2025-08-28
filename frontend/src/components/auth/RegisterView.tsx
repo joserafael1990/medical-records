@@ -19,14 +19,20 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem
+  MenuItem,
+  Avatar
 } from '@mui/material';
 import {
   Visibility,
   VisibilityOff,
   CheckCircle,
   Cancel,
-  ArrowBack
+  ArrowBack,
+  AccountCircle,
+  Work,
+  School,
+  Business,
+  Save
 } from '@mui/icons-material';
 import AvantLogo from '../common/AvantLogo';
 import { MEDICAL_SPECIALTIES, MEXICAN_STATES } from '../../constants';
@@ -69,6 +75,7 @@ interface PasswordValidation {
 
 const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }) => {
   const [activeStep, setActiveStep] = useState(0);
+  const [visitedSteps, setVisitedSteps] = useState<Set<number>>(new Set([0]));
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -187,13 +194,24 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
 
   const handleNext = () => {
     if (validateStep(activeStep)) {
-      setActiveStep(prev => prev + 1);
+      setActiveStep(prev => {
+        const newStep = prev + 1;
+        setVisitedSteps(prevVisited => new Set(prevVisited).add(newStep));
+        return newStep;
+      });
       setError('');
     }
   };
 
   const handleBack = () => {
     setActiveStep(prev => prev - 1);
+    setError('');
+  };
+
+  // Función para navegación directa a cualquier paso
+  const handleStepClick = (step: number) => {
+    setActiveStep(step);
+    setVisitedSteps(prev => new Set(prev).add(step));
     setError('');
   };
 
@@ -256,10 +274,26 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
   };
 
   const steps = [
-    'Información de la Cuenta',
-    'Perfil Profesional',
-    'Información Profesional Adicional',
-    'Datos del Consultorio'
+    {
+      label: 'Información de la Cuenta',
+      icon: <AccountCircle />,
+      description: 'Email y contraseña'
+    },
+    {
+      label: 'Perfil Profesional',
+      icon: <Work />,
+      description: 'Datos profesionales básicos'
+    },
+    {
+      label: 'Información Profesional Adicional',
+      icon: <School />,
+      description: 'Universidad y estudios'
+    },
+    {
+      label: 'Datos del Consultorio',
+      icon: <Business />,
+      description: 'Dirección y contacto'
+    }
   ];
 
   const getStepContent = (step: number) => {
@@ -617,10 +651,81 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
             )}
 
             <Box sx={{ width: '100%', mt: 3 }}>
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
+                  Registro de Usuario
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Haz clic en cualquier paso para navegar directamente
+                </Typography>
+              </Box>
               <Stepper activeStep={activeStep} orientation="vertical">
-                {steps.map((label, index) => (
-                  <Step key={label}>
-                    <StepLabel>{label}</StepLabel>
+                {steps.map((step, index) => (
+                  <Step key={step.label}>
+                    <StepLabel
+                      onClick={() => handleStepClick(index)}
+                      sx={{ 
+                        cursor: 'pointer',
+                        '&:hover': {
+                          bgcolor: 'action.hover',
+                          borderRadius: 1
+                        },
+                        p: 1,
+                        borderRadius: 1,
+                        transition: 'background-color 0.2s ease'
+                      }}
+                      StepIconComponent={() => {
+                        const isActive = index === activeStep;
+                        const isCompleted = index < activeStep;
+                        const isVisited = visitedSteps.has(index);
+                        
+                        return (
+                          <Avatar
+                            sx={{
+                              bgcolor: isCompleted 
+                                ? 'success.main' 
+                                : isActive 
+                                  ? 'primary.main' 
+                                  : isVisited 
+                                    ? 'info.main' 
+                                    : 'grey.300',
+                              color: 'white',
+                              width: 32,
+                              height: 32,
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease',
+                              border: isActive ? '2px solid' : 'none',
+                              borderColor: isActive ? 'primary.dark' : 'transparent',
+                              '&:hover': {
+                                transform: 'scale(1.05)',
+                                bgcolor: isCompleted 
+                                  ? 'success.dark' 
+                                  : isActive 
+                                    ? 'primary.dark' 
+                                    : isVisited 
+                                      ? 'info.dark' 
+                                      : 'grey.400'
+                              }
+                            }}
+                          >
+                            {isCompleted ? <Save fontSize="small" /> : step.icon}
+                          </Avatar>
+                        );
+                      }}
+                    >
+                      <Typography 
+                        variant="body2" 
+                        sx={{ 
+                          fontWeight: index === activeStep ? 600 : 400,
+                          cursor: 'pointer',
+                          '&:hover': {
+                            color: 'primary.main'
+                          }
+                        }}
+                      >
+                        {step.label}
+                      </Typography>
+                    </StepLabel>
                     <StepContent>
                       {getStepContent(index)}
                       
