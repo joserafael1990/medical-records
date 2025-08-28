@@ -22,7 +22,8 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Chip
+  Chip,
+  Avatar
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -65,6 +66,7 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
   fieldErrors = {}
 }) => {
   const [activeStep, setActiveStep] = useState(0);
+  const [visitedSteps, setVisitedSteps] = useState<Set<number>>(new Set([0]));
 
   const steps = [
     {
@@ -111,14 +113,25 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
     onClose();
     setFormErrorMessage('');
     setActiveStep(0);
+    setVisitedSteps(new Set([0]));
   };
 
   const handleNext = () => {
-    setActiveStep((prevActiveStep) => prevActiveStep + 1);
+    setActiveStep((prevActiveStep) => {
+      const newStep = prevActiveStep + 1;
+      setVisitedSteps(prev => new Set(prev).add(newStep));
+      return newStep;
+    });
   };
 
   const handleBack = () => {
     setActiveStep((prevActiveStep) => prevActiveStep - 1);
+  };
+
+  // Función para navegación directa a cualquier paso
+  const handleStepClick = (step: number) => {
+    setActiveStep(step);
+    setVisitedSteps(prev => new Set(prev).add(step));
   };
 
   // Handle navigation to specific section when dialog opens
@@ -540,28 +553,78 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
             borderColor: 'divider',
             p: 3
           }}>
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
+                Perfil del Médico
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Haz clic en cualquier sección para navegar directamente
+              </Typography>
+            </Box>
             <Stepper activeStep={activeStep} orientation="vertical">
               {steps.map((step, index) => (
                 <Step key={step.label}>
                   <StepLabel
-                    StepIconComponent={() => (
-                      <Box
-                        sx={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: '50%',
-                          bgcolor: index <= activeStep ? 'primary.main' : 'grey.300',
-                          color: 'white',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}
-                      >
-                        {step.icon}
-                      </Box>
-                    )}
+                    onClick={() => handleStepClick(index)}
+                    sx={{ 
+                      cursor: 'pointer',
+                      '&:hover': {
+                        bgcolor: 'action.hover',
+                        borderRadius: 1
+                      },
+                      p: 1,
+                      borderRadius: 1,
+                      transition: 'background-color 0.2s ease'
+                    }}
+                    StepIconComponent={() => {
+                      const isActive = index === activeStep;
+                      const isCompleted = index < activeStep;
+                      const isVisited = visitedSteps.has(index);
+                      
+                      return (
+                        <Avatar
+                          sx={{
+                            bgcolor: isCompleted 
+                              ? 'success.main' 
+                              : isActive 
+                                ? 'primary.main' 
+                                : isVisited 
+                                  ? 'info.main' 
+                                  : 'grey.300',
+                            color: 'white',
+                            width: 32,
+                            height: 32,
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            border: isActive ? '2px solid' : 'none',
+                            borderColor: isActive ? 'primary.dark' : 'transparent',
+                            '&:hover': {
+                              transform: 'scale(1.05)',
+                              bgcolor: isCompleted 
+                                ? 'success.dark' 
+                                : isActive 
+                                  ? 'primary.dark' 
+                                  : isVisited 
+                                    ? 'info.dark' 
+                                    : 'grey.400'
+                            }
+                          }}
+                        >
+                          {isCompleted ? <SaveIcon fontSize="small" /> : step.icon}
+                        </Avatar>
+                      );
+                    }}
                   >
-                    <Typography variant="body2" sx={{ fontWeight: index === activeStep ? 600 : 400 }}>
+                    <Typography 
+                      variant="body2" 
+                      sx={{ 
+                        fontWeight: index === activeStep ? 600 : 400,
+                        cursor: 'pointer',
+                        '&:hover': {
+                          color: 'primary.main'
+                        }
+                      }}
+                    >
                       {step.label}
                     </Typography>
                   </StepLabel>
