@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -13,7 +13,9 @@ import {
   TableCell,
   Avatar,
   Chip,
-  IconButton
+  IconButton,
+  CircularProgress,
+  Pagination
 } from '@mui/material';
 import {
   PersonAdd as PersonAddIcon,
@@ -28,6 +30,9 @@ import { Patient, Consultation } from '../../types';
 import { calculateAge } from '../../utils';
 import { ErrorRibbon } from '../common/ErrorRibbon';
 import { useMemoizedSearch } from '../../hooks/useMemoizedSearch';
+import { useAdvancedSearch, SearchFilters } from '../../hooks/useAdvancedSearch';
+import { SearchService, SearchablePatient } from '../../services/searchService';
+import AdvancedSearchBar from '../common/AdvancedSearchBar';
 
 interface PatientsViewProps {
   patients: Patient[];
@@ -50,6 +55,26 @@ const PatientsView: React.FC<PatientsViewProps> = ({
   handleNewPatient,
   handleEditPatient
 }) => {
+  // Advanced search setup
+  const searchFunction = useCallback(async (query: string, filters: SearchFilters, page: number) => {
+    return SearchService.searchPatients(query, filters, page, 10);
+  }, []);
+
+  const {
+    searchQuery,
+    setSearchQuery,
+    filters,
+    setFilters,
+    results,
+    currentPage,
+    setCurrentPage,
+    clearSearch,
+    recentSearches
+  } = useAdvancedSearch<SearchablePatient>({
+    searchFn: searchFunction,
+    debounceMs: 300
+  });
+
   // Helper function to get the latest consultation reason for a patient
   const getLatestConsultationReason = (patientId: string): string => {
     const patientConsultations = consultations.filter(c => c.patient_id === patientId);
@@ -63,11 +88,9 @@ const PatientsView: React.FC<PatientsViewProps> = ({
     return sortedConsultations[0].chief_complaint || 'No especificado';
   };
 
-  // Memoized search for better performance
-  const filteredPatients = useMemoizedSearch(patients, patientSearchTerm, {
-    searchFields: ['full_name', 'phone', 'email', 'curp'],
-    caseSensitive: false
-  });
+  // Use advanced search results when searching, otherwise use all patients
+  const displayPatients = searchQuery ? results.items : patients;
+  const isSearching = searchQuery.length > 0;
   return (
     <Box>
       {/* Patient Management Header */}
@@ -117,22 +140,51 @@ const PatientsView: React.FC<PatientsViewProps> = ({
         </Paper>
       )}
 
-      {/* Search and Filters */}
+      {/* Advanced Search Bar */}
       <Paper sx={{ p: 3, mb: 3 }}>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          <TextField
-            placeholder="Buscar por nombre, teléfono, email, CURP..."
-            value={patientSearchTerm}
-            onChange={(e) => setPatientSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />
-            }}
-            sx={{ flexGrow: 1 }}
-          />
-          <Button variant="outlined" startIcon={<AddIcon />}>
-            Filtros
-          </Button>
-        </Box>
+        <AdvancedSearchBar
+          value={searchQuery}
+          onChange={setSearchQuery}
+          onClear={clearSearch}
+          placeholder="Buscar por nombre, teléfono, email, CURP..."
+          filters={filters}
+          onFiltersChange={setFilters}
+          recentSearches={recentSearches}
+          onRecentSearchClick={setSearchQuery}
+          isLoading={results.isLoading}
+          showFilters={true}
+          resultCount={results.total}
+        />
+        
+        {/* Search Summary */}
+        {isSearching && (
+          <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+            {results.isLoading ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CircularProgress size={16} />
+                <Typography variant="body2" color="text.secondary">
+                  Buscando...
+                </Typography>
+              </Box>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                {results.total > 0 
+                  ? `${results.total} paciente${results.total !== 1 ? 's' : ''} encontrado${results.total !== 1 ? 's' : ''}`
+                  : 'No se encontraron pacientes'
+                }
+              </Typography>
+            )}
+          </Box>
+        )}
+
+        {results.hasError && (
+          <Box sx={{ mt: 2 }}>
+            <ErrorRibbon 
+              message={results.errorMessage || 'Error en la búsqueda'} 
+              onClose={() => {}} 
+            />
+          </Box>
+        )}
       </Paper>
 
       {/* Patients Table */}
@@ -149,7 +201,7 @@ const PatientsView: React.FC<PatientsViewProps> = ({
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredPatients && Array.isArray(filteredPatients) && filteredPatients.map((patient) => (
+              {displayPatients && Array.isArray(displayPatients) && displayPatients.map((patient) => (
                 <TableRow 
                   key={patient.id} 
                   hover
@@ -219,11 +271,11 @@ const PatientsView: React.FC<PatientsViewProps> = ({
                   </TableCell>
                 </TableRow>
               ))}
-              {(!filteredPatients || !Array.isArray(filteredPatients) || filteredPatients.length === 0) && (
+              {(!displayPatients || !Array.isArray(displayPatients) || displayPatients.length === 0) && (
                 <TableRow>
-                  <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
                     <Typography variant="body1" color="text.secondary">
-                      No hay pacientes registrados
+                      {isSearching ? 'No se encontraron pacientes con los criterios de búsqueda' : 'No hay pacientes registrados'}
                     </Typography>
                   </TableCell>
                 </TableRow>
@@ -231,6 +283,21 @@ const PatientsView: React.FC<PatientsViewProps> = ({
             </TableBody>
           </Table>
         </TableContainer>
+
+        {/* Pagination for search results */}
+        {isSearching && results.totalPages > 1 && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+            <Pagination
+              count={results.totalPages}
+              page={currentPage}
+              onChange={(event, page) => setCurrentPage(page)}
+              color="primary"
+              size="large"
+              showFirstButton
+              showLastButton
+            />
+          </Box>
+        )}
       </Paper>
     </Box>
   );
