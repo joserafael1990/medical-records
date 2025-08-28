@@ -232,7 +232,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                       {formatPatientNameWithAge(option)}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      📞 {option.phone} | 🆔 {option.id}
+{option.phone} | ID: {option.id}
                     </Typography>
                   </Box>
                 )}

@@ -37,7 +37,16 @@ import {
   Science as ScienceIcon,
   NavigateNext as NextIcon,
   NavigateBefore as BackIcon,
-  Save as SaveIcon
+  Save as SaveIcon,
+  Biotech as BiotechIcon,
+  LocalHospital as HospitalIcon,
+  Phone as PhoneIcon,
+  Email as EmailIcon,
+  Badge as BadgeIcon,
+  Warning as WarningIcon,
+  CheckCircle as CheckCircleIcon,
+  Schedule as ScheduleIcon,
+  Info as InfoIcon
 } from '@mui/icons-material';
 import { Patient, ConsultationFormData, ClinicalStudy } from '../../types';
 import { ErrorRibbon } from '../common/ErrorRibbon';
@@ -338,14 +347,17 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                       {selectedPatient.full_name}
                     </Typography>
                     <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                      <Typography variant="body2" color="text.secondary">
-                        📞 {selectedPatient.phone || 'No registrado'}
+                      <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <PhoneIcon sx={{ fontSize: 16 }} />
+                        {selectedPatient.phone || 'No registrado'}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        📧 {selectedPatient.email || 'No registrado'}
+                      <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <EmailIcon sx={{ fontSize: 16 }} />
+                        {selectedPatient.email || 'No registrado'}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        🆔 {selectedPatient.id}
+                      <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <BadgeIcon sx={{ fontSize: 16 }} />
+                        {selectedPatient.id}
                       </Typography>
                     </Box>
                   </Box>
@@ -355,8 +367,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2, mb: 2 }}>
                   {/* Demographic Info */}
                   <Box sx={{ bgcolor: 'white', p: 2, borderRadius: '8px', border: '1px solid #e0e0e0' }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'primary.main', mb: 1 }}>
-                      📊 Información Demográfica
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'primary.main', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <PersonIcon sx={{ fontSize: 18 }} />
+                      Información Demográfica
                     </Typography>
                     <Typography variant="body2" sx={{ mb: 0.5 }}>
                       <Typography component="span" sx={{ fontWeight: 600 }}>Edad:</Typography> {selectedPatient.age ? `${selectedPatient.age} años` : 'No registrada'}
@@ -374,8 +387,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
                   {/* Medical Info */}
                   <Box sx={{ bgcolor: 'white', p: 2, borderRadius: '8px', border: '1px solid #e0e0e0' }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'error.main', mb: 1 }}>
-                      🩸 Información Médica
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'error.main', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <HealingIcon sx={{ fontSize: 18 }} />
+                      Información Médica
                     </Typography>
                     <Typography variant="body2" sx={{ mb: 0.5 }}>
                       <Typography component="span" sx={{ fontWeight: 600 }}>Tipo de Sangre:</Typography> 
@@ -402,8 +416,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
                   {/* Contact & Emergency */}
                   <Box sx={{ bgcolor: 'white', p: 2, borderRadius: '8px', border: '1px solid #e0e0e0' }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'warning.main', mb: 1 }}>
-                      🚨 Contacto de Emergencia
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'warning.main', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <WarningIcon sx={{ fontSize: 18 }} />
+                      Contacto de Emergencia
                     </Typography>
                     <Typography variant="body2" sx={{ mb: 0.5 }}>
                       <Typography component="span" sx={{ fontWeight: 600 }}>Nombre:</Typography> {selectedPatient.emergency_contact_name || 'No registrado'}
@@ -418,8 +433,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
                   {/* Insurance & Address */}
                   <Box sx={{ bgcolor: 'white', p: 2, borderRadius: '8px', border: '1px solid #e0e0e0' }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'info.main', mb: 1 }}>
-                      🏥 Seguro y Ubicación
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'info.main', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <HospitalIcon sx={{ fontSize: 18 }} />
+                      Seguro y Ubicación
                     </Typography>
                     <Typography variant="body2" sx={{ mb: 0.5 }}>
                       <Typography component="span" sx={{ fontWeight: 600 }}>Seguro:</Typography> {selectedPatient.insurance_type || 'No registrado'}
@@ -439,8 +455,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 {/* Medical History Expandable */}
                 {(selectedPatient.previous_hospitalizations || selectedPatient.surgical_history) && (
                   <Box sx={{ bgcolor: 'white', p: 2, borderRadius: '8px', border: '1px solid #e0e0e0', mt: 2 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'secondary.main', mb: 1 }}>
-                      📋 Historial Médico
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'secondary.main', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <AssignmentIcon sx={{ fontSize: 18 }} />
+                      Historial Médico
                     </Typography>
                     {selectedPatient.previous_hospitalizations && (
                       <Typography variant="body2" sx={{ mb: 0.5 }}>
@@ -473,7 +490,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   )}
                   {selectedPatient.allergies && (
                     <Chip 
-                      label="⚠️ Alergias" 
+                      icon={<WarningIcon />}
+                      label="Alergias" 
                       size="small" 
                       color="error" 
                       variant="outlined"
@@ -481,7 +499,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   )}
                   {selectedPatient.chronic_conditions && (
                     <Chip 
-                      label="📊 Cond. Crónicas" 
+                      icon={<InfoIcon />}
+                      label="Cond. Crónicas" 
                       size="small" 
                       color="warning" 
                       variant="outlined"
@@ -544,7 +563,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   gap: 1,
                   color: 'primary.main'
                 }}>
-                  🧪 Estudios Clínicos Solicitados
+                  <BiotechIcon sx={{ fontSize: 20, mr: 1 }} />
+                  Estudios Clínicos Solicitados
                 </Typography>
                 
                 {loadingPatientStudies ? (
@@ -631,8 +651,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                           
                           {study.results_text && (
                             <Box sx={{ mt: 2, p: 2, bgcolor: 'success.50', borderRadius: '8px', border: '1px solid', borderColor: 'success.200' }}>
-                              <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.main', mb: 1 }}>
-                                📋 Resultados:
+                              <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.main', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <CheckCircleIcon sx={{ fontSize: 16 }} />
+                                Resultados:
                               </Typography>
                               <Typography variant="body2" color="text.secondary">
                                 {study.results_text}

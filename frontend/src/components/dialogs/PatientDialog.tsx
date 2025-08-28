@@ -72,7 +72,7 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
           {/* SECCIÓN: INFORMACIÓN PERSONAL OBLIGATORIA - NOM-004 */}
           <Box sx={{ width: '100%' }}>
             <Typography variant="h6" sx={{ color: '#d32f2f', fontWeight: 'bold', mb: 2 }}>
-              📋 DATOS OBLIGATORIOS
+DATOS OBLIGATORIOS
             </Typography>
           </Box>
           

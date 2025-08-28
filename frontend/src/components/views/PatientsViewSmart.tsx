@@ -160,7 +160,7 @@ const PatientsViewSmart: React.FC<PatientsViewSmartProps> = ({
       {/* Panel de Búsqueda y Filtros */}
       <Paper sx={{ p: 3, mb: 3, borderRadius: 2, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
         <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-          🔍 Búsqueda Inteligente
+          Búsqueda Inteligente
         </Typography>
         
         <IntelligentSearch
@@ -222,7 +222,7 @@ const PatientsViewSmart: React.FC<PatientsViewSmartProps> = ({
       {/* Estadísticas Rápidas */}
       <Paper sx={{ p: 3, mt: 3, borderRadius: 2, bgcolor: 'primary.50' }}>
         <Typography variant="h6" sx={{ mb: 2, color: 'primary.main', fontWeight: 600 }}>
-          📊 Estadísticas Rápidas
+          Estadísticas Rápidas
         </Typography>
         
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2 }}>
