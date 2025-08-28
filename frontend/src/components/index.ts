@@ -18,6 +18,8 @@ export { default as VirtualizedTable } from './common/VirtualizedTable';
 export { default as LoadingFallback } from './common/LoadingFallback';
 export { default as MedicalOrdersSection } from './common/MedicalOrdersSection';
 export { default as MedicalOrderPrintFormat } from './common/MedicalOrderPrintFormat';
-export { default as AdvancedSearchBar } from './common/AdvancedSearchBar';
-export * from './common/SkeletonComponents';
-export * from './common/LoadingStates';
+
+// UX Improvements
+export { SmartLoadingState, useSmartLoading } from './common/SmartLoadingState';
+export { IntelligentSearch, useIntelligentSearch } from './common/IntelligentSearch';
+export { ToastProvider, useToast, useSimpleToast } from './common/ToastNotification';

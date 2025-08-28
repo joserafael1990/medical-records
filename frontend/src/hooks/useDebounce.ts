@@ -1,17 +1,10 @@
-// ============================================================================
-// DEBOUNCE HOOK - Hook optimizado para debouncing
-// ============================================================================
-
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { UI_CONFIG } from '../constants';
+import { useState, useEffect } from 'react';
 
 /**
- * Hook para debouncing de valores
- * @param value - Valor a debounce
- * @param delay - Delay en milisegundos (default: 500ms)
- * @returns Valor debounced
+ * Custom hook para implementar debounce en búsquedas
+ * Retrasa la ejecución hasta que el usuario pare de escribir
  */
-export const useDebounce = <T>(value: T, delay: number = UI_CONFIG.DEBOUNCE_DELAY): T => {
+export const useDebounce = <T>(value: T, delay: number): T => {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
 
   useEffect(() => {
@@ -28,86 +21,41 @@ export const useDebounce = <T>(value: T, delay: number = UI_CONFIG.DEBOUNCE_DELA
 };
 
 /**
- * Hook para debouncing de callbacks
- * @param callback - Función a debounce
- * @param delay - Delay en milisegundos (default: 500ms)
- * @param deps - Dependencias del callback
- * @returns Función debounced
+ * Hook más avanzado para búsquedas con loading state
  */
-export const useDebouncedCallback = <T extends (...args: any[]) => any>(
-  callback: T,
-  delay: number = UI_CONFIG.DEBOUNCE_DELAY,
-  deps: React.DependencyList = []
-): T => {
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const debouncedCallback = useCallback(
-    (...args: Parameters<T>) => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-
-      timeoutRef.current = setTimeout(() => {
-        callback(...args);
-      }, delay);
-    },
-    [callback, delay, ...deps]
-  ) as T;
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, []);
-
-  return debouncedCallback;
-};
-
-/**
- * Hook para búsqueda con debounce
- * @param searchFunction - Función de búsqueda
- * @param delay - Delay en milisegundos
- * @returns [searchTerm, setSearchTerm, isSearching]
- */
-export const useDebouncedSearch = <T>(
-  searchFunction: (term: string) => Promise<T[]>,
-  delay: number = UI_CONFIG.DEBOUNCE_DELAY
-): [string, (term: string) => void, boolean, T[], string | null] => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
-  const [results, setResults] = useState<T[]>([]);
+export const useSearchWithDebounce = (
+  searchTerm: string,
+  searchFunction: (term: string) => Promise<any[]>,
+  delay: number = 300
+) => {
+  const [results, setResults] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
   const debouncedSearchTerm = useDebounce(searchTerm, delay);
 
   useEffect(() => {
-    if (debouncedSearchTerm.trim()) {
-      setIsSearching(true);
-      setError(null);
-      
-      searchFunction(debouncedSearchTerm)
-        .then(data => {
-          setResults(data);
-        })
-        .catch(err => {
-          console.error('Search error:', err);
-          setError('Error en la búsqueda');
-          setResults([]);
-        })
-        .finally(() => {
-          setIsSearching(false);
-        });
-    } else {
+    if (!debouncedSearchTerm.trim()) {
       setResults([]);
-      setIsSearching(false);
-      setError(null);
+      setIsLoading(false);
+      return;
     }
+
+    const performSearch = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const searchResults = await searchFunction(debouncedSearchTerm);
+        setResults(searchResults);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Error en la búsqueda');
+        setResults([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    performSearch();
   }, [debouncedSearchTerm, searchFunction]);
 
-  return [searchTerm, setSearchTerm, isSearching, results, error];
+  return { results, isLoading, error };
 };
-
-export default useDebounce;
