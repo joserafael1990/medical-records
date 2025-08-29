@@ -712,7 +712,7 @@ function AppContent() {
     handleSubmit: handleSubmitDoctorProfile,
     clearMessages: clearDoctorProfileMessages
   } = useDoctorProfile();
-  const [agendaView, setAgendaView] = useState<'daily' | 'weekly'>('daily');
+  const [agendaView, setAgendaView] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [patientFormData, setPatientFormData] = useState({
     // ===== CAMPOS OBLIGATORIOS NOM-004 =====
     first_name: '',

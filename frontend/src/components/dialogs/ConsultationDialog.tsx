@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -253,17 +253,17 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     setVisitedSteps(new Set([0]));
   };
 
-  const handleNext = () => {
-    setActiveStep((prevActiveStep) => {
+  const handleNext = useCallback(() => {
+    setActiveStep((prevActiveStep: number) => {
       const newStep = prevActiveStep + 1;
-      setVisitedSteps(prev => new Set(prev).add(newStep));
+      setVisitedSteps((prev: Set<number>) => new Set(prev).add(newStep));
       return newStep;
     });
-  };
+  }, []);
 
-  const handleBack = () => {
-    setActiveStep((prevActiveStep) => prevActiveStep - 1);
-  };
+  const handleBack = useCallback(() => {
+    setActiveStep((prevActiveStep: number) => prevActiveStep - 1);
+  }, []);
 
   // Función para navegación directa a cualquier paso
   const handleStepClick = (step: number) => {
@@ -388,12 +388,12 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     setFollowUpFormData({ date: '', time: '', reason: '' });
   };
 
-  const handleFollowUpFormChange = (field: string, value: string) => {
-    setFollowUpFormData(prev => ({
+  const handleFollowUpFormChange = useCallback((field: string, value: string) => {
+    setFollowUpFormData((prev: { date: string; time: string; reason: string }) => ({
       ...prev,
       [field]: value
     }));
-  };
+  }, []);
 
   const isStepValid = (step: number) => {
     switch (step) {
@@ -428,10 +428,10 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               <Box sx={{ flex: 1 }}>
                 <Autocomplete
                   options={patients}
-                  getOptionLabel={(option) => formatPatientNameWithAge(option)}
+                  getOptionLabel={(option: Patient) => formatPatientNameWithAge(option)}
                   value={selectedPatient}
-                  onChange={(_, newValue) => handlePatientChange(newValue)}
-                  renderInput={(params) => (
+                  onChange={(_, newValue: Patient | null) => handlePatientChange(newValue)}
+                  renderInput={(params: any) => (
                     <TextField
                       {...params}
                       label="Seleccionar Paciente"
@@ -440,7 +440,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                       helperText={fieldErrors.patient_id}
                     />
                   )}
-                  renderOption={(props, option) => (
+                  renderOption={(props: any, option: Patient) => (
                     <Box component="li" {...props}>
                       <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
                         {option.first_name[0]}{option.paternal_surname[0]}
@@ -671,7 +671,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   label="Fecha de Consulta"
                   type="date"
                   value={formData.date && formData.date.includes('T') ? formData.date.split('T')[0] : ''}
-                  onChange={(e) => {
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                     const dateValue = e.target.value;
                     const timeValue = formData.date && formData.date.includes('T') ? formData.date.split('T')[1] : '09:00';
                     setFormData(prev => ({ 
@@ -691,7 +691,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   label="Hora"
                   type="time"
                   value={formData.date && formData.date.includes('T') ? formData.date.split('T')[1]?.substring(0, 5) : '09:00'}
-                  onChange={(e) => {
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                     const timeValue = e.target.value;
                     const dateValue = formData.date && formData.date.includes('T') ? formData.date.split('T')[0] : new Date().toISOString().split('T')[0];
                     setFormData(prev => ({ 
@@ -731,7 +731,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 ) : patientClinicalStudies.length > 0 ? (
                   <Paper sx={{ p: 2, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider' }}>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      {patientClinicalStudies.map((study, index) => (
+                      {patientClinicalStudies.map((study: ClinicalStudy, index: number) => (
                         <Box 
                           key={study.id} 
                           sx={{ 
@@ -843,7 +843,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               multiline
               rows={3}
               value={formData.chief_complaint || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, chief_complaint: e.target.value }))}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData(prev => ({ ...prev, chief_complaint: e.target.value }))}
               fullWidth
               required
               placeholder="¿Por qué viene el paciente a consulta?"
@@ -856,7 +856,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               multiline
               rows={4}
               value={formData.history_present_illness || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, history_present_illness: e.target.value }))}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData(prev => ({ ...prev, history_present_illness: e.target.value }))}
               fullWidth
               required
               placeholder="Evolución y características de la enfermedad actual..."
@@ -869,7 +869,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               multiline
               rows={4}
               value={formData.physical_examination || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, physical_examination: e.target.value }))}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData(prev => ({ ...prev, physical_examination: e.target.value }))}
               fullWidth
               required
               placeholder="Hallazgos de la exploración física..."
@@ -888,7 +888,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               multiline
               rows={3}
               value={formData.family_history || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, family_history: e.target.value }))}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData(prev => ({ ...prev, family_history: e.target.value }))}
               fullWidth
               required
               placeholder="Enfermedades familiares relevantes (diabetes, hipertensión, cáncer, etc.)..."
@@ -901,7 +901,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               multiline
               rows={3}
               value={formData.personal_pathological_history || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, personal_pathological_history: e.target.value }))}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData(prev => ({ ...prev, personal_pathological_history: e.target.value }))}
               fullWidth
               required
               placeholder="Enfermedades previas, cirugías, hospitalizaciones, uso de sustancias..."
@@ -914,7 +914,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               multiline
               rows={3}
               value={formData.personal_non_pathological_history || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, personal_non_pathological_history: e.target.value }))}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData(prev => ({ ...prev, personal_non_pathological_history: e.target.value }))}
               fullWidth
               required
               placeholder="Hábitos: alimentación, ejercicio, sueño, trabajo, vivienda..."
@@ -937,7 +937,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 <TextField
                   label="Diagnóstico Principal"
                   value={formData.primary_diagnosis || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, primary_diagnosis: e.target.value }))}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData(prev => ({ ...prev, primary_diagnosis: e.target.value }))}
                   fullWidth
                   required
                   placeholder="Diagnóstico principal"
@@ -960,7 +960,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 <TextField
                   label="Diagnósticos Secundarios"
                   value={formData.secondary_diagnoses || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, secondary_diagnoses: e.target.value }))}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData(prev => ({ ...prev, secondary_diagnoses: e.target.value }))}
                   fullWidth
                   placeholder="Diagnósticos secundarios"
                   helperText="Condiciones adicionales o comorbilidades"
@@ -990,7 +990,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               multiline
               rows={4}
               value={formData.treatment_plan || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, treatment_plan: e.target.value }))}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData(prev => ({ ...prev, treatment_plan: e.target.value }))}
               fullWidth
               required
               placeholder="Medicamentos, dosis, frecuencia, duración..."
@@ -1003,7 +1003,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               multiline
               rows={3}
               value={formData.follow_up_instructions || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, follow_up_instructions: e.target.value }))}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData(prev => ({ ...prev, follow_up_instructions: e.target.value }))}
               fullWidth
               required
               placeholder="Cuándo regresar, qué vigilar, recomendaciones..."
@@ -1023,7 +1023,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               multiline
               rows={3}
               value={formData.interconsultations || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, interconsultations: e.target.value }))}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData(prev => ({ ...prev, interconsultations: e.target.value }))}
               fullWidth
               placeholder="Observaciones adicionales, recomendaciones especiales, etc..."
             />
@@ -1042,8 +1042,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   onAddStudy={onAddClinicalStudy}
                   onEditStudy={onEditClinicalStudy}
                   onDeleteStudy={onDeleteClinicalStudy}
-                  onViewFile={(fileUrl) => window.open(fileUrl, '_blank')}
-                  onDownloadFile={(fileUrl, fileName) => {
+                  onViewFile={(fileUrl: string) => window.open(fileUrl, '_blank')}
+                  onDownloadFile={(fileUrl: string, fileName: string) => {
                     const link = document.createElement('a');
                     link.href = fileUrl;
                     link.download = fileName;
@@ -1085,7 +1085,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                             label="Fecha de Seguimiento"
                             type="date"
                             value={followUpFormData.date}
-                            onChange={(e) => handleFollowUpFormChange('date', e.target.value)}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleFollowUpFormChange('date', e.target.value)}
                             InputLabelProps={{ shrink: true }}
                             fullWidth
                             helperText="Fecha recomendada para revisar resultados"
@@ -1094,7 +1094,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                             label="Hora"
                             type="time"
                             value={followUpFormData.time}
-                            onChange={(e) => handleFollowUpFormChange('time', e.target.value)}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleFollowUpFormChange('time', e.target.value)}
                             InputLabelProps={{ shrink: true }}
                             fullWidth
                             helperText="Hora preferida"
@@ -1106,7 +1106,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                           multiline
                           rows={2}
                           value={followUpFormData.reason}
-                          onChange={(e) => handleFollowUpFormChange('reason', e.target.value)}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleFollowUpFormChange('reason', e.target.value)}
                           placeholder="Ej: Revisión de resultados de laboratorio, evaluación de respuesta al tratamiento..."
                           fullWidth
                         />

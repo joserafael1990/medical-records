@@ -7,3 +7,7 @@ export { useMedicalTableColumns } from './useMedicalTableColumns';
 export { default as useMedicalOrders } from './useMedicalOrders';
 export { useMemoizedSearch } from './useMemoizedSearch';
 export { useMemoizedCalculation, useMemoizedStats, useMemoizedGroupBy } from './useMemoizedCalculation';
+
+// New refactored hooks
+export { useAppointmentManager } from './useAppointmentManager';
+export { useAppState } from './useAppState';
