@@ -7,16 +7,13 @@ import {
   Button,
   Typography,
   Box,
-  FormControl,
   FormControlLabel,
   Switch,
   TextField,
   Card,
   CardContent,
-  CardHeader,
   Alert,
   Chip,
-  Divider,
   IconButton,
   Accordion,
   AccordionSummary,
@@ -31,7 +28,6 @@ import {
   Close as CloseIcon,
   ExpandMore as ExpandMoreIcon,
   Add as AddIcon,
-  Delete as DeleteIcon,
   Restaurant as LunchIcon
 } from '@mui/icons-material';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
@@ -83,6 +79,8 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
   onClose,
   onSave
 }) => {
+  // Debug logging
+  console.log('🔧 ScheduleConfigDialog - Rendered with props:', { open, onClose: !!onClose, onSave: !!onSave });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +89,9 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
   const [hasExistingSchedule, setHasExistingSchedule] = useState(false);
 
   useEffect(() => {
+    console.log('🔧 ScheduleConfigDialog - useEffect triggered, open:', open);
     if (open) {
+      console.log('🔧 ScheduleConfigDialog - Loading weekly schedule...');
       loadWeeklySchedule();
     }
   }, [open]);

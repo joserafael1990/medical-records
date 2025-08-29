@@ -38,9 +38,14 @@ import {
   CalendarToday as CalendarIcon,
   Star as StarIcon,
   CheckCircle as CheckCircleIcon,
-  Warning as WarningIcon
+  Warning as WarningIcon,
+  VpnKey as KeyIcon,
+  Description as DocumentIcon,
+  Schedule as ScheduleIcon
 } from '@mui/icons-material';
 import { DoctorProfile, DoctorFormData } from '../../types';
+import DigitalSignatureDialog from '../dialogs/DigitalSignatureDialog';
+import ScheduleConfigDialog from '../dialogs/ScheduleConfigDialog';
 
 interface DoctorProfileViewProps {
   doctorProfile: DoctorProfile | null;
@@ -69,12 +74,20 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
 }) => {
   const [profileCompleteness, setProfileCompleteness] = useState(0);
   const [missingFields, setMissingFields] = useState<string[]>([]);
+  const [digitalSignatureDialogOpen, setDigitalSignatureDialogOpen] = useState(false);
+  const [digitalSignatureMode, setDigitalSignatureMode] = useState<'generate' | 'info' | 'sign'>('info');
+  const [scheduleConfigDialogOpen, setScheduleConfigDialogOpen] = useState(false);
+  
+  // Debug logging for dialog state
+  useEffect(() => {
+    console.log('🔧 DoctorProfileView - scheduleConfigDialogOpen changed to:', scheduleConfigDialogOpen);
+  }, [scheduleConfigDialogOpen]);
 
   // Calculate profile completeness
   useEffect(() => {
     if (doctorProfile) {
       const requiredFields = [
-        'first_name', 'paternal_surname', 'maternal_surname', 'email', 'phone',
+        'first_name', 'paternal_surname', 'maternal_surname', 'email', 'phone', 'curp',
         'professional_license', 'university', 'specialty',
         'office_address', 'office_city', 'office_state'
       ];
@@ -101,6 +114,8 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
       'maternal_surname': 'Apellido Materno',
       'email': 'Correo Electrónico',
       'phone': 'Teléfono',
+      'curp': 'CURP',
+      'rfc': 'RFC',
       'professional_license': 'Cédula Profesional',
       'university': 'Universidad',
       'specialty': 'Especialidad',
@@ -358,6 +373,114 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                       'No especificada'
                     }
                   />
+                </ListItem>
+              </List>
+
+              <Divider sx={{ my: 2 }} />
+
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
+                Identificación Legal
+              </Typography>
+              <List dense>
+                <ListItem>
+                  <ListItemIcon>
+                    <VerifiedIcon color="success" />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="CURP"
+                    secondary={doctorProfile?.curp || 'No especificada'}
+                  />
+                </ListItem>
+                {doctorProfile?.rfc && (
+                  <ListItem>
+                    <ListItemIcon>
+                      <BadgeIcon color="info" />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary="RFC"
+                      secondary={doctorProfile.rfc}
+                    />
+                  </ListItem>
+                )}
+              </List>
+
+              <Divider sx={{ my: 2 }} />
+
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
+                Firma Digital
+              </Typography>
+              <List dense>
+                <ListItem>
+                  <ListItemIcon>
+                    <CertificateIcon color="primary" />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Certificado Digital"
+                    secondary="Configura tu certificado para firmar documentos"
+                  />
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<VerifiedIcon />}
+                    onClick={() => {
+                      setDigitalSignatureMode('info');
+                      setDigitalSignatureDialogOpen(true);
+                    }}
+                    sx={{ ml: 1 }}
+                  >
+                    Ver Certificado
+                  </Button>
+                </ListItem>
+                <ListItem>
+                  <ListItemIcon>
+                    <KeyIcon color="secondary" />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Generar Certificado"
+                    secondary="Crear nuevo certificado digital"
+                  />
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={<KeyIcon />}
+                    onClick={() => {
+                      setDigitalSignatureMode('generate');
+                      setDigitalSignatureDialogOpen(true);
+                    }}
+                    sx={{ ml: 1 }}
+                  >
+                    Generar
+                  </Button>
+                </ListItem>
+              </List>
+
+              <Divider sx={{ my: 2 }} />
+
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
+                Horarios de Consulta
+              </Typography>
+              <List dense>
+                <ListItem>
+                  <ListItemIcon>
+                    <ScheduleIcon color="primary" />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Configuración de Horarios"
+                    secondary="Define tus horarios de trabajo para cada día de la semana"
+                  />
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<CalendarIcon />}
+                    onClick={() => {
+                      console.log('🔧 Schedule config button clicked');
+                      setScheduleConfigDialogOpen(true);
+                      console.log('🔧 setScheduleConfigDialogOpen(true) called');
+                    }}
+                    sx={{ ml: 1 }}
+                  >
+                    Configurar
+                  </Button>
                 </ListItem>
               </List>
             </CardContent>
@@ -625,6 +748,30 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
         </Box>
       </Box>
 
+      {/* Digital Signature Dialog */}
+      <DigitalSignatureDialog
+        open={digitalSignatureDialogOpen}
+        onClose={() => setDigitalSignatureDialogOpen(false)}
+        mode={digitalSignatureMode}
+        onSignatureComplete={(signatureData) => {
+          console.log('Signature completed:', signatureData);
+          setDigitalSignatureDialogOpen(false);
+        }}
+      />
+
+      {/* Schedule Configuration Dialog */}
+      {console.log('🔧 DoctorProfileView - Rendering ScheduleConfigDialog with open:', scheduleConfigDialogOpen)}
+      <ScheduleConfigDialog
+        open={scheduleConfigDialogOpen}
+        onClose={() => {
+          console.log('🔧 ScheduleConfigDialog - onClose called');
+          setScheduleConfigDialogOpen(false);
+        }}
+        onSave={() => {
+          console.log('🔧 ScheduleConfigDialog - onSave called');
+          setScheduleConfigDialogOpen(false);
+        }}
+      />
 
     </Box>
   );
