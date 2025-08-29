@@ -13,8 +13,11 @@ export interface UseAppointmentManagerReturn {
   
   // Dialog state
   appointmentDialogOpen: boolean;
+  setAppointmentDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
   isEditingAppointment: boolean;
+  setIsEditingAppointment: React.Dispatch<React.SetStateAction<boolean>>;
   appointmentFormData: AppointmentFormData;
+  setAppointmentFormData: React.Dispatch<React.SetStateAction<AppointmentFormData>>;
   
   // Actions
   handleNewAppointment: () => void;
@@ -185,8 +188,11 @@ export const useAppointmentManager = (
     
     // Dialog state
     appointmentDialogOpen,
+    setAppointmentDialogOpen,
     isEditingAppointment,
+    setIsEditingAppointment,
     appointmentFormData,
+    setAppointmentFormData,
     
     // Actions
     handleNewAppointment,

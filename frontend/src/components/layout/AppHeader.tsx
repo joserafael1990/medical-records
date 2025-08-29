@@ -113,7 +113,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({
           )}
           
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <AvantLogo size="small" />
+            <AvantLogo variant="icon" />
             <Typography 
               variant="h6" 
               sx={{ 

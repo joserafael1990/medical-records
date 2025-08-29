@@ -97,7 +97,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Logo Section */}
       <Box sx={{ p: 3, textAlign: 'center' }}>
-        <AvantLogo size="medium" />
+        <AvantLogo variant="full" />
         <Typography variant="h6" sx={{ mt: 2, fontWeight: 600, color: 'primary.main' }}>
           Historias Clínicas
         </Typography>

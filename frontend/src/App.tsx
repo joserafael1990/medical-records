@@ -60,6 +60,8 @@ import { Patient, DoctorFormData, ConsultationFormData, AppointmentFormData, Cli
 import { API_CONFIG } from './constants';
 import { apiService } from './services/api';
 import { useDoctorProfileCache as useDoctorProfile } from './hooks/useDoctorProfileCache';
+import { useAppState, useAppointmentManager } from './hooks';
+import { AppHeader, AppSidebar } from './components/layout';
 import {
   MedicalServices as MedicalIcon,
   Dashboard as DashboardIcon,
@@ -453,10 +455,23 @@ function AppContent() {
   // Authentication
   const { user, logout } = useAuth();
   
+  // Global app state using extracted hook
+  const {
+    activeView,
+    setActiveView,
+    successMessage,
+    formErrorMessage,
+    fieldErrors,
+    isSubmitting,
+    showSuccessMessage,
+    setFormErrorMessage,
+    setFieldErrors,
+    setIsSubmitting,
+    clearMessages
+  } = useAppState();
 
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [todayAppointments, setTodayAppointments] = useState<any[]>([]);
-  const [activeView, setActiveView] = useState('dashboard');
   
   // Patient management state
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -465,11 +480,6 @@ function AppContent() {
   const [isEditingPatient, setIsEditingPatient] = useState(false);
   const [patientSearchTerm, setPatientSearchTerm] = useState('');
   const [selectedPatientData, setSelectedPatientData] = useState<CompletePatientData | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<{[key: string]: string}>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string>('');
-  const [formErrorMessage, setFormErrorMessage] = useState<string>('');
-  const successTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Consultations management state
   const [consultations, setConsultations] = useState<any[]>([]);
@@ -669,30 +679,6 @@ function AppContent() {
   const [clinicalStudyFieldErrors, setClinicalStudyFieldErrors] = useState<{[key: string]: string}>({});
   const [isClinicalStudySubmitting, setIsClinicalStudySubmitting] = useState(false);
 
-  // Agenda management state
-  const [appointments, setAppointments] = useState<any[]>([]);
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [appointmentDialogOpen, setAppointmentDialogOpen] = useState(false);
-  const [isEditingAppointment, setIsEditingAppointment] = useState(false);
-  const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
-  
-  // Logout dialog state
-  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
-  const [appointmentFormData, setAppointmentFormData] = useState<AppointmentFormData>({
-    patient_id: '',
-    doctor_id: '', // Initialize doctor_id field
-    date_time: '',
-    appointment_type: 'consultation',
-    reason: '',
-    notes: '',
-    duration_minutes: 30,
-    status: 'scheduled'
-  });
-
-  // User menu state
-  const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
-  const userMenuOpen = Boolean(userMenuAnchor);
-
   // Doctor profile management
   const {
     doctorProfile,
@@ -712,7 +698,38 @@ function AppContent() {
     handleSubmit: handleSubmitDoctorProfile,
     clearMessages: clearDoctorProfileMessages
   } = useDoctorProfile();
-  const [agendaView, setAgendaView] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+
+  // Agenda management using extracted hook
+  const appointmentManager = useAppointmentManager(patients, doctorProfile);
+  const {
+    appointments,
+    setAppointments,
+    selectedDate,
+    setSelectedDate,
+    agendaView,
+    setAgendaView,
+    appointmentDialogOpen,
+    setAppointmentDialogOpen,
+    isEditingAppointment,
+    setIsEditingAppointment,
+    appointmentFormData,
+    setAppointmentFormData,
+    handleNewAppointment,
+    handleEditAppointment,
+    handleAppointmentSubmit,
+    handleCancelAppointment,
+    fetchAppointments
+  } = appointmentManager;
+  
+  const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
+  
+  // Logout dialog state
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
+
+  // User menu state
+  const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
+  const userMenuOpen = Boolean(userMenuAnchor);
+  
   const [patientFormData, setPatientFormData] = useState({
     // ===== CAMPOS OBLIGATORIOS NOM-004 =====
     first_name: '',
@@ -767,30 +784,7 @@ function AppContent() {
 
 
 
-  // Optimized success message handler
-  const showSuccessMessage = useCallback((message: string) => {
-    // Clear any existing timeout
-    if (successTimeoutRef.current) {
-      clearTimeout(successTimeoutRef.current);
-    }
-    
-    setSuccessMessage(message);
-    
-    // Set new timeout
-    successTimeoutRef.current = setTimeout(() => {
-      setSuccessMessage('');
-      successTimeoutRef.current = null;
-    }, 5000);
-  }, []);
 
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (successTimeoutRef.current) {
-        clearTimeout(successTimeoutRef.current);
-      }
-    };
-  }, []);
 
   // Global error handler to catch runtime errors
   useEffect(() => {
@@ -818,20 +812,7 @@ function AppContent() {
     };
   }, []);
 
-  // Fetch appointments from API
-  const fetchAppointments = useCallback(async () => {
-    // Only fetch if we're in agenda view
-    if (activeView !== 'agenda') return;
-    
-    try {
-      const targetDate = selectedDate.toISOString().split('T')[0];
-      const data = await apiService.getDailyAgenda(targetDate);
-      setAppointments(data);
-    } catch (error) {
-      console.error('Error fetching appointments:', error);
-      setAppointments([]);
-    }
-  }, [selectedDate, activeView]);
+
 
   // Load appointments when active view is agenda or when selected date changes
   useEffect(() => {
@@ -1305,7 +1286,7 @@ const fetchConsultations = useCallback(async () => {
       console.log('📋 Using sample consultations data');
       setConsultations(sampleConsultations);
     } else {
-      setConsultations(data);
+    setConsultations(data);
     }
   } catch (error) {
     console.error('Error fetching consultations:', error);
@@ -1355,27 +1336,7 @@ const handleBackFromConsultationDetail = useCallback(() => {
   setSelectedConsultation(null);
 }, []);
 
-// Appointment handlers
-const handleNewAppointment = useCallback(() => {
-  setSelectedAppointment(null);
-  setIsEditingAppointment(false);
-  setAppointmentFormData({
-    patient_id: '',
-    doctor_id: doctorProfile?.id || '', // Auto-assign current doctor's ID
-    date_time: getCurrentMexicoCityDateTime(),
-    appointment_type: 'consultation',
-    reason: '',
-    notes: '',
-    duration_minutes: 30,
-    status: 'scheduled'
-  });
-  
-  // Load patients when opening appointment dialog
-  fetchPatients();
-  
-  setAppointmentDialogOpen(true);
-  setFormErrorMessage('');
-}, [doctorProfile, fetchPatients]);
+
 
 // Function to create appointment from consultation follow-up
 const handleCreateFollowUpAppointment = useCallback(async (appointmentData: any) => {
@@ -1446,26 +1407,7 @@ const handleCreateFollowUpAppointment = useCallback(async (appointmentData: any)
   }
 }, [activeView, selectedDate, patients, doctorProfile]);
 
-const handleEditAppointment = useCallback((appointment: any) => {
-  setSelectedAppointment(appointment);
-  setIsEditingAppointment(true);
-  setAppointmentFormData({
-    patient_id: appointment.patient_id || '',
-    doctor_id: appointment.doctor_id || '', // Include doctor_id from appointment
-    date_time: toDateTimeLocalFormat(appointment.date_time || ''), // Convert to datetime-local format
-    appointment_type: appointment.appointment_type || 'consultation',
-    reason: appointment.reason || '',
-    notes: appointment.notes || '',
-    duration_minutes: appointment.duration_minutes || 30,
-    status: appointment.status || 'scheduled'
-  });
-  
-  // Load patients when editing appointment dialog
-  fetchPatients();
-  
-  setAppointmentDialogOpen(true);
-  setFormErrorMessage('');
-}, [fetchPatients]);
+
 
 // User menu handlers
 const handleUserMenuOpen = useCallback((event: React.MouseEvent<HTMLElement>) => {
@@ -1639,7 +1581,7 @@ const handleConsultationSubmit = useCallback(async () => {
           doctor_specialty: ''
         });
         setTempConsultationId(null);
-        setSuccessMessage(
+        showSuccessMessage(
           isEditingConsultation 
             ? 'Consulta actualizada exitosamente (modo local)' 
             : 'Consulta creada exitosamente (modo local)'
@@ -1895,8 +1837,9 @@ const handleClinicalStudySubmit = useCallback(async () => {
   }
 }, [isEditingClinicalStudy, selectedClinicalStudy, clinicalStudyFormData, selectedConsultation, tempConsultationId, doctorProfile, getCurrentConsultationStudies, updateCurrentConsultationStudies, loadConsultationStudies]);
 
-// Handle appointment form submission
-const handleAppointmentSubmit = useCallback(async () => {
+// REMOVED: Duplicate handleAppointmentSubmit function
+// Using hook version instead
+/* const handleAppointmentSubmit = useCallback(async () => {
   setIsSubmitting(true);
   setFormErrorMessage('');
   
@@ -2004,7 +1947,7 @@ const handleAppointmentSubmit = useCallback(async () => {
   } finally {
     setIsSubmitting(false);
   }
-}, [appointmentFormData, isEditingAppointment, selectedAppointment, fetchAppointments, doctorProfile]);
+}, [appointmentFormData, isEditingAppointment, selectedAppointment, fetchAppointments, doctorProfile]); */
 
 // Validation function for required fields
 const validatePatientForm = () => {
@@ -2024,7 +1967,7 @@ const validatePatientForm = () => {
 
 // Clear error for a specific field when user starts typing
 const clearFieldError = useCallback((fieldName: string) => {
-  setFieldErrors(prev => {
+  setFieldErrors((prev: { [key: string]: string }) => {
     if (prev[fieldName]) {
       const newErrors = { ...prev };
       delete newErrors[fieldName];
@@ -2032,7 +1975,7 @@ const clearFieldError = useCallback((fieldName: string) => {
     }
     return prev; // Return same object if no changes needed
   });
-}, []);
+}, [setFieldErrors]);
 
 // Optimized handler for field changes with debouncing
 const handleFieldChange = useCallback((fieldName: string, value: string) => {
@@ -2044,14 +1987,14 @@ const handleFieldChange = useCallback((fieldName: string, value: string) => {
   
   // Clear error if exists (debounced to avoid excessive re-renders)
   if (fieldErrors[fieldName]) {
-    setFieldErrors(prev => {
+    setFieldErrors((prev: { [key: string]: string }) => {
       if (!prev[fieldName]) return prev; // No change needed
       const newErrors = { ...prev };
       delete newErrors[fieldName];
       return newErrors;
     });
   }
-}, [fieldErrors]);
+}, [fieldErrors, setFieldErrors]);
 
 // Handle patient form submission
 const handlePatientSubmit = async () => {
@@ -2871,7 +2814,7 @@ const formatDateTime = (dateString: string) => {
                     patients={patients}
                     consultations={consultations}
                     successMessage={successMessage}
-                    setSuccessMessage={setSuccessMessage}
+                    setSuccessMessage={showSuccessMessage}
                     handleNewPatient={handleNewPatient}
                     handleEditPatient={handleEditPatient}
                     isLoading={false}
@@ -2885,7 +2828,7 @@ const formatDateTime = (dateString: string) => {
                     consultations={consultations}
                     patients={patients}
                     successMessage={successMessage}
-                    setSuccessMessage={setSuccessMessage}
+                    setSuccessMessage={showSuccessMessage}
                     handleNewConsultation={handleNewConsultation}
                     handleEditConsultation={handleEditConsultation}
                     isLoading={false}

@@ -14,7 +14,7 @@ export interface UseAppStateReturn {
   // Message actions
   showSuccessMessage: (message: string) => void;
   setFormErrorMessage: (message: string) => void;
-  setFieldErrors: (errors: { [key: string]: string }) => void;
+  setFieldErrors: React.Dispatch<React.SetStateAction<{ [key: string]: string }>>;
   setIsSubmitting: (loading: boolean) => void;
   clearMessages: () => void;
 }
