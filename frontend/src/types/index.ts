@@ -599,3 +599,27 @@ export interface MedicalOrderFormData {
   special_instructions?: string;
   valid_until_date?: string;
 }
+
+// ============================================================================
+// MEDICAL HISTORY & PRESCRIPTIONS - Consolidated from App.tsx
+// ============================================================================
+
+export interface MedicalHistory {
+  id: string;
+  patient_id: string;
+  date: string;
+  chief_complaint: string;
+  history_present_illness: string;
+  physical_examination?: string;
+  diagnosis: string;
+  treatment_plan?: string;
+  follow_up_instructions?: string;
+  doctor_notes?: string;
+  vital_signs_id?: string;
+}
+
+// Prescription interface already defined above (lines 148-165) with PrescriptionStatus enum
+
+// VitalSigns interface already defined above (lines 137-151) with consistent field names
+
+// CompletePatientData interface already defined above (lines 127-135) with Consultation[] for medical_history

@@ -56,7 +56,22 @@ import {
 import { ConsultationDetailView } from './components';
 import { LoadingFallback } from './components';
 import SmartTableDemo from './components/demo/SmartTableDemo';
-import { Patient, DoctorFormData, ConsultationFormData, AppointmentFormData, ClinicalStudy, ClinicalStudyFormData, StudyType, StudyStatus } from './types';
+import { 
+  Patient, 
+  DoctorFormData, 
+  ConsultationFormData, 
+  AppointmentFormData, 
+  ClinicalStudy, 
+  ClinicalStudyFormData, 
+  StudyType, 
+  StudyStatus,
+  MedicalHistory,
+  Prescription,
+  VitalSigns,
+  CompletePatientData,
+  Appointment,
+  DashboardData
+} from './types';
 import { API_CONFIG } from './constants';
 import { apiService } from './services/api';
 import { useDoctorProfileCache as useDoctorProfile } from './hooks/useDoctorProfileCache';
@@ -357,87 +372,24 @@ const theme = createTheme({
   },
 });
 
-// Dashboard data interface
-interface DashboardData {
-  physician: string;
-  today_appointments: number;
-  pending_records: number;
-  whatsapp_messages: number;
-  compliance_score: number;
-  monthly_revenue: number;
-  ai_time_saved: number;
-  features_ready: string[];
-}
+// DashboardData interface moved to types/index.ts
 
 // Patient interface imported from types
 
-// Medical record interfaces
-interface VitalSigns {
-  id: string;
-  patient_id: string;
-  date_recorded: string;
-  weight?: number;
-  height?: number;
-  bmi?: number;
-  blood_pressure_systolic?: number;
-  blood_pressure_diastolic?: number;
-  heart_rate?: number;
-  temperature?: number;
-  respiratory_rate?: number;
-  oxygen_saturation?: number;
-  notes?: string;
-}
+// VitalSigns interface moved to types/index.ts
 
-interface MedicalHistory {
-  id: string;
-  patient_id: string;
-  date: string;
-  chief_complaint: string;
-  history_present_illness: string;
-  physical_examination?: string;
-  diagnosis: string;
-  treatment_plan?: string;
-  follow_up_instructions?: string;
-  doctor_notes?: string;
-  vital_signs_id?: string;
-}
-
-interface Prescription {
-  id: string;
-  patient_id: string;
-  medical_history_id?: string;
-  medication_name: string;
-  dosage: string;
-  frequency: string;
-  duration: string;
-  instructions?: string;
-  prescribed_date: string;
-  status: string;
-  notes?: string;
-}
-
-interface Appointment {
-  id: string;
-  patient_id: string;
-  date_time: string;
-  duration: number;
-  appointment_type: string;
-  status: string;
-  chief_complaint?: string;
-  notes?: string;
-  created_at: string;
-  updated_at: string;
-}
-
-interface CompletePatientData {
-  patient: Patient;
-  medical_history: MedicalHistory[];
-  vital_signs: VitalSigns[];
-  prescriptions: Prescription[];
-  appointments: Appointment[];
-  active_prescriptions: Prescription[];
-  upcoming_appointments: Appointment[];
-}
+// ============================================================================
+// INTERFACES CONSOLIDATED - All moved to types/index.ts
+// ============================================================================
+// 
+// The following interfaces have been moved to types/index.ts to avoid duplication:
+// - MedicalHistory
+// - Prescription  
+// - Appointment
+// - CompletePatientData
+// - VitalSigns
+//
+// They are now imported from './types' at the top of this file.
 
 function AppContent() {
   // Clean slate - clear any residual clinical studies data
