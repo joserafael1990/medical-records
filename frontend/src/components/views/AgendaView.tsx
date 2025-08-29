@@ -206,6 +206,17 @@ const AgendaView: React.FC<AgendaViewProps> = ({
 
   const renderDailyView = () => {
     const dayAppointments = sortAppointmentsByTime(getAppointmentsForDate(selectedDate));
+    
+    // Debug logging for development only
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 DEBUG AgendaView - renderDailyView:', {
+        selectedDate: selectedDate.toISOString(),
+        totalAppointments: appointments.length,
+        dayAppointments: dayAppointments.length,
+        appointmentsData: appointments,
+        filteredData: dayAppointments
+      });
+    }
 
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -456,11 +467,21 @@ const AgendaView: React.FC<AgendaViewProps> = ({
     }
     
     return (
-      <Paper sx={{ p: 3 }}>
+      <Paper sx={{ p: 3, borderRadius: 2, boxShadow: 2 }}>
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, mb: 2 }}>
           {/* Day headers */}
           {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map((day) => (
-            <Box key={day} sx={{ p: 1, textAlign: 'center', fontWeight: 600, color: 'text.secondary' }}>
+            <Box 
+              key={day} 
+              sx={{ 
+                p: 1, 
+                textAlign: 'center', 
+                fontWeight: 600, 
+                color: 'primary.main',
+                bgcolor: 'grey.100',
+                borderRadius: 1
+              }}
+            >
               {day}
             </Box>
           ))}
@@ -483,13 +504,16 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                 sx={{
                   height: 80,
                   p: 1,
-                  border: '1px solid',
-                  borderColor: isSelected ? 'primary.main' : 'divider',
-                  bgcolor: isToday ? 'primary.50' : isSelected ? 'primary.100' : 'transparent',
+                  border: '2px solid',
+                  borderColor: isSelected ? 'primary.main' : isToday ? 'primary.light' : 'grey.300',
+                  bgcolor: isToday ? 'rgba(25, 118, 210, 0.1)' : isSelected ? 'rgba(25, 118, 210, 0.2)' : 'background.paper',
                   borderRadius: 1,
                   cursor: 'pointer',
+                  transition: 'all 0.2s ease-in-out',
                   '&:hover': {
-                    bgcolor: 'action.hover'
+                    bgcolor: 'action.hover',
+                    transform: 'scale(1.02)',
+                    boxShadow: 1
                   }
                 }}
                 onClick={() => setSelectedDate(day)}
@@ -510,7 +534,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                     {dayAppointments.slice(0, 2).map((apt) => (
                       <Chip
                         key={apt.id}
-                        label={new Date(apt.date_time).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                        label={new Date(apt.date_time).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
                         size="small"
                         sx={{
                           height: 16,
