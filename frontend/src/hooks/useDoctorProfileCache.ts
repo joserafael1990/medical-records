@@ -34,6 +34,8 @@ const initialFormData: DoctorFormData = {
   email: '',
   phone: '',
   birth_date: '',
+  curp: '',
+  rfc: '',
   professional_license: '',
   specialty: '',
   specialty_license: '',
@@ -91,8 +93,17 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
     setIsLoading(true);
     setFormErrorMessage('');
     
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 Fetching doctor profile...');
+      console.log('📋 Token in localStorage:', localStorage.getItem('token') ? 'Present' : 'Missing');
+    }
+    
     try {
       const data = await apiService.getDoctorProfile();
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ Doctor profile loaded successfully:', data);
+      }
       
       // Update cache
       cache.data = data;
@@ -100,6 +111,12 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
       
       setDoctorProfile(data);
     } catch (error: any) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('❌ Error fetching doctor profile:', error);
+        console.log('📋 Error status:', error.response?.status);
+        console.log('📋 Error data:', error.response?.data);
+      }
+      
       // Handle 404 specifically (profile doesn't exist yet)
       if (error.response?.status === 404) {
         cache.data = null;
@@ -136,6 +153,8 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
         email: doctorProfile.email || '',
         phone: doctorProfile.phone || '',
         birth_date: doctorProfile.birth_date || '',
+        curp: doctorProfile.curp || '',
+        rfc: doctorProfile.rfc || '',
         professional_license: doctorProfile.professional_license || '',
         specialty: doctorProfile.specialty || '',
         specialty_license: doctorProfile.specialty_license || '',

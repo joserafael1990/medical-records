@@ -7,7 +7,7 @@ import validationSchemas from '../shared_validation_schemas.json';
 
 // API Configuration
 export const API_CONFIG = {
-  BASE_URL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
+  BASE_URL: process.env.REACT_APP_API_URL || 'http://localhost:8001',
   ENDPOINTS: {
     HEALTH: '/api/health',
     PATIENTS: '/api/patients',
@@ -36,7 +36,7 @@ export const APP_CONFIG = {
 
 // Feature Flags
 export const FEATURE_FLAGS = {
-  ENABLE_DEBUG_LOGS: process.env.REACT_APP_ENABLE_DEBUG_LOGS === 'true',
+  ENABLE_DEBUG_LOGS: true, // Temporarily enabled for debugging
   ENABLE_ERROR_MONITORING: process.env.REACT_APP_ENABLE_ERROR_MONITORING === 'true',
   ENABLE_ANALYTICS: process.env.REACT_APP_ENABLE_ANALYTICS === 'true',
   SHOW_BACKEND_STATUS: process.env.REACT_APP_SHOW_BACKEND_STATUS === 'true',

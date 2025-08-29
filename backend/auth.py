@@ -64,16 +64,30 @@ async def get_current_doctor(credentials: HTTPAuthorizationCredentials = Depends
         headers={"WWW-Authenticate": "Bearer"},
     )
     
+    print(f"🔍 AUTH DEBUG: get_current_doctor called")
+    print(f"📋 Credentials present: {credentials is not None}")
+    
     token = credentials.credentials
+    print(f"📋 Token: {token[:20]}..." if token else "No token")
+    
     token_data = verify_token(token)
+    print(f"📋 Token data: {token_data}")
     
     if token_data is None:
+        print("❌ Token verification failed")
         raise credentials_exception
     
-    doctor = DoctorService.get_profile_by_id(db, token_data["id"])
+    doctor_id = token_data["id"]
+    print(f"📋 Looking for doctor with ID: {doctor_id}")
+    
+    doctor = DoctorService.get_profile_by_id(db, doctor_id)
+    print(f"📋 Doctor found: {doctor is not None}")
+    
     if doctor is None:
+        print(f"❌ No doctor found with ID: {doctor_id}")
         raise credentials_exception
     
+    print(f"✅ Doctor authenticated: {doctor.full_name}")
     return doctor
 
 # Optional dependency for endpoints that can work with or without authentication
