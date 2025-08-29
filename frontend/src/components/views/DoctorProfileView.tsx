@@ -2,7 +2,6 @@ import React, { memo, useState, useEffect } from 'react';
 import {
   Box,
   Typography,
-  Paper,
   Card,
   CardContent,
   Divider,
@@ -15,18 +14,12 @@ import {
   ListItemText,
   Alert,
   LinearProgress,
-  Stepper,
-  Step,
-  StepLabel,
   IconButton
 } from '@mui/material';
 import {
   Person as PersonIcon,
   Edit as EditIcon,
-  Save as SaveIcon,
   School as SchoolIcon,
-  LocalHospital as HospitalIcon,
-  Work as WorkIcon,
   ContactMail as ContactIcon,
   LocationOn as LocationIcon,
   Security as CertificateIcon,
@@ -34,13 +27,10 @@ import {
   Email as EmailIcon,
   Phone as PhoneIcon,
   Badge as BadgeIcon,
-  Business as BusinessIcon,
   CalendarToday as CalendarIcon,
   Star as StarIcon,
   CheckCircle as CheckCircleIcon,
-  Warning as WarningIcon,
   VpnKey as KeyIcon,
-  Description as DocumentIcon,
   Schedule as ScheduleIcon
 } from '@mui/icons-material';
 import { DoctorProfile, DoctorFormData } from '../../types';
@@ -172,7 +162,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
   }
 
   return (
-    <Box>
+    <React.Fragment>
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
@@ -760,7 +750,6 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
       />
 
       {/* Schedule Configuration Dialog */}
-      {console.log('🔧 DoctorProfileView - Rendering ScheduleConfigDialog with open:', scheduleConfigDialogOpen)}
       <ScheduleConfigDialog
         open={scheduleConfigDialogOpen}
         onClose={() => {
@@ -773,7 +762,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
         }}
       />
 
-    </Box>
+    </React.Fragment>
   );
 };
 
