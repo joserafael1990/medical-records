@@ -2484,7 +2484,7 @@ const formatDateTime = (dateString: string) => {
               <SettingsIcon fontSize="small" />
             </ListItemIcon>
             <ListItemText>
-              <Typography variant="body2">Configuración Profesional</Typography>
+              <Typography variant="body2">Configuración</Typography>
             </ListItemText>
           </MenuItem>
           
