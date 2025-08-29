@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Appointment, AppointmentFormData } from '../types';
 import { apiService } from '../services/api';
 
@@ -85,11 +85,14 @@ export const useAppointmentManager = (
   }, []);
 
   // Fetch appointments for current date
-  const fetchAppointments = useCallback(async () => {
+  const fetchAppointments = useCallback(async (targetDate?: Date) => {
     try {
-      const dateStr = selectedDate.toISOString().split('T')[0];
+      const dateToFetch = targetDate || selectedDate;
+      const dateStr = dateToFetch.toISOString().split('T')[0];
+      console.log('📅 Fetching appointments for date:', dateStr);
       const data = await apiService.getDailyAgenda(dateStr);
       setAppointments(data);
+      console.log('✅ Fetched appointments:', data.length);
     } catch (error) {
       console.error('Error fetching appointments:', error);
     }
@@ -161,14 +164,27 @@ export const useAppointmentManager = (
       }
       
       setAppointmentDialogOpen(false);
+      
+      // Refresh appointments for current selected date
       await fetchAppointments();
+      
+      // If the appointment was created for a different date, navigate to that date
+      const appointmentDate = new Date(appointmentFormData.date_time);
+      const currentDate = selectedDate;
+      
+      // Compare just the date parts (ignore time)
+      if (appointmentDate.toDateString() !== currentDate.toDateString()) {
+        console.log('🔄 Appointment created for different date, navigating to:', appointmentDate.toDateString());
+        setSelectedDate(appointmentDate);
+      }
+      
     } catch (error: any) {
       console.error('Error saving appointment:', error);
       setFormErrorMessage('Error al guardar la cita');
     } finally {
       setIsSubmitting(false);
     }
-  }, [isEditingAppointment, appointmentFormData, fetchAppointments, showSuccessMessage]);
+  }, [isEditingAppointment, appointmentFormData, fetchAppointments, showSuccessMessage, selectedDate, setSelectedDate]);
 
   // Handle cancel appointment
   const handleCancelAppointment = useCallback(() => {
@@ -176,6 +192,11 @@ export const useAppointmentManager = (
     setFieldErrors({});
     setFormErrorMessage('');
   }, []);
+
+  // Auto-fetch appointments when selectedDate changes
+  useEffect(() => {
+    fetchAppointments();
+  }, [selectedDate, fetchAppointments]);
 
   return {
     // State
