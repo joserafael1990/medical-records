@@ -2479,12 +2479,12 @@ const formatDateTime = (dateString: string) => {
             </ListItemText>
           </MenuItem>
           
-          <MenuItem onClick={() => { handleUserMenuClose(); setActiveView('dashboard'); }}>
+          <MenuItem onClick={() => { handleUserMenuClose(); setActiveView('profile'); }}>
             <ListItemIcon>
-              <SettingsIcon fontSize="small" />
+              <ScheduleIcon fontSize="small" />
             </ListItemIcon>
             <ListItemText>
-              <Typography variant="body2">Configuración</Typography>
+              <Typography variant="body2">Configurar Horarios</Typography>
             </ListItemText>
           </MenuItem>
           
