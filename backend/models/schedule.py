@@ -42,8 +42,8 @@ class ScheduleTemplate(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relaciones
-    doctor = relationship("DoctorProfile", back_populates="schedule_templates")
+    # Relaciones - temporarily commented out to fix initialization
+    # doctor = relationship("DoctorProfile", back_populates="schedule_templates")
     schedule_exceptions = relationship("ScheduleException", back_populates="template")
 
 class ScheduleException(Base):
@@ -76,8 +76,8 @@ class ScheduleException(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relaciones
-    doctor = relationship("DoctorProfile", back_populates="schedule_exceptions")
+    # Relaciones - temporarily commented out to fix initialization
+    # doctor = relationship("DoctorProfile", back_populates="schedule_exceptions")
     template = relationship("ScheduleTemplate", back_populates="schedule_exceptions")
 
 class ScheduleSlot(Base):
@@ -105,8 +105,8 @@ class ScheduleSlot(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relaciones
-    doctor = relationship("DoctorProfile", back_populates="schedule_slots")
+    # Relaciones - temporarily commented out to fix initialization
+    # doctor = relationship("DoctorProfile", back_populates="schedule_slots")
 
 # ============================================================================
 # PYDANTIC MODELS

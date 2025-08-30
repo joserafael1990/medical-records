@@ -130,6 +130,10 @@ class DoctorProfile(Base):
     phone = Column(String(20), nullable=False)
     birth_date = Column(Date, nullable=False)
     
+    # Legal Identification (NOM-024 Required)
+    curp = Column(String(18), nullable=False, unique=True)  # CURP - Obligatorio según NOM-024
+    rfc = Column(String(13))  # RFC - Opcional para fines fiscales
+    
     # Professional Information (NOM-004 Required)
     professional_license = Column(String(20), nullable=False, unique=True)
     specialty = Column(String(100), nullable=False)
@@ -173,6 +177,10 @@ class DoctorProfile(Base):
     # Relationships
     appointments = relationship("Appointment", back_populates="doctor")
     user = relationship("User", back_populates="doctor", uselist=False)
+    # Temporarily commented out schedule relationships to fix initialization
+    # schedule_templates = relationship("ScheduleTemplate", back_populates="doctor")
+    # schedule_exceptions = relationship("ScheduleException", back_populates="doctor")
+    # schedule_slots = relationship("ScheduleSlot", back_populates="doctor")
 
 class MedicalHistory(Base):
     __tablename__ = "medical_history"
