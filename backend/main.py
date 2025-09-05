@@ -345,7 +345,7 @@ class DoctorProfileBase(BaseModel):
     office_address: str
     office_city: str
     office_state: str
-    office_postal_code: Optional[str] = None
+    office_postal_code: Optional[Union[str, int]] = None
     office_country: str = "México"
     
     # Academic Information (NOM-004 Optional but recommended)
@@ -370,10 +370,10 @@ class DoctorProfileBase(BaseModel):
             return str(v)
         return v
     
-    @field_validator('phone', 'office_phone', 'mobile_phone')
+    @field_validator('phone', 'office_phone', 'mobile_phone', 'office_postal_code')
     @classmethod
     def validate_numeric_fields(cls, v):
-        """Convert integer values to strings for phone fields"""
+        """Convert integer values to strings for phone and postal code fields"""
         if v is not None:
             return str(v)
         return v
@@ -488,7 +488,7 @@ class DoctorProfileUpdate(BaseModel):
     office_address: Optional[str] = None
     office_city: Optional[str] = None
     office_state: Optional[str] = None
-    office_postal_code: Optional[str] = None
+    office_postal_code: Optional[Union[str, int]] = None
     office_country: Optional[str] = None
     # medical_school, internship_hospital, residency_hospital removed per user request
     # board_certifications: Optional[List[str]] = None
@@ -497,7 +497,7 @@ class DoctorProfileUpdate(BaseModel):
     professional_seal: Optional[str] = None
     created_by: Optional[str] = None
 
-    @field_validator('graduation_year', 'phone', 'office_phone', 'mobile_phone')
+    @field_validator('graduation_year', 'phone', 'office_phone', 'mobile_phone', 'office_postal_code')
     @classmethod
     def validate_numeric_fields(cls, v):
         """Convert integer values to strings for numeric fields"""
