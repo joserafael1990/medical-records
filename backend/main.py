@@ -321,7 +321,7 @@ class DoctorProfileBase(BaseModel):
     paternal_surname: str
     maternal_surname: Optional[str] = None
     email: str
-    phone: str
+    phone: Union[str, int]
     birth_date: date
     
     # Legal Identification (NOM-024 Required)
@@ -338,8 +338,8 @@ class DoctorProfileBase(BaseModel):
     
     # Contact Information
     professional_email: Optional[str] = None
-    office_phone: Optional[str] = None
-    mobile_phone: Optional[str] = None
+    office_phone: Optional[Union[str, int]] = None
+    mobile_phone: Optional[Union[str, int]] = None
     
     # Office Information (NOM-004 Required)
     office_address: str
@@ -370,10 +370,10 @@ class DoctorProfileBase(BaseModel):
             return str(v)
         return v
     
-    @field_validator('phone', 'postal_code', 'emergency_contact_phone')
+    @field_validator('phone', 'office_phone', 'mobile_phone')
     @classmethod
     def validate_numeric_fields(cls, v):
-        """Convert integer values to strings for phone and postal code fields"""
+        """Convert integer values to strings for phone fields"""
         if v is not None:
             return str(v)
         return v
@@ -472,7 +472,7 @@ class DoctorProfileUpdate(BaseModel):
     paternal_surname: Optional[str] = None
     maternal_surname: Optional[str] = None
     email: Optional[EmailStr] = None
-    phone: Optional[str] = None
+    phone: Optional[Union[str, int]] = None
     birth_date: Optional[date] = None
     curp: Optional[str] = None
     rfc: Optional[str] = None
@@ -483,8 +483,8 @@ class DoctorProfileUpdate(BaseModel):
     graduation_year: Optional[Union[str, int]] = None
     subspecialty: Optional[str] = None
     professional_email: Optional[EmailStr] = None
-    office_phone: Optional[str] = None
-    mobile_phone: Optional[str] = None
+    office_phone: Optional[Union[str, int]] = None
+    mobile_phone: Optional[Union[str, int]] = None
     office_address: Optional[str] = None
     office_city: Optional[str] = None
     office_state: Optional[str] = None
@@ -496,6 +496,14 @@ class DoctorProfileUpdate(BaseModel):
     digital_signature: Optional[str] = None
     professional_seal: Optional[str] = None
     created_by: Optional[str] = None
+
+    @field_validator('graduation_year', 'phone', 'office_phone', 'mobile_phone')
+    @classmethod
+    def validate_numeric_fields(cls, v):
+        """Convert integer values to strings for numeric fields"""
+        if v is not None:
+            return str(v)
+        return v
 
 class DoctorProfileResponse(DoctorProfileBase):
     id: str
