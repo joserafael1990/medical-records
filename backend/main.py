@@ -5,8 +5,8 @@ Sistema de gestión de historias clínicas médicas conforme a NOM-004
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, EmailStr, ValidationError
-from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, EmailStr, ValidationError, field_validator
+from typing import List, Optional, Dict, Any, Union
 from datetime import datetime, date, timedelta
 from enum import Enum
 import pytz
@@ -317,7 +317,7 @@ class DoctorProfileBase(BaseModel):
     specialty: str
     specialty_license: Optional[str] = None
     university: str
-    graduation_year: str
+    graduation_year: Union[str, int]
     subspecialty: Optional[str] = None
     
     # Contact Information
@@ -345,6 +345,14 @@ class DoctorProfileBase(BaseModel):
     
     # System fields
     created_by: str
+
+    @field_validator('graduation_year')
+    @classmethod
+    def validate_graduation_year(cls, v):
+        """Convert integer graduation year to string"""
+        if v is not None:
+            return str(v)
+        return v
 
 class DoctorProfileCreate(DoctorProfileBase):
     pass
@@ -448,7 +456,7 @@ class DoctorProfileUpdate(BaseModel):
     specialty: Optional[str] = None
     specialty_license: Optional[str] = None
     university: Optional[str] = None
-    graduation_year: Optional[str] = None
+    graduation_year: Optional[Union[str, int]] = None
     subspecialty: Optional[str] = None
     professional_email: Optional[EmailStr] = None
     office_phone: Optional[str] = None
