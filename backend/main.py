@@ -1,4 +1,4 @@
-"""
+ogatorio no"""
 Historias Clínicas API - Backend with PostgreSQL
 Sistema de gestión de historias clínicas médicas conforme a NOM-004
 """
