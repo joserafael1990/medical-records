@@ -230,6 +230,17 @@ class PatientBase(BaseModel):
         if v is not None:
             return str(v)
         return v
+    
+    @field_validator('email')
+    @classmethod
+    def validate_email_field(cls, v):
+        """Validate email field: convert empty string to None, validate format if provided"""
+        if not v or v == "":  # Convert empty string to None
+            return None
+        # Basic email validation if value is provided
+        if "@" not in v:
+            raise ValueError("Email must contain @ sign")
+        return v
 
 class PatientCreate(PatientBase):
     pass
@@ -243,7 +254,7 @@ class PatientUpdate(BaseModel):
     gender: Optional[str] = None
     curp: Optional[Union[str, int]] = None
     phone: Optional[Union[str, int]] = None
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
@@ -267,6 +278,17 @@ class PatientUpdate(BaseModel):
         """Convert integer values to strings for phone, postal code, insurance and ID fields"""
         if v is not None:
             return str(v)
+        return v
+    
+    @field_validator('email')
+    @classmethod
+    def validate_email_field(cls, v):
+        """Validate email field: convert empty string to None, validate format if provided"""
+        if not v or v == "":  # Convert empty string to None
+            return None
+        # Basic email validation if value is provided
+        if "@" not in v:
+            raise ValueError("Email must contain @ sign")
         return v
 
 class PatientResponse(BaseModel):
@@ -471,7 +493,7 @@ class DoctorProfileUpdate(BaseModel):
     first_name: Optional[str] = None
     paternal_surname: Optional[str] = None
     maternal_surname: Optional[str] = None
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     phone: Optional[Union[str, int]] = None
     birth_date: Optional[date] = None
     curp: Optional[Union[str, int]] = None
