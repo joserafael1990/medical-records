@@ -201,12 +201,12 @@ class PatientBase(BaseModel):
     address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
-    postal_code: Optional[str] = None
+    postal_code: Optional[Union[str, int]] = None
     country: str = "México"
-    phone: Optional[str] = None
+    phone: Optional[Union[str, int]] = None
     email: Optional[str] = None
     emergency_contact_name: Optional[str] = None
-    emergency_contact_phone: Optional[str] = None
+    emergency_contact_phone: Optional[Union[str, int]] = None
     emergency_contact_relationship: Optional[str] = None
     
     # Insurance and Medical
@@ -223,6 +223,14 @@ class PatientBase(BaseModel):
     # System fields
     created_by: str
 
+    @field_validator('phone', 'postal_code', 'emergency_contact_phone')
+    @classmethod
+    def validate_numeric_fields(cls, v):
+        """Convert integer values to strings for phone and postal code fields"""
+        if v is not None:
+            return str(v)
+        return v
+
 class PatientCreate(PatientBase):
     pass
 
@@ -234,15 +242,15 @@ class PatientUpdate(BaseModel):
     birth_date: Optional[date] = None
     gender: Optional[str] = None
     curp: Optional[str] = None
-    phone: Optional[str] = None
+    phone: Optional[Union[str, int]] = None
     email: Optional[EmailStr] = None
     address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
-    postal_code: Optional[str] = None
+    postal_code: Optional[Union[str, int]] = None
     country: Optional[str] = None
     emergency_contact_name: Optional[str] = None
-    emergency_contact_phone: Optional[str] = None
+    emergency_contact_phone: Optional[Union[str, int]] = None
     emergency_contact_relationship: Optional[str] = None
     insurance_provider: Optional[str] = None
     insurance_number: Optional[str] = None
@@ -252,6 +260,14 @@ class PatientUpdate(BaseModel):
     current_medications: Optional[str] = None
     status: Optional[str] = None  # 'active' or 'inactive'
     created_by: Optional[str] = None
+
+    @field_validator('phone', 'postal_code', 'emergency_contact_phone')
+    @classmethod
+    def validate_numeric_fields(cls, v):
+        """Convert integer values to strings for phone and postal code fields"""
+        if v is not None:
+            return str(v)
+        return v
 
 class PatientResponse(BaseModel):
     # Copy of PatientBase but with birth_date as string for API response
@@ -350,6 +366,14 @@ class DoctorProfileBase(BaseModel):
     @classmethod
     def validate_graduation_year(cls, v):
         """Convert integer graduation year to string"""
+        if v is not None:
+            return str(v)
+        return v
+    
+    @field_validator('phone', 'postal_code', 'emergency_contact_phone')
+    @classmethod
+    def validate_numeric_fields(cls, v):
+        """Convert integer values to strings for phone and postal code fields"""
         if v is not None:
             return str(v)
         return v
