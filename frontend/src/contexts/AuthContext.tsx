@@ -98,35 +98,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setIsLoading(false);
         return true;
     } catch (error) {
-      console.error('Login error - Backend not available, using fallback mode:', error);
-      
-      // Fallback mode: If backend is not available, simulate login with default doctor
-      if (email === 'dr.garcia@historias.com' && password === 'password123') {
-        const fallbackDoctor = {
-          id: 'DR001',
-          full_name: 'Lic. Gloria Adriana Moreno',
-          title: 'Lic.',
-          first_name: 'Gloria',
-          paternal_surname: 'Adriana',
-          maternal_surname: 'Moreno',
-          email: 'dr.garcia@historias.com',
-          specialty: 'Medicina General',
-          professional_license: '12345678'
-        };
-        
-        // Store fallback authentication data
-        localStorage.setItem('token', 'fallback_token'); // Changed from 'auth_token' to 'token'
-        localStorage.setItem('doctor_data', JSON.stringify(fallbackDoctor));
-        
-        setUser({
-          doctor: fallbackDoctor,
-          token: 'fallback_token'
-        });
-        
-        setIsLoading(false);
-        return true;
-      }
-      
+      console.error('Login error:', error);
       setIsLoading(false);
       return false;
     }

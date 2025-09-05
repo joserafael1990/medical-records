@@ -190,7 +190,7 @@ class PatientBase(BaseModel):
     maternal_surname: Optional[str] = None
     
     # Personal Information
-    curp: Optional[str] = None
+    curp: Optional[Union[str, int]] = None
     birth_date: date
     gender: str
     civil_status: Optional[str] = None
@@ -211,7 +211,7 @@ class PatientBase(BaseModel):
     
     # Insurance and Medical
     insurance_provider: Optional[str] = None
-    insurance_number: Optional[str] = None
+    insurance_number: Optional[Union[str, int]] = None
     blood_type: Optional[str] = None
     allergies: Optional[str] = None
     chronic_conditions: Optional[str] = None
@@ -223,10 +223,10 @@ class PatientBase(BaseModel):
     # System fields
     created_by: str
 
-    @field_validator('phone', 'postal_code', 'emergency_contact_phone')
+    @field_validator('phone', 'postal_code', 'emergency_contact_phone', 'insurance_number', 'curp')
     @classmethod
     def validate_numeric_fields(cls, v):
-        """Convert integer values to strings for phone and postal code fields"""
+        """Convert integer values to strings for phone, postal code, insurance and ID fields"""
         if v is not None:
             return str(v)
         return v
@@ -241,7 +241,7 @@ class PatientUpdate(BaseModel):
     maternal_surname: Optional[str] = None
     birth_date: Optional[date] = None
     gender: Optional[str] = None
-    curp: Optional[str] = None
+    curp: Optional[Union[str, int]] = None
     phone: Optional[Union[str, int]] = None
     email: Optional[EmailStr] = None
     address: Optional[str] = None
@@ -253,7 +253,7 @@ class PatientUpdate(BaseModel):
     emergency_contact_phone: Optional[Union[str, int]] = None
     emergency_contact_relationship: Optional[str] = None
     insurance_provider: Optional[str] = None
-    insurance_number: Optional[str] = None
+    insurance_number: Optional[Union[str, int]] = None
     blood_type: Optional[str] = None
     allergies: Optional[str] = None
     chronic_conditions: Optional[str] = None
@@ -261,10 +261,10 @@ class PatientUpdate(BaseModel):
     status: Optional[str] = None  # 'active' or 'inactive'
     created_by: Optional[str] = None
 
-    @field_validator('phone', 'postal_code', 'emergency_contact_phone')
+    @field_validator('phone', 'postal_code', 'emergency_contact_phone', 'insurance_number', 'curp')
     @classmethod
     def validate_numeric_fields(cls, v):
-        """Convert integer values to strings for phone and postal code fields"""
+        """Convert integer values to strings for phone, postal code, insurance and ID fields"""
         if v is not None:
             return str(v)
         return v
@@ -276,7 +276,7 @@ class PatientResponse(BaseModel):
     maternal_surname: Optional[str] = None
     birth_date: str  # String format for API response
     gender: str
-    curp: Optional[str] = None
+    curp: Optional[Union[str, int]] = None
     civil_status: Optional[str] = None
     nationality: str = "mexicana"
     birth_place: Optional[str] = None
@@ -293,7 +293,7 @@ class PatientResponse(BaseModel):
     
     # Insurance and Medical fields
     insurance_provider: Optional[str] = None
-    insurance_number: Optional[str] = None
+    insurance_number: Optional[Union[str, int]] = None
     blood_type: Optional[str] = None  # Added missing blood_type field
     
     # Medical history fields
@@ -325,13 +325,13 @@ class DoctorProfileBase(BaseModel):
     birth_date: date
     
     # Legal Identification (NOM-024 Required)
-    curp: str  # CURP - Obligatorio según NOM-024
-    rfc: Optional[str] = None  # RFC - Opcional para fines fiscales
+    curp: Union[str, int]  # CURP - Obligatorio según NOM-024
+    rfc: Optional[Union[str, int]] = None  # RFC - Opcional para fines fiscales
     
     # Professional Information (NOM-004 Required)
-    professional_license: str
+    professional_license: Union[str, int]
     specialty: str
-    specialty_license: Optional[str] = None
+    specialty_license: Optional[Union[str, int]] = None
     university: str
     graduation_year: Union[str, int]
     subspecialty: Optional[str] = None
@@ -370,10 +370,10 @@ class DoctorProfileBase(BaseModel):
             return str(v)
         return v
     
-    @field_validator('phone', 'office_phone', 'mobile_phone', 'office_postal_code')
+    @field_validator('phone', 'office_phone', 'mobile_phone', 'office_postal_code', 'curp', 'rfc', 'professional_license', 'specialty_license')
     @classmethod
     def validate_numeric_fields(cls, v):
-        """Convert integer values to strings for phone and postal code fields"""
+        """Convert integer values to strings for phone, postal code, licenses and ID fields"""
         if v is not None:
             return str(v)
         return v
@@ -474,11 +474,11 @@ class DoctorProfileUpdate(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[Union[str, int]] = None
     birth_date: Optional[date] = None
-    curp: Optional[str] = None
-    rfc: Optional[str] = None
-    professional_license: Optional[str] = None
+    curp: Optional[Union[str, int]] = None
+    rfc: Optional[Union[str, int]] = None
+    professional_license: Optional[Union[str, int]] = None
     specialty: Optional[str] = None
-    specialty_license: Optional[str] = None
+    specialty_license: Optional[Union[str, int]] = None
     university: Optional[str] = None
     graduation_year: Optional[Union[str, int]] = None
     subspecialty: Optional[str] = None
@@ -497,10 +497,10 @@ class DoctorProfileUpdate(BaseModel):
     professional_seal: Optional[str] = None
     created_by: Optional[str] = None
 
-    @field_validator('graduation_year', 'phone', 'office_phone', 'mobile_phone', 'office_postal_code')
+    @field_validator('graduation_year', 'phone', 'office_phone', 'mobile_phone', 'office_postal_code', 'curp', 'rfc', 'professional_license', 'specialty_license')
     @classmethod
     def validate_numeric_fields(cls, v):
-        """Convert integer values to strings for numeric fields"""
+        """Convert integer values to strings for numeric, license and ID fields"""
         if v is not None:
             return str(v)
         return v
@@ -1234,7 +1234,7 @@ async def update_doctor_profile(
         # Synchronize email: if email was updated in profile, update user's login email too
         if 'email' in profile_data:
             from database import User
-            user = db.query(User).filter(User.doctor_id == updated_profile.id).first()
+            user = db.query(User).filter(User.id == updated_profile.id).first()
             if user and user.email != updated_profile.email:
                 print(f"🔄 Synchronizing email: {user.email} → {updated_profile.email}")
                 user.email = updated_profile.email
