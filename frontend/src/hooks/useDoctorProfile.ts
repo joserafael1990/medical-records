@@ -36,6 +36,10 @@ const initialFormData: DoctorFormData = {
   phone: '',
   birth_date: '',
   
+  // Identificación Legal
+  curp: '',
+  rfc: '',
+  
   // Información Profesional
   professional_license: '',
   specialty_license: '',
@@ -329,6 +333,8 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
         email: doctorProfile.email || '',
         phone: doctorProfile.phone || '',
         birth_date: formatDateForInput(doctorProfile.birth_date || ''),
+        curp: doctorProfile.curp || '',
+        rfc: doctorProfile.rfc || '',
         professional_license: doctorProfile.professional_license || '',
         specialty_license: doctorProfile.specialty_license || '',
         university: doctorProfile.university || '',

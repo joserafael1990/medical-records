@@ -37,6 +37,11 @@ export const useAppointmentManager = (
   patients: any[],
   doctorProfile: any
 ): UseAppointmentManagerReturn => {
+  console.log('🏗️ useAppointmentManager initialized with:', { 
+    patients: patients?.length || 0, 
+    doctorProfile: doctorProfile?.id || 'none' 
+  });
+  
   // State
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -91,8 +96,10 @@ export const useAppointmentManager = (
       const dateStr = dateToFetch.toISOString().split('T')[0];
       console.log('📅 Fetching appointments for date:', dateStr);
       const data = await apiService.getDailyAgenda(dateStr);
+      console.log('📊 Raw API response:', data);
       setAppointments(data);
-      console.log('✅ Fetched appointments:', data.length);
+      console.log('✅ Fetched appointments count:', data.length);
+      console.log('🎯 Appointments set in state:', data);
     } catch (error) {
       console.error('Error fetching appointments:', error);
     }
@@ -195,8 +202,17 @@ export const useAppointmentManager = (
 
   // Auto-fetch appointments when selectedDate changes
   useEffect(() => {
+    console.log('🔄 useAppointmentManager - selectedDate changed:', selectedDate.toISOString());
     fetchAppointments();
   }, [selectedDate, fetchAppointments]);
+
+  // Debug: log when appointments state changes
+  useEffect(() => {
+    console.log('📊 useAppointmentManager - appointments state changed:', {
+      count: appointments.length,
+      appointments: appointments
+    });
+  }, [appointments]);
 
   return {
     // State

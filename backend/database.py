@@ -13,32 +13,14 @@ import uuid
 from datetime import datetime
 import os
 
-# Database URL - can be configured via environment variable
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", 
-    "sqlite:///./historias_clinicas.db"  # Default to SQLite for development
-)
+# Database URL - PostgreSQL only configuration
+from config import settings
+DATABASE_URL = settings.DATABASE_URL
 
-# Check if PostgreSQL is available and fallback to SQLite
-if DATABASE_URL.startswith("postgresql://"):
-    print(f"🐘 Intentando conectar a PostgreSQL: {DATABASE_URL}")
-    try:
-        # Test PostgreSQL connection
-        test_engine = create_engine(DATABASE_URL)
-        test_engine.connect()
-        print(f"✅ PostgreSQL conectado exitosamente")
-    except Exception as e:
-        print(f"❌ Error al conectar a PostgreSQL: {e}")
-        print(f"🔄 Cambiando a SQLite para desarrollo...")
-        DATABASE_URL = "sqlite:///./historias_clinicas.db"
-else:
-    print(f"📁 Usando SQLite: {DATABASE_URL}")
+print(f"🐘 Conectando a PostgreSQL: {DATABASE_URL}")
 
-# SQLAlchemy setup
-if DATABASE_URL.startswith("sqlite"):
-    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-else:
-    engine = create_engine(DATABASE_URL)
+# SQLAlchemy setup - PostgreSQL only
+engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

@@ -25,6 +25,7 @@ def load_validation_schemas():
         return {
             "patterns": {
                 "curp": "^[A-Z]{4}\\d{6}[HM][A-Z]{5}[A-Z0-9]\\d$",
+                "rfc": "^[A-Z&]{3,4}\\d{6}[A-Z0-9]{3}$",
                 "email": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
                 "phone_mexico": "^(\\+52\\s?)?(\\d{10}|\\d{3}\\s?\\d{3}\\s?\\d{4})$",
                 "professional_license": "^\\d{7,8}$",
@@ -69,6 +70,23 @@ def validate_curp(curp: str) -> bool:
     
     # Additional validation logic could be added here
     # (checksum validation, valid state codes, etc.)
+    
+    return True
+
+def validate_rfc(rfc: str) -> bool:
+    """Validate Mexican RFC (Registro Federal de Contribuyentes)"""
+    if not rfc:
+        return False
+    
+    rfc = rfc.upper()
+    
+    # Length validation: persons 13 chars, companies 12 chars
+    if len(rfc) not in [12, 13]:
+        return False
+    
+    # Basic pattern validation
+    if not VALIDATION_PATTERNS['rfc'].match(rfc):
+        return False
     
     return True
 

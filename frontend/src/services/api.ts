@@ -185,6 +185,35 @@ class ApiService {
   }
 
   // ============================================================================
+  // GENERIC HTTP METHODS
+  // ============================================================================
+
+  async get<T = any>(url: string, params?: any): Promise<{ data: T }> {
+    const response = await this.api.get<T>(url, { params });
+    return response;
+  }
+
+  async post<T = any>(url: string, data?: any): Promise<{ data: T }> {
+    const response = await this.api.post<T>(url, data);
+    return response;
+  }
+
+  async put<T = any>(url: string, data?: any): Promise<{ data: T }> {
+    const response = await this.api.put<T>(url, data);
+    return response;
+  }
+
+  async delete<T = any>(url: string): Promise<{ data: T }> {
+    const response = await this.api.delete<T>(url);
+    return response;
+  }
+
+  async patch<T = any>(url: string, data?: any): Promise<{ data: T }> {
+    const response = await this.api.patch<T>(url, data);
+    return response;
+  }
+
+  // ============================================================================
   // HEALTH CHECK
   // ============================================================================
 

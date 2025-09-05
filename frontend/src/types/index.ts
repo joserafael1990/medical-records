@@ -355,6 +355,10 @@ export interface DoctorProfile {
   phone: string;
   birth_date: string;
   
+  // Identificación Legal (NOM-024)
+  curp: string; // CURP - Obligatorio según NOM-024
+  rfc?: string; // RFC - Opcional para fines fiscales
+  
   // Información Profesional (NOM-004)
   professional_license: string; // Cédula profesional
   specialty_license?: string; // Cédula de especialidad
@@ -401,6 +405,10 @@ export interface DoctorFormData {
   email: string;
   phone: string;
   birth_date: string;
+  
+  // Identificación Legal (NOM-024)
+  curp: string; // CURP - Obligatorio según NOM-024
+  rfc: string; // RFC - Opcional para fines fiscales
   
   // Información Profesional
   professional_license: string;

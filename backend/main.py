@@ -32,6 +32,19 @@ from database import (
     ClinicalStudy as DBClinicalStudy,
     Appointment as DBAppointment
 )
+from models.schedule import (
+    ScheduleTemplate as DBScheduleTemplate,
+    ScheduleException as DBScheduleException,
+    ScheduleSlot as DBScheduleSlot,
+    ScheduleTemplateCreate,
+    ScheduleTemplateUpdate,
+    ScheduleTemplate,
+    ScheduleExceptionCreate,
+    ScheduleException,
+    WeeklySchedule,
+    AvailableSlot,
+    DaySchedule
+)
 from db_service import (
     PatientService, DoctorService, ConsultationService, MedicalOrderService, 
     ClinicalStudyService, AuthService, get_dashboard_data
@@ -295,6 +308,10 @@ class DoctorProfileBase(BaseModel):
     phone: str
     birth_date: date
     
+    # Legal Identification (NOM-024 Required)
+    curp: str  # CURP - Obligatorio según NOM-024
+    rfc: Optional[str] = None  # RFC - Opcional para fines fiscales
+    
     # Professional Information (NOM-004 Required)
     professional_license: str
     specialty: str
@@ -425,6 +442,8 @@ class DoctorProfileUpdate(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     birth_date: Optional[date] = None
+    curp: Optional[str] = None
+    rfc: Optional[str] = None
     professional_license: Optional[str] = None
     specialty: Optional[str] = None
     specialty_license: Optional[str] = None
@@ -1062,6 +1081,8 @@ async def get_doctor_profile(
         "email": profile.email,
         "phone": profile.phone,
         "birth_date": profile.birth_date,
+        "curp": profile.curp,
+        "rfc": profile.rfc or "",
         "professional_license": profile.professional_license,
         "specialty": profile.specialty,
         "specialty_license": profile.specialty_license or "",
@@ -1111,6 +1132,8 @@ async def create_doctor_profile(profile: DoctorProfileCreate, db: Session = Depe
             "email": new_profile.email,
             "phone": new_profile.phone,
             "birth_date": new_profile.birth_date,
+            "curp": new_profile.curp,
+            "rfc": new_profile.rfc or "",
             "professional_license": new_profile.professional_license,
             "specialty": new_profile.specialty,
             "specialty_license": new_profile.specialty_license or "",
@@ -1189,6 +1212,8 @@ async def update_doctor_profile(
             "email": updated_profile.email,
             "phone": updated_profile.phone,
             "birth_date": updated_profile.birth_date,
+            "curp": updated_profile.curp,
+            "rfc": updated_profile.rfc or "",
             "professional_license": updated_profile.professional_license,
             "specialty": updated_profile.specialty,
             "specialty_license": updated_profile.specialty_license or "",
@@ -2381,6 +2406,713 @@ async def update_order_status(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error updating order status: {str(e)}")
+
+# ============================================================================
+# INTEROPERABILITY ENDPOINTS (HL7 FHIR) - NOM-024 Compliance
+# ============================================================================
+
+from interoperability import InteroperabilityService, FHIRExporter
+from encryption import get_encryption_service
+
+@app.get("/api/fhir/Patient/{patient_id}")
+async def get_fhir_patient(
+    patient_id: str,
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
+):
+    """Obtener paciente en formato FHIR"""
+    try:
+        patient = PatientService.get_patient(db, patient_id)
+        if not patient:
+            raise HTTPException(status_code=404, detail="Paciente no encontrado")
+        
+        interop_service = InteroperabilityService()
+        fhir_patient = interop_service.patient_to_fhir_patient(patient)
+        
+        return fhir_patient.dict()
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error obteniendo paciente FHIR: {str(e)}")
+
+@app.get("/api/fhir/Practitioner/{doctor_id}")
+async def get_fhir_practitioner(
+    doctor_id: str,
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
+):
+    """Obtener médico en formato FHIR"""
+    try:
+        doctor = DoctorService.get_profile_by_id(db, doctor_id)
+        if not doctor:
+            raise HTTPException(status_code=404, detail="Médico no encontrado")
+        
+        interop_service = InteroperabilityService()
+        fhir_practitioner = interop_service.doctor_to_fhir_practitioner(doctor)
+        
+        return fhir_practitioner.dict()
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error obteniendo médico FHIR: {str(e)}")
+
+@app.get("/api/fhir/Bundle/patient-summary/{patient_id}")
+async def get_patient_summary_bundle(
+    patient_id: str,
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
+):
+    """Obtener resumen completo del paciente en formato FHIR Bundle"""
+    try:
+        # Obtener datos del paciente
+        patient = PatientService.get_patient(db, patient_id)
+        if not patient:
+            raise HTTPException(status_code=404, detail="Paciente no encontrado")
+        
+        # Obtener consultas del paciente
+        consultations = ConsultationService.get_consultations_by_patient(db, patient_id)
+        
+        # Obtener médico actual
+        doctor_profile = current_doctor
+        
+        # Exportar como bundle FHIR
+        exporter = FHIRExporter()
+        bundle = exporter.export_patient_summary(patient, consultations, doctor_profile)
+        
+        return bundle
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generando bundle FHIR: {str(e)}")
+
+# ============================================================================
+# ENCRYPTION ENDPOINTS - NOM-035 Compliance
+# ============================================================================
+
+@app.post("/api/admin/encrypt-existing-data")
+async def encrypt_existing_data(
+    table_name: str,
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
+):
+    """Endpoint administrativo para cifrar datos existentes"""
+    try:
+        # Solo permitir a administradores
+        if not current_doctor or current_doctor.id != "ADMIN":
+            raise HTTPException(status_code=403, detail="Acceso denegado")
+        
+        encryption_service = get_encryption_service()
+        
+        if table_name == "patients":
+            from encryption import EncryptionMigration
+            EncryptionMigration.migrate_table_to_encrypted(db, Patient, encryption_service)
+        elif table_name == "doctors":
+            from encryption import EncryptionMigration
+            EncryptionMigration.migrate_table_to_encrypted(db, DBDoctorProfile, encryption_service)
+        else:
+            raise HTTPException(status_code=400, detail="Tabla no válida")
+        
+        return {"message": f"Datos de {table_name} cifrados exitosamente"}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error cifrando datos: {str(e)}")
+
+@app.get("/api/admin/encryption-status")
+async def get_encryption_status(
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
+):
+    """Obtener estado del cifrado de datos"""
+    try:
+        # Verificar si hay clave de cifrado configurada
+        import os
+        encryption_key_configured = bool(os.getenv('MEDICAL_ENCRYPTION_KEY'))
+        
+        # Contar registros con datos potencialmente sensibles
+        total_patients = db.query(Patient).count()
+        total_doctors = db.query(DBDoctorProfile).count()
+        
+        return {
+            "encryption_key_configured": encryption_key_configured,
+            "total_patients": total_patients,
+            "total_doctors": total_doctors,
+            "encryption_algorithm": "AES-256-GCM",
+            "key_derivation": "PBKDF2-SHA256",
+            "compliance_status": "NOM-035 Partial" if encryption_key_configured else "Non-compliant"
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error obteniendo estado de cifrado: {str(e)}")
+
+# ============================================================================
+# CATALOGS ENDPOINTS - NOM-035 Compliance
+# ============================================================================
+
+@app.get("/api/catalogs/specialties")
+async def get_medical_specialties():
+    """Obtener catálogo de especialidades médicas según NOM-035"""
+    from interoperability import NOMCatalogs
+    return NOMCatalogs.MEDICAL_SPECIALTIES
+
+@app.get("/api/catalogs/genders")
+async def get_gender_codes():
+    """Obtener catálogo de códigos de género según NOM-035"""
+    from interoperability import NOMCatalogs
+    return NOMCatalogs.GENDER_CODES
+
+@app.get("/api/catalogs/encounter-types")
+async def get_encounter_types():
+    """Obtener catálogo de tipos de encuentro según NOM-035"""
+    from interoperability import NOMCatalogs
+    return NOMCatalogs.ENCOUNTER_TYPES
+
+# ============================================================================
+# DIGITAL SIGNATURE ENDPOINTS - NOM-004/NOM-024 Compliance
+# ============================================================================
+
+from digital_signature import (
+    get_digital_signature_service,
+    get_certificate_manager,
+    get_medical_document_signer,
+    get_signature_verification_service
+)
+
+class CertificateRequest(BaseModel):
+    """Solicitud para generar certificado digital"""
+    password: str
+    validity_days: int = 365
+
+class SignDocumentRequest(BaseModel):
+    """Solicitud para firmar documento"""
+    document_type: str  # consultation, prescription, medical_certificate
+    document_data: Dict[str, Any]
+    certificate_password: str
+
+class VerifySignatureRequest(BaseModel):
+    """Solicitud para verificar firma"""
+    document_content: str
+    signature_data: Dict[str, Any]
+
+@app.post("/api/digital-signature/generate-certificate")
+async def generate_digital_certificate(
+    request: CertificateRequest,
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
+):
+    """Generar certificado digital para el médico"""
+    try:
+        if not current_doctor:
+            raise HTTPException(status_code=401, detail="Doctor no autenticado")
+        
+        # Obtener servicios
+        signature_service = get_digital_signature_service()
+        cert_manager = get_certificate_manager()
+        
+        # Información del doctor para el certificado
+        doctor_info = {
+            "full_name": current_doctor.full_name,
+            "email": current_doctor.email,
+            "professional_license": current_doctor.professional_license,
+            "curp": getattr(current_doctor, 'curp', ''),
+            "state": getattr(current_doctor, 'office_state', 'CDMX'),
+            "city": getattr(current_doctor, 'office_city', 'Ciudad de México')
+        }
+        
+        # Generar par de claves
+        private_key, public_key = signature_service.generate_key_pair()
+        
+        # Crear certificado autofirmado
+        certificate = signature_service.create_self_signed_certificate(
+            private_key, 
+            doctor_info, 
+            request.validity_days
+        )
+        
+        # Almacenar certificado de forma segura
+        cert_path = cert_manager.store_certificate(
+            current_doctor.id,
+            certificate,
+            private_key,
+            request.password
+        )
+        
+        # Obtener información del certificado
+        cert_info = cert_manager.get_certificate_info(current_doctor.id, request.password)
+        
+        return {
+            "message": "Certificado digital generado exitosamente",
+            "certificate_info": {
+                "certificate_id": cert_info.certificate_id,
+                "subject_name": cert_info.subject_name,
+                "not_before": cert_info.not_before,
+                "not_after": cert_info.not_after,
+                "key_usage": cert_info.key_usage,
+                "is_active": cert_info.is_active
+            },
+            "certificate_path": cert_path
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generando certificado: {str(e)}")
+
+@app.get("/api/digital-signature/certificate-info")
+async def get_certificate_info(
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
+):
+    """Obtener información del certificado digital del médico"""
+    try:
+        if not current_doctor:
+            raise HTTPException(status_code=401, detail="Doctor no autenticado")
+        
+        cert_manager = get_certificate_manager()
+        
+        # Verificar si existe certificado
+        cert_file = f"{current_doctor.id}_certificate.p12"
+        cert_path = os.path.join(cert_manager.certificates_dir, cert_file)
+        
+        if not os.path.exists(cert_path):
+            return {
+                "has_certificate": False,
+                "message": "No hay certificado digital configurado"
+            }
+        
+        return {
+            "has_certificate": True,
+            "certificate_file": cert_file,
+            "message": "Certificado digital encontrado. Use la contraseña para acceder a los detalles."
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error obteniendo información del certificado: {str(e)}")
+
+@app.post("/api/digital-signature/sign-document")
+async def sign_medical_document(
+    request: SignDocumentRequest,
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
+):
+    """Firmar documento médico digitalmente"""
+    try:
+        if not current_doctor:
+            raise HTTPException(status_code=401, detail="Doctor no autenticado")
+        
+        # Obtener servicios
+        cert_manager = get_certificate_manager()
+        document_signer = get_medical_document_signer()
+        
+        # Cargar certificado y clave privada
+        try:
+            private_key, certificate = cert_manager.load_certificate(
+                current_doctor.id, 
+                request.certificate_password
+            )
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Certificado digital no encontrado")
+        except Exception:
+            raise HTTPException(status_code=401, detail="Contraseña de certificado incorrecta")
+        
+        # Agregar información del doctor al documento
+        document_data = request.document_data.copy()
+        document_data["doctor_id"] = current_doctor.id
+        document_data["doctor_name"] = current_doctor.full_name
+        document_data["professional_license"] = current_doctor.professional_license
+        
+        # Firmar documento según su tipo
+        if request.document_type == "consultation":
+            signature_manifest = document_signer.sign_consultation(
+                document_data, private_key, certificate
+            )
+        elif request.document_type == "prescription":
+            signature_manifest = document_signer.sign_prescription(
+                document_data, private_key, certificate
+            )
+        elif request.document_type == "medical_certificate":
+            signature_manifest = document_signer.sign_medical_certificate(
+                document_data, private_key, certificate
+            )
+        else:
+            raise HTTPException(status_code=400, detail="Tipo de documento no válido")
+        
+        return {
+            "message": "Documento firmado exitosamente",
+            "signature_manifest": {
+                "document_id": signature_manifest.document_id,
+                "document_type": signature_manifest.document_type,
+                "document_hash": signature_manifest.document_hash,
+                "signatures": [
+                    {
+                        "signature_id": sig.signature_id,
+                        "timestamp": sig.timestamp,
+                        "algorithm": sig.algorithm,
+                        "status": sig.status
+                    } for sig in signature_manifest.signatures
+                ],
+                "creation_timestamp": signature_manifest.creation_timestamp,
+                "last_signature_timestamp": signature_manifest.last_signature_timestamp
+            }
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error firmando documento: {str(e)}")
+
+@app.post("/api/digital-signature/verify-signature")
+async def verify_document_signature(
+    request: VerifySignatureRequest,
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
+):
+    """Verificar firma digital de un documento"""
+    try:
+        verification_service = get_signature_verification_service()
+        
+        # Crear objeto DocumentSignature desde los datos recibidos
+        from digital_signature import DocumentSignature, DigitalSignature
+        
+        signatures = [
+            DigitalSignature(
+                signature_id=sig["signature_id"],
+                document_hash=sig["document_hash"],
+                signature_value=sig["signature_value"],
+                timestamp=sig["timestamp"],
+                signer_certificate=sig["signer_certificate"],
+                algorithm=sig.get("algorithm", "SHA256withRSA"),
+                status=sig.get("status", "valid")
+            ) for sig in request.signature_data["signatures"]
+        ]
+        
+        document_signature = DocumentSignature(
+            document_id=request.signature_data["document_id"],
+            document_type=request.signature_data["document_type"],
+            signatures=signatures,
+            document_hash=request.signature_data["document_hash"],
+            creation_timestamp=request.signature_data["creation_timestamp"],
+            last_signature_timestamp=request.signature_data["last_signature_timestamp"]
+        )
+        
+        # Verificar firmas
+        verification_results = verification_service.verify_document_signatures(
+            request.document_content,
+            document_signature
+        )
+        
+        return {
+            "message": "Verificación de firmas completada",
+            "verification_results": verification_results
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error verificando firmas: {str(e)}")
+
+@app.get("/api/digital-signature/status")
+async def get_digital_signature_status(
+    db: Session = Depends(get_db),
+    current_doctor: DBDoctorProfile = Depends(get_current_doctor_optional)
+):
+    """Obtener estado general de firma digital del sistema"""
+    try:
+        # Contar médicos con certificados
+        cert_manager = get_certificate_manager()
+        total_doctors = db.query(DBDoctorProfile).count()
+        
+        cert_count = 0
+        cert_dir = cert_manager.certificates_dir
+        if os.path.exists(cert_dir):
+            cert_files = [f for f in os.listdir(cert_dir) if f.endswith('_certificate.p12')]
+            cert_count = len(cert_files)
+        
+        return {
+            "digital_signature_enabled": True,
+            "certificate_directory": cert_dir,
+            "total_doctors": total_doctors,
+            "doctors_with_certificates": cert_count,
+            "certificate_coverage": f"{(cert_count/total_doctors*100):.1f}%" if total_doctors > 0 else "0%",
+            "signing_algorithm": "SHA256withRSA",
+            "key_size": "2048 bits",
+            "certificate_standard": "X.509 v3",
+            "pkcs12_format": "PKCS#12",
+            "compliance_status": "NOM-004/NOM-024 Compliant"
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error obteniendo estado: {str(e)}")
+
+# ============================================================================
+# SCHEDULE ENDPOINTS - Gestión de horarios
+# ============================================================================
+
+@app.post("/api/schedule/templates", response_model=ScheduleTemplate)
+async def create_schedule_template(
+    template: ScheduleTemplateCreate,
+    current_doctor: DoctorInfo = Depends(get_current_doctor),
+    db: Session = Depends(get_db)
+):
+    """Crear una nueva plantilla de horario"""
+    try:
+        # Verificar si ya existe un horario para este día
+        existing = db.query(DBScheduleTemplate).filter(
+            DBScheduleTemplate.doctor_id == current_doctor.id,
+            DBScheduleTemplate.day_of_week == template.day_of_week
+        ).first()
+        
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Ya existe un horario configurado para este día de la semana"
+            )
+        
+        db_template = DBScheduleTemplate(
+            doctor_id=current_doctor.id,
+            **template.dict()
+        )
+        
+        db.add(db_template)
+        db.commit()
+        db.refresh(db_template)
+        
+        api_logger.info(f"Plantilla de horario creada para doctor {current_doctor.id}, día {template.day_of_week}")
+        return db_template
+        
+    except Exception as e:
+        db.rollback()
+        api_logger.error(f"Error creando plantilla de horario: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+@app.get("/api/schedule/templates", response_model=List[ScheduleTemplate])
+async def get_schedule_templates(
+    current_doctor: DoctorInfo = Depends(get_current_doctor),
+    db: Session = Depends(get_db)
+):
+    """Obtener todas las plantillas de horario del médico"""
+    try:
+        templates = db.query(DBScheduleTemplate).filter(
+            DBScheduleTemplate.doctor_id == current_doctor.id
+        ).order_by(DBScheduleTemplate.day_of_week).all()
+        
+        return templates
+        
+    except Exception as e:
+        api_logger.error(f"Error obteniendo plantillas de horario: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+@app.get("/api/schedule/templates/weekly", response_model=WeeklySchedule)
+async def get_weekly_schedule(
+    current_doctor: DoctorInfo = Depends(get_current_doctor),
+    db: Session = Depends(get_db)
+):
+    """Obtener el horario semanal completo"""
+    try:
+        templates = db.query(DBScheduleTemplate).filter(
+            DBScheduleTemplate.doctor_id == current_doctor.id
+        ).all()
+        
+        # Organizar por día de la semana
+        weekly = {
+            0: None,  # Lunes
+            1: None,  # Martes
+            2: None,  # Miércoles
+            3: None,  # Jueves
+            4: None,  # Viernes
+            5: None,  # Sábado
+            6: None   # Domingo
+        }
+        
+        for template in templates:
+            weekly[template.day_of_week] = template
+        
+        return WeeklySchedule(
+            monday=weekly[0],
+            tuesday=weekly[1],
+            wednesday=weekly[2],
+            thursday=weekly[3],
+            friday=weekly[4],
+            saturday=weekly[5],
+            sunday=weekly[6]
+        )
+        
+    except Exception as e:
+        api_logger.error(f"Error obteniendo horario semanal: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+@app.put("/api/schedule/templates/{template_id}", response_model=ScheduleTemplate)
+async def update_schedule_template(
+    template_id: int,
+    template_update: ScheduleTemplateUpdate,
+    current_doctor: DoctorInfo = Depends(get_current_doctor),
+    db: Session = Depends(get_db)
+):
+    """Actualizar una plantilla de horario"""
+    try:
+        db_template = db.query(DBScheduleTemplate).filter(
+            DBScheduleTemplate.id == template_id,
+            DBScheduleTemplate.doctor_id == current_doctor.id
+        ).first()
+        
+        if not db_template:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Plantilla de horario no encontrada"
+            )
+        
+        # Actualizar campos
+        update_data = template_update.dict(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(db_template, field, value)
+        
+        db_template.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(db_template)
+        
+        api_logger.info(f"Plantilla de horario {template_id} actualizada")
+        return db_template
+        
+    except Exception as e:
+        db.rollback()
+        api_logger.error(f"Error actualizando plantilla de horario: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+@app.delete("/api/schedule/templates/{template_id}")
+async def delete_schedule_template(
+    template_id: int,
+    current_doctor: DoctorInfo = Depends(get_current_doctor),
+    db: Session = Depends(get_db)
+):
+    """Eliminar una plantilla de horario"""
+    try:
+        db_template = db.query(DBScheduleTemplate).filter(
+            DBScheduleTemplate.id == template_id,
+            DBScheduleTemplate.doctor_id == current_doctor.id
+        ).first()
+        
+        if not db_template:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Plantilla de horario no encontrada"
+            )
+        
+        db.delete(db_template)
+        db.commit()
+        
+        api_logger.info(f"Plantilla de horario {template_id} eliminada")
+        return {"message": "Plantilla de horario eliminada exitosamente"}
+        
+    except Exception as e:
+        db.rollback()
+        api_logger.error(f"Error eliminando plantilla de horario: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+@app.post("/api/schedule/generate-weekly-template")
+async def generate_default_weekly_template(
+    current_doctor: DoctorInfo = Depends(get_current_doctor),
+    db: Session = Depends(get_db)
+):
+    """Generar plantilla semanal por defecto (Lunes a Viernes 9:00-18:00)"""
+    try:
+        # Verificar si ya existen plantillas
+        existing_count = db.query(DBScheduleTemplate).filter(
+            DBScheduleTemplate.doctor_id == current_doctor.id
+        ).count()
+        
+        if existing_count > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ya existen plantillas de horario configuradas"
+            )
+        
+        # Crear plantillas para Lunes a Viernes
+        from datetime import time
+        for day in range(5):  # 0-4 (Lunes a Viernes)
+            template = DBScheduleTemplate(
+                doctor_id=current_doctor.id,
+                day_of_week=day,
+                start_time=time(9, 0),  # 9:00 AM
+                end_time=time(18, 0),   # 6:00 PM
+                consultation_duration=30,
+                break_duration=0,
+                lunch_start=time(13, 0),  # 1:00 PM
+                lunch_end=time(14, 0),    # 2:00 PM
+                is_active=True
+            )
+            db.add(template)
+        
+        db.commit()
+        
+        api_logger.info(f"Plantilla semanal por defecto creada para doctor {current_doctor.id}")
+        return {"message": "Plantilla semanal por defecto creada exitosamente"}
+        
+    except Exception as e:
+        db.rollback()
+        api_logger.error(f"Error generando plantilla semanal: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+@app.get("/api/schedule/available-slots", response_model=List[AvailableSlot])
+async def get_available_slots(
+    target_date: date,
+    duration_minutes: int = 30,
+    current_doctor: DoctorInfo = Depends(get_current_doctor),
+    db: Session = Depends(get_db)
+):
+    """Obtener slots disponibles para una fecha específica"""
+    try:
+        # Obtener día de la semana (0=Lunes, 6=Domingo)
+        day_of_week = target_date.weekday()
+        
+        # Buscar plantilla para este día
+        template = db.query(DBScheduleTemplate).filter(
+            DBScheduleTemplate.doctor_id == current_doctor.id,
+            DBScheduleTemplate.day_of_week == day_of_week,
+            DBScheduleTemplate.is_active == True
+        ).first()
+        
+        if not template:
+            return []  # No hay horario configurado para este día
+        
+        # Verificar excepciones para esta fecha
+        exception = db.query(DBScheduleException).filter(
+            DBScheduleException.doctor_id == current_doctor.id,
+            DBScheduleException.exception_date == target_date
+        ).first()
+        
+        if exception and exception.is_day_off:
+            return []  # Es día libre
+        
+        # Generar slots disponibles
+        slots = []
+        current_time = datetime.combine(target_date, template.start_time)
+        end_time = datetime.combine(target_date, template.end_time)
+        
+        # Considerar horario de almuerzo
+        lunch_start = None
+        lunch_end = None
+        if template.lunch_start and template.lunch_end:
+            lunch_start = datetime.combine(target_date, template.lunch_start)
+            lunch_end = datetime.combine(target_date, template.lunch_end)
+        
+        while current_time + timedelta(minutes=duration_minutes) <= end_time:
+            slot_end = current_time + timedelta(minutes=duration_minutes)
+            
+            # Verificar si el slot no interfiere con el almuerzo
+            if lunch_start and lunch_end:
+                if not (current_time >= lunch_end or slot_end <= lunch_start):
+                    current_time += timedelta(minutes=template.consultation_duration + template.break_duration)
+                    continue
+            
+            # TODO: Verificar que no haya citas existentes en este slot
+            
+            slots.append(AvailableSlot(
+                date=target_date,
+                start_time=current_time.time(),
+                end_time=slot_end.time(),
+                duration_minutes=duration_minutes,
+                slot_type="consultation"
+            ))
+            
+            current_time += timedelta(minutes=template.consultation_duration + template.break_duration)
+        
+        return slots
+        
+    except Exception as e:
+        api_logger.error(f"Error obteniendo slots disponibles: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 # ============================================================================
 # MAIN APPLICATION

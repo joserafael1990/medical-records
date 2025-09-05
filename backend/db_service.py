@@ -107,8 +107,24 @@ class DoctorService:
     @staticmethod
     def create_profile(db: Session, profile_data: dict) -> DoctorProfile:
         """Create doctor profile"""
+        from validators import validate_curp, validate_rfc
+        
         if 'id' not in profile_data or not profile_data['id']:
             profile_data['id'] = f"DR{str(uuid.uuid4())[:8].upper()}"
+        
+        # Validate CURP (required)
+        if 'curp' in profile_data and profile_data['curp']:
+            profile_data['curp'] = profile_data['curp'].upper()
+            if not validate_curp(profile_data['curp']):
+                from exceptions import ValidationException
+                raise ValidationException("CURP inválida. Debe tener 18 caracteres con formato correcto.")
+        
+        # Validate RFC (optional)
+        if 'rfc' in profile_data and profile_data['rfc']:
+            profile_data['rfc'] = profile_data['rfc'].upper()
+            if not validate_rfc(profile_data['rfc']):
+                from exceptions import ValidationException
+                raise ValidationException("RFC inválido. Formato: AAA######AAA o AAAA######AAA")
         
         # Convert date strings
         if isinstance(profile_data.get('birth_date'), str):
@@ -142,9 +158,25 @@ class DoctorService:
     @staticmethod
     def update_profile(db: Session, profile_id: str, profile_data: dict) -> Optional[DoctorProfile]:
         """Update doctor profile"""
+        from validators import validate_curp, validate_rfc
+        
         profile = db.query(DoctorProfile).filter(DoctorProfile.id == profile_id).first()
         if not profile:
             return None
+        
+        # Validate CURP if provided
+        if 'curp' in profile_data and profile_data['curp']:
+            profile_data['curp'] = profile_data['curp'].upper()
+            if not validate_curp(profile_data['curp']):
+                from exceptions import ValidationException
+                raise ValidationException("CURP inválida. Debe tener 18 caracteres con formato correcto.")
+        
+        # Validate RFC if provided
+        if 'rfc' in profile_data and profile_data['rfc']:
+            profile_data['rfc'] = profile_data['rfc'].upper()
+            if not validate_rfc(profile_data['rfc']):
+                from exceptions import ValidationException
+                raise ValidationException("RFC inválido. Formato: AAA######AAA o AAAA######AAA")
         
         for key, value in profile_data.items():
             if hasattr(profile, key) and key not in ['id', 'created_at']:

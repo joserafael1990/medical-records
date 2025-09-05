@@ -180,7 +180,7 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
     switch (step) {
       case 0:
         return formData.title && formData.first_name && formData.paternal_surname && formData.maternal_surname && 
-               formData.email && formData.phone && formData.birth_date;
+               formData.email && formData.phone && formData.birth_date && formData.curp;
       case 1:
         return formData.university && formData.graduation_year;
       case 2:
@@ -199,7 +199,7 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
     // Campos obligatorios para crear/editar un perfil completo
     const requiredFields = [
       'title', 'first_name', 'paternal_surname', 'maternal_surname',
-      'email', 'phone', 'birth_date',
+      'email', 'phone', 'birth_date', 'curp',
       'professional_license', 'specialty', 'university', 'graduation_year',
       'office_address', 'office_city', 'office_state'
     ];
@@ -314,6 +314,39 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
                 InputLabelProps={{ shrink: true }}
                 error={!!fieldErrors.birth_date}
                 helperText={fieldErrors.birth_date}
+              />
+            </Box>
+
+            <Divider sx={{ my: 2 }} />
+            
+            <Alert severity="warning" icon={<InfoIcon />}>
+              <Typography variant="body2">
+                <strong>Identificación Legal:</strong> CURP es obligatoria según NOM-024-SSA3-2012. 
+                RFC es opcional pero recomendable para fines fiscales.
+              </Typography>
+            </Alert>
+
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+              <TextField
+                label="CURP"
+                value={formData.curp || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, curp: e.target.value.toUpperCase() }))}
+                fullWidth
+                required
+                error={!!fieldErrors.curp}
+                helperText={fieldErrors.curp || "Clave Única de Registro de Población (18 caracteres)"}
+                placeholder="AAAA######HAAAAA#"
+                inputProps={{ maxLength: 18 }}
+              />
+              <TextField
+                label="RFC"
+                value={formData.rfc || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, rfc: e.target.value.toUpperCase() }))}
+                fullWidth
+                error={!!fieldErrors.rfc}
+                helperText={fieldErrors.rfc || "Registro Federal de Contribuyentes (opcional)"}
+                placeholder="AAA######AAA"
+                inputProps={{ maxLength: 13 }}
               />
             </Box>
           </Box>
