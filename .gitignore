@@ -63,3 +63,15 @@ temp/
 frontend/node_modules/
 backend/__pycache__/
 backend/**/__pycache__/
+# Archivos de respaldo y temporales
+*.backup
+backup_*.sql
+historias_clinicas.db.backup
+archive/
+*/archive/
+
+# Archivos duplicados y obsoletos
+*_backup_*.py
+*_legacy_*.py
+*_complete.py
+crud_backup.py

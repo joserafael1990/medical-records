@@ -3,22 +3,10 @@
 // ============================================================================
 
 import { Patient } from '../types';
+import { calculateAge, formatDate, formatDateTime } from './dateHelpers';
 
-/**
- * Calculate age from birth date
- */
-export const calculateAge = (birthDate: string): number => {
-  const birth = new Date(birthDate);
-  const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const monthDiff = today.getMonth() - birth.getMonth();
-  
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-    age--;
-  }
-  
-  return age;
-};
+// Re-export date helpers to maintain API compatibility
+export { calculateAge, formatDate, formatDateTime };
 
 /**
  * Format patient name with age
@@ -38,35 +26,7 @@ export const formatDoctorName = (doctorProfile: any): string => {
   return `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name} ${doctorProfile.paternal_surname} ${doctorProfile.maternal_surname || ''}`.trim();
 };
 
-/**
- * Format date for display
- */
-export const formatDate = (dateString: string): string => {
-  if (!dateString) return '';
-  
-  const date = new Date(dateString);
-  return date.toLocaleDateString('es-MX', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-};
-
-/**
- * Format date and time for display
- */
-export const formatDateTime = (dateString: string): string => {
-  if (!dateString) return '';
-  
-  const date = new Date(dateString);
-  return date.toLocaleString('es-MX', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-};
+// formatDate and formatDateTime now imported from dateHelpers.ts to avoid conflicts
 
 /**
  * Format time for display (HH:MM)
@@ -141,4 +101,34 @@ export const formatFileSize = (bytes: number): string => {
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
+
+/**
+ * Format phone number for display
+ */
+export const formatPhone = (phone: string) => {
+  if (!phone) return '';
+  const cleaned = phone.replace(/\D/g, '');
+  if (cleaned.length === 10) {
+    return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+  }
+  return phone;
+};
+
+/**
+ * Truncate text with ellipsis
+ */
+export const formatText = (text: string, maxLength: number = 100) => {
+  if (!text) return '';
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength) + '...';
+};
+
+/**
+ * Capitalize first letter
+ */
+export const capitalizeFirst = (text: string) => {
+  if (!text) return '';
+  return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
 };

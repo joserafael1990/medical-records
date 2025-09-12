@@ -1,147 +1,23 @@
 // ============================================================================
 // UTILITIES - Funciones de utilidad reutilizables
 // ============================================================================
+//
+// This file serves as the main barrel export for all utility functions.
+// Individual utility modules are organized by category for better maintainability.
+//
+// ============================================================================
 
 import { VALIDATION_RULES } from '../constants';
 import type { Patient, FieldErrors, ValidationError } from '../types';
 
-// ============================================================================
-// DATE UTILITIES
-// ============================================================================
+// Re-export utilities from organized modules
+export * from './dateHelpers';
+export * from './validationHelpers';
+export * from './formatters';
+export * from './consultationHelpers';
 
-export const calculateAge = (birthDate: string): number => {
-  const today = new Date();
-  const birth = new Date(birthDate);
-  let age = today.getFullYear() - birth.getFullYear();
-  const monthDiff = today.getMonth() - birth.getMonth();
-  
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-    age--;
-  }
-  
-  return age;
-};
-
-export const formatDateTime = (dateString: string): string => {
-  return new Date(dateString).toLocaleDateString('es-MX', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-};
-
-export const formatDate = (dateString: string): string => {
-  return new Date(dateString).toLocaleDateString('es-MX', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-};
-
-export const formatTime = (dateString: string): string => {
-  return new Date(dateString).toLocaleTimeString('es-MX', {
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-};
-
-export const isToday = (dateString: string): boolean => {
-  const today = new Date();
-  const date = new Date(dateString);
-  return date.toDateString() === today.toDateString();
-};
-
-export const addDays = (date: Date, days: number): Date => {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
-};
-
-// ============================================================================
-// VALIDATION UTILITIES
-// ============================================================================
-
-export const validateEmail = (email: string): boolean => {
-  return VALIDATION_RULES.EMAIL.REGEX.test(email);
-};
-
-export const validatePhone = (phone: string): boolean => {
-  return VALIDATION_RULES.PHONE.MEXICO_REGEX.test(phone);
-};
-
-export const validateCURP = (curp: string): boolean => {
-  return VALIDATION_RULES.CURP.REGEX.test(curp.toUpperCase());
-};
-
-export const validateRequired = (value: string): boolean => {
-  return value.trim().length > 0;
-};
-
-export const validateMinLength = (value: string, minLength: number): boolean => {
-  return value.trim().length >= minLength;
-};
-
-export const validateMaxLength = (value: string, maxLength: number): boolean => {
-  return value.trim().length <= maxLength;
-};
-
-// ============================================================================
-// FORM UTILITIES
-// ============================================================================
-
-export const validatePatientForm = (formData: any): FieldErrors => {
-  const errors: FieldErrors = {};
-
-  // Required fields validation
-  VALIDATION_RULES.REQUIRED_FIELDS.PATIENT.forEach(field => {
-    if (!validateRequired(formData[field] || '')) {
-      errors[field] = `${getFieldLabel(field)} es obligatorio`;
-    }
-  });
-
-  // Phone validation
-  if (formData.phone && !validatePhone(formData.phone)) {
-    errors.phone = 'Formato de teléfono no válido para México';
-  }
-
-  // Email validation
-  if (formData.email && !validateEmail(formData.email)) {
-    errors.email = 'Formato de email no válido';
-  }
-
-  // CURP validation
-  if (formData.curp && !validateCURP(formData.curp)) {
-    errors.curp = 'Formato de CURP no válido';
-  }
-
-  // Name length validation
-  ['first_name', 'paternal_surname', 'maternal_surname'].forEach(field => {
-    const value = formData[field] || '';
-    if (value && !validateMinLength(value, VALIDATION_RULES.NAME.MIN_LENGTH)) {
-      errors[field] = `${getFieldLabel(field)} debe tener al menos ${VALIDATION_RULES.NAME.MIN_LENGTH} caracteres`;
-    }
-    if (value && !validateMaxLength(value, VALIDATION_RULES.NAME.MAX_LENGTH)) {
-      errors[field] = `${getFieldLabel(field)} no puede exceder ${VALIDATION_RULES.NAME.MAX_LENGTH} caracteres`;
-    }
-  });
-
-  return errors;
-};
-
-export const validateConsultationForm = (formData: any): FieldErrors => {
-  const errors: FieldErrors = {};
-
-  // Required fields validation
-  VALIDATION_RULES.REQUIRED_FIELDS.CONSULTATION.forEach(field => {
-    if (!validateRequired(formData[field] || '')) {
-      errors[field] = `${getFieldLabel(field)} es obligatorio`;
-    }
-  });
-
-  return errors;
-};
+// Legacy exports for backward compatibility
+// (These will eventually be deprecated in favor of the organized modules)
 
 const getFieldLabel = (field: string): string => {
   const labels: { [key: string]: string } = {

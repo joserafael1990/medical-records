@@ -1,6 +1,15 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
+
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import { formatDateTime } from './utils/formatters';
+
+// Debug helper - only logs in development
+const debugLog = (message: string, data?: any) => {
+  if (process.env.NODE_ENV === 'development') {
+    console.log(message, data || '');
+  }
+};
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import AppBar from '@mui/material/AppBar';
@@ -16,20 +25,7 @@ import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Avatar from '@mui/material/Avatar';
 import LinearProgress from '@mui/material/LinearProgress';
-import TextField from '@mui/material/TextField';
-import Dialog from '@mui/material/Dialog';
-import DialogTitle from '@mui/material/DialogTitle';
-import DialogContent from '@mui/material/DialogContent';
-import DialogActions from '@mui/material/DialogActions';
-import FormControl from '@mui/material/FormControl';
-import InputLabel from '@mui/material/InputLabel';
-import Select from '@mui/material/Select';
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import TableContainer from '@mui/material/TableContainer';
-import TableHead from '@mui/material/TableHead';
-import TableRow from '@mui/material/TableRow';
+// Removed unused Table-related imports
 
 import MenuItem from '@mui/material/MenuItem';
 import MenuList from '@mui/material/MenuList';
@@ -46,6 +42,7 @@ import {
   PatientsViewSmart,
   ConsultationsViewSmart,
   AgendaView,
+  MedicalRecordsView,
   PatientDialog,
   ConsultationDialog,
   AppointmentDialog,
@@ -55,33 +52,32 @@ import {
 } from './components/lazy';
 import { ConsultationDetailView } from './components';
 import { LoadingFallback } from './components';
-import SmartTableDemo from './components/demo/SmartTableDemo';
+// SmartTableDemo removed - demo component deleted
 import { 
   Patient, 
-  DoctorFormData, 
+  // Removed unused DoctorFormData 
   ConsultationFormData, 
-  AppointmentFormData, 
+  // Removed unused AppointmentFormData 
   ClinicalStudy, 
   ClinicalStudyFormData, 
   StudyType, 
   StudyStatus,
-  MedicalHistory,
-  Prescription,
-  VitalSigns,
+  // Removed unused types: MedicalHistory, Prescription, VitalSigns, Appointment
   CompletePatientData,
-  Appointment,
-  DashboardData
+  DashboardData,
+  PatientFormData
 } from './types';
-import { API_CONFIG } from './constants';
+// Removed unused API_CONFIG import
 import { apiService } from './services/api';
 import { useDoctorProfileCache as useDoctorProfile } from './hooks/useDoctorProfileCache';
-import { useAppState, useAppointmentManager } from './hooks';
-import { AppHeader, AppSidebar } from './components/layout';
+import { useAppState, useAppointmentManager, usePatientManagement, useConsultationManagement } from './hooks';
+// Removed unused AppHeader, AppSidebar imports
 import {
   MedicalServices as MedicalIcon,
   Dashboard as DashboardIcon,
   Description as DocumentIcon,
   People as PatientIcon,
+  Assignment as AssignmentIcon,
   WhatsApp as WhatsAppIcon,
   AccountCircle as ProfileIcon,
   CheckCircle as CheckIcon,
@@ -116,11 +112,10 @@ import AvantLogo from './components/common/AvantLogo';
 import LogoutConfirmDialog from './components/dialogs/LogoutConfirmDialog';
 import { useAuth } from './contexts/AuthContext';
 import axios from 'axios';
+import { submitConsultation } from './utils/consultationHelpers';
+// networkDiagnostic utility removed to reduce bundle size
 
 // Mexican States with Official INEGI Codes
-
-
-
 
 // AVANT Color Palette - Surgical Blue Medical Theme
 const avantColors = {
@@ -392,20 +387,16 @@ const theme = createTheme({
 // They are now imported from './types' at the top of this file.
 
 function AppContent() {
-  // Clean slate - clear any residual clinical studies data
+  // Clean slate - clear any residual clinical studies data AND problematic cached data
   useEffect(() => {
-    console.log('🧹 Limpiando datos residuales de estudios clínicos...');
-    // Clear any localStorage items related to clinical studies
-    Object.keys(localStorage).forEach(key => {
-      if (key.includes('clinical') || key.includes('study') || key.includes('studies')) {
-        localStorage.removeItem(key);
-        console.log(`🗑️ Eliminado del localStorage: ${key}`);
-      }
-    });
+    console.log('🧹 Limpiando datos residuales y cache corrupto...');
+    
+    // localStorage cleanup removed - backend-only approach
+    console.log('✅ Sistema configurado para usar exclusivamente backend');
   }, []);
 
   // Authentication
-  const { user, logout } = useAuth();
+  const { user, logout, isAuthenticated } = useAuth();
   
   // Global app state using extracted hook
   const {
@@ -424,212 +415,8 @@ function AppContent() {
 
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [todayAppointments, setTodayAppointments] = useState<any[]>([]);
-  
-  // Patient management state
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [patientDialogOpen, setPatientDialogOpen] = useState(false);
-  const [isEditingPatient, setIsEditingPatient] = useState(false);
-  const [patientSearchTerm, setPatientSearchTerm] = useState('');
-  const [selectedPatientData, setSelectedPatientData] = useState<CompletePatientData | null>(null);
 
-  // Consultations management state
-  const [consultations, setConsultations] = useState<any[]>([]);
-  const [consultationSearchTerm, setConsultationSearchTerm] = useState('');
-  const [consultationDialogOpen, setConsultationDialogOpen] = useState(false);
-  const [isEditingConsultation, setIsEditingConsultation] = useState(false);
-  const [creatingPatientFromConsultation, setCreatingPatientFromConsultation] = useState(false);
-  const [selectedConsultation, setSelectedConsultation] = useState<any>(null);
-  const [consultationDetailView, setConsultationDetailView] = useState(false);
-  const [consultationFormData, setConsultationFormData] = useState<ConsultationFormData>({
-    patient_id: '',
-    date: '',
-    chief_complaint: '',
-    history_present_illness: '',
-    
-    // Antecedentes (parte de la evaluación clínica)
-    family_history: '',
-    personal_pathological_history: '',
-    personal_non_pathological_history: '',
-    
-    physical_examination: '',
-    primary_diagnosis: '',
-
-    secondary_diagnoses: '',
-
-    treatment_plan: '',
-    therapeutic_plan: '',
-    follow_up_instructions: '',
-    prognosis: '',
-    laboratory_results: '',
-    imaging_studies: '',
-    interconsultations: '',
-    doctor_name: '',
-    doctor_professional_license: '',
-    doctor_specialty: ''
-  });
-
-  // Clinical Studies are now part of each consultation, not global
-  // Temporary consultation ID for new consultations before they're saved
-  const [tempConsultationId, setTempConsultationId] = useState<string | null>(null);
-  // Temporary clinical studies for new consultations
-  const [tempClinicalStudies, setTempClinicalStudies] = useState<ClinicalStudy[]>([]);
-
-  // Helper functions for localStorage persistence
-
-  const saveStudiesToStorage = (consultationId: string, studies: ClinicalStudy[]) => {
-    try {
-      localStorage.setItem(`clinical_studies_${consultationId}`, JSON.stringify(studies));
-    } catch (error) {
-      console.error('Error saving studies to localStorage:', error);
-    }
-  };
-
-  const loadStudiesFromStorage = (consultationId: string): ClinicalStudy[] => {
-    try {
-      const stored = localStorage.getItem(`clinical_studies_${consultationId}`);
-      return stored ? JSON.parse(stored) : [];
-    } catch (error) {
-      console.error('Error loading studies from localStorage:', error);
-      return [];
-    }
-  };
-  
-  // State for clinical studies from backend
-  const [consultationStudies, setConsultationStudies] = useState<ClinicalStudy[]>([]);
-
-  // Helper function to get clinical studies for current consultation
-  const getCurrentConsultationStudies = (): ClinicalStudy[] => {
-    console.log('📋 getCurrentConsultationStudies called:', {
-      selectedConsultation: selectedConsultation?.id,
-      consultationStudies: consultationStudies.length,
-      tempConsultationId,
-      tempClinicalStudies: tempClinicalStudies.length
-    });
-    
-    // If we have a selected consultation (viewing/editing existing), return loaded studies from backend
-    if (selectedConsultation?.id) {
-      console.log('📋 Returning consultation studies:', consultationStudies);
-      return consultationStudies;
-    }
-    // If we're creating a new consultation, use temporary studies
-    if (tempConsultationId && !selectedConsultation) {
-      console.log('📋 Returning temp studies:', tempClinicalStudies);
-      return tempClinicalStudies;
-    }
-    console.log('📋 Returning empty array');
-    return [];
-  };
-
-  // Load clinical studies from backend for selected consultation
-  const loadConsultationStudies = useCallback(async (consultationId: string) => {
-    console.log('🔍 Loading studies for consultation:', consultationId);
-    try {
-      const studies = await apiService.getClinicalStudiesByConsultation(consultationId);
-      console.log('✅ Studies loaded from backend:', studies);
-      
-      // If no studies in backend, check localStorage and migrate them
-      if (studies.length === 0) {
-        const storedStudies = loadStudiesFromStorage(consultationId);
-        console.log('📦 Found in localStorage:', storedStudies);
-        
-        if (storedStudies.length > 0) {
-          console.log('🔄 Migrating studies from localStorage to backend...');
-          // Try to migrate studies to backend
-          for (const study of storedStudies) {
-            try {
-              const studyData = {
-                consultation_id: consultationId,
-                patient_id: study.patient_id,
-                study_type: study.study_type,
-                study_name: study.study_name,
-                study_description: study.study_description || '',
-                ordered_date: new Date(study.ordered_date).toISOString(),
-                status: study.status,
-                results_text: study.results_text || '',
-                interpretation: study.interpretation || '',
-                ordering_doctor: study.ordering_doctor,
-                performing_doctor: study.performing_doctor || '',
-                institution: study.institution || '',
-                urgency: study.urgency || 'normal',
-                clinical_indication: study.clinical_indication || '',
-                relevant_history: study.relevant_history || '',
-                created_by: study.created_by || ''
-              };
-              
-              await apiService.createClinicalStudy(studyData);
-              console.log('✅ Migrated study:', study.study_name);
-            } catch (migrationError) {
-              console.error('❌ Failed to migrate study:', study.study_name, migrationError);
-            }
-          }
-          
-          // Reload studies from backend after migration
-          const updatedStudies = await apiService.getClinicalStudiesByConsultation(consultationId);
-          console.log('🔄 Studies after migration:', updatedStudies);
-          setConsultationStudies(updatedStudies);
-        } else {
-          setConsultationStudies([]);
-        }
-      } else {
-        setConsultationStudies(studies);
-      }
-    } catch (error) {
-      console.error('❌ Error loading clinical studies from backend:', error);
-      // Fallback to localStorage
-      const storedStudies = loadStudiesFromStorage(consultationId);
-      console.log('📦 Fallback to localStorage studies:', storedStudies);
-      setConsultationStudies(storedStudies);
-    }
-  }, []);
-
-  // Helper function to update clinical studies for current consultation
-  const updateCurrentConsultationStudies = (studies: ClinicalStudy[]) => {
-    if (selectedConsultation?.id) {
-      // Updating existing consultation - save to localStorage
-      saveStudiesToStorage(selectedConsultation.id, studies);
-      
-      const updatedConsultation = {
-        ...selectedConsultation,
-        clinical_studies: studies
-      };
-      setSelectedConsultation(updatedConsultation);
-      
-      // Also update in consultations list if it exists there
-      setConsultations(prev => prev.map(consultation => 
-        consultation.id === selectedConsultation.id 
-          ? { ...consultation, clinical_studies: studies }
-          : consultation
-      ));
-    } else if (tempConsultationId) {
-      // Updating temporary consultation studies
-      setTempClinicalStudies(studies);
-    }
-  };
-  const [clinicalStudyDialogOpen, setClinicalStudyDialogOpen] = useState(false);
-  const [isEditingClinicalStudy, setIsEditingClinicalStudy] = useState(false);
-  const [selectedClinicalStudy, setSelectedClinicalStudy] = useState<ClinicalStudy | null>(null);
-  const [clinicalStudyFormData, setClinicalStudyFormData] = useState<ClinicalStudyFormData>({
-    consultation_id: '',
-    patient_id: '',
-    study_type: 'hematologia',
-    study_name: '',
-    study_description: '',
-    ordered_date: '',
-    status: 'pending',
-    results_text: '',
-    interpretation: '',
-    ordering_doctor: '',
-    performing_doctor: '',
-    institution: '',
-    urgency: 'normal',
-    clinical_indication: '',
-    relevant_history: '',
-    created_by: ''
-  });
-  const [clinicalStudyFormErrorMessage, setClinicalStudyFormErrorMessage] = useState('');
-  const [clinicalStudyFieldErrors, setClinicalStudyFieldErrors] = useState<{[key: string]: string}>({});
-  const [isClinicalStudySubmitting, setIsClinicalStudySubmitting] = useState(false);
+  // localStorage functions removed - backend-only approach
 
   // Doctor profile management
   const {
@@ -651,8 +438,60 @@ function AppContent() {
     clearMessages: clearDoctorProfileMessages
   } = useDoctorProfile();
 
+  // Patient management - using refactored hook
+  const patientManagement = usePatientManagement();
+
+  // Consultation management - using refactored hook  
+  const consultationManagement = useConsultationManagement();
+
+  // loadStudiesFromStorage removed - backend-only approach
+  
+  // State for clinical studies from backend
+  const [consultationStudies, setConsultationStudies] = useState<ClinicalStudy[]>([]);
+
+  // Helper function to get clinical studies for current consultation
+  const getCurrentConsultationStudies = (): ClinicalStudy[] => {
+    // Use consultation studies from backend only
+    return consultationManagement.consultationStudies || [];
+  };
+
+  // Load clinical studies from backend for selected consultation
+  // loadConsultationStudies removed - now using consultationManagement.loadConsultationStudies
+
+  // Helper function to update clinical studies for current consultation
+  const updateCurrentConsultationStudies = (studies: ClinicalStudy[]) => {
+    // Update studies in consultation management only
+    consultationManagement.setConsultationStudies(studies);
+  };
+  const [clinicalStudyDialogOpen, setClinicalStudyDialogOpen] = useState(false);
+  const [isEditingClinicalStudy, setIsEditingClinicalStudy] = useState(false);
+  const [selectedClinicalStudy, setSelectedClinicalStudy] = useState<ClinicalStudy | null>(null);
+  const [clinicalStudyFormData, setClinicalStudyFormData] = useState<ClinicalStudyFormData>({
+    consultation_id: 0,
+    patient_id: 0,
+    study_type: 'hematologia',
+    study_name: '',
+    study_description: '',
+    ordered_date: '',
+    status: 'pending',
+    results_text: '',
+    interpretation: '',
+    ordering_doctor: '',
+    performing_doctor: '',
+    institution: '',
+    urgency: 'normal',
+    clinical_indication: '',
+    relevant_history: '',
+    created_by: ''
+  });
+  const [clinicalStudyFormErrorMessage, setClinicalStudyFormErrorMessage] = useState('');
+  const [clinicalStudyFieldErrors, setClinicalStudyFieldErrors] = useState<{[key: string]: string}>({});
+  const [isClinicalStudySubmitting, setIsClinicalStudySubmitting] = useState(false);
+
+  // Doctor profile management - moved to top of component
+
   // Agenda management using extracted hook
-  const appointmentManager = useAppointmentManager(patients, doctorProfile);
+  const appointmentManager = useAppointmentManager(patientManagement.patients, doctorProfile);
   const {
     appointments,
     setAppointments,
@@ -681,78 +520,115 @@ function AppContent() {
   // User menu state
   const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
   const userMenuOpen = Boolean(userMenuAnchor);
+
   
-  const [patientFormData, setPatientFormData] = useState({
-    // ===== CAMPOS OBLIGATORIOS NOM-004 =====
+  const [patientFormData, setPatientFormData] = useState<PatientFormData>({
+    // ===== CAMPOS OBLIGATORIOS (NOM-004) =====
     first_name: '',
     paternal_surname: '',
     maternal_surname: '',
     birth_date: '',
     gender: '',
-    address: '',
     
-    // ===== CAMPOS OPCIONALES =====
-    // Identificación adicional
-    birth_state_code: '',
-    nationality: 'Mexicana',
+    // ===== IDENTIFICACIÓN =====
     curp: '',
-    internal_id: '',
-    
-    // Contacto adicional
-    phone: '',
-    email: '',
-    neighborhood: '',
-    municipality: '',
-    state: '',
-    postal_code: '',
-    
-    // Datos sociodemográficos
+    rfc: '',
     civil_status: '',
-    education_level: '',
-    occupation: '',
-    religion: '',
+    nationality_id: 1,
+    birth_place: '',
     
-    // Seguro médico
-    insurance_type: '',
-    insurance_number: '',
+    // ===== LUGAR DE NACIMIENTO (NOM-024) =====
+    birth_state_id: null,
+    foreign_birth_place: '',
     
-    // Contacto de emergencia
-    emergency_contact_name: '',
-    emergency_contact_phone: '',
-    emergency_contact_relationship: '',
-    emergency_contact_address: '',
+    // ===== CONTACTOS =====
+    email: '',
+    primary_phone: '',
     
-    // Historial médico adicional
+    // ===== DIRECCIÓN PERSONAL COMPLETA =====
+    address_street: '',
+    address_ext_number: '',
+    address_int_number: '',
+    address_neighborhood: '',
+    city_id: null,
+    address_postal_code: '',
+    
+    // ===== DATOS MÉDICOS =====
+    blood_type: '',
     allergies: '',
     chronic_conditions: '',
     current_medications: '',
-    blood_type: '',
-    previous_hospitalizations: '',
-    surgical_history: '',
     
-    // Estado del paciente
-    status: 'active' as 'active' | 'inactive' // Todos los pacientes son activos por defecto
+    // ===== SEGURO MÉDICO =====
+    insurance_provider: '',
+    insurance_number: '',
+    
+    // ===== CONTACTO DE EMERGENCIA =====
+    emergency_contact_name: '',
+    emergency_contact_phone: '',
+    emergency_contact_relationship: '',
+    
+    is_active: true
   });
-
-
-
-
 
   // Global error handler to catch runtime errors
   useEffect(() => {
     const handleError = (event: ErrorEvent) => {
       // Filter out extension-related errors
-      if (event.message.includes('runtime.lastError') || 
-          event.message.includes('Extension context invalidated') ||
-          event.message.includes('message channel closed')) {
+      if (event.message?.includes('runtime.lastError') || 
+          event.message?.includes('Extension context invalidated') ||
+          event.message?.includes('message channel closed')) {
         console.warn('Browser extension error (can be ignored):', event.message);
         return;
       }
-      console.error('Application error:', event.error);
+      
+      // Filter out [object Object] errors - these should be fixed now
+      if (event.message?.includes('[object Object]')) {
+        console.warn('🚫 [object Object] error detected - this should be fixed now');
+        return;
+      }
+      
+      // Better error formatting
+      const errorMessage = event.error?.message || event.message || 'Unknown error';
+      const errorStack = event.error?.stack || 'No stack trace available';
+      
+      // Only log significant errors
+      if (errorMessage !== 'Unknown error' && !errorMessage.includes('Script error')) {
+        console.error('Application error:', {
+          message: errorMessage,
+          stack: errorStack,
+          filename: event.filename,
+          lineno: event.lineno,
+          colno: event.colno
+        });
+      }
     };
 
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      console.error('Unhandled promise rejection:', event.reason);
+      // Prevent the default error display
+      event.preventDefault();
+      
+      // Better promise rejection formatting
+      const reason = event.reason;
+      if (reason && typeof reason === 'object') {
+        // Only log errors that aren't auth-related (to avoid spam)
+        if (!reason.detail?.includes('authentication') && reason.status !== 401 && reason.status !== 403) {
+          console.error('Unhandled promise rejection:', {
+            message: reason.message || 'Promise rejection',
+            details: reason.detail || reason.response?.data?.detail || 'No details available',
+            status: reason.status || reason.response?.status || 'Unknown status',
+            stack: reason.stack || 'No stack trace'
+          });
+        } else {
+          // Auth errors are expected during logout/session expiry
+          console.warn('Auth-related error (expected during logout):', {
+            status: reason.status,
+            detail: reason.detail
+          });
+        }
+      } else {
+        console.error('Unhandled promise rejection:', reason);
+      }
     };
 
     window.addEventListener('error', handleError);
@@ -764,165 +640,28 @@ function AppContent() {
     };
   }, []);
 
-
-
   // Load appointments when active view is agenda or when selected date changes
   useEffect(() => {
+    if (!user || !isAuthenticated) {
+      console.log('🔒 AppContent - User not authenticated, skipping appointments fetch');
+      return;
+    }
+    
     if (activeView === 'agenda') {
       fetchAppointments();
     }
-  }, [activeView, selectedDate]); // Remove fetchAppointments dependency to avoid infinite loop
+  }, [activeView, selectedDate, user, isAuthenticated]); // Remove fetchAppointments dependency to avoid infinite loop
 
   // Patient management functions
-  const fetchPatients = useCallback(async () => {
-    try {
-      console.log('🔄 Cargando pacientes...');
-      const data = await apiService.getPatients(patientSearchTerm);
-      console.log('✅ Pacientes cargados desde API:', data);
-      setPatients(data);
-    } catch (error) {
-      console.error('❌ Error fetching patients:', error);
-      console.log('🔄 Cargando datos mock...');
-      // Set empty array to prevent the map error
-      setPatients([]);
-      // Mock data for demo when backend is not available
-      setPatients([
-        {
-          id: 'PAT001',
-          first_name: 'María',
-          paternal_surname: 'González',
-          maternal_surname: 'Pérez',
-          birth_state_code: 'Ciudad de México',
-          nationality: 'Mexicana',
-          municipality: 'Benito Juárez',
-          state: 'Ciudad de México',
-          full_name: 'María González Pérez',
-          birth_date: '1985-05-15',
-          age: 39, // This will be calculated dynamically now
-          gender: 'Femenino',
-          phone: '+52 555 123 4567',
-          email: 'maria.gonzalez@email.com',
-          address: 'Av. Insurgentes Sur 123, CDMX',
-          curp: 'GOPM850515MDFNTR09',
-          insurance_type: 'IMSS',
-          insurance_number: '123456789',
-          blood_type: 'O+',
-          allergies: 'Penicilina',
-          chronic_conditions: 'Diabetes tipo 2',
-          current_medications: 'Metformina 500mg',
-          emergency_contact_name: 'Juan González',
-          emergency_contact_phone: '+52 555 987 6543',
-          emergency_contact_relationship: 'Esposo',
+  // fetchPatients removed - now using patientManagement.fetchPatients from hook
 
-          created_at: '2024-01-15T10:30:00',
-          last_visit: '2024-08-20T14:45:00',
-          total_visits: 5,
-          status: 'active'
-        },
-        {
-          id: 'PAT002',
-          first_name: 'Carlos',
-          paternal_surname: 'Rodríguez',
-          maternal_surname: 'López',
-          birth_state_code: 'Jalisco',
-          nationality: 'Mexicana',
-          municipality: 'Guadalajara',
-          state: 'Jalisco',
-          full_name: 'Carlos Rodríguez López',
-          birth_date: '1990-12-03',
-          age: 33, // This will be calculated dynamically now
-          gender: 'Masculino',
-          phone: '+52 555 234 5678',
-          email: 'carlos.rodriguez@email.com',
-          address: 'Av. Vallarta 456, Guadalajara',
-          curp: 'ROLC901203HJCDPR08',
-          insurance_type: 'ISSSTE',
-          insurance_number: '987654321',
-          blood_type: 'A+',
-          allergies: 'Ninguna conocida',
-          chronic_conditions: 'Ninguna',
-          current_medications: 'Ninguna',
-          emergency_contact_name: 'Ana López',
-          emergency_contact_phone: '+52 555 876 5432',
-          emergency_contact_relationship: 'Esposa',
-          created_at: '2024-02-10T08:15:00',
-          last_visit: '2024-08-15T16:30:00',
-          total_visits: 3,
-          status: 'active'
-        }
-      ]);
-      console.log('✅ Datos mock cargados exitosamente');
-      console.log('📝 Recuerda: Los nombres ahora deberían mostrar edad en los dropdowns');
-    }
-  }, [patientSearchTerm]);
-
-
-
-
-
-  const resetPatientForm = useCallback(() => {
-    setPatientFormData({
-      // ===== CAMPOS OBLIGATORIOS NOM-004 =====
-      first_name: '',
-      paternal_surname: '',
-      maternal_surname: '',
-      birth_date: '',
-      gender: '',
-      address: '',
-      
-      // ===== CAMPOS OPCIONALES =====
-      // Identificación adicional
-      birth_state_code: '',
-      nationality: 'Mexicana',
-      curp: '',
-      internal_id: '',
-      
-      // Contacto adicional
-      phone: '',
-      email: '',
-      neighborhood: '',
-      municipality: '',
-      state: '',
-      postal_code: '',
-      
-      // Datos sociodemográficos
-      civil_status: '',
-      education_level: '',
-      occupation: '',
-      religion: '',
-      
-      // Seguro médico
-      insurance_type: '',
-      insurance_number: '',
-      
-      // Contacto de emergencia
-      emergency_contact_name: '',
-      emergency_contact_phone: '',
-      emergency_contact_relationship: '',
-      emergency_contact_address: '',
-      
-      // Historial médico adicional
-      allergies: '',
-      chronic_conditions: '',
-      current_medications: '',
-      blood_type: '',
-      previous_hospitalizations: '',
-      surgical_history: '',
-      
-      // Estado del paciente
-      status: 'active' as 'active' | 'inactive'
-    });
-    setSelectedPatient(null);
-    setFieldErrors({});
-    setFormErrorMessage('');
-    setIsSubmitting(false);
-  }, []);
+  // resetPatientForm removed - now using patientManagement.resetPatientForm from hook
 
 // Fetch complete patient data
 const fetchCompletePatientData = async (patientId: string) => {
   try {
     const data = await apiService.getCompletePatientInfo(patientId);
-    setSelectedPatientData(data as unknown as CompletePatientData);
+    patientManagement.setSelectedPatientData(data as unknown as CompletePatientData);
   } catch (error) {
     console.error('Error fetching complete patient data:', error);
   }
@@ -930,7 +669,7 @@ const fetchCompletePatientData = async (patientId: string) => {
 
 // Handle patient detail view
 const handleViewPatientDetails = (patient: Patient) => {
-  setSelectedPatient(patient);
+  patientManagement.setSelectedPatient(patient);
   setActiveView('patient-detail');
 };
 
@@ -1019,68 +758,22 @@ const formatPatientNameWithAge = (patient: Patient): string => {
 };
 
 // Consultation handlers (enhanced implementation)
-const handleNewConsultation = useCallback(() => {
-  setSelectedConsultation(null);
-  setIsEditingConsultation(false);
-  
-  // Clear clinical studies when starting new consultation
-  setConsultationStudies([]);
-  
-  setConsultationFormData({
-    patient_id: '',
-    date: getCurrentMexicoCityDateTime(),
-    chief_complaint: '',
-    history_present_illness: '',
-    
-    // Antecedentes (parte de la evaluación clínica)
-    family_history: '',
-    personal_pathological_history: '',
-    personal_non_pathological_history: '',
-    
-    physical_examination: '',
-    primary_diagnosis: '',
-
-    secondary_diagnoses: '',
-
-    treatment_plan: '',
-    therapeutic_plan: '',
-    follow_up_instructions: '',
-    prognosis: '',
-    laboratory_results: '',
-    imaging_studies: '',
-    interconsultations: '',
-    doctor_name: '',
-    doctor_professional_license: '',
-    doctor_specialty: ''
-  });
-  
-  // Load patients when opening consultation dialog
-  fetchPatients();
-  
-  setConsultationDialogOpen(true);
-  setFormErrorMessage('');
-  setConsultationDetailView(false);
-}, [fetchPatients]);
+const handleNewConsultation = useCallback(() => { consultationManagement.openConsultationDialog(); }, [consultationManagement]);
 
 const handleEditConsultation = useCallback(async (consultation: any) => {
-  setSelectedConsultation(consultation);
-  setIsEditingConsultation(true);
-  setConsultationFormData({
-    patient_id: consultation.patient_id || '',
+  consultationManagement.setSelectedConsultation(consultation);
+  consultationManagement.setIsEditingConsultation(true);
+  consultationManagement.setConsultationFormData({
+    patient_id: consultation.patient_id || 0,
     date: consultation.date || '',
     chief_complaint: consultation.chief_complaint || '',
     history_present_illness: consultation.history_present_illness || '',
-    
-    // Antecedentes (parte de la evaluación clínica)
     family_history: consultation.family_history || '',
     personal_pathological_history: consultation.personal_pathological_history || '',
     personal_non_pathological_history: consultation.personal_non_pathological_history || '',
-    
     physical_examination: consultation.physical_examination || '',
     primary_diagnosis: consultation.primary_diagnosis || '',
-
     secondary_diagnoses: consultation.secondary_diagnoses || '',
-
     treatment_plan: consultation.treatment_plan || '',
     therapeutic_plan: consultation.therapeutic_plan || '',
     follow_up_instructions: consultation.follow_up_instructions || '',
@@ -1093,29 +786,60 @@ const handleEditConsultation = useCallback(async (consultation: any) => {
     doctor_specialty: consultation.doctor_specialty || ''
   });
   
-  // Load patients when opening consultation dialog
-  fetchPatients();
+  // Load patients when opening consultation dialog (only if authenticated)
+  if (isAuthenticated) {
+    patientManagement.fetchPatients();
+  }
   
   // Load clinical studies for this consultation when editing
   if (consultation?.id) {
-    await loadConsultationStudies(consultation.id);
+    await consultationManagement.loadConsultationStudies(consultation.id);
   }
   
-  setConsultationDialogOpen(true);
+  consultationManagement.setConsultationDialogOpen(true);
   setFormErrorMessage('');
-  setConsultationDetailView(false);
-}, [fetchPatients, loadConsultationStudies]);
+  consultationManagement.setConsultationDetailView(false);
+}, [patientManagement.fetchPatients, consultationManagement.loadConsultationStudies]);
+
+// Medical Records handlers for new component
+const onCreateRecord = useCallback(async (data: ConsultationFormData): Promise<void> => {
+  try {
+    setIsSubmitting(true);
+    await apiService.createConsultation(data.patient_id.toString(), data);
+    showSuccessMessage('Expediente médico creado exitosamente');
+  } catch (error: any) {
+    console.error('Error creating medical record:', error);
+    setFormErrorMessage(error.response?.data?.detail || 'Error al crear el expediente médico');
+    throw error;
+  } finally {
+    setIsSubmitting(false);
+  }
+}, [showSuccessMessage, setFormErrorMessage, setIsSubmitting]);
+
+const onUpdateRecord = useCallback(async (id: string, data: ConsultationFormData): Promise<void> => {
+  try {
+    setIsSubmitting(true);
+    await apiService.updateConsultation(id, data);
+    showSuccessMessage('Expediente médico actualizado exitosamente');
+  } catch (error: any) {
+    console.error('Error updating medical record:', error);
+    setFormErrorMessage(error.response?.data?.detail || 'Error al actualizar el expediente médico');
+    throw error;
+  } finally {
+    setIsSubmitting(false);
+  }
+}, [showSuccessMessage, setFormErrorMessage, setIsSubmitting]);
 
 // Handle view consultation
 const handleViewConsultation = useCallback(async (consultation: any) => {
-  setSelectedConsultation(consultation);
-  setConsultationDetailView(true);
+  consultationManagement.setSelectedConsultation(consultation);
+  consultationManagement.setConsultationDetailView(true);
   
   // Load clinical studies for this consultation
   if (consultation?.id) {
-    await loadConsultationStudies(consultation.id);
+    await consultationManagement.loadConsultationStudies(consultation.id);
   }
-}, [loadConsultationStudies]);
+}, [consultationManagement.loadConsultationStudies]);
 
 // Handle print consultation
 const handlePrintConsultation = useCallback((consultation: any) => {
@@ -1176,119 +900,7 @@ const handlePrintConsultation = useCallback((consultation: any) => {
 }, []);
 
 // Fetch consultations from API
-const fetchConsultations = useCallback(async () => {
-  try {
-    const data = await apiService.getConsultations({ 
-      patient_search: consultationSearchTerm 
-    });
-    console.log('📋 Fetched consultations:', data);
-    
-    // Si no hay datos del backend, usar datos de ejemplo para testing
-    if (!data || data.length === 0) {
-      const sampleConsultations = [
-        {
-          id: 'CONS-001',
-          patient_id: 'PAT-001',
-          patient_name: 'María González Pérez',
-          date: '2024-08-28',
-          chief_complaint: 'Dolor de cabeza recurrente',
-          primary_diagnosis: 'Migraña tensional',
-          history_present_illness: 'Dolor de cabeza desde hace 3 días, intensidad moderada',
-          physical_examination: 'Tensión arterial normal, reflejos normales',
-          treatment_plan: 'Analgésicos y medidas no farmacológicas',
-          follow_up_instructions: 'Control en 1 semana si persiste',
-          doctor_name: 'Dr. Juan Pérez',
-          doctor_professional_license: 'MP12345',
-          created_by: 'system',
-          created_at: '2024-08-28'
-        },
-        {
-          id: 'CONS-002',
-          patient_id: 'PAT-002',
-          patient_name: 'Carlos Rodríguez López',
-          date: '2024-08-27',
-          chief_complaint: 'Control rutinario diabetes',
-          primary_diagnosis: 'Diabetes mellitus tipo 2 controlada',
-          history_present_illness: 'Control rutinario, sin síntomas',
-          physical_examination: 'Peso estable, presión arterial controlada',
-          treatment_plan: 'Continuar con metformina 850mg c/12h',
-          follow_up_instructions: 'Control en 3 meses con laboratorios',
-          doctor_name: 'Dr. Juan Pérez',
-          doctor_professional_license: 'MP12345',
-          created_by: 'system',
-          created_at: '2024-08-27'
-        },
-        {
-          id: 'CONS-003',
-          patient_id: 'PAT-003',
-          patient_name: 'Ana Fernández García',
-          date: '2024-08-26',
-          chief_complaint: 'Dolor abdominal',
-          primary_diagnosis: 'Gastritis aguda',
-          history_present_illness: 'Dolor epigástrico de 2 días de evolución',
-          physical_examination: 'Abdomen blando, dolor a la palpación en epigastrio',
-          treatment_plan: 'Omeprazol 20mg en ayunas, dieta blanda',
-          follow_up_instructions: 'Evolución en 5 días',
-          doctor_name: 'Dr. Juan Pérez',
-          doctor_professional_license: 'MP12345',
-          created_by: 'system',
-          created_at: '2024-08-26'
-        }
-      ];
-      console.log('📋 Using sample consultations data');
-      setConsultations(sampleConsultations);
-    } else {
-    setConsultations(data);
-    }
-  } catch (error) {
-    console.error('Error fetching consultations:', error);
-    // En caso de error, también usar datos de muestra
-    const sampleConsultations = [
-      {
-        id: 'CONS-001',
-        patient_id: 'PAT-001',
-        patient_name: 'María González Pérez',
-        date: '2024-08-28',
-        chief_complaint: 'Dolor de cabeza recurrente',
-        primary_diagnosis: 'Migraña tensional',
-        history_present_illness: 'Dolor de cabeza desde hace 3 días',
-        physical_examination: 'Normal',
-        treatment_plan: 'Analgésicos y descanso',
-        follow_up_instructions: 'Control en 1 semana',
-        doctor_name: 'Dr. Juan Pérez',
-        doctor_professional_license: 'MP12345',
-        created_by: 'system',
-        created_at: '2024-08-28'
-      }
-    ];
-    console.log('📋 Using fallback sample data due to API error');
-    setConsultations(sampleConsultations);
-  }
-}, [consultationSearchTerm]);
-
-// Handle delete consultation
-const handleDeleteConsultation = useCallback(async (consultation: any) => {
-  if (!window.confirm(`¿Estás seguro de que deseas eliminar la consulta de ${consultation.patient_name}?`)) {
-    return;
-  }
-  
-  try {
-    // Delete consultation functionality - pending backend implementation
-    showSuccessMessage(`Consulta de ${consultation.patient_name} eliminada exitosamente`);
-    fetchConsultations(); // Refresh the list
-  } catch (error) {
-    console.error('Error deleting consultation:', error);
-    setFormErrorMessage('Error al eliminar la consulta');
-  }
-}, [fetchConsultations]);
-
-// Handle back from consultation detail
-const handleBackFromConsultationDetail = useCallback(() => {
-  setConsultationDetailView(false);
-  setSelectedConsultation(null);
-}, []);
-
-
+// fetchConsultations removed - now using consultationManagement.fetchConsultations
 
 // Function to create appointment from consultation follow-up
 const handleCreateFollowUpAppointment = useCallback(async (appointmentData: any) => {
@@ -1317,49 +929,16 @@ const handleCreateFollowUpAppointment = useCallback(async (appointmentData: any)
         console.log('ℹ️ Appointment created for different date than currently selected, will appear when navigating to that date');
       }
     } catch (apiError: any) {
-      // If API fails, create locally for demonstration
-      if (apiError.code === 'ERR_NETWORK' || apiError.code === 'ERR_CONNECTION_REFUSED' || apiError.status === 0) {
-        console.log('⚠️ API unavailable, creating appointment locally...');
-        
-        const localAppointment = {
-          id: `APT-${Date.now()}`,
-          ...appointmentData,
-          appointment_date: appointmentData.date_time, // Map field for backend compatibility
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          patient_name: patients.find(p => p.id === appointmentData.patient_id)?.full_name || 'Paciente',
-          doctor_name: doctorProfile 
-            ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name} ${doctorProfile.paternal_surname}`.trim()
-            : 'Dr. Sistema'
-        };
-        
-        // Add to appointments state only if current view is agenda and dates match
-        const appointmentDate = new Date(appointmentData.date_time).toISOString().split('T')[0];
-        const currentSelectedDate = selectedDate.toISOString().split('T')[0];
-        
-        console.log('📅 Local appointment creation:', {
-          appointmentDate,
-          currentSelectedDate,
-          activeView,
-          shouldAddToState: activeView === 'agenda' && appointmentDate === currentSelectedDate
-        });
-        
-        // Always add to state for now - will be filtered by date in AgendaView
-        // Add to appointments state for immediate feedback
-        setAppointments(prev => [localAppointment, ...prev]);
-        console.log('✅ Follow-up appointment created locally (fallback)');
-      } else {
-        throw apiError; // Re-throw if it's not a connection error
-      }
+      // No fallback logic - backend is required
+      console.error('❌ Error creating appointment:', apiError);
+      throw apiError;
     }
     
   } catch (error) {
     console.error('Error creating follow-up appointment:', error);
     throw error; // Re-throw so the calling function can handle it
   }
-}, [activeView, selectedDate, patients, doctorProfile]);
-
-
+}, [activeView, selectedDate, patientManagement.patients, doctorProfile]);
 
 // User menu handlers
 const handleUserMenuOpen = useCallback((event: React.MouseEvent<HTMLElement>) => {
@@ -1386,190 +965,53 @@ const handleLogout = useCallback(() => {
 }, []);
 
 const confirmLogout = useCallback(() => {
+  try {
   setLogoutDialogOpen(false);
   logout();
   console.log('✅ Sesión cerrada exitosamente');
+  } catch (error) {
+    console.error('❌ Error during logout:', error);
+    // Ensure dialog is closed even if logout fails
+    setLogoutDialogOpen(false);
+  }
 }, [logout]);
 
 const cancelLogout = useCallback(() => {
   setLogoutDialogOpen(false);
 }, []);
 
-// Handle consultation form submission
+// Handle consultation form submission using centralized utility (eliminates 184 lines of duplicated code)
 const handleConsultationSubmit = useCallback(async () => {
   setIsSubmitting(true);
   setFormErrorMessage('');
   
   try {
-    // Map frontend data to backend format  
-    const consultationData = {
-      patient_id: consultationFormData.patient_id,
-      date: consultationFormData.date ? new Date(consultationFormData.date).toISOString() : new Date().toISOString(),
-      chief_complaint: consultationFormData.chief_complaint || '',
-      history_present_illness: consultationFormData.history_present_illness || '',
-      family_history: consultationFormData.family_history || '',
-      personal_pathological_history: consultationFormData.personal_pathological_history || '',
-      personal_non_pathological_history: consultationFormData.personal_non_pathological_history || '',
-      physical_examination: consultationFormData.physical_examination || '',
-      primary_diagnosis: consultationFormData.primary_diagnosis || '',
-      secondary_diagnoses: consultationFormData.secondary_diagnoses || '',
-      differential_diagnosis: '',
-      treatment_plan: consultationFormData.treatment_plan || '',
-      prescribed_medications: '',
-      follow_up_instructions: consultationFormData.follow_up_instructions || '',
-      therapeutic_plan: '',
-      prognosis: '',
-      laboratory_results: '',
-      imaging_studies: '',
-      interconsultations: '',
-      doctor_name: doctorProfile 
-        ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name} ${doctorProfile.paternal_surname} ${doctorProfile.maternal_surname || ''}`.trim()
-        : 'Dr. Usuario',
-      doctor_professional_license: doctorProfile?.professional_license || '',
-      doctor_specialty: doctorProfile?.specialty || 'Medicina General'
-    };
+    await submitConsultation({
+      consultationFormData: consultationManagement.consultationFormData,
+      isEditing: consultationManagement.isEditingConsultation,
+      selectedConsultation: consultationManagement.selectedConsultation,
+      doctorProfile,
+      tempConsultationId: consultationManagement.tempConsultationId,
+      tempClinicalStudies: consultationManagement.tempClinicalStudies,
+      setTempConsultationId: consultationManagement.setTempConsultationId,
+      setTempClinicalStudies: consultationManagement.setTempClinicalStudies,
+      showSuccessMessage,
+      onSuccess: async () => {
+        consultationManagement.setConsultationDialogOpen(false);
+        await consultationManagement.loadConsultations(); // Refresh consultations list
+      }
+    });
     
-    console.log('🔍 Consultation Data Debug:', consultationData);
-    
-    let result: any;
-    if (isEditingConsultation && selectedConsultation) {
-      result = await apiService.updateConsultation(selectedConsultation.id, consultationData);
-    } else {
-      result = await apiService.createConsultation(consultationFormData.patient_id, consultationData);
-    }
-    
-    // Update temporary clinical studies with real consultation ID if creating new consultation
-    if (!isEditingConsultation && tempConsultationId && tempClinicalStudies.length > 0) {
-          // Update the consultation_id in temporary studies
-    const updatedStudies = tempClinicalStudies.map(study => ({
-      ...study,
-      consultation_id: result.id
-    }));
-    
-    // Save studies to localStorage with real consultation ID
-    saveStudiesToStorage(result.id, updatedStudies);
-    
-    // Clear temporary data
-    setTempConsultationId(null);
-    setTempClinicalStudies([]);
-    }
-    
-    showSuccessMessage(
-      isEditingConsultation 
-        ? 'Consulta actualizada exitosamente' 
-        : 'Consulta creada exitosamente'
-    );
-    setConsultationDialogOpen(false);
-    fetchConsultations(); // Refresh the list
   } catch (error: any) {
     console.error('Error saving consultation:', error);
     
-    // Check if it's a connection error (backend not available)
-    if (error.code === 'ERR_NETWORK' || error.code === 'ERR_CONNECTION_REFUSED' || error.message?.includes('Network Error') || error.status === 0) {
-      console.log('🔄 Backend unavailable, creating consultation locally for testing...');
-      
-      try {
-        // Create simulated consultation locally
-        const simulatedConsultation = {
-          id: `CONS-${Date.now()}`,
-          patient_id: consultationFormData.patient_id,
-          date: consultationFormData.date ? new Date(consultationFormData.date).toISOString() : new Date().toISOString(),
-          chief_complaint: consultationFormData.chief_complaint || '',
-          history_present_illness: consultationFormData.history_present_illness || '',
-          family_history: consultationFormData.family_history || '',
-          personal_pathological_history: consultationFormData.personal_pathological_history || '',
-          personal_non_pathological_history: consultationFormData.personal_non_pathological_history || '',
-          physical_examination: consultationFormData.physical_examination || '',
-          primary_diagnosis: consultationFormData.primary_diagnosis || '',
-          secondary_diagnoses: consultationFormData.secondary_diagnoses || '',
-          treatment_plan: consultationFormData.treatment_plan || '',
-          follow_up_instructions: consultationFormData.follow_up_instructions || '',
-          interconsultations: consultationFormData.interconsultations || '',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          patient_name: patients.find(p => p.id === consultationFormData.patient_id)?.full_name || 'Paciente Desconocido',
-          doctor_name: doctorProfile 
-            ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name} ${doctorProfile.paternal_surname} ${doctorProfile.maternal_surname || ''}`.trim()
-            : 'Dr. Sistema',
-          doctor_professional_license: doctorProfile?.professional_license || 'SIS001'
-        };
-        
-        // Add to local consultations state
-        setConsultations(prev => [simulatedConsultation, ...prev]);
-        
-        // Handle temporary clinical studies
-        if (!isEditingConsultation && tempConsultationId && tempClinicalStudies.length > 0) {
-          const updatedStudies = tempClinicalStudies.map(study => ({
-            ...study,
-            consultation_id: simulatedConsultation.id
-          }));
-          
-          // Clinical studies will be associated with the consultation
-          // For now, we just clear the temporary studies
-          setTempClinicalStudies([]);
-        }
-        
-        // Reset form and show success
-        setConsultationFormData({
-          patient_id: '',
-          date: '',
-          chief_complaint: '',
-          history_present_illness: '',
-          family_history: '',
-          personal_pathological_history: '',
-          personal_non_pathological_history: '',
-          physical_examination: '',
-          primary_diagnosis: '',
-          secondary_diagnoses: '',
-          treatment_plan: '',
-          therapeutic_plan: '',
-          follow_up_instructions: '',
-          prognosis: '',
-          laboratory_results: '',
-          imaging_studies: '',
-          interconsultations: '',
-          doctor_name: '',
-          doctor_professional_license: '',
-          doctor_specialty: ''
-        });
-        setTempConsultationId(null);
-        showSuccessMessage(
-          isEditingConsultation 
-            ? 'Consulta actualizada exitosamente (modo local)' 
-            : 'Consulta creada exitosamente (modo local)'
-        );
-        setConsultationDialogOpen(false);
-        
-        return; // Exit successfully
-        
-      } catch (localError) {
-        console.error('Error creating local consultation:', localError);
-        setFormErrorMessage('Error al crear la consulta localmente');
-      }
-    }
+    // No fallback logic - backend is required
     
-    // Parse API errors properly for other types of errors
+    // Standard error handling
     if (error.response?.data?.detail) {
       const detail = error.response.data.detail;
       if (typeof detail === 'string') {
         setFormErrorMessage(detail);
-      } else if (Array.isArray(detail)) {
-        // Handle Pydantic validation errors
-        const errorMessages = detail.map((err: any) => {
-          const field = err.loc?.[1] || err.loc?.[0] || 'Campo';
-          return `${field}: ${err.msg}`;
-        }).join(', ');
-        setFormErrorMessage(errorMessages);
-        
-        // Set individual field errors
-        const newFieldErrors: {[key: string]: string} = {};
-        detail.forEach((err: any) => {
-          const field = err.loc?.[1] || err.loc?.[0];
-          if (field) {
-            newFieldErrors[field] = err.msg;
-          }
-        });
-        setFieldErrors(newFieldErrors);
       } else {
         setFormErrorMessage('Error al guardar la consulta');
       }
@@ -1579,27 +1021,27 @@ const handleConsultationSubmit = useCallback(async () => {
   } finally {
     setIsSubmitting(false);
   }
-}, [consultationFormData, isEditingConsultation, selectedConsultation, fetchConsultations, doctorProfile, tempConsultationId, tempClinicalStudies, consultations]);
+}, [consultationManagement.consultationFormData, consultationManagement.isEditingConsultation, consultationManagement.selectedConsultation, consultationManagement.loadConsultations, doctorProfile, consultationManagement.tempConsultationId, consultationManagement.tempClinicalStudies, patientManagement.patients]);
 
 // Clinical Studies handlers
 const handleAddClinicalStudy = useCallback(() => {
-  let consultationId: string;
-  let patientId: string;
+  let consultationId: number;
+  let patientId: number;
   
-  if (selectedConsultation) {
+  if (consultationManagement.selectedConsultation) {
     // Existing consultation
-    consultationId = selectedConsultation.id;
-    patientId = selectedConsultation.patient_id;
+    consultationId = consultationManagement.selectedConsultation.id;
+    patientId = consultationManagement.selectedConsultation.patient_id;
   } else {
     // New consultation - generate temporary ID if not exists
-    if (!tempConsultationId) {
-      const newTempId = `temp_consultation_${Date.now()}`;
-      setTempConsultationId(newTempId);
+    if (!consultationManagement.tempConsultationId) {
+      const newTempId = Date.now(); // Usar timestamp como ID temporal numérico
+      consultationManagement.setTempConsultationId(newTempId.toString());
       consultationId = newTempId;
     } else {
-      consultationId = tempConsultationId;
+      consultationId = parseInt(consultationManagement.tempConsultationId);
     }
-    patientId = consultationFormData.patient_id;
+    patientId = consultationManagement.consultationFormData.patient_id;
     
     if (!patientId) {
       console.error('❌ No hay paciente seleccionado para agregar estudio');
@@ -1610,13 +1052,13 @@ const handleAddClinicalStudy = useCallback(() => {
   console.log('📋 Agregando estudio clínico a:', {
     consultationId,
     patientId,
-    isNewConsultation: !selectedConsultation
+    isNewConsultation: !consultationManagement.selectedConsultation
   });
   
   setSelectedClinicalStudy(null);
   setIsEditingClinicalStudy(false);
   
-  const orderingDoctor = doctorProfile?.full_name || user?.doctor?.full_name || 'Dr. Usuario Sistema';
+  const orderingDoctor = doctorProfile?.full_name || user?.persona?.full_name || 'Dr. Usuario Sistema';
   const orderedDate = new Date().toISOString().split('T')[0];
   
   const newFormData: ClinicalStudyFormData = {
@@ -1642,7 +1084,7 @@ const handleAddClinicalStudy = useCallback(() => {
   setClinicalStudyFormErrorMessage('');
   setClinicalStudyFieldErrors({});
   setClinicalStudyDialogOpen(true);
-}, [selectedConsultation, tempConsultationId, consultationFormData.patient_id, doctorProfile, user]);
+}, [consultationManagement.selectedConsultation, consultationManagement.tempConsultationId, consultationManagement.consultationFormData.patient_id, doctorProfile, user]);
 
 const handleEditClinicalStudy = useCallback((study: ClinicalStudy) => {
   setSelectedClinicalStudy(study);
@@ -1656,7 +1098,7 @@ const handleEditClinicalStudy = useCallback((study: ClinicalStudy) => {
     ordered_date: study.ordered_date.split('T')[0],
     performed_date: study.performed_date?.split('T')[0],
     results_date: study.results_date?.split('T')[0],
-    status: study.status,
+    status: study.is_active ? 'completed' : 'pending',
     results_text: study.results_text || '',
     interpretation: study.interpretation || '',
     ordering_doctor: study.ordering_doctor,
@@ -1672,22 +1114,22 @@ const handleEditClinicalStudy = useCallback((study: ClinicalStudy) => {
   setClinicalStudyDialogOpen(true);
 }, []);
 
-const handleDeleteClinicalStudy = useCallback((studyId: string) => {
-  if (!selectedConsultation) {
+const handleDeleteClinicalStudy = useCallback((studyId: number) => {
+  if (!consultationManagement.selectedConsultation) {
     console.error('❌ No hay consulta seleccionada para eliminar estudio');
     return;
   }
   
-  console.log('🗑️ Eliminando estudio clínico:', studyId, 'de consulta:', selectedConsultation.id);
+  console.log('🗑️ Eliminando estudio clínico:', studyId, 'de consulta:', consultationManagement.selectedConsultation.id);
   const currentStudies = getCurrentConsultationStudies();
   const updatedStudies = currentStudies.filter(study => study.id !== studyId);
   updateCurrentConsultationStudies(updatedStudies);
   
 
-}, [selectedConsultation, getCurrentConsultationStudies, updateCurrentConsultationStudies]);
+}, [consultationManagement.selectedConsultation, getCurrentConsultationStudies, updateCurrentConsultationStudies]);
 
 const handleClinicalStudySubmit = useCallback(async () => {
-  if (!selectedConsultation && !tempConsultationId) {
+  if (!consultationManagement.selectedConsultation && !consultationManagement.tempConsultationId) {
     console.error('❌ No hay consulta seleccionada ni ID temporal');
     setClinicalStudyFormErrorMessage('Error: No hay consulta disponible');
     return;
@@ -1697,8 +1139,8 @@ const handleClinicalStudySubmit = useCallback(async () => {
   setClinicalStudyFormErrorMessage('');
   
   try {
-    const consultationId = selectedConsultation?.id || tempConsultationId;
-    const patientId = selectedConsultation?.patient_id || clinicalStudyFormData.patient_id;
+    const consultationId = consultationManagement.selectedConsultation?.id || consultationManagement.tempConsultationId;
+    const patientId = consultationManagement.selectedConsultation?.patient_id || clinicalStudyFormData.patient_id;
     
     if (!consultationId) {
       console.error('❌ No se pudo determinar el ID de consulta');
@@ -1714,7 +1156,7 @@ const handleClinicalStudySubmit = useCallback(async () => {
       study_name: clinicalStudyFormData.study_name,
       study_description: clinicalStudyFormData.study_description || '',
       ordered_date: new Date(clinicalStudyFormData.ordered_date).toISOString(),
-      status: clinicalStudyFormData.status,
+      status: clinicalStudyFormData.status || 'pending',
       results_text: clinicalStudyFormData.results_text || '',
       interpretation: clinicalStudyFormData.interpretation || '',
       ordering_doctor: clinicalStudyFormData.ordering_doctor,
@@ -1729,51 +1171,29 @@ const handleClinicalStudySubmit = useCallback(async () => {
     if (isEditingClinicalStudy && selectedClinicalStudy) {
       // Update existing study via backend
       try {
-        await apiService.updateClinicalStudy(selectedClinicalStudy.id, studyData);
+        await apiService.updateClinicalStudy(selectedClinicalStudy.id.toString(), studyData);
         console.log('✅ Estudio clínico actualizado en backend');
       } catch (error) {
-        console.error('Error updating via backend, using localStorage fallback:', error);
-        // Fallback to localStorage
-        const currentStudies = getCurrentConsultationStudies();
-        const updatedStudy = { ...selectedClinicalStudy, ...studyData, updated_at: new Date().toISOString() };
-        const updatedStudies = currentStudies.map(study => 
-          study.id === selectedClinicalStudy.id ? updatedStudy : study
-        );
-        updateCurrentConsultationStudies(updatedStudies);
+        console.error('❌ Error updating clinical study:', error);
+        throw error; // No fallback - backend required
       }
     } else {
       // Create new study
-      if (selectedConsultation?.id) {
+      if (consultationManagement.selectedConsultation?.id) {
         // Existing consultation - use backend
         try {
           const newStudy = await apiService.createClinicalStudy(studyData);
           console.log('✅ Estudio clínico creado en backend:', newStudy);
           
           // Reload studies from backend to get updated list
-          await loadConsultationStudies(selectedConsultation.id);
+          await consultationManagement.loadConsultationStudies(consultationManagement.selectedConsultation.id);
         } catch (error) {
-          console.error('Error creating via backend, using localStorage fallback:', error);
-          // Fallback to localStorage
-          const currentStudies = getCurrentConsultationStudies();
-          const newStudy: ClinicalStudy = {
-            id: `cs_${Date.now()}`,
-            ...studyData,
-            created_at: new Date().toISOString()
-          };
-          const updatedStudies = [...currentStudies, newStudy];
-          updateCurrentConsultationStudies(updatedStudies);
+          console.error('❌ Error creating clinical study:', error);
+          throw error; // No fallback - backend required
         }
       } else {
-        // New consultation with temporary ID - use localStorage for now
-        const currentStudies = getCurrentConsultationStudies();
-        const newStudy: ClinicalStudy = {
-          id: `cs_${Date.now()}`,
-          ...studyData,
-          created_at: new Date().toISOString()
-        };
-        const updatedStudies = [...currentStudies, newStudy];
-        updateCurrentConsultationStudies(updatedStudies);
-        console.log('💾 Estudio clínico guardado temporalmente (nueva consulta)');
+        // New consultation - require backend for all operations
+        throw new Error('Cannot create clinical study: Consultation must be saved to backend first');
       }
     }
     
@@ -1787,7 +1207,7 @@ const handleClinicalStudySubmit = useCallback(async () => {
   } finally {
     setIsClinicalStudySubmitting(false);
   }
-}, [isEditingClinicalStudy, selectedClinicalStudy, clinicalStudyFormData, selectedConsultation, tempConsultationId, doctorProfile, getCurrentConsultationStudies, updateCurrentConsultationStudies, loadConsultationStudies]);
+}, [isEditingClinicalStudy, selectedClinicalStudy, clinicalStudyFormData, consultationManagement.selectedConsultation, consultationManagement.tempConsultationId, doctorProfile, getCurrentConsultationStudies, updateCurrentConsultationStudies, consultationManagement.loadConsultationStudies]);
 
 // REMOVED: Duplicate handleAppointmentSubmit function
 // Using hook version instead
@@ -1878,7 +1298,8 @@ const handleClinicalStudySubmit = useCallback(async () => {
     // Enhanced error logging
     if (process.env.NODE_ENV === 'development') {
       console.group('❌ Appointment Creation Error');
-      console.error('Error object:', error);
+      console.error('Error message:', error?.message || 'Unknown error');
+      console.error('Error details:', error?.detail || error?.response?.data?.detail);
       console.error('Response data:', error.response?.data);
       console.error('Response status:', error.response?.status);
       console.error('Form data that caused error:', appointmentFormData);
@@ -1888,9 +1309,15 @@ const handleClinicalStudySubmit = useCallback(async () => {
     // User-friendly error message
     let errorMessage = 'Error al guardar la cita';
     if (error.response?.data?.detail) {
-      if (typeof error.response.data.detail === 'string') {
-        errorMessage = error.response.data.detail;
-      } else if (error.response.data.detail.includes && error.response.data.detail.includes('foreign key')) {
+      const detail = error.response.data.detail;
+      if (typeof detail === 'string') {
+        errorMessage = detail;
+        if (detail.includes('foreign key')) {
+          errorMessage = 'Error: Paciente o médico no válido. Por favor, selecciona un paciente válido.';
+        }
+      } else if (Array.isArray(detail) && detail.some && detail.some(item => 
+        typeof item === 'string' && item.includes('foreign key')
+      )) {
         errorMessage = 'Error: Paciente o médico no válido. Por favor, selecciona un paciente válido.';
       }
     }
@@ -1906,13 +1333,28 @@ const validatePatientForm = () => {
   const errors: {[key: string]: string} = {};
   
   // Mandatory fields according to NOM-004
-  if (!patientFormData.first_name.trim()) errors.first_name = 'Este campo es obligatorio';
-  if (!patientFormData.paternal_surname.trim()) errors.paternal_surname = 'Este campo es obligatorio';
-  if (!patientFormData.maternal_surname.trim()) errors.maternal_surname = 'Este campo es obligatorio';
-  if (!patientFormData.birth_date) errors.birth_date = 'Este campo es obligatorio';
-  if (!patientFormData.gender) errors.gender = 'Este campo es obligatorio';
-  if (!patientFormData.phone.trim()) errors.phone = 'Este campo es obligatorio';
-  if (!patientFormData.address.trim()) errors.address = 'Este campo es obligatorio';
+  // Use safe string checks to avoid errors with undefined/null values
+  if (!patientFormData.first_name || !patientFormData.first_name.trim()) {
+    errors.first_name = 'Este campo es obligatorio';
+  }
+  if (!patientFormData.paternal_surname || !patientFormData.paternal_surname.trim()) {
+    errors.paternal_surname = 'Este campo es obligatorio';
+  }
+  if (!patientFormData.maternal_surname || !patientFormData.maternal_surname.trim()) {
+    errors.maternal_surname = 'Este campo es obligatorio';
+  }
+  if (!patientFormData.birth_date) {
+    errors.birth_date = 'Este campo es obligatorio';
+  }
+  if (!patientFormData.gender) {
+    errors.gender = 'Este campo es obligatorio';
+  }
+  if (!patientFormData.primary_phone || !patientFormData.primary_phone.trim()) {
+    errors.primary_phone = 'Este campo es obligatorio';
+  }
+  if (!patientFormData.address_street || !patientFormData.address_street.trim()) {
+    errors.address_street = 'Este campo es obligatorio';
+  }
   
   return errors;
 };
@@ -1968,77 +1410,112 @@ const handlePatientSubmit = async () => {
   }
   
   try {
-    // Prepare patient data for backend (only fields expected by PatientBase model)
-    const patientData = {
+    // ✅ UNIFICADO: Usar directamente los nombres del frontend (ahora coinciden con backend)
+    const transformedData = {
       first_name: patientFormData.first_name,
       paternal_surname: patientFormData.paternal_surname,
       maternal_surname: patientFormData.maternal_surname,
       birth_date: patientFormData.birth_date,
       gender: patientFormData.gender,
-      place_of_birth: null, // Not included in frontend form
-      birth_state_code: patientFormData.birth_state_code || '',
-      nationality: patientFormData.nationality || "Mexicana",
-      curp: patientFormData.curp || '',
-      internal_id: patientFormData.internal_id || '',
-      phone: patientFormData.phone,
-      address: patientFormData.address,
-      email: patientFormData.email || '',
-      neighborhood: patientFormData.neighborhood || '',
-      municipality: patientFormData.municipality || '',
-      state: patientFormData.state || '',
-      postal_code: patientFormData.postal_code || '',
+      curp: patientFormData.curp || null,
+      rfc: null,
       civil_status: patientFormData.civil_status || '',
-      education_level: patientFormData.education_level || '',
-      occupation: patientFormData.occupation || '',
-      religion: patientFormData.religion || '',
-      insurance_type: patientFormData.insurance_type || '',
-      insurance_number: patientFormData.insurance_number || '',
-      emergency_contact_name: patientFormData.emergency_contact_name || '',
-      emergency_contact_phone: patientFormData.emergency_contact_phone || '',
-      emergency_contact_relationship: patientFormData.emergency_contact_relationship || '',
-      emergency_contact_address: patientFormData.emergency_contact_address || '',
-      allergies: patientFormData.allergies || '',
-      chronic_conditions: patientFormData.chronic_conditions || '',
-      current_medications: patientFormData.current_medications || '',
-      blood_type: patientFormData.blood_type || '',
-
-      previous_hospitalizations: patientFormData.previous_hospitalizations || '',
-      surgical_history: patientFormData.surgical_history || '',
-      status: patientFormData.status
+      nationality_id: 1, // Default to Mexico (ID 1)
+      birth_place: null,
+      birth_state_id: null,
+      foreign_birth_place: null,
+      email: patientFormData.email || null,
+      primary_phone: patientFormData.primary_phone || null,  // ✅ CORREGIDO
+      address_street: patientFormData.address_street || null,
+      address_ext_number: patientFormData.address_ext_number || null,
+      address_int_number: patientFormData.address_int_number || null,
+      address_neighborhood: patientFormData.address_neighborhood || null,        // ✅ CORREGIDO
+      city_id: patientFormData.city_id,                                // ✅ CORREGIDO
+      address_postal_code: patientFormData.address_postal_code || null,                  // ✅ CORREGIDO
+      blood_type: patientFormData.blood_type || null,  // ✅ Ya unificado
+      allergies: patientFormData.allergies || null,  // ✅ Ya unificado
+      chronic_conditions: patientFormData.chronic_conditions || null,
+      current_medications: patientFormData.current_medications || null,
+      insurance_provider: patientFormData.insurance_provider || null,  // ✅ CORREGIDO
+      insurance_number: patientFormData.insurance_number || null,
+      emergency_contact_name: patientFormData.emergency_contact_name || null,      // ✅ CORREGIDO
+      emergency_contact_phone: patientFormData.emergency_contact_phone || null,  // ✅ CORREGIDO
+      emergency_contact_relationship: patientFormData.emergency_contact_relationship || null,  // ✅ CORREGIDO
+      title: null
     };
     
-    if (isEditingPatient && selectedPatient) {
+    if (patientManagement.isEditingPatient && patientManagement.selectedPatient) {
       // Update existing patient
-      await apiService.updatePatient(selectedPatient.id, patientData);
+      console.log('🔄 App: About to update patient', { 
+        patientId: patientManagement.selectedPatient.id, 
+        transformedData,
+        originalFormData: patientFormData 
+      });
+      
+      // ✅ UNIFICADO: Logging con nombres consistentes
+      console.log('🔍 App: Checking unified fields:', {
+        'address_street (frontend)': patientFormData.address_street,
+        'allergies (frontend)': patientFormData.allergies,
+        'blood_type (frontend)': patientFormData.blood_type,
+        'address_street (backend)': transformedData.address_street,
+        'allergies (backend)': transformedData.allergies,
+        'blood_type (backend)': transformedData.blood_type
+      });
+      
+      // Additional detailed check
+      console.log('🔍 App: Form data types:', {
+        'address_street type': typeof patientFormData.address_street,
+        'allergies type': typeof patientFormData.allergies,
+        'blood_type type': typeof patientFormData.blood_type,
+        'address_street empty?': !patientFormData.address_street,
+        'allergies empty?': !patientFormData.allergies,
+        'blood_type empty?': !patientFormData.blood_type
+      });
+      
+      const updateResult = await apiService.updatePatient(patientManagement.selectedPatient.id, transformedData);
+      console.log('✅ App: Patient update result:', updateResult);
+      
+      // ✅ UNIFICADO: Check unified field names in response
+      console.log('🔍 App: Updated patient unified fields:', {
+        'address_street (response)': updateResult.address_street,
+        'allergies (response)': updateResult.allergies,
+        'blood_type (response)': updateResult.blood_type
+      });
+      
       const patientName = `${patientFormData.first_name} ${patientFormData.paternal_surname} ${patientFormData.maternal_surname}`;
-      fetchPatients();
-      setPatientDialogOpen(false);
-      resetPatientForm();
+      
+      // Refresh patient list to verify changes
+      console.log('🔄 App: Refreshing patient list...');
+      await patientManagement.fetchPatients();
+      console.log('✅ App: Patient list refreshed');
+      
+      patientManagement.setPatientDialogOpen(false);
+      patientManagement.resetPatientForm();
       setFieldErrors({});
       showSuccessMessage(`✅ El paciente ${patientName} fue actualizado exitosamente`);
     } else {
       // Create new patient
       // Sending patient data to API
-      await apiService.createPatient(patientData);
+      await apiService.createPatient(transformedData as any);
       // API response received successfully
         const patientName = `${patientFormData.first_name} ${patientFormData.paternal_surname} ${patientFormData.maternal_surname}`;
         // Success: dialog closed and view changed
         
         // Immediate UI updates
-        setPatientDialogOpen(false);
+        patientManagement.setPatientDialogOpen(false);
         
-        if (creatingPatientFromConsultation) {
+        if (consultationManagement.creatingPatientFromConsultation) {
           // If creating patient from consultation, return to consultation dialog
-          setCreatingPatientFromConsultation(false);
-          setConsultationDialogOpen(true);
+          consultationManagement.setCreatingPatientFromConsultation(false);
+          consultationManagement.setConsultationDialogOpen(true);
           
           // Batch state updates to avoid multiple re-renders  
           setTimeout(() => {
             setFormErrorMessage('');
             setFieldErrors({});
-            resetPatientForm();
+            patientManagement.resetPatientForm();
             showSuccessMessage(`✅ El paciente ${patientName} fue agregado con éxito. Ahora puedes seleccionarlo en la consulta.`);
-            fetchPatients(); // This will make the new patient available in the consultation dialog
+            patientManagement.fetchPatients(); // This will make the new patient available in the consultation dialog
           }, 10);
         } else {
           // Normal patient creation flow
@@ -2048,17 +1525,16 @@ const handlePatientSubmit = async () => {
           setTimeout(() => {
             setFormErrorMessage('');
             setFieldErrors({});
-            resetPatientForm();
+            patientManagement.resetPatientForm();
             showSuccessMessage(`✅ El paciente ${patientName} fue agregado con éxito`);
-            fetchPatients();
+            patientManagement.fetchPatients();
           }, 10);
         }
-
 
     }
   } catch (error: any) {
     console.error('Error saving patient:', error);
-    console.error('Error response status:', error.response?.status);
+    console.error('Error response status:', error.response?.is_active);
     console.error('Error response data:', error.response?.data);
     console.error('Error response headers:', error.response?.headers);
     console.error('Request config:', error.config);
@@ -2080,7 +1556,7 @@ const handlePatientSubmit = async () => {
       } else {
         // If it's an object, try to extract meaningful error info
         console.error('Unknown error format:', error.response.data);
-        errorMessage = `Error ${error.response.status}: ${JSON.stringify(error.response.data)}`;
+        errorMessage = `Error ${error.response.is_active}: ${JSON.stringify(error.response.data)}`;
       }
     }
     
@@ -2096,132 +1572,114 @@ const handlePatientSubmit = async () => {
 const handleEditPatient = (patient: Patient) => {
   setPatientFormData({
     // ===== CAMPOS OBLIGATORIOS NOM-004 =====
-    first_name: patient.first_name,
-    paternal_surname: patient.paternal_surname,
-    maternal_surname: patient.maternal_surname,
-    birth_date: patient.birth_date,
-    gender: patient.gender,
-    phone: patient.phone,
-    address: patient.address,
-    
-    // ===== CAMPOS OPCIONALES =====
-    // Identificación adicional
-    birth_state_code: patient.birth_state_code || '',
-    nationality: patient.nationality || '',
+    first_name: patient.first_name || '',
+    paternal_surname: patient.paternal_surname || '',
+    maternal_surname: patient.maternal_surname || '',
+    birth_date: patient.birth_date || '',
+    gender: patient.gender || '',
+    // ===== IDENTIFICACIÓN =====
     curp: patient.curp || '',
-    internal_id: patient.internal_id || '',
-    
-    // Contacto adicional
-    neighborhood: patient.neighborhood || '',
-    
-    // Datos demográficos
-    municipality: patient.municipality || '',
-    state: patient.state || '',
-    postal_code: patient.postal_code || '',
+    rfc: patient.rfc || '',
     civil_status: patient.civil_status || '',
-    education_level: patient.education_level || '',
-    occupation: patient.occupation || '',
-    religion: patient.religion || '',
+    nationality_id: patient.nationality_id || 1,
+    birth_place: patient.birth_place || '',
     
-    // Seguro médico
-    insurance_type: patient.insurance_type || '',
-    insurance_number: patient.insurance_number || '',
+    // ===== LUGAR DE NACIMIENTO (NOM-024) =====
+    birth_state_id: patient.birth_state_id || null,
+    foreign_birth_place: patient.foreign_birth_place || '',
     
-    // Contacto de emergencia
-    emergency_contact_name: patient.emergency_contact_name || '',
-    emergency_contact_phone: patient.emergency_contact_phone || '',
-    emergency_contact_relationship: patient.emergency_contact_relationship || '',
-    emergency_contact_address: patient.emergency_contact_address || '',
+    // ===== CONTACTOS =====
+    email: patient.email || '',
+    primary_phone: patient.primary_phone || '',  // ✅ CORREGIDO
     
-    // Información médica adicional
+    // ===== DIRECCIÓN PERSONAL =====
+    address_street: patient.address_street || '',
+    address_ext_number: patient.address_ext_number || '',
+    address_int_number: patient.address_int_number || '',
+    address_neighborhood: patient.address_neighborhood || '',
+    city_id: patient.city_id || null,
+    address_postal_code: patient.address_postal_code || '',
+    
+    // ===== DATOS MÉDICOS =====
     blood_type: patient.blood_type || '',
     allergies: patient.allergies || '',
     chronic_conditions: patient.chronic_conditions || '',
     current_medications: patient.current_medications || '',
-    previous_hospitalizations: patient.previous_hospitalizations || '',
-    surgical_history: patient.surgical_history || '',
     
-    // Otros campos
-    email: patient.email || '',
+    // ===== SEGURO MÉDICO =====
+    insurance_provider: patient.insurance_provider || '',  // ✅ CORREGIDO
+    insurance_number: patient.insurance_number || '',
+    
+    // ===== CONTACTO DE EMERGENCIA =====
+    emergency_contact_name: patient.emergency_contact_name || '',      // ✅ CORREGIDO
+    emergency_contact_phone: patient.emergency_contact_phone || '',  // ✅ CORREGIDO
+    emergency_contact_relationship: patient.emergency_contact_relationship || '',  // ✅ CORREGIDO
     
     // Estado del paciente
-    status: (patient.status || 'active') as 'active' | 'inactive'
+    is_active: patient.is_active || true
   });
   
-  setSelectedPatient(patient);
-  setIsEditingPatient(true);
-  setPatientDialogOpen(true);
+  patientManagement.setSelectedPatient(patient);
+  patientManagement.setIsEditingPatient(true);
+  patientManagement.setPatientDialogOpen(true);
 };
 
 // Handle new patient
 const handleNewPatient = useCallback(() => {
-  resetPatientForm();
-  setIsEditingPatient(false);
+  patientManagement.resetPatientForm();
+  patientManagement.setIsEditingPatient(false);
   setFormErrorMessage('');
-  setPatientDialogOpen(true);
+  patientManagement.setPatientDialogOpen(true);
 }, []);
 
-// Handle delete patient
+// Handle deactivate patient (soft delete)
 const handleDeletePatient = useCallback(async () => {
-  if (!selectedPatient) return;
+  if (!patientManagement.selectedPatient) return;
   
-  const patientName = `${selectedPatient.first_name} ${selectedPatient.paternal_surname} ${selectedPatient.maternal_surname}`;
+  const patientName = `${patientManagement.selectedPatient.first_name} ${patientManagement.selectedPatient.paternal_surname} ${patientManagement.selectedPatient.maternal_surname}`;
   
   // Confirmation dialog
-  const confirmDelete = window.confirm(
-    `⚠️ ¿Estás seguro de que deseas eliminar al paciente ${patientName}?\n\n` +
-    `Esta acción NO se puede deshacer y se eliminará:\n` +
-    `• Toda la información del paciente\n` +
-    `• Historial médico\n` +
-    `• Citas programadas\n` +
-    `• Prescripciones\n\n` +
-    `Escribe "ELIMINAR" en el siguiente campo si estás completamente seguro.`
+  const confirmDeactivate = window.confirm(
+    `⚠️ ¿Estás seguro de que deseas desactivar al paciente ${patientName}?\n\n` +
+    `Al desactivar un paciente:\n` +
+    `• El paciente pasará a estado INACTIVO\n` +
+    `• No aparecerá en las listas de pacientes activos\n` +
+    `• No se podrán crear nuevas consultas o citas\n` +
+    `• El historial médico se conserva\n` +
+    `• La acción se puede revertir reactivando el paciente\n\n` +
+    `¿Deseas continuar?`
   );
   
-  if (!confirmDelete) return;
-  
-  // Additional confirmation
-  const confirmText = window.prompt(
-    `Para confirmar la eliminación del paciente ${patientName}, escribe exactamente: ELIMINAR`
-  );
-  
-  if (confirmText !== 'ELIMINAR') {
-    alert('❌ Eliminación cancelada. El texto no coincide.');
-    return;
-  }
+  if (!confirmDeactivate) return;
   
   try {
     setIsSubmitting(true);
-    await apiService.deletePatient(selectedPatient.id);
+    await apiService.deletePatient(patientManagement.selectedPatient.id);
     
-    setPatientDialogOpen(false);
-    resetPatientForm();
+    patientManagement.setPatientDialogOpen(false);
+    patientManagement.resetPatientForm();
     setFieldErrors({});
     setActiveView('patients');
-    fetchPatients();
-    showSuccessMessage(`🗑️ El paciente ${patientName} fue eliminado exitosamente`);
+    patientManagement.fetchPatients();
+    showSuccessMessage(`🔒 El paciente ${patientName} fue desactivado exitosamente`);
   } catch (error: any) {
-    console.error('Error deleting patient:', error);
-    const errorMessage = error.response?.data?.detail || 'Error al eliminar el paciente. Por favor, intenta nuevamente.';
+    console.error('Error deactivating patient:', error);
+    const errorMessage = error.response?.data?.detail || 'Error al desactivar el paciente. Por favor, intenta nuevamente.';
     alert(`❌ Error: ${errorMessage}`);
   } finally {
     setIsSubmitting(false);
   }
-}, [selectedPatient, fetchPatients]);
+}, [patientManagement.selectedPatient, patientManagement.fetchPatients]);
 
-// Format date and time for display
-const formatDateTime = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString('es-MX', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-};
+// formatDateTime moved to utils/formatters.ts to avoid duplication
 
   // Load dashboard data
   useEffect(() => {
+    if (!user || !isAuthenticated) {
+      console.log('🔒 AppContent - User not authenticated, skipping dashboard data load');
+      return;
+    }
+    
     const loadDashboardData = async () => {
       try {
         // Fetch dashboard data
@@ -2256,43 +1714,61 @@ const formatDateTime = (dateString: string) => {
     };
 
     loadDashboardData();
-  }, []);
+  }, [user, isAuthenticated]);
 
   // Fetch patients when view changes to patients
   useEffect(() => {
-    if (activeView === 'patients') {
-      fetchPatients();
+    if (!user || !isAuthenticated) {
+      console.log('🔒 AppContent - User not authenticated, skipping patients fetch');
+      return;
     }
-  }, [activeView]); // Remove fetchPatients dependency to avoid loops
+    
+    if (activeView === 'patients' && isAuthenticated) {
+      patientManagement.fetchPatients();
+    }
+  }, [activeView, user, isAuthenticated]); // Remove fetchPatients dependency to avoid loops
 
   // Search patients with debounce
   useEffect(() => {
-    if (activeView === 'patients' && patientSearchTerm !== undefined) {
+    if (!user || !isAuthenticated) {
+      return;
+    }
+    
+    if (activeView === 'patients' && patientManagement.patientSearchTerm !== undefined && isAuthenticated) {
       const timeoutId = setTimeout(() => {
-        fetchPatients();
+        patientManagement.fetchPatients();
       }, 500); // Increased debounce to 500ms to reduce API calls
       
       return () => clearTimeout(timeoutId);
     }
-  }, [patientSearchTerm, activeView]); // Remove fetchPatients dependency
+  }, [patientManagement.patientSearchTerm, activeView, user, isAuthenticated]); // Remove fetchPatients dependency
 
   // Fetch consultations when view changes to consultations
   useEffect(() => {
-    if (activeView === 'consultations') {
-      fetchConsultations();
+    if (!user || !isAuthenticated) {
+      console.log('🔒 AppContent - User not authenticated, skipping consultations fetch');
+      return;
     }
-  }, [activeView, fetchConsultations]);
+    
+    if (activeView === 'consultations') {
+      consultationManagement.fetchConsultations();
+    }
+  }, [activeView, consultationManagement.fetchConsultations, user, isAuthenticated]);
 
   // Debounced consultation search
   useEffect(() => {
-    if (activeView === 'consultations' && consultationSearchTerm !== undefined) {
+    if (!user || !isAuthenticated) {
+      return;
+    }
+    
+    if (activeView === 'consultations' && consultationManagement.consultationSearchTerm !== undefined) {
       const timeoutId = setTimeout(() => {
-        fetchConsultations();
+        consultationManagement.loadConsultations();
       }, 500); // 500ms debounce
       
       return () => clearTimeout(timeoutId);
     }
-  }, [consultationSearchTerm, activeView]);
+  }, [consultationManagement.consultationSearchTerm, activeView, user, isAuthenticated]);
 
   return (
     <ThemeProvider theme={theme}>
@@ -2364,13 +1840,14 @@ const formatDateTime = (dateString: string) => {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 1 }}>
                 <Box sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
                   <Typography variant="body2" sx={{ color: 'white', fontWeight: 500 }}>
-                    {doctorProfile 
-                      ? `${doctorProfile.first_name} ${doctorProfile.paternal_surname}` 
-                      : (dashboardData?.physician || 'Dr. García')
+                    {doctorProfile?.full_name || 
+                     (user?.persona?.first_name && user?.persona?.paternal_surname
+                      ? `${user?.persona?.first_name} ${user?.persona?.paternal_surname}` 
+                      : (user?.persona?.full_name || dashboardData?.physician || 'Dr. García'))
                     }
                   </Typography>
                   <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)' }}>
-                    {doctorProfile?.specialty || 'Médico General'}
+                    {doctorProfile?.specialty || user?.persona?.specialty || 'Médico General'}
                   </Typography>
                 </Box>
                 <IconButton
@@ -2390,9 +1867,14 @@ const formatDateTime = (dateString: string) => {
                       cursor: 'pointer'
                     }}
                   >
-                    {doctorProfile ? 
+                    {doctorProfile?.first_name && doctorProfile.first_name.length > 0 && 
+                     doctorProfile?.paternal_surname && doctorProfile.paternal_surname.length > 0 ? 
                       `${doctorProfile.first_name[0]}${doctorProfile.paternal_surname[0]}` :
-                      <ProfileIcon sx={{ color: 'white' }} />
+                      (user?.persona?.first_name && user.persona.first_name.length > 0 && 
+                       user?.persona?.paternal_surname && user.persona.paternal_surname.length > 0 ? 
+                        `${user.persona.first_name[0]}${user.persona.paternal_surname[0]}` :
+                        <ProfileIcon sx={{ color: 'white' }} />
+                      )
                     }
                   </Avatar>
                 </IconButton>
@@ -2438,9 +1920,11 @@ const formatDateTime = (dateString: string) => {
                   fontWeight: 600
                 }}
               >
-                {user ? 
-                  `${user.doctor.first_name[0]}${user.doctor.paternal_surname[0]}` :
-                  (doctorProfile ? 
+                {user?.persona?.first_name && user.persona.first_name.length > 0 && 
+                 user?.persona?.paternal_surname && user.persona.paternal_surname.length > 0 ? 
+                  `${user.persona.first_name[0]}${user.persona.paternal_surname[0]}` :
+                  (doctorProfile?.first_name && doctorProfile.first_name.length > 0 && 
+                   doctorProfile?.paternal_surname && doctorProfile.paternal_surname.length > 0 ? 
                     `${doctorProfile.first_name[0]}${doctorProfile.paternal_surname[0]}` :
                     'A'
                   )
@@ -2448,19 +1932,19 @@ const formatDateTime = (dateString: string) => {
               </Avatar>
               <Box sx={{ flex: 1 }}>
                                 <Typography variant="subtitle2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
-                  {user?.doctor.full_name || 
-                   (doctorProfile 
-                ? `${doctorProfile.first_name} ${doctorProfile.paternal_surname}` 
+                  {user?.persona?.full_name || 
+                   (user?.persona?.first_name && user?.persona?.paternal_surname
+                ? `${user?.persona?.first_name} ${user?.persona?.paternal_surname}` 
                 : (dashboardData?.physician || 'Dr. García')
                    )
               }
             </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.2 }}>
-                  {user?.doctor.specialty || doctorProfile?.specialty || 'Médico General'}
+                  {doctorProfile?.specialty || user?.persona?.specialty || 'Médico General'}
             </Typography>
-                {(user?.doctor.professional_license || doctorProfile?.professional_license) && (
+                {(doctorProfile?.professional_license || user?.persona?.professional_license) && (
                   <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
-                    Cédula: {user?.doctor.professional_license || doctorProfile?.professional_license}
+                    Cédula: {doctorProfile?.professional_license || user?.persona?.professional_license}
               </Typography>
                 )}
               </Box>
@@ -2499,8 +1983,6 @@ const formatDateTime = (dateString: string) => {
             </ListItemText>
           </MenuItem>
         </Menu>
-
-
 
         <Container maxWidth="xl" sx={{ mt: 3, mb: 3 }}>
           <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', md: 'row' } }}>
@@ -2579,6 +2061,30 @@ const formatDateTime = (dateString: string) => {
                     </ListItemIcon>
                       <ListItemText 
                         primary="Consultas" 
+                        primaryTypographyProps={{ fontWeight: 500 }}
+                      />
+                  </MenuItem>
+                  
+                  <MenuItem 
+                    selected={activeView === 'medical-records'}
+                    onClick={() => setActiveView('medical-records')}
+                      sx={{ 
+                        borderRadius: '12px', 
+                        mb: 1,
+                        '&.Mui-selected': {
+                          backgroundColor: 'primary.main',
+                          color: 'white',
+                          '& .MuiListItemIcon-root': {
+                            color: 'white'
+                          }
+                        }
+                      }}
+                  >
+                    <ListItemIcon>
+                        <AssignmentIcon />
+                    </ListItemIcon>
+                      <ListItemText 
+                        primary="Expedientes Médicos" 
                         primaryTypographyProps={{ fontWeight: 500 }}
                       />
                   </MenuItem>
@@ -2763,40 +2269,51 @@ const formatDateTime = (dateString: string) => {
               {activeView === 'patients' && (
                 <Suspense fallback={<LoadingFallback message="Cargando pacientes..." />}>
                   <PatientsViewSmart
-                    patients={patients}
-                    consultations={consultations}
+                    patients={patientManagement.patients}
+                    consultations={consultationManagement.consultations}
                     successMessage={successMessage}
                     setSuccessMessage={showSuccessMessage}
                     handleNewPatient={handleNewPatient}
                     handleEditPatient={handleEditPatient}
-                    isLoading={false}
+                    patientSearchTerm={patientManagement.patientSearchTerm}
+                    setPatientSearchTerm={patientManagement.setPatientSearchTerm}
                   />
                 </Suspense>
               )}
 
-              {activeView === 'consultations' && !consultationDetailView && (
+              {activeView === 'consultations' && !consultationManagement.consultationDetailView && (
                 <Suspense fallback={<LoadingFallback message="Cargando consultas..." />}>
                   <ConsultationsViewSmart
-                    consultations={consultations}
-                    patients={patients}
-                    successMessage={successMessage}
-                    setSuccessMessage={showSuccessMessage}
-                    handleNewConsultation={handleNewConsultation}
-                    handleEditConsultation={handleEditConsultation}
-                    isLoading={false}
+                    consultations={consultationManagement.consultations as any}
+                    handleNewConsultation={consultationManagement.handleNewConsultation}
+                    handleEditConsultation={consultationManagement.handleEditConsultation}
+                    consultationSearchTerm={consultationManagement.consultationSearchTerm}
+                    setConsultationSearchTerm={consultationManagement.setConsultationSearchTerm}
                   />
                 </Suspense>
               )}
 
-              {activeView === 'consultations' && consultationDetailView && selectedConsultation && (
+              {activeView === 'consultations' && consultationManagement.consultationDetailView && consultationManagement.selectedConsultation && (
                 <Suspense fallback={<LoadingFallback message="Cargando detalles..." />}>
                   <ConsultationDetailView
-                    consultation={selectedConsultation}
-                    onBack={handleBackFromConsultationDetail}
-                    onEdit={handleEditConsultation}
+                    consultation={consultationManagement.selectedConsultation as any}
+                    onBack={consultationManagement.handleBackFromConsultationDetail}
+                    onEdit={consultationManagement.handleEditConsultation}
                     onPrint={handlePrintConsultation}
                     clinicalStudies={getCurrentConsultationStudies()}
                     onEditClinicalStudy={handleEditClinicalStudy}
+                  />
+                </Suspense>
+              )}
+
+              {activeView === 'medical-records' && (
+                <Suspense fallback={<LoadingFallback message="Cargando expedientes médicos..." />}>
+                  <MedicalRecordsView
+                    patients={patientManagement.patients}
+                    onCreateRecord={onCreateRecord}
+                    onUpdateRecord={onUpdateRecord}
+                    isLoading={false}
+                    onRefresh={() => {}}
                   />
                 </Suspense>
               )}
@@ -2832,11 +2349,7 @@ const formatDateTime = (dateString: string) => {
                 </Suspense>
               )}
 
-              {activeView === 'demo' && (
-                <Suspense fallback={<LoadingFallback message="Cargando demo..." />}>
-                  <SmartTableDemo />
-                </Suspense>
-              )}
+              {/* Demo section removed - SmartTableDemo component was deleted */}
 
               {/* Keep the rest of the original dashboard content as fallback */}
               {false && activeView === 'dashboard' && (
@@ -2844,7 +2357,7 @@ const formatDateTime = (dateString: string) => {
                   {/* Welcome Header */}
                   <Box sx={{ mb: 4 }}>
                     <Typography variant="h4" sx={{ mb: 1, fontWeight: 600 }}>
-                      Buenos días, {dashboardData?.physician || 'Dr. García'}
+                      Buenos días, {user?.persona?.first_name ? `Dr. ${user?.persona?.first_name}` : (dashboardData?.physician || 'Dr. García')}
                   </Typography>
                     <Typography variant="body1" color="text.secondary">
                       Aquí tienes un resumen de tu día y métricas de eficiencia.
@@ -3092,13 +2605,13 @@ const formatDateTime = (dateString: string) => {
         {/* Patient Dialog */}
         <Suspense fallback={<LoadingFallback message="Cargando formulario..." />}>
           <PatientDialog
-            open={patientDialogOpen}
+            open={patientManagement.patientDialogOpen}
             onClose={() => {
-              setPatientDialogOpen(false);
+              patientManagement.setPatientDialogOpen(false);
               setFormErrorMessage('');
               setFieldErrors({});
             }}
-            isEditing={isEditingPatient}
+            isEditing={patientManagement.isEditingPatient}
             formData={patientFormData}
             onFormDataChange={handleFieldChange}
             onSubmit={handlePatientSubmit}
@@ -3106,40 +2619,40 @@ const formatDateTime = (dateString: string) => {
             formErrorMessage={formErrorMessage}
             setFormErrorMessage={setFormErrorMessage}
             isSubmitting={isSubmitting}
-            onDelete={isEditingPatient ? handleDeletePatient : undefined}
+            onDelete={patientManagement.isEditingPatient ? handleDeletePatient : undefined}
           />
         </Suspense>
 
         {/* Consultation Dialog */}
         <Suspense fallback={<LoadingFallback message="Cargando formulario de consulta..." />}>
           <ConsultationDialog
-            open={consultationDialogOpen}
+            open={consultationManagement.consultationDialogOpen}
             onClose={() => {
-              setConsultationDialogOpen(false);
+              consultationManagement.setConsultationDialogOpen(false);
               setFormErrorMessage('');
               setFieldErrors({});
             }}
-            isEditing={isEditingConsultation}
-            formData={consultationFormData}
-            setFormData={setConsultationFormData}
+            isEditing={consultationManagement.isEditingConsultation}
+            formData={consultationManagement.consultationFormData}
+            setFormData={consultationManagement.setConsultationFormData}
             onSubmit={handleConsultationSubmit}
-            patients={patients}
+            patients={patientManagement.patients}
             formErrorMessage={formErrorMessage}
             setFormErrorMessage={setFormErrorMessage}
             isSubmitting={isSubmitting}
             fieldErrors={fieldErrors}
             onCreateNewPatient={() => {
-              setConsultationDialogOpen(false);
-              setIsEditingPatient(false);
-              setCreatingPatientFromConsultation(true);
-              setPatientDialogOpen(true);
+              consultationManagement.setConsultationDialogOpen(false);
+              patientManagement.setIsEditingPatient(false);
+              consultationManagement.setCreatingPatientFromConsultation(true);
+              patientManagement.setPatientDialogOpen(true);
             }}
             clinicalStudies={getCurrentConsultationStudies()}
             onAddClinicalStudy={handleAddClinicalStudy}
             onEditClinicalStudy={handleEditClinicalStudy}
-            onDeleteClinicalStudy={handleDeleteClinicalStudy}
-            selectedConsultation={selectedConsultation}
-            tempConsultationId={tempConsultationId}
+            onDeleteClinicalStudy={(studyId: string | number) => handleDeleteClinicalStudy(typeof studyId === 'string' ? parseInt(studyId) : studyId)}
+            selectedConsultation={consultationManagement.selectedConsultation}
+            tempConsultationId={consultationManagement.tempConsultationId}
             onCreateAppointment={handleCreateFollowUpAppointment}
           />
         </Suspense>
@@ -3156,12 +2669,12 @@ const formatDateTime = (dateString: string) => {
             onSubmit={handleAppointmentSubmit}
             onNewPatient={() => {
               setAppointmentDialogOpen(false);
-              setIsEditingPatient(false);
-              setCreatingPatientFromConsultation(true);
-              setPatientDialogOpen(true);
+              patientManagement.setIsEditingPatient(false);
+              consultationManagement.setCreatingPatientFromConsultation(true);
+              patientManagement.setPatientDialogOpen(true);
             }}
             formData={appointmentFormData}
-            patients={patients}
+            patients={patientManagement.patients}
             isEditing={isEditingAppointment}
             loading={isSubmitting}
             formErrorMessage={formErrorMessage}
@@ -3213,7 +2726,7 @@ const formatDateTime = (dateString: string) => {
           open={logoutDialogOpen}
           onClose={cancelLogout}
           onConfirm={confirmLogout}
-          userName={user?.doctor.full_name || 'Usuario'}
+          userName={user?.persona?.full_name || 'Usuario'}
         />
       </Box>
         </ProtectedRoute>

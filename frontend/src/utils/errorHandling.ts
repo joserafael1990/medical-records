@@ -2,10 +2,9 @@
 // ERROR HANDLING - Utilidades para manejo de errores
 // ============================================================================
 
-export interface ApiError {
-  message: string;
-  fieldErrors?: { [key: string]: string };
-}
+import type { ApiError } from '../types';
+
+// ApiError interface moved to types/index.ts to avoid duplication
 
 /**
  * Parse API error response and extract meaningful error messages
@@ -75,7 +74,12 @@ export const parseApiError = (error: any): ApiError => {
     message = error.message;
   }
 
-  return { message, fieldErrors };
+  return { 
+    detail: message, 
+    status: error.response?.status || 500,
+    message, 
+    fieldErrors 
+  };
 };
 
 /**
@@ -87,7 +91,7 @@ export const handleFormError = (
   setFieldErrors: (errors: { [key: string]: string }) => void
 ) => {
   const parsedError = parseApiError(error);
-  setErrorMessage(parsedError.message);
+  setErrorMessage(parsedError.message || 'Ha ocurrido un error inesperado');
   setFieldErrors(parsedError.fieldErrors || {});
 };
 
@@ -95,7 +99,7 @@ export const handleFormError = (
  * Show user-friendly error messages
  */
 export const getErrorMessage = (error: any): string => {
-  return parseApiError(error).message;
+  return parseApiError(error).message || 'Ha ocurrido un error inesperado';
 };
 
 /**
@@ -195,11 +199,35 @@ export const createErrorBoundary = (
 };
 
 /**
- * Log error for debugging
+ * Log error for debugging - safely formatted to avoid [object Object] issues
  */
 export const logError = (error: any, context?: string) => {
-  console.error(`[Error${context ? ` - ${context}` : ''}]:`, error);
+  const formattedError = {
+    message: error?.message || 'Unknown error',
+    detail: error?.detail || error?.response?.data?.detail,
+    status: error?.status || error?.response?.status,
+    stack: error?.stack
+  };
+  
+  console.error(`[Error${context ? ` - ${context}` : ''}]:`, formattedError);
   
   // In production, you might want to send this to an error tracking service
   // Example: Sentry.captureException(error, { extra: { context } });
+};
+
+/**
+ * Safe console.error wrapper that prevents [object Object] logging
+ */
+export const safeConsoleError = (message: string, error: any) => {
+  if (error && typeof error === 'object') {
+    console.error(message, {
+      message: error.message || 'Unknown error',
+      detail: error.detail || error.response?.data?.detail,
+      status: error.status || error.response?.status,
+      code: error.code,
+      stack: error.stack
+    });
+  } else {
+    console.error(message, error);
+  }
 };
