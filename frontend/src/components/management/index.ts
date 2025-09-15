@@ -1,5 +1,5 @@
 // Management hooks barrel export
-export { usePatientManagement } from './PatientManagement';
+export { usePatientManagementComponent } from './PatientManagement';
 export { useConsultationManagement } from './ConsultationManagement';
 
 export {};

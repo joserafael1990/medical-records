@@ -14,7 +14,7 @@ from datetime import datetime, date, timedelta
 import crud
 import schemas
 import auth
-from database import get_db, Person, Specialty, Country, State, City, Nationality, EmergencyRelationship
+from database import get_db, Person, Specialty, Country, State, Nationality, EmergencyRelationship
 
 # ============================================================================
 # FASTAPI APP SETUP
@@ -136,13 +136,6 @@ async def get_states(
     """Get list of states"""
     return crud.get_states(db, country_id=country_id, active=True)
 
-@app.get("/api/catalogs/cities")
-async def get_cities(
-    state_id: Optional[int] = Query(None),
-    db: Session = Depends(get_db)
-):
-    """Get list of cities"""
-    return crud.get_cities(db, state_id=state_id, active=True)
 
 @app.get("/api/catalogs/nationalities")
 async def get_nationalities(db: Session = Depends(get_db)):
@@ -259,19 +252,54 @@ async def get_my_profile(
         "first_name": current_user.first_name,
         "paternal_surname": current_user.paternal_surname,
         "maternal_surname": current_user.maternal_surname,
+        "full_name": current_user.full_name,
         "email": current_user.email,
         "primary_phone": current_user.primary_phone,
+        "birth_date": current_user.birth_date,
+        "gender": current_user.gender,
+        "civil_status": current_user.civil_status,
+        "curp": current_user.curp,
+        "rfc": current_user.rfc,
+        "nationality_id": current_user.nationality_id,
+        "birth_place": current_user.birth_place,
+        "birth_state_id": current_user.birth_state_id,
+        "foreign_birth_place": current_user.foreign_birth_place,
+        
+        # Personal Address
+        "address_street": current_user.address_street,
+        "address_ext_number": current_user.address_ext_number,
+        "address_int_number": current_user.address_int_number,
+        "address_neighborhood": current_user.address_neighborhood,
+        "address_city": current_user.address_city,
+        "address_state_id": current_user.address_state_id,
+        "address_state_name": current_user.address_state.name if current_user.address_state else None,
+        "address_postal_code": current_user.address_postal_code,
+        
+        # Professional Address (Office)
+        "office_address": current_user.office_address,
+        "office_city": current_user.office_city,
+        "office_state_id": current_user.office_state_id,
+        "office_state_name": current_user.office_state.name if current_user.office_state else None,
+        "office_postal_code": current_user.office_postal_code,
+        
+        # Professional Data
+        "professional_license": current_user.professional_license,
         "specialty_id": current_user.specialty_id,
         "specialty_name": specialty_name,
-        "professional_license": current_user.professional_license,
+        "specialty_license": current_user.specialty_license,
         "university": current_user.university,
         "graduation_year": current_user.graduation_year,
         "subspecialty": current_user.subspecialty,
-        "birth_date": current_user.birth_date,
-        "curp": current_user.curp,
-        "rfc": current_user.rfc,
-        "gender": current_user.gender,
-        "civil_status": current_user.civil_status,
+        "digital_signature": current_user.digital_signature,
+        "professional_seal": current_user.professional_seal,
+        
+        # Emergency Contact
+        "emergency_contact_name": current_user.emergency_contact_name,
+        "emergency_contact_phone": current_user.emergency_contact_phone,
+        "emergency_contact_relationship": current_user.emergency_contact_relationship,
+        
+        # System
+        "is_active": current_user.is_active,
         "created_at": current_user.created_at,
         "updated_at": current_user.updated_at
     }
@@ -320,15 +348,39 @@ async def update_my_profile(
             "person_type": updated_doctor.person_type,
             "title": updated_doctor.title,
             "first_name": updated_doctor.first_name,
-            "last_name": updated_doctor.last_name,
+            "paternal_surname": updated_doctor.paternal_surname,
+            "maternal_surname": updated_doctor.maternal_surname,
+            "full_name": updated_doctor.full_name,
             "email": updated_doctor.email,
-            "phone": updated_doctor.phone,
+            "primary_phone": updated_doctor.primary_phone,
             "birth_date": updated_doctor.birth_date,
             "gender": updated_doctor.gender,
-            "marital_status": updated_doctor.marital_status,
+            "civil_status": updated_doctor.civil_status,
+            "curp": updated_doctor.curp,
+            "rfc": updated_doctor.rfc,
+            "nationality_id": updated_doctor.nationality_id,
+            "birth_place": updated_doctor.birth_place,
+            "birth_state_id": updated_doctor.birth_state_id,
+            "foreign_birth_place": updated_doctor.foreign_birth_place,
+            
+            # Personal Address
+            "address_street": updated_doctor.address_street,
+            "address_ext_number": updated_doctor.address_ext_number,
+            "address_int_number": updated_doctor.address_int_number,
+            "address_neighborhood": updated_doctor.address_neighborhood,
+            "address_city": updated_doctor.address_city,
+            "address_state_id": updated_doctor.address_state_id,
+            "address_state_name": updated_doctor.address_state.name if updated_doctor.address_state else None,
+            "address_postal_code": updated_doctor.address_postal_code,
+            
+            # Professional Address (Office)
             "office_address": updated_doctor.office_address,
-            "office_city_id": updated_doctor.office_city_id,
+            "office_city": updated_doctor.office_city,
+            "office_state_id": updated_doctor.office_state_id,
+            "office_state_name": updated_doctor.office_state.name if updated_doctor.office_state else None,
             "office_postal_code": updated_doctor.office_postal_code,
+            
+            # Professional Data
             "professional_license": updated_doctor.professional_license,
             "specialty_id": updated_doctor.specialty_id,
             "specialty_name": specialty_name,
@@ -338,7 +390,16 @@ async def update_my_profile(
             "subspecialty": updated_doctor.subspecialty,
             "digital_signature": updated_doctor.digital_signature,
             "professional_seal": updated_doctor.professional_seal,
-            "updated_at": datetime.now()
+            
+            # Emergency Contact
+            "emergency_contact_name": updated_doctor.emergency_contact_name,
+            "emergency_contact_phone": updated_doctor.emergency_contact_phone,
+            "emergency_contact_relationship": updated_doctor.emergency_contact_relationship,
+            
+            # System
+            "is_active": updated_doctor.is_active,
+            "created_at": updated_doctor.created_at,
+            "updated_at": updated_doctor.updated_at
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error updating profile: {str(e)}")

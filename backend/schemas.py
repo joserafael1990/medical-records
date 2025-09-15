@@ -111,7 +111,8 @@ class PersonBase(BaseSchema):
     address_ext_number: Optional[str] = None
     address_int_number: Optional[str] = None
     address_neighborhood: Optional[str] = None
-    city_id: Optional[int] = None
+    address_city: Optional[str] = None
+    address_state_id: Optional[int] = None
     address_postal_code: Optional[str] = None
     
     # Emergency contact
@@ -145,7 +146,6 @@ class DoctorCreate(PersonBase):
     
     # Professional address
     office_address: Optional[str] = None
-    office_city_id: Optional[int] = None
     office_postal_code: Optional[str] = None
     
     # Professional data
@@ -160,19 +160,36 @@ class DoctorCreate(PersonBase):
 
 # Professional data for doctor updates (optional fields for partial updates)
 class DoctorUpdate(BaseSchema):
-    # Personal info (optional for updates)
+    # Personal info (optional for updates) - using correct model field names
     title: Optional[str] = None
     first_name: Optional[str] = None
-    last_name: Optional[str] = None
+    paternal_surname: Optional[str] = None
+    maternal_surname: Optional[str] = None
     email: Optional[EmailStr] = None
-    phone: Optional[str] = None
+    primary_phone: Optional[str] = None
     birth_date: Optional[date] = None
     gender: Optional[Literal['M', 'F', 'O']] = None
-    marital_status: Optional[str] = None
+    civil_status: Optional[str] = None
+    curp: Optional[str] = None
+    rfc: Optional[str] = None
+    nationality_id: Optional[int] = None
+    birth_place: Optional[str] = None
+    birth_state_id: Optional[int] = None
+    foreign_birth_place: Optional[str] = None
+    
+    # Personal address
+    address_street: Optional[str] = None
+    address_ext_number: Optional[str] = None
+    address_int_number: Optional[str] = None
+    address_neighborhood: Optional[str] = None
+    address_city: Optional[str] = None
+    address_state_id: Optional[int] = None
+    address_postal_code: Optional[str] = None
     
     # Professional address
     office_address: Optional[str] = None
-    office_city_id: Optional[int] = None
+    office_city: Optional[str] = None  # Free text field for office city
+    office_state_id: Optional[int] = None  # FK to states table
     office_postal_code: Optional[str] = None
     
     # Professional data
@@ -184,6 +201,11 @@ class DoctorUpdate(BaseSchema):
     subspecialty: Optional[str] = None
     digital_signature: Optional[str] = None
     professional_seal: Optional[str] = None
+    
+    # Emergency contact
+    emergency_contact_name: Optional[str] = None
+    emergency_contact_phone: Optional[str] = None
+    emergency_contact_relationship: Optional[str] = None
 
 # Medical data for patients
 class PatientCreate(PersonBase):
@@ -224,12 +246,12 @@ class PersonUpdate(BaseSchema):
     address_ext_number: Optional[str] = None
     address_int_number: Optional[str] = None
     address_neighborhood: Optional[str] = None
-    city_id: Optional[int] = None
+    address_city: Optional[str] = None
+    address_state_id: Optional[int] = None
     address_postal_code: Optional[str] = None
     
     # Professional address (doctors)
     office_address: Optional[str] = None
-    office_city_id: Optional[int] = None
     office_postal_code: Optional[str] = None
     
     # Professional data (doctors)
@@ -267,8 +289,8 @@ class Person(PersonBase):
     nationality: Optional[Nationality] = None
     specialty: Optional[Specialty] = None
     birth_state: Optional[State] = None
-    city_residence: Optional[City] = None
-    office_city: Optional[City] = None
+    address_state: Optional[State] = None
+    office_state: Optional[State] = None
 
 # ============================================================================
 # MEDICAL RECORDS

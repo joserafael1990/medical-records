@@ -79,7 +79,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
       const requiredFields = [
         'first_name', 'paternal_surname', 'maternal_surname', 'email', 'phone', 'curp',
         'professional_license', 'university', 'specialty',
-        'office_address', 'office_city', 'office_state'
+        'office_address', 'office_city', 'office_state_id'
       ];
       
       const completedFields = requiredFields.filter(field => 
@@ -112,7 +112,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
       // 'medical_school': 'Escuela de Medicina', // removed per user request
       'office_address': 'Dirección del Consultorio',
       'office_city': 'Ciudad',
-      'office_state': 'Estado'
+      'office_state_id': 'Estado'
     };
     return labels[field] || field;
   };
@@ -312,12 +312,12 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                 </Avatar>
                 <Typography variant="h5" sx={{ fontWeight: 600 }}>
                   {doctorProfile ? 
-                    `${doctorProfile.first_name} ${doctorProfile.paternal_surname}` : 
+                    `${doctorProfile.first_name} ${doctorProfile.paternal_surname}${doctorProfile.maternal_surname ? ` ${doctorProfile.maternal_surname}` : ''}` : 
                     'Nombre del Doctor'
                   }
                 </Typography>
                 <Typography variant="body1" color="text.secondary">
-                  {doctorProfile?.specialty || 'Especialidad'}
+                  {doctorProfile?.specialty_name || doctorProfile?.specialty || 'Especialidad'}
                 </Typography>
                 {doctorProfile?.professional_license && (
                   <Chip
@@ -595,7 +595,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                       Especialidad
                     </Typography>
                     <Chip
-                      label={doctorProfile?.specialty || 'No especificada'}
+                      label={doctorProfile?.specialty_name || doctorProfile?.specialty || 'No especificada'}
                       color="primary"
                       variant="outlined"
                     />
@@ -657,7 +657,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                         Ciudad
                       </Typography>
                       <Typography variant="body1">
-                        {doctorProfile?.office_city || 'No especificada'}
+                        {(doctorProfile as any)?.office_city || doctorProfile?.office_city || 'No especificada'}
                       </Typography>
                     </Box>
                     
@@ -666,7 +666,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                         Estado
                       </Typography>
                       <Typography variant="body1">
-                        {doctorProfile?.office_state || 'No especificado'}
+                        {(doctorProfile as any)?.office_state_name || 'No especificado'}
                       </Typography>
                     </Box>
                     
@@ -675,7 +675,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                         Código Postal
                       </Typography>
                       <Typography variant="body1">
-                        {doctorProfile?.office_postal_code || 'No especificado'}
+                        {(doctorProfile as any)?.office_postal_code || doctorProfile?.office_postal_code || 'No especificado'}
                       </Typography>
                     </Box>
                   </Box>

@@ -1037,7 +1037,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               <>
                 <ClinicalStudiesSection
                   consultationId={selectedConsultation?.id || tempConsultationId || 'new_consultation'}
-                  patientId={formData.patient_id}
+                  patientId={String(formData.patient_id)}
                   studies={clinicalStudies}
                   onAddStudy={onAddClinicalStudy}
                   onEditStudy={onEditClinicalStudy}

@@ -148,7 +148,7 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
         });
       }, 100);
 
-      await onFileUpload(formData.consultation_id, file);
+      await onFileUpload(String(formData.consultation_id), file);
       
       clearInterval(progressInterval);
       setUploadProgress(100);

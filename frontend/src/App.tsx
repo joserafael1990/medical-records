@@ -398,6 +398,7 @@ function AppContent() {
   // Authentication
   const { user, logout, isAuthenticated } = useAuth();
   
+  
   // Global app state using extracted hook
   const {
     activeView,
@@ -536,6 +537,9 @@ function AppContent() {
     civil_status: '',
     nationality_id: 1,
     birth_place: '',
+    nationality: '',
+    birth_state_code: '',
+    internal_id: '',
     
     // ===== LUGAR DE NACIMIENTO (NOM-024) =====
     birth_state_id: null,
@@ -543,23 +547,40 @@ function AppContent() {
     
     // ===== CONTACTOS =====
     email: '',
+    phone: '',
     primary_phone: '',
+    
+    // ===== DIRECCIÓN PERSONAL =====
+    address: '',
+    neighborhood: '',
+    municipality: '',
+    state: '',
+    postal_code: '',
     
     // ===== DIRECCIÓN PERSONAL COMPLETA =====
     address_street: '',
     address_ext_number: '',
     address_int_number: '',
     address_neighborhood: '',
-    city_id: null,
+    address_city: '',
+    address_state_id: 0,
     address_postal_code: '',
+    
+    // ===== DATOS PERSONALES ADICIONALES =====
+    education_level: '',
+    occupation: '',
+    religion: '',
     
     // ===== DATOS MÉDICOS =====
     blood_type: '',
     allergies: '',
     chronic_conditions: '',
     current_medications: '',
+    previous_hospitalizations: '',
+    surgical_history: '',
     
     // ===== SEGURO MÉDICO =====
+    insurance_type: '',
     insurance_provider: '',
     insurance_number: '',
     
@@ -567,7 +588,10 @@ function AppContent() {
     emergency_contact_name: '',
     emergency_contact_phone: '',
     emergency_contact_relationship: '',
+    emergency_contact_address: '',
     
+    // ===== ESTADO =====
+    status: 'active' as 'active' | 'inactive',
     is_active: true
   });
 
@@ -764,7 +788,7 @@ const handleEditConsultation = useCallback(async (consultation: any) => {
   consultationManagement.setSelectedConsultation(consultation);
   consultationManagement.setIsEditingConsultation(true);
   consultationManagement.setConsultationFormData({
-    patient_id: consultation.patient_id || 0,
+    patient_id: consultation.patient_id || '',
     date: consultation.date || '',
     chief_complaint: consultation.chief_complaint || '',
     history_present_illness: consultation.history_present_illness || '',
@@ -1025,8 +1049,8 @@ const handleConsultationSubmit = useCallback(async () => {
 
 // Clinical Studies handlers
 const handleAddClinicalStudy = useCallback(() => {
-  let consultationId: number;
-  let patientId: number;
+  let consultationId: string | number;
+  let patientId: string | number;
   
   if (consultationManagement.selectedConsultation) {
     // Existing consultation
@@ -1058,7 +1082,7 @@ const handleAddClinicalStudy = useCallback(() => {
   setSelectedClinicalStudy(null);
   setIsEditingClinicalStudy(false);
   
-  const orderingDoctor = doctorProfile?.full_name || user?.persona?.full_name || 'Dr. Usuario Sistema';
+  const orderingDoctor = doctorProfile?.full_name || user?.person?.full_name || 'Dr. Usuario Sistema';
   const orderedDate = new Date().toISOString().split('T')[0];
   
   const newFormData: ClinicalStudyFormData = {
@@ -1098,7 +1122,7 @@ const handleEditClinicalStudy = useCallback((study: ClinicalStudy) => {
     ordered_date: study.ordered_date.split('T')[0],
     performed_date: study.performed_date?.split('T')[0],
     results_date: study.results_date?.split('T')[0],
-    status: study.is_active ? 'completed' : 'pending',
+    status: study.status,
     results_text: study.results_text || '',
     interpretation: study.interpretation || '',
     ordering_doctor: study.ordering_doctor,
@@ -1114,7 +1138,7 @@ const handleEditClinicalStudy = useCallback((study: ClinicalStudy) => {
   setClinicalStudyDialogOpen(true);
 }, []);
 
-const handleDeleteClinicalStudy = useCallback((studyId: number) => {
+const handleDeleteClinicalStudy = useCallback((studyId: string | number) => {
   if (!consultationManagement.selectedConsultation) {
     console.error('❌ No hay consulta seleccionada para eliminar estudio');
     return;
@@ -1122,7 +1146,7 @@ const handleDeleteClinicalStudy = useCallback((studyId: number) => {
   
   console.log('🗑️ Eliminando estudio clínico:', studyId, 'de consulta:', consultationManagement.selectedConsultation.id);
   const currentStudies = getCurrentConsultationStudies();
-  const updatedStudies = currentStudies.filter(study => study.id !== studyId);
+  const updatedStudies = currentStudies.filter(study => study.id !== String(studyId));
   updateCurrentConsultationStudies(updatedStudies);
   
 
@@ -1417,31 +1441,50 @@ const handlePatientSubmit = async () => {
       maternal_surname: patientFormData.maternal_surname,
       birth_date: patientFormData.birth_date,
       gender: patientFormData.gender,
-      curp: patientFormData.curp || null,
-      rfc: null,
+      curp: patientFormData.curp || '',
+      rfc: patientFormData.rfc || '',
       civil_status: patientFormData.civil_status || '',
       nationality_id: 1, // Default to Mexico (ID 1)
-      birth_place: null,
-      birth_state_id: null,
-      foreign_birth_place: null,
-      email: patientFormData.email || null,
-      primary_phone: patientFormData.primary_phone || null,  // ✅ CORREGIDO
-      address_street: patientFormData.address_street || null,
-      address_ext_number: patientFormData.address_ext_number || null,
-      address_int_number: patientFormData.address_int_number || null,
-      address_neighborhood: patientFormData.address_neighborhood || null,        // ✅ CORREGIDO
-      city_id: patientFormData.city_id,                                // ✅ CORREGIDO
-      address_postal_code: patientFormData.address_postal_code || null,                  // ✅ CORREGIDO
-      blood_type: patientFormData.blood_type || null,  // ✅ Ya unificado
-      allergies: patientFormData.allergies || null,  // ✅ Ya unificado
-      chronic_conditions: patientFormData.chronic_conditions || null,
-      current_medications: patientFormData.current_medications || null,
-      insurance_provider: patientFormData.insurance_provider || null,  // ✅ CORREGIDO
-      insurance_number: patientFormData.insurance_number || null,
-      emergency_contact_name: patientFormData.emergency_contact_name || null,      // ✅ CORREGIDO
-      emergency_contact_phone: patientFormData.emergency_contact_phone || null,  // ✅ CORREGIDO
-      emergency_contact_relationship: patientFormData.emergency_contact_relationship || null,  // ✅ CORREGIDO
-      title: null
+      birth_place: patientFormData.birth_place || '',
+      birth_state_id: patientFormData.birth_state_id,
+      foreign_birth_place: patientFormData.foreign_birth_place || '',
+      email: patientFormData.email || '',
+      primary_phone: patientFormData.primary_phone || '',  // ✅ CORREGIDO
+      address_street: patientFormData.address_street || '',
+      address_ext_number: patientFormData.address_ext_number || '',
+      address_int_number: patientFormData.address_int_number || '',
+      address_neighborhood: patientFormData.address_neighborhood || '',        // ✅ CORREGIDO
+      address_city: patientFormData.address_city || '',
+      address_state_id: patientFormData.address_state_id || null,
+      address_postal_code: patientFormData.address_postal_code || '',                  // ✅ CORREGIDO
+      blood_type: patientFormData.blood_type || '',  // ✅ Ya unificado
+      allergies: patientFormData.allergies || '',  // ✅ Ya unificado
+      chronic_conditions: patientFormData.chronic_conditions || '',
+      current_medications: patientFormData.current_medications || '',
+      insurance_provider: patientFormData.insurance_provider || '',  // ✅ CORREGIDO
+      insurance_number: patientFormData.insurance_number || '',
+      emergency_contact_name: patientFormData.emergency_contact_name || '',      // ✅ CORREGIDO
+      emergency_contact_phone: patientFormData.emergency_contact_phone || '',  // ✅ CORREGIDO
+      emergency_contact_relationship: patientFormData.emergency_contact_relationship || '',  // ✅ CORREGIDO
+      // Agregamos los campos faltantes que están en PatientFormData
+      address: patientFormData.address || '',
+      birth_state_code: patientFormData.birth_state_code || '',
+      nationality: patientFormData.nationality || '',
+      internal_id: patientFormData.internal_id || '',
+      phone: patientFormData.phone || '',
+      neighborhood: patientFormData.neighborhood || '',
+      municipality: patientFormData.municipality || '',
+      state: patientFormData.state || '',
+      postal_code: patientFormData.postal_code || '',
+      education_level: patientFormData.education_level || '',
+      occupation: patientFormData.occupation || '',
+      religion: patientFormData.religion || '',
+      insurance_type: patientFormData.insurance_type || '',
+      emergency_contact_address: patientFormData.emergency_contact_address || '',
+      previous_hospitalizations: patientFormData.previous_hospitalizations || '',
+      surgical_history: patientFormData.surgical_history || '',
+      status: patientFormData.status,
+      is_active: patientFormData.is_active
     };
     
     if (patientManagement.isEditingPatient && patientManagement.selectedPatient) {
@@ -1590,23 +1633,43 @@ const handleEditPatient = (patient: Patient) => {
     
     // ===== CONTACTOS =====
     email: patient.email || '',
+    phone: patient.phone || '',
     primary_phone: patient.primary_phone || '',  // ✅ CORREGIDO
     
     // ===== DIRECCIÓN PERSONAL =====
+    address: patient.address || '',
+    neighborhood: patient.neighborhood || '',
+    municipality: patient.municipality || '',
+    state: patient.state || '',
+    postal_code: patient.postal_code || '',
+    nationality: patient.nationality || '',
+    birth_state_code: patient.birth_state_code || '',
+    internal_id: patient.internal_id || '',
+    
+    // ===== DIRECCIÓN ESPECÍFICA =====
     address_street: patient.address_street || '',
     address_ext_number: patient.address_ext_number || '',
     address_int_number: patient.address_int_number || '',
     address_neighborhood: patient.address_neighborhood || '',
-    city_id: patient.city_id || null,
+    address_city: patient.address_city || '',
+    address_state_id: patient.address_state_id || 0,
     address_postal_code: patient.address_postal_code || '',
+    
+    // ===== DATOS PERSONALES ADICIONALES =====
+    education_level: patient.education_level || '',
+    occupation: patient.occupation || '',
+    religion: patient.religion || '',
     
     // ===== DATOS MÉDICOS =====
     blood_type: patient.blood_type || '',
     allergies: patient.allergies || '',
     chronic_conditions: patient.chronic_conditions || '',
     current_medications: patient.current_medications || '',
+    previous_hospitalizations: patient.previous_hospitalizations || '',
+    surgical_history: patient.surgical_history || '',
     
     // ===== SEGURO MÉDICO =====
+    insurance_type: patient.insurance_type || '',
     insurance_provider: patient.insurance_provider || '',  // ✅ CORREGIDO
     insurance_number: patient.insurance_number || '',
     
@@ -1614,8 +1677,10 @@ const handleEditPatient = (patient: Patient) => {
     emergency_contact_name: patient.emergency_contact_name || '',      // ✅ CORREGIDO
     emergency_contact_phone: patient.emergency_contact_phone || '',  // ✅ CORREGIDO
     emergency_contact_relationship: patient.emergency_contact_relationship || '',  // ✅ CORREGIDO
+    emergency_contact_address: patient.emergency_contact_address || '',
     
-    // Estado del paciente
+    // ===== ESTADO =====
+    status: patient.status || 'active' as 'active' | 'inactive',
     is_active: patient.is_active || true
   });
   
@@ -1841,13 +1906,14 @@ const handleDeletePatient = useCallback(async () => {
                 <Box sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
                   <Typography variant="body2" sx={{ color: 'white', fontWeight: 500 }}>
                     {doctorProfile?.full_name || 
-                     (user?.persona?.first_name && user?.persona?.paternal_surname
-                      ? `${user?.persona?.first_name} ${user?.persona?.paternal_surname}` 
-                      : (user?.persona?.full_name || dashboardData?.physician || 'Dr. García'))
+                     user?.doctor?.full_name ||
+                     (user?.doctor?.first_name && user?.doctor?.paternal_surname
+                      ? `${user?.doctor?.first_name} ${user?.doctor?.paternal_surname}${user?.doctor?.maternal_surname ? ` ${user?.doctor?.maternal_surname}` : ''}` 
+                      : (dashboardData?.physician || 'Dr. García'))
                     }
                   </Typography>
                   <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)' }}>
-                    {doctorProfile?.specialty || user?.persona?.specialty || 'Médico General'}
+                    {doctorProfile?.specialty_name || doctorProfile?.specialty || user?.doctor?.specialty || 'Médico General'}
                   </Typography>
                 </Box>
                 <IconButton
@@ -1870,9 +1936,9 @@ const handleDeletePatient = useCallback(async () => {
                     {doctorProfile?.first_name && doctorProfile.first_name.length > 0 && 
                      doctorProfile?.paternal_surname && doctorProfile.paternal_surname.length > 0 ? 
                       `${doctorProfile.first_name[0]}${doctorProfile.paternal_surname[0]}` :
-                      (user?.persona?.first_name && user.persona.first_name.length > 0 && 
-                       user?.persona?.paternal_surname && user.persona.paternal_surname.length > 0 ? 
-                        `${user.persona.first_name[0]}${user.persona.paternal_surname[0]}` :
+                      (user?.person?.first_name && user.person.first_name.length > 0 && 
+                       user?.person?.paternal_surname && user.person.paternal_surname.length > 0 ? 
+                        `${user.person.first_name[0]}${user.person.paternal_surname[0]}` :
                         <ProfileIcon sx={{ color: 'white' }} />
                       )
                     }
@@ -1920,9 +1986,9 @@ const handleDeletePatient = useCallback(async () => {
                   fontWeight: 600
                 }}
               >
-                {user?.persona?.first_name && user.persona.first_name.length > 0 && 
-                 user?.persona?.paternal_surname && user.persona.paternal_surname.length > 0 ? 
-                  `${user.persona.first_name[0]}${user.persona.paternal_surname[0]}` :
+                {user?.person?.first_name && user.person.first_name.length > 0 && 
+                 user?.person?.paternal_surname && user.person.paternal_surname.length > 0 ? 
+                   `${user.person.first_name[0]}${user.person.paternal_surname[0]}` :
                   (doctorProfile?.first_name && doctorProfile.first_name.length > 0 && 
                    doctorProfile?.paternal_surname && doctorProfile.paternal_surname.length > 0 ? 
                     `${doctorProfile.first_name[0]}${doctorProfile.paternal_surname[0]}` :
@@ -1932,19 +1998,19 @@ const handleDeletePatient = useCallback(async () => {
               </Avatar>
               <Box sx={{ flex: 1 }}>
                                 <Typography variant="subtitle2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
-                  {user?.persona?.full_name || 
-                   (user?.persona?.first_name && user?.persona?.paternal_surname
-                ? `${user?.persona?.first_name} ${user?.persona?.paternal_surname}` 
+                  {user?.person?.full_name || 
+                   (user?.person?.first_name && user?.person?.paternal_surname
+                ? `${user?.person?.first_name} ${user?.person?.paternal_surname}` 
                 : (dashboardData?.physician || 'Dr. García')
                    )
               }
             </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.2 }}>
-                  {doctorProfile?.specialty || user?.persona?.specialty || 'Médico General'}
+                  {doctorProfile?.specialty || user?.person?.specialty || 'Médico General'}
             </Typography>
-                {(doctorProfile?.professional_license || user?.persona?.professional_license) && (
+                {(doctorProfile?.professional_license || user?.person?.professional_license) && (
                   <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
-                    Cédula: {doctorProfile?.professional_license || user?.persona?.professional_license}
+                    Cédula: {doctorProfile?.professional_license || user?.person?.professional_license}
               </Typography>
                 )}
               </Box>
@@ -2357,7 +2423,7 @@ const handleDeletePatient = useCallback(async () => {
                   {/* Welcome Header */}
                   <Box sx={{ mb: 4 }}>
                     <Typography variant="h4" sx={{ mb: 1, fontWeight: 600 }}>
-                      Buenos días, {user?.persona?.first_name ? `Dr. ${user?.persona?.first_name}` : (dashboardData?.physician || 'Dr. García')}
+                      Buenos días, {user?.person?.first_name ? `Dr. ${user?.person?.first_name}` : (dashboardData?.physician || 'Dr. García')}
                   </Typography>
                     <Typography variant="body1" color="text.secondary">
                       Aquí tienes un resumen de tu día y métricas de eficiencia.
@@ -2726,7 +2792,7 @@ const handleDeletePatient = useCallback(async () => {
           open={logoutDialogOpen}
           onClose={cancelLogout}
           onConfirm={confirmLogout}
-          userName={user?.persona?.full_name || 'Usuario'}
+          userName={user?.person?.full_name || 'Usuario'}
         />
       </Box>
         </ProtectedRoute>

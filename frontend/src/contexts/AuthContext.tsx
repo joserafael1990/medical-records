@@ -17,6 +17,7 @@ interface DoctorInfo {
 interface User {
   doctor: DoctorInfo;
   token: string;
+  person?: any;
 }
 
 interface AuthContextType {
@@ -88,10 +89,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         // Store authentication data
         localStorage.setItem('token', data.access_token);
-        localStorage.setItem('doctor_data', JSON.stringify(data.doctor));
+        localStorage.setItem('doctor_data', JSON.stringify(data.user));
         
         setUser({
-          doctor: data.doctor,
+          doctor: data.user,
           token: data.access_token
         });
         

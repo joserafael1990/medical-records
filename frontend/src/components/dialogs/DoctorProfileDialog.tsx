@@ -22,6 +22,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  FormHelperText,
   Chip,
   Avatar
 } from '@mui/material';
@@ -39,6 +40,7 @@ import {
 } from '@mui/icons-material';
 import { DoctorFormData } from '../../types';
 import { MEDICAL_SPECIALTIES, MEXICAN_STATE_NAMES } from '../../constants';
+import { apiService } from '../../services/api';
 
 interface DoctorProfileDialogProps {
   open: boolean;
@@ -75,14 +77,9 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
       description: 'Datos personales básicos'
     },
     {
-      label: 'Formación Académica',
+      label: 'Información Profesional',
       icon: <SchoolIcon />,
-      description: 'Universidad y estudios médicos'
-    },
-    {
-      label: 'Licencias Profesionales',
-      icon: <BadgeIcon />,
-      description: 'Cédulas y certificaciones'
+      description: 'Formación académica, licencias y certificaciones'
     },
     {
       label: 'Dirección del Consultorio',
@@ -91,20 +88,57 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
     }
   ];
 
-  // Usar la lista completa de especialidades desde las constantes
-  const specialties = MEDICAL_SPECIALTIES;
+  // Estado para especialidades dinámicas desde la API
+  const [specialties, setSpecialties] = useState<string[]>([...MEDICAL_SPECIALTIES]);
+  const [loadingSpecialties, setLoadingSpecialties] = useState(false);
+  const [states, setStates] = useState<Array<{id: number, name: string}>>([]);
+  const [loadingStates, setLoadingStates] = useState(false);
 
-  // Usar la lista de estados desde las constantes
-  const mexicanStates = MEXICAN_STATE_NAMES;
+  // Función para cargar especialidades desde la API
+  useEffect(() => {
+    const loadSpecialties = async () => {
+      setLoadingSpecialties(true);
+      try {
+        const data = await apiService.getSpecialties();
+        setSpecialties(data.map((spec: any) => spec.name)); // Solo nombres para compatibilidad
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ Especialidades cargadas desde BD:', data.length);
+        }
+      } catch (error) {
+        console.error('❌ Error loading specialties:', error);
+        setSpecialties([...MEDICAL_SPECIALTIES]); // fallback a constantes
+      } finally {
+        setLoadingSpecialties(false);
+      }
+    };
+
+    const loadStates = async () => {
+      setLoadingStates(true);
+      try {
+        const data = await apiService.getStates();
+        setStates(data);
+      } catch (error) {
+        console.error('❌ Error loading states:', error);
+        setStates([]);
+      } finally {
+        setLoadingStates(false);
+      }
+    };
+
+    if (open) { // Solo cargar cuando el diálogo esté abierto
+      loadSpecialties();
+      loadStates();
+    }
+  }, [open]);
 
   // Map section names to step numbers
   const getSectionStep = (section: string) => {
     const sectionMap: { [key: string]: number } = {
       'personal': 0,
       'academic': 1,
-      'licenses': 2,
-      'office': 3,
-      'contact': 3  // Contact is part of office info step
+      'licenses': 1,  // Now part of professional info
+      'office': 2,
+      'contact': 2  // Contact is part of office info step
     };
     return sectionMap[section] || 0;
   };
@@ -168,8 +202,6 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
           }
           return true;
         case 2:
-          return true; // Licencias opcionales en edición
-        case 3:
           return true; // Dirección opcional en edición
         default:
           return true;
@@ -179,14 +211,22 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
     // En modo creación, validar todos los campos requeridos
     switch (step) {
       case 0:
-        return formData.title && formData.first_name && formData.paternal_surname && formData.maternal_surname && 
-               formData.email && formData.phone && formData.birth_date && formData.curp;
+        return formData.first_name && formData.paternal_surname && formData.maternal_surname && 
+               formData.email && formData.phone && formData.birth_date && formData.gender && formData.curp;
       case 1:
-        return formData.university && formData.graduation_year;
+        const step1Valid = formData.title && formData.university && formData.graduation_year && formData.professional_license && formData.specialty;
+        if (!step1Valid && process.env.NODE_ENV === 'development') {
+          console.log('🔍 Step 1 validation failed:', {
+            title: formData.title,
+            university: formData.university,
+            graduation_year: formData.graduation_year,
+            professional_license: formData.professional_license,
+            specialty: formData.specialty
+          });
+        }
+        return step1Valid;
       case 2:
-        return formData.professional_license && formData.specialty;
-      case 3:
-        return formData.office_address && formData.office_city && formData.office_state;
+        return formData.office_address && formData.office_city && formData.office_state_id;
       default:
         return false;
     }
@@ -199,9 +239,9 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
     // Campos obligatorios para crear/editar un perfil completo
     const requiredFields = [
       'title', 'first_name', 'paternal_surname', 'maternal_surname',
-      'email', 'phone', 'birth_date', 'curp',
+      'email', 'phone', 'birth_date', 'gender', 'curp',
       'professional_license', 'specialty', 'university', 'graduation_year',
-      'office_address', 'office_city', 'office_state'
+      'office_address', 'office_city', 'office_state_id'
     ];
 
     // Verificar que todos los campos requeridos tengan valor
@@ -237,22 +277,7 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
               </Typography>
             </Alert>
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '120px repeat(3, 1fr)' }, gap: 2 }}>
-              <Autocomplete
-                options={['Dr.', 'Dra.', 'Lic.', 'Lcda.']}
-                value={formData.title || ''}
-                onChange={(_, newValue) => setFormData(prev => ({ ...prev, title: newValue || '' }))}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Título"
-                    required
-                    error={!!fieldErrors.title}
-                    helperText={fieldErrors.title || "Título profesional"}
-                  />
-                )}
-                disableClearable
-              />
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 2 }}>
               <TextField
                 label="Nombre(s)"
                 value={formData.first_name || ''}
@@ -293,7 +318,7 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
               helperText={fieldErrors.email || "Correo para comunicación oficial"}
             />
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2 }}>
               <TextField
                 label="Teléfono"
                 value={formData.phone || ''}
@@ -304,6 +329,18 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
                 helperText={fieldErrors.phone || "Teléfono principal de contacto"}
                 placeholder="55-1234-5678"
               />
+              <FormControl fullWidth required error={!!fieldErrors.gender}>
+                <InputLabel>Género</InputLabel>
+                <Select
+                  value={formData.gender || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, gender: e.target.value }))}
+                  label="Género"
+                >
+                  <MenuItem value="M">Masculino</MenuItem>
+                  <MenuItem value="F">Femenino</MenuItem>
+                  <MenuItem value="O">Otro</MenuItem>
+                </Select>
+              </FormControl>
               <TextField
                 label="Fecha de Nacimiento"
                 type="date"
@@ -357,7 +394,35 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <Alert severity="info" icon={<InfoIcon />}>
               <Typography variant="body2">
-                Información sobre tu formación académica médica, requerida para validar tu preparación profesional.
+                Información profesional completa: formación académica, licencias y especialidades médicas.
+              </Typography>
+            </Alert>
+
+            <Autocomplete
+              options={['Dr.', 'Dra.', 'Lic.', 'Lcda.']}
+              value={formData.title || ''}
+              onChange={(_, newValue) => setFormData(prev => ({ ...prev, title: newValue || '' }))}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Título"
+                  required
+                  error={!!fieldErrors.title}
+                  helperText={fieldErrors.title || "Título profesional"}
+                />
+              )}
+              disableClearable
+            />
+
+            {/* Formación Académica */}
+            <Typography variant="h6" sx={{ color: 'primary.main', display: 'flex', alignItems: 'center', gap: 1 }}>
+              <SchoolIcon /> Formación Académica
+            </Typography>
+
+            <Alert severity="info" icon={<InfoIcon />}>
+              <Typography variant="body2">
+                <strong>Importante:</strong> La información académica y las cédulas profesionales son obligatorias según la NOM-004. 
+                Asegúrate de ingresar los datos correctos.
               </Typography>
             </Alert>
 
@@ -372,34 +437,17 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
               placeholder="Universidad Nacional Autónoma de México"
             />
 
-            {/* medical_school field removed per user request */}
-
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-              <TextField
-                label="Año de Graduación"
-                type="number"
-                value={formData.graduation_year || ''}
-                onChange={(e) => setFormData(prev => ({ ...prev, graduation_year: e.target.value }))}
-                fullWidth
-                required
-                error={!!fieldErrors.graduation_year}
-                helperText={fieldErrors.graduation_year}
-                inputProps={{ min: 1950, max: new Date().getFullYear() }}
-              />
-              {/* internship_hospital and residency_hospital fields removed per user request */}
-            </Box>
-          </Box>
-        );
-
-      case 2:
-        return (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <Alert severity="warning" icon={<InfoIcon />}>
-              <Typography variant="body2">
-                <strong>Importante:</strong> Las cédulas profesionales son obligatorias según la NOM-004. 
-                Asegúrate de ingresar los números correctos.
-              </Typography>
-            </Alert>
+            <TextField
+              label="Año de Graduación"
+              type="number"
+              value={formData.graduation_year || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, graduation_year: e.target.value }))}
+              fullWidth
+              required
+              error={!!fieldErrors.graduation_year}
+              helperText={fieldErrors.graduation_year || `Año entre 1950 y ${new Date().getFullYear()}`}
+              inputProps={{ min: 1950, max: new Date().getFullYear() }}
+            />
 
             <TextField
               label="Cédula Profesional"
@@ -412,6 +460,23 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
               placeholder="12345678"
             />
 
+            <Autocomplete
+              options={specialties}
+              value={formData.specialty || ''}
+              onChange={(_, newValue) => setFormData(prev => ({ ...prev, specialty: newValue || '' }))}
+              loading={loadingSpecialties}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label={loadingSpecialties ? "Cargando especialidades..." : "Especialidad"}
+                  required
+                  error={!!fieldErrors.specialty}
+                  helperText={fieldErrors.specialty || (loadingSpecialties ? "Cargando desde base de datos..." : "Tu especialidad médica principal")}
+                />
+              )}
+              freeSolo
+            />
+
             <TextField
               label="Cédula de Especialidad"
               value={formData.specialty_license || ''}
@@ -421,22 +486,6 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
               placeholder="87654321"
             />
 
-            <Autocomplete
-              options={specialties}
-              value={formData.specialty || ''}
-              onChange={(_, newValue) => setFormData(prev => ({ ...prev, specialty: newValue || '' }))}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Especialidad"
-                  required
-                  error={!!fieldErrors.specialty}
-                  helperText={fieldErrors.specialty || "Tu especialidad médica principal"}
-                />
-              )}
-              freeSolo
-            />
-
             <TextField
               label="Subespecialidad"
               value={formData.subspecialty || ''}
@@ -444,14 +493,10 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
               fullWidth
               helperText="Subespecialidad médica (si aplica)"
             />
-
-            <Divider />
-
-            {/* Certificaciones del Consejo y Membresías Profesionales removed per user request */}
           </Box>
         );
 
-      case 3:
+      case 2:
         return (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <Alert severity="info" icon={<InfoIcon />}>
@@ -489,16 +534,21 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
                 helperText={fieldErrors.office_city}
               />
               <Autocomplete
-                options={mexicanStates}
-                value={formData.office_state || ''}
-                onChange={(_, newValue) => setFormData(prev => ({ ...prev, office_state: newValue || '' }))}
+                options={states}
+                getOptionLabel={(option) => option.name}
+                value={states.find(state => state.id === parseInt(formData.office_state_id || '0')) || null}
+                onChange={(_, newValue) => setFormData(prev => ({ 
+                  ...prev, 
+                  office_state_id: newValue ? String(newValue.id) : '' 
+                }))}
+                loading={loadingStates}
                 renderInput={(params) => (
                   <TextField
                     {...params}
                     label="Estado"
                     required
-                    error={!!fieldErrors.office_state}
-                    helperText={fieldErrors.office_state}
+                    error={!!fieldErrors.office_state_id}
+                    helperText={fieldErrors.office_state_id}
                   />
                 )}
               />

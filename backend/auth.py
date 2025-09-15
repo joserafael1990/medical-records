@@ -169,7 +169,7 @@ def login_user(db: Session, email: str, password: str) -> Dict[str, Any]:
     
     # Crear payload para tokens - ALL ENGLISH FIELD NAMES
     token_data = {
-        "sub": user.username,
+        "sub": user.username or str(user.id),  # Use username or user ID as string if username is None
         "user_id": user.id,
         "person_type": user.person_type,   # ENGLISH: tipo_persona → person_type
         "person_code": user.person_code    # ENGLISH: codigo_persona → person_code

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { apiService } from '../../services/api';
 import {
   Container,
@@ -44,24 +44,26 @@ interface RegistrationData {
   password: string;
   confirmPassword: string;
   
-  // Step 2: Professional Profile
-  title: string;
+  // Step 2: Personal Information
   first_name: string;
   paternal_surname: string;
   maternal_surname: string;
-  specialty: string;
-  professional_license: string;
+  curp: string;
+  gender: string;
   birth_date: string;
   phone: string;
   
-  // Step 3: Additional Professional Info
+  // Step 3: Professional Information
+  title: string;
+  specialty: string;
   university: string;
   graduation_year: string;
+  professional_license: string;
   
   // Step 4: Office Data
   office_address: string;
   office_city: string;
-  office_state: string;
+  office_state_id: string;
   office_phone: string;
 }
 
@@ -80,8 +82,23 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [specialties, setSpecialties] = useState<any[]>([]);
   
   const { login } = useAuth();
+
+  // Load specialties on component mount
+  useEffect(() => {
+    const loadSpecialties = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/catalogs/specialties');
+        const data = await response.json();
+        setSpecialties(data);
+      } catch (error) {
+        console.error('Error loading specialties:', error);
+      }
+    };
+    loadSpecialties();
+  }, []);
 
   const [formData, setFormData] = useState<RegistrationData>({
     // Step 1
@@ -90,23 +107,25 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
     confirmPassword: '',
     
     // Step 2
-    title: 'Dr.',
     first_name: '',
     paternal_surname: '',
     maternal_surname: '',
-    specialty: '',
-    professional_license: '',
+    curp: '',
+    gender: '',
     birth_date: '',
     phone: '',
     
     // Step 3
+    title: 'Dr.',
+    specialty: '',
     university: '',
     graduation_year: '',
+    professional_license: '',
     
     // Step 4
     office_address: '',
     office_city: '',
-    office_state: '',
+    office_state_id: '',
     office_phone: ''
   });
 
@@ -161,25 +180,39 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
         return true;
       
       case 1:
-        const requiredFields = ['first_name', 'paternal_surname', 'specialty', 'professional_license', 'birth_date', 'phone'];
+        const requiredFields = ['first_name', 'paternal_surname', 'curp', 'gender', 'birth_date', 'phone'];
         const missingFields = requiredFields.filter(field => !formData[field as keyof RegistrationData]);
         if (missingFields.length > 0) {
           setError('Por favor, completa todos los campos obligatorios');
           return false;
         }
+        // Validate CURP format
+        if (formData.curp && formData.curp.length !== 18) {
+          setError('El CURP debe tener exactamente 18 caracteres');
+          return false;
+        }
         return true;
       
       case 2:
-        const requiredStep2Fields = ['university', 'graduation_year'];
+        const requiredStep2Fields = ['title', 'specialty', 'university', 'graduation_year', 'professional_license'];
         const missingStep2Fields = requiredStep2Fields.filter(field => !formData[field as keyof RegistrationData]);
         if (missingStep2Fields.length > 0) {
           setError('Por favor, completa todos los campos obligatorios');
           return false;
         }
+        // Validate graduation year
+        if (formData.graduation_year) {
+          const year = parseInt(formData.graduation_year);
+          const currentYear = new Date().getFullYear();
+          if (isNaN(year) || year < 1950 || year > currentYear) {
+            setError(`El año de graduación debe estar entre 1950 y ${currentYear}`);
+            return false;
+          }
+        }
         return true;
       
       case 3:
-        const requiredStep3Fields = ['office_address', 'office_city', 'office_state'];
+        const requiredStep3Fields = ['office_address', 'office_city', 'office_state_id'];
         const missingStep3Fields = requiredStep3Fields.filter(field => !formData[field as keyof RegistrationData]);
         if (missingStep3Fields.length > 0) {
           setError('Por favor, completa todos los campos obligatorios');
@@ -228,41 +261,43 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
         first_name: formData.first_name,
         paternal_surname: formData.paternal_surname,
         maternal_surname: formData.maternal_surname || '',
-        specialty: formData.specialty,
+        curp: formData.curp,
+        gender: formData.gender,
         professional_license: formData.professional_license,
         birth_date: formData.birth_date, // Ensure YYYY-MM-DD format
-        phone: formData.phone,
+        primary_phone: formData.phone, // Fixed field name
         email: formData.email,
+        password: formData.password, // Added required password field
         // Required fields
+        specialty_id: parseInt(formData.specialty) || null,
         university: formData.university,
         graduation_year: formData.graduation_year,
         office_address: formData.office_address,
         office_city: formData.office_city,
-        office_state: formData.office_state,
-        office_country: 'México',
+        office_state_id: parseInt(formData.office_state_id) || null,
         // Optional fields
         office_phone: formData.office_phone || '',
-        professional_email: formData.email,
         // System fields
         created_by: `${formData.title} ${formData.first_name} ${formData.paternal_surname}`.trim()
       };
 
-      // First create the doctor profile
-      console.log('📝 Sending doctor profile data:', doctorProfileData);
+      // Register the doctor (creates profile and handles authentication automatically)
+      console.log('📝 Sending registration data:', doctorProfileData);
       
-      const profileData = await apiService.createDoctorProfile(doctorProfileData);
+      const registrationResponse = await apiService.register(doctorProfileData);
       
-      // Then register the user account
-      await apiService.register({
-        email: formData.email,
-        password: formData.password,
-        doctor_id: profileData.id
-      });
-
-      // Automatically log in the user
-      const success = await login(formData.email, formData.password);
-      if (!success) {
-        throw new Error('Error al iniciar sesión automáticamente');
+      // The registration endpoint already handles login, so we just need to update the auth context
+      if (registrationResponse.success) {
+        console.log('✅ Registration successful:', registrationResponse);
+        
+        // Store authentication data from registration response
+        localStorage.setItem('token', registrationResponse.access_token);
+        localStorage.setItem('doctor_data', JSON.stringify(registrationResponse.user));
+        
+        // Force reload to trigger authentication state update
+        window.location.reload();
+      } else {
+        throw new Error('Error en el registro');
       }
 
     } catch (error: any) {
@@ -280,14 +315,14 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
       description: 'Email y contraseña'
     },
     {
-      label: 'Perfil Profesional',
-      icon: <Work />,
-      description: 'Datos profesionales básicos'
+      label: 'Información Personal',
+      icon: <AccountCircle />,
+      description: 'Datos personales básicos'
     },
     {
-      label: 'Información Profesional Adicional',
-      icon: <School />,
-      description: 'Universidad y estudios'
+      label: 'Información Profesional',
+      icon: <Work />,
+      description: 'Título, cédula, universidad'
     },
     {
       label: 'Datos del Consultorio',
@@ -402,34 +437,18 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
       case 1:
         return (
           <Box>
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <Box sx={{ minWidth: '120px', flex: '0 0 auto' }}>
-                <FormControl fullWidth margin="normal">
-                  <InputLabel>Título</InputLabel>
-                  <Select
-                    value={formData.title}
-                    onChange={handleInputChange('title')}
-                    label="Título"
-                  >
-                    <MenuItem value="Dr.">Dr.</MenuItem>
-                    <MenuItem value="Dra.">Dra.</MenuItem>
-                    <MenuItem value="Lic.">Lic.</MenuItem>
-                    <MenuItem value="M.C.">M.C.</MenuItem>
-                    <MenuItem value="Esp.">Esp.</MenuItem>
-                  </Select>
-                </FormControl>
-              </Box>
-              <Box sx={{ flex: '1 1 300px' }}>
-                <TextField
-                  fullWidth
-                  margin="normal"
-                  label="Nombre(s)"
-                  value={formData.first_name}
-                  onChange={handleInputChange('first_name')}
-                  required
-                />
-              </Box>
-            </Box>
+            <Typography variant="h6" gutterBottom>
+              Información Personal
+            </Typography>
+            
+            <TextField
+              fullWidth
+              margin="normal"
+              label="Nombre(s)"
+              value={formData.first_name}
+              onChange={handleInputChange('first_name')}
+              required
+            />
 
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
               <Box sx={{ flex: '1 1 250px' }}>
@@ -453,33 +472,36 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
               </Box>
             </Box>
 
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Especialidad</InputLabel>
+            <TextField
+              fullWidth
+              margin="normal"
+              label="CURP"
+              value={formData.curp}
+              onChange={handleInputChange('curp')}
+              required
+              placeholder="AAAA######HAAAAA##"
+              inputProps={{
+                maxLength: 18,
+                style: { textTransform: 'uppercase' }
+              }}
+              helperText="Clave Única de Registro de Población (18 caracteres)"
+            />
+
+            <FormControl fullWidth margin="normal" required>
+              <InputLabel required>Género</InputLabel>
               <Select
-                value={formData.specialty}
-                onChange={handleInputChange('specialty')}
-                label="Especialidad"
+                value={formData.gender}
+                onChange={handleInputChange('gender')}
+                label="Género"
                 required
               >
-                {MEDICAL_SPECIALTIES.map((specialty) => (
-                  <MenuItem key={specialty} value={specialty}>
-                    {specialty}
-                  </MenuItem>
-                ))}
+                <MenuItem value="M">Masculino</MenuItem>
+                <MenuItem value="F">Femenino</MenuItem>
+                <MenuItem value="O">Otro</MenuItem>
               </Select>
             </FormControl>
 
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <Box sx={{ flex: '1 1 250px' }}>
-                <TextField
-                  fullWidth
-                  margin="normal"
-                  label="Cédula Profesional"
-                  value={formData.professional_license}
-                  onChange={handleInputChange('professional_license')}
-                  required
-                />
-              </Box>
               <Box sx={{ flex: '1 1 250px' }}>
                 <TextField
                   fullWidth
@@ -494,16 +516,17 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
                   }}
                 />
               </Box>
+              <Box sx={{ flex: '1 1 250px' }}>
+                <TextField
+                  fullWidth
+                  margin="normal"
+                  label="Teléfono"
+                  value={formData.phone}
+                  onChange={handleInputChange('phone')}
+                  required
+                />
+              </Box>
             </Box>
-
-            <TextField
-              fullWidth
-              margin="normal"
-              label="Teléfono"
-              value={formData.phone}
-              onChange={handleInputChange('phone')}
-              required
-            />
           </Box>
         );
 
@@ -511,9 +534,46 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
         return (
           <Box>
             <Typography variant="h6" gutterBottom>
-              Información Profesional Adicional
+              Información Profesional
             </Typography>
             
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Box sx={{ minWidth: '120px', flex: '0 0 auto' }}>
+                <FormControl fullWidth margin="normal" required>
+                  <InputLabel>Título</InputLabel>
+                  <Select
+                    value={formData.title}
+                    onChange={handleInputChange('title')}
+                    label="Título"
+                    required
+                  >
+                    <MenuItem value="Dr.">Dr.</MenuItem>
+                    <MenuItem value="Dra.">Dra.</MenuItem>
+                    <MenuItem value="Lic.">Lic.</MenuItem>
+                    <MenuItem value="M.C.">M.C.</MenuItem>
+                    <MenuItem value="Esp.">Esp.</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
+              <Box sx={{ flex: '1 1 300px' }}>
+                <FormControl fullWidth margin="normal" required>
+                  <InputLabel>Especialidad</InputLabel>
+                  <Select
+                    value={formData.specialty}
+                    onChange={handleInputChange('specialty')}
+                    label="Especialidad"
+                    required
+                  >
+                    {specialties.map((specialty) => (
+                      <MenuItem key={specialty.id} value={specialty.id.toString()}>
+                        {specialty.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+            </Box>
+
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
               <Box sx={{ flex: '1 1 250px' }}>
                 <TextField
@@ -534,10 +594,20 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
                   value={formData.graduation_year}
                   onChange={handleInputChange('graduation_year')}
                   inputProps={{ min: 1950, max: new Date().getFullYear() }}
+                  helperText={`Año entre 1950 y ${new Date().getFullYear()}`}
                   required
                 />
               </Box>
             </Box>
+
+            <TextField
+              fullWidth
+              margin="normal"
+              label="Cédula Profesional"
+              value={formData.professional_license}
+              onChange={handleInputChange('professional_license')}
+              required
+            />
           </Box>
         );
 
@@ -572,10 +642,10 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
               </Box>
               <Box sx={{ flex: '1 1 250px' }}>
                 <FormControl fullWidth margin="normal" required>
-                  <InputLabel>Estado</InputLabel>
+                  <InputLabel required>Estado</InputLabel>
                   <Select
-                    value={formData.office_state}
-                    onChange={handleInputChange('office_state')}
+                    value={formData.office_state_id}
+                    onChange={handleInputChange('office_state_id')}
                     label="Estado"
                   >
                     {MEXICAN_STATES.map((state) => (

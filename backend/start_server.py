@@ -3,7 +3,7 @@
 Script de arranque directo del servidor FastAPI
 """
 import uvicorn
-from main import app
+from main_clean_english import app
 
 if __name__ == "__main__":
     print("🚀 Arrancando servidor FastAPI...")
@@ -14,7 +14,7 @@ if __name__ == "__main__":
     print("   - Workers: 1")
     
     uvicorn.run(
-        "main:app",
+        "main_clean_english:app",
         host="0.0.0.0",
         port=8000,
         reload=True,

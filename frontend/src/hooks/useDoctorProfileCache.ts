@@ -34,6 +34,7 @@ const initialFormData: DoctorFormData = {
   email: '',
   phone: '',
   birth_date: '',
+  gender: '',
   curp: '',
   rfc: '',
   professional_license: '',
@@ -47,7 +48,7 @@ const initialFormData: DoctorFormData = {
   mobile_phone: '',
   office_address: '',
   office_city: '',
-  office_state: '',
+  office_state_id: '',
   office_postal_code: '',
   office_country: 'México'
 };
@@ -66,6 +67,7 @@ const formatDateForBackend = (inputDate: string): string => {
 };
 
 export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
+  const { isAuthenticated } = useAuth();
   const [doctorProfile, setDoctorProfile] = useState<DoctorProfile | null>(cache.data);
   const [isLoading, setIsLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -109,7 +111,12 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
       cache.data = data;
       cache.timestamp = now;
       
+      // Always update local state
       setDoctorProfile(data);
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 Profile state updated:', data.specialty_name);
+      }
     } catch (error: any) {
       if (process.env.NODE_ENV === 'development') {
         console.error('❌ Error fetching doctor profile:', error);
@@ -144,32 +151,35 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
 
   const handleEdit = useCallback((section?: string) => {
     if (doctorProfile) {
-      // Map only the fields that exist in DoctorFormData
-      setFormData({
+      // Map backend fields to form fields
+      const mappedData = {
         title: doctorProfile.title || '',
         first_name: doctorProfile.first_name || '',
         paternal_surname: doctorProfile.paternal_surname || '',
         maternal_surname: doctorProfile.maternal_surname || '',
         email: doctorProfile.email || '',
-        phone: doctorProfile.phone || '',
+        phone: doctorProfile.primary_phone || '',
         birth_date: doctorProfile.birth_date || '',
+        gender: (doctorProfile as any).gender || '',
         curp: doctorProfile.curp || '',
         rfc: doctorProfile.rfc || '',
         professional_license: doctorProfile.professional_license || '',
-        specialty: doctorProfile.specialty || '',
+        specialty: doctorProfile.specialty_name || '',
         specialty_license: doctorProfile.specialty_license || '',
         university: doctorProfile.university || '',
-        graduation_year: doctorProfile.graduation_year || '',
+        graduation_year: String(doctorProfile.graduation_year || ''),
         subspecialty: doctorProfile.subspecialty || '',
         professional_email: doctorProfile.professional_email || '',
         office_phone: doctorProfile.office_phone || '',
         mobile_phone: doctorProfile.mobile_phone || '',
         office_address: doctorProfile.office_address || '',
         office_city: doctorProfile.office_city || '',
-        office_state: doctorProfile.office_state || '',
+        office_state_id: String(doctorProfile.office_state_id || ''),
         office_postal_code: doctorProfile.office_postal_code || '',
         office_country: doctorProfile.office_country || 'México'
-      });
+      };
+      
+      setFormData(mappedData);
       setIsEditing(true);
       setDialogOpen(true);
       clearMessages();
@@ -196,30 +206,72 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
   }, [clearMessages]);
 
   const saveProfile = async (data: DoctorFormData): Promise<void> => {
+    // Get specialty ID if specialty name was selected
+    let specialtyId = null;
+    if (data.specialty) {
+      try {
+        const specialties = await apiService.getSpecialties();
+        const foundSpecialty = specialties.find(spec => spec.name === data.specialty);
+        specialtyId = foundSpecialty ? foundSpecialty.id : null;
+      } catch (error) {
+        console.warn('Could not fetch specialties for ID conversion:', error);
+      }
+    }
+    
+    // Transform frontend field names to backend field names
     const transformedData: any = {
-      ...data,
+      title: data.title,
+      first_name: data.first_name,
+      paternal_surname: data.paternal_surname,
+      maternal_surname: data.maternal_surname,
+      email: data.email,
+      primary_phone: data.phone, // Frontend uses 'phone', backend expects 'primary_phone'
       birth_date: formatDateForBackend(data.birth_date),
-      // Add required backend fields
-      created_by: doctorProfile 
-        ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name || ''} ${doctorProfile.paternal_surname || ''}`.trim()
-        : "Usuario",
+      curp: data.curp,
+      rfc: data.rfc,
+      professional_license: data.professional_license,
+      specialty_id: specialtyId, // Convert specialty name to ID
+      specialty_license: data.specialty_license,
+      university: data.university,
+      graduation_year: data.graduation_year ? parseInt(data.graduation_year) : null,
+      subspecialty: data.subspecialty,
+      // Office information
+      office_address: data.office_address,
+      office_postal_code: data.office_postal_code,
+      // Office address with state ID
+      office_city: data.office_city,
+      office_state_id: data.office_state_id ? parseInt(data.office_state_id) : null,
       // Include optional fields if they exist in the original profile
       digital_signature: doctorProfile?.digital_signature || '',
       professional_seal: doctorProfile?.professional_seal || ''
     };
 
+    // Clean data: only send fields with values
+    const cleanedData: any = {};
+    Object.keys(transformedData).forEach(key => {
+      const value = transformedData[key];
+      if (value !== null && value !== undefined && value !== '') {
+        cleanedData[key] = value;
+      }
+    });
+
     try {
       if (isEditing) {
-        await apiService.updateDoctorProfile(transformedData);
+        await apiService.updateDoctorProfile(cleanedData);
       } else {
-        await apiService.createDoctorProfile(transformedData);
+        await apiService.createDoctorProfile(cleanedData);
       }
 
       // Invalidate cache after save
+      cache.data = null;
       cache.timestamp = 0;
       
       // Refresh the profile after saving
-      return fetchProfile();
+      await fetchProfile();
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ Profile updated and reloaded successfully');
+      }
     } catch (error: any) {
       console.error('❌ Error in saveProfile:', error);
       
@@ -266,13 +318,13 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
     }
   }, [formData, isEditing, clearMessages]);
 
-  // Load profile on component mount (only once)
+  // Load profile when authenticated
   useEffect(() => {
-    if (!fetchCalledRef.current) {
+    if (isAuthenticated && (!fetchCalledRef.current || !doctorProfile)) {
       fetchCalledRef.current = true;
       fetchProfile();
     }
-  }, []);
+  }, [isAuthenticated, fetchProfile, doctorProfile]);
 
   return {
     // State

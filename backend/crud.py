@@ -13,7 +13,7 @@ import bcrypt
 
 from database import (
     Person, MedicalRecord, Appointment, VitalSigns,
-    Country, State, City, Nationality, Specialty, EmergencyRelationship
+    Country, State, Nationality, Specialty, EmergencyRelationship
 )
 import schemas
 
@@ -73,14 +73,6 @@ def get_states(db: Session, country_id: Optional[int] = None, active: bool = Tru
         query = query.filter(State.country_id == country_id)
     return query.order_by(State.name).all()
 
-def get_cities(db: Session, state_id: Optional[int] = None, active: bool = True) -> List[City]:
-    """Get list of cities"""
-    query = db.query(City)
-    if active:
-        query = query.filter(City.active == True)
-    if state_id:
-        query = query.filter(City.state_id == state_id)
-    return query.order_by(City.name).all()
 
 def get_nationalities(db: Session, active: bool = True) -> List[Nationality]:
     """Get list of nationalities"""
@@ -163,12 +155,19 @@ def update_doctor_profile(db: Session, doctor_id: int, doctor_data: schemas.Doct
     
     # Update only provided fields
     update_data = doctor_data.dict(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(db_doctor, field, value)
     
-    db.commit()
-    db.refresh(db_doctor)
-    return db_doctor
+    for field, value in update_data.items():
+        # Verify the field exists in the model
+        if hasattr(db_doctor, field):
+            setattr(db_doctor, field, value)
+    
+    try:
+        db.commit()
+        db.refresh(db_doctor)
+        return db_doctor
+    except Exception as e:
+        db.rollback()
+        raise e
 
 def create_patient(db: Session, patient_data: schemas.PatientCreate) -> Person:
     """Create a new patient"""
@@ -546,14 +545,6 @@ def get_estados(db: Session, pais_id: Optional[int] = None, activo: bool = True)
         query = query.filter(State.is_active == True)
     return query.order_by(State.name).all()
 
-def get_ciudades(db: Session, estado_id: Optional[int] = None, activo: bool = True) -> List[City]:
-    """Obtener lista de ciudades"""
-    query = db.query(City)
-    if estado_id:
-        query = query.filter(City.state_id == estado_id)
-    if activo:
-        query = query.filter(City.is_active == True)
-    return query.order_by(City.name).all()
 
 # ELIMINATED: Duplicate Spanish functions - use English versions instead:
 # - get_nacionalidades -> use get_nationalities  

@@ -40,7 +40,7 @@ interface ConsultationManagementActions {
   deleteConsultation: (id: string) => Promise<void>;
   
   // Clinical studies
-  loadConsultationStudies: (consultationId: number) => Promise<void>;
+  loadConsultationStudies: (consultationId: string) => Promise<void>;
   setConsultationStudies: (studies: ClinicalStudy[]) => void;
   
   // Temporary state management
@@ -97,7 +97,7 @@ export const useConsultationManagement = (): ConsultationManagementReturn => {
   
   // Form data with default values
   const [consultationFormData, setConsultationFormData] = useState<ConsultationFormData>({
-    patient_id: 0,
+    patient_id: '',
     date: getCurrentMexicoCityDateTime(),
     chief_complaint: '',
     history_present_illness: '',
@@ -120,7 +120,7 @@ export const useConsultationManagement = (): ConsultationManagementReturn => {
   });
 
   // Load consultation studies
-  const loadConsultationStudies = useCallback(async (consultationId: number) => {
+  const loadConsultationStudies = useCallback(async (consultationId: string) => {
     try {
       debugLog('🔍 Loading studies for consultation:', consultationId);
       // TODO: Implement getClinicalStudies in apiService when API is ready
@@ -209,7 +209,7 @@ export const useConsultationManagement = (): ConsultationManagementReturn => {
     setConsultationDetailView(false);
     setConsultationStudies([]);
     setConsultationFormData({
-      patient_id: 0,
+      patient_id: '',
       date: getCurrentMexicoCityDateTime(),
       chief_complaint: '',
       history_present_illness: '',
@@ -263,7 +263,7 @@ export const useConsultationManagement = (): ConsultationManagementReturn => {
       
       // Load clinical studies for this consultation
       if (consultation.id) {
-        loadConsultationStudies(Number(consultation.id));
+        loadConsultationStudies(consultation.id);
       }
     } else {
       resetConsultationForm();

@@ -54,7 +54,7 @@ export function useConsultationManagement(
   const [selectedConsultation, setSelectedConsultation] = useState<any>(null);
   const [consultationDetailView, setConsultationDetailView] = useState(false);
   const [consultationFormData, setConsultationFormData] = useState<ConsultationFormData>({
-    patient_id: 0,
+    patient_id: '',
     date: new Date().toISOString().split('T')[0],
     chief_complaint: '',
     history_present_illness: '',

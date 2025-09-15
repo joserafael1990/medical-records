@@ -7,20 +7,21 @@ import validationSchemas from '../shared_validation_schemas.json';
 
 // API Configuration
 export const API_CONFIG = {
-  BASE_URL: process.env.REACT_APP_API_URL || 'http://localhost:8001',
+  BASE_URL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
   ENDPOINTS: {
     HEALTH: '/api/health',
     PATIENTS: '/api/patients',
     CONSULTATIONS: '/api/consultations',
     APPOINTMENTS: '/api/appointments',
-    DASHBOARD: '/api/physicians/dashboard',
+    DASHBOARD: '/api/dashboard/stats',
     AGENDA: {
       DAILY: '/api/agenda/daily',
       WEEKLY: '/api/agenda/weekly',
       AVAILABLE_SLOTS: '/api/agenda/available-slots'
     },
-    DOCTOR_PROFILE: '/api/doctor/profile',
-    CLINICAL_STUDIES: '/api/clinical-studies'
+    DOCTOR_PROFILE: '/api/doctors/me/profile',
+    CLINICAL_STUDIES: '/api/clinical-studies',
+    SPECIALTIES: '/api/catalogs/specialties'
   },
   TIMEOUT: Number(process.env.REACT_APP_API_TIMEOUT) || 10000,
   RETRY_ATTEMPTS: Number(process.env.REACT_APP_API_RETRY_ATTEMPTS) || 3

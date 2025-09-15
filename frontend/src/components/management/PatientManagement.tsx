@@ -1,18 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Patient, CompletePatientData } from '../../types';
 import { apiService } from '../../services/api';
-// useApiErrorHandler removed - using simplified error handling
+// Using centralized PatientManagement interfaces from hooks
+import type { PatientManagementState, PatientManagementActions } from '../../hooks/usePatientManagement';
 
-export interface PatientManagementState {
-  patients: Patient[];
-  selectedPatient: Patient | null;
-  patientDialogOpen: boolean;
-  isEditingPatient: boolean;
-  patientSearchTerm: string;
-  selectedPatientData: CompletePatientData | null;
-}
-
-export interface PatientManagementActions {
+// Component-specific interface extending centralized ones
+export interface PatientManagementComponentActions extends Omit<PatientManagementActions, 'setPatients' | 'setSelectedPatient' | 'setPatientDialogOpen' | 'setIsEditingPatient' | 'setPatientSearchTerm' | 'setSelectedPatientData'> {
   setPatients: React.Dispatch<React.SetStateAction<Patient[]>>;
   setSelectedPatient: React.Dispatch<React.SetStateAction<Patient | null>>;
   setPatientDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -23,12 +16,15 @@ export interface PatientManagementActions {
   loadPatients: () => Promise<void>;
 }
 
-export interface UsePatientManagementReturn extends PatientManagementState, PatientManagementActions {}
+// Removed duplicate usePatientManagement hook - using centralized hook instead
+// This component should use the centralized usePatientManagement from hooks/
 
-export function usePatientManagement(
+export interface UsePatientManagementComponentReturn extends PatientManagementState, PatientManagementComponentActions {}
+
+export function usePatientManagementComponent(
   showSuccessMessage?: (message: string) => void,
   showErrorMessage?: (message: string) => void
-): UsePatientManagementReturn {
+): UsePatientManagementComponentReturn {
   // Patient management state
   const [patients, setPatients] = useState<Patient[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -87,19 +83,41 @@ export function usePatientManagement(
     loadPatients();
   }, [loadPatients]);
 
+  // Stub implementations for missing interface methods
+  const fetchPatients = loadPatients;
+  const createPatient = async (data: any) => { throw new Error('Use centralized hook'); };
+  const updatePatient = async (id: string, data: any) => { throw new Error('Use centralized hook'); };
+  const deactivatePatient = async (patient: Patient) => { throw new Error('Use centralized hook'); };
+  const resetPatientForm = () => {};
+  const openPatientDialog = (patient?: Patient) => {};
+  const closePatientDialog = () => {};
+
   return {
+    // State
     patients,
     selectedPatient,
+    selectedPatientData,
     patientDialogOpen,
     isEditingPatient,
     patientSearchTerm,
-    selectedPatientData,
+    isSubmitting: false,
+    
+    // Actions
+    fetchPatients,
+    createPatient,
+    updatePatient,
+    deactivatePatient,
     setPatients,
     setSelectedPatient,
+    setSelectedPatientData,
     setPatientDialogOpen,
     setIsEditingPatient,
     setPatientSearchTerm,
-    setSelectedPatientData,
+    resetPatientForm,
+    openPatientDialog,
+    closePatientDialog,
+    
+    // Component-specific
     handleViewPatientDetails,
     loadPatients
   };

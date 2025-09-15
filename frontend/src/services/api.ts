@@ -459,6 +459,20 @@ class ApiService {
   }
 
   // ============================================================================
+  // CATALOG SERVICES
+  // ============================================================================
+
+  async getSpecialties(): Promise<any[]> {
+    const response = await this.api.get(API_CONFIG.ENDPOINTS.SPECIALTIES);
+    return response.data;
+  }
+
+  async getStates(): Promise<Array<{id: number, name: string}>> {
+    const response = await this.api.get('/api/catalogs/states');
+    return response.data;
+  }
+
+  // ============================================================================
   // AUTHENTICATION SERVICES
   // ============================================================================
 
@@ -585,6 +599,8 @@ export const {
   getDoctorProfile,
   createDoctorProfile,
   updateDoctorProfile,
+  getSpecialties,
+  getStates,
   login,
   register,
   getDashboardData,

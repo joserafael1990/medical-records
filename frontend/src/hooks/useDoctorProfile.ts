@@ -35,6 +35,7 @@ const initialFormData: DoctorFormData = {
   email: '',
   phone: '',
   birth_date: '',
+  gender: '',
   
   // Identificación Legal
   curp: '',
@@ -56,7 +57,7 @@ const initialFormData: DoctorFormData = {
   // Dirección del Consultorio
   office_address: '',
   office_city: '',
-  office_state: '',
+  office_state_id: '',
   office_postal_code: '',
   office_country: 'México',
   
@@ -194,9 +195,9 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
       }
     }
     
-    if (!isEditMode || data.office_state?.trim()) {
-      if (!data.office_state?.trim()) {
-        errors.office_state = 'El estado es requerido';
+    if (!isEditMode || data.office_state_id?.trim()) {
+      if (!data.office_state_id?.trim()) {
+        errors.office_state_id = 'El estado es requerido';
       }
     }
 
@@ -331,22 +332,23 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
         paternal_surname: doctorProfile.paternal_surname || '',
         maternal_surname: doctorProfile.maternal_surname || '',
         email: doctorProfile.email || '',
-        phone: doctorProfile.phone || '',
+        phone: doctorProfile.primary_phone || '',
         birth_date: formatDateForInput(doctorProfile.birth_date || ''),
+        gender: (doctorProfile as any).gender || '',
         curp: doctorProfile.curp || '',
         rfc: doctorProfile.rfc || '',
         professional_license: doctorProfile.professional_license || '',
         specialty_license: doctorProfile.specialty_license || '',
         university: doctorProfile.university || '',
         graduation_year: doctorProfile.graduation_year || '',
-        specialty: doctorProfile.specialty || '',
+        specialty: doctorProfile.specialty_name || '',
         subspecialty: doctorProfile.subspecialty || '',
         professional_email: doctorProfile.professional_email || '',
         office_phone: doctorProfile.office_phone || '',
         mobile_phone: doctorProfile.mobile_phone || '',
         office_address: doctorProfile.office_address || '',
         office_city: doctorProfile.office_city || '',
-        office_state: doctorProfile.office_state || '',
+        office_state_id: String(doctorProfile.office_state_id || ''),
         office_postal_code: doctorProfile.office_postal_code || '',
         office_country: doctorProfile.office_country || 'México',
         // medical_school, internship_hospital, residency_hospital removed per user request

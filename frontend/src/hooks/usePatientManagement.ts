@@ -14,26 +14,31 @@ const debugLog = (message: string, data?: any) => {
   }
 };
 
-interface PatientManagementState {
+// ============================================================================
+// CENTRALIZED PATIENT MANAGEMENT INTERFACES
+// ============================================================================
+
+export interface PatientManagementState {
   patients: Patient[];
   selectedPatient: Patient | null;
+  selectedPatientData?: any; // For complete patient data
   patientDialogOpen: boolean;
   isEditingPatient: boolean;
   patientSearchTerm: string;
   isSubmitting: boolean;
 }
 
-interface PatientManagementActions {
+export interface PatientManagementActions {
   // Data operations
   fetchPatients: () => Promise<void>;
   createPatient: (data: PatientFormData) => Promise<Patient>;
-  updatePatient: (id: number, data: PatientFormData) => Promise<Patient>;
+  updatePatient: (id: string, data: PatientFormData) => Promise<Patient>; // Unified to string
   deactivatePatient: (patient: Patient) => Promise<void>;
   
   // UI state management
   setPatients: (patients: Patient[]) => void;
   setSelectedPatient: (patient: Patient | null) => void;
-  setSelectedPatientData: (patient: any) => void; // For complete patient data
+  setSelectedPatientData: (patient: any) => void;
   setPatientDialogOpen: (open: boolean) => void;
   setIsEditingPatient: (editing: boolean) => void;
   setPatientSearchTerm: (term: string) => void;
@@ -106,7 +111,7 @@ export const usePatientManagement = (): PatientManagementReturn => {
   }, [fetchPatients]);
 
   // Update existing patient
-  const updatePatient = useCallback(async (id: number, data: PatientFormData): Promise<Patient> => {
+  const updatePatient = useCallback(async (id: string, data: PatientFormData): Promise<Patient> => {
     setIsSubmitting(true);
     try {
       const updatedPatient = await apiService.updatePatient(id, data);

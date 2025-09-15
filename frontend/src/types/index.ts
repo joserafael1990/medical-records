@@ -2,47 +2,68 @@
 // TYPES - Definiciones TypeScript mejoradas
 // ============================================================================
 
-export interface Patient {
-  id: string;
+// Base fields shared between Patient and PatientFormData
+interface PatientBaseFields {
   first_name: string;
   paternal_surname: string;
   maternal_surname: string;
-  full_name: string;
   birth_date: string;
-  age: number;
   gender: string;
   phone: string;
   email?: string;
   address: string;
   curp?: string;
-  insurance_type?: string;
-  insurance_number?: string;
-  blood_type?: string;
-  allergies?: string;
-  chronic_conditions?: string;
-  current_medications?: string;
-  emergency_contact_name?: string;
-  emergency_contact_phone?: string;
-  emergency_contact_relationship?: string;
-  created_at: string;
-  last_visit?: string;
-  total_visits: number;
-  status: 'active' | 'inactive';
-  // Additional fields for compatibility
-  birth_state_code?: string;
-  nationality?: string;
+  rfc?: string;
+  internal_id?: string;
+  primary_phone?: string;
+  neighborhood?: string;
   municipality?: string;
   state?: string;
-  internal_id?: string;
-  neighborhood?: string;
   postal_code?: string;
+  birth_state_code?: string;
+  nationality?: string;
   civil_status?: string;
   education_level?: string;
   occupation?: string;
   religion?: string;
+  insurance_type?: string;
+  insurance_provider?: string;
+  insurance_number?: string;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  emergency_contact_relationship?: string;
   emergency_contact_address?: string;
+  allergies?: string;
+  chronic_conditions?: string;
+  current_medications?: string;
+  blood_type?: string;
   previous_hospitalizations?: string;
   surgical_history?: string;
+  
+  // Address fields
+  address_street?: string;
+  address_ext_number?: string;
+  address_int_number?: string;
+  address_neighborhood?: string;
+  address_city?: string;
+  address_state_id?: number | null;
+  address_postal_code?: string;
+  nationality_id?: number;
+  birth_place?: string;
+  birth_state_id?: number | null;
+  foreign_birth_place?: string;
+}
+
+export interface Patient extends PatientBaseFields {
+  // Unique Patient fields (not in forms)
+  id: string;
+  full_name: string;
+  age: number;
+  created_at: string;
+  last_visit?: string;
+  total_visits: number;
+  status: 'active' | 'inactive';
+  is_active?: boolean;
 }
 
 export interface Consultation {
@@ -218,28 +239,22 @@ export enum AgendaView {
 // FORM TYPES
 // ============================================================================
 
-export interface PatientFormData {
-  first_name: string;
-  paternal_surname: string;
-  maternal_surname: string;
-  birth_date: string;
-  gender: string;
-  address: string;
+// Form data interface - required fields made explicit, inherits from base
+export interface PatientFormData extends Required<Omit<PatientBaseFields, 'email' | 'curp' | 'rfc' | 'internal_id' | 'primary_phone' | 'birth_state_code' | 'nationality' | 'civil_status' | 'education_level' | 'occupation' | 'religion' | 'insurance_type' | 'insurance_provider' | 'insurance_number' | 'emergency_contact_name' | 'emergency_contact_phone' | 'emergency_contact_relationship' | 'emergency_contact_address' | 'allergies' | 'chronic_conditions' | 'current_medications' | 'blood_type' | 'previous_hospitalizations' | 'surgical_history' | 'address_street' | 'address_ext_number' | 'address_int_number' | 'address_neighborhood' | 'address_postal_code' | 'birth_place' | 'foreign_birth_place'>> {
+  // Required form fields
   birth_state_code: string;
   nationality: string;
   curp: string;
+  rfc: string;
   internal_id: string;
-  phone: string;
+  primary_phone: string;
   email: string;
-  neighborhood: string;
-  municipality: string;
-  state: string;
-  postal_code: string;
   civil_status: string;
   education_level: string;
   occupation: string;
   religion: string;
   insurance_type: string;
+  insurance_provider: string;
   insurance_number: string;
   emergency_contact_name: string;
   emergency_contact_phone: string;
@@ -251,11 +266,23 @@ export interface PatientFormData {
   blood_type: string;
   previous_hospitalizations: string;
   surgical_history: string;
-  status: 'active' | 'inactive'; // Patient status - active by default
+  address_street: string;
+  address_ext_number: string;
+  address_int_number: string;
+  address_neighborhood: string;
+  address_city: string;
+  address_state_id: number | null;
+  address_postal_code: string;
+  birth_place: string;
+  foreign_birth_place: string;
+  
+  // Form-specific fields
+  status: 'active' | 'inactive';
+  is_active: boolean;
 }
 
 export interface ConsultationFormData {
-  patient_id: string;
+  patient_id: string | number;
   date: string;
   chief_complaint: string;
   history_present_illness: string;
@@ -311,6 +338,8 @@ export interface ApiResponse<T> {
 export interface ApiError {
   detail: string | ValidationError[];
   status: number;
+  message?: string;
+  fieldErrors?: { [key: string]: string };
 }
 
 export interface ValidationError {
@@ -352,8 +381,10 @@ export interface DoctorProfile {
   paternal_surname: string;
   maternal_surname: string;
   email: string;
-  phone: string;
+  phone?: string; // Frontend field
+  primary_phone?: string; // Backend field
   birth_date: string;
+  gender?: string; // Género del médico
   
   // Identificación Legal (NOM-024)
   curp: string; // CURP - Obligatorio según NOM-024
@@ -365,6 +396,7 @@ export interface DoctorProfile {
   university: string; // Universidad de egreso
   graduation_year: string;
   specialty: string;
+  specialty_name?: string; // Nombre de la especialidad desde BD
   subspecialty?: string;
   
   // Contacto Profesional
@@ -373,11 +405,12 @@ export interface DoctorProfile {
   mobile_phone?: string;
   
   // Dirección del Consultorio
-  office_address: string;
-  office_city: string;
-  office_state: string;
-  office_postal_code: string;
-  office_country: string;
+  office_address?: string;
+  office_city?: string; // Free text field for office city
+  office_state_id?: number; // FK to states table
+  office_state_name?: string; // State name from backend
+  office_postal_code?: string;
+  office_country?: string;
   
   // Información Adicional NOM-004
   // medical_school, internship_hospital, residency_hospital removed per user request
@@ -405,6 +438,7 @@ export interface DoctorFormData {
   email: string;
   phone: string;
   birth_date: string;
+  gender: string;
   
   // Identificación Legal (NOM-024)
   curp: string; // CURP - Obligatorio según NOM-024
@@ -426,7 +460,7 @@ export interface DoctorFormData {
   // Dirección del Consultorio
   office_address: string;
   office_city: string;
-  office_state: string;
+  office_state_id: string;
   office_postal_code: string;
   office_country: string;
   
@@ -505,8 +539,8 @@ export interface ClinicalStudy {
 }
 
 export interface ClinicalStudyFormData {
-  consultation_id: string;
-  patient_id: string;
+  consultation_id: string | number;
+  patient_id: string | number;
   study_type: StudyType;
   study_name: string;
   study_description: string;

@@ -40,22 +40,10 @@ class State(Base):
     
     # Relationships
     country = relationship("Country", back_populates="states")
-    cities = relationship("City", back_populates="state")
     persons_birth = relationship("Person", foreign_keys="Person.birth_state_id")
+    persons_address = relationship("Person", foreign_keys="Person.address_state_id")
+    persons_office = relationship("Person", foreign_keys="Person.office_state_id")
 
-class City(Base):
-    __tablename__ = "cities"
-    
-    id = Column(Integer, primary_key=True)
-    name = Column(String(100), nullable=False)
-    state_id = Column(Integer, ForeignKey("states.id"))
-    active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    
-    # Relationships
-    state = relationship("State", back_populates="cities")
-    persons_residence = relationship("Person", foreign_keys="Person.city_id")
-    persons_office = relationship("Person", foreign_keys="Person.office_city_id")
 
 # ============================================================================
 # AUXILIARY CATALOGS
@@ -132,12 +120,14 @@ class Person(Base):
     address_ext_number = Column(String(20))
     address_int_number = Column(String(20))
     address_neighborhood = Column(String(100))
-    city_id = Column(Integer, ForeignKey("cities.id"))
+    address_city = Column(String(100))  # Free text field for city
+    address_state_id = Column(Integer, ForeignKey("states.id"))  # FK to states table
     address_postal_code = Column(String(5))
     
     # PROFESSIONAL ADDRESS (doctors only)
     office_address = Column(Text)
-    office_city_id = Column(Integer, ForeignKey("cities.id"))
+    office_city = Column(String(100))  # Free text field for office city
+    office_state_id = Column(Integer, ForeignKey("states.id"))  # FK to states table
     office_postal_code = Column(String(5))
     
     # PROFESSIONAL DATA (doctors only)
@@ -178,8 +168,8 @@ class Person(Base):
     nationality = relationship("Nationality", back_populates="persons")
     specialty = relationship("Specialty", back_populates="doctors")
     birth_state = relationship("State", foreign_keys=[birth_state_id], overlaps="persons_birth")
-    city_residence = relationship("City", foreign_keys=[city_id], overlaps="persons_residence")
-    office_city = relationship("City", foreign_keys=[office_city_id], overlaps="persons_office")
+    address_state = relationship("State", foreign_keys=[address_state_id], overlaps="persons_address")
+    office_state = relationship("State", foreign_keys=[office_state_id], overlaps="persons_office")
     emergency_relationship = relationship("EmergencyRelationship", back_populates="persons")
     
     # Medical relationships
