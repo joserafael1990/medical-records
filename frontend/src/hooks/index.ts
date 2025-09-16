@@ -14,6 +14,7 @@ export { useAppointmentManager } from './useAppointmentManager';
 // New refactored hooks (extracted from App.tsx)
 export { usePatientManagement } from './usePatientManagement';
 export { useConsultationManagement } from './useConsultationManagement';
+export { useEmergencyRelationships } from './useEmergencyRelationships';
 
 // Individual hooks are imported directly by components as needed:
 // - useDoctorProfile, useDoctorProfileCache

@@ -21,7 +21,8 @@ export const API_CONFIG = {
     },
     DOCTOR_PROFILE: '/api/doctors/me/profile',
     CLINICAL_STUDIES: '/api/clinical-studies',
-    SPECIALTIES: '/api/catalogs/specialties'
+    SPECIALTIES: '/api/catalogs/specialties',
+    EMERGENCY_RELATIONSHIPS: '/api/catalogs/emergency-relationships'
   },
   TIMEOUT: Number(process.env.REACT_APP_API_TIMEOUT) || 10000,
   RETRY_ATTEMPTS: Number(process.env.REACT_APP_API_RETRY_ATTEMPTS) || 3
