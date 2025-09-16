@@ -40,10 +40,12 @@
     "patient": [
       "first_name",
       "paternal_surname",
-      "maternal_surname",
       "birth_date",
       "gender",
-      "address"
+      "address_street",
+      "address_city",
+      "address_state_id",
+      "address_postal_code"
     ],
     "consultation": [
       "patient_id",

@@ -50,6 +50,10 @@ class ApiService {
         
         if (FEATURE_FLAGS.ENABLE_DEBUG_LOGS) {
           console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`);
+          console.log(`🔑 Token present: ${token ? 'YES' : 'NO'}`);
+          if (token) {
+            console.log(`🔑 Token preview: ${token.substring(0, 20)}...`);
+          }
         }
         return config;
       },
@@ -69,7 +73,13 @@ class ApiService {
       },
       (error: AxiosError) => {
         if (FEATURE_FLAGS.ENABLE_DEBUG_LOGS) {
-          console.error(`❌ API Error: ${error.response?.status} ${error.config?.url}`, error);
+          console.error(`❌ API Error: ${error.response?.status} ${error.config?.url}`);
+          console.error('❌ Error details:', {
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data,
+            headers: error.response?.headers
+          });
         }
         
         // Handle specific error cases
