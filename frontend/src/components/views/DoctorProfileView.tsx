@@ -76,57 +76,91 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
   // Calculate profile completeness
   useEffect(() => {
     if (doctorProfile) {
+      // Campos obligatorios (peso: 70% del total)
       const requiredFields = [
-        'first_name', 'paternal_surname', 'maternal_surname', 'email', 'phone', 'curp',
-        'professional_license', 'university', 'specialty',
+        'first_name', 'paternal_surname', 'maternal_surname', 'email', 'primary_phone', 'curp',
+        'professional_license', 'university', 'specialty_name',
         'office_address', 'office_city', 'office_state_id'
       ];
       
-      const completedFields = requiredFields.filter(field => 
+      // Campos opcionales importantes (peso: 30% del total)
+      const optionalFields = [
+        'birth_date', 'gender', 'rfc', 'graduation_year', 'specialty_license', 'subspecialty',
+        'office_postal_code', 'professional_email', 'office_phone'
+      ];
+      
+      const completedRequired = requiredFields.filter(field => 
         doctorProfile[field as keyof DoctorProfile] && 
         String(doctorProfile[field as keyof DoctorProfile]).trim() !== ''
       );
       
-      const missing = requiredFields.filter(field => 
+      const completedOptional = optionalFields.filter(field => 
+        doctorProfile[field as keyof DoctorProfile] && 
+        String(doctorProfile[field as keyof DoctorProfile]).trim() !== ''
+      );
+      
+      const missingRequired = requiredFields.filter(field => 
         !doctorProfile[field as keyof DoctorProfile] || 
         String(doctorProfile[field as keyof DoctorProfile]).trim() === ''
       );
       
-      setProfileCompleteness((completedFields.length / requiredFields.length) * 100);
-      setMissingFields(missing);
+      const missingOptional = optionalFields.filter(field => 
+        !doctorProfile[field as keyof DoctorProfile] || 
+        String(doctorProfile[field as keyof DoctorProfile]).trim() === ''
+      );
+      
+      // Cálculo ponderado: 70% obligatorios + 30% opcionales
+      const requiredScore = (completedRequired.length / requiredFields.length) * 70;
+      const optionalScore = (completedOptional.length / optionalFields.length) * 30;
+      const totalScore = requiredScore + optionalScore;
+      
+      setProfileCompleteness(totalScore);
+      setMissingFields([...missingRequired, ...missingOptional]);
     }
   }, [doctorProfile]);
 
   const getFieldLabel = (field: string): string => {
     const labels: { [key: string]: string } = {
+      // Campos obligatorios
       'first_name': 'Nombre(s)',
       'paternal_surname': 'Apellido Paterno',
       'maternal_surname': 'Apellido Materno',
       'email': 'Correo Electrónico',
-      'phone': 'Teléfono',
+      'primary_phone': 'Teléfono',
       'curp': 'CURP',
-      'rfc': 'RFC',
       'professional_license': 'Cédula Profesional',
       'university': 'Universidad',
-      'specialty': 'Especialidad',
-      // 'medical_school': 'Escuela de Medicina', // removed per user request
+      'specialty_name': 'Especialidad',
       'office_address': 'Dirección del Consultorio',
       'office_city': 'Ciudad',
-      'office_state_id': 'Estado'
+      'office_state_id': 'Estado',
+      // Campos opcionales
+      'birth_date': 'Fecha de Nacimiento',
+      'gender': 'Género',
+      'rfc': 'RFC',
+      'graduation_year': 'Año de Graduación',
+      'specialty_license': 'Cédula de Especialidad',
+      'subspecialty': 'Subespecialidad',
+      'office_postal_code': 'Código Postal',
+      'professional_email': 'Correo Profesional',
+      'office_phone': 'Teléfono del Consultorio',
     };
     return labels[field] || field;
   };
 
   const getCompletenessColor = () => {
-    if (profileCompleteness >= 90) return 'success';
+    if (profileCompleteness >= 85) return 'success';
     if (profileCompleteness >= 70) return 'warning';
+    if (profileCompleteness >= 50) return 'info';
     return 'error';
   };
 
   const getCompletenessMessage = () => {
-    if (profileCompleteness >= 90) return '¡Perfil casi completo! Excelente trabajo.';
-    if (profileCompleteness >= 70) return 'Buen progreso. Completa los campos restantes.';
-    return 'Tu perfil necesita más información para cumplir con las normas.';
+    if (profileCompleteness >= 95) return '¡Perfil completo al 100%! Toda la información está actualizada.';
+    if (profileCompleteness >= 85) return '¡Excelente! Solo faltan algunos campos opcionales.';
+    if (profileCompleteness >= 70) return 'Buen progreso. Los campos obligatorios están completos.';
+    if (profileCompleteness >= 50) return 'Avance moderado. Completa los campos obligatorios restantes.';
+    return 'Tu perfil necesita más información para cumplir con las normas médicas.';
   };
 
   if (isLoading) {
@@ -349,7 +383,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                   </ListItemIcon>
                   <ListItemText
                     primary="Teléfono"
-                    secondary={doctorProfile?.phone || 'No especificado'}
+                    secondary={doctorProfile?.primary_phone || 'No especificado'}
                   />
                 </ListItem>
                 <ListItem>
@@ -678,6 +712,15 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                         {(doctorProfile as any)?.office_postal_code || doctorProfile?.office_postal_code || 'No especificado'}
                       </Typography>
                     </Box>
+                  </Box>
+                  
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                      Teléfono del Consultorio
+                    </Typography>
+                    <Typography variant="body1">
+                      {doctorProfile?.office_phone || 'No especificado'}
+                    </Typography>
                   </Box>
                 </Box>
               </CardContent>

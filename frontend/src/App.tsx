@@ -10,6 +10,22 @@ const debugLog = (message: string, data?: any) => {
     console.log(message, data || '');
   }
 };
+
+// TEMP FIX: Override console.error to prevent [object Object] logging
+const originalConsoleError = console.error;
+console.error = (...args: any[]) => {
+  const safeArgs = args.map(arg => {
+    if (arg && typeof arg === 'object' && arg.constructor === Object) {
+      try {
+        return JSON.stringify(arg, null, 2);
+      } catch {
+        return `[Object: ${Object.keys(arg).join(', ')}]`;
+      }
+    }
+    return arg;
+  });
+  originalConsoleError(...safeArgs);
+};
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import AppBar from '@mui/material/AppBar';
@@ -109,6 +125,7 @@ import {
   KeyboardArrowDown as ArrowDownIcon
 } from '@mui/icons-material';
 import AvantLogo from './components/common/AvantLogo';
+import ErrorBoundary from './components/common/ErrorBoundary';
 import LogoutConfirmDialog from './components/dialogs/LogoutConfirmDialog';
 import { useAuth } from './contexts/AuthContext';
 import axios from 'axios';
@@ -523,7 +540,8 @@ function AppContent() {
   const userMenuOpen = Boolean(userMenuAnchor);
 
   
-  const [patientFormData, setPatientFormData] = useState<PatientFormData>({
+  // ===== ESTADO INICIAL DEL FORMULARIO DE PACIENTE =====
+  const initialPatientFormData: PatientFormData = {
     // ===== CAMPOS OBLIGATORIOS (NOM-004) =====
     first_name: '',
     paternal_surname: '',
@@ -547,7 +565,6 @@ function AppContent() {
     
     // ===== CONTACTOS =====
     email: '',
-    phone: '',
     primary_phone: '',
     
     // ===== DIRECCIÓN PERSONAL =====
@@ -563,7 +580,7 @@ function AppContent() {
     address_int_number: '',
     address_neighborhood: '',
     address_city: '',
-    address_state_id: 0,
+    address_state_id: '',
     address_postal_code: '',
     
     // ===== DATOS PERSONALES ADICIONALES =====
@@ -588,81 +605,15 @@ function AppContent() {
     emergency_contact_name: '',
     emergency_contact_phone: '',
     emergency_contact_relationship: '',
-    emergency_contact_address: '',
     
     // ===== ESTADO =====
     status: 'active' as 'active' | 'inactive',
     is_active: true
-  });
+  };
 
-  // Global error handler to catch runtime errors
-  useEffect(() => {
-    const handleError = (event: ErrorEvent) => {
-      // Filter out extension-related errors
-      if (event.message?.includes('runtime.lastError') || 
-          event.message?.includes('Extension context invalidated') ||
-          event.message?.includes('message channel closed')) {
-        console.warn('Browser extension error (can be ignored):', event.message);
-        return;
-      }
-      
-      // Filter out [object Object] errors - these should be fixed now
-      if (event.message?.includes('[object Object]')) {
-        console.warn('🚫 [object Object] error detected - this should be fixed now');
-        return;
-      }
-      
-      // Better error formatting
-      const errorMessage = event.error?.message || event.message || 'Unknown error';
-      const errorStack = event.error?.stack || 'No stack trace available';
-      
-      // Only log significant errors
-      if (errorMessage !== 'Unknown error' && !errorMessage.includes('Script error')) {
-        console.error('Application error:', {
-          message: errorMessage,
-          stack: errorStack,
-          filename: event.filename,
-          lineno: event.lineno,
-          colno: event.colno
-        });
-      }
-    };
+  const [patientFormData, setPatientFormData] = useState<PatientFormData>(initialPatientFormData);
 
-    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      // Prevent the default error display
-      event.preventDefault();
-      
-      // Better promise rejection formatting
-      const reason = event.reason;
-      if (reason && typeof reason === 'object') {
-        // Only log errors that aren't auth-related (to avoid spam)
-        if (!reason.detail?.includes('authentication') && reason.status !== 401 && reason.status !== 403) {
-          console.error('Unhandled promise rejection:', {
-            message: reason.message || 'Promise rejection',
-            details: reason.detail || reason.response?.data?.detail || 'No details available',
-            status: reason.status || reason.response?.status || 'Unknown status',
-            stack: reason.stack || 'No stack trace'
-          });
-        } else {
-          // Auth errors are expected during logout/session expiry
-          console.warn('Auth-related error (expected during logout):', {
-            status: reason.status,
-            detail: reason.detail
-          });
-        }
-      } else {
-        console.error('Unhandled promise rejection:', reason);
-      }
-    };
-
-    window.addEventListener('error', handleError);
-    window.addEventListener('unhandledrejection', handleUnhandledRejection);
-
-    return () => {
-      window.removeEventListener('error', handleError);
-      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
-    };
-  }, []);
+  // Error handlers are now handled globally in globalErrorHandlers.ts
 
   // Load appointments when active view is agenda or when selected date changes
   useEffect(() => {
@@ -1364,9 +1315,7 @@ const validatePatientForm = () => {
   if (!patientFormData.paternal_surname || !patientFormData.paternal_surname.trim()) {
     errors.paternal_surname = 'Este campo es obligatorio';
   }
-  if (!patientFormData.maternal_surname || !patientFormData.maternal_surname.trim()) {
-    errors.maternal_surname = 'Este campo es obligatorio';
-  }
+  // maternal_surname is optional - no validation needed
   if (!patientFormData.birth_date) {
     errors.birth_date = 'Este campo es obligatorio';
   }
@@ -1378,6 +1327,15 @@ const validatePatientForm = () => {
   }
   if (!patientFormData.address_street || !patientFormData.address_street.trim()) {
     errors.address_street = 'Este campo es obligatorio';
+  }
+  if (!patientFormData.address_city || !patientFormData.address_city.trim()) {
+    errors.address_city = 'Este campo es obligatorio';
+  }
+  if (!patientFormData.address_state_id || patientFormData.address_state_id.trim() === '') {
+    errors.address_state_id = 'Este campo es obligatorio';
+  }
+  if (!patientFormData.address_postal_code || !patientFormData.address_postal_code.trim()) {
+    errors.address_postal_code = 'Este campo es obligatorio';
   }
   
   return errors;
@@ -1455,7 +1413,7 @@ const handlePatientSubmit = async () => {
       address_int_number: patientFormData.address_int_number || '',
       address_neighborhood: patientFormData.address_neighborhood || '',        // ✅ CORREGIDO
       address_city: patientFormData.address_city || '',
-      address_state_id: patientFormData.address_state_id || null,
+      address_state_id: patientFormData.address_state_id ? parseInt(String(patientFormData.address_state_id)) : null,
       address_postal_code: patientFormData.address_postal_code || '',                  // ✅ CORREGIDO
       blood_type: patientFormData.blood_type || '',  // ✅ Ya unificado
       allergies: patientFormData.allergies || '',  // ✅ Ya unificado
@@ -1471,7 +1429,6 @@ const handlePatientSubmit = async () => {
       birth_state_code: patientFormData.birth_state_code || '',
       nationality: patientFormData.nationality || '',
       internal_id: patientFormData.internal_id || '',
-      phone: patientFormData.phone || '',
       neighborhood: patientFormData.neighborhood || '',
       municipality: patientFormData.municipality || '',
       state: patientFormData.state || '',
@@ -1480,7 +1437,6 @@ const handlePatientSubmit = async () => {
       occupation: patientFormData.occupation || '',
       religion: patientFormData.religion || '',
       insurance_type: patientFormData.insurance_type || '',
-      emergency_contact_address: patientFormData.emergency_contact_address || '',
       previous_hospitalizations: patientFormData.previous_hospitalizations || '',
       surgical_history: patientFormData.surgical_history || '',
       status: patientFormData.status,
@@ -1515,7 +1471,7 @@ const handlePatientSubmit = async () => {
         'blood_type empty?': !patientFormData.blood_type
       });
       
-      const updateResult = await apiService.updatePatient(patientManagement.selectedPatient.id, transformedData);
+      const updateResult = await apiService.updatePatient(patientManagement.selectedPatient.id, transformedData as any);
       console.log('✅ App: Patient update result:', updateResult);
       
       // ✅ UNIFICADO: Check unified field names in response
@@ -1526,6 +1482,16 @@ const handlePatientSubmit = async () => {
       });
       
       const patientName = `${patientFormData.first_name} ${patientFormData.paternal_surname} ${patientFormData.maternal_surname}`;
+      
+      // Update the selected patient with the new data
+      console.log('🔄 App: Updating selected patient with new data...');
+      patientManagement.setSelectedPatient(updateResult);
+      
+      // If we're viewing patient details, update complete patient data too
+      if (patientManagement.selectedPatient && patientManagement.selectedPatient.id === updateResult.id) {
+        console.log('🔄 App: Fetching complete updated patient data...');
+        await fetchCompletePatientData(updateResult.id.toString());
+      }
       
       // Refresh patient list to verify changes
       console.log('🔄 App: Refreshing patient list...');
@@ -1576,11 +1542,17 @@ const handlePatientSubmit = async () => {
 
     }
   } catch (error: any) {
-    console.error('Error saving patient:', error);
-    console.error('Error response status:', error.response?.is_active);
-    console.error('Error response data:', error.response?.data);
-    console.error('Error response headers:', error.response?.headers);
-    console.error('Request config:', error.config);
+    console.error('Error saving patient:', {
+      message: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data
+    });
+    console.error('Full error details:', {
+      url: error.config?.url,
+      method: error.config?.method,
+      requestData: error.config?.data
+    });
     
     let errorMessage = 'Error al guardar el paciente. Por favor, verifica los datos e intenta nuevamente.';
     
@@ -1599,7 +1571,7 @@ const handlePatientSubmit = async () => {
       } else {
         // If it's an object, try to extract meaningful error info
         console.error('Unknown error format:', error.response.data);
-        errorMessage = `Error ${error.response.is_active}: ${JSON.stringify(error.response.data)}`;
+        errorMessage = `Error ${error.response.status}: ${JSON.stringify(error.response.data)}`;
       }
     }
     
@@ -1633,8 +1605,7 @@ const handleEditPatient = (patient: Patient) => {
     
     // ===== CONTACTOS =====
     email: patient.email || '',
-    phone: patient.phone || '',
-    primary_phone: patient.primary_phone || '',  // ✅ CORREGIDO
+    primary_phone: patient.primary_phone || '',  // ✅ ÚNICO CAMPO DE TELÉFONO
     
     // ===== DIRECCIÓN PERSONAL =====
     address: patient.address || '',
@@ -1652,7 +1623,7 @@ const handleEditPatient = (patient: Patient) => {
     address_int_number: patient.address_int_number || '',
     address_neighborhood: patient.address_neighborhood || '',
     address_city: patient.address_city || '',
-    address_state_id: patient.address_state_id || 0,
+    address_state_id: patient.address_state_id ? String(patient.address_state_id) : '',
     address_postal_code: patient.address_postal_code || '',
     
     // ===== DATOS PERSONALES ADICIONALES =====
@@ -1677,7 +1648,6 @@ const handleEditPatient = (patient: Patient) => {
     emergency_contact_name: patient.emergency_contact_name || '',      // ✅ CORREGIDO
     emergency_contact_phone: patient.emergency_contact_phone || '',  // ✅ CORREGIDO
     emergency_contact_relationship: patient.emergency_contact_relationship || '',  // ✅ CORREGIDO
-    emergency_contact_address: patient.emergency_contact_address || '',
     
     // ===== ESTADO =====
     status: patient.status || 'active' as 'active' | 'inactive',
@@ -1691,11 +1661,14 @@ const handleEditPatient = (patient: Patient) => {
 
 // Handle new patient
 const handleNewPatient = useCallback(() => {
+  // Reset form data to initial empty state
+  setPatientFormData(initialPatientFormData);
+  // Reset patient management state
   patientManagement.resetPatientForm();
   patientManagement.setIsEditingPatient(false);
   setFormErrorMessage('');
   patientManagement.setPatientDialogOpen(true);
-}, []);
+}, [initialPatientFormData]);
 
 // Handle deactivate patient (soft delete)
 const handleDeletePatient = useCallback(async () => {
@@ -2802,9 +2775,11 @@ const handleDeletePatient = useCallback(async () => {
 
 function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

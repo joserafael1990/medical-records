@@ -52,7 +52,6 @@ const initialFormData: DoctorFormData = {
   // Contacto Profesional
   professional_email: '',
   office_phone: '',
-  mobile_phone: '',
   
   // Dirección del Consultorio
   office_address: '',
@@ -123,11 +122,7 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
       }
     }
     
-    if (!isEditMode || data.maternal_surname?.trim()) {
-      if (!data.maternal_surname?.trim()) {
-        errors.maternal_surname = 'El apellido materno es requerido';
-      }
-    }
+    // maternal_surname is optional for doctors too
     
     // Email siempre debe ser válido si está presente
     if (data.email?.trim()) {
@@ -345,7 +340,6 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
         subspecialty: doctorProfile.subspecialty || '',
         professional_email: doctorProfile.professional_email || '',
         office_phone: doctorProfile.office_phone || '',
-        mobile_phone: doctorProfile.mobile_phone || '',
         office_address: doctorProfile.office_address || '',
         office_city: doctorProfile.office_city || '',
         office_state_id: String(doctorProfile.office_state_id || ''),

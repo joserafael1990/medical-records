@@ -45,7 +45,6 @@ const initialFormData: DoctorFormData = {
   subspecialty: '',
   professional_email: '',
   office_phone: '',
-  mobile_phone: '',
   office_address: '',
   office_city: '',
   office_state_id: '',
@@ -171,7 +170,6 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
         subspecialty: doctorProfile.subspecialty || '',
         professional_email: doctorProfile.professional_email || '',
         office_phone: doctorProfile.office_phone || '',
-        mobile_phone: doctorProfile.mobile_phone || '',
         office_address: doctorProfile.office_address || '',
         office_city: doctorProfile.office_city || '',
         office_state_id: String(doctorProfile.office_state_id || ''),
@@ -235,6 +233,9 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
       university: data.university,
       graduation_year: data.graduation_year ? parseInt(data.graduation_year) : null,
       subspecialty: data.subspecialty,
+      // Professional contact information
+      professional_email: data.professional_email,
+      office_phone: data.office_phone,
       // Office information
       office_address: data.office_address,
       office_postal_code: data.office_postal_code,
