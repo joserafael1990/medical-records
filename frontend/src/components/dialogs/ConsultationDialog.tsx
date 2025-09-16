@@ -448,7 +448,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                       <Box>
                         <Typography variant="body1">{formatPatientNameWithAge(option)}</Typography>
                         <Typography variant="body2" color="text.secondary">
-                          {option.phone} • {option.email}
+                          {option.primary_phone} • {option.email}
                         </Typography>
                       </Box>
                     </Box>
@@ -486,7 +486,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                     <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
                       <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <PhoneIcon sx={{ fontSize: 16 }} />
-                        {selectedPatient.phone || 'No registrado'}
+                        {selectedPatient.primary_phone || 'No registrado'}
                       </Typography>
                       <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <EmailIcon sx={{ fontSize: 16 }} />

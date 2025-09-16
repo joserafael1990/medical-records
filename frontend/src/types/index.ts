@@ -6,16 +6,15 @@
 interface PatientBaseFields {
   first_name: string;
   paternal_surname: string;
-  maternal_surname: string;
+  maternal_surname?: string;
   birth_date: string;
   gender: string;
-  phone: string;
   email?: string;
+  primary_phone?: string;
   address: string;
   curp?: string;
   rfc?: string;
   internal_id?: string;
-  primary_phone?: string;
   neighborhood?: string;
   municipality?: string;
   state?: string;
@@ -32,7 +31,6 @@ interface PatientBaseFields {
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
   emergency_contact_relationship?: string;
-  emergency_contact_address?: string;
   allergies?: string;
   chronic_conditions?: string;
   current_medications?: string;
@@ -46,7 +44,7 @@ interface PatientBaseFields {
   address_int_number?: string;
   address_neighborhood?: string;
   address_city?: string;
-  address_state_id?: number | null;
+  address_state_id?: string | null;
   address_postal_code?: string;
   nationality_id?: number;
   birth_place?: string;
@@ -239,8 +237,58 @@ export enum AgendaView {
 // FORM TYPES
 // ============================================================================
 
-// Form data interface - required fields made explicit, inherits from base
-export interface PatientFormData extends Required<Omit<PatientBaseFields, 'email' | 'curp' | 'rfc' | 'internal_id' | 'primary_phone' | 'birth_state_code' | 'nationality' | 'civil_status' | 'education_level' | 'occupation' | 'religion' | 'insurance_type' | 'insurance_provider' | 'insurance_number' | 'emergency_contact_name' | 'emergency_contact_phone' | 'emergency_contact_relationship' | 'emergency_contact_address' | 'allergies' | 'chronic_conditions' | 'current_medications' | 'blood_type' | 'previous_hospitalizations' | 'surgical_history' | 'address_street' | 'address_ext_number' | 'address_int_number' | 'address_neighborhood' | 'address_postal_code' | 'birth_place' | 'foreign_birth_place'>> {
+// Interface for API calls - uses backend expected types
+export interface PatientApiData extends Required<Omit<PatientBaseFields, 'email' | 'curp' | 'rfc' | 'internal_id' | 'primary_phone' | 'birth_state_code' | 'nationality' | 'civil_status' | 'education_level' | 'occupation' | 'religion' | 'insurance_type' | 'insurance_provider' | 'insurance_number' | 'emergency_contact_name' | 'emergency_contact_phone' | 'emergency_contact_relationship' | 'allergies' | 'chronic_conditions' | 'current_medications' | 'blood_type' | 'previous_hospitalizations' | 'surgical_history' | 'address_street' | 'address_ext_number' | 'address_int_number' | 'address_neighborhood' | 'address_postal_code' | 'birth_place' | 'foreign_birth_place' | 'address_state_id'>> {
+  // Required form fields
+  birth_state_code: string;
+  nationality: string;
+  internal_id: string;
+  primary_phone: string;
+  address_street: string;
+  address_ext_number: string;
+  address_int_number: string;
+  address_neighborhood: string;
+  address_city: string;
+  address_state_id: number | null; // Backend expects number
+  address_postal_code: string;
+  birth_place: string;
+  foreign_birth_place: string;
+  
+  // Form-specific fields
+  address: string;  // Legacy field for compatibility
+  neighborhood: string; // Legacy field for compatibility
+  municipality: string; // Legacy field for compatibility
+  state: string;        // Legacy field for compatibility
+  postal_code: string;  // Legacy field for compatibility
+  
+  // Optional form fields with default values
+  email: string;
+  curp: string;
+  rfc: string;
+  civil_status: string;
+  education_level: string;
+  occupation: string;
+  religion: string;
+  insurance_type: string;
+  insurance_provider: string;
+  insurance_number: string;
+  emergency_contact_name: string;
+  emergency_contact_phone: string;
+  emergency_contact_relationship: string;
+  allergies: string;
+  chronic_conditions: string;
+  current_medications: string;
+  blood_type: string;
+  previous_hospitalizations: string;
+  surgical_history: string;
+  
+  // Status fields
+  status: string;
+  is_active: boolean;
+}
+
+// Form data interface - required fields made explicit, uses string types for UI
+export interface PatientFormData extends Required<Omit<PatientBaseFields, 'email' | 'curp' | 'rfc' | 'internal_id' | 'primary_phone' | 'birth_state_code' | 'nationality' | 'civil_status' | 'education_level' | 'occupation' | 'religion' | 'insurance_type' | 'insurance_provider' | 'insurance_number' | 'emergency_contact_name' | 'emergency_contact_phone' | 'emergency_contact_relationship' | 'allergies' | 'chronic_conditions' | 'current_medications' | 'blood_type' | 'previous_hospitalizations' | 'surgical_history' | 'address_street' | 'address_ext_number' | 'address_int_number' | 'address_neighborhood' | 'address_postal_code' | 'birth_place' | 'foreign_birth_place' | 'address_state_id'>> {
   // Required form fields
   birth_state_code: string;
   nationality: string;
@@ -259,7 +307,6 @@ export interface PatientFormData extends Required<Omit<PatientBaseFields, 'email
   emergency_contact_name: string;
   emergency_contact_phone: string;
   emergency_contact_relationship: string;
-  emergency_contact_address: string;
   allergies: string;
   chronic_conditions: string;
   current_medications: string;
@@ -271,7 +318,7 @@ export interface PatientFormData extends Required<Omit<PatientBaseFields, 'email
   address_int_number: string;
   address_neighborhood: string;
   address_city: string;
-  address_state_id: number | null;
+  address_state_id: string;
   address_postal_code: string;
   birth_place: string;
   foreign_birth_place: string;
@@ -402,7 +449,6 @@ export interface DoctorProfile {
   // Contacto Profesional
   professional_email?: string;
   office_phone?: string;
-  mobile_phone?: string;
   
   // Dirección del Consultorio
   office_address?: string;
@@ -455,7 +501,6 @@ export interface DoctorFormData {
   // Contacto Profesional
   professional_email: string;
   office_phone: string;
-  mobile_phone: string;
   
   // Dirección del Consultorio
   office_address: string;

@@ -162,7 +162,7 @@ const MedicalOrderPrintFormat: React.FC<MedicalOrderPrintFormatProps> = ({
                 Teléfono:
               </TableCell>
               <TableCell sx={{ border: 'none' }}>
-                {patient?.phone || 'No especificado'}
+                {patient?.primary_phone || 'No especificado'}
               </TableCell>
             </TableRow>
           </TableBody>

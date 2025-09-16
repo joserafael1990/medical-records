@@ -178,7 +178,7 @@ const PatientsView: React.FC<PatientsViewProps> = ({
                     <Box>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                         <PhoneIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                        <Typography variant="body2">{patient.phone}</Typography>
+                        <Typography variant="body2">{patient.primary_phone}</Typography>
                       </Box>
                       {patient.email && (
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

@@ -71,7 +71,7 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
         patient?.first_name,
         patient?.paternal_surname,
         patient?.maternal_surname,
-        patient?.phone,
+        patient?.primary_phone,
         patient?.email
       ].filter(Boolean);
 
@@ -89,7 +89,7 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
       return {
         ...consultation,
         patient_name: patient?.full_name || 'Paciente No Identificado',
-        patient_phone: patient?.phone,
+        patient_phone: patient?.primary_phone,
         patient_email: patient?.email,
         patient_age: patient?.birth_date ? calculateAge(patient.birth_date) : undefined,
         status: 'Programada'

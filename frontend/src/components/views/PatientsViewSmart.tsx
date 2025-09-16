@@ -62,7 +62,7 @@ const PatientsViewSmart: React.FC<PatientsViewSmartProps> = ({
         patient.first_name,
         patient.paternal_surname,
         patient.maternal_surname,
-        patient.phone,
+        patient.primary_phone,
         patient.email,
         patient.id,
         patient.blood_type,

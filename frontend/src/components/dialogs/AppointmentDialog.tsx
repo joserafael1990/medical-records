@@ -233,14 +233,14 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                 options={patients}
                 value={selectedPatient}
                 onChange={(_, value) => handlePatientChange(value)}
-                getOptionLabel={(option) => `${formatPatientNameWithAge(option)} - ${option.phone}`}
+                getOptionLabel={(option) => `${formatPatientNameWithAge(option)} - ${option.primary_phone}`}
                 renderOption={(props, option) => (
                   <Box component="li" {...props} sx={{ flexDirection: 'column', alignItems: 'flex-start' }}>
                     <Typography variant="body1" sx={{ fontWeight: 500 }}>
                       {formatPatientNameWithAge(option)}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-{option.phone} | ID: {option.id}
+{option.primary_phone} | ID: {option.id}
                     </Typography>
                   </Box>
                 )}
@@ -345,7 +345,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                     Contacto
                   </Typography>
                   <Typography variant="body2" sx={{ mb: 0.5 }}>
-                    <strong>Teléfono:</strong> {selectedPatient.phone || 'No registrado'}
+                    <strong>Teléfono:</strong> {selectedPatient.primary_phone || 'No registrado'}
                   </Typography>
                   <Typography variant="body2">
                     <strong>Email:</strong> {selectedPatient.email || 'No registrado'}

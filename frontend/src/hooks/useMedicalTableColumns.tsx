@@ -67,16 +67,16 @@ export const useMedicalTableColumns = () => {
       )
     },
     {
-      key: 'phone',
+      key: 'primary_phone',
       label: 'Contacto',
       sortable: false,
       width: '20%',
       render: (value: Patient[keyof Patient], patient: Patient, index: number) => (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-          {patient.phone && (
+          {patient.primary_phone && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               <PhoneIcon fontSize="small" color="action" />
-              <Typography variant="body2">{patient.phone}</Typography>
+              <Typography variant="body2">{patient.primary_phone}</Typography>
             </Box>
           )}
           {patient.email && (
@@ -258,7 +258,7 @@ export const useMedicalTableColumns = () => {
       }
     },
     {
-      key: 'phone',
+      key: 'primary_phone',
       label: 'Teléfono',
       sortable: false,
       render: (value: Patient[keyof Patient], row: Patient, index: number) => (
