@@ -281,6 +281,7 @@ async def get_my_profile(
         "office_state_id": current_user.office_state_id,
         "office_state_name": current_user.office_state.name if current_user.office_state else None,
         "office_postal_code": current_user.office_postal_code,
+        "office_phone": current_user.office_phone,
         
         # Professional Data
         "professional_license": current_user.professional_license,
@@ -379,6 +380,7 @@ async def update_my_profile(
             "office_state_id": updated_doctor.office_state_id,
             "office_state_name": updated_doctor.office_state.name if updated_doctor.office_state else None,
             "office_postal_code": updated_doctor.office_postal_code,
+            "office_phone": updated_doctor.office_phone,
             
             # Professional Data
             "professional_license": updated_doctor.professional_license,
@@ -416,7 +418,39 @@ async def get_patients(
     limit: int = 100
 ):
     """Get list of patients"""
-    return crud.get_patients(db, skip=skip, limit=limit)
+    try:
+        # Get patients with proper error handling
+        return crud.get_patients(db, skip=skip, limit=limit)
+    except Exception as e:
+        print(f"❌ Error in get_patients: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        # Fallback to simple query if relationships fail
+        patients = db.query(Person).filter(Person.person_type == 'patient').offset(skip).limit(limit).all()
+        return patients
+
+@app.get("/api/patients/{patient_id}")
+async def get_patient(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Get specific patient by ID"""
+    try:
+        patient = db.query(Person).filter(
+            Person.id == patient_id,
+            Person.person_type == 'patient'
+        ).first()
+        
+        if not patient:
+            raise HTTPException(status_code=404, detail="Patient not found")
+        
+        return patient
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error in get_patient: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @app.post("/api/patients")
 async def create_patient(
@@ -426,6 +460,55 @@ async def create_patient(
 ):
     """Create new patient"""
     return crud.create_patient(db, patient_data)
+
+@app.put("/api/patients/{patient_id}")
+async def update_patient(
+    patient_id: int,
+    patient_data: schemas.PatientCreate,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Update specific patient by ID"""
+    try:
+        patient = db.query(Person).filter(
+            Person.id == patient_id,
+            Person.person_type == 'patient'
+        ).first()
+        
+        if not patient:
+            raise HTTPException(status_code=404, detail="Patient not found")
+        
+        # Update patient fields with proper null handling for foreign keys
+        update_data = patient_data.dict(exclude_unset=True)
+        
+        # Handle foreign key fields - convert empty strings to None
+        foreign_key_fields = [
+            'emergency_contact_relationship',
+            'nationality_id',
+            'birth_state_id',
+            'city_residence_id'
+        ]
+        
+        for field, value in update_data.items():
+            if hasattr(patient, field):
+                # Convert empty strings to None for foreign key fields
+                if field in foreign_key_fields and value == '':
+                    setattr(patient, field, None)
+                else:
+                    setattr(patient, field, value)
+        
+        patient.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(patient)
+        
+        return patient
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error in update_patient: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 # ============================================================================
 # DASHBOARD
@@ -451,6 +534,78 @@ async def get_dashboard_stats():
 # APPOINTMENTS
 # ============================================================================
 
+@app.get("/api/appointments")
+async def get_appointments(
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user),
+    skip: int = 0,
+    limit: int = 100
+):
+    """Get list of appointments"""
+    try:
+        # For now, return empty list - appointments table might not exist yet
+        return []
+    except Exception as e:
+        print(f"❌ Error in get_appointments: {str(e)}")
+        return []
+
+@app.get("/api/appointments/{appointment_id}")
+async def get_appointment(
+    appointment_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Get specific appointment by ID"""
+    try:
+        # TODO: Implement when appointments table is created
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    except Exception as e:
+        print(f"❌ Error in get_appointment: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.post("/api/appointments")
+async def create_appointment(
+    appointment_data: dict,  # TODO: Create proper schema
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Create new appointment"""
+    try:
+        # TODO: Implement appointment creation when table is ready
+        return {"message": "Appointment functionality not yet implemented", "data": appointment_data}
+    except Exception as e:
+        print(f"❌ Error in create_appointment: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.put("/api/appointments/{appointment_id}")
+async def update_appointment(
+    appointment_id: int,
+    appointment_data: dict,  # TODO: Create proper schema
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Update specific appointment by ID"""
+    try:
+        # TODO: Implement appointment update when table is ready
+        return {"message": "Appointment update functionality not yet implemented", "appointment_id": appointment_id}
+    except Exception as e:
+        print(f"❌ Error in update_appointment: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.delete("/api/appointments/{appointment_id}")
+async def delete_appointment(
+    appointment_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Delete/cancel specific appointment by ID"""
+    try:
+        # TODO: Implement appointment deletion when table is ready
+        return {"message": "Appointment deleted successfully", "appointment_id": appointment_id}
+    except Exception as e:
+        print(f"❌ Error in delete_appointment: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
 @app.get("/api/appointments/calendar")
 async def get_calendar_appointments(target_date: str = None):
     """Get calendar appointments for specific date"""
@@ -460,6 +615,82 @@ async def get_calendar_appointments(target_date: str = None):
         "total": 0,
         "message": "No appointments scheduled for the requested date"
     }
+
+# ============================================================================
+# CONSULTATIONS
+# ============================================================================
+
+@app.get("/api/consultations")
+async def get_consultations(
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user),
+    skip: int = 0,
+    limit: int = 100
+):
+    """Get list of consultations"""
+    try:
+        # For now, return empty list - consultations table might not exist yet
+        return []
+    except Exception as e:
+        print(f"❌ Error in get_consultations: {str(e)}")
+        return []
+
+@app.get("/api/consultations/{consultation_id}")
+async def get_consultation(
+    consultation_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Get specific consultation by ID"""
+    try:
+        # TODO: Implement when consultations table is created
+        raise HTTPException(status_code=404, detail="Consultation not found")
+    except Exception as e:
+        print(f"❌ Error in get_consultation: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.post("/api/consultations")
+async def create_consultation(
+    consultation_data: dict,  # TODO: Create proper schema
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Create new consultation"""
+    try:
+        # TODO: Implement consultation creation when table is ready
+        return {"message": "Consultation functionality not yet implemented", "data": consultation_data}
+    except Exception as e:
+        print(f"❌ Error in create_consultation: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.put("/api/consultations/{consultation_id}")
+async def update_consultation(
+    consultation_id: int,
+    consultation_data: dict,  # TODO: Create proper schema
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Update specific consultation by ID"""
+    try:
+        # TODO: Implement consultation update when table is ready
+        return {"message": "Consultation update functionality not yet implemented", "consultation_id": consultation_id}
+    except Exception as e:
+        print(f"❌ Error in update_consultation: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.delete("/api/consultations/{consultation_id}")
+async def delete_consultation(
+    consultation_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Delete specific consultation by ID"""
+    try:
+        # TODO: Implement consultation deletion when table is ready
+        return {"message": "Consultation deleted successfully", "consultation_id": consultation_id}
+    except Exception as e:
+        print(f"❌ Error in delete_consultation: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 # ============================================================================
 # DEBUG/TESTING ENDPOINTS

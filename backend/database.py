@@ -129,6 +129,7 @@ class Person(Base):
     office_city = Column(String(100))  # Free text field for office city
     office_state_id = Column(Integer, ForeignKey("states.id"))  # FK to states table
     office_postal_code = Column(String(5))
+    office_phone = Column(String(20))  # Professional/office phone number
     
     # PROFESSIONAL DATA (doctors only)
     professional_license = Column(String(20), unique=True)

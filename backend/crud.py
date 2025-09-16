@@ -174,11 +174,26 @@ def create_patient(db: Session, patient_data: schemas.PatientCreate) -> Person:
     # Generate patient code
     person_code = generate_person_code(db, 'patient')
     
+    # Prepare patient data with proper null handling for foreign keys
+    patient_dict = patient_data.dict(exclude={'person_type'})
+    
+    # Handle foreign key fields - convert empty strings to None
+    foreign_key_fields = [
+        'emergency_contact_relationship',
+        'nationality_id',
+        'birth_state_id',
+        'city_residence_id'
+    ]
+    
+    for field in foreign_key_fields:
+        if field in patient_dict and patient_dict[field] == '':
+            patient_dict[field] = None
+    
     # Create patient
     db_patient = Person(
         person_code=person_code,
         person_type='patient',
-        **patient_data.dict(exclude={'person_type'})
+        **patient_dict
     )
     
     db.add(db_patient)

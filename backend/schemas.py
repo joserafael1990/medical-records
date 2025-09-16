@@ -147,6 +147,7 @@ class DoctorCreate(PersonBase):
     # Professional address
     office_address: Optional[str] = None
     office_postal_code: Optional[str] = None
+    office_phone: Optional[str] = None
     
     # Professional data
     professional_license: Optional[str] = None
@@ -191,6 +192,7 @@ class DoctorUpdate(BaseSchema):
     office_city: Optional[str] = None  # Free text field for office city
     office_state_id: Optional[int] = None  # FK to states table
     office_postal_code: Optional[str] = None
+    office_phone: Optional[str] = None
     
     # Professional data
     professional_license: Optional[str] = None
@@ -253,6 +255,7 @@ class PersonUpdate(BaseSchema):
     # Professional address (doctors)
     office_address: Optional[str] = None
     office_postal_code: Optional[str] = None
+    office_phone: Optional[str] = None
     
     # Professional data (doctors)
     professional_license: Optional[str] = None
