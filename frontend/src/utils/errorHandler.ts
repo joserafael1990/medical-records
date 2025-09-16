@@ -270,10 +270,19 @@ export class ErrorHandler {
   }
 
   /**
-   * Format error for logging
+   * Format error for logging - safe serialization that handles circular references
    */
   static formatForLogging(error: any, context?: Record<string, any>): any {
     const parsedError = this.parseApiError(error);
+    
+    // Safe serialization helper
+    const safeSerialize = (obj: any): any => {
+      try {
+        return JSON.parse(JSON.stringify(obj));
+      } catch {
+        return String(obj);
+      }
+    };
     
     return {
       timestamp: new Date().toISOString(),
@@ -284,12 +293,12 @@ export class ErrorHandler {
         severity: parsedError.severity,
         isRetryable: parsedError.isRetryable
       },
-      details: parsedError.details,
-      context: context || {},
-      stackTrace: error.stack,
-      url: error.config?.url,
-      method: error.config?.method,
-      requestData: error.config?.data
+      details: safeSerialize(parsedError.details),
+      context: safeSerialize(context || {}),
+      stackTrace: error?.stack ? String(error.stack) : 'No stack trace available',
+      url: error?.config?.url ? String(error.config.url) : 'Unknown URL',
+      method: error?.config?.method ? String(error.config.method) : 'Unknown method',
+      requestData: error?.config?.data ? safeSerialize(error.config.data) : 'No request data'
     };
   }
 
@@ -316,8 +325,19 @@ export const useErrorHandler = () => {
   const handleError = (error: any, context?: Record<string, any>) => {
     const parsedError = ErrorHandler.parseApiError(error);
     
-    // Log error for debugging
-    console.error('Application Error:', ErrorHandler.formatForLogging(error, context));
+    // Log error for debugging using safe logging
+    try {
+      const formattedError = ErrorHandler.formatForLogging(error, context);
+      console.error('Application Error:', JSON.stringify(formattedError, null, 2));
+    } catch (loggingError) {
+      // Fallback safe logging
+      console.error('Application Error (safe fallback):', {
+        message: parsedError.message,
+        errorCode: parsedError.errorCode,
+        userMessage: parsedError.userFriendlyMessage,
+        timestamp: new Date().toISOString()
+      });
+    }
     
     // In production, send to error monitoring service
     if (process.env.NODE_ENV === 'production') {

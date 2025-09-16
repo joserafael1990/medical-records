@@ -66,7 +66,10 @@ export const useMedicalOrders = ({
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error al cargar órdenes médicas';
       setError(errorMessage);
-      console.error('Error loading medical orders:', err);
+      console.error('Error loading medical orders:', {
+        message: err instanceof Error ? err.message : 'Unknown error',
+        details: err instanceof Error ? err.stack : String(err)
+      });
     } finally {
       setIsLoading(false);
     }
@@ -87,7 +90,10 @@ export const useMedicalOrders = ({
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error al crear orden médica';
       setError(errorMessage);
-      console.error('Error creating medical order:', err);
+      console.error('Error creating medical order:', {
+        message: err instanceof Error ? err.message : 'Unknown error',
+        details: err instanceof Error ? err.stack : String(err)
+      });
       return null;
     } finally {
       setIsCreating(false);
@@ -112,7 +118,10 @@ export const useMedicalOrders = ({
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error al actualizar estado de la orden';
       setError(errorMessage);
-      console.error('Error updating order status:', err);
+      console.error('Error updating order status:', {
+        message: err instanceof Error ? err.message : 'Unknown error',
+        details: err instanceof Error ? err.stack : String(err)
+      });
       throw err; // Re-throw to allow component to handle it
     }
   }, []);
@@ -304,13 +313,21 @@ export const useMedicalOrders = ({
 
       // Update status to completada if it was pendiente
       if (order.status === 'pendiente') {
-        updateOrderStatus(order.id, 'completada').catch(console.error);
+        updateOrderStatus(order.id, 'completada').catch((err) => {
+          console.error('Error updating order status after print:', {
+            message: err instanceof Error ? err.message : 'Unknown error',
+            details: err instanceof Error ? err.stack : String(err)
+          });
+        });
       }
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error al imprimir la orden';
       setError(errorMessage);
-      console.error('Error printing order:', err);
+      console.error('Error printing order:', {
+        message: err instanceof Error ? err.message : 'Unknown error',
+        details: err instanceof Error ? err.stack : String(err)
+      });
     }
   }, [updateOrderStatus]);
 

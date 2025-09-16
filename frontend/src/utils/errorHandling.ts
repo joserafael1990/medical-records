@@ -202,14 +202,21 @@ export const createErrorBoundary = (
  * Log error for debugging - safely formatted to avoid [object Object] issues
  */
 export const logError = (error: any, context?: string) => {
-  const formattedError = {
-    message: error?.message || 'Unknown error',
-    detail: error?.detail || error?.response?.data?.detail,
-    status: error?.status || error?.response?.status,
-    stack: error?.stack
-  };
-  
-  console.error(`[Error${context ? ` - ${context}` : ''}]:`, formattedError);
+  try {
+    const formattedError = {
+      message: error?.message || 'Unknown error',
+      detail: error?.detail || error?.response?.data?.detail || 'No additional details',
+      status: error?.status || error?.response?.status || 'Unknown status',
+      url: error?.config?.url || error?.response?.config?.url || 'Unknown URL',
+      stack: error?.stack || 'No stack trace'
+    };
+    
+    console.error(`[Error${context ? ` - ${context}` : ''}]:`, formattedError);
+  } catch (loggingError) {
+    // Fallback error logging to prevent infinite loops
+    safeConsoleError('Failed to log error properly:', loggingError);
+    safeConsoleError('Original error:', error);
+  }
   
   // In production, you might want to send this to an error tracking service
   // Example: Sentry.captureException(error, { extra: { context } });
@@ -219,15 +226,31 @@ export const logError = (error: any, context?: string) => {
  * Safe console.error wrapper that prevents [object Object] logging
  */
 export const safeConsoleError = (message: string, error: any) => {
-  if (error && typeof error === 'object') {
-    console.error(message, {
-      message: error.message || 'Unknown error',
-      detail: error.detail || error.response?.data?.detail,
-      status: error.status || error.response?.status,
-      code: error.code,
-      stack: error.stack
-    });
-  } else {
-    console.error(message, error);
+  try {
+    if (error && typeof error === 'object') {
+      // Create a safe error object
+      const safeError = {
+        message: error.message || 'Unknown error',
+        detail: error.detail || error.response?.data?.detail || 'No additional details',
+        status: error.status || error.response?.status || 'Unknown status',
+        code: error.code || 'No code',
+        name: error.name || 'Error',
+        url: error.config?.url || error.response?.config?.url || 'Unknown URL'
+      };
+      
+      console.error(message, safeError);
+      
+      // Also log the stack if available (in development)
+      if (process.env.NODE_ENV === 'development' && error.stack) {
+        console.error('Stack trace:', error.stack);
+      }
+    } else {
+      console.error(message, String(error));
+    }
+  } catch (loggingError) {
+    // Fallback if even logging fails
+    console.error('Error occurred while logging error:', loggingError);
+    console.error('Original message:', message);
+    console.error('Original error (stringified):', JSON.stringify(error, null, 2));
   }
 };

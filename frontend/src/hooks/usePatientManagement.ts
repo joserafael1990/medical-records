@@ -89,7 +89,12 @@ export const usePatientManagement = (): PatientManagementReturn => {
       
       setPatients(cleanedData);
     } catch (error: any) {
-      console.error('❌ Error fetching patients:', error?.message || 'Unknown error');
+      console.error('❌ Error fetching patients:', {
+        message: error?.message || 'Unknown error',
+        status: error?.response?.status,
+        statusText: error?.response?.statusText,
+        data: error?.response?.data
+      });
       setPatients([]);
       // No fallback logic - backend is required
       throw error;
