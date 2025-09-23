@@ -228,7 +228,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           const studies = await apiService.getClinicalStudiesByPatient(selectedPatient.id);
           setPatientClinicalStudies(studies);
         } catch (error) {
-          console.error('Error loading patient clinical studies:', error);
+          console.error('❌ Error loading patient clinical studies:', error);
           // Set sample data for demonstration if API fails
           const sampleStudies: ClinicalStudy[] = [
             {

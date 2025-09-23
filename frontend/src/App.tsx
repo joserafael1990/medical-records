@@ -38,6 +38,9 @@ function AppContent() {
   // Authentication
   const { user, logout, isAuthenticated } = useAuth();
   
+  // Doctor profile information
+  const { doctorProfile } = useDoctorProfile();
+  
   // Global app state using extracted hook
   const {
     activeView,
@@ -158,6 +161,64 @@ function AppContent() {
 
   const [patientFormData, setPatientFormData] = useState<PatientFormData>(initialPatientFormData);
 
+  // Sync patientFormData when selectedPatient changes for editing
+  useEffect(() => {
+    if (patientManagement.isEditingPatient && patientManagement.selectedPatient) {
+      const patient = patientManagement.selectedPatient;
+      
+      const syncedFormData: PatientFormData = {
+        // Basic information
+        first_name: patient.first_name || '',
+        paternal_surname: patient.paternal_surname || '',
+        maternal_surname: patient.maternal_surname || '',
+        email: patient.email || '',
+        date_of_birth: patient.date_of_birth || patient.birth_date || '',
+        birth_date: patient.birth_date || patient.date_of_birth || '',
+        phone: patient.phone || patient.primary_phone || '',
+        primary_phone: patient.primary_phone || patient.phone || '',
+        gender: patient.gender || '',
+        civil_status: patient.civil_status || '',
+        
+        // Address
+        address: patient.address || patient.address_street || '',
+        address_street: patient.address_street || patient.address || '',
+        city: patient.city || patient.address_city || '',
+        address_city: patient.address_city || patient.city || '',
+        state: patient.state || patient.address_state_id || '',
+        address_state_id: patient.address_state_id || patient.state || '',
+        zip_code: patient.zip_code || patient.postal_code || patient.address_postal_code || '',
+        country: patient.country || 'México',
+        
+        // Emergency contact
+        emergency_contact_name: patient.emergency_contact_name || '',
+        emergency_contact_phone: patient.emergency_contact_phone || '',
+        emergency_contact_relationship: patient.emergency_contact_relationship || '',
+        
+        // Medical information
+        blood_type: patient.blood_type || '',
+        allergies: patient.allergies || '',
+        current_medications: patient.current_medications || '',
+        medical_history: patient.medical_history || '',
+        chronic_conditions: patient.chronic_conditions || '',
+        insurance_provider: patient.insurance_provider || '',
+        insurance_policy_number: patient.insurance_policy_number || patient.insurance_number || '',
+        
+        // Mexican official fields
+        curp: patient.curp || '',
+        rfc: patient.rfc || '',
+        
+        // Technical fields
+        active: patient.active !== false,
+        is_active: patient.is_active !== false,
+        address_postal_code: patient.address_postal_code || patient.zip_code || patient.postal_code || '',
+        birth_place: patient.birth_place || '',
+        foreign_birth_place: patient.foreign_birth_place || ''
+      };
+      
+      setPatientFormData(syncedFormData);
+    }
+  }, [patientManagement.isEditingPatient, patientManagement.selectedPatient]);
+
   // Appointment Dialog States
   // Appointment dialog state is now managed by appointmentManager hook
   // const [isEditingAppointment, setIsEditingAppointment] = useState(false);
@@ -238,6 +299,8 @@ function AppContent() {
   useEffect(() => {
     if (activeView === 'patients' && isAuthenticated) {
       patientManagement.fetchPatients();
+      // Also fetch consultations to calculate patient consultation counts
+      consultationManagement.fetchConsultations();
     }
   }, [activeView, isAuthenticated]); // Removed user and patientManagement dependencies
 
@@ -275,6 +338,9 @@ function AppContent() {
   const getCurrentConsultationStudies = (): ClinicalStudy[] => {
     return consultationManagement.consultationStudies || [];
   };
+
+  // Reactive clinical studies for current consultation
+  const currentConsultationStudies = getCurrentConsultationStudies();
 
   // Helper function to update clinical studies for current consultation
   const updateCurrentConsultationStudies = (studies: ClinicalStudy[]) => {
@@ -392,7 +458,8 @@ const handleViewConsultation = useCallback(async (consultation: any) => {
   }, [initialPatientFormData, patientFormData]); // Added dependencies
 
   const handleEditPatient = (patient: Patient) => {
-    setPatientFormData({
+
+    const newFormData = {
       // Basic information
       first_name: patient.first_name || '',
       paternal_surname: patient.paternal_surname || '',
@@ -439,8 +506,12 @@ const handleViewConsultation = useCallback(async (consultation: any) => {
       address_postal_code: patient.postal_code || patient.zip_code || '',
       birth_place: patient.birth_place || '',
       foreign_birth_place: patient.foreign_birth_place || ''
-    });
+    };
     
+    // Update form data first
+    setPatientFormData(newFormData);
+    
+    // Set patient management states directly
     patientManagement.setSelectedPatient(patient);
     patientManagement.setIsEditingPatient(true);
     patientManagement.setPatientDialogOpen(true);
@@ -514,6 +585,22 @@ const handleViewConsultation = useCallback(async (consultation: any) => {
     return Object.keys(errors).length === 0;
   };
 
+  // Clean patient data before sending to backend
+  const cleanPatientDataForBackend = (data: PatientFormData) => {
+    const cleaned = { ...data };
+    
+    // Convert empty strings to null for integer fields that are optional
+    if (cleaned.address_state_id === '' || cleaned.address_state_id === undefined) {
+      cleaned.address_state_id = null as any;
+    } else if (typeof cleaned.address_state_id === 'string') {
+      // Convert string numbers to actual numbers
+      const parsed = parseInt(cleaned.address_state_id, 10);
+      cleaned.address_state_id = isNaN(parsed) ? null as any : parsed as any;
+    }
+    
+    return cleaned;
+  };
+
   // Patient form submission
   const handlePatientSubmit = async () => {
     setIsSubmitting(true);
@@ -528,15 +615,18 @@ const handleViewConsultation = useCallback(async (consultation: any) => {
     }
 
     try {
+      // Clean data before sending to backend
+      const cleanedData = cleanPatientDataForBackend(patientFormData);
+      
       if (patientManagement.isEditingPatient && patientManagement.selectedPatient) {
-        await apiService.updatePatient(patientManagement.selectedPatient.id, patientFormData);
+        await apiService.updatePatient(patientManagement.selectedPatient.id, cleanedData);
         await patientManagement.fetchPatients();
         patientManagement.setPatientDialogOpen(false);
         patientManagement.resetPatientForm();
         setFieldErrors({});
         showSuccessMessage(`✅ El paciente fue actualizado exitosamente`);
       } else {
-        const newPatient = await apiService.createPatient(patientFormData);
+        const newPatient = await apiService.createPatient(cleanedData);
         await patientManagement.fetchPatients();
         patientManagement.setPatientDialogOpen(false);
         
@@ -598,7 +688,7 @@ const handleViewConsultation = useCallback(async (consultation: any) => {
       } else if (!error.response) {
         // Network errors
         setFormErrorMessage('Error de conexión. Verifique su internet e intente nuevamente');
-      } else {
+  } else {
         // Use the specific error message from the API service
         setFormErrorMessage(errorMessage);
       }
@@ -642,26 +732,53 @@ const handleAddClinicalStudy = useCallback(() => {
   let patientId: string | number;
   
   if (consultationManagement.selectedConsultation) {
+    // Consulta existente seleccionada
     consultationId = consultationManagement.selectedConsultation.id;
     patientId = consultationManagement.selectedConsultation.patient_id;
     } else if (consultationManagement.tempConsultationId) {
+    // Consulta nueva con ID temporal
       consultationId = consultationManagement.tempConsultationId;
       patientId = consultationManagement.consultationFormData.patient_id;
   } else {
-      console.error('No hay consulta seleccionada ni ID temporal para agregar estudio');
-      return;
-    }
+    // No hay consulta - crear ID temporal para nueva consulta
+    const newTempId = `temp_consultation_${Date.now()}`;
+    consultationManagement.setTempConsultationId(newTempId);
+    consultationId = newTempId;
+    patientId = consultationManagement.consultationFormData.patient_id || '';
+  }
     
-    if (!patientId) {
-      console.error('❌ No hay paciente seleccionado para el estudio clínico');
-      return;
-    }
+    // Si no hay paciente, se seleccionará en el dialog de estudio clínico
+    // No es necesario validar patientId aquí
 
-    const doctorName = user?.person?.full_name || 'Dr. García';
+    // Formatear información completa del médico solicitante
+    const formatDoctorFullInfo = (doctorProfile: any, user: any) => {
+      if (doctorProfile) {
+        const title = doctorProfile.title || 'Dr.';
+        const firstName = doctorProfile.first_name || '';
+        const paternalSurname = doctorProfile.paternal_surname || '';
+        const maternalSurname = doctorProfile.maternal_surname || '';
+        const license = doctorProfile.professional_license || '';
+        
+        let fullName = `${title} ${firstName} ${paternalSurname}`;
+        if (maternalSurname) {
+          fullName += ` ${maternalSurname}`;
+        }
+        
+        if (license) {
+          fullName += ` - Cédula Profesional: ${license}`;
+        }
+        
+        return fullName;
+      }
+      
+      return user?.person?.full_name || 'Dr. García';
+    };
+
+    const orderingDoctorInfo = formatDoctorFullInfo(doctorProfile, user);
 
     setClinicalStudyFormData({
-      consultation_id: typeof consultationId === 'string' ? parseInt(consultationId) : consultationId,
-      patient_id: typeof patientId === 'string' ? parseInt(patientId) : patientId,
+      consultation_id: consultationId,
+      patient_id: patientId || 0,
       study_type: 'hematologia',
     study_name: '',
     study_description: '',
@@ -669,13 +786,13 @@ const handleAddClinicalStudy = useCallback(() => {
       status: 'pending',
     results_text: '',
     interpretation: '',
-      ordering_doctor: doctorName,
+      ordering_doctor: orderingDoctorInfo,
     performing_doctor: '',
     institution: '',
     urgency: 'normal',
     clinical_indication: '',
     relevant_history: '',
-      created_by: doctorName
+      created_by: orderingDoctorInfo
     });
   
     setSelectedClinicalStudy(null);
@@ -683,7 +800,7 @@ const handleAddClinicalStudy = useCallback(() => {
     setClinicalStudyDialogOpen(true);
   setClinicalStudyFormErrorMessage('');
   setClinicalStudyFieldErrors({});
-}, [consultationManagement.selectedConsultation, consultationManagement.tempConsultationId, consultationManagement.consultationFormData.patient_id, user?.person?.full_name]);
+}, [consultationManagement.selectedConsultation, consultationManagement.tempConsultationId, consultationManagement.consultationFormData.patient_id, consultationManagement.setTempConsultationId, user?.person?.full_name, doctorProfile]);
 
 const handleEditClinicalStudy = useCallback((study: ClinicalStudy) => {
   setSelectedClinicalStudy(study);
@@ -828,6 +945,7 @@ const handleClinicalStudySubmit = useCallback(async () => {
         {/* Patient Dialog */}
         <Suspense fallback={<LoadingFallback message="Cargando formulario..." />}>
           <PatientDialog
+            key={`patient-dialog-${patientManagement.isEditingPatient ? 'edit' : 'create'}-${patientManagement.selectedPatient?.id || 'new'}`}
             open={patientManagement.patientDialogOpen}
             onClose={() => {
               patientManagement.setPatientDialogOpen(false);
@@ -841,6 +959,7 @@ const handleClinicalStudySubmit = useCallback(async () => {
             fieldErrors={fieldErrors}
             formErrorMessage={formErrorMessage}
             setFormErrorMessage={setFormErrorMessage}
+            selectedPatient={patientManagement.selectedPatient}
             isSubmitting={isSubmitting}
           onDelete={patientManagement.isEditingPatient ? async () => {
             if (!patientManagement.selectedPatient) return;
@@ -886,7 +1005,7 @@ const handleClinicalStudySubmit = useCallback(async () => {
               consultationManagement.setCreatingPatientFromConsultation(true);
               patientManagement.setPatientDialogOpen(true);
             }}
-            clinicalStudies={getCurrentConsultationStudies()}
+            clinicalStudies={currentConsultationStudies}
             onAddClinicalStudy={handleAddClinicalStudy}
             onEditClinicalStudy={handleEditClinicalStudy}
             onDeleteClinicalStudy={(studyId: string | number) => handleDeleteClinicalStudy(typeof studyId === 'string' ? parseInt(studyId) : studyId)}

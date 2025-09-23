@@ -79,7 +79,7 @@ const PatientsViewSmart: React.FC<PatientsViewSmartProps> = ({
   const enrichedPatients = useMemo(() => {
     return filteredPatients.map(patient => {
       const patientConsultations = consultations.filter(
-        consultation => consultation.patient_id === patient.id
+        consultation => Number(consultation.patient_id) === Number(patient.id)
       );
       
       return {

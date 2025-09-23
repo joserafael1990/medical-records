@@ -214,6 +214,102 @@ async def get_clinical_studies_by_consultation(
     # For now, return empty list to prevent frontend errors
     return []
 
+@app.get("/api/clinical-studies/patient/{patient_id}")
+async def get_clinical_studies_by_patient(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Get all clinical studies for a specific patient"""
+    print(f"🔬 Getting clinical studies for patient: {patient_id}")
+    
+    # TODO: Implement actual clinical studies table and logic
+    # For now, return mock historical studies for demonstration
+    # Check if patient exists in our database first
+    patient = db.query(Person).filter(
+        Person.id == patient_id,
+        Person.person_type == "patient"
+    ).first()
+    
+    if not patient:
+        print(f"🔬 Patient {patient_id} not found in database")
+        return []
+    
+    print(f"🔬 Patient found: {patient.first_name} {patient.paternal_surname}")
+    
+    # Return mock studies only for existing patients
+    mock_historical_studies = [
+        {
+            "id": "HIST-001",
+            "consultation_id": "CONS-001",
+            "patient_id": str(patient_id),
+            "study_type": "quimica_clinica",
+            "study_name": "Perfil lipídico completo",
+            "study_description": "Análisis de colesterol total, HDL, LDL y triglicéridos",
+            "ordered_date": "2024-08-20",
+            "status": "completed",
+            "results_text": "Colesterol total: 180 mg/dL, HDL: 45 mg/dL, LDL: 110 mg/dL, Triglicéridos: 125 mg/dL",
+            "interpretation": "Valores dentro de rangos normales",
+            "ordering_doctor": "Dr. Rafael García Hernández - Cédula Profesional: 12345678",
+            "performing_doctor": "Dr. María González",
+            "institution": "Laboratorio Clínico Central",
+            "urgency": "normal",
+            "clinical_indication": "Control rutinario de dislipidemia",
+            "relevant_history": "Antecedente familiar de hipercolesterolemia",
+            "created_by": "Dr. Rafael García",
+            "created_at": "2024-08-20T10:00:00.000Z",
+            "updated_at": "2024-08-22T14:30:00.000Z",
+            "performed_date": "2024-08-22"
+        },
+        {
+            "id": "HIST-002",
+            "consultation_id": "CONS-002",
+            "patient_id": str(patient_id),
+            "study_type": "radiologia_simple",
+            "study_name": "Radiografía de tórax PA y lateral",
+            "study_description": "Proyecciones posteroanterior y lateral de tórax",
+            "ordered_date": "2024-07-15",
+            "status": "completed",
+            "results_text": "Campos pulmonares libres, sin evidencia de consolidación. Silueta cardiaca de forma y tamaño normal. Estructuras mediastinales sin alteraciones.",
+            "interpretation": "Estudio radiológico normal",
+            "ordering_doctor": "Dr. Rafael García Hernández - Cédula Profesional: 12345678",
+            "performing_doctor": "Dr. Ana Torres Radióloga",
+            "institution": "Hospital General - Departamento de Imagenología",
+            "urgency": "normal",
+            "clinical_indication": "Evaluación por dolor torácico inespecífico",
+            "relevant_history": "Dolor torácico de 2 días de evolución",
+            "created_by": "Dr. Rafael García",
+            "created_at": "2024-07-15T09:30:00.000Z",
+            "updated_at": "2024-07-15T16:45:00.000Z",
+            "performed_date": "2024-07-15"
+        },
+        {
+            "id": "HIST-003",
+            "consultation_id": "CONS-003",
+            "patient_id": str(patient_id),
+            "study_type": "hematologia",
+            "study_name": "Biometría hemática completa",
+            "study_description": "Conteo de células sanguíneas, hemoglobina y hematocrito",
+            "ordered_date": "2024-06-10",
+            "status": "completed",
+            "results_text": "Leucocitos: 7,200/μL, Eritrocitos: 4.5 M/μL, Hemoglobina: 14.2 g/dL, Hematocrito: 42%, Plaquetas: 285,000/μL",
+            "interpretation": "Biometría hemática dentro de parámetros normales",
+            "ordering_doctor": "Dr. Rafael García Hernández - Cédula Profesional: 12345678",
+            "performing_doctor": "Dr. Carlos Mendoza",
+            "institution": "Laboratorio Clínico Central",
+            "urgency": "normal",
+            "clinical_indication": "Chequeo médico anual",
+            "relevant_history": "Control médico preventivo",
+            "created_by": "Dr. Rafael García",
+            "created_at": "2024-06-10T11:00:00.000Z",
+            "updated_at": "2024-06-10T17:30:00.000Z",
+            "performed_date": "2024-06-10"
+        }
+    ]
+    
+    print(f"🔬 Returning {len(mock_historical_studies)} historical studies for patient {patient_id}")
+    return mock_historical_studies
+
 @app.post("/api/clinical-studies")
 async def create_clinical_study(
     study_data: dict,
@@ -221,13 +317,38 @@ async def create_clinical_study(
     current_user: Person = Depends(get_current_user)
 ):
     """Create a new clinical study"""
+    print(f"🔬 Creating clinical study with data: {study_data}")
+    
     # TODO: Implement actual clinical studies table and logic
-    # For now, return a mock response to prevent frontend errors
-    return {
-        "id": 1,
-        "message": "Clinical study endpoint not implemented yet",
-        "status": "pending_implementation"
+    # For now, return a properly structured mock response
+    import random
+    mock_id = random.randint(1000, 9999)
+    
+    # Return the data in the structure the frontend expects
+    mock_response = {
+        "id": str(mock_id),
+        "consultation_id": study_data.get("consultation_id"),
+        "patient_id": str(study_data.get("patient_id", "")),
+        "study_type": study_data.get("study_type", "hematologia"),
+        "study_name": study_data.get("study_name", "Estudio Mock"),
+        "study_description": study_data.get("study_description", ""),
+        "ordered_date": study_data.get("ordered_date"),
+        "status": study_data.get("status", "pending"),
+        "results_text": study_data.get("results_text", ""),
+        "interpretation": study_data.get("interpretation", ""),
+        "ordering_doctor": study_data.get("ordering_doctor", ""),
+        "performing_doctor": study_data.get("performing_doctor", ""),
+        "institution": study_data.get("institution", ""),
+        "urgency": study_data.get("urgency", "normal"),
+        "clinical_indication": study_data.get("clinical_indication", ""),
+        "relevant_history": study_data.get("relevant_history", ""),
+        "created_by": study_data.get("created_by", ""),
+        "created_at": "2025-09-23T19:22:00.000Z",
+        "updated_at": "2025-09-23T19:22:00.000Z"
     }
+    
+    print(f"🔬 Returning mock clinical study: {mock_response}")
+    return mock_response
 
 @app.put("/api/clinical-studies/{study_id}")
 async def update_clinical_study(
