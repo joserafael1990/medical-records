@@ -61,12 +61,8 @@ const calculateAge = (birthDate: string): number => {
 
 // Function to format patient name with age
 const formatPatientNameWithAge = (patient: Patient): string => {
-  console.log('🧑 Formateando paciente en Appointment:', patient);
   const age = calculateAge(patient.birth_date);
-  console.log('📅 Edad calculada en Appointment:', age, 'para fecha:', patient.birth_date);
-  const formattedName = `${patient.first_name} ${patient.paternal_surname} ${patient.maternal_surname} (${age} años)`;
-  console.log('✨ Nombre final en Appointment:', formattedName);
-  return formattedName;
+  return `${patient.first_name} ${patient.paternal_surname} ${patient.maternal_surname} (${age} años)`;
 };
 
 interface AppointmentDialogProps {
@@ -100,6 +96,15 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
 }) => {
   const [localFormData, setLocalFormData] = useState<AppointmentFormData>(formData);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+
+  // Determine if fields should be read-only
+  // RULE: Read-only ONLY for EXISTING appointments (isEditing=true) that were originally cancelled
+  // New appointments (isEditing=false) are NEVER read-only
+  const isReadOnly = isEditing && 
+                     formData.status === 'cancelled' && 
+                     localFormData.status === 'cancelled';
+
+  // Read-only logic for cancelled appointments
 
   // Update local form data when props change
   useEffect(() => {
@@ -227,44 +232,47 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
               Paciente
               <Typography component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Typography>
             </Typography>
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
-              <Autocomplete
-                fullWidth
-                options={patients}
-                value={selectedPatient}
-                onChange={(_, value) => handlePatientChange(value)}
-                getOptionLabel={(option) => `${formatPatientNameWithAge(option)} - ${option.primary_phone}`}
-                renderOption={(props, option) => (
-                  <Box component="li" {...props} sx={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                      {formatPatientNameWithAge(option)}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-{option.primary_phone} | ID: {option.id}
-                    </Typography>
-                  </Box>
-                )}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Buscar paciente"
-                    placeholder="Escribe para buscar..."
-                    variant="outlined"
-                    size="small"
-                    error={hasFieldError('patient_id') || (!localFormData.patient_id || localFormData.patient_id.trim() === '')}
-                    helperText={getFieldError('patient_id') || ((!localFormData.patient_id || localFormData.patient_id.trim() === '') ? 'Campo requerido' : '')}
-                  />
-                )}
-                loading={patients.length === 0}
-                loadingText="Cargando pacientes..."
-                noOptionsText="No se encontraron pacientes"
-                sx={{ flex: 1 }}
-              />
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+              <Box sx={{ flex: 1 }}>
+                <Autocomplete
+                  options={patients}
+                  getOptionLabel={(option) => formatPatientNameWithAge(option)}
+                  value={selectedPatient}
+                  onChange={(_, newValue) => handlePatientChange(newValue)}
+                  disabled={isReadOnly}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Seleccionar Paciente"
+                      required
+                      error={hasFieldError('patient_id') || (!localFormData.patient_id)}
+                      helperText={getFieldError('patient_id') || (!localFormData.patient_id ? 'Campo requerido' : '')}
+                    />
+                  )}
+                  renderOption={(props, option) => (
+                    <Box component="li" {...props}>
+                      <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
+                        {option.first_name[0]}{option.paternal_surname[0]}
+                      </Avatar>
+                      <Box>
+                        <Typography variant="body1">{formatPatientNameWithAge(option)}</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {option.primary_phone} • {option.email}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  )}
+                  loading={patients.length === 0}
+                  loadingText="Cargando pacientes..."
+                  noOptionsText="No se encontraron pacientes"
+                />
+              </Box>
               <Button
                 variant="outlined"
                 onClick={onNewPatient}
                 startIcon={<PersonAddIcon />}
                 sx={{ whiteSpace: 'nowrap', height: 40 }}
+                disabled={isReadOnly}
               >
                 Nuevo
               </Button>
@@ -297,6 +305,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                     size="small"
                     startIcon={<EditIcon />}
                     onClick={() => onEditPatient(selectedPatient)}
+                    disabled={isReadOnly}
                     sx={{
                       bgcolor: 'white',
                       borderColor: 'primary.main',
@@ -406,27 +415,23 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                 )}
               </Box>
 
-              {/* Allergies and Conditions Alert */}
-              {(selectedPatient.allergies || selectedPatient.chronic_conditions) && (
-                <Alert 
-                  severity="warning" 
-                  sx={{ mt: 2, bgcolor: 'warning.50', borderColor: 'warning.200' }}
-                >
-                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                    ⚠️ Información Médica Importante:
+              {/* Medical Information Alert - Always show when patient is selected */}
+              <Alert 
+                severity="warning" 
+                sx={{ mt: 2, bgcolor: 'warning.50', borderColor: 'warning.200' }}
+              >
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                  ⚠️ Información Médica Importante:
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  <strong>Alergias:</strong> {selectedPatient.allergies || '(Sin información registrada)'}
+                </Typography>
+                {selectedPatient.chronic_conditions && (
+                  <Typography variant="body2">
+                    <strong>Condiciones Crónicas:</strong> {selectedPatient.chronic_conditions}
                   </Typography>
-                  {selectedPatient.allergies && (
-                    <Typography variant="body2" sx={{ mb: 0.5 }}>
-                      <strong>Alergias:</strong> {selectedPatient.allergies}
-                    </Typography>
-                  )}
-                  {selectedPatient.chronic_conditions && (
-                    <Typography variant="body2">
-                      <strong>Condiciones Crónicas:</strong> {selectedPatient.chronic_conditions}
-                    </Typography>
-                  )}
-                </Alert>
-              )}
+                )}
+              </Alert>
             </Paper>
           )}
 
@@ -447,6 +452,9 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                 error={hasFieldError('date_time')}
                 helperText={getFieldError('date_time')}
                 InputLabelProps={{ shrink: true }}
+                InputProps={{
+                  readOnly: isReadOnly
+                }}
               />
             </Box>
 
@@ -466,6 +474,9 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                 inputProps={{ min: 5, max: 480, step: 5 }}
                 error={hasFieldError('duration_minutes')}
                 helperText={getFieldError('duration_minutes')}
+                InputProps={{
+                  readOnly: isReadOnly
+                }}
               />
             </Box>
           </Box>
@@ -483,6 +494,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                   value={localFormData.appointment_type || ''}
                   onChange={handleFieldChange('appointment_type')}
                   label="Tipo"
+                  disabled={isReadOnly}
                 >
                   <MenuItem value="consultation">Consulta</MenuItem>
                   <MenuItem value="follow_up">Seguimiento</MenuItem>
@@ -503,6 +515,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                   value={localFormData.status || 'scheduled'}
                   onChange={handleFieldChange('status')}
                   label="Estado"
+                  disabled={isReadOnly}
                 >
                   <MenuItem value="scheduled">Programada</MenuItem>
                   <MenuItem value="confirmed">Confirmada</MenuItem>
@@ -514,6 +527,32 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
               </FormControl>
             </Box>
           </Box>
+
+          {/* Cancellation Reason - Only show when status is 'cancelled' */}
+          {localFormData.status === 'cancelled' && (
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <NotesIcon sx={{ fontSize: 20 }} />
+                Razón de Cancelación
+                <Typography component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Typography>
+              </Typography>
+              <TextField
+                fullWidth
+                multiline
+                rows={2}
+                label="Describe la razón de la cancelación"
+                value={localFormData.cancelled_reason || ''}
+                onChange={handleFieldChange('cancelled_reason')}
+                size="small"
+                error={hasFieldError('cancelled_reason') || (localFormData.status === 'cancelled' && (!localFormData.cancelled_reason || localFormData.cancelled_reason.trim() === ''))}
+                helperText={getFieldError('cancelled_reason') || (localFormData.status === 'cancelled' && (!localFormData.cancelled_reason || localFormData.cancelled_reason.trim() === '') ? 'Campo requerido para citas canceladas' : '')}
+                placeholder="Ej: Enfermedad del paciente, emergencia familiar, reagendamiento, etc."
+                InputProps={{
+                  readOnly: false // Cancellation reason is ALWAYS editable when status is cancelled
+                }}
+              />
+            </Box>
+          )}
 
           {/* Reason */}
           <Box>
@@ -533,6 +572,9 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
               error={hasFieldError('reason') || (!localFormData.reason || localFormData.reason.trim() === '')}
               helperText={getFieldError('reason') || ((!localFormData.reason || localFormData.reason.trim() === '') ? 'Campo requerido' : '')}
               placeholder="Ej: Consulta general, dolor de cabeza, revisión, etc."
+              InputProps={{
+                readOnly: isReadOnly
+              }}
             />
           </Box>
 
@@ -548,6 +590,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                 value={localFormData.priority || 'normal'}
                 onChange={handleFieldChange('priority')}
                 label="Prioridad"
+                disabled={isReadOnly}
               >
                 <MenuItem value="low">Baja</MenuItem>
                 <MenuItem value="normal">Normal</MenuItem>
@@ -572,6 +615,9 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
               onChange={handleFieldChange('preparation_instructions')}
               size="small"
               placeholder="Ej: Ayuno de 12 horas, traer estudios previos..."
+              InputProps={{
+                readOnly: isReadOnly
+              }}
             />
           </Box>
 
@@ -590,6 +636,9 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
               size="small"
               error={hasFieldError('notes')}
               helperText={getFieldError('notes')}
+              InputProps={{
+                readOnly: isReadOnly
+              }}
             />
           </Box>
         </Box>
@@ -605,14 +654,30 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
         >
           Cancelar
         </Button>
-        <Button 
-          onClick={handleSubmit}
-          variant="contained"
-          disabled={loading || !localFormData.patient_id || !localFormData.date_time}
-          sx={{ minWidth: 120 }}
-        >
-          {loading ? 'Guardando...' : (isEditing ? 'Actualizar' : 'Crear Cita')}
-        </Button>
+        {!isReadOnly && (
+          <Button 
+            onClick={handleSubmit}
+            variant="contained"
+            disabled={loading || !localFormData.patient_id || !localFormData.date_time}
+            sx={{ minWidth: 120 }}
+          >
+            {loading ? 'Guardando...' : (isEditing ? 'Actualizar' : 'Crear Cita')}
+          </Button>
+        )}
+        {isReadOnly && localFormData.status === 'cancelled' && (
+          <Button 
+            onClick={handleSubmit}
+            variant="outlined"
+            disabled={loading || !localFormData.cancelled_reason?.trim()}
+            sx={{ 
+              minWidth: 120,
+              borderColor: 'primary.main',
+              color: 'primary.main'
+            }}
+          >
+            {loading ? 'Guardando...' : 'Actualizar'}
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   );

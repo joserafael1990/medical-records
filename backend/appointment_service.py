@@ -7,8 +7,25 @@ from sqlalchemy import and_, or_, desc, asc, func
 from datetime import datetime, date, time, timedelta
 from typing import List, Optional, Dict
 import uuid
+import pytz
+import os
+os.environ['TZ'] = 'America/Mexico_City'
 
-from database import Appointment, Patient, DoctorProfile
+from database import Appointment, Person
+
+# Global CDMX Timezone configuration 
+SYSTEM_TIMEZONE = pytz.timezone('America/Mexico_City')
+
+def now_cdmx() -> datetime:
+    """Get current datetime in CDMX timezone"""
+    return datetime.now(SYSTEM_TIMEZONE)
+
+def to_utc_for_storage(dt: datetime) -> datetime:
+    """Convert datetime to UTC for database storage"""
+    if dt.tzinfo is None:
+        # Assume CDMX if naive
+        dt = SYSTEM_TIMEZONE.localize(dt)
+    return dt.astimezone(pytz.utc)
 
 
 class AppointmentService:
@@ -26,15 +43,19 @@ class AppointmentService:
         if isinstance(start_time, str):
             start_time = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
         
+        # Convert to UTC for storage
+        start_time = to_utc_for_storage(start_time)
+        appointment_data['appointment_date'] = start_time
+        
         duration_minutes = appointment_data.get('duration_minutes', 30)
         end_time = start_time + timedelta(minutes=duration_minutes)
         appointment_data['end_time'] = end_time
         
-        # Set created_at
-        appointment_data['created_at'] = datetime.utcnow()
+        # Set created_at in UTC
+        appointment_data['created_at'] = now_cdmx().astimezone(pytz.utc)
         
         # Get patient name for easier querying
-        patient = db.query(Patient).filter(Patient.id == appointment_data['patient_id']).first()
+        patient = db.query(Person).filter(Person.id == appointment_data['patient_id']).first()
         if patient:
             appointment_data['doctor_name'] = f"{patient.first_name} {patient.paternal_surname}"
         
@@ -96,6 +117,8 @@ class AppointmentService:
             appointment_data['appointment_date'] = datetime.fromisoformat(
                 appointment_data['appointment_date'].replace('Z', '+00:00')
             )
+            # Convert to UTC for storage
+            appointment_data['appointment_date'] = to_utc_for_storage(appointment_data['appointment_date'])
         
         # Recalculate end_time if appointment_date or duration changed
         if 'appointment_date' in appointment_data or 'duration_minutes' in appointment_data:
@@ -105,18 +128,18 @@ class AppointmentService:
         
         # Handle cancellation
         if appointment_data.get('status') == 'cancelled' and 'cancelled_reason' in appointment_data:
-            appointment_data['cancelled_at'] = datetime.utcnow()
+            appointment_data['cancelled_at'] = now_cdmx().astimezone(pytz.utc)
         
         # Handle confirmation
         if appointment_data.get('status') == 'confirmed':
-            appointment_data['confirmed_at'] = datetime.utcnow()
+            appointment_data['confirmed_at'] = now_cdmx().astimezone(pytz.utc)
         
         # Update fields
         for key, value in appointment_data.items():
             if hasattr(appointment, key):
                 setattr(appointment, key, value)
         
-        appointment.updated_at = datetime.utcnow()
+        appointment.updated_at = now_cdmx().astimezone(pytz.utc)
         db.commit()
         db.refresh(appointment)
         return appointment

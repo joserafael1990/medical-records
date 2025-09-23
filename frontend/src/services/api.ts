@@ -4,6 +4,7 @@
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { API_CONFIG, ERROR_MESSAGES, FEATURE_FLAGS, isProduction } from '../constants';
+import { logger } from '../utils/logger';
 import type { 
   Patient, 
   Consultation, 
@@ -13,6 +14,7 @@ import type {
   PatientFormData,
   ConsultationFormData,
   AppointmentFormData,
+  AppointmentUpdateData,
   MedicalOrder,
   MedicalOrderFormData,
   OrderStatus,
@@ -49,16 +51,16 @@ class ApiService {
         }
         
         if (FEATURE_FLAGS.ENABLE_DEBUG_LOGS) {
-          console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`);
-          console.log(`🔑 Token present: ${token ? 'YES' : 'NO'}`);
+          logger.api.request(config.url || '', config.method?.toUpperCase() || '');
+          logger.auth.info(`Token present: ${token ? 'YES' : 'NO'}`);
           if (token) {
-            console.log(`🔑 Token preview: ${token.substring(0, 20)}...`);
+            logger.auth.info(`Token preview: ${token.substring(0, 20)}...`);
           }
         }
         return config;
       },
       (error) => {
-        console.error('❌ Request Error:', error);
+        logger.api.error('request', error);
         return Promise.reject(error);
       }
     );
@@ -67,25 +69,43 @@ class ApiService {
     this.api.interceptors.response.use(
       (response) => {
         if (FEATURE_FLAGS.ENABLE_DEBUG_LOGS) {
-          console.log(`✅ API Response: ${response.status} ${response.config.url}`);
+          logger.api.response(response.config.url || '', response.status);
         }
         return response;
       },
       (error: AxiosError) => {
+        // Enhanced error logging for debugging connection issues
+        console.group('🚨 API Error Details');
+        console.log('URL:', error.config?.url);
+        console.log('Method:', error.config?.method?.toUpperCase());
+        console.log('Status:', error.response?.status);
+        console.log('Status Text:', error.response?.statusText);
+        console.log('Response Data:', error.response?.data);
+        console.log('Request Headers:', error.config?.headers);
+        console.log('Error Message:', error.message);
+        console.log('Network Error (no response):', !error.response);
+        if (!error.response) {
+          console.log('🔍 Possible causes:');
+          console.log('- Backend server is down');
+          console.log('- CORS configuration issue');
+          console.log('- Network connectivity problem');
+          console.log('- Firewall blocking the request');
+          console.log('- Incorrect API URL configuration');
+        }
+        console.groupEnd();
+        
         if (FEATURE_FLAGS.ENABLE_DEBUG_LOGS) {
-          console.error(`❌ API Error: ${error.response?.status} ${error.config?.url}`);
-          console.error('❌ Error details:', {
+          logger.api.error(error.config?.url || 'unknown', {
             status: error.response?.status,
             statusText: error.response?.statusText,
-            data: error.response?.data,
-            headers: error.response?.headers
+            data: error.response?.data
           });
         }
         
         // Handle specific error cases
         if (error.response?.status === 401 || error.response?.status === 403) {
           // Handle unauthorized/forbidden - clear auth data
-          console.log('🔄 Session expired or unauthorized, clearing authentication...');
+          logger.auth.sessionExpired();
           localStorage.removeItem('token');
           localStorage.removeItem('doctor_data');
           
@@ -143,7 +163,14 @@ class ApiService {
           // Handle Pydantic validation errors
           return data.detail.map((err: any) => {
             const field = err.loc?.[1] || err.loc?.[0] || 'Campo';
-            return `${field}: ${err.msg}`;
+            let message = err.msg || 'Error de validación';
+            
+            // Clean up common Pydantic error prefixes
+            if (message.startsWith('Value error, ')) {
+              message = message.replace('Value error, ', '');
+            }
+            
+            return `${field}: ${message}`;
           }).join(', ');
         }
       }
@@ -233,6 +260,387 @@ class ApiService {
   }
 
   // ============================================================================
+  // TEST & CONNECTIVITY SERVICES
+  // ============================================================================
+
+  async testConnection(): Promise<{ status: string; timestamp: string }> {
+    console.log('🔍 Testing backend connectivity...');
+    try {
+      // Test with a simple endpoint that doesn't require auth
+      const response = await this.api.get('/docs');
+      console.log('✅ Backend connectivity test passed');
+      return { 
+        status: 'connected', 
+        timestamp: new Date().toISOString() 
+      };
+    } catch (error: any) {
+      console.error('❌ Backend connectivity test failed:', error);
+      throw new Error(`Connection test failed: ${error.message}`);
+    }
+  }
+
+  async testPatientsEndpoint(): Promise<{ status: string; authRequired: boolean }> {
+    console.log('🏥 Testing patients endpoint specifically...');
+    try {
+      // Test patients endpoint - should return 403 if not authenticated
+      await this.api.get('/api/patients');
+      console.log('✅ Patients endpoint accessible (authenticated)');
+      return { status: 'accessible', authRequired: false };
+    } catch (error: any) {
+      if (error.response?.status === 403 || error.response?.status === 401) {
+        console.log('🔒 Patients endpoint requires authentication (expected)');
+        return { status: 'requires_auth', authRequired: true };
+      } else {
+        console.error('❌ Patients endpoint test failed:', error);
+        throw new Error(`Patients endpoint test failed: ${error.message}`);
+      }
+    }
+  }
+
+  async testAuth(): Promise<{ status: string; user?: any }> {
+    console.log('🔐 Testing authentication...');
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        return { status: 'no_token' };
+      }
+
+      // Try to get current user info to validate token
+      const response = await this.api.get('/api/doctors/me/profile');
+      console.log('✅ Authentication valid, user:', response.data);
+      return { status: 'valid', user: response.data };
+    } catch (error: any) {
+      console.log('❌ Authentication test failed:', {
+        status: error.response?.status,
+        message: error.response?.data?.detail || error.message
+      });
+
+      if (error.response?.status === 401) {
+        return { status: 'expired' };
+      } else if (error.response?.status === 403) {
+        return { status: 'forbidden' };
+      } else {
+        return { status: 'error' };
+      }
+    }
+  }
+
+  async testBackendHealth(): Promise<{ status: string; error?: string }> {
+    console.log('🏥 Testing backend health endpoint...');
+    try {
+      const response = await this.api.get('/health');
+      console.log('✅ Backend health check passed:', response.data);
+      return { status: 'healthy' };
+    } catch (error: any) {
+      console.log('❌ Backend health check failed:', {
+        status: error.response?.status,
+        message: error.response?.data?.detail || error.message
+      });
+      return {
+        status: 'unhealthy',
+        error: error.response?.data?.detail || error.message
+      };
+    }
+  }
+
+  async testTokenValidity(): Promise<{ status: string; error?: string; user?: any }> {
+    console.log('🔐 Testing token validity...');
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        return { status: 'no_token' };
+      }
+
+      console.log('🔐 Token format check:', {
+        hasThreeParts: token.split('.').length === 3,
+        parts: token.split('.').map((part, i) => `Part ${i + 1}: ${part.length} chars`)
+      });
+
+      // Try to get current user info to validate token
+      const response = await this.api.get('/api/doctors/me/profile');
+      console.log('✅ Token is valid, user:', response.data);
+      return { status: 'valid', user: response.data };
+    } catch (error: any) {
+      console.log('❌ Token validity test failed:', {
+        status: error.response?.status,
+        message: error.response?.data?.detail || error.message,
+        data: error.response?.data
+      });
+
+      if (error.response?.status === 401) {
+        return { status: 'expired_or_invalid' };
+      } else if (error.response?.status === 403) {
+        return { status: 'forbidden' };
+      } else {
+        return { status: 'error', error: error.message };
+      }
+    }
+  }
+
+  async testCreateMinimalPatient(): Promise<{ status: string; error?: string; details?: any }> {
+    console.log('🧪 Testing patient creation with minimal valid data...');
+
+    try {
+      // Create minimal valid patient data
+      const minimalPatientData = {
+        first_name: 'Test',
+        paternal_surname: 'Patient',
+        maternal_surname: null,
+        email: null,
+        date_of_birth: '1990-01-01',
+        birth_date: '1990-01-01',
+        gender: 'M',
+        civil_status: null,
+        primary_phone: '5551234567',
+        phone: '5551234567',
+        curp: null,
+        rfc: null,
+        person_type: 'patient'
+      };
+
+      console.log('🧪 Minimal patient data:', minimalPatientData);
+      const token = localStorage.getItem('token');
+      console.log('🧪 Request headers:', {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token?.substring(0, 20)}...`
+      });
+      console.log('🧪 Full token info:', {
+        exists: !!token,
+        length: token?.length || 0,
+        isValidFormat: token ? token.split('.').length === 3 : false
+      });
+
+      const response = await this.api.post('/api/patients', minimalPatientData);
+      console.log('✅ Minimal patient creation successful:', response.data);
+      return { status: 'success', error: undefined, details: response.data };
+    } catch (error: any) {
+      console.error('❌ Minimal patient creation failed - Full error details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          headers: error.config?.headers,
+          data: error.config?.data
+        }
+      });
+
+      // Enhanced error analysis
+      if (!error.response) {
+        return {
+          status: 'network_error',
+          error: 'Error de red - no se recibió respuesta del servidor',
+          details: { originalError: error.message }
+        };
+      } else if (error.response.status >= 500) {
+        return {
+          status: 'server_error',
+          error: `Error interno del servidor (${error.response.status})`,
+          details: error.response.data
+        };
+      } else if (error.response.status >= 400) {
+        return {
+          status: 'validation_error',
+          error: `Error de validación (${error.response.status})`,
+          details: error.response.data
+        };
+      } else {
+        return {
+          status: 'failed',
+          error: error.response?.data?.detail || error.message || 'Error desconocido',
+          details: error.response?.data
+        };
+      }
+    }
+  }
+
+  async testGetPatients(): Promise<{ status: string; error?: string; count?: number }> {
+    console.log('📋 Testing GET patients endpoint...');
+    try {
+      const response = await this.api.get('/api/patients');
+      console.log('✅ GET patients successful:', {
+        status: response.status,
+        count: Array.isArray(response.data) ? response.data.length : 'not array'
+      });
+      return {
+        status: 'success',
+        count: Array.isArray(response.data) ? response.data.length : 0
+      };
+    } catch (error: any) {
+      console.error('❌ GET patients failed:', {
+        status: error.response?.status,
+        message: error.response?.data?.detail || error.message
+      });
+      return {
+        status: 'failed',
+        error: error.response?.data?.detail || error.message
+      };
+    }
+  }
+
+  async testSimplePatientCreation(): Promise<{ status: string; error?: string; response?: any }> {
+    console.log('🧪 Testing simple patient creation endpoint...');
+    try {
+      const response = await this.api.post('/api/test-patient-creation', {});
+      console.log('✅ Simple patient creation test successful:', response.data);
+      return { status: 'success', response: response.data };
+    } catch (error: any) {
+      console.error('❌ Simple patient creation test failed:', {
+        status: error.response?.status,
+        message: error.response?.data?.detail || error.message,
+        data: error.response?.data
+      });
+      return {
+        status: 'failed',
+        error: error.response?.data?.detail || error.message,
+        response: error.response?.data
+      };
+    }
+  }
+
+  async testRealPatientCreation(): Promise<{ status: string; error?: string; response?: any }> {
+    console.log('🏥 Testing REAL patient creation endpoint with minimal data...');
+    try {
+      // Test with the actual patient creation endpoint
+      const testPatientData = {
+        first_name: 'TestReal',
+        paternal_surname: 'Patient',
+        maternal_surname: null,
+        email: null,
+        date_of_birth: '1990-01-01',
+        birth_date: '1990-01-01',
+        gender: 'M',
+        civil_status: null,
+        primary_phone: '5551234567',
+        phone: '5551234567',
+        curp: null,
+        rfc: null,
+        person_type: 'patient'
+      };
+
+      console.log('🏥 Real patient data:', testPatientData);
+
+      const token = localStorage.getItem('token');
+      console.log('🏥 Request headers:', {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token?.substring(0, 20)}...`
+      });
+      console.log('🏥 Full token info:', {
+        exists: !!token,
+        length: token?.length || 0,
+        isValidFormat: token ? token.split('.').length === 3 : false
+      });
+
+      const response = await this.api.post('/api/patients', testPatientData);
+      console.log('✅ REAL patient creation successful:', response.data);
+      return { status: 'success', response: response.data };
+    } catch (error: any) {
+      console.error('❌ REAL patient creation failed - Full analysis:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          headers: error.config?.headers,
+          data: error.config?.data
+        }
+      });
+
+      // Enhanced error analysis
+      if (!error.response) {
+        return {
+          status: 'network_error',
+          error: 'Error de red - no se recibió respuesta del servidor',
+          response: { originalError: error.message }
+        };
+      } else if (error.response.status === 500) {
+        console.error('🚨 SERVER ERROR 500 - Full response:', {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          headers: error.response.headers,
+          data: error.response.data,
+          config: error.config
+        });
+
+        // Try to get more specific error information
+        let errorDetail = 'Error interno del servidor (500)';
+        if (error.response.data) {
+          if (typeof error.response.data === 'string') {
+            errorDetail = error.response.data;
+          } else if (error.response.data.detail) {
+            errorDetail = error.response.data.detail;
+          } else if (error.response.data.message) {
+            errorDetail = error.response.data.message;
+          } else {
+            errorDetail = `Error 500: ${JSON.stringify(error.response.data)}`;
+          }
+        }
+
+        return {
+          status: 'server_error_500',
+          error: errorDetail,
+          response: error.response.data
+        };
+      } else if (error.response.status === 422) {
+        return {
+          status: 'validation_error',
+          error: `Error de validación (${error.response.status})`,
+          response: error.response.data
+        };
+      } else if (error.response.status === 401) {
+        return {
+          status: 'authentication_error',
+          error: `Error de autenticación (${error.response.status})`,
+          response: error.response.data
+        };
+      } else if (error.response.status === 403) {
+        return {
+          status: 'authorization_error',
+          error: `Error de autorización (${error.response.status})`,
+          response: error.response.data
+        };
+      } else {
+        return {
+          status: 'failed',
+          error: `Error ${error.response?.status}: ${error.response?.data?.detail || error.message}`,
+          response: error.response?.data
+        };
+      }
+    }
+  }
+
+  async testPostEmpty(): Promise<{ status: string; error?: string; details?: any }> {
+    console.log('🆕 Testing POST patients with empty data...');
+    try {
+      const response = await this.api.post('/api/patients', {});
+      console.log('✅ POST empty successful:', response.data);
+      return { status: 'success', details: response.data };
+    } catch (error: any) {
+      console.error('❌ POST empty failed - Detailed analysis:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          headers: error.config?.headers,
+          data: error.config?.data
+        }
+      });
+      return {
+        status: 'failed',
+        error: error.response?.data?.detail || error.message,
+        details: error.response?.data
+      };
+    }
+  }
+
+  // ============================================================================
   // PATIENT SERVICES
   // ============================================================================
 
@@ -248,8 +656,77 @@ class ApiService {
   }
 
   async createPatient(patientData: PatientFormData): Promise<Patient> {
-    const response = await this.api.post<Patient>(API_CONFIG.ENDPOINTS.PATIENTS, patientData);
+    console.log('🏥 Creating patient with data:', patientData);
+    console.log('🌐 API URL:', `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PATIENTS}`);
+    console.log('🔑 Auth token exists:', !!localStorage.getItem('token'));
+    
+    // Special logging for civil_status field
+    console.log('👤 Civil status field analysis:', {
+      value: patientData.civil_status,
+      type: typeof patientData.civil_status,
+      isEmpty: patientData.civil_status === '',
+      isNull: patientData.civil_status === null,
+      isUndefined: patientData.civil_status === undefined,
+      length: patientData.civil_status?.length || 0
+    });
+    
+    // Clean the data before sending to ensure proper format
+    const cleanedData = {
+      ...patientData,
+      // Convert empty string to null for optional fields to match backend expectations
+      civil_status: patientData.civil_status === '' ? null : patientData.civil_status,
+      maternal_surname: patientData.maternal_surname === '' ? null : patientData.maternal_surname,
+      email: patientData.email === '' ? null : patientData.email,
+      curp: patientData.curp === '' ? null : patientData.curp,
+      rfc: patientData.rfc === '' ? null : patientData.rfc,
+      // Handle required fields that shouldn't be empty
+      date_of_birth: patientData.date_of_birth === '' ? null : patientData.date_of_birth,
+      birth_date: patientData.birth_date === '' ? null : patientData.birth_date,
+      gender: patientData.gender === '' ? null : patientData.gender,
+      primary_phone: patientData.primary_phone === '' ? null : patientData.primary_phone,
+      first_name: patientData.first_name === '' ? null : patientData.first_name,
+      paternal_surname: patientData.paternal_surname === '' ? null : patientData.paternal_surname
+    };
+    
+    console.log('🧹 Cleaned data for backend:', cleanedData);
+    
+    try {
+      const response = await this.api.post<Patient>(API_CONFIG.ENDPOINTS.PATIENTS, cleanedData);
+      console.log('✅ Patient created successfully:', response.data);
     return response.data;
+    } catch (error: any) {
+      // Enhanced error handling for patient creation
+      if (error.response?.status === 409) {
+        // Conflict - patient already exists
+        const detail = error.response.data?.detail || 'El paciente ya existe en el sistema';
+        throw new Error(detail);
+      } else if (error.response?.status === 422) {
+        // Validation errors
+        const detail = error.response.data?.detail;
+        if (Array.isArray(detail)) {
+          // Field validation errors
+          const fieldErrors = detail.map((err: any) => {
+            const field = err.loc?.[1] || err.loc?.[0];
+            return `${field}: ${err.msg}`;
+          }).join(', ');
+          throw new Error(`Errores de validación: ${fieldErrors}`);
+        } else {
+          throw new Error(detail || 'Error de validación en los datos del paciente');
+        }
+      } else if (error.response?.status === 400) {
+        // Bad request
+        throw new Error(error.response.data?.detail || 'Datos del paciente inválidos');
+      } else if (error.response?.status >= 500) {
+        // Server errors
+        throw new Error('Error interno del servidor. Por favor, contacte al administrador del sistema');
+      } else if (!error.response) {
+        // Network error
+        throw new Error('Error de conexión. Verifique su conexión a internet e intente nuevamente');
+      } else {
+        // Other errors
+        throw new Error(error.response.data?.detail || 'Error inesperado al crear el paciente');
+      }
+    }
   }
 
   async updatePatient(id: string, patientData: Partial<PatientFormData>): Promise<Patient> {
@@ -296,24 +773,10 @@ class ApiService {
     // Extract only the fields needed by the backend, exclude doctor-related fields
     const { doctor_name, doctor_professional_license, doctor_specialty, ...cleanData } = consultationData;
     
-    // Create Mexico City timezone date with year correction
-    const getCurrentMexicoCityDateTime = () => {
-      const now = new Date();
-      // Get Mexico City time (UTC-6 standard, UTC-5 daylight saving)
-      const mexicoCityTime = new Date(now.toLocaleString("en-US", {timeZone: "America/Mexico_City"}));
-      
-      // Temporary fix: If system reports 2025, correct it to 2024
-      if (mexicoCityTime.getFullYear() === 2025) {
-        mexicoCityTime.setFullYear(2024);
-      }
-      
-      return mexicoCityTime.toISOString();
-    };
-    
     const payload = {
       ...cleanData,
       patient_id: patientId, // Ensure patient_id is included
-      date: getCurrentMexicoCityDateTime()
+      // Use the date from formData directly (already in CDMX format)
       // Note: doctor fields and created_by are now assigned by the backend
     };
     
@@ -330,7 +793,7 @@ class ApiService {
       updated_at: new Date().toISOString()
     };
     
-    const response = await this.api.put<Consultation>(`/api/medical-history/${id}`, payload);
+    const response = await this.api.put<Consultation>(`/api/consultations/${id}`, payload);
     return response.data;
   }
 
@@ -393,31 +856,78 @@ class ApiService {
 
   // Agenda-specific methods
   async getDailyAgenda(targetDate?: string): Promise<Appointment[]> {
+    // If no target date provided, use today's date
+    const dateToUse = targetDate || new Date().toISOString().split('T')[0];
     const response = await this.api.get<Appointment[]>(API_CONFIG.ENDPOINTS.AGENDA.DAILY, {
-      params: targetDate ? { target_date: targetDate } : {}
+      params: { date: dateToUse }
     });
-    return response.data;
+    
+    // Transform backend appointment_date to frontend date_time for compatibility
+    const transformedData = response.data.map(appointment => ({
+      ...appointment,
+      date_time: appointment.appointment_date || appointment.date_time, // Map appointment_date to date_time
+      patient_name: appointment.patient ? 
+        `${appointment.patient.first_name} ${appointment.patient.paternal_surname}` : 
+        appointment.patient_name
+    }));
+    
+    return transformedData;
   }
 
-  async getWeeklyAgenda(startDate?: string): Promise<Appointment[]> {
+  async getWeeklyAgenda(startDate?: string, endDate?: string): Promise<Appointment[]> {
+    const params: any = {};
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
+    
     const response = await this.api.get<Appointment[]>(API_CONFIG.ENDPOINTS.AGENDA.WEEKLY, {
-      params: startDate ? { start_date: startDate } : {}
+      params
     });
-    return response.data;
+    
+    // Transform backend appointment_date to frontend date_time for compatibility
+    const transformedData = response.data.map(appointment => ({
+      ...appointment,
+      date_time: appointment.appointment_date || appointment.date_time, // Map appointment_date to date_time
+      patient_name: appointment.patient ? 
+        `${appointment.patient.first_name} ${appointment.patient.paternal_surname}` : 
+        appointment.patient_name
+    }));
+    
+    return transformedData;
+  }
+
+  async getMonthlyAgenda(startDate?: string, endDate?: string): Promise<Appointment[]> {
+    const params: any = {};
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
+    
+    const response = await this.api.get<Appointment[]>(API_CONFIG.ENDPOINTS.AGENDA.DAILY, {
+      params
+    });
+    
+    // Transform backend appointment_date to frontend date_time for compatibility
+    const transformedData = response.data.map(appointment => ({
+      ...appointment,
+      date_time: appointment.appointment_date || appointment.date_time, // Map appointment_date to date_time
+      patient_name: appointment.patient ? 
+        `${appointment.patient.first_name} ${appointment.patient.paternal_surname}` : 
+        appointment.patient_name
+    }));
+    
+    return transformedData;
   }
 
   async createAgendaAppointment(appointmentData: any): Promise<any> {
-    const response = await this.api.post('/api/agenda/appointments', appointmentData);
+    const response = await this.api.post('/api/appointments', appointmentData);
     return response.data;
   }
 
   async updateAgendaAppointment(id: string, appointmentData: Partial<AppointmentFormData>): Promise<Appointment> {
-    const response = await this.api.put<Appointment>(`/api/agenda/appointments/${id}`, appointmentData);
+    const response = await this.api.put<Appointment>(`/api/appointments/${id}`, appointmentData);
     return response.data;
   }
 
   async deleteAgendaAppointment(id: string): Promise<void> {
-    await this.api.delete(`/api/agenda/appointments/${id}`);
+    await this.api.delete(`/api/appointments/${id}`);
   }
 
   async createAppointment(patientId: string, appointmentData: AppointmentFormData): Promise<Appointment> {
@@ -430,8 +940,8 @@ class ApiService {
 
 
 
-  async updateAppointment(id: string, appointmentData: Partial<AppointmentFormData>): Promise<Appointment> {
-    const response = await this.api.put<Appointment>(`/api/agenda/appointments/${id}`, appointmentData);
+  async updateAppointment(id: string, appointmentData: AppointmentUpdateData): Promise<Appointment> {
+    const response = await this.api.put<Appointment>(`/api/appointments/${id}`, appointmentData);
     return response.data;
   }
 
@@ -560,6 +1070,17 @@ class ApiService {
   async deleteClinicalStudy(studyId: string): Promise<void> {
     await this.api.delete(`${API_CONFIG.ENDPOINTS.CLINICAL_STUDIES}/${studyId}`);
   }
+
+  // Medical Records methods
+  async getMedicalRecords(): Promise<any[]> {
+    try {
+      const response = await this.api.get('/api/medical-records');
+      return Array.isArray(response.data) ? response.data : [];
+    } catch (error) {
+      console.warn('Medical records endpoint not implemented yet');
+      return [];
+    }
+  }
 }
 
 // ============================================================================
@@ -599,6 +1120,7 @@ export const {
   getPatientAppointments,
   getDailyAgenda,
   getWeeklyAgenda,
+  getMonthlyAgenda,
   getAvailableSlots,
   createAppointment,
   createAgendaAppointment,

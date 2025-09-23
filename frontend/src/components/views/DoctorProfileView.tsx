@@ -64,6 +64,33 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
 }) => {
   const [profileCompleteness, setProfileCompleteness] = useState(0);
   const [missingFields, setMissingFields] = useState<string[]>([]);
+  
+  // Debug: log doctor profile data
+  useEffect(() => {
+    console.log('🩺 DoctorProfileView component mounted/updated');
+    console.log('🩺 DoctorProfileView received data:', doctorProfile);
+    console.log('🩺 isLoading:', isLoading);
+    if (doctorProfile) {
+      console.log('📋 FULL OBJECT:', JSON.stringify(doctorProfile, null, 2));
+      console.log('📋 Key fields:', {
+        university: doctorProfile.university,
+        graduation_year: doctorProfile.graduation_year,
+        professional_license: doctorProfile.professional_license,
+        specialty_name: doctorProfile.specialty_name,
+        specialty: doctorProfile.specialty,
+        office_phone: doctorProfile.office_phone,
+        primary_phone: doctorProfile.primary_phone
+      });
+      
+      // Check which fields are empty
+      const emptyFields = Object.entries(doctorProfile).filter(([key, value]) => 
+        value === '' || value === null || value === undefined
+      );
+      console.log('🔍 Empty fields:', emptyFields);
+    } else {
+      console.log('❌ No doctor profile data received');
+    }
+  }, [doctorProfile, isLoading]);
   const [digitalSignatureDialogOpen, setDigitalSignatureDialogOpen] = useState(false);
   const [digitalSignatureMode, setDigitalSignatureMode] = useState<'generate' | 'info' | 'sign'>('info');
   const [scheduleConfigDialogOpen, setScheduleConfigDialogOpen] = useState(false);

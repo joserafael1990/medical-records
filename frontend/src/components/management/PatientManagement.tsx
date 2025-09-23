@@ -101,6 +101,7 @@ export function usePatientManagementComponent(
     isEditingPatient,
     patientSearchTerm,
     isSubmitting: false,
+    isLoading: false,
     
     // Actions
     fetchPatients,

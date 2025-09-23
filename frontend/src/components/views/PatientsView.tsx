@@ -215,9 +215,9 @@ const PatientsView: React.FC<PatientsViewProps> = ({
                   </TableCell>
                   <TableCell>
                     <Chip 
-                      label={patient.status === 'active' ? 'Activo' : 'Inactivo'}
+                      label={patient.is_active ? 'Activo' : 'Inactivo'}
                       size="small"
-                      color={patient.status === 'active' ? 'success' : 'default'}
+                      color={patient.is_active ? 'success' : 'default'}
                     />
                   </TableCell>
                 </TableRow>

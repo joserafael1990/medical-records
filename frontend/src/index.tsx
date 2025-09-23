@@ -3,6 +3,9 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { initializeGlobalErrorHandlers } from './utils/globalErrorHandlers';
 
+// Import enhanced UX error styles
+import './styles/errorNavigation.css';
+
 // Initialize global error handlers
 initializeGlobalErrorHandlers();
 

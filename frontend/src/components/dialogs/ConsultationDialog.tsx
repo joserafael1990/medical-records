@@ -57,7 +57,9 @@ import {
   Schedule as StatusIcon,
   Description as NotesIcon
 } from '@mui/icons-material';
-import { Patient, ConsultationFormData, ClinicalStudy } from '../../types';
+
+import { Patient, Consultation, Appointment, ConsultationFormData, ClinicalStudy } from '../../types';
+import { getAppointmentDate, getCurrentCDMXDateTime } from '../../constants';
 import { ErrorRibbon } from '../common/ErrorRibbon';
 import ClinicalStudiesSection from '../common/ClinicalStudiesSection';
 import { apiService } from '../../services/api';
@@ -85,12 +87,8 @@ const calculateAge = (birthDate: string): number => {
 
 // Function to format patient name with age
 const formatPatientNameWithAge = (patient: Patient): string => {
-  console.log('🧑 Formateando paciente:', patient);
   const age = calculateAge(patient.birth_date);
-  console.log('📅 Edad calculada:', age, 'para fecha:', patient.birth_date);
-  const formattedName = `${patient.first_name} ${patient.paternal_surname} ${patient.maternal_surname} (${age} años)`;
-  console.log('✨ Nombre final:', formattedName);
-  return formattedName;
+  return `${patient.first_name} ${patient.paternal_surname} ${patient.maternal_surname} (${age} años)`;
 };
 
 interface ConsultationDialogProps {
@@ -116,6 +114,56 @@ interface ConsultationDialogProps {
   onCreateAppointment?: (appointmentData: any) => Promise<void>; // Callback para crear citas
 }
 
+// Helper function to build full address from patient data
+const getPatientFullAddress = (patient: Patient): string => {
+  if (!patient) return 'No registrada';
+  
+  // Try to build address from specific fields first
+  const addressParts = [];
+  
+  if (patient.address_street) {
+    let streetAddress = patient.address_street;
+    if (patient.address_ext_number) {
+      streetAddress += ` #${patient.address_ext_number}`;
+    }
+    if (patient.address_int_number) {
+      streetAddress += ` Int. ${patient.address_int_number}`;
+    }
+    addressParts.push(streetAddress);
+  }
+  
+  if (patient.address_neighborhood) {
+    addressParts.push(`Col. ${patient.address_neighborhood}`);
+  }
+  
+  if (patient.address_city) {
+    addressParts.push(patient.address_city);
+  }
+  
+  if (patient.address_postal_code) {
+    addressParts.push(`C.P. ${patient.address_postal_code}`);
+  }
+  
+  // If we have specific address parts, use them
+  if (addressParts.length > 0) {
+    return addressParts.join(', ');
+  }
+  
+  // Fallback to legacy address field
+  if (patient.address) {
+    return patient.address;
+  }
+  
+  // Try legacy fields as final fallback
+  const legacyParts = [];
+  if (patient.neighborhood) legacyParts.push(patient.neighborhood);
+  if (patient.municipality) legacyParts.push(patient.municipality);
+  if (patient.state) legacyParts.push(patient.state);
+  if (patient.postal_code) legacyParts.push(`C.P. ${patient.postal_code}`);
+  
+  return legacyParts.length > 0 ? legacyParts.join(', ') : 'No registrada';
+};
+
 const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   open,
   onClose,
@@ -140,6 +188,26 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 }) => {
   const [activeStep, setActiveStep] = useState(0);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  
+  // Debug log for dialog open state
+  // Dialog state tracking removed to prevent infinite logs
+
+  // Reset local states when opening dialog for new consultation
+  useEffect(() => {
+    if (open && !isEditing) {
+      setSelectedPatient(null);
+      setActiveStep(0);
+      setVisitedSteps(new Set([0]));
+      setPatientClinicalStudies([]);
+      setShowScheduleFollowUp(false);
+      setScheduledFollowUp(null);
+      setFollowUpFormData({
+        date: '',
+        time: '',
+        reason: ''
+      });
+    }
+  }, [open, isEditing]);
   const [visitedSteps, setVisitedSteps] = useState<Set<number>>(new Set([0]));
   const [patientClinicalStudies, setPatientClinicalStudies] = useState<ClinicalStudy[]>([]);
   const [loadingPatientStudies, setLoadingPatientStudies] = useState(false);
@@ -368,7 +436,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   const handleEditFollowUp = () => {
     if (scheduledFollowUp) {
       // Parse the existing appointment data
-      const dateTime = new Date(scheduledFollowUp.date_time);
+      const dateTime = getAppointmentDate(scheduledFollowUp.date_time);
       const date = dateTime.toISOString().split('T')[0];
       const time = dateTime.toTimeString().split(' ')[0].substring(0, 5);
       
@@ -598,7 +666,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                       <Typography component="span" sx={{ fontWeight: 600 }}>No. Seguro:</Typography> {selectedPatient.insurance_number || 'N/A'}
                     </Typography>
                     <Typography variant="body2" sx={{ mb: 0.5 }}>
-                      <Typography component="span" sx={{ fontWeight: 600 }}>Dirección:</Typography> {selectedPatient.address || 'No registrada'}
+                      <Typography component="span" sx={{ fontWeight: 600 }}>Dirección:</Typography> {getPatientFullAddress(selectedPatient)}
                     </Typography>
                     <Typography variant="body2">
                       <Typography component="span" sx={{ fontWeight: 600 }}>Estado Civil:</Typography> {selectedPatient.civil_status || 'No especificado'}
@@ -629,9 +697,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 {/* Quick Actions */}
                 <Box sx={{ display: 'flex', gap: 1, mt: 2, pt: 2, borderTop: '1px solid #e0e0e0' }}>
                   <Chip 
-                    label={`Estado: ${selectedPatient.status === 'active' ? 'Activo' : 'Inactivo'}`} 
+                    label={`Estado: ${selectedPatient.is_active ? 'Activo' : 'Inactivo'}`} 
                     size="small" 
-                    color={selectedPatient.status === 'active' ? 'success' : 'default'} 
+                    color={selectedPatient.is_active ? 'success' : 'default'} 
                     variant="filled"
                   />
                   {selectedPatient.birth_date && (
@@ -690,10 +758,10 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 <TextField
                   label="Hora"
                   type="time"
-                  value={formData.date && formData.date.includes('T') ? formData.date.split('T')[1]?.substring(0, 5) : '09:00'}
+                  value={formData.date && formData.date.includes('T') ? formData.date.split('T')[1]?.substring(0, 5) : getCurrentCDMXDateTime().split('T')[1]}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                     const timeValue = e.target.value;
-                    const dateValue = formData.date && formData.date.includes('T') ? formData.date.split('T')[0] : new Date().toISOString().split('T')[0];
+                    const dateValue = formData.date && formData.date.includes('T') ? formData.date.split('T')[0] : getCurrentCDMXDateTime().split('T')[0];
                     setFormData(prev => ({ 
                       ...prev, 
                       date: `${dateValue}T${timeValue}` 
@@ -1189,7 +1257,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                             Fecha y Hora:
                           </Typography>
                           <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                            {new Date(scheduledFollowUp.date_time).toLocaleDateString('es-ES', {
+                            {getAppointmentDate(scheduledFollowUp.date_time).toLocaleDateString('es-ES', {
                               weekday: 'long',
                               year: 'numeric', 
                               month: 'long', 
@@ -1198,7 +1266,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                           </Typography>
                           <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                             <ClockIcon sx={{ fontSize: 14 }} />
-                            {new Date(scheduledFollowUp.date_time).toLocaleTimeString('es-ES', {
+                            {getAppointmentDate(scheduledFollowUp.date_time).toLocaleTimeString('es-ES', {
                               hour: '2-digit',
                               minute: '2-digit'
                             })}

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { API_CONFIG } from '../constants';
+import { useAuth } from '../contexts/AuthContext';
 
 export interface EmergencyRelationship {
   code: string;
@@ -9,6 +10,7 @@ export interface EmergencyRelationship {
 }
 
 export const useEmergencyRelationships = () => {
+  const { isAuthenticated } = useAuth();
   const [relationships, setRelationships] = useState<EmergencyRelationship[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,8 +38,12 @@ export const useEmergencyRelationships = () => {
   };
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      console.log('🔒 useEmergencyRelationships - User not authenticated, skipping fetch');
+      return;
+    }
     fetchRelationships();
-  }, []);
+  }, [isAuthenticated]);
 
   return {
     relationships,

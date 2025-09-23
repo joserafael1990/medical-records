@@ -322,12 +322,17 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
               <TextField
                 label="Teléfono"
                 value={formData.phone || ''}
-                onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                onChange={(e) => {
+                  // Solo permitir números
+                  const value = e.target.value.replace(/[^0-9]/g, '');
+                  setFormData(prev => ({ ...prev, phone: value }));
+                }}
                 fullWidth
                 required
                 error={!!fieldErrors.phone}
-                helperText={fieldErrors.phone || "Teléfono principal de contacto"}
-                placeholder="55-1234-5678"
+                helperText={fieldErrors.phone || "Solo números (10 dígitos)"}
+                placeholder="5551234567"
+                inputProps={{ maxLength: 15 }}
               />
               <FormControl fullWidth required error={!!fieldErrors.gender}>
                 <InputLabel>Género</InputLabel>
@@ -439,25 +444,34 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
 
             <TextField
               label="Año de Graduación"
-              type="number"
               value={formData.graduation_year || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, graduation_year: e.target.value }))}
+              onChange={(e) => {
+                // Solo permitir números
+                const value = e.target.value.replace(/[^0-9]/g, '');
+                setFormData(prev => ({ ...prev, graduation_year: value }));
+              }}
               fullWidth
               required
               error={!!fieldErrors.graduation_year}
-              helperText={fieldErrors.graduation_year || `Año entre 1950 y ${new Date().getFullYear()}`}
-              inputProps={{ min: 1950, max: new Date().getFullYear() }}
+              helperText={fieldErrors.graduation_year || `Solo números - Año entre 1950 y ${new Date().getFullYear()}`}
+              placeholder="2020"
+              inputProps={{ maxLength: 4 }}
             />
 
             <TextField
               label="Cédula Profesional"
               value={formData.professional_license || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, professional_license: e.target.value }))}
+              onChange={(e) => {
+                // Solo permitir números
+                const value = e.target.value.replace(/[^0-9]/g, '');
+                setFormData(prev => ({ ...prev, professional_license: value }));
+              }}
               fullWidth
               required
               error={!!fieldErrors.professional_license}
-              helperText={fieldErrors.professional_license || "Número de cédula profesional expedida por la SEP"}
+              helperText={fieldErrors.professional_license || "Solo números (7-8 dígitos)"}
               placeholder="12345678"
+              inputProps={{ maxLength: 8 }}
             />
 
             <Autocomplete
@@ -480,10 +494,15 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
             <TextField
               label="Cédula de Especialidad"
               value={formData.specialty_license || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, specialty_license: e.target.value }))}
+              onChange={(e) => {
+                // Solo permitir números
+                const value = e.target.value.replace(/[^0-9]/g, '');
+                setFormData(prev => ({ ...prev, specialty_license: value }));
+              }}
               fullWidth
-              helperText="Número de cédula de especialidad (si aplica)"
+              helperText="Solo números (7-8 dígitos, opcional)"
               placeholder="87654321"
+              inputProps={{ maxLength: 8 }}
             />
 
             <TextField
@@ -555,20 +574,30 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
               <TextField
                 label="Código Postal"
                 value={formData.office_postal_code || ''}
-                onChange={(e) => setFormData(prev => ({ ...prev, office_postal_code: e.target.value }))}
+                onChange={(e) => {
+                  // Solo permitir números
+                  const value = e.target.value.replace(/[^0-9]/g, '');
+                  setFormData(prev => ({ ...prev, office_postal_code: value }));
+                }}
                 fullWidth
-                helperText="Código postal del consultorio"
+                helperText="Solo números (5 dígitos)"
                 placeholder="12345"
+                inputProps={{ maxLength: 5 }}
               />
             </Box>
 
             <TextField
               label="Teléfono del Consultorio"
               value={formData.office_phone || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, office_phone: e.target.value }))}
+              onChange={(e) => {
+                // Solo permitir números
+                const value = e.target.value.replace(/[^0-9]/g, '');
+                setFormData(prev => ({ ...prev, office_phone: value }));
+              }}
               fullWidth
-              helperText="Teléfono fijo del consultorio para citas y consultas"
-              placeholder="55-1234-5678"
+              helperText="Solo números (opcional)"
+              placeholder="5551234567"
+              inputProps={{ maxLength: 15 }}
             />
 
             <TextField

@@ -16,6 +16,11 @@ export { usePatientManagement } from './usePatientManagement';
 export { useConsultationManagement } from './useConsultationManagement';
 export { useEmergencyRelationships } from './useEmergencyRelationships';
 
+// Enhanced UX Error Handling hooks
+export { useLoadingStates } from './useLoadingStates';
+export { useRealTimeValidation } from './useRealTimeValidation';
+export { useFormErrorNavigation } from './useFormErrorNavigation';
+
 // Individual hooks are imported directly by components as needed:
 // - useDoctorProfile, useDoctorProfileCache
 // - useDebounce, useTableSorting  

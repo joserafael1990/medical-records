@@ -87,8 +87,7 @@ const PatientsViewSmart: React.FC<PatientsViewSmartProps> = ({
         total_visits: patientConsultations.length,
         last_visit: patientConsultations.length > 0 
           ? Math.max(...patientConsultations.map(c => new Date(c.date).getTime()))
-          : null,
-        status: patient.status || 'Activo'
+          : null
       };
     });
   }, [filteredPatients, consultations]);
@@ -103,7 +102,7 @@ const PatientsViewSmart: React.FC<PatientsViewSmartProps> = ({
   const handleFilterClick = () => {
     // Agregar filtro dinámico basado en el estado actual
     if (enrichedPatients.length > 0) {
-      const totalActive = enrichedPatients.filter(p => (p.status as any) === 'active' || (p.status as any) === 'Activo').length;
+      const totalActive = enrichedPatients.filter(p => p.is_active).length;
       addFilter({
         key: 'active_count',
         label: 'Pacientes Activos',
@@ -237,7 +236,7 @@ const PatientsViewSmart: React.FC<PatientsViewSmartProps> = ({
           
           <Box>
             <Typography variant="h4" sx={{ fontWeight: 700, color: 'success.main' }}>
-              {enrichedPatients.filter(p => (p.status as any) === 'active' || (p.status as any) === 'Activo').length}
+              {enrichedPatients.filter(p => p.is_active).length}
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Pacientes Activos

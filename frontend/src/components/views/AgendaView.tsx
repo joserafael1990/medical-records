@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -31,6 +31,7 @@ import {
   EventNote as EventNoteIcon
 } from '@mui/icons-material';
 import { Appointment } from '../../types';
+import { getStatusLabel, getAppointmentTypeLabel, formatAppointmentTime, getAppointmentDate } from '../../constants';
 
 interface AgendaViewProps {
   appointments: Appointment[];
@@ -51,7 +52,17 @@ const AgendaView: React.FC<AgendaViewProps> = ({
   handleNewAppointment,
   handleEditAppointment
 }) => {
+  // DEBUG: Log agenda state
+  console.log('📅 AGENDA VIEW STATE:', {
+    total_appointments: appointments.length,
+    selected_date: selectedDate.toDateString(),
+    today_date: new Date().toDateString(),
+    is_today_selected: selectedDate.toDateString() === new Date().toDateString(),
+    agenda_view: agendaView
+  });
   const [expandedAccordion, setExpandedAccordion] = useState<string | false>(false);
+  
+  // Removed debug logs
 
   // Date navigation functions
   const navigateDate = (direction: 'prev' | 'next') => {
@@ -90,16 +101,6 @@ const AgendaView: React.FC<AgendaViewProps> = ({
     }
   };
 
-  // Get appointment type label
-  const getAppointmentTypeLabel = (type: string) => {
-    switch (type) {
-      case 'consultation': return 'Consulta';
-      case 'follow_up': return 'Seguimiento';
-      case 'emergency': return 'Urgencia';
-      case 'routine_check': return 'Revisión';
-      default: return type;
-    }
-  };
 
   // Generate week dates for weekly view
   const getWeekDates = () => {
@@ -117,19 +118,34 @@ const AgendaView: React.FC<AgendaViewProps> = ({
     return weekDates;
   };
 
-  // Filter appointments by date
+  // Filter appointments by date - simplified for CDMX native
   const getAppointmentsForDate = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    const targetDateStr = date.toDateString();
     return appointments.filter(apt => {
-      const aptDate = new Date(apt.date_time).toISOString().split('T')[0];
-      return aptDate === dateStr;
+      if (!apt.date_time) return false;
+      const aptDate = getAppointmentDate(apt.date_time);
+      const aptDateStr = aptDate.toDateString();
+      
+      // DEBUG: Log comparison for today
+      if (aptDateStr === new Date().toDateString() || targetDateStr === new Date().toDateString()) {
+        console.log('🔍 getAppointmentsForDate COMPARISON:', {
+          apt_id: apt.id,
+          apt_date: aptDateStr,
+          target_date: targetDateStr,
+          match: aptDateStr === targetDateStr
+        });
+      }
+      
+      return aptDateStr === targetDateStr;
     });
   };
 
-  // Sort appointments by time
+  // Sort appointments by time - using CDMX native
   const sortAppointmentsByTime = (appointments: Appointment[]) => {
     return [...appointments].sort((a, b) => {
-      return new Date(a.date_time).getTime() - new Date(b.date_time).getTime();
+      const dateA = getAppointmentDate(a.date_time);
+      const dateB = getAppointmentDate(b.date_time);
+      return dateA.getTime() - dateB.getTime();
     });
   };
 
@@ -152,12 +168,37 @@ const AgendaView: React.FC<AgendaViewProps> = ({
       }
     }
     
-    // Filter appointments within the date range
+    // Filter appointments within the date range - simplified for CDMX native
     const appointmentsInRange = appointments.filter(apt => {
-      const aptDate = new Date(apt.date_time);
-      return dateRange.some(date => 
+      if (!apt.date_time) return false;
+      const aptDate = getAppointmentDate(apt.date_time);
+      const matches = dateRange.some(date => 
         aptDate.toDateString() === date.toDateString()
       );
+      
+      // DEBUG: Log filtering for today's date specifically
+      const today = new Date().toDateString();
+      if (aptDate.toDateString() === today || dateRange.some(d => d.toDateString() === today)) {
+        console.log('🔍 FILTERING TODAY:', {
+          apt_id: apt.id,
+          apt_date_time: apt.date_time,
+          parsed_date: aptDate.toDateString(),
+          today_date: today,
+          selected_date: selectedDate.toDateString(),
+          date_range: dateRange.map(d => d.toDateString()),
+          matches: matches,
+          FILTER_RESULT: matches ? 'PASS ✅' : 'FAIL ❌'
+        });
+      }
+      
+      return matches;
+    });
+    
+    // DEBUG: Check what we got after filtering
+    console.log('📊 AFTER FILTERING:', {
+      total_appointments: appointments.length,
+      appointments_in_range: appointmentsInRange.length,
+      appointment_ids: appointmentsInRange.map(a => a.id)
     });
     
     // Calculate stats by status
@@ -204,27 +245,51 @@ const AgendaView: React.FC<AgendaViewProps> = ({
   };
 
   const renderDailyView = () => {
-    const dayAppointments = sortAppointmentsByTime(getAppointmentsForDate(selectedDate));
+    const rawAppointments = getAppointmentsForDate(selectedDate);
+    const dayAppointments = rawAppointments; // TEMPORAL: Skip sorting to test
     
-    // Debug logging for development only
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 DEBUG AgendaView - renderDailyView:', {
-        selectedDate: selectedDate.toISOString(),
-        totalAppointments: appointments.length,
-        dayAppointments: dayAppointments.length,
-        appointmentsData: appointments,
-        filteredData: dayAppointments
-      });
+    console.log('🔍 RENDER DEBUG:', {
+      raw_appointments: rawAppointments.length,
+      sorted_appointments: dayAppointments.length,
+      raw_data: rawAppointments,
+      sorted_data: dayAppointments
+    });
+    
+    console.log('🚨 DAILY VIEW RENDERING:', {
+      total_appointments: appointments.length,
+      selected_date: selectedDate.toDateString(),
+      filtered_for_day: dayAppointments.length,
+      appointment_details: dayAppointments.map(apt => ({
+        id: apt.id,
+        date_time: apt.date_time,
+        patient_name: apt.patient_name || `${apt.patient?.first_name} ${apt.patient?.paternal_surname}`,
+        status: apt.status
+      }))
+    });
+    
+    // Log rendering state with detailed debugging
+    console.log('🔍 CONDITIONAL CHECK:', {
+      dayAppointments_length: dayAppointments.length,
+      dayAppointments_length_type: typeof dayAppointments.length,
+      greater_than_zero: dayAppointments.length > 0,
+      dayAppointments_array: dayAppointments,
+      is_array: Array.isArray(dayAppointments)
+    });
+    
+    if (dayAppointments.length > 0) {
+      console.log('✅ RENDERING APPOINTMENTS:', dayAppointments.length, 'appointments found');
+    } else {
+      console.log('❌ NO APPOINTMENTS TO RENDER - showing empty state');
     }
 
     return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {dayAppointments.length > 0 ? (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }} key={`daily-${selectedDate.toDateString()}-${dayAppointments.length}`}>
+          {dayAppointments.length > 0 ? (
           dayAppointments.map((appointment) => (
             <Card key={appointment.id} sx={{ 
               p: 3,
               border: '1px solid',
-              borderColor: 'divider',
+              borderColor: 'grey.200',
               '&:hover': {
                 borderColor: 'primary.main',
                 boxShadow: 1
@@ -235,13 +300,10 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
                     <TimeIcon sx={{ color: 'primary.main', fontSize: 20 }} />
                     <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                      {new Date(appointment.date_time).toLocaleTimeString('es-MX', { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                      })}
+                      {formatAppointmentTime(appointment.date_time)}
                     </Typography>
                     <Chip 
-                      label={appointment.status} 
+                      label={getStatusLabel(appointment.status)} 
                       size="small"
                       color={getStatusColor(appointment.status)}
                     />
@@ -379,10 +441,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                           <TableRow key={appointment.id} hover>
                             <TableCell>
                               <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                {new Date(appointment.date_time).toLocaleTimeString('es-MX', { 
-                                  hour: '2-digit', 
-                                  minute: '2-digit' 
-                                })}
+                                {formatAppointmentTime(appointment.date_time)}
                               </Typography>
                             </TableCell>
                             <TableCell>
@@ -397,7 +456,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                             </TableCell>
                             <TableCell>
                               <Chip 
-                                label={appointment.status} 
+                                label={getStatusLabel(appointment.status)} 
                                 size="small"
                                 color={getStatusColor(appointment.status)}
                               />
@@ -533,7 +592,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                     {dayAppointments.slice(0, 2).map((apt) => (
                       <Chip
                         key={apt.id}
-                        label={new Date(apt.date_time).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                        label={formatAppointmentTime(apt.date_time)}
                         size="small"
                         sx={{
                           height: 16,

@@ -60,8 +60,17 @@ export interface Patient extends PatientBaseFields {
   created_at: string;
   last_visit?: string;
   total_visits: number;
-  status: 'active' | 'inactive';
-  is_active?: boolean;
+  is_active: boolean;
+  
+  // Additional fields for compatibility with App.tsx
+  date_of_birth?: string;
+  phone?: string;
+  city?: string;
+  zip_code?: string;
+  country?: string;
+  medical_history?: string;
+  insurance_policy_number?: string;
+  active?: boolean;
 }
 
 export interface Consultation {
@@ -101,6 +110,50 @@ export interface Consultation {
   clinical_studies?: ClinicalStudy[];
 }
 
+export interface MedicalRecord {
+  id: number;
+  record_code?: string;
+  patient_id: number;
+  doctor_id: number;
+  consultation_date: string;
+  
+  // NOM-004 required fields
+  chief_complaint: string;
+  history_present_illness: string;
+  family_history: string;
+  personal_pathological_history: string;
+  personal_non_pathological_history: string;
+  physical_examination: string;
+  primary_diagnosis: string;
+  treatment_plan: string;
+  follow_up_instructions: string;
+  prognosis: string;
+  
+  // Optional fields
+  secondary_diagnoses?: string;
+  differential_diagnosis?: string;
+  prescribed_medications?: string;
+  laboratory_results?: string;
+  imaging_results?: string;
+  notes?: string;
+  
+  // System fields
+  created_at: string;
+  updated_at: string;
+  created_by?: number;
+  
+  // Relationships
+  patient?: Patient;
+  doctor?: {
+    id: number;
+    first_name: string;
+    paternal_surname: string;
+    maternal_surname?: string;
+    professional_license?: string;
+    specialty?: string;
+  };
+}
+
 export interface ConsultationResponse extends Consultation {
   patient_name: string;
 }
@@ -130,6 +183,24 @@ export interface Appointment {
   updated_at?: string;
   cancelled_reason?: string;
   cancelled_at?: string;
+  // Backend response includes nested patient object
+  patient?: {
+    id: number;
+    first_name: string;
+    paternal_surname: string;
+    maternal_surname?: string;
+    email?: string;
+    primary_phone?: string;
+    [key: string]: any;
+  };
+  doctor?: {
+    id: number;
+    first_name: string;
+    paternal_surname: string;
+    maternal_surname?: string;
+    email?: string;
+    [key: string]: any;
+  };
 }
 
 export interface DashboardData {
@@ -283,56 +354,81 @@ export interface PatientApiData extends Required<Omit<PatientBaseFields, 'email'
   surgical_history: string;
   
   // Status fields
-  status: string;
   is_active: boolean;
 }
 
 // Form data interface - required fields made explicit, uses string types for UI
-export interface PatientFormData extends Required<Omit<PatientBaseFields, 'email' | 'curp' | 'rfc' | 'internal_id' | 'primary_phone' | 'birth_state_code' | 'nationality' | 'civil_status' | 'education_level' | 'occupation' | 'religion' | 'insurance_type' | 'insurance_provider' | 'insurance_number' | 'emergency_contact_name' | 'emergency_contact_phone' | 'emergency_contact_relationship' | 'allergies' | 'chronic_conditions' | 'current_medications' | 'blood_type' | 'previous_hospitalizations' | 'surgical_history' | 'address_street' | 'address_ext_number' | 'address_int_number' | 'address_neighborhood' | 'address_postal_code' | 'birth_place' | 'foreign_birth_place' | 'address_state_id'>> {
-  // Required form fields
-  birth_state_code: string;
-  nationality: string;
-  curp: string;
-  rfc: string;
-  internal_id: string;
-  primary_phone: string;
+export interface PatientFormData {
+  // Basic information
+  first_name: string;
+  paternal_surname: string;
+  maternal_surname: string;
   email: string;
+  date_of_birth: string;
+  birth_date: string;  // Alternative field name for compatibility
+  phone: string;
+  primary_phone: string;  // Alternative field name for compatibility
+  gender: string;
   civil_status: string;
-  education_level: string;
-  occupation: string;
-  religion: string;
-  insurance_type: string;
-  insurance_provider: string;
-  insurance_number: string;
+  
+  // Address
+  address: string;
+  address_street: string; // Alternative field name for compatibility
+  city: string;
+  address_city: string;  // Alternative field name for compatibility
+  state: string;
+  address_state_id: string;  // Alternative field name for compatibility
+  zip_code: string;
+  country: string;
+  
+  // Emergency contact
   emergency_contact_name: string;
   emergency_contact_phone: string;
   emergency_contact_relationship: string;
-  allergies: string;
-  chronic_conditions: string;
-  current_medications: string;
+  
+  // Medical information
   blood_type: string;
-  previous_hospitalizations: string;
-  surgical_history: string;
-  address_street: string;
-  address_ext_number: string;
-  address_int_number: string;
-  address_neighborhood: string;
-  address_city: string;
-  address_state_id: string;
+  allergies: string;
+  current_medications: string;
+  medical_history: string;
+  chronic_conditions: string;  // Additional medical field
+  insurance_provider: string;
+  insurance_policy_number: string;
+  
+  // Mexican official fields
+  curp: string;
+  rfc: string;
+  
+  // Technical fields
+  active: boolean;
+  is_active: boolean;  // Alternative field name for compatibility
   address_postal_code: string;
   birth_place: string;
   foreign_birth_place: string;
-  
-  // Form-specific fields
-  status: 'active' | 'inactive';
-  is_active: boolean;
 }
 
 export interface ConsultationFormData {
+  id?: string | number;
   patient_id: string | number;
   date: string;
+  consultation_date?: string;  // Alternative field name for compatibility
+  consultation_time?: string;  // Alternative field name for compatibility
   chief_complaint: string;
   history_present_illness: string;
+  
+  // Additional fields for compatibility
+  reason?: string;
+  symptoms?: string;
+  diagnosis?: string;
+  treatment?: string;
+  notes?: string;
+  follow_up_date?: string;
+  follow_up_instructions?: string;
+  created_by?: string;
+  status?: string;
+  consultation_type?: string;
+  duration_minutes?: number;
+  vital_signs?: any;
   
   // Antecedentes (parte de la evaluación clínica)
   family_history: string; // Antecedentes heredofamiliares
@@ -344,7 +440,6 @@ export interface ConsultationFormData {
   secondary_diagnoses: string;
   treatment_plan: string;
   therapeutic_plan: string;
-  follow_up_instructions: string;
   prognosis: string;
   laboratory_results: string;
   imaging_studies: string;
@@ -352,6 +447,31 @@ export interface ConsultationFormData {
   doctor_name: string;
   doctor_professional_license: string;
   doctor_specialty: string;
+}
+
+export interface MedicalRecordFormData {
+  patient_id: number;
+  consultation_date: string;
+  
+  // NOM-004 required fields
+  chief_complaint: string;
+  history_present_illness: string;
+  family_history: string;
+  personal_pathological_history: string;
+  personal_non_pathological_history: string;
+  physical_examination: string;
+  primary_diagnosis: string;
+  treatment_plan: string;
+  follow_up_instructions: string;
+  prognosis: string;
+  
+  // Optional fields
+  secondary_diagnoses?: string;
+  differential_diagnosis?: string;
+  prescribed_medications?: string;
+  laboratory_results?: string;
+  imaging_results?: string;
+  notes?: string;
 }
 
 export interface AppointmentFormData {
@@ -370,6 +490,23 @@ export interface AppointmentFormData {
   insurance_covered?: boolean;
   room_number?: string;
   equipment_needed?: string;
+  cancelled_reason?: string; // Cancellation reason field
+}
+
+export interface AppointmentUpdateData {
+  appointment_date?: string;
+  end_time?: string;
+  duration_minutes?: number;
+  appointment_type?: string;
+  status?: string;
+  priority?: string;
+  reason?: string;
+  notes?: string;
+  preparation_instructions?: string;
+  follow_up_required?: boolean;
+  room_number?: string;
+  estimated_cost?: number;
+  insurance_covered?: boolean;
 }
 
 // ============================================================================

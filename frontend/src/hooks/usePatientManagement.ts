@@ -3,8 +3,9 @@
  * Centralized hook for all patient-related operations extracted from App.tsx
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { apiService } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 import type { Patient, PatientFormData } from '../types';
 
 // Debug helper - only logs in development
@@ -26,6 +27,7 @@ export interface PatientManagementState {
   isEditingPatient: boolean;
   patientSearchTerm: string;
   isSubmitting: boolean;
+  isLoading: boolean;
 }
 
 export interface PatientManagementActions {
@@ -59,13 +61,12 @@ export const usePatientManagement = (): PatientManagementReturn => {
   const [isEditingPatient, setIsEditingPatient] = useState(false);
   const [patientSearchTerm, setPatientSearchTerm] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Fetch patients from API
   const fetchPatients = useCallback(async () => {
     try {
-      debugLog('🔄 Cargando pacientes...');
       const data = await apiService.getPatients(patientSearchTerm);
-      debugLog('✅ Pacientes cargados desde API:', data);
       
       // Clean and normalize patient data
       const cleanedData = data.map((patient: any) => ({
@@ -101,6 +102,20 @@ export const usePatientManagement = (): PatientManagementReturn => {
     }
   }, [patientSearchTerm]);
 
+  // Authentication state
+  const { isAuthenticated } = useAuth();
+  
+  // Load patients on mount - only if authenticated
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+    
+    fetchPatients().catch(error => {
+      console.warn('⚠️ Could not load patients on mount:', error.message);
+    });
+  }, [isAuthenticated]); // Only depend on authentication, not fetchPatients
+
   // Create new patient
   const createPatient = useCallback(async (data: PatientFormData): Promise<Patient> => {
     setIsSubmitting(true);
@@ -109,7 +124,8 @@ export const usePatientManagement = (): PatientManagementReturn => {
       await fetchPatients(); // Refresh list
       return newPatient;
     } catch (error: any) {
-      throw new Error(error.message || 'Error al crear paciente');
+      // Let the error bubble up with specific details - the App.tsx handler will format it
+      throw error;
     } finally {
       setIsSubmitting(false);
     }
@@ -123,7 +139,8 @@ export const usePatientManagement = (): PatientManagementReturn => {
       await fetchPatients(); // Refresh list
       return updatedPatient;
     } catch (error: any) {
-      throw new Error(error.message || 'Error al actualizar paciente');
+      // Let the error bubble up with specific details - the App.tsx handler will format it
+      throw error;
     } finally {
       setIsSubmitting(false);
     }
@@ -133,9 +150,9 @@ export const usePatientManagement = (): PatientManagementReturn => {
   const deactivatePatient = useCallback(async (patient: Patient): Promise<void> => {
     setIsSubmitting(true);
     try {
-      // TODO: Implement deactivatePatient in apiService
-      // await apiService.deactivatePatient(patient.id);
-      console.log('Deactivating patient:', patient.id);
+      // NOTE: Patient deactivation API endpoint not yet implemented
+      console.log('Patient deactivation requested:', patient.id);
+      // Placeholder: Would call apiService.deactivatePatient(patient.id) when available
       await fetchPatients(); // Refresh list
     } catch (error: any) {
       throw new Error(error.message || 'Error al desactivar paciente');
@@ -183,6 +200,7 @@ export const usePatientManagement = (): PatientManagementReturn => {
     isEditingPatient,
     patientSearchTerm,
     isSubmitting,
+    isLoading,
     
     // Actions
     fetchPatients,

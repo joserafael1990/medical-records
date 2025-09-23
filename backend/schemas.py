@@ -396,6 +396,7 @@ class AppointmentUpdate(BaseSchema):
     room_number: Optional[str] = None
     estimated_cost: Optional[Decimal] = None
     insurance_covered: Optional[bool] = None
+    cancelled_reason: Optional[str] = None
 
 class Appointment(AppointmentBase):
     id: int

@@ -9,7 +9,7 @@ import {
 import {
   Add as AddIcon
 } from '@mui/icons-material';
-import { Patient, Consultation } from '../../types';
+import { Patient, Consultation, Appointment } from '../../types';
 import { ErrorRibbon } from '../common/ErrorRibbon';
 import { IntelligentSearch, useIntelligentSearch } from '../common/IntelligentSearch';
 import { SmartTable } from '../common/SmartTable';
@@ -19,6 +19,7 @@ import { calculateAge } from '../../utils';
 interface ConsultationsViewSmartProps {
   consultations: Consultation[];
   patients: Patient[];
+  appointments: Appointment[];
   successMessage: string;
   setSuccessMessage: (message: string) => void;
   handleNewConsultation: () => void;
@@ -32,6 +33,7 @@ interface ConsultationsViewSmartProps {
 const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
   consultations,
   patients,
+  appointments,
   successMessage,
   setSuccessMessage,
   handleNewConsultation,
@@ -88,7 +90,7 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
       
       return {
         ...consultation,
-        patient_name: patient?.full_name || 'Paciente No Identificado',
+        patient_name: patient?.full_name || consultation.patient_name || 'Paciente No Identificado',
         patient_phone: patient?.primary_phone,
         patient_email: patient?.email,
         patient_age: patient?.birth_date ? calculateAge(patient.birth_date) : undefined,
@@ -112,13 +114,21 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
       new Date(c.date).toDateString() === today
     );
     
+    // Citas agendadas para hoy (pendientes)
+    const todayAppointments = appointments.filter(apt => {
+      if (!apt.date_time) return false;
+      const aptDate = new Date(apt.date_time);
+      return aptDate.toDateString() === today && 
+             (apt.status === 'scheduled' || apt.status === 'confirmed' || !apt.status);
+    });
+    
     return {
       total: consultations.length,
       today: todayConsultations.length,
-      pending: consultations.length, // Todas consideradas pendientes por defecto
-      completed: 0 // No hay campo status en el modelo actual
+      pending: todayAppointments.length, // Citas agendadas para hoy
+      completed: consultations.length - todayConsultations.length // Consultas completadas (excluyendo las de hoy)
     };
-  }, [consultations]);
+  }, [consultations, appointments]);
 
   return (
     <Box sx={{ p: 3, maxWidth: 1400, mx: 'auto' }}>

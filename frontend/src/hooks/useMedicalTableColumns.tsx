@@ -4,6 +4,7 @@ import { Phone as PhoneIcon, Email as EmailIcon } from '@mui/icons-material';
 import { TableColumn } from '../components/common/SmartTable';
 import { Patient, Consultation } from '../types';
 import { calculateAge, formatDate } from '../utils';
+import { formatAppointmentTime } from '../constants';
 
 /**
  * Hook que proporciona configuraciones de columnas para tablas médicas
@@ -122,16 +123,16 @@ export const useMedicalTableColumns = () => {
       )
     },
     {
-      key: 'status',
+      key: 'is_active',
       label: 'Estado',
       sortable: true,
       align: 'center',
       width: '9%',
       render: (value: Patient[keyof Patient], row: Patient, index: number) => (
         <Chip 
-          label={String(value || 'Activo')} 
+          label={value ? 'Activo' : 'Inactivo'} 
           size="small" 
-          color={value === 'Activo' ? 'success' : value === 'Inactivo' ? 'default' : 'warning'}
+          color={value ? 'success' : 'default'}
           variant="filled"
         />
       )
@@ -175,13 +176,19 @@ export const useMedicalTableColumns = () => {
       render: (value: Consultation[keyof Consultation], row: Consultation, index: number) => {
         const date = new Date(String(value));
         const isToday = date.toDateString() === new Date().toDateString();
+        const rawValue = String(value);
+        const formattedTime = formatAppointmentTime(rawValue);
+        
         return (
           <Box>
-            <Typography variant="body2">
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
               {formatDate(String(value))}
             </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {formattedTime}
+            </Typography>
             {isToday && (
-              <Chip label="Hoy" size="small" color="primary" variant="filled" />
+              <Chip label="Hoy" size="small" color="primary" variant="filled" sx={{ mt: 0.5 }} />
             )}
           </Box>
         );
@@ -272,11 +279,19 @@ export const useMedicalTableColumns = () => {
       key: 'date',
       label: 'Fecha',
       sortable: true,
-      render: (value: Consultation[keyof Consultation], row: Consultation, index: number) => (
-        <Typography variant="body2">
-          {formatDate(String(value))}
-        </Typography>
-      )
+      render: (value: Consultation[keyof Consultation], row: Consultation, index: number) => {
+        const date = new Date(String(value));
+        return (
+          <Box>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              {formatDate(String(value))}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {formatAppointmentTime(String(value))}
+            </Typography>
+          </Box>
+        );
+      }
     },
     {
       key: 'patient_name',

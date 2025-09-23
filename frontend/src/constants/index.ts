@@ -15,9 +15,9 @@ export const API_CONFIG = {
     APPOINTMENTS: '/api/appointments',
     DASHBOARD: '/api/dashboard/stats',
     AGENDA: {
-      DAILY: '/api/agenda/daily',
-      WEEKLY: '/api/agenda/weekly',
-      AVAILABLE_SLOTS: '/api/agenda/available-slots'
+      DAILY: '/api/appointments/calendar',
+      WEEKLY: '/api/appointments/calendar',
+      AVAILABLE_SLOTS: '/api/appointments/calendar'
     },
     DOCTOR_PROFILE: '/api/doctors/me/profile',
     CLINICAL_STUDIES: '/api/clinical-studies',
@@ -123,6 +123,148 @@ export const MEDICAL_CONSTANTS = {
 } as const;
 
 // Lista COMPLETA de especialidades y profesiones de salud reconocidas en México
+// ============================================================================
+// APPOINTMENT STATUS TRANSLATIONS
+// ============================================================================
+export const APPOINTMENT_STATUS_LABELS = {
+  'scheduled': 'Programada',
+  'confirmed': 'Confirmada',
+  'in_progress': 'En Progreso',
+  'completed': 'Completada',
+  'cancelled': 'Cancelada',
+  'no_show': 'No Asistió'
+} as const;
+
+export const APPOINTMENT_TYPE_LABELS = {
+  'consultation': 'Consulta',
+  'follow_up': 'Seguimiento',
+  'emergency': 'Urgencia',
+  'routine_check': 'Revisión'
+} as const;
+
+// Utility functions for appointment translations
+export const getStatusLabel = (status: string): string => {
+  return APPOINTMENT_STATUS_LABELS[status as keyof typeof APPOINTMENT_STATUS_LABELS] || status;
+};
+
+export const getAppointmentTypeLabel = (type: string): string => {
+  return APPOINTMENT_TYPE_LABELS[type as keyof typeof APPOINTMENT_TYPE_LABELS] || type;
+};
+
+// ============================================================================
+// SIMPLIFIED DATETIME UTILITIES - CDMX NATIVE
+// ============================================================================
+// All dates are now handled natively in CDMX timezone throughout the system
+// No more conversions needed!
+
+/**
+ * Format appointment time from CDMX datetime string
+ * Treats input as CDMX time regardless of browser timezone
+ */
+export const formatAppointmentTime = (cdmxDateString: string): string => {
+  // Parse CDMX datetime string manually to avoid timezone interpretation
+  const dateParts = cdmxDateString.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!dateParts) {
+    console.warn('Invalid date format for formatAppointmentTime:', cdmxDateString);
+    return 'Invalid time';
+  }
+  
+  const [, year, month, day, hour, minute] = dateParts;
+  
+  // Convert to 12-hour format manually to ensure CDMX interpretation
+  const hour24 = parseInt(hour);
+  const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
+  const ampm = hour24 >= 12 ? 'p.m.' : 'a.m.';
+  
+  return `${hour12}:${minute} ${ampm}`;
+};
+
+/**
+ * Get appointment date from CDMX datetime string
+ * Treats input as CDMX time regardless of browser timezone
+ */
+export const getAppointmentDate = (cdmxDateString: string): Date => {
+  // Parse CDMX datetime string manually to avoid timezone interpretation
+  const dateParts = cdmxDateString.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!dateParts) {
+    console.warn('Invalid date format for getAppointmentDate:', cdmxDateString);
+    return new Date();
+  }
+  
+  const [, year, month, day, hour, minute] = dateParts;
+  
+  return new Date(
+    parseInt(year),
+    parseInt(month) - 1, // Month is 0-based
+    parseInt(day),
+    parseInt(hour),
+    parseInt(minute)
+  );
+};
+
+/**
+ * Format datetime for HTML datetime-local inputs
+ * Treats input as CDMX time regardless of browser timezone
+ */
+export const formatDateTimeForInput = (cdmxDateString: string): string => {
+  // Parse CDMX datetime string manually to avoid timezone interpretation
+  const dateParts = cdmxDateString.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!dateParts) {
+    console.warn('Invalid date format for formatDateTimeForInput:', cdmxDateString);
+    return new Date().toISOString().slice(0, 16);
+  }
+  
+  const [, year, month, day, hour, minute] = dateParts;
+  
+  // Return in datetime-local format
+  return `${year}-${month}-${day}T${hour}:${minute}`;
+};
+
+/**
+ * Get current CDMX datetime for forms
+ */
+export const getCurrentCDMXDateTime = (): string => {
+  // Get current time and manually adjust for CDMX timezone (UTC-6)
+  const now = new Date();
+  
+  // Method 1: Try Intl.DateTimeFormat approach
+  try {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Mexico_City',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+    
+    const parts = formatter.formatToParts(now);
+    const partsObj = parts.reduce((acc, part) => {
+      acc[part.type] = part.value;
+      return acc;
+    }, {} as any);
+    
+    const cdmxDateTime = `${partsObj.year}-${partsObj.month}-${partsObj.day}T${partsObj.hour}:${partsObj.minute}`;
+    
+    return cdmxDateTime;
+  } catch (error) {
+    // Fallback: Manual UTC offset calculation
+    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const cdmxOffset = -6; // CDMX is UTC-6
+    const cdmxTime = new Date(utcTime + (cdmxOffset * 3600000));
+    
+    const year = cdmxTime.getUTCFullYear();
+    const month = String(cdmxTime.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(cdmxTime.getUTCDate()).padStart(2, '0');
+    const hours = String(cdmxTime.getUTCHours()).padStart(2, '0');
+    const minutes = String(cdmxTime.getUTCMinutes()).padStart(2, '0');
+    
+    const result = `${year}-${month}-${day}T${hours}:${minutes}`;
+    return result;
+  }
+};
+
 export const MEDICAL_SPECIALTIES = [
   // Profesiones de Salud Básicas
   'Medicina General',

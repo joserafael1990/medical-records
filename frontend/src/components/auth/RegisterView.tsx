@@ -35,7 +35,7 @@ import {
   Save
 } from '@mui/icons-material';
 import AvantLogo from '../common/AvantLogo';
-import { MEDICAL_SPECIALTIES, MEXICAN_STATES } from '../../constants';
+import { MEDICAL_SPECIALTIES, MEXICAN_STATES, API_CONFIG } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface RegistrationData {
@@ -90,7 +90,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
   useEffect(() => {
     const loadSpecialties = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/catalogs/specialties');
+        const response = await fetch(`${API_CONFIG.BASE_URL}/api/catalogs/specialties`);
         const data = await response.json();
         setSpecialties(data);
       } catch (error) {
@@ -522,7 +522,14 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
                   margin="normal"
                   label="Teléfono"
                   value={formData.phone}
-                  onChange={handleInputChange('phone')}
+                  onChange={(e) => {
+                    // Solo permitir números
+                    const value = e.target.value.replace(/[^0-9]/g, '');
+                    handleInputChange('phone')({ target: { value } });
+                  }}
+                  placeholder="5551234567"
+                  helperText="Solo números (10 dígitos)"
+                  inputProps={{ maxLength: 15 }}
                   required
                 />
               </Box>
@@ -586,17 +593,21 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
                 />
               </Box>
               <Box sx={{ flex: '1 1 250px' }}>
-                <TextField
-                  fullWidth
-                  margin="normal"
-                  label="Año de Graduación"
-                  type="number"
-                  value={formData.graduation_year}
-                  onChange={handleInputChange('graduation_year')}
-                  inputProps={{ min: 1950, max: new Date().getFullYear() }}
-                  helperText={`Año entre 1950 y ${new Date().getFullYear()}`}
-                  required
-                />
+            <TextField
+              fullWidth
+              margin="normal"
+              label="Año de Graduación"
+              value={formData.graduation_year}
+              onChange={(e) => {
+                // Solo permitir números
+                const value = e.target.value.replace(/[^0-9]/g, '');
+                handleInputChange('graduation_year')({ target: { value } });
+              }}
+              placeholder="2020"
+              helperText={`Solo números - Año entre 1950 y ${new Date().getFullYear()}`}
+              inputProps={{ maxLength: 4 }}
+              required
+            />
               </Box>
             </Box>
 
@@ -605,7 +616,14 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
               margin="normal"
               label="Cédula Profesional"
               value={formData.professional_license}
-              onChange={handleInputChange('professional_license')}
+              onChange={(e) => {
+                // Solo permitir números
+                const value = e.target.value.replace(/[^0-9]/g, '');
+                handleInputChange('professional_license')({ target: { value } });
+              }}
+              placeholder="12345678"
+              helperText="Solo números (7-8 dígitos)"
+              inputProps={{ maxLength: 8 }}
               required
             />
           </Box>
@@ -661,9 +679,16 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
             <TextField
               fullWidth
               margin="normal"
-              label="Teléfono"
+              label="Teléfono del Consultorio"
               value={formData.office_phone}
-              onChange={handleInputChange('office_phone')}
+              onChange={(e) => {
+                // Solo permitir números
+                const value = e.target.value.replace(/[^0-9]/g, '');
+                handleInputChange('office_phone')({ target: { value } });
+              }}
+              placeholder="5551234567"
+              helperText="Solo números (opcional)"
+              inputProps={{ maxLength: 15 }}
             />
           </Box>
         );

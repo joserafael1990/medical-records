@@ -58,6 +58,9 @@ build/
 # Temporary files
 tmp/
 temp/
+**/temp_*.json
+**/test_*.json
+**/token_*.txt
 
 # Additional exclusions
 frontend/node_modules/

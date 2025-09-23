@@ -17,6 +17,7 @@ import {
 import { PatientFormData } from '../../types';
 import { ErrorRibbon } from '../common/ErrorRibbon';
 import { useEmergencyRelationships } from '../../hooks/useEmergencyRelationships';
+import { apiService } from '../../services/api';
 
 interface PatientDialogProps {
   open: boolean;
@@ -46,6 +47,47 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
   onDelete
 }) => {
   const { relationships, isLoading: relationshipsLoading } = useEmergencyRelationships();
+  
+  // Test connectivity function
+  const testConnection = async () => {
+    try {
+      console.log('🔍 Testing backend connection...');
+
+      // Test general connectivity
+      const connectionResult = await apiService.testConnection();
+      console.log('✅ General connectivity:', connectionResult);
+
+      // Test authentication
+      const authResult = await apiService.testAuth();
+      console.log('✅ Authentication test:', authResult);
+
+      // Test patients endpoint specifically
+      const patientsResult = await apiService.testPatientsEndpoint();
+      console.log('✅ Patients endpoint test:', patientsResult);
+
+      // Check authentication status
+      const token = localStorage.getItem('token');
+      console.log('🔑 Auth token status:', {
+        exists: !!token,
+        length: token?.length || 0,
+        preview: token ? `${token.substring(0, 20)}...` : 'No token'
+      });
+
+      let message = '✅ Conectividad exitosa al backend\n';
+      message += `🔐 Autenticación: ${authResult.status}\n`;
+      message += `🏥 Endpoint pacientes: ${patientsResult.status}\n`;
+      message += `🔑 Token de auth: ${token ? 'Presente' : 'Ausente'}`;
+
+      if (authResult.user) {
+        message += `\n👤 Usuario: ${authResult.user.first_name} ${authResult.user.paternal_surname}`;
+      }
+
+      alert(message);
+    } catch (error: any) {
+      console.error('❌ Connection test failed:', error);
+      alert(`❌ Error de conectividad: ${error.message}`);
+    }
+  };
 
   const handleClose = () => {
     onClose();
@@ -152,12 +194,26 @@ DATOS OBLIGATORIOS
             <TextField
               fullWidth
               label="Teléfono"
-              placeholder="Ej: +52 555 123 4567 o 5551234567"
+              placeholder="Ej: 5551234567 (solo números)"
               value={formData.primary_phone}
-              onChange={(e) => onFormDataChange('primary_phone', e.target.value)}
+              onChange={(e) => {
+                // Solo permitir números
+                const value = e.target.value.replace(/[^0-9]/g, '');
+                onFormDataChange('primary_phone', value);
+              }}
+              onBlur={(e) => {
+                // Validación en tiempo real al perder el foco
+                const value = e.target.value;
+                if (value && value.length < 10) {
+                  onFormDataChange('primary_phone_error', 'El teléfono debe tener al menos 10 dígitos');
+                } else {
+                  onFormDataChange('primary_phone_error', '');
+                }
+              }}
               error={!!fieldErrors.primary_phone}
-              helperText={fieldErrors.primary_phone || "Formato México: +52 555 123 4567 o 5551234567 (10 dígitos mínimo)"}
+              helperText={fieldErrors.primary_phone || fieldErrors.primary_phone_error || "Solo números (10 dígitos mínimo)"}
               required
+              inputProps={{ maxLength: 15 }}
             />
           </Box>
           
@@ -244,11 +300,15 @@ DATOS OBLIGATORIOS
             <TextField
               label="Código Postal"
               value={formData.address_postal_code}
-              onChange={(e) => onFormDataChange('address_postal_code', e.target.value)}
+              onChange={(e) => {
+                // Solo permitir números
+                const value = e.target.value.replace(/[^0-9]/g, '');
+                onFormDataChange('address_postal_code', value);
+              }}
               fullWidth
               required
               error={!!fieldErrors.address_postal_code}
-              helperText={fieldErrors.address_postal_code}
+              helperText={fieldErrors.address_postal_code || "Solo números (5 dígitos)"}
               placeholder="12345"
               inputProps={{ maxLength: 5 }}
             />
@@ -283,6 +343,30 @@ DATOS OBLIGATORIOS
               onChange={(e) => onFormDataChange('curp', e.target.value)}
               helperText="Clave Única de Registro de Población"
             />
+          </Box>
+
+          <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
+            <FormControl fullWidth error={!!fieldErrors.civil_status}>
+              <InputLabel>Estado Civil</InputLabel>
+              <Select
+                value={formData.civil_status}
+                onChange={(e) => onFormDataChange('civil_status', e.target.value)}
+                label="Estado Civil"
+              >
+                <MenuItem value="">--Seleccionar--</MenuItem>
+                <MenuItem value="Soltero(a)">Soltero(a)</MenuItem>
+                <MenuItem value="Casado(a)">Casado(a)</MenuItem>
+                <MenuItem value="Divorciado(a)">Divorciado(a)</MenuItem>
+                <MenuItem value="Viudo(a)">Viudo(a)</MenuItem>
+                <MenuItem value="Unión libre">Unión libre</MenuItem>
+                <MenuItem value="Separado(a)">Separado(a)</MenuItem>
+              </Select>
+              {fieldErrors.civil_status && (
+                <Typography variant="caption" color="error" sx={{ mt: 0.5, ml: 1.75 }}>
+                  {fieldErrors.civil_status}
+                </Typography>
+              )}
+            </FormControl>
           </Box>
 
           <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
@@ -397,6 +481,205 @@ DATOS OBLIGATORIOS
         )}
         <Button onClick={handleClose} disabled={isSubmitting}>
           Cancelar
+        </Button>
+        <Button
+          onClick={testConnection}
+          variant="outlined"
+          color="info"
+          disabled={isSubmitting}
+        >
+          🔍 Test Conexión
+        </Button>
+        <Button
+          onClick={async () => {
+            try {
+              const healthResult = await apiService.testBackendHealth();
+              console.log('🏥 Health test result:', healthResult);
+
+              let message = `🏥 Estado del backend: ${healthResult.status}\n`;
+              if (healthResult.error) {
+                message += `Error: ${healthResult.error}`;
+              }
+
+              alert(message);
+            } catch (error: any) {
+              console.error('🏥 Health test error:', error);
+              alert(`❌ Error al verificar backend: ${error.message}`);
+            }
+          }}
+          variant="outlined"
+          color="secondary"
+          disabled={isSubmitting}
+        >
+          🏥 Health Check
+        </Button>
+        <Button
+          onClick={async () => {
+            try {
+              const tokenResult = await apiService.testTokenValidity();
+              console.log('🔐 Token validity test result:', tokenResult);
+
+              let message = `🔐 Validez del Token: ${tokenResult.status}\n`;
+              if (tokenResult.error) {
+                message += `Error: ${tokenResult.error}\n`;
+              }
+              if (tokenResult.user) {
+                message += `✅ Token válido\n`;
+                message += `👤 Usuario: ${tokenResult.user.first_name} ${tokenResult.user.paternal_surname}`;
+              }
+
+              alert(message);
+            } catch (error: any) {
+              console.error('🔐 Token test error:', error);
+              alert(`❌ Error al verificar token: ${error.message}`);
+            }
+          }}
+          variant="outlined"
+          color="primary"
+          disabled={isSubmitting}
+        >
+          🔐 Token Test
+        </Button>
+        <Button
+          onClick={async () => {
+            try {
+              const getResult = await apiService.testGetPatients();
+              console.log('📋 GET patients test result:', getResult);
+
+              let message = `📋 GET pacientes: ${getResult.status}\n`;
+              if (getResult.count !== undefined) {
+                message += `Cantidad: ${getResult.count} pacientes\n`;
+              }
+              if (getResult.error) {
+                message += `Error: ${getResult.error}`;
+              }
+
+              alert(message);
+            } catch (error: any) {
+              console.error('📋 GET test error:', error);
+              alert(`❌ Error al probar GET: ${error.message}`);
+            }
+          }}
+          variant="outlined"
+          color="success"
+          disabled={isSubmitting}
+        >
+          📋 GET Test
+        </Button>
+        <Button
+          onClick={async () => {
+            try {
+              const result = await apiService.testPostEmpty();
+              console.log('🆕 POST empty test result:', result);
+
+              let message = `🆕 POST vacío: ${result.status}\n`;
+              if (result.error) {
+                message += `Error: ${result.error}\n`;
+                if (result.details) {
+                  message += `Detalles: ${JSON.stringify(result.details, null, 2)}`;
+                }
+              } else if (result.details) {
+                message += `✅ POST vacío exitoso`;
+              }
+
+              alert(message);
+            } catch (error: any) {
+              console.error('🆕 POST empty test error:', error);
+              alert(`❌ Error al probar POST vacío: ${error.message}`);
+            }
+          }}
+          variant="outlined"
+          color="error"
+          disabled={isSubmitting}
+        >
+          🆕 POST Vacío
+        </Button>
+        <Button
+          onClick={async () => {
+            try {
+              const result = await apiService.testSimplePatientCreation();
+              console.log('🧪 Simple test result:', result);
+
+              let message = `🧪 Test Simple: ${result.status}\n`;
+              if (result.error) {
+                message += `Error: ${result.error}\n`;
+                if (result.response) {
+                  message += `Respuesta: ${JSON.stringify(result.response, null, 2)}`;
+                }
+              } else if (result.response) {
+                message += `✅ Test simple exitoso\n`;
+                message += `Respuesta: ${JSON.stringify(result.response, null, 2)}`;
+              }
+
+              alert(message);
+            } catch (error: any) {
+              console.error('🧪 Simple test error:', error);
+              alert(`❌ Error al probar simple: ${error.message}`);
+            }
+          }}
+          variant="outlined"
+          color="secondary"
+          disabled={isSubmitting}
+        >
+          🧪 Test Simple
+        </Button>
+        <Button
+          onClick={async () => {
+            try {
+              const result = await apiService.testRealPatientCreation();
+              console.log('🏥 Real test result:', result);
+
+              let message = `🏥 Test Real: ${result.status}\n`;
+              if (result.error) {
+                message += `Error: ${result.error}\n`;
+                if (result.response) {
+                  message += `Respuesta del servidor: ${JSON.stringify(result.response, null, 2)}`;
+                }
+              } else if (result.response) {
+                message += `✅ Test real exitoso\n`;
+                message += `Respuesta: ${JSON.stringify(result.response, null, 2)}`;
+              }
+
+              alert(message);
+            } catch (error: any) {
+              console.error('🏥 Real test error:', error);
+              alert(`❌ Error al probar real: ${error.message}\n\nDetalles en consola`);
+            }
+          }}
+          variant="outlined"
+          color="error"
+          disabled={isSubmitting}
+        >
+          🏥 Test Real
+        </Button>
+        <Button
+          onClick={async () => {
+            try {
+              const result = await apiService.testCreateMinimalPatient();
+              console.log('🧪 Test result:', result);
+
+              let message = '';
+              if (result.status === 'success') {
+                message = '✅ Creación con datos mínimos exitosa';
+              } else {
+                message = `❌ Error: ${result.error}\n\n`;
+                message += `Estado: ${result.status}\n`;
+                if (result.details) {
+                  message += `Detalles: ${JSON.stringify(result.details, null, 2)}`;
+                }
+              }
+
+              alert(message);
+            } catch (error: any) {
+              console.error('🧪 Test error:', error);
+              alert(`❌ Error al probar: ${error.message}\n\nDetalles en consola`);
+            }
+          }}
+          variant="outlined"
+          color="warning"
+          disabled={isSubmitting}
+        >
+          🧪 Test Mínimo
         </Button>
         <Button 
           onClick={onSubmit} 

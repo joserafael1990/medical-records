@@ -66,6 +66,8 @@ const formatDateForBackend = (inputDate: string): string => {
 };
 
 export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
+  // Removed initialization log to prevent console spam
+  
   const { isAuthenticated } = useAuth();
   const [doctorProfile, setDoctorProfile] = useState<DoctorProfile | null>(cache.data);
   const [isLoading, setIsLoading] = useState(false);
@@ -102,9 +104,7 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
     try {
       const data = await apiService.getDoctorProfile();
       
-      if (process.env.NODE_ENV === 'development') {
-        console.log('✅ Doctor profile loaded successfully:', data);
-      }
+      // Doctor profile loaded successfully
       
       // Update cache
       cache.data = data;
@@ -271,7 +271,7 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
       await fetchProfile();
       
       if (process.env.NODE_ENV === 'development') {
-        console.log('✅ Profile updated and reloaded successfully');
+        // Profile updated and reloaded successfully
       }
     } catch (error: any) {
       console.error('❌ Error in saveProfile:', error);
@@ -321,9 +321,22 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
 
   // Load profile when authenticated
   useEffect(() => {
+    console.log('🔄 useEffect - Load profile when authenticated', {
+      isAuthenticated,
+      fetchCalledRef: fetchCalledRef.current,
+      doctorProfile: doctorProfile ? 'exists' : 'null'
+    });
+    
     if (isAuthenticated && (!fetchCalledRef.current || !doctorProfile)) {
+      // Calling fetchProfile
       fetchCalledRef.current = true;
       fetchProfile();
+    } else {
+      console.log('❌ Skipping fetchProfile:', {
+        isAuthenticated,
+        fetchCalled: fetchCalledRef.current,
+        hasProfile: !!doctorProfile
+      });
     }
   }, [isAuthenticated, fetchProfile, doctorProfile]);
 

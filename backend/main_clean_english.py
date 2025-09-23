@@ -8,13 +8,82 @@ No legacy code - completely fresh implementation
 from fastapi import FastAPI, Depends, HTTPException, status, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func
 from typing import List, Optional
 from datetime import datetime, date, timedelta
+import pytz
+import os
 import crud
 import schemas
 import auth
-from database import get_db, Person, Specialty, Country, State, Nationality, EmergencyRelationship
+from database import get_db, Person, Specialty, Country, State, Nationality, EmergencyRelationship, Appointment, MedicalRecord
+from appointment_service import AppointmentService
+
+# ============================================================================
+# GLOBAL TIMEZONE CONFIGURATION
+# ============================================================================
+# Configure entire system to use CDMX timezone natively
+SYSTEM_TIMEZONE = pytz.timezone('America/Mexico_City')
+os.environ['TZ'] = 'America/Mexico_City'
+
+def now_cdmx():
+    """Get current datetime in CDMX timezone"""
+    return datetime.now(SYSTEM_TIMEZONE)
+
+def cdmx_datetime(dt_string: str) -> datetime:
+    """Parse datetime string treating it as CDMX timezone"""
+    if isinstance(dt_string, str):
+        # Parse the datetime string (assumed to be in CDMX timezone)
+        dt = datetime.fromisoformat(dt_string.replace('Z', ''))
+        
+        # Create timezone-aware datetime with proper CDMX offset (-06:00)
+        from datetime import timezone, timedelta
+        cdmx_tz = timezone(timedelta(hours=-6))
+        result = dt.replace(tzinfo=cdmx_tz)
+        
+        return result
+    return dt_string
+
+# ============================================================================
+# TIMEZONE CONFIGURATION - CDMX (UTC-6)
+# ============================================================================
+# Legacy - replaced by SYSTEM_TIMEZONE
+
+# ============================================================================
+# AUTHENTICATION
+# ============================================================================
+def get_current_user(db: Session = Depends(get_db)) -> Person:
+    """
+    Simplified authentication for development
+    Returns the first doctor in the database
+    TODO: Implement proper JWT token authentication
+    """
+    try:
+        # For development: return first doctor
+        doctor = db.query(Person).filter(Person.person_type == 'doctor').first()
+        if not doctor:
+            raise HTTPException(status_code=404, detail="No doctor found in database")
+        return doctor
+    except Exception as e:
+        print(f"❌ Authentication error: {str(e)}")
+        raise HTTPException(status_code=401, detail="Authentication failed")
+
+# Legacy - replaced by now_cdmx()
+
+def to_cdmx_timezone(dt: datetime) -> datetime:
+    """Convert datetime to CDMX timezone"""
+    if dt.tzinfo is None:
+        # Assume UTC if naive
+        dt = pytz.utc.localize(dt)
+    return dt.astimezone(SYSTEM_TIMEZONE)
+
+def from_cdmx_to_utc(dt: datetime) -> datetime:
+    """Convert CDMX datetime to UTC for database storage"""
+    if dt.tzinfo is None:
+        # Assume CDMX if naive
+        dt = SYSTEM_TIMEZONE.localize(dt)
+    return dt.astimezone(pytz.utc)
 
 # ============================================================================
 # FASTAPI APP SETUP
@@ -28,13 +97,28 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# CORS
+# CORS - Enhanced configuration for development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:3002",
+        "http://localhost:3003",
+        "http://localhost:3004",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+        "http://127.0.0.1:3002",
+        "http://127.0.0.1:3003",
+        "http://127.0.0.1:3004",
+        # Allow all origins in development (less secure but works)
+        "*",
+        "null"  # For local file:// access
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 # Security
@@ -85,7 +169,106 @@ async def root():
 @app.get("/health")
 async def health():
     """Health endpoint"""
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "timestamp": now_cdmx().isoformat()}
+
+@app.get("/api/test-cors")
+async def test_cors():
+    """Test CORS configuration"""
+    return {
+        "status": "cors_ok",
+        "message": "CORS is working correctly",
+        "origin": "allowed",
+        "timestamp": now_cdmx().isoformat()
+    }
+
+@app.options("/api/{path:path}")
+async def options_handler(path: str):
+    """Handle OPTIONS requests for any endpoint"""
+    # Simply return OK for any OPTIONS request to API endpoints
+    # This allows the browser to make preflight requests
+    return {"status": "ok"}
+
+# ============================================================================
+# CLINICAL STUDIES API ENDPOINTS
+# ============================================================================
+
+@app.get("/api/clinical-studies/patient/{patient_id}")
+async def get_clinical_studies_by_patient(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Get clinical studies for a specific patient"""
+    # TODO: Implement actual clinical studies table and logic
+    # For now, return empty list to prevent frontend errors
+    return []
+
+@app.get("/api/clinical-studies/consultation/{consultation_id}")
+async def get_clinical_studies_by_consultation(
+    consultation_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Get clinical studies for a specific consultation"""
+    # TODO: Implement actual clinical studies table and logic
+    # For now, return empty list to prevent frontend errors
+    return []
+
+@app.post("/api/clinical-studies")
+async def create_clinical_study(
+    study_data: dict,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Create a new clinical study"""
+    # TODO: Implement actual clinical studies table and logic
+    # For now, return a mock response to prevent frontend errors
+    return {
+        "id": 1,
+        "message": "Clinical study endpoint not implemented yet",
+        "status": "pending_implementation"
+    }
+
+@app.put("/api/clinical-studies/{study_id}")
+async def update_clinical_study(
+    study_id: int,
+    study_data: dict,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Update a clinical study"""
+    # TODO: Implement actual clinical studies table and logic
+    return {
+        "id": study_id,
+        "message": "Clinical study update endpoint not implemented yet",
+        "status": "pending_implementation"
+    }
+
+@app.delete("/api/clinical-studies/{study_id}")
+async def delete_clinical_study(
+    study_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Delete a clinical study"""
+    # TODO: Implement actual clinical studies table and logic
+    return {"message": "Clinical study deleted (mock)", "status": "pending_implementation"}
+
+@app.post("/api/test-patient-creation")
+async def test_patient_creation():
+    """Test patient creation endpoint - simplified for debugging"""
+    try:
+        # Just return success to test if the endpoint works
+        return {
+            "status": "patient_creation_works",
+            "message": "Patient creation endpoint is accessible",
+            "timestamp": now_cdmx().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Patient creation test failed: {str(e)}"
+        )
 
 # ============================================================================
 # CATALOGS (PUBLIC ENDPOINTS)
@@ -459,7 +642,62 @@ async def create_patient(
     current_user: Person = Depends(get_current_user)
 ):
     """Create new patient"""
-    return crud.create_patient(db, patient_data)
+    # Start a new transaction
+    db.begin()
+    try:
+        # Check if patient already exists by CURP or email
+        if patient_data.curp:
+            existing_patient = db.query(Person).filter(
+                Person.curp == patient_data.curp,
+                Person.person_type == 'patient'
+            ).first()
+            if existing_patient:
+                db.rollback()
+                raise HTTPException(
+                    status_code=409, 
+                    detail=f"Ya existe un paciente con CURP: {patient_data.curp}"
+                )
+        
+        if patient_data.email:
+            existing_patient = db.query(Person).filter(
+                Person.email == patient_data.email,
+                Person.person_type == 'patient'
+            ).first()
+            if existing_patient:
+                db.rollback()
+                raise HTTPException(
+                    status_code=409, 
+                    detail=f"Ya existe un paciente con email: {patient_data.email}"
+                )
+        
+        # Generate unique person code BEFORE creating the patient
+        person_code = crud.generate_person_code(db, 'patient')
+        
+        # Verify the generated code is actually unique
+        existing_code = db.query(Person).filter(Person.person_code == person_code).first()
+        if existing_code:
+            db.rollback()
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Error interno: código generado ya existe: {person_code}"
+            )
+        
+        # Create patient using the pre-generated code
+        patient = crud.create_patient_with_code(db, patient_data, person_code)
+        
+        # Only commit if everything succeeded
+        db.commit()
+        return patient
+        
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error interno al crear paciente: {str(e)}"
+        )
 
 @app.put("/api/patients/{patient_id}")
 async def update_patient(
@@ -476,7 +714,32 @@ async def update_patient(
         ).first()
         
         if not patient:
-            raise HTTPException(status_code=404, detail="Patient not found")
+            raise HTTPException(status_code=404, detail=f"No se encontró el paciente con ID: {patient_id}")
+        
+        # Check for conflicts with other patients (excluding current patient)
+        if patient_data.curp and patient_data.curp != patient.curp:
+            existing_patient = db.query(Person).filter(
+                Person.curp == patient_data.curp,
+                Person.person_type == 'patient',
+                Person.id != patient_id
+            ).first()
+            if existing_patient:
+                raise HTTPException(
+                    status_code=409, 
+                    detail=f"Ya existe otro paciente con CURP: {patient_data.curp}"
+                )
+        
+        if patient_data.email and patient_data.email != patient.email:
+            existing_patient = db.query(Person).filter(
+                Person.email == patient_data.email,
+                Person.person_type == 'patient',
+                Person.id != patient_id
+            ).first()
+            if existing_patient:
+                raise HTTPException(
+                    status_code=409, 
+                    detail=f"Ya existe otro paciente con email: {patient_data.email}"
+                )
         
         # Update patient fields with proper null handling for foreign keys
         update_data = patient_data.dict(exclude_unset=True)
@@ -503,12 +766,17 @@ async def update_patient(
         
         return patient
     except HTTPException:
+        db.rollback()
         raise
     except Exception as e:
+        db.rollback()
         print(f"❌ Error in update_patient: {str(e)}")
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error interno al actualizar paciente: {str(e)}"
+        )
 
 # ============================================================================
 # DASHBOARD
@@ -539,14 +807,169 @@ async def get_appointments(
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user),
     skip: int = 0,
-    limit: int = 100
+    limit: int = 100,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    status: Optional[str] = None
 ):
-    """Get list of appointments"""
+    """Get list of appointments with optional filters"""
     try:
-        # For now, return empty list - appointments table might not exist yet
-        return []
+        from datetime import datetime
+        
+        # Convert string dates to date objects if provided
+        start_date_obj = None
+        end_date_obj = None
+        
+        if start_date:
+            start_date_obj = datetime.fromisoformat(start_date).date()
+        if end_date:
+            end_date_obj = datetime.fromisoformat(end_date).date()
+        
+        # Get appointments using the service
+        appointments = AppointmentService.get_appointments(
+            db=db,
+            skip=skip,
+            limit=limit,
+            start_date=start_date_obj,
+            end_date=end_date_obj,
+            status=status,
+            doctor_id=str(current_user.id)  # Filter by current doctor
+        )
+        
+        # Transform to include patient information
+        result = []
+        for appointment in appointments:
+            apt_dict = {
+                "id": str(appointment.id),
+                "patient_id": str(appointment.patient_id),
+                "appointment_date": appointment.appointment_date.isoformat(),  # CDMX native format
+                "date_time": appointment.appointment_date.isoformat(),  # CDMX native format  
+                "end_time": appointment.end_time.isoformat() if appointment.end_time else None,
+                "appointment_type": appointment.appointment_type,
+                "reason": appointment.reason,
+                "notes": appointment.notes,
+                "duration_minutes": appointment.duration_minutes,
+                "status": appointment.status,
+                "priority": appointment.priority,
+                "room_number": appointment.room_number,
+                "estimated_cost": str(appointment.estimated_cost) if appointment.estimated_cost else None,
+                "insurance_covered": appointment.insurance_covered,
+                "cancelled_reason": appointment.cancelled_reason,
+                "cancelled_at": appointment.cancelled_at.isoformat() if appointment.cancelled_at else None,
+                "created_at": appointment.created_at.isoformat(),
+                "updated_at": appointment.updated_at.isoformat() if appointment.updated_at else None,
+                "patient_name": f"{appointment.patient.first_name} {appointment.patient.paternal_surname}" if appointment.patient else "Unknown Patient"
+            }
+            result.append(apt_dict)
+        
+        print(f"✅ Returned {len(result)} appointments")
+        return result
+        
     except Exception as e:
         print(f"❌ Error in get_appointments: {str(e)}")
+        # Return empty list instead of error to prevent frontend crashes
+        return []
+
+@app.get("/api/appointments/calendar")
+async def get_calendar_appointments(
+    target_date: str = None,
+    start_date: str = None,
+    end_date: str = None,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Get calendar appointments for specific date or date range - CDMX timezone aware"""
+    try:
+        print(f"📅 Getting calendar appointments for user {current_user.id}")
+        print(f"📊 Parameters: target_date={target_date}, start_date={start_date}, end_date={end_date}")
+        
+        # Build the base query
+        query = db.query(Appointment).options(
+            joinedload(Appointment.patient),
+            joinedload(Appointment.doctor)
+        ).filter(Appointment.doctor_id == current_user.id)
+        
+        print(f"🔍 Base query built for doctor_id: {current_user.id}")
+        
+        # Handle different date filtering scenarios with CDMX timezone
+        if start_date and end_date:
+            # Date range query for weekly/monthly views
+            parsed_start = datetime.fromisoformat(start_date).date()
+            parsed_end = datetime.fromisoformat(end_date).date()
+            
+            # Convert to CDMX timezone for filtering
+            cdmx_start = SYSTEM_TIMEZONE.localize(datetime.combine(parsed_start, datetime.min.time()))
+            cdmx_end = SYSTEM_TIMEZONE.localize(datetime.combine(parsed_end, datetime.max.time()))
+            
+            # Convert to UTC for database query
+            utc_start = cdmx_start.astimezone(pytz.utc)
+            utc_end = cdmx_end.astimezone(pytz.utc)
+            
+            query = query.filter(
+                Appointment.appointment_date >= utc_start,
+                Appointment.appointment_date <= utc_end
+            )
+            print(f"📅 Fetching appointments from {parsed_start} to {parsed_end} (CDMX timezone)")
+            print(f"🌍 UTC range: {utc_start} to {utc_end}")
+            
+        elif target_date:
+            # Single date query for daily view
+            parsed_date = datetime.fromisoformat(target_date).date()
+            
+            # Create naive datetime bounds for the day (assuming appointments are stored in local time)
+            day_start = datetime.combine(parsed_date, datetime.min.time())
+            day_end = datetime.combine(parsed_date, datetime.max.time())
+            
+            query = query.filter(
+                Appointment.appointment_date >= day_start,
+                Appointment.appointment_date <= day_end
+            )
+            print(f"📅 Fetching appointments for {parsed_date} (local time)")
+            print(f"🔍 Local day bounds: {day_start} to {day_end}")
+            
+        else:
+            # Default to today in CDMX timezone
+            today_cdmx = now_cdmx().date()
+            cdmx_start = SYSTEM_TIMEZONE.localize(datetime.combine(today_cdmx, datetime.min.time()))
+            cdmx_end = SYSTEM_TIMEZONE.localize(datetime.combine(today_cdmx, datetime.max.time()))
+            
+            utc_start = cdmx_start.astimezone(pytz.utc)
+            utc_end = cdmx_end.astimezone(pytz.utc)
+            
+            query = query.filter(
+                Appointment.appointment_date >= utc_start,
+                Appointment.appointment_date <= utc_end
+            )
+            print(f"📅 Fetching appointments for today: {today_cdmx} (CDMX timezone)")
+        
+        # Execute query and return results
+        appointments = query.order_by(Appointment.appointment_date).all()
+        
+        return appointments
+    except Exception as e:
+        print(f"Error in get_calendar_appointments: {str(e)}")
+        return []
+
+@app.get("/api/appointments/debug")
+async def debug_appointments(
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Debug endpoint to see all appointments for current doctor"""
+    try:
+        appointments = db.query(Appointment).options(
+            joinedload(Appointment.patient),
+            joinedload(Appointment.doctor)
+        ).filter(Appointment.doctor_id == current_user.id).all()
+        
+        print(f"🔍 DEBUG: Found {len(appointments)} total appointments for doctor {current_user.id}")
+        for apt in appointments:
+            cdmx_time = to_cdmx_timezone(apt.appointment_date)
+            print(f"  📅 ID: {apt.id}, Date: {apt.appointment_date} (UTC) = {cdmx_time} (CDMX), Duration: {apt.duration_minutes}min")
+        
+        return appointments
+    except Exception as e:
+        print(f"❌ Error in debug_appointments: {str(e)}")
         return []
 
 @app.get("/api/appointments/{appointment_id}")
@@ -557,37 +980,58 @@ async def get_appointment(
 ):
     """Get specific appointment by ID"""
     try:
-        # TODO: Implement when appointments table is created
-        raise HTTPException(status_code=404, detail="Appointment not found")
+        # NOTE: Appointments table not yet implemented in database schema
+        raise HTTPException(status_code=501, detail="Appointments feature not yet implemented")
     except Exception as e:
         print(f"❌ Error in get_appointment: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @app.post("/api/appointments")
 async def create_appointment(
-    appointment_data: dict,  # TODO: Create proper schema
+    appointment_data: schemas.AppointmentCreate,
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
     """Create new appointment"""
     try:
-        # TODO: Implement appointment creation when table is ready
-        return {"message": "Appointment functionality not yet implemented", "data": appointment_data}
+        # Create the appointment using CRUD
+        appointment = crud.create_appointment(db, appointment_data, current_user.id)
+        return appointment
     except Exception as e:
         print(f"❌ Error in create_appointment: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error al crear la cita: {str(e)}")
 
 @app.put("/api/appointments/{appointment_id}")
 async def update_appointment(
     appointment_id: int,
-    appointment_data: dict,  # TODO: Create proper schema
+    appointment_data: schemas.AppointmentUpdate,
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
     """Update specific appointment by ID"""
     try:
-        # TODO: Implement appointment update when table is ready
-        return {"message": "Appointment update functionality not yet implemented", "appointment_id": appointment_id}
+        # Verify the appointment exists and belongs to the current doctor
+        appointment = db.query(Appointment).filter(
+            Appointment.id == appointment_id,
+            Appointment.doctor_id == current_user.id
+        ).first()
+        
+        if not appointment:
+            raise HTTPException(status_code=404, detail="Appointment not found or access denied")
+        
+        # Update the appointment using CRUD
+        updated_appointment = crud.update_appointment(db, appointment_id, appointment_data)
+        
+        # Reload the appointment with relationships for the response
+        updated_appointment_with_relations = db.query(Appointment).options(
+            joinedload(Appointment.patient),
+            joinedload(Appointment.doctor)
+        ).filter(Appointment.id == appointment_id).first()
+        
+        print(f"✅ Appointment {appointment_id} updated successfully")
+        return updated_appointment_with_relations
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"❌ Error in update_appointment: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
@@ -600,21 +1044,11 @@ async def delete_appointment(
 ):
     """Delete/cancel specific appointment by ID"""
     try:
-        # TODO: Implement appointment deletion when table is ready
-        return {"message": "Appointment deleted successfully", "appointment_id": appointment_id}
+        # NOTE: Appointments table not yet implemented in database schema
+        raise HTTPException(status_code=501, detail="Appointments feature not yet implemented")
     except Exception as e:
         print(f"❌ Error in delete_appointment: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-
-@app.get("/api/appointments/calendar")
-async def get_calendar_appointments(target_date: str = None):
-    """Get calendar appointments for specific date"""
-    return {
-        "appointments": [],
-        "date": target_date or date.today().isoformat(),
-        "total": 0,
-        "message": "No appointments scheduled for the requested date"
-    }
 
 # ============================================================================
 # CONSULTATIONS
@@ -629,8 +1063,60 @@ async def get_consultations(
 ):
     """Get list of consultations"""
     try:
-        # For now, return empty list - consultations table might not exist yet
-        return []
+        print(f"📋 Fetching consultations from database for doctor {current_user.id}")
+        
+        # Query medical records (consultations) from database
+        consultations = db.query(MedicalRecord).options(
+            joinedload(MedicalRecord.patient),
+            joinedload(MedicalRecord.doctor)
+        ).filter(
+            MedicalRecord.doctor_id == current_user.id
+        ).order_by(MedicalRecord.consultation_date.desc()).offset(skip).limit(limit).all()
+        
+        print(f"📊 Found {len(consultations)} consultations in database")
+        
+        # Transform to API format
+        result = []
+        for consultation in consultations:
+            patient_name = "Paciente No Identificado"
+            if consultation.patient:
+                patient_name = f"{consultation.patient.first_name} {consultation.patient.paternal_surname} {consultation.patient.maternal_surname or ''}".strip()
+            
+            doctor_name = "Doctor"
+            if consultation.doctor:
+                doctor_name = f"{consultation.doctor.first_name} {consultation.doctor.paternal_surname}".strip()
+            
+            consultation_date_iso = consultation.consultation_date.isoformat()
+            
+            result.append({
+                "id": consultation.id,
+                "patient_id": consultation.patient_id,
+                "consultation_date": consultation_date_iso,
+                "chief_complaint": consultation.chief_complaint,
+                "history_present_illness": consultation.history_present_illness,
+                "family_history": consultation.family_history,
+                "personal_pathological_history": consultation.personal_pathological_history,
+                "personal_non_pathological_history": consultation.personal_non_pathological_history,
+                "physical_examination": consultation.physical_examination,
+                "primary_diagnosis": consultation.primary_diagnosis,
+                "secondary_diagnoses": consultation.secondary_diagnoses,
+                "treatment_plan": consultation.treatment_plan,
+                "therapeutic_plan": consultation.treatment_plan,  # Alias for compatibility
+                "follow_up_instructions": consultation.follow_up_instructions,
+                "prognosis": consultation.prognosis,
+                "laboratory_results": consultation.laboratory_results,
+                "imaging_studies": consultation.laboratory_results,  # Alias for compatibility
+                "notes": consultation.notes,
+                "interconsultations": consultation.notes,  # Map notes to interconsultations for frontend compatibility
+                "created_by": consultation.created_by,
+                "created_at": consultation.created_at.isoformat(),
+                "patient_name": patient_name,
+                "doctor_name": doctor_name,
+                "date": consultation_date_iso
+            })
+        
+        print(f"✅ Returning {len(result)} consultations for doctor {current_user.id}")
+        return result
     except Exception as e:
         print(f"❌ Error in get_consultations: {str(e)}")
         return []
@@ -643,22 +1129,154 @@ async def get_consultation(
 ):
     """Get specific consultation by ID"""
     try:
-        # TODO: Implement when consultations table is created
-        raise HTTPException(status_code=404, detail="Consultation not found")
+        print(f"📋 Fetching consultation {consultation_id} for doctor {current_user.id}")
+        
+        # Query specific medical record
+        consultation = db.query(MedicalRecord).options(
+            joinedload(MedicalRecord.patient),
+            joinedload(MedicalRecord.doctor)
+        ).filter(
+            MedicalRecord.id == consultation_id,
+            MedicalRecord.doctor_id == current_user.id
+        ).first()
+        
+        if not consultation:
+            raise HTTPException(status_code=404, detail="Consultation not found")
+        
+        # Get patient name
+        patient_name = "Paciente No Identificado"
+        if consultation.patient:
+            patient_name = f"{consultation.patient.first_name} {consultation.patient.paternal_surname} {consultation.patient.maternal_surname or ''}".strip()
+        
+        # Get doctor name
+        doctor_name = "Doctor"
+        if consultation.doctor:
+            doctor_name = f"{consultation.doctor.first_name} {consultation.doctor.paternal_surname}".strip()
+        
+        # Return complete consultation data
+        result = {
+            "id": consultation.id,
+            "patient_id": consultation.patient_id,
+            "consultation_date": consultation.consultation_date.isoformat(),
+            "chief_complaint": consultation.chief_complaint,
+            "history_present_illness": consultation.history_present_illness,
+            "family_history": consultation.family_history,
+            "personal_pathological_history": consultation.personal_pathological_history,
+            "personal_non_pathological_history": consultation.personal_non_pathological_history,
+            "physical_examination": consultation.physical_examination,
+            "primary_diagnosis": consultation.primary_diagnosis,
+            "secondary_diagnoses": consultation.secondary_diagnoses,
+            "treatment_plan": consultation.treatment_plan,
+            "therapeutic_plan": consultation.treatment_plan,  # Alias for compatibility
+            "follow_up_instructions": consultation.follow_up_instructions,
+            "prognosis": consultation.prognosis,
+            "laboratory_results": consultation.laboratory_results,
+            "imaging_studies": consultation.laboratory_results,  # Alias for compatibility
+            "notes": consultation.notes,
+            "interconsultations": consultation.notes,  # Map notes to interconsultations for frontend compatibility
+            "created_by": consultation.created_by,
+            "created_at": consultation.created_at.isoformat(),
+            "patient_name": patient_name,
+            "doctor_name": doctor_name,
+            "date": consultation.consultation_date.isoformat()
+        }
+        
+        print(f"✅ Returning consultation {consultation_id}")
+        return result
+        
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"❌ Error in get_consultation: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @app.post("/api/consultations")
 async def create_consultation(
-    consultation_data: dict,  # TODO: Create proper schema
+    consultation_data: dict,  # NOTE: Proper schema pending consultations table implementation
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
     """Create new consultation"""
     try:
-        # TODO: Implement consultation creation when table is ready
-        return {"message": "Consultation functionality not yet implemented", "data": consultation_data}
+        # Parse consultation date
+        consultation_date_str = consultation_data.get("date", consultation_data.get("consultation_date"))
+        if consultation_date_str:
+            # Parse ISO datetime string as CDMX time
+            consultation_date = cdmx_datetime(consultation_date_str)
+        else:
+            consultation_date = now_cdmx()
+        
+        # Create MedicalRecord in database
+        new_medical_record = MedicalRecord(
+            patient_id=consultation_data.get("patient_id"),
+            doctor_id=current_user.id,
+            consultation_date=consultation_date,
+            chief_complaint=consultation_data.get("chief_complaint", ""),
+            history_present_illness=consultation_data.get("history_present_illness", ""),
+            family_history=consultation_data.get("family_history", ""),
+            personal_pathological_history=consultation_data.get("personal_pathological_history", ""),
+            personal_non_pathological_history=consultation_data.get("personal_non_pathological_history", ""),
+            physical_examination=consultation_data.get("physical_examination", ""),
+            primary_diagnosis=consultation_data.get("primary_diagnosis", ""),
+            treatment_plan=consultation_data.get("treatment_plan", ""),
+            follow_up_instructions=consultation_data.get("follow_up_instructions", ""),
+            prognosis=consultation_data.get("prognosis", ""),
+            secondary_diagnoses=consultation_data.get("secondary_diagnoses", ""),
+            laboratory_results=consultation_data.get("laboratory_results", ""),
+            notes=consultation_data.get("notes") or consultation_data.get("interconsultations", ""),
+            created_by=current_user.id
+        )
+        
+        # Save to database
+        db.add(new_medical_record)
+        db.commit()
+        db.refresh(new_medical_record)
+        
+        # Get patient name for response
+        patient_name = "Paciente No Identificado"
+        if new_medical_record.patient_id:
+            patient = db.query(Person).filter(
+                Person.id == new_medical_record.patient_id,
+                Person.person_type == "patient"
+            ).first()
+            if patient:
+                patient_name = f"{patient.first_name} {patient.paternal_surname} {patient.maternal_surname or ''}".strip()
+        
+        doctor_name = f"{current_user.first_name} {current_user.paternal_surname}".strip()
+        
+        # Return in API format
+        result = {
+            "id": new_medical_record.id,
+            "patient_id": new_medical_record.patient_id,
+            "consultation_date": new_medical_record.consultation_date.isoformat(),
+            "chief_complaint": new_medical_record.chief_complaint,
+            "history_present_illness": new_medical_record.history_present_illness,
+            "family_history": new_medical_record.family_history,
+            "personal_pathological_history": new_medical_record.personal_pathological_history,
+            "personal_non_pathological_history": new_medical_record.personal_non_pathological_history,
+            "physical_examination": new_medical_record.physical_examination,
+            "primary_diagnosis": new_medical_record.primary_diagnosis,
+            "secondary_diagnoses": new_medical_record.secondary_diagnoses,
+            "treatment_plan": new_medical_record.treatment_plan,
+            "therapeutic_plan": new_medical_record.treatment_plan,  # Alias for compatibility
+            "follow_up_instructions": new_medical_record.follow_up_instructions,
+            "prognosis": new_medical_record.prognosis,
+            "laboratory_results": new_medical_record.laboratory_results,
+            "imaging_studies": new_medical_record.laboratory_results,  # Alias for compatibility
+            "notes": new_medical_record.notes,
+            "interconsultations": new_medical_record.notes,  # Map notes to interconsultations for frontend compatibility
+            "created_by": new_medical_record.created_by,
+            "created_at": new_medical_record.created_at.isoformat(),
+            "patient_name": patient_name,
+            "doctor_name": doctor_name,
+            "date": new_medical_record.consultation_date.isoformat()
+        }
+        
+        print(f"✅ Medical record created in database: ID={new_medical_record.id}")
+        return result
+        
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions as-is
     except Exception as e:
         print(f"❌ Error in create_consultation: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
@@ -666,14 +1284,93 @@ async def create_consultation(
 @app.put("/api/consultations/{consultation_id}")
 async def update_consultation(
     consultation_id: int,
-    consultation_data: dict,  # TODO: Create proper schema
+    consultation_data: dict,  # NOTE: Proper schema pending consultations table implementation
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
     """Update specific consultation by ID"""
     try:
-        # TODO: Implement consultation update when table is ready
-        return {"message": "Consultation update functionality not yet implemented", "consultation_id": consultation_id}
+        print(f"📝 Updating consultation {consultation_id} for user {current_user.id}")
+        print(f"📊 Update data received: {consultation_data}")
+        
+        # Find existing consultation
+        consultation = db.query(MedicalRecord).filter(
+            MedicalRecord.id == consultation_id,
+            MedicalRecord.doctor_id == current_user.id
+        ).first()
+        
+        if not consultation:
+            raise HTTPException(status_code=404, detail="Consultation not found")
+        
+        # Parse consultation date if provided
+        consultation_date = consultation.consultation_date
+        consultation_date_str = consultation_data.get("date", consultation_data.get("consultation_date"))
+        if consultation_date_str:
+            # Parse ISO datetime string as CDMX time
+            consultation_date = cdmx_datetime(consultation_date_str)
+        
+        # Update fields
+        consultation.patient_id = consultation_data.get("patient_id", consultation.patient_id)
+        consultation.consultation_date = consultation_date
+        consultation.chief_complaint = consultation_data.get("chief_complaint", consultation.chief_complaint)
+        consultation.history_present_illness = consultation_data.get("history_present_illness", consultation.history_present_illness)
+        consultation.family_history = consultation_data.get("family_history", consultation.family_history)
+        consultation.personal_pathological_history = consultation_data.get("personal_pathological_history", consultation.personal_pathological_history)
+        consultation.personal_non_pathological_history = consultation_data.get("personal_non_pathological_history", consultation.personal_non_pathological_history)
+        consultation.physical_examination = consultation_data.get("physical_examination", consultation.physical_examination)
+        consultation.primary_diagnosis = consultation_data.get("primary_diagnosis", consultation.primary_diagnosis)
+        consultation.secondary_diagnoses = consultation_data.get("secondary_diagnoses", consultation.secondary_diagnoses)
+        consultation.treatment_plan = consultation_data.get("treatment_plan", consultation.treatment_plan)
+        consultation.follow_up_instructions = consultation_data.get("follow_up_instructions", consultation.follow_up_instructions)
+        consultation.prognosis = consultation_data.get("prognosis", consultation.prognosis)
+        consultation.laboratory_results = consultation_data.get("laboratory_results", consultation.laboratory_results)
+        consultation.notes = consultation_data.get("notes") or consultation_data.get("interconsultations") or consultation.notes
+        
+        # Save changes
+        db.commit()
+        db.refresh(consultation)
+        
+        # Get patient and doctor names for response
+        patient_name = "Paciente No Identificado"
+        if consultation.patient:
+            patient_name = f"{consultation.patient.first_name} {consultation.patient.paternal_surname} {consultation.patient.maternal_surname or ''}".strip()
+        
+        doctor_name = f"{current_user.first_name} {current_user.paternal_surname}".strip()
+        
+        # Return updated consultation in API format
+        result = {
+            "id": consultation.id,
+            "patient_id": consultation.patient_id,
+            "consultation_date": consultation.consultation_date.isoformat(),
+            "chief_complaint": consultation.chief_complaint,
+            "history_present_illness": consultation.history_present_illness,
+            "family_history": consultation.family_history,
+            "personal_pathological_history": consultation.personal_pathological_history,
+            "personal_non_pathological_history": consultation.personal_non_pathological_history,
+            "physical_examination": consultation.physical_examination,
+            "primary_diagnosis": consultation.primary_diagnosis,
+            "secondary_diagnoses": consultation.secondary_diagnoses,
+            "treatment_plan": consultation.treatment_plan,
+            "therapeutic_plan": consultation.treatment_plan,  # Alias for compatibility
+            "follow_up_instructions": consultation.follow_up_instructions,
+            "prognosis": consultation.prognosis,
+            "laboratory_results": consultation.laboratory_results,
+            "imaging_studies": consultation.laboratory_results,  # Alias for compatibility
+            "notes": consultation.notes,
+            "interconsultations": consultation.notes,  # Map notes to interconsultations for frontend compatibility
+            "created_by": consultation.created_by,
+            "created_at": consultation.created_at.isoformat(),
+            "updated_at": consultation.updated_at.isoformat(),
+            "patient_name": patient_name,
+            "doctor_name": doctor_name,
+            "date": consultation.consultation_date.isoformat()
+        }
+        
+        print(f"✅ Consultation {consultation_id} updated successfully")
+        return result
+        
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"❌ Error in update_consultation: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
@@ -686,10 +1383,153 @@ async def delete_consultation(
 ):
     """Delete specific consultation by ID"""
     try:
-        # TODO: Implement consultation deletion when table is ready
-        return {"message": "Consultation deleted successfully", "consultation_id": consultation_id}
+        # NOTE: Consultations table not yet implemented in database schema
+        raise HTTPException(status_code=501, detail="Consultations feature not yet implemented")
     except Exception as e:
         print(f"❌ Error in delete_consultation: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+# ============================================================================
+# MEDICAL RECORDS ENDPOINTS
+# ============================================================================
+
+@app.get("/api/medical-records")
+async def get_medical_records(
+    patient_id: Optional[int] = None,
+    doctor_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Get medical records - all, by patient, or by doctor"""
+    try:
+        if patient_id:
+            records = crud.get_medical_records_by_patient(db, patient_id)
+        elif doctor_id:
+            records = crud.get_medical_records_by_doctor(db, doctor_id)
+        else:
+            # Get all records for current doctor
+            records = crud.get_medical_records_by_doctor(db, current_user.id)
+        
+        # Convert to schemas and return
+        result = []
+        for record in records:
+            record_dict = schemas.MedicalRecord.from_orm(record).dict()
+            result.append(record_dict)
+            
+        return {"data": result, "count": len(result)}
+    except Exception as e:
+        print(f"❌ Error in get_medical_records: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/api/medical-records/{record_id}")
+async def get_medical_record(
+    record_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Get specific medical record by ID"""
+    try:
+        record = crud.get_medical_record(db, record_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="Medical record not found")
+        
+        # Check if user has access to this record
+        if record.doctor_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Access denied to this medical record")
+        
+        return schemas.MedicalRecord.from_orm(record).dict()
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error in get_medical_record: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.post("/api/medical-records")
+async def create_medical_record(
+    record_data: schemas.MedicalRecordCreate,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Create new medical record"""
+    try:
+        # Verify patient exists
+        patient = crud.get_person(db, record_data.patient_id)
+        if not patient:
+            raise HTTPException(status_code=404, detail="Patient not found")
+        
+        # Set doctor as current user
+        record_data.doctor_id = current_user.id
+        
+        # Create the record
+        new_record = crud.create_medical_record(db, record_data)
+        
+        return {
+            "message": "Medical record created successfully",
+            "data": schemas.MedicalRecord.from_orm(new_record).dict()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error in create_medical_record: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.put("/api/medical-records/{record_id}")
+async def update_medical_record(
+    record_id: int,
+    record_data: schemas.MedicalRecordUpdate,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Update specific medical record by ID"""
+    try:
+        # Check if record exists and user has access
+        existing_record = crud.get_medical_record(db, record_id)
+        if not existing_record:
+            raise HTTPException(status_code=404, detail="Medical record not found")
+        
+        if existing_record.doctor_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Access denied to this medical record")
+        
+        # Update the record
+        updated_record = crud.update_medical_record(db, record_id, record_data)
+        
+        return {
+            "message": "Medical record updated successfully",
+            "data": schemas.MedicalRecord.from_orm(updated_record).dict()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error in update_medical_record: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.delete("/api/medical-records/{record_id}")
+async def delete_medical_record(
+    record_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Delete specific medical record by ID"""
+    try:
+        # Check if record exists and user has access
+        existing_record = crud.get_medical_record(db, record_id)
+        if not existing_record:
+            raise HTTPException(status_code=404, detail="Medical record not found")
+        
+        if existing_record.doctor_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Access denied to this medical record")
+        
+        # Soft delete by setting a deleted flag or hard delete
+        # For now, we'll do hard delete - in production consider soft delete
+        db.delete(existing_record)
+        db.commit()
+        
+        return {"message": "Medical record deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Error in delete_medical_record: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 # ============================================================================
@@ -729,7 +1569,7 @@ if __name__ == "__main__":
     print("🚀 Starting clean English API server...")
     uvicorn.run(
         "main_clean_english:app",
-        host="0.0.0.0",
+        host="127.0.0.1",
         port=8000,
         reload=True,
         log_level="info"

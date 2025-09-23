@@ -126,7 +126,10 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={onAddStudy}
+          onClick={() => {
+            console.log('🔬 Nuevo Estudio button clicked');
+            onAddStudy();
+          }}
           size="small"
         >
           Nuevo Estudio

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Paper,
@@ -10,9 +10,15 @@ import {
   Container,
   Avatar,
   IconButton,
-  InputAdornment
+  InputAdornment,
+  Collapse
 } from '@mui/material';
-import { LockOutlined, Visibility, VisibilityOff } from '@mui/icons-material';
+import { 
+  LockOutlined, 
+  Visibility, 
+  VisibilityOff,
+  Warning as WarningIcon
+} from '@mui/icons-material';
 import AvantLogo from '../common/AvantLogo';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -21,24 +27,52 @@ const LoginView: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [errorType, setErrorType] = useState<string>('');
   const { login, isLoading, setShowRegister } = useAuth();
 
   const handleClickShowPassword = () => {
     setShowPassword(!showPassword);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    // Clear previous errors
     setError('');
+    setErrorType('');
+    
 
     if (!email || !password) {
-      setError('Por favor, ingresa tu correo electrónico y contraseña');
+      const validationError = 'Por favor, ingresa tu correo electrónico y contraseña';
+      setError(validationError);
+      setErrorType('validation');
       return;
     }
 
-    const success = await login(email, password);
-    if (!success) {
-      setError('Correo electrónico o contraseña incorrectos');
+    try {
+      const result = await login(email, password);
+      
+      if (result.success) {
+        // Success - user will be redirected by AuthContext
+      } else {
+        // Handle login failure
+        setError(result.error || 'Credenciales incorrectas. Por favor, verifica tu email y contraseña.');
+        setErrorType(result.errorType || 'credentials');
+      }
+    } catch (error: any) {
+      // Handle unexpected errors
+      if (error && error.detail) {
+        setError('Error de autenticación: ' + error.detail);
+      } else if (error && error.status === 401) {
+        setError('Credenciales incorrectas. Por favor, verifica tu email y contraseña.');
+      } else {
+        setError('Error inesperado durante el inicio de sesión');
+      }
+      
+      setErrorType('unexpected');
     }
   };
 
@@ -66,13 +100,35 @@ const LoginView: React.FC = () => {
             <AvantLogo variant="full" sx={{ fontSize: 60, color: 'primary.main' }} />
           </Box>
 
-          {error && (
-            <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
-              {error}
+          {/* Error Display with Context */}
+          <Collapse in={!!error}>
+            <Alert 
+              severity={errorType === 'validation' ? 'warning' : 'error'}
+              sx={{ width: '100%', mb: 2 }}
+              icon={errorType === 'validation' ? <WarningIcon /> : undefined}
+              action={undefined}
+            >
+              <Box>
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                  {error}
+                </Typography>
+                
+              </Box>
             </Alert>
-          )}
+          </Collapse>
 
-          <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1, width: '100%' }}>
+          <Box 
+            component="form" 
+            onSubmit={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleSubmit(e);
+              return false;
+            }}
+            noValidate
+            autoComplete="off"
+            sx={{ mt: 1, width: '100%' }}
+          >
             <TextField
               margin="normal"
               required
@@ -117,15 +173,20 @@ const LoginView: React.FC = () => {
             />
             
             <Button
-              type="submit"
+              type="button"
               fullWidth
               variant="contained"
               sx={{ mt: 3, mb: 2 }}
               disabled={isLoading}
               startIcon={isLoading ? <CircularProgress size={20} /> : null}
+              onClick={(e) => {
+                e.preventDefault();
+                handleSubmit();
+              }}
             >
               {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
             </Button>
+            
           </Box>
 
           <Box sx={{ textAlign: 'center', mt: 3 }}>

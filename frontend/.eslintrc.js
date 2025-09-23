@@ -1,29 +1,36 @@
 module.exports = {
   extends: [
-    'react-app'
+    'react-app',
+    'react-app/jest'
   ],
   rules: {
-    // Completely disable all problematic rules for development
-    'import/first': 'off',
-    'import/order': 'off',
-    'import/no-duplicates': 'off',
-    'import/newline-after-import': 'off',
-    'import/no-unresolved': 'off',
+    // CRITICAL: Enable essential rules that prevent runtime errors
+    '@typescript-eslint/no-unused-vars': ['warn', { 
+      argsIgnorePattern: '^_',
+      varsIgnorePattern: '^_',
+      ignoreRestSiblings: true 
+    }],
+    'react-hooks/exhaustive-deps': 'warn', // CRITICAL for useEffect dependencies
+    'react/jsx-no-undef': 'error', // CRITICAL for undefined components
+    'no-unused-vars': 'off', // Let TypeScript handle this
     
-    // Disable all TypeScript and React warnings that block compilation
-    '@typescript-eslint/no-unused-vars': 'off',
-    '@typescript-eslint/no-redeclare': 'off',
-    'react-hooks/exhaustive-deps': 'off',
-    'react/jsx-no-undef': 'off',
-    'no-unused-vars': 'off',
-    'no-redeclare': 'off'
+    // Import organization (less critical but helpful)
+    'import/first': 'warn',
+    'import/no-duplicates': 'warn',
+    'import/newline-after-import': 'warn',
+    
+    // Allow some flexibility for development
+    'import/order': 'off', // Can be noisy during development
+    'import/no-unresolved': 'off', // TypeScript handles this
+    '@typescript-eslint/no-redeclare': 'warn',
+    'no-redeclare': 'off' // Let TypeScript handle this
   },
-  // Ignore specific patterns that cause issues
   ignorePatterns: [
     '*.test.js',
-    '*.test.ts',
+    '*.test.ts', 
     '*.test.tsx',
     'build/',
-    'node_modules/'
+    'node_modules/',
+    'coverage/'
   ]
 };

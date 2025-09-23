@@ -33,7 +33,7 @@ export interface ConsultationManagementActions {
   handleViewConsultation: (consultation: any) => Promise<void>;
   handleDeleteConsultation: (consultation: any) => Promise<void>;
   handleBackFromConsultationDetail: () => void;
-  loadConsultations: () => Promise<void>;
+  fetchConsultations: () => Promise<void>;
 }
 
 export interface UseConsultationManagementReturn extends ConsultationManagementState, ConsultationManagementActions {}
@@ -93,8 +93,8 @@ export function useConsultationManagement(
     }
   };
 
-  // Load consultations
-  const loadConsultations = useCallback(async () => {
+  // Fetch consultations
+  const fetchConsultations = useCallback(async () => {
     // Skip if no success handler (means not authenticated)
     if (!showSuccessMessage) {
       console.log('🔒 ConsultationManagement - No auth context, skipping consultation load');
@@ -234,7 +234,7 @@ export function useConsultationManagement(
     handleViewConsultation,
     handleDeleteConsultation,
     handleBackFromConsultationDetail,
-    loadConsultations
+    fetchConsultations
   };
 }
 

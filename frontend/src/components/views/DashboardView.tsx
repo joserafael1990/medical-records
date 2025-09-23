@@ -18,10 +18,12 @@ import {
   TrendingUp as TrendingUpIcon
 } from '@mui/icons-material';
 import { DashboardData } from '../../types';
+import { getAppointmentDate } from '../../constants';
 
 interface DashboardViewProps {
   dashboardData: DashboardData | null;
   todayAppointments?: any[]; // Add today's appointments
+  appointments?: any[]; // All appointments for dynamic calculation
   onNewAppointment?: () => void;
   onNewConsultation?: () => void;
 }
@@ -29,9 +31,49 @@ interface DashboardViewProps {
 const DashboardView: React.FC<DashboardViewProps> = ({ 
   dashboardData, 
   todayAppointments = [],
+  appointments = [],
   onNewAppointment, 
   onNewConsultation 
 }) => {
+  // Calculate today's appointments dynamically
+  const today = new Date().toDateString();
+  const todayAppointmentsFiltered = appointments.filter(apt => {
+    if (!apt.date_time) return false;
+    const aptDate = getAppointmentDate(apt.date_time);
+    const isToday = aptDate.toDateString() === today;
+    // Mostrar TODAS las citas del día (incluyendo canceladas) para que el doctor sepa
+    return isToday;
+  });
+  const todayAppointmentsCount = todayAppointmentsFiltered.length;
+  
+  // DEBUG: Log dashboard calculation
+  console.log('📊 DASHBOARD STATS:', {
+    total_appointments: appointments.length,
+    today_date: today,
+    today_appointments_count: todayAppointmentsCount,
+    appointments_for_debug: appointments.map(a => ({
+      id: a.id,
+      date_time: a.date_time,
+      parsed_date: a.date_time ? getAppointmentDate(a.date_time).toDateString() : null,
+      status: a.status,
+      patient_name: a.patient_name
+    })),
+    today_appointments_filtered: todayAppointmentsFiltered.map(a => ({
+      id: a.id,
+      status: a.status,
+      patient_name: a.patient_name
+    })),
+    cancelled_appointments_today: appointments.filter(a => {
+      if (!a.date_time) return false;
+      const aptDate = getAppointmentDate(a.date_time);
+      const isToday = aptDate.toDateString() === today;
+      return isToday && (a.status === 'cancelled' || a.status === 'canceled');
+    }).map(a => ({
+      id: a.id,
+      status: a.status,
+      patient_name: a.patient_name
+    }))
+  });
   return (
     <Box>
       {/* Welcome Header */}
@@ -63,7 +105,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box>
                   <Typography variant="h3" sx={{ fontWeight: 700, mb: 0.5 }}>
-                    {dashboardData?.today_appointments || 1}
+                    {todayAppointmentsCount}
                   </Typography>
                   <Typography variant="body2" sx={{ opacity: 0.9 }}>
                     Citas Hoy
@@ -199,7 +241,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               </Box>
               
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {todayAppointments.length > 0 ? todayAppointments.map((appointment, index) => (
+                {todayAppointmentsFiltered.length > 0 ? todayAppointmentsFiltered.map((appointment, index) => (
                   <Box
                     key={index}
                     sx={{
@@ -207,10 +249,15 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                       alignItems: 'center',
                       p: 2,
                       borderRadius: '12px',
-                      backgroundColor: index === 1 ? 'primary.light' : 'grey.50',
-                      color: index === 1 ? 'white' : 'text.primary',
+                      backgroundColor: 
+                        appointment.status === 'cancelled' || appointment.status === 'canceled' ? 'grey.100' :
+                        index === 1 ? 'primary.light' : 'grey.50',
+                      color: 
+                        appointment.status === 'cancelled' || appointment.status === 'canceled' ? 'text.secondary' :
+                        index === 1 ? 'white' : 'text.primary',
                       border: index === 1 ? 'none' : '1px solid',
-                      borderColor: 'grey.200'
+                      borderColor: 'grey.200',
+                      opacity: appointment.status === 'cancelled' || appointment.status === 'canceled' ? 0.7 : 1
                     }}
                   >
                     <Box sx={{ 
@@ -227,17 +274,40 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                       <TimeIcon />
                     </Box>
                     <Box sx={{ flexGrow: 1 }}>
-                      <Typography variant="body1" sx={{ fontWeight: 600, mb: 0.5 }}>
-                        {appointment.appointment_date ? new Date(appointment.appointment_date).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : 'Sin hora'} - {appointment.patient_name || 'Paciente desconocido'}
+                      <Typography 
+                        variant="body1" 
+                        sx={{ 
+                          fontWeight: 600, 
+                          mb: 0.5,
+                          textDecoration: appointment.status === 'cancelled' || appointment.status === 'canceled' ? 'line-through' : 'none'
+                        }}
+                      >
+                        {appointment.date_time ? new Date(appointment.date_time).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : 'Sin hora'} - {appointment.patient_name || 'Paciente desconocido'}
                       </Typography>
-                      <Typography variant="body2" sx={{ opacity: 0.8 }}>
+                      <Typography 
+                        variant="body2" 
+                        sx={{ 
+                          opacity: 0.8,
+                          textDecoration: appointment.status === 'cancelled' || appointment.status === 'canceled' ? 'line-through' : 'none'
+                        }}
+                      >
                         {appointment.appointment_type || appointment.reason || 'Consulta médica'}
                       </Typography>
                     </Box>
                     <Chip
-                      label={appointment.status === 'confirmed' || appointment.status === 'scheduled' ? 'Confirmada' : 'Pendiente'}
+                      label={
+                        appointment.status === 'confirmed' ? 'Confirmada' : 
+                        appointment.status === 'scheduled' ? 'Programada' : 
+                        appointment.status === 'cancelled' || appointment.status === 'canceled' ? 'Cancelada' :
+                        'Pendiente'
+                      }
                       size="small"
-                      color={appointment.status === 'confirmed' || appointment.status === 'scheduled' ? 'success' : 'warning'}
+                      color={
+                        appointment.status === 'confirmed' ? 'success' : 
+                        appointment.status === 'scheduled' ? 'info' : 
+                        appointment.status === 'cancelled' || appointment.status === 'canceled' ? 'error' :
+                        'warning'
+                      }
                       sx={{ fontWeight: 500 }}
                     />
                   </Box>

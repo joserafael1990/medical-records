@@ -6,6 +6,7 @@
 import { useState, useCallback } from 'react';
 import { apiService } from '../services/api';
 import type { Consultation, ConsultationFormData, ClinicalStudy } from '../types';
+import { getCurrentCDMXDateTime } from '../constants';
 
 // Debug helper - only logs in development
 const debugLog = (message: string, data?: any) => {
@@ -24,6 +25,7 @@ interface ConsultationManagementState {
   consultationStudies: ClinicalStudy[];
   consultationSearchTerm: string;
   isSubmitting: boolean;
+  isLoading: boolean;
   // Temporary state for new consultations
   tempConsultationId: string | null;
   tempClinicalStudies: ClinicalStudy[];
@@ -34,7 +36,6 @@ interface ConsultationManagementState {
 interface ConsultationManagementActions {
   // Data operations
   fetchConsultations: () => Promise<void>;
-  loadConsultations: () => Promise<void>; // Alias for fetchConsultations
   createConsultation: (data: ConsultationFormData) => Promise<Consultation>;
   updateConsultation: (id: string, data: ConsultationFormData) => Promise<Consultation>;
   deleteConsultation: (id: string) => Promise<void>;
@@ -70,12 +71,7 @@ interface ConsultationManagementActions {
 
 export type ConsultationManagementReturn = ConsultationManagementState & ConsultationManagementActions;
 
-// Helper function to get current Mexico City date/time
-const getCurrentMexicoCityDateTime = () => {
-  const now = new Date();
-  const mexicoTime = new Date(now.toLocaleString("en-US", {timeZone: "America/Mexico_City"}));
-  return mexicoTime.toISOString().slice(0, 16);
-};
+// Function moved to imports section above
 
 export const useConsultationManagement = (): ConsultationManagementReturn => {
   // State
@@ -86,6 +82,7 @@ export const useConsultationManagement = (): ConsultationManagementReturn => {
   const [consultationDetailView, setConsultationDetailView] = useState(false);
   const [consultationStudies, setConsultationStudies] = useState<ClinicalStudy[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   
   // Temporary state for new consultations
   const [tempConsultationId, setTempConsultationId] = useState<string | null>(null);
@@ -96,9 +93,9 @@ export const useConsultationManagement = (): ConsultationManagementReturn => {
   const [creatingPatientFromConsultation, setCreatingPatientFromConsultation] = useState(false);
   
   // Form data with default values
-  const [consultationFormData, setConsultationFormData] = useState<ConsultationFormData>({
+  const [consultationFormData, setConsultationFormData] = useState<ConsultationFormData>(() => ({
     patient_id: '',
-    date: getCurrentMexicoCityDateTime(),
+    date: getCurrentCDMXDateTime(),
     chief_complaint: '',
     history_present_illness: '',
     family_history: '',
@@ -117,16 +114,13 @@ export const useConsultationManagement = (): ConsultationManagementReturn => {
     doctor_name: '',
     doctor_professional_license: '',
     doctor_specialty: ''
-  });
+  }));
 
   // Load consultation studies
   const loadConsultationStudies = useCallback(async (consultationId: string) => {
     try {
-      debugLog('🔍 Loading studies for consultation:', consultationId);
-      // TODO: Implement getClinicalStudies in apiService when API is ready
-      // For now, return empty array as backend doesn't have this endpoint yet
+      // NOTE: Clinical studies API endpoint not yet implemented in backend
       const studies: ClinicalStudy[] = [];
-      debugLog('📋 Studies loaded from backend:', studies);
       setConsultationStudies(studies);
     } catch (error: any) {
       console.error('❌ Error loading clinical studies from backend:', error?.message || 'Unknown error');
@@ -140,8 +134,9 @@ export const useConsultationManagement = (): ConsultationManagementReturn => {
   // Fetch consultations from API
   const fetchConsultations = useCallback(async () => {
     try {
-      debugLog('🔄 Cargando consultas...');
+      console.log('🔄 Fetching consultations from backend...');
       const data = await apiService.getConsultations();
+      console.log('📊 Raw consultations data from API:', data);
       
       // Transform consultation data
       const transformedData = data.map((consultation: any) => ({
@@ -152,10 +147,11 @@ export const useConsultationManagement = (): ConsultationManagementReturn => {
         id: consultation.id || consultation.consultation_id
       }));
       
-      debugLog('✅ Transformed consultations:', transformedData);
+      console.log('✅ Transformed consultations:', transformedData);
+      console.log(`📈 Total consultations loaded: ${transformedData.length}`);
       setConsultations(transformedData);
     } catch (error: any) {
-      console.error('Error fetching consultations:', error?.message || 'Unknown error');
+      console.error('❌ Error fetching consultations:', error?.message || 'Unknown error');
       setConsultations([]);
     }
   }, []);
@@ -201,16 +197,12 @@ export const useConsultationManagement = (): ConsultationManagementReturn => {
     }
   }, [fetchConsultations]);
 
-  // Reset form state
-  const resetConsultationForm = useCallback(() => {
-    setSelectedConsultation(null);
-    setIsEditingConsultation(false);
-    setConsultationDialogOpen(false);
-    setConsultationDetailView(false);
-    setConsultationStudies([]);
+  // Reset form state (keeps dialog open for new consultations)
+  const resetConsultationFormData = useCallback(() => {
+    const currentDateTime = getCurrentCDMXDateTime();
     setConsultationFormData({
       patient_id: '',
-      date: getCurrentMexicoCityDateTime(),
+      date: currentDateTime,
       chief_complaint: '',
       history_present_illness: '',
       family_history: '',
@@ -232,6 +224,16 @@ export const useConsultationManagement = (): ConsultationManagementReturn => {
     });
   }, []);
 
+  // Reset form state and close dialog
+  const resetConsultationForm = useCallback(() => {
+    setSelectedConsultation(null);
+    setIsEditingConsultation(false);
+    setConsultationDialogOpen(false);
+    setConsultationDetailView(false);
+    setConsultationStudies([]);
+    resetConsultationFormData();
+  }, [resetConsultationFormData]);
+
   // Open consultation dialog for create/edit
   const openConsultationDialog = useCallback((consultation?: Consultation) => {
     if (consultation) {
@@ -240,7 +242,7 @@ export const useConsultationManagement = (): ConsultationManagementReturn => {
       // Populate form with consultation data
       setConsultationFormData({
         patient_id: consultation.patient_id,
-        date: consultation.date || getCurrentMexicoCityDateTime(),
+        date: consultation.date || getCurrentCDMXDateTime(),
         chief_complaint: consultation.chief_complaint || '',
         history_present_illness: consultation.history_present_illness || '',
         family_history: consultation.family_history || '',
@@ -281,16 +283,18 @@ export const useConsultationManagement = (): ConsultationManagementReturn => {
 
   // Handler functions
   const handleNewConsultation = useCallback(() => {
-    resetConsultationForm();
+    console.log('🆕 handleNewConsultation called - opening dialog');
+    setSelectedConsultation(null);
     setIsEditingConsultation(false);
+    resetConsultationFormData();
     setConsultationDialogOpen(true);
-  }, []);
+  }, [resetConsultationFormData]);
 
   const handleEditConsultation = useCallback((consultation: Consultation) => {
     setSelectedConsultation(consultation);
     setConsultationFormData({
       patient_id: consultation.patient_id,
-      date: consultation.date || getCurrentMexicoCityDateTime(),
+      date: consultation.date || getCurrentCDMXDateTime(),
       chief_complaint: consultation.chief_complaint || '',
       history_present_illness: consultation.history_present_illness || '',
       family_history: consultation.family_history || '',
@@ -319,8 +323,6 @@ export const useConsultationManagement = (): ConsultationManagementReturn => {
     setSelectedConsultation(null);
   }, []);
 
-  // Alias for fetchConsultations
-  const loadConsultations = fetchConsultations;
 
   return {
     // State
@@ -333,13 +335,13 @@ export const useConsultationManagement = (): ConsultationManagementReturn => {
     consultationStudies,
     consultationSearchTerm,
     isSubmitting,
+    isLoading,
     tempConsultationId,
     tempClinicalStudies,
     creatingPatientFromConsultation,
     
     // Actions
     fetchConsultations,
-    loadConsultations,
     createConsultation,
     updateConsultation,
     deleteConsultation,

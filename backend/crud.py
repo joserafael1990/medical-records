@@ -7,9 +7,24 @@ Performance: Optimized queries with efficient joins
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_, func, text, desc, asc
 from typing import Optional, List, Tuple
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from fastapi import HTTPException
 import bcrypt
+import pytz
+
+# CDMX Timezone configuration
+CDMX_TZ = pytz.timezone('America/Mexico_City')
+
+def get_cdmx_now() -> datetime:
+    """Get current datetime in CDMX timezone"""
+    return datetime.now(CDMX_TZ)
+
+def to_utc_for_storage(dt: datetime) -> datetime:
+    """Convert datetime to UTC for database storage"""
+    if dt.tzinfo is None:
+        # Assume CDMX if naive
+        dt = CDMX_TZ.localize(dt)
+    return dt.astimezone(pytz.utc)
 
 from database import (
     Person, MedicalRecord, Appointment, VitalSigns,
@@ -37,21 +52,34 @@ def generate_person_code(db: Session, person_type: str) -> str:
         'admin': 'ADM'
     }.get(person_type, 'PER')
     
-    # Get last number for this type
-    last_person = db.query(Person).filter(
+    # Get all existing codes for this type and find the highest number
+    existing_codes = db.query(Person.person_code).filter(
         Person.person_code.like(f'{prefix}%')
-    ).order_by(desc(Person.person_code)).first()
+    ).all()
     
-    if last_person:
+    max_num = 0
+    for (code,) in existing_codes:
         try:
-            last_num = int(last_person.person_code[3:])
-            new_num = last_num + 1
-        except:
-            new_num = 1
-    else:
-        new_num = 1
+            # Extract number part after the prefix
+            num_part = code[3:]  # Remove 3-char prefix (DOC, PAT, ADM)
+            num = int(num_part)
+            max_num = max(max_num, num)
+        except (ValueError, IndexError):
+            continue
     
-    return f"{prefix}{new_num:06d}"
+    new_num = max_num + 1
+    new_code = f"{prefix}{new_num:06d}"
+    
+    # Double-check the code doesn't exist (safety check)
+    existing = db.query(Person).filter(Person.person_code == new_code).first()
+    if existing:
+        # If somehow it still exists, try incrementing until we find a free one
+        while existing:
+            new_num += 1
+            new_code = f"{prefix}{new_num:06d}"
+            existing = db.query(Person).filter(Person.person_code == new_code).first()
+    
+    return new_code
 
 # ============================================================================
 # CATALOG OPERATIONS
@@ -169,11 +197,8 @@ def update_doctor_profile(db: Session, doctor_id: int, doctor_data: schemas.Doct
         db.rollback()
         raise e
 
-def create_patient(db: Session, patient_data: schemas.PatientCreate) -> Person:
-    """Create a new patient"""
-    # Generate patient code
-    person_code = generate_person_code(db, 'patient')
-    
+def create_patient_with_code(db: Session, patient_data: schemas.PatientCreate, person_code: str) -> Person:
+    """Create a new patient with a pre-generated code"""
     # Prepare patient data with proper null handling for foreign keys
     patient_dict = patient_data.dict(exclude={'person_type'})
     
@@ -189,7 +214,7 @@ def create_patient(db: Session, patient_data: schemas.PatientCreate) -> Person:
         if field in patient_dict and patient_dict[field] == '':
             patient_dict[field] = None
     
-    # Create patient
+    # Create patient with the provided code
     db_patient = Person(
         person_code=person_code,
         person_type='patient',
@@ -197,9 +222,15 @@ def create_patient(db: Session, patient_data: schemas.PatientCreate) -> Person:
     )
     
     db.add(db_patient)
-    db.commit()
+    db.flush()  # Flush to get the ID but don't commit yet
     db.refresh(db_patient)
     return db_patient
+
+def create_patient(db: Session, patient_data: schemas.PatientCreate) -> Person:
+    """Create a new patient (legacy function for backward compatibility)"""
+    # Generate patient code
+    person_code = generate_person_code(db, 'patient')
+    return create_patient_with_code(db, patient_data, person_code)
 
 def get_person(db: Session, person_id: int) -> Optional[Person]:
     """Get person by ID"""
@@ -243,7 +274,7 @@ def get_patients(db: Session, skip: int = 0, limit: int = 100) -> List[Person]:
     return db.query(Person).options(
         joinedload(Person.nationality),
         joinedload(Person.birth_state),
-        joinedload(Person.city_residence)
+        joinedload(Person.specialty)
     ).filter(Person.person_type == 'patient').offset(skip).limit(limit).all()
 
 def update_person(db: Session, person_id: int, person_data: schemas.PersonUpdate) -> Person:
@@ -356,16 +387,20 @@ def update_medical_record(db: Session, record_id: int, record_data: schemas.Medi
 # APPOINTMENT OPERATIONS
 # ============================================================================
 
-def create_appointment(db: Session, appointment_data: schemas.AppointmentCreate) -> Appointment:
+def create_appointment(db: Session, appointment_data: schemas.AppointmentCreate, doctor_id: int) -> Appointment:
     """Create a new appointment"""
     # Generate appointment code
     last_appointment = db.query(Appointment).order_by(desc(Appointment.id)).first()
     appointment_number = (last_appointment.id + 1) if last_appointment else 1
     appointment_code = f"APT{appointment_number:08d}"
     
+    # Prepare appointment data
+    appointment_dict = appointment_data.dict()
+    appointment_dict['doctor_id'] = doctor_id
+    
     db_appointment = Appointment(
         appointment_code=appointment_code,
-        **appointment_data.dict()
+        **appointment_dict
     )
     
     db.add(db_appointment)
@@ -400,18 +435,58 @@ def get_appointments_by_doctor(db: Session, doctor_id: int, date_from: Optional[
     return query.order_by(Appointment.appointment_date).all()
 
 def update_appointment(db: Session, appointment_id: int, appointment_data: schemas.AppointmentUpdate) -> Appointment:
-    """Update appointment"""
+    """Update appointment with CDMX timezone support"""
     appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
     
     update_data = appointment_data.dict(exclude_unset=True)
+    
+    print(f"🔄 CRUD update_appointment - ID: {appointment_id}")
+    print(f"📝 Original appointment_date: {appointment.appointment_date}")
+    print(f"📝 Original duration: {appointment.duration_minutes}")
+    print(f"📥 Update data received: {update_data}")
+    
+    # Handle datetime conversion for appointment_date with CDMX timezone
+    if 'appointment_date' in update_data and isinstance(update_data['appointment_date'], str):
+        update_data['appointment_date'] = datetime.fromisoformat(
+            update_data['appointment_date'].replace('Z', '+00:00')
+        )
+        # Convert to UTC for storage
+        update_data['appointment_date'] = to_utc_for_storage(update_data['appointment_date'])
+        print(f"🌍 Converted appointment_date to UTC: {update_data['appointment_date']}")
+    
+    # Recalculate end_time if appointment_date or duration changed
+    if 'appointment_date' in update_data or 'duration_minutes' in update_data:
+        start_time = update_data.get('appointment_date', appointment.appointment_date)
+        duration = update_data.get('duration_minutes', appointment.duration_minutes)
+        update_data['end_time'] = start_time + timedelta(minutes=duration)
+        print(f"⏰ Recalculated end_time: {update_data['end_time']} (duration: {duration} min)")
+    
+    # Handle cancellation
+    if update_data.get('status') == 'cancelled' and 'cancelled_reason' in update_data:
+        update_data['cancelled_at'] = get_cdmx_now().astimezone(pytz.utc)
+    
+    # Handle confirmation
+    if update_data.get('status') == 'confirmed':
+        update_data['confirmed_at'] = get_cdmx_now().astimezone(pytz.utc)
+    
     for field, value in update_data.items():
         setattr(appointment, field, value)
     
-    appointment.updated_at = datetime.utcnow()
+    appointment.updated_at = get_cdmx_now().astimezone(pytz.utc)
+    
+    print(f"💾 Final appointment_date before save: {appointment.appointment_date}")
+    print(f"💾 Final end_time before save: {appointment.end_time}")
+    print(f"💾 Final duration before save: {appointment.duration_minutes}")
+    
     db.commit()
     db.refresh(appointment)
+    
+    print(f"✅ Appointment updated successfully - ID: {appointment_id}")
+    print(f"📅 Final appointment date: {appointment.appointment_date}")
+    print(f"⏱️  Final duration: {appointment.duration_minutes} minutes")
+    
     return appointment
 
 def cancel_appointment(db: Session, appointment_id: int, reason: str, cancelled_by: int) -> Appointment:
