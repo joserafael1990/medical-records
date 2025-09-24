@@ -28,6 +28,19 @@ import type {
 class ApiService {
   private api: AxiosInstance;
 
+  // Helper method to map frontend gender values to backend format
+  private mapGenderToBackend(gender: string): string {
+    const genderMap: { [key: string]: string } = {
+      'Masculino': 'M',
+      'Femenino': 'F',
+      'M': 'M',
+      'F': 'F',
+      'masculino': 'M',
+      'femenino': 'F'
+    };
+    return genderMap[gender] || gender;
+  }
+
   constructor() {
     this.api = axios.create({
       baseURL: API_CONFIG.BASE_URL,
@@ -647,6 +660,18 @@ class ApiService {
   async getPatients(search?: string): Promise<Patient[]> {
     const params = search ? { search } : {};
     const response = await this.api.get<Patient[]>(API_CONFIG.ENDPOINTS.PATIENTS, { params });
+    
+    // Debug: Check emergency contact data in API response
+    if (Array.isArray(response.data)) {
+      response.data.forEach(patient => {
+        console.log(`🔍 API Patient ${patient.id} emergency data:`, {
+          emergency_contact_name: patient.emergency_contact_name,
+          emergency_contact_phone: patient.emergency_contact_phone,
+          emergency_contact_relationship: patient.emergency_contact_relationship
+        });
+      });
+    }
+    
     return Array.isArray(response.data) ? response.data : [];
   }
 
@@ -656,36 +681,40 @@ class ApiService {
   }
 
   async createPatient(patientData: PatientFormData): Promise<Patient> {
-    console.log('🏥 Creating patient with data:', patientData);
-    console.log('🌐 API URL:', `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PATIENTS}`);
-    console.log('🔑 Auth token exists:', !!localStorage.getItem('token'));
-    
-    // Special logging for civil_status field
-    console.log('👤 Civil status field analysis:', {
-      value: patientData.civil_status,
-      type: typeof patientData.civil_status,
-      isEmpty: patientData.civil_status === '',
-      isNull: patientData.civil_status === null,
-      isUndefined: patientData.civil_status === undefined,
-      length: patientData.civil_status?.length || 0
-    });
     
     // Clean the data before sending to ensure proper format
     const cleanedData = {
-      ...patientData,
-      // Convert empty string to null for optional fields to match backend expectations
-      civil_status: patientData.civil_status === '' ? null : patientData.civil_status,
+      // Required fields - don't convert to null
+      first_name: patientData.first_name || '',
+      paternal_surname: patientData.paternal_surname || '',
+      birth_date: patientData.birth_date || patientData.date_of_birth || '',
+      gender: this.mapGenderToBackend(patientData.gender || ''),
+      
+      // Optional fields - can be null
       maternal_surname: patientData.maternal_surname === '' ? null : patientData.maternal_surname,
       email: patientData.email === '' ? null : patientData.email,
+      primary_phone: patientData.primary_phone === '' ? null : patientData.primary_phone,
       curp: patientData.curp === '' ? null : patientData.curp,
       rfc: patientData.rfc === '' ? null : patientData.rfc,
-      // Handle required fields that shouldn't be empty
-      date_of_birth: patientData.date_of_birth === '' ? null : patientData.date_of_birth,
-      birth_date: patientData.birth_date === '' ? null : patientData.birth_date,
-      gender: patientData.gender === '' ? null : patientData.gender,
-      primary_phone: patientData.primary_phone === '' ? null : patientData.primary_phone,
-      first_name: patientData.first_name === '' ? null : patientData.first_name,
-      paternal_surname: patientData.paternal_surname === '' ? null : patientData.paternal_surname
+      birth_city: patientData.birth_city === '' ? null : patientData.birth_city,
+      birth_state_id: patientData.birth_state_id ? parseInt(patientData.birth_state_id) : null,
+      civil_status: patientData.civil_status === '' ? null : patientData.civil_status,
+      
+      // Address fields
+      address_street: patientData.address_street || patientData.address || '',
+      address_city: patientData.address_city || patientData.city || '',
+      address_state_id: patientData.address_state_id ? parseInt(patientData.address_state_id) : null,
+      address_postal_code: patientData.address_postal_code || '',
+      
+      // Default values
+      nationality_id: 1, // Default to Mexico (ID 1)
+      
+      // Medical fields
+      blood_type: patientData.blood_type === '' ? null : patientData.blood_type,
+      allergies: patientData.allergies === '' ? null : patientData.allergies,
+      chronic_conditions: patientData.chronic_conditions === '' ? null : patientData.chronic_conditions,
+      current_medications: patientData.current_medications === '' ? null : patientData.current_medications,
+      insurance_provider: patientData.insurance_provider === '' ? null : patientData.insurance_provider
     };
     
     console.log('🧹 Cleaned data for backend:', cleanedData);
@@ -730,7 +759,61 @@ class ApiService {
   }
 
   async updatePatient(id: string, patientData: Partial<PatientFormData>): Promise<Patient> {
-    const response = await this.api.put<Patient>(`${API_CONFIG.ENDPOINTS.PATIENTS}/${id}`, patientData);
+    // Debug: Check emergency contact data being sent
+    console.log('🔍 UPDATE: Emergency contact data from form:', {
+      emergency_contact_name: patientData.emergency_contact_name,
+      emergency_contact_phone: patientData.emergency_contact_phone,
+      emergency_contact_relationship: patientData.emergency_contact_relationship
+    });
+    
+    // Clean the data before sending to ensure proper format
+    const cleanedData = {
+      // Required fields with proper mapping
+      first_name: patientData.first_name || '',
+      paternal_surname: patientData.paternal_surname || '',
+      birth_date: patientData.birth_date || patientData.date_of_birth || '',
+      gender: patientData.gender ? this.mapGenderToBackend(patientData.gender) : '',
+      
+      // Optional fields - can be null
+      maternal_surname: patientData.maternal_surname === '' ? null : patientData.maternal_surname,
+      email: patientData.email === '' ? null : patientData.email,
+      primary_phone: patientData.primary_phone === '' ? null : patientData.primary_phone,
+      curp: patientData.curp === '' ? null : patientData.curp,
+      rfc: patientData.rfc === '' ? null : patientData.rfc,
+      birth_city: patientData.birth_city === '' ? null : patientData.birth_city,
+      birth_state_id: patientData.birth_state_id ? parseInt(patientData.birth_state_id) : null,
+      civil_status: patientData.civil_status === '' ? null : patientData.civil_status,
+      
+      // Address fields
+      address_street: patientData.address_street || patientData.address || '',
+      address_city: patientData.address_city || patientData.city || '',
+      address_state_id: patientData.address_state_id ? parseInt(patientData.address_state_id) : null,
+      address_postal_code: patientData.address_postal_code || '',
+      
+      // Default values
+      nationality_id: 1, // Default to Mexico (ID 1)
+      
+      // Medical fields
+      blood_type: patientData.blood_type === '' ? null : patientData.blood_type,
+      allergies: patientData.allergies === '' ? null : patientData.allergies,
+      chronic_conditions: patientData.chronic_conditions === '' ? null : patientData.chronic_conditions,
+      current_medications: patientData.current_medications === '' ? null : patientData.current_medications,
+      insurance_provider: patientData.insurance_provider === '' ? null : patientData.insurance_provider,
+      
+      // Emergency contact fields
+      emergency_contact_name: patientData.emergency_contact_name === '' ? null : patientData.emergency_contact_name,
+      emergency_contact_phone: patientData.emergency_contact_phone === '' ? null : patientData.emergency_contact_phone,
+      emergency_contact_relationship: patientData.emergency_contact_relationship === '' ? null : patientData.emergency_contact_relationship,
+    };
+    
+    // Debug: Check final cleaned data being sent
+    console.log('🧹 UPDATE: Final cleaned data being sent to backend:', {
+      emergency_contact_name: cleanedData.emergency_contact_name,
+      emergency_contact_phone: cleanedData.emergency_contact_phone,
+      emergency_contact_relationship: cleanedData.emergency_contact_relationship
+    });
+    
+    const response = await this.api.put<Patient>(`${API_CONFIG.ENDPOINTS.PATIENTS}/${id}`, cleanedData);
     return response.data;
   }
 

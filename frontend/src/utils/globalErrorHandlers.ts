@@ -94,13 +94,7 @@ export const initializeGlobalErrorHandlers = () => {
 
   // Note: React errors are already handled above in the main error handler
 
-  console.log('✅ Global error handlers initialized');
-  console.log('✅ Safe console.error override active');
-  
-  // Test the console.error override
-  if (process.env.NODE_ENV === 'development') {
-    console.error('🧪 Testing safe console.error with object:', { test: 'This should be properly formatted', nested: { value: 123 } });
-  }
+  // Global error handlers initialized
 };
 
 /**

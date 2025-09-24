@@ -8,12 +8,6 @@ import { apiService } from '../services/api';
 import type { Consultation, ConsultationFormData, ClinicalStudy } from '../types';
 import { getCurrentCDMXDateTime } from '../constants';
 
-// Debug helper - only logs in development
-const debugLog = (message: string, data?: any) => {
-  if (process.env.NODE_ENV === 'development') {
-    console.log(message, data || '');
-  }
-};
 
 interface ConsultationManagementState {
   consultations: Consultation[];

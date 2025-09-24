@@ -28,7 +28,7 @@ def to_utc_for_storage(dt: datetime) -> datetime:
 
 from database import (
     Person, MedicalRecord, Appointment, VitalSigns,
-    Country, State, Nationality, Specialty, EmergencyRelationship
+    Country, State, Specialty, EmergencyRelationship
 )
 import schemas
 
@@ -102,12 +102,6 @@ def get_states(db: Session, country_id: Optional[int] = None, active: bool = Tru
     return query.order_by(State.name).all()
 
 
-def get_nationalities(db: Session, active: bool = True) -> List[Nationality]:
-    """Get list of nationalities"""
-    query = db.query(Nationality)
-    if active:
-        query = query.filter(Nationality.active == True)
-    return query.order_by(Nationality.name).all()
 
 def get_specialties(db: Session, active: bool = True) -> List[Specialty]:
     """Get list of medical specialties"""
@@ -197,7 +191,7 @@ def update_doctor_profile(db: Session, doctor_id: int, doctor_data: schemas.Doct
         db.rollback()
         raise e
 
-def create_patient_with_code(db: Session, patient_data: schemas.PatientCreate, person_code: str) -> Person:
+def create_patient_with_code(db: Session, patient_data: schemas.PatientCreate, person_code: str, created_by_doctor_id: int = None) -> Person:
     """Create a new patient with a pre-generated code"""
     # Prepare patient data with proper null handling for foreign keys
     patient_dict = patient_data.dict(exclude={'person_type'})
@@ -205,7 +199,6 @@ def create_patient_with_code(db: Session, patient_data: schemas.PatientCreate, p
     # Handle foreign key fields - convert empty strings to None
     foreign_key_fields = [
         'emergency_contact_relationship',
-        'nationality_id',
         'birth_state_id',
         'city_residence_id'
     ]
@@ -214,10 +207,11 @@ def create_patient_with_code(db: Session, patient_data: schemas.PatientCreate, p
         if field in patient_dict and patient_dict[field] == '':
             patient_dict[field] = None
     
-    # Create patient with the provided code
+    # Create patient with the provided code and assign the creating doctor
     db_patient = Person(
         person_code=person_code,
         person_type='patient',
+        created_by=created_by_doctor_id,  # Assign the doctor who creates the patient
         **patient_dict
     )
     
@@ -251,7 +245,6 @@ def get_person_by_email(db: Session, email: str) -> Optional[Person]:
 def get_persons(db: Session, skip: int = 0, limit: int = 100, person_type: Optional[str] = None) -> List[Person]:
     """Get list of persons"""
     query = db.query(Person).options(
-        joinedload(Person.nationality),
         joinedload(Person.specialty),
         joinedload(Person.birth_state),
         joinedload(Person.city_residence)
@@ -270,12 +263,21 @@ def get_doctors(db: Session, skip: int = 0, limit: int = 100) -> List[Person]:
     ).filter(Person.person_type == 'doctor').offset(skip).limit(limit).all()
 
 def get_patients(db: Session, skip: int = 0, limit: int = 100) -> List[Person]:
-    """Get list of patients"""
+    """Get list of all patients (admin function - use get_patients_by_doctor for doctor access)"""
     return db.query(Person).options(
-        joinedload(Person.nationality),
         joinedload(Person.birth_state),
         joinedload(Person.specialty)
     ).filter(Person.person_type == 'patient').offset(skip).limit(limit).all()
+
+def get_patients_by_doctor(db: Session, doctor_id: int, skip: int = 0, limit: int = 100) -> List[Person]:
+    """Get list of patients created by a specific doctor"""
+    return db.query(Person).options(
+        joinedload(Person.birth_state),
+        joinedload(Person.specialty)
+    ).filter(
+        Person.person_type == 'patient',
+        Person.created_by == doctor_id
+    ).offset(skip).limit(limit).all()
 
 def update_person(db: Session, person_id: int, person_data: schemas.PersonUpdate) -> Person:
     """Update person"""
@@ -307,7 +309,6 @@ def delete_person(db: Session, person_id: int) -> bool:
 def search_persons(db: Session, search_term: str, person_type: Optional[str] = None) -> List[Person]:
     """Search persons by name, code, CURP, or email"""
     query = db.query(Person).options(
-        joinedload(Person.nationality),
         joinedload(Person.specialty)
     )
     

@@ -1,4 +1,4 @@
-import React, { memo, useEffect } from 'react';
+import React, { memo, useEffect, useState, useMemo } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -12,11 +12,14 @@ import {
   Select,
   MenuItem,
   Typography,
-  CircularProgress
+  CircularProgress,
+  Autocomplete,
+  FormHelperText
 } from '@mui/material';
 import { PatientFormData, Patient } from '../../types';
 import { ErrorRibbon } from '../common/ErrorRibbon';
 import { useEmergencyRelationships } from '../../hooks/useEmergencyRelationships';
+import { useCatalogs } from '../../hooks/useCatalogs';
 import { apiService } from '../../services/api';
 
 interface PatientDialogProps {
@@ -49,6 +52,106 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
   selectedPatient
 }) => {
   const { relationships, isLoading: relationshipsLoading } = useEmergencyRelationships();
+  const { countries, states, getStatesByCountry, getCountryByName, loading: catalogsLoading } = useCatalogs();
+  
+  // State for selected country to filter states
+  const [selectedAddressCountry, setSelectedAddressCountry] = useState<string>('México');
+  const [selectedBirthCountry, setSelectedBirthCountry] = useState<string>('México');
+  
+  
+  // Initialize country when countries are loaded
+  useEffect(() => {
+    if (countries.length > 0) {
+      if (!selectedAddressCountry) {
+        setSelectedAddressCountry('México');
+      }
+      if (!selectedBirthCountry) {
+        setSelectedBirthCountry('México');
+      }
+    }
+  }, [countries.length]); // Solo depender de la longitud para evitar bucles
+  
+  // Get current state info to determine its country
+  const currentStateInfo = useMemo(() => {
+    if (!formData.address_state_id || !states.length) return null;
+    return states.find(state => state.id === parseInt(formData.address_state_id));
+  }, [formData.address_state_id, states]);
+
+  // Get current birth state info to determine its country
+  const currentBirthStateInfo = useMemo(() => {
+    if (!formData.birth_state_id || !states.length) return null;
+    return states.find(state => state.id === parseInt(formData.birth_state_id));
+  }, [formData.birth_state_id, states]);
+  
+  // Update selected country when state changes (for editing mode)
+  useEffect(() => {
+    if (currentStateInfo && countries.length) {
+      const countryForState = countries.find(c => c.id === currentStateInfo.country_id);
+      if (countryForState && countryForState.name !== selectedAddressCountry) {
+        setSelectedAddressCountry(countryForState.name);
+      }
+    }
+  }, [currentStateInfo, countries]); // Removido selectedAddressCountry para evitar bucle
+
+  // Update selected birth country when birth state changes (for editing mode)
+  useEffect(() => {
+    if (currentBirthStateInfo && countries.length) {
+      const countryForBirthState = countries.find(c => c.id === currentBirthStateInfo.country_id);
+      if (countryForBirthState && countryForBirthState.name !== selectedBirthCountry) {
+        setSelectedBirthCountry(countryForBirthState.name);
+      }
+    }
+  }, [currentBirthStateInfo, countries]); // Removido selectedBirthCountry para evitar bucle
+
+  // Update selected birth country when editing a patient with a country value
+  useEffect(() => {
+    if (isEditing && formData.country) {
+      setSelectedBirthCountry(formData.country);
+    }
+  }, [isEditing, formData.country]);
+  
+  // Get filtered states for selected country
+  const filteredStates = useMemo(() => {
+    return getStatesByCountry(selectedAddressCountry);
+  }, [getStatesByCountry, selectedAddressCountry]);
+
+  // Get filtered birth states for selected birth country
+  const filteredBirthStates = useMemo(() => {
+    return getStatesByCountry(selectedBirthCountry);
+  }, [getStatesByCountry, selectedBirthCountry]);
+  
+  // Handle country change
+  const handleCountryChange = (countryName: string) => {
+    setSelectedAddressCountry(countryName);
+    // Clear state selection when country changes
+    onFormDataChange('address_state_id', '');
+  };
+
+  // Handle birth country change
+  const handleBirthCountryChange = (countryName: string) => {
+    setSelectedBirthCountry(countryName);
+    // Clear birth state selection when country changes
+    onFormDataChange('birth_state_id', '');
+    // Update the country field in form data
+    onFormDataChange('country', countryName);
+  };
+
+  // Map backend gender values to frontend display values
+  const mapGenderToFrontend = (gender: string | null | undefined): string => {
+    if (!gender) return '';
+    switch (gender.toLowerCase()) {
+      case 'm':
+      case 'male':
+      case 'masculino':
+        return 'Masculino';
+      case 'f':
+      case 'female':
+      case 'femenino':
+        return 'Femenino';
+      default:
+        return '';
+    }
+  };
   
 
   const handleClose = () => {
@@ -140,7 +243,7 @@ DATOS OBLIGATORIOS
             <FormControl fullWidth required error={!!fieldErrors.gender}>
               <InputLabel>Género</InputLabel>
               <Select
-                value={formData.gender || (isEditing ? selectedPatient?.gender || '' : '')}
+                value={formData.gender ? mapGenderToFrontend(formData.gender) : (isEditing ? mapGenderToFrontend(selectedPatient?.gender) : '')}
                 onChange={(e) => onFormDataChange('gender', e.target.value)}
                 label="Género"
               >
@@ -204,7 +307,52 @@ DATOS OBLIGATORIOS
             />
           </Box>
 
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 2 }}>
+          {/* Orden: Dirección completa, País, Estado, Ciudad, Código Postal */}
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 2 }}>
+            <Autocomplete
+              options={countries}
+              getOptionLabel={(option) => option.name}
+              value={countries.find(country => country.name === selectedAddressCountry) || null}
+              onChange={(_, newValue) => {
+                const countryName = newValue?.name || 'México';
+                handleCountryChange(countryName);
+              }}
+              loading={catalogsLoading}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="País"
+                  required
+                  error={!!fieldErrors.address_country}
+                  helperText={fieldErrors.address_country || "Selecciona el país"}
+                />
+              )}
+            />
+            <Autocomplete
+              options={filteredStates}
+              getOptionLabel={(option) => option.name}
+              value={filteredStates.find(state => state.id === parseInt(formData.address_state_id || '0')) || null}
+              onChange={(_, newValue) => {
+                onFormDataChange('address_state_id', newValue ? String(newValue.id) : '');
+              }}
+              loading={catalogsLoading}
+              disabled={!selectedAddressCountry || filteredStates.length === 0}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Estado/Provincia"
+                  required
+                  error={!!fieldErrors.address_state_id}
+                  helperText={fieldErrors.address_state_id || 
+                    (!selectedAddressCountry ? "Primero selecciona un país" :
+                     filteredStates.length === 0 ? "No hay estados disponibles" : 
+                     "Selecciona el estado")}
+                />
+              )}
+            />
+          </Box>
+
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 2 }}>
             <TextField
               label="Ciudad"
               value={formData.address_city || (isEditing ? selectedPatient?.city || selectedPatient?.address_city || '' : '')}
@@ -215,53 +363,6 @@ DATOS OBLIGATORIOS
               helperText={fieldErrors.address_city}
               placeholder="Ciudad de México"
             />
-            <FormControl fullWidth required error={!!fieldErrors.address_state_id}>
-              <InputLabel>Estado</InputLabel>
-              <Select
-                value={formData.address_state_id ? String(formData.address_state_id) : (isEditing ? selectedPatient?.state || selectedPatient?.address_state_id || '' : '')}
-                onChange={(e) => onFormDataChange('address_state_id', e.target.value)}
-                label="Estado"
-              >
-                <MenuItem value="">Selecciona un estado</MenuItem>
-                <MenuItem value="1">Aguascalientes</MenuItem>
-                <MenuItem value="2">Baja California</MenuItem>
-                <MenuItem value="3">Baja California Sur</MenuItem>
-                <MenuItem value="4">Campeche</MenuItem>
-                <MenuItem value="5">Chiapas</MenuItem>
-                <MenuItem value="6">Chihuahua</MenuItem>
-                <MenuItem value="7">Ciudad de México</MenuItem>
-                <MenuItem value="8">Coahuila</MenuItem>
-                <MenuItem value="9">Colima</MenuItem>
-                <MenuItem value="10">Durango</MenuItem>
-                <MenuItem value="11">Guanajuato</MenuItem>
-                <MenuItem value="12">Guerrero</MenuItem>
-                <MenuItem value="13">Hidalgo</MenuItem>
-                <MenuItem value="14">Jalisco</MenuItem>
-                <MenuItem value="15">Estado de México</MenuItem>
-                <MenuItem value="16">Michoacán</MenuItem>
-                <MenuItem value="17">Morelos</MenuItem>
-                <MenuItem value="18">Nayarit</MenuItem>
-                <MenuItem value="19">Nuevo León</MenuItem>
-                <MenuItem value="20">Oaxaca</MenuItem>
-                <MenuItem value="21">Puebla</MenuItem>
-                <MenuItem value="22">Querétaro</MenuItem>
-                <MenuItem value="23">Quintana Roo</MenuItem>
-                <MenuItem value="24">San Luis Potosí</MenuItem>
-                <MenuItem value="25">Sinaloa</MenuItem>
-                <MenuItem value="26">Sonora</MenuItem>
-                <MenuItem value="27">Tabasco</MenuItem>
-                <MenuItem value="28">Tamaulipas</MenuItem>
-                <MenuItem value="29">Tlaxcala</MenuItem>
-                <MenuItem value="30">Veracruz</MenuItem>
-                <MenuItem value="31">Yucatán</MenuItem>
-                <MenuItem value="32">Zacatecas</MenuItem>
-              </Select>
-              {fieldErrors.address_state_id && (
-                <Typography variant="caption" color="error" sx={{ mt: 0.5, ml: 1.75 }}>
-                  {fieldErrors.address_state_id}
-                </Typography>
-              )}
-            </FormControl>
             <TextField
               label="Código Postal"
               value={formData.address_postal_code || (isEditing ? selectedPatient?.zip_code || selectedPatient?.postal_code || selectedPatient?.address_postal_code || '' : '')}
@@ -290,26 +391,65 @@ DATOS OBLIGATORIOS
             </Typography>
           </Box>
 
+          {/* 1. País de Nacimiento */}
           <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
-            <TextField
-              fullWidth
-              label="Email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => onFormDataChange('email', e.target.value)}
+            <Autocomplete
+              options={countries}
+              getOptionLabel={(option) => option.name}
+              value={countries.find(country => country.name === selectedBirthCountry) || null}
+              onChange={(_, newValue) => {
+                const countryName = newValue?.name || 'México';
+                handleBirthCountryChange(countryName);
+              }}
+              loading={catalogsLoading}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="País de Nacimiento"
+                  helperText="Selecciona el país de nacimiento"
+                />
+              )}
             />
           </Box>
 
+          {/* 2. Estado de Nacimiento */}
           <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
-            <TextField
-              fullWidth
-              label="CURP"
-              value={formData.curp}
-              onChange={(e) => onFormDataChange('curp', e.target.value)}
-              helperText="Clave Única de Registro de Población"
+            <Autocomplete
+              options={filteredBirthStates}
+              getOptionLabel={(option) => option.name}
+              value={filteredBirthStates.find(state => state.id === parseInt(formData.birth_state_id || '0')) || null}
+              onChange={(_, newValue) => {
+                onFormDataChange('birth_state_id', newValue ? String(newValue.id) : '');
+              }}
+              loading={catalogsLoading}
+              disabled={!selectedBirthCountry || filteredBirthStates.length === 0}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Estado de Nacimiento"
+                  helperText={
+                    !selectedBirthCountry ? "Primero selecciona un país" :
+                    filteredBirthStates.length === 0 ? "No hay estados disponibles" : 
+                    "Estado/Provincia donde nació"
+                  }
+                />
+              )}
             />
           </Box>
 
+          {/* 3. Ciudad de Nacimiento */}
+          <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
+            <TextField
+              fullWidth
+              label="Ciudad de Nacimiento"
+              value={formData.birth_city || (isEditing ? selectedPatient?.birth_city || '' : '')}
+              onChange={(e) => onFormDataChange('birth_city', e.target.value)}
+              helperText="Ciudad donde nació"
+              placeholder="Ciudad de México"
+            />
+          </Box>
+
+          {/* 4. Estado Civil */}
           <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
             <FormControl fullWidth error={!!fieldErrors.civil_status}>
               <InputLabel>Estado Civil</InputLabel>
@@ -334,6 +474,7 @@ DATOS OBLIGATORIOS
             </FormControl>
           </Box>
 
+          {/* 5. Tipo de Sangre */}
           <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
             <FormControl fullWidth>
               <InputLabel>Tipo de Sangre</InputLabel>
@@ -355,6 +496,7 @@ DATOS OBLIGATORIOS
             </FormControl>
           </Box>
 
+          {/* 6. Alergias */}
           <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
             <TextField
               fullWidth
@@ -363,6 +505,30 @@ DATOS OBLIGATORIOS
               onChange={(e) => onFormDataChange('allergies', e.target.value)}
               multiline
               rows={2}
+              helperText="Medicamentos, alimentos, etc."
+            />
+          </Box>
+
+          {/* 7. Email */}
+          <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
+            <TextField
+              fullWidth
+              label="Email"
+              type="email"
+              value={formData.email}
+              onChange={(e) => onFormDataChange('email', e.target.value)}
+              helperText="Correo electrónico"
+            />
+          </Box>
+
+          {/* 8. CURP */}
+          <Box sx={{ width: { xs: '100%', sm: '48%' } }}>
+            <TextField
+              fullWidth
+              label="CURP"
+              value={formData.curp}
+              onChange={(e) => onFormDataChange('curp', e.target.value)}
+              helperText="Clave Única de Registro de Población"
             />
           </Box>
 

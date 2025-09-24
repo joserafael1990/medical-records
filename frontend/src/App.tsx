@@ -123,6 +123,10 @@ function AppContent() {
     gender: '',
     civil_status: '',
     
+    // Personal details (added fields)
+    birth_city: '',
+    birth_state_id: '',
+    
     // Address
     address: '',
     address_street: '',
@@ -132,6 +136,7 @@ function AppContent() {
     address_state_id: '',
     zip_code: '',
     country: 'México',
+    address_postal_code: '',
     
     // Emergency contact
     emergency_contact_name: '',
@@ -153,20 +158,19 @@ function AppContent() {
     
     // Technical fields
     active: true,
-    is_active: true,
-    address_postal_code: '',
-    birth_place: '',
-    foreign_birth_place: ''
+    is_active: true
   };
 
   const [patientFormData, setPatientFormData] = useState<PatientFormData>(initialPatientFormData);
 
-  // Sync patientFormData when selectedPatient changes for editing
+  // Sync patientFormData when dialog opens - reset for new or populate for edit
   useEffect(() => {
-    if (patientManagement.isEditingPatient && patientManagement.selectedPatient) {
-      const patient = patientManagement.selectedPatient;
-      
-      const syncedFormData: PatientFormData = {
+    if (patientManagement.patientDialogOpen) {
+      if (patientManagement.isEditingPatient && patientManagement.selectedPatient) {
+        // Editing mode: populate form with patient data
+        const patient = patientManagement.selectedPatient;
+        
+        const syncedFormData: PatientFormData = {
         // Basic information
         first_name: patient.first_name || '',
         paternal_surname: patient.paternal_surname || '',
@@ -178,6 +182,10 @@ function AppContent() {
         primary_phone: patient.primary_phone || patient.phone || '',
         gender: patient.gender || '',
         civil_status: patient.civil_status || '',
+        
+        // Personal details (added fields)
+        birth_city: patient.birth_city || '',
+        birth_state_id: patient.birth_state_id ? String(patient.birth_state_id) : '',
         
         // Address
         address: patient.address || patient.address_street || '',
@@ -210,21 +218,20 @@ function AppContent() {
         // Technical fields
         active: patient.active !== false,
         is_active: patient.is_active !== false,
-        address_postal_code: patient.address_postal_code || patient.zip_code || patient.postal_code || '',
-        birth_place: patient.birth_place || '',
-        foreign_birth_place: patient.foreign_birth_place || ''
+        address_postal_code: patient.address_postal_code || patient.zip_code || patient.postal_code || ''
       };
       
       setPatientFormData(syncedFormData);
+      } else {
+        // Create mode: reset form to initial empty values
+        setPatientFormData(initialPatientFormData);
+        setFieldErrors({});
+        setFormErrorMessage('');
+      }
     }
-  }, [patientManagement.isEditingPatient, patientManagement.selectedPatient]);
+  }, [patientManagement.patientDialogOpen, patientManagement.isEditingPatient, patientManagement.selectedPatient]);
 
   // Appointment Dialog States
-  // Appointment dialog state is now managed by appointmentManager hook
-  // const [isEditingAppointment, setIsEditingAppointment] = useState(false);
-  // const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
-  // Appointment form data is now managed by appointmentManager hook
-  // const [appointmentFormData, setAppointmentFormData] = useState<AppointmentFormData>({...});
 
   // Clinical Study States
   const [clinicalStudyDialogOpen, setClinicalStudyDialogOpen] = useState(false);
@@ -304,17 +311,6 @@ function AppContent() {
     }
   }, [activeView, isAuthenticated]); // Removed user and patientManagement dependencies
 
-  // Patient search with debounce - DISABLED to prevent infinite loops
-  // TODO: Reimplement this with stable dependencies
-  // useEffect(() => {
-  //   if (activeView === 'patients' && patientManagement.patientSearchTerm !== undefined && isAuthenticated) {
-  //     const timeoutId = setTimeout(() => {
-  //       patientManagement.fetchPatients();
-  //     }, 500);
-  //     
-  //     return () => clearTimeout(timeoutId);
-  //   }
-  // }, [patientManagement.patientSearchTerm, activeView, user, isAuthenticated]);
 
   // Fetch consultations when view changes to consultations
   useEffect(() => {
@@ -323,16 +319,6 @@ function AppContent() {
     }
   }, [activeView, isAuthenticated]); // Removed dependencies that change constantly
 
-  // Consultation search with debounce - DISABLED to prevent infinite loops
-  // TODO: Reimplement this with stable dependencies
-  // useEffect(() => {
-  //   if (activeView === 'consultations' && consultationManagement.consultationSearchTerm !== undefined) {
-  //     const timeoutId = setTimeout(() => {
-  //     }, 500);
-  //     
-  //     return () => clearTimeout(timeoutId);
-  //   }
-  // }, [consultationManagement.consultationSearchTerm, activeView, isAuthenticated]);
 
   // Helper function to get clinical studies for current consultation
   const getCurrentConsultationStudies = (): ClinicalStudy[] => {
@@ -458,6 +444,13 @@ const handleViewConsultation = useCallback(async (consultation: any) => {
   }, [initialPatientFormData, patientFormData]); // Added dependencies
 
   const handleEditPatient = (patient: Patient) => {
+    // Debug: log patient data to see emergency contact fields
+    console.log('🔍 Patient data for editing:', patient);
+    console.log('🔍 Emergency contact fields:', {
+      emergency_contact_name: patient.emergency_contact_name,
+      emergency_contact_phone: patient.emergency_contact_phone,
+      emergency_contact_relationship: patient.emergency_contact_relationship
+    });
 
     const newFormData = {
       // Basic information
@@ -471,6 +464,10 @@ const handleViewConsultation = useCallback(async (consultation: any) => {
       primary_phone: patient.primary_phone || patient.phone || '',
       gender: patient.gender || '',
       civil_status: patient.civil_status || '',
+      
+      // Personal details (added fields)
+      birth_city: patient.birth_city || '',
+      birth_state_id: patient.birth_state_id ? String(patient.birth_state_id) : '',
       
       // Address
       address: patient.address || '',
@@ -503,9 +500,7 @@ const handleViewConsultation = useCallback(async (consultation: any) => {
       // Technical fields
       active: patient.active !== false,
       is_active: patient.is_active !== false,
-      address_postal_code: patient.postal_code || patient.zip_code || '',
-      birth_place: patient.birth_place || '',
-      foreign_birth_place: patient.foreign_birth_place || ''
+      address_postal_code: patient.postal_code || patient.zip_code || ''
     };
     
     // Update form data first

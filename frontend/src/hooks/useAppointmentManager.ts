@@ -139,7 +139,6 @@ export const useAppointmentManager = (
         }
 
         // API response received
-        console.log('🔥 APPOINTMENTS LOADED:', data.length, 'appointments');
         setAppointments(data);
       } catch (error) {
         console.error('Error fetching appointments:', error);
@@ -363,16 +362,12 @@ export const useAppointmentManager = (
             // Fetch fresh data without clearing state abruptly
             setTimeout(async () => {
               try {
-                console.log('🔄 Refreshing appointments after creating new appointment...');
-                console.log('📅 Current selectedDate:', selectedDate);
-                console.log('📋 Current agendaView:', agendaView);
                 
                 let refreshData: any[] = [];
                 const dateToRefresh = new Date(selectedDate);
                 
                 if (agendaView === 'daily') {
                   const dateStr = dateToRefresh.toISOString().split('T')[0];
-                  console.log('📅 Refreshing daily appointments for date:', dateStr);
                   refreshData = await apiService.getDailyAgenda(dateStr);
                 } else if (agendaView === 'weekly') {
                   const start = new Date(dateToRefresh);
@@ -385,7 +380,6 @@ export const useAppointmentManager = (
 
                   const startStr = start.toISOString().split('T')[0];
                   const endStr = end.toISOString().split('T')[0];
-                  console.log('📅 Refreshing weekly appointments from:', startStr, 'to:', endStr);
                   refreshData = await apiService.getWeeklyAgenda(startStr, endStr);
                 } else if (agendaView === 'monthly') {
                   const start = new Date(dateToRefresh.getFullYear(), dateToRefresh.getMonth(), 1);
@@ -393,12 +387,9 @@ export const useAppointmentManager = (
                   
                   const startStr = start.toISOString().split('T')[0];
                   const endStr = end.toISOString().split('T')[0];
-                  console.log('📅 Refreshing monthly appointments from:', startStr, 'to:', endStr);
                   refreshData = await apiService.getMonthlyAgenda(startStr, endStr);
                 }
                 
-                console.log('✅ Refreshed appointments data:', refreshData);
-                console.log(`📊 Total appointments after refresh: ${refreshData.length}`);
                 setAppointments(refreshData);
               } catch (error) {
                 console.error('❌ Error refreshing appointments:', error);
@@ -463,16 +454,12 @@ export const useAppointmentManager = (
         // Refresh appointments after successful creation
         setTimeout(async () => {
           try {
-            console.log('🔄 Refreshing appointments after creating new appointment...');
-            console.log('📅 Current selectedDate:', selectedDate);
-            console.log('📋 Current agendaView:', agendaView);
             
             let refreshData: any[] = [];
             const dateToRefresh = new Date(selectedDate);
             
             if (agendaView === 'daily') {
               const dateStr = dateToRefresh.toISOString().split('T')[0];
-              console.log('📅 Refreshing daily appointments for date:', dateStr);
               refreshData = await apiService.getDailyAgenda(dateStr);
             } else if (agendaView === 'weekly') {
               const start = new Date(dateToRefresh);
@@ -485,21 +472,16 @@ export const useAppointmentManager = (
 
               const startStr = start.toISOString().split('T')[0];
               const endStr = end.toISOString().split('T')[0];
-              console.log('📅 Refreshing weekly appointments from:', startStr, 'to:', endStr);
               refreshData = await apiService.getWeeklyAgenda(startStr, endStr);
             } else if (agendaView === 'monthly') {
               const start = new Date(dateToRefresh.getFullYear(), dateToRefresh.getMonth(), 1);
               const end = new Date(dateToRefresh.getFullYear(), dateToRefresh.getMonth() + 1, 0);
               const startStr = start.toISOString().split('T')[0];
               const endStr = end.toISOString().split('T')[0];
-              console.log('📅 Refreshing monthly appointments from:', startStr, 'to:', endStr);
               refreshData = await apiService.getMonthlyAgenda(startStr, endStr);
             } else {
-              console.log('📅 Refreshing all appointments');
               refreshData = await apiService.getAppointments();
             }
-            
-            console.log('🔥 APPOINTMENTS LOADED:', refreshData.length, 'appointments');
             setAppointments(refreshData);
           } catch (error) {
             console.error('❌ Error refreshing appointments:', error);

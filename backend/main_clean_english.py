@@ -17,7 +17,7 @@ import os
 import crud
 import schemas
 import auth
-from database import get_db, Person, Specialty, Country, State, Nationality, EmergencyRelationship, Appointment, MedicalRecord
+from database import get_db, Person, Specialty, Country, State, EmergencyRelationship, Appointment, MedicalRecord
 from appointment_service import AppointmentService
 
 # ============================================================================
@@ -53,21 +53,7 @@ def cdmx_datetime(dt_string: str) -> datetime:
 # ============================================================================
 # AUTHENTICATION
 # ============================================================================
-def get_current_user(db: Session = Depends(get_db)) -> Person:
-    """
-    Simplified authentication for development
-    Returns the first doctor in the database
-    TODO: Implement proper JWT token authentication
-    """
-    try:
-        # For development: return first doctor
-        doctor = db.query(Person).filter(Person.person_type == 'doctor').first()
-        if not doctor:
-            raise HTTPException(status_code=404, detail="No doctor found in database")
-        return doctor
-    except Exception as e:
-        print(f"❌ Authentication error: {str(e)}")
-        raise HTTPException(status_code=401, detail="Authentication failed")
+# Legacy development function removed - using proper JWT authentication
 
 # Legacy - replaced by now_cdmx()
 
@@ -441,10 +427,6 @@ async def get_states(
     return crud.get_states(db, country_id=country_id, active=True)
 
 
-@app.get("/api/catalogs/nationalities")
-async def get_nationalities(db: Session = Depends(get_db)):
-    """Get list of nationalities"""
-    return crud.get_nationalities(db, active=True)
 
 @app.get("/api/catalogs/emergency-relationships")
 async def get_emergency_relationships(db: Session = Depends(get_db)):
@@ -564,8 +546,7 @@ async def get_my_profile(
         "civil_status": current_user.civil_status,
         "curp": current_user.curp,
         "rfc": current_user.rfc,
-        "nationality_id": current_user.nationality_id,
-        "birth_place": current_user.birth_place,
+        "birth_city": current_user.birth_city,
         "birth_state_id": current_user.birth_state_id,
         "foreign_birth_place": current_user.foreign_birth_place,
         
@@ -663,8 +644,7 @@ async def update_my_profile(
             "civil_status": updated_doctor.civil_status,
             "curp": updated_doctor.curp,
             "rfc": updated_doctor.rfc,
-            "nationality_id": updated_doctor.nationality_id,
-            "birth_place": updated_doctor.birth_place,
+            "birth_city": updated_doctor.birth_city,
             "birth_state_id": updated_doctor.birth_state_id,
             "foreign_birth_place": updated_doctor.foreign_birth_place,
             
@@ -721,16 +701,28 @@ async def get_patients(
     skip: int = 0,
     limit: int = 100
 ):
-    """Get list of patients"""
+    """Get list of patients created by the current doctor"""
     try:
-        # Get patients with proper error handling
-        return crud.get_patients(db, skip=skip, limit=limit)
+        # Only return patients created by the current doctor
+        result = crud.get_patients_by_doctor(db, doctor_id=current_user.id, skip=skip, limit=limit)
+        
+        # Debug: Check emergency contact data
+        for patient in result:
+            print(f"🔍 Patient {patient.id} emergency contact:")
+            print(f"  - Name: {patient.emergency_contact_name}")
+            print(f"  - Phone: {patient.emergency_contact_phone}")
+            print(f"  - Relationship: {patient.emergency_contact_relationship}")
+        
+        return result
     except Exception as e:
         print(f"❌ Error in get_patients: {str(e)}")
         import traceback
         traceback.print_exc()
-        # Fallback to simple query if relationships fail
-        patients = db.query(Person).filter(Person.person_type == 'patient').offset(skip).limit(limit).all()
+        # Fallback to simple query if relationships fail, but still filter by doctor
+        patients = db.query(Person).filter(
+            Person.person_type == 'patient',
+            Person.created_by == current_user.id
+        ).offset(skip).limit(limit).all()
         return patients
 
 @app.get("/api/patients/{patient_id}")
@@ -739,15 +731,16 @@ async def get_patient(
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
-    """Get specific patient by ID"""
+    """Get specific patient by ID (only if created by current doctor)"""
     try:
         patient = db.query(Person).filter(
             Person.id == patient_id,
-            Person.person_type == 'patient'
+            Person.person_type == 'patient',
+            Person.created_by == current_user.id  # Only patients created by this doctor
         ).first()
         
         if not patient:
-            raise HTTPException(status_code=404, detail="Patient not found")
+            raise HTTPException(status_code=404, detail="Patient not found or access denied")
         
         return patient
     except HTTPException:
@@ -763,8 +756,6 @@ async def create_patient(
     current_user: Person = Depends(get_current_user)
 ):
     """Create new patient"""
-    # Start a new transaction
-    db.begin()
     try:
         # Check if patient already exists by CURP or email
         if patient_data.curp:
@@ -773,7 +764,6 @@ async def create_patient(
                 Person.person_type == 'patient'
             ).first()
             if existing_patient:
-                db.rollback()
                 raise HTTPException(
                     status_code=409, 
                     detail=f"Ya existe un paciente con CURP: {patient_data.curp}"
@@ -785,7 +775,6 @@ async def create_patient(
                 Person.person_type == 'patient'
             ).first()
             if existing_patient:
-                db.rollback()
                 raise HTTPException(
                     status_code=409, 
                     detail=f"Ya existe un paciente con email: {patient_data.email}"
@@ -797,24 +786,23 @@ async def create_patient(
         # Verify the generated code is actually unique
         existing_code = db.query(Person).filter(Person.person_code == person_code).first()
         if existing_code:
-            db.rollback()
             raise HTTPException(
                 status_code=500, 
                 detail=f"Error interno: código generado ya existe: {person_code}"
             )
         
-        # Create patient using the pre-generated code
-        patient = crud.create_patient_with_code(db, patient_data, person_code)
+        # Create patient using the pre-generated code and assign the creating doctor
+        patient = crud.create_patient_with_code(db, patient_data, person_code, current_user.id)
         
-        # Only commit if everything succeeded
+        # Commit the transaction to persist the patient
         db.commit()
+        db.refresh(patient)
+        
         return patient
         
     except HTTPException:
-        db.rollback()
         raise
     except Exception as e:
-        db.rollback()
         raise HTTPException(
             status_code=500, 
             detail=f"Error interno al crear paciente: {str(e)}"
@@ -828,14 +816,20 @@ async def update_patient(
     current_user: Person = Depends(get_current_user)
 ):
     """Update specific patient by ID"""
+    # Debug: Check emergency contact data in update request
+    print(f"🔍 UPDATE Patient {patient_id} - Emergency contact data received:")
+    print(f"  - Name: {patient_data.emergency_contact_name}")
+    print(f"  - Phone: {patient_data.emergency_contact_phone}")
+    print(f"  - Relationship: {patient_data.emergency_contact_relationship}")
     try:
         patient = db.query(Person).filter(
             Person.id == patient_id,
-            Person.person_type == 'patient'
+            Person.person_type == 'patient',
+            Person.created_by == current_user.id  # Only patients created by this doctor
         ).first()
         
         if not patient:
-            raise HTTPException(status_code=404, detail=f"No se encontró el paciente con ID: {patient_id}")
+            raise HTTPException(status_code=404, detail=f"No se encontró el paciente con ID: {patient_id} o acceso denegado")
         
         # Check for conflicts with other patients (excluding current patient)
         if patient_data.curp and patient_data.curp != patient.curp:
@@ -868,7 +862,6 @@ async def update_patient(
         # Handle foreign key fields - convert empty strings to None
         foreign_key_fields = [
             'emergency_contact_relationship',
-            'nationality_id',
             'birth_state_id',
             'city_residence_id'
         ]

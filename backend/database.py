@@ -49,16 +49,6 @@ class State(Base):
 # AUXILIARY CATALOGS
 # ============================================================================
 
-class Nationality(Base):
-    __tablename__ = "nationalities"
-    
-    id = Column(Integer, primary_key=True)
-    name = Column(String(50), nullable=False)
-    active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    
-    # Relationships
-    persons = relationship("Person", back_populates="nationality")
 
 class Specialty(Base):
     __tablename__ = "specialties"
@@ -104,8 +94,7 @@ class Person(Base):
     birth_date = Column(Date, nullable=False)
     gender = Column(String(20), nullable=False)
     civil_status = Column(String(20))
-    nationality_id = Column(Integer, ForeignKey("nationalities.id"), default=1)
-    birth_place = Column(String(100))
+    birth_city = Column(String(100))  # Ciudad de nacimiento (reemplaza birth_place)
     
     # BIRTH LOCATION (NOM-024)
     birth_state_id = Column(Integer, ForeignKey("states.id"))  # For Mexicans
@@ -166,7 +155,6 @@ class Person(Base):
     created_by = Column(Integer, ForeignKey("persons.id"))
     
     # RELATIONSHIPS
-    nationality = relationship("Nationality", back_populates="persons")
     specialty = relationship("Specialty", back_populates="doctors")
     birth_state = relationship("State", foreign_keys=[birth_state_id], overlaps="persons_birth")
     address_state = relationship("State", foreign_keys=[address_state_id], overlaps="persons_address")

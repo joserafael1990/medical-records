@@ -56,13 +56,6 @@ class City(CityBase):
 # AUXILIARY CATALOGS
 # ============================================================================
 
-class NationalityBase(BaseSchema):
-    name: str
-    active: bool = True
-
-class Nationality(NationalityBase):
-    id: int
-    created_at: datetime
 
 class SpecialtyBase(BaseSchema):
     name: str
@@ -95,8 +88,7 @@ class PersonBase(BaseSchema):
     birth_date: date
     gender: str
     civil_status: Optional[str] = None
-    nationality_id: int = 1
-    birth_place: Optional[str] = None
+    birth_city: Optional[str] = None
     
     # Birth location
     birth_state_id: Optional[int] = None
@@ -173,8 +165,7 @@ class DoctorUpdate(BaseSchema):
     civil_status: Optional[str] = None
     curp: Optional[str] = None
     rfc: Optional[str] = None
-    nationality_id: Optional[int] = None
-    birth_place: Optional[str] = None
+    birth_city: Optional[str] = None
     birth_state_id: Optional[int] = None
     foreign_birth_place: Optional[str] = None
     
@@ -232,8 +223,7 @@ class PersonUpdate(BaseSchema):
     birth_date: Optional[date] = None
     gender: Optional[str] = None
     civil_status: Optional[str] = None
-    nationality_id: Optional[int] = None
-    birth_place: Optional[str] = None
+    birth_city: Optional[str] = None
     
     # Birth location
     birth_state_id: Optional[int] = None
@@ -289,7 +279,6 @@ class Person(PersonBase):
     created_by: Optional[int] = None
     
     # Relationships
-    nationality: Optional[Nationality] = None
     specialty: Optional[Specialty] = None
     birth_state: Optional[State] = None
     address_state: Optional[State] = None

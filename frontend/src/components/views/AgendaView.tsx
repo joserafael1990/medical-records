@@ -126,15 +126,6 @@ const AgendaView: React.FC<AgendaViewProps> = ({
       const aptDate = getAppointmentDate(apt.date_time);
       const aptDateStr = aptDate.toDateString();
       
-      // DEBUG: Log comparison for today
-      if (aptDateStr === new Date().toDateString() || targetDateStr === new Date().toDateString()) {
-        console.log('🔍 getAppointmentsForDate COMPARISON:', {
-          apt_id: apt.id,
-          apt_date: aptDateStr,
-          target_date: targetDateStr,
-          match: aptDateStr === targetDateStr
-        });
-      }
       
       return aptDateStr === targetDateStr;
     });
@@ -176,30 +167,11 @@ const AgendaView: React.FC<AgendaViewProps> = ({
         aptDate.toDateString() === date.toDateString()
       );
       
-      // DEBUG: Log filtering for today's date specifically
       const today = new Date().toDateString();
-      if (aptDate.toDateString() === today || dateRange.some(d => d.toDateString() === today)) {
-        console.log('🔍 FILTERING TODAY:', {
-          apt_id: apt.id,
-          apt_date_time: apt.date_time,
-          parsed_date: aptDate.toDateString(),
-          today_date: today,
-          selected_date: selectedDate.toDateString(),
-          date_range: dateRange.map(d => d.toDateString()),
-          matches: matches,
-          FILTER_RESULT: matches ? 'PASS ✅' : 'FAIL ❌'
-        });
-      }
       
       return matches;
     });
     
-    // DEBUG: Check what we got after filtering
-    console.log('📊 AFTER FILTERING:', {
-      total_appointments: appointments.length,
-      appointments_in_range: appointmentsInRange.length,
-      appointment_ids: appointmentsInRange.map(a => a.id)
-    });
     
     // Calculate stats by status
     const stats = {
@@ -246,41 +218,9 @@ const AgendaView: React.FC<AgendaViewProps> = ({
 
   const renderDailyView = () => {
     const rawAppointments = getAppointmentsForDate(selectedDate);
-    const dayAppointments = rawAppointments; // TEMPORAL: Skip sorting to test
+    const dayAppointments = rawAppointments;
     
-    console.log('🔍 RENDER DEBUG:', {
-      raw_appointments: rawAppointments.length,
-      sorted_appointments: dayAppointments.length,
-      raw_data: rawAppointments,
-      sorted_data: dayAppointments
-    });
     
-    console.log('🚨 DAILY VIEW RENDERING:', {
-      total_appointments: appointments.length,
-      selected_date: selectedDate.toDateString(),
-      filtered_for_day: dayAppointments.length,
-      appointment_details: dayAppointments.map(apt => ({
-        id: apt.id,
-        date_time: apt.date_time,
-        patient_name: apt.patient_name || `${apt.patient?.first_name} ${apt.patient?.paternal_surname}`,
-        status: apt.status
-      }))
-    });
-    
-    // Log rendering state with detailed debugging
-    console.log('🔍 CONDITIONAL CHECK:', {
-      dayAppointments_length: dayAppointments.length,
-      dayAppointments_length_type: typeof dayAppointments.length,
-      greater_than_zero: dayAppointments.length > 0,
-      dayAppointments_array: dayAppointments,
-      is_array: Array.isArray(dayAppointments)
-    });
-    
-    if (dayAppointments.length > 0) {
-      console.log('✅ RENDERING APPOINTMENTS:', dayAppointments.length, 'appointments found');
-    } else {
-      console.log('❌ NO APPOINTMENTS TO RENDER - showing empty state');
-    }
 
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }} key={`daily-${selectedDate.toDateString()}-${dayAppointments.length}`}>
@@ -288,8 +228,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
           dayAppointments.map((appointment) => (
             <Card key={appointment.id} sx={{ 
               p: 3,
-              border: '1px solid',
-              borderColor: 'grey.200',
+              borderColor: 'red',
               '&:hover': {
                 borderColor: 'primary.main',
                 boxShadow: 1

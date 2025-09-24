@@ -47,7 +47,7 @@ interface PatientBaseFields {
   address_state_id?: string | null;
   address_postal_code?: string;
   nationality_id?: number;
-  birth_place?: string;
+  birth_city?: string;
   birth_state_id?: number | null;
   foreign_birth_place?: string;
 }
@@ -309,7 +309,7 @@ export enum AgendaView {
 // ============================================================================
 
 // Interface for API calls - uses backend expected types
-export interface PatientApiData extends Required<Omit<PatientBaseFields, 'email' | 'curp' | 'rfc' | 'internal_id' | 'primary_phone' | 'birth_state_code' | 'nationality' | 'civil_status' | 'education_level' | 'occupation' | 'religion' | 'insurance_type' | 'insurance_provider' | 'insurance_number' | 'emergency_contact_name' | 'emergency_contact_phone' | 'emergency_contact_relationship' | 'allergies' | 'chronic_conditions' | 'current_medications' | 'blood_type' | 'previous_hospitalizations' | 'surgical_history' | 'address_street' | 'address_ext_number' | 'address_int_number' | 'address_neighborhood' | 'address_postal_code' | 'birth_place' | 'foreign_birth_place' | 'address_state_id'>> {
+export interface PatientApiData extends Required<Omit<PatientBaseFields, 'email' | 'curp' | 'rfc' | 'internal_id' | 'primary_phone' | 'birth_state_code' | 'nationality' | 'civil_status' | 'education_level' | 'occupation' | 'religion' | 'insurance_type' | 'insurance_provider' | 'insurance_number' | 'emergency_contact_name' | 'emergency_contact_phone' | 'emergency_contact_relationship' | 'allergies' | 'chronic_conditions' | 'current_medications' | 'blood_type' | 'previous_hospitalizations' | 'surgical_history' | 'address_street' | 'address_ext_number' | 'address_int_number' | 'address_neighborhood' | 'address_postal_code' | 'birth_city' | 'foreign_birth_place' | 'address_state_id'>> {
   // Required form fields
   birth_state_code: string;
   nationality: string;
@@ -322,7 +322,7 @@ export interface PatientApiData extends Required<Omit<PatientBaseFields, 'email'
   address_city: string;
   address_state_id: number | null; // Backend expects number
   address_postal_code: string;
-  birth_place: string;
+  birth_city: string;
   foreign_birth_place: string;
   
   // Form-specific fields
@@ -371,15 +371,20 @@ export interface PatientFormData {
   gender: string;
   civil_status: string;
   
+  // Personal details (added fields)
+  birth_city: string;
+  birth_state_id: string;  // State ID for birth place
+  
   // Address
   address: string;
   address_street: string; // Alternative field name for compatibility
   city: string;
   address_city: string;  // Alternative field name for compatibility
   state: string;
-  address_state_id: string;  // Alternative field name for compatibility
+  address_state_id: string;  // State ID (contains country relationship)
   zip_code: string;
-  country: string;
+  country: string; // For residence country (separate from address)
+  address_postal_code: string;
   
   // Emergency contact
   emergency_contact_name: string;
@@ -402,9 +407,6 @@ export interface PatientFormData {
   // Technical fields
   active: boolean;
   is_active: boolean;  // Alternative field name for compatibility
-  address_postal_code: string;
-  birth_place: string;
-  foreign_birth_place: string;
 }
 
 export interface ConsultationFormData {
