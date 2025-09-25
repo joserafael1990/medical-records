@@ -12,6 +12,7 @@ interface DoctorInfo {
   email: string;
   specialty: string;
   professional_license: string;
+  appointment_duration?: number; // Duration of appointments in minutes
 }
 
 interface User {

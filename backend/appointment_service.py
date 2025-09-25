@@ -38,16 +38,22 @@ class AppointmentService:
         if 'id' not in appointment_data or not appointment_data['id']:
             appointment_data['id'] = f"APT{str(uuid.uuid4())[:8].upper()}"
         
-        # Calculate end_time based on appointment_date and duration
+        # Calculate end_time based on appointment_date and doctor's appointment_duration
         start_time = appointment_data['appointment_date']
         if isinstance(start_time, str):
             start_time = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
-        
+
         # Convert to UTC for storage
         start_time = to_utc_for_storage(start_time)
         appointment_data['appointment_date'] = start_time
-        
-        duration_minutes = appointment_data.get('duration_minutes', 30)
+
+        # Get doctor's appointment_duration from persons table
+        doctor = db.query(Person).filter(Person.id == appointment_data['doctor_id']).first()
+        if doctor and doctor.appointment_duration:
+            duration_minutes = doctor.appointment_duration
+        else:
+            duration_minutes = 30  # Default fallback
+
         end_time = start_time + timedelta(minutes=duration_minutes)
         appointment_data['end_time'] = end_time
         
@@ -120,10 +126,15 @@ class AppointmentService:
             # Convert to UTC for storage
             appointment_data['appointment_date'] = to_utc_for_storage(appointment_data['appointment_date'])
         
-        # Recalculate end_time if appointment_date or duration changed
-        if 'appointment_date' in appointment_data or 'duration_minutes' in appointment_data:
-            start_time = appointment_data.get('appointment_date', appointment.appointment_date)
-            duration = appointment_data.get('duration_minutes', appointment.duration_minutes)
+        # Recalculate end_time if appointment_date changed (duration comes from doctor's profile)
+        if 'appointment_date' in appointment_data:
+            start_time = appointment_data['appointment_date']
+            # Get doctor's appointment_duration from persons table
+            doctor = db.query(Person).filter(Person.id == appointment.doctor_id).first()
+            if doctor and doctor.appointment_duration:
+                duration = doctor.appointment_duration
+            else:
+                duration = 30  # Default fallback
             appointment_data['end_time'] = start_time + timedelta(minutes=duration)
         
         # Handle cancellation

@@ -49,7 +49,7 @@ const initialFormData: DoctorFormData = {
   office_city: '',
   office_state_id: '',
   office_postal_code: '',
-  office_country: 'México'
+  appointment_duration: ''
 };
 
 // Simple cache to prevent unnecessary requests
@@ -149,7 +149,13 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
   }, []);
 
   const handleEdit = useCallback((section?: string) => {
+    console.log('🔍 HOOK handleEdit called - Starting edit process');
+    console.log('🔍 Current dialogOpen state:', dialogOpen);
+    console.log('🔍 Current isEditing state:', isEditing);
+    console.log('🔍 Doctor profile exists:', !!doctorProfile);
+    
     if (doctorProfile) {
+      console.log('🔍 HOOK: Mapping doctor profile data to form');
       // Map backend fields to form fields
       const mappedData = {
         title: doctorProfile.title || '',
@@ -174,19 +180,25 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
         office_city: doctorProfile.office_city || '',
         office_state_id: String(doctorProfile.office_state_id || ''),
         office_postal_code: doctorProfile.office_postal_code || '',
-        office_country: doctorProfile.office_country || 'México'
+        office_country: doctorProfile.office_country || 'México',
+        appointment_duration: String(doctorProfile.appointment_duration || '')
       };
       
+      console.log('🔍 HOOK: Setting form data and opening dialog');
       setFormData(mappedData);
       setIsEditing(true);
       setDialogOpen(true);
       clearMessages();
+      
+      console.log('🔍 HOOK: After setting states - dialogOpen should be true, isEditing should be true');
       
       // Store the section to navigate to (we'll add this functionality to the dialog)
       if (section) {
         // We'll need to pass this to the dialog component
         (window as any).doctorProfileActiveSection = section;
       }
+    } else {
+      console.log('❌ HOOK: No doctor profile found, cannot edit');
     }
   }, [doctorProfile, clearMessages]);
 
@@ -242,6 +254,7 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
       // Office address with state ID
       office_city: data.office_city,
       office_state_id: data.office_state_id ? parseInt(data.office_state_id) : null,
+      appointment_duration: data.appointment_duration ? parseInt(data.appointment_duration) : null,
       // Include optional fields if they exist in the original profile
       digital_signature: doctorProfile?.digital_signature || '',
       professional_seal: doctorProfile?.professional_seal || ''
@@ -255,6 +268,7 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
         cleanedData[key] = value;
       }
     });
+
 
     try {
       if (isEditing) {

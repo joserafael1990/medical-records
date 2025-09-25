@@ -1,4 +1,4 @@
-import React, { memo, useState, useEffect } from 'react';
+import React, { memo, useState, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -41,6 +41,7 @@ import {
 import { DoctorFormData } from '../../types';
 import { MEDICAL_SPECIALTIES, MEXICAN_STATE_NAMES } from '../../constants';
 import { apiService } from '../../services/api';
+import { useCatalogs } from '../../hooks/useCatalogs';
 
 interface DoctorProfileDialogProps {
   open: boolean;
@@ -93,6 +94,61 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
   const [loadingSpecialties, setLoadingSpecialties] = useState(false);
   const [states, setStates] = useState<Array<{id: number, name: string}>>([]);
   const [loadingStates, setLoadingStates] = useState(false);
+
+  // Hook para catálogos (países, estados)
+  const { 
+    countries, 
+    getStatesByCountry, 
+    getCountryByName, 
+    loading: catalogsLoading 
+  } = useCatalogs();
+
+  // Estado para dropdown de país del consultorio
+  const [selectedOfficeCountry, setSelectedOfficeCountry] = useState<string>('México');
+
+  // Función para manejar cambio de país del consultorio
+  const handleOfficeCountryChange = (countryName: string) => {
+    setSelectedOfficeCountry(countryName);
+    // Limpiar el estado cuando cambia el país
+    setFormData(prev => ({ 
+      ...prev, 
+      office_state_id: ''
+    }));
+  };
+
+  // Estados filtrados para el consultorio basados en el país seleccionado
+  const filteredOfficeStates = useMemo(() => {
+    return getStatesByCountry(selectedOfficeCountry);
+  }, [selectedOfficeCountry, getStatesByCountry]);
+
+  // Información del país del estado seleccionado del consultorio
+  const currentOfficeStateInfo = useMemo(() => {
+    if (!formData.office_state_id) return null;
+    const stateId = parseInt(formData.office_state_id);
+    
+    for (const country of countries) {
+      const statesInCountry = getStatesByCountry(country.name);
+      const stateFound = statesInCountry.find(state => state.id === stateId);
+      if (stateFound) {
+        return { country, state: stateFound };
+      }
+    }
+    return null;
+  }, [formData.office_state_id, countries, getStatesByCountry]);
+
+  // Sincronizar el país del consultorio cuando se edita
+  useEffect(() => {
+    if (isEditing && currentOfficeStateInfo && currentOfficeStateInfo.country.name !== selectedOfficeCountry) {
+      setSelectedOfficeCountry(currentOfficeStateInfo.country.name);
+    }
+  }, [isEditing, currentOfficeStateInfo, selectedOfficeCountry]);
+
+  // Inicializar país del consultorio a México cuando se cargan los países
+  useEffect(() => {
+    if (countries.length > 0 && !isEditing) {
+      setSelectedOfficeCountry('México');
+    }
+  }, [countries.length, isEditing]);
 
   // Función para cargar especialidades desde la API
   useEffect(() => {
@@ -273,7 +329,7 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <Alert severity="info" icon={<InfoIcon />}>
               <Typography variant="body2">
-                Esta información es requerida por la NOM-004-SSA3-2012 para la correcta identificación del profesional de la salud.
+                Completa tu información personal para una identificación profesional adecuada.
               </Typography>
             </Alert>
 
@@ -529,6 +585,7 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
               Dirección del Consultorio
             </Typography>
 
+            {/* 1. Dirección Completa */}
             <TextField
               label="Dirección Completa"
               value={formData.office_address || ''}
@@ -542,7 +599,56 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
               placeholder="Av. Reforma 123, Col. Centro"
             />
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 2 }}>
+            {/* 2. País y Estado (cascading) */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 2 }}>
+              <Autocomplete
+                options={countries}
+                getOptionLabel={(option) => option.name}
+                value={countries.find(country => country.name === selectedOfficeCountry) || null}
+                onChange={(_, newValue) => {
+                  const countryName = newValue?.name || 'México';
+                  handleOfficeCountryChange(countryName);
+                }}
+                loading={catalogsLoading}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="País"
+                    required
+                    helperText="Selecciona el país del consultorio"
+                  />
+                )}
+              />
+              <Autocomplete
+                options={filteredOfficeStates}
+                getOptionLabel={(option) => option.name}
+                value={filteredOfficeStates.find(state => state.id === parseInt(formData.office_state_id || '0')) || null}
+                onChange={(_, newValue) => {
+                  setFormData(prev => ({ 
+                    ...prev, 
+                    office_state_id: newValue ? String(newValue.id) : '' 
+                  }));
+                }}
+                loading={catalogsLoading}
+                disabled={!selectedOfficeCountry || filteredOfficeStates.length === 0}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Estado"
+                    required
+                    error={!!fieldErrors.office_state_id}
+                    helperText={
+                      !selectedOfficeCountry ? "Primero selecciona un país" :
+                      filteredOfficeStates.length === 0 ? "No hay estados disponibles" :
+                      fieldErrors.office_state_id || "Estado/Provincia"
+                    }
+                  />
+                )}
+              />
+            </Box>
+
+            {/* 3. Ciudad y Código Postal */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 2 }}>
               <TextField
                 label="Ciudad"
                 value={formData.office_city || ''}
@@ -550,26 +656,7 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
                 fullWidth
                 required
                 error={!!fieldErrors.office_city}
-                helperText={fieldErrors.office_city}
-              />
-              <Autocomplete
-                options={states}
-                getOptionLabel={(option) => option.name}
-                value={states.find(state => state.id === parseInt(formData.office_state_id || '0')) || null}
-                onChange={(_, newValue) => setFormData(prev => ({ 
-                  ...prev, 
-                  office_state_id: newValue ? String(newValue.id) : '' 
-                }))}
-                loading={loadingStates}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Estado"
-                    required
-                    error={!!fieldErrors.office_state_id}
-                    helperText={fieldErrors.office_state_id}
-                  />
-                )}
+                helperText={fieldErrors.office_city || "Ciudad del consultorio"}
               />
               <TextField
                 label="Código Postal"
@@ -586,28 +673,35 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
               />
             </Box>
 
-            <TextField
-              label="Teléfono del Consultorio"
-              value={formData.office_phone || ''}
-              onChange={(e) => {
-                // Solo permitir números
-                const value = e.target.value.replace(/[^0-9]/g, '');
-                setFormData(prev => ({ ...prev, office_phone: value }));
-              }}
-              fullWidth
-              helperText="Solo números (opcional)"
-              placeholder="5551234567"
-              inputProps={{ maxLength: 15 }}
-            />
-
-            <TextField
-              label="País"
-              value={formData.office_country || 'México'}
-              onChange={(e) => setFormData(prev => ({ ...prev, office_country: e.target.value }))}
-              fullWidth
-              disabled
-            />
-
+            {/* 4. Teléfono del Consultorio y Duración de Citas */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 2 }}>
+              <TextField
+                label="Teléfono del Consultorio"
+                value={formData.office_phone || ''}
+                onChange={(e) => {
+                  // Solo permitir números
+                  const value = e.target.value.replace(/[^0-9]/g, '');
+                  setFormData(prev => ({ ...prev, office_phone: value }));
+                }}
+                fullWidth
+                helperText="Solo números (opcional)"
+                placeholder="5551234567"
+                inputProps={{ maxLength: 15 }}
+              />
+              <TextField
+                label="Duración de Citas (minutos)"
+                value={formData.appointment_duration || ''}
+                onChange={(e) => {
+                  // Solo permitir números
+                  const value = e.target.value.replace(/[^0-9]/g, '');
+                  setFormData(prev => ({ ...prev, appointment_duration: value }));
+                }}
+                fullWidth
+                helperText="Tiempo promedio por consulta"
+                placeholder="30"
+                inputProps={{ maxLength: 3 }}
+              />
+            </Box>
 
           </Box>
         );

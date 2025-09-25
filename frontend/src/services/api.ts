@@ -930,9 +930,9 @@ class ApiService {
     return response.data;
   }
 
-  async getAvailableSlots(targetDate: string, durationMinutes = 30): Promise<any[]> {
+  async getAvailableSlots(targetDate: string): Promise<any[]> {
     const response = await this.api.get(API_CONFIG.ENDPOINTS.AGENDA.AVAILABLE_SLOTS, {
-      params: { target_date: targetDate, duration_minutes: durationMinutes }
+      params: { target_date: targetDate }
     });
     return response.data;
   }

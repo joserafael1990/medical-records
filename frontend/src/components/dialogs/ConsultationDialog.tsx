@@ -88,7 +88,108 @@ const calculateAge = (birthDate: string): number => {
 // Function to format patient name with age
 const formatPatientNameWithAge = (patient: Patient): string => {
   const age = calculateAge(patient.birth_date);
-  return `${patient.first_name} ${patient.paternal_surname} ${patient.maternal_surname} (${age} años)`;
+  const fullName = [
+    patient.first_name,
+    patient.paternal_surname,
+    patient.maternal_surname && patient.maternal_surname !== 'null' ? patient.maternal_surname : ''
+  ].filter(part => part && part.trim()).join(' ');
+  return `${fullName} (${age} años)`;
+};
+
+// Function to format appointment for display
+const formatAppointmentDisplay = (appointment: any, patients: Patient[]): string => {
+  const patient = patients.find(p => p.id === appointment.patient_id);
+  const patientName = patient ? formatPatientNameWithAge(patient) : 'Paciente desconocido';
+  
+  // Handle different date formats and properties
+  let dateStr = 'Fecha inválida';
+  let timeStr = 'Sin hora';
+  
+  // Try different date properties that might exist
+  const dateValue = appointment.date || appointment.appointment_date || appointment.scheduled_date;
+  
+  if (dateValue) {
+    try {
+      const dateObj = new Date(dateValue);
+      if (!isNaN(dateObj.getTime())) {
+        dateStr = dateObj.toLocaleDateString('es-ES', {
+          day: '2-digit',
+          month: '2-digit', 
+          year: 'numeric'
+        });
+      }
+    } catch (error) {
+      console.warn('Error parsing date:', dateValue, error);
+    }
+  }
+  
+  // Try different time properties that might exist
+  const timeValue = appointment.time || appointment.appointment_time || appointment.scheduled_time || appointment.hour;
+  
+  // Time value found and processing correctly
+  
+  if (timeValue) {
+    try {
+      // If it's a full datetime, extract time
+      if (typeof timeValue === 'string' && (timeValue.includes('T') || timeValue.includes(' '))) {
+        const timeObj = new Date(timeValue);
+        if (!isNaN(timeObj.getTime())) {
+          timeStr = timeObj.toLocaleTimeString('es-ES', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: true 
+          });
+        }
+      } else if (typeof timeValue === 'string') {
+        // If it's just time string (e.g., "11:58", "14:30")
+        timeStr = timeValue;
+      } else if (typeof timeValue === 'object' && timeValue !== null) {
+        // If it's a Date object
+        const timeObj = new Date(timeValue);
+        if (!isNaN(timeObj.getTime())) {
+          timeStr = timeObj.toLocaleTimeString('es-ES', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: true 
+          });
+        }
+      }
+    } catch (error) {
+      console.warn('Error parsing time:', timeValue, error);
+    }
+  }
+  
+  // Also try to extract time from the date field if it contains both date and time
+  if (timeStr === 'Sin hora' && dateValue) {
+    try {
+      const dateObj = new Date(dateValue);
+      if (!isNaN(dateObj.getTime())) {
+        // Check if the date contains time information (not just 00:00:00)
+        const hours = dateObj.getHours();
+        const minutes = dateObj.getMinutes();
+        if (hours !== 0 || minutes !== 0) {
+          timeStr = dateObj.toLocaleTimeString('es-ES', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: true 
+          });
+        }
+      }
+    } catch (error) {
+      console.warn('Error extracting time from date:', dateValue, error);
+    }
+  }
+  
+  return `${patientName} - ${dateStr} ${timeStr}`;
+};
+
+// Function to get available appointments (not completed or cancelled)
+const getAvailableAppointments = (appointments: any[]): any[] => {
+  return appointments.filter(apt => 
+    apt.status !== 'completed' && 
+    apt.status !== 'cancelled' &&
+    apt.status !== 'no_show'
+  );
 };
 
 interface ConsultationDialogProps {
@@ -99,6 +200,7 @@ interface ConsultationDialogProps {
   setFormData: (data: ConsultationFormData | ((prev: ConsultationFormData) => ConsultationFormData)) => void;
   onSubmit: () => void;
   patients: Patient[];
+  appointments?: any[]; // Lista de citas disponibles
   formErrorMessage: string;
   setFormErrorMessage: (message: string) => void;
   isSubmitting: boolean;
@@ -143,7 +245,17 @@ const getPatientFullAddress = (patient: Patient): string => {
   if (patient.address_postal_code) {
     addressParts.push(`C.P. ${patient.address_postal_code}`);
   }
-  
+
+  // Add country after postal code
+  if (patient.address_country_name) {
+    addressParts.push(patient.address_country_name);
+  } else if (patient.address_country || patient.country) {
+    addressParts.push(patient.address_country || patient.country);
+  } else {
+    // Default to México if no country specified
+    addressParts.push('México');
+  }
+
   // If we have specific address parts, use them
   if (addressParts.length > 0) {
     return addressParts.join(', ');
@@ -172,6 +284,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   setFormData,
   onSubmit,
   patients,
+  appointments = [],
   formErrorMessage,
   setFormErrorMessage,
   isSubmitting,
@@ -188,6 +301,55 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 }) => {
   const [activeStep, setActiveStep] = useState(0);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [selectedAppointment, setSelectedAppointment] = useState<any | null>(null);
+  
+  // Available appointments (exclude completed/cancelled)
+  const availableAppointments = getAvailableAppointments(appointments);
+  
+  // Appointments data structure is now working correctly
+  
+  // Handle appointment selection
+  const handleAppointmentChange = (appointment: any | null) => {
+    setSelectedAppointment(appointment);
+    
+    if (appointment) {
+      // When an appointment is selected, auto-select the patient
+      const patient = patients.find(p => p.id === appointment.patient_id);
+      if (patient) {
+        setSelectedPatient(patient);
+        
+        // Handle date conversion safely
+        let consultationDate = '';
+        const dateValue = appointment.date || appointment.appointment_date || appointment.scheduled_date;
+        
+        // Processing selected appointment data
+        
+        if (dateValue) {
+          try {
+            const dateObj = new Date(dateValue);
+            if (!isNaN(dateObj.getTime())) {
+              consultationDate = dateObj.toISOString().split('T')[0];
+            }
+          } catch (error) {
+            console.warn('Error converting appointment date:', dateValue, error);
+          }
+        }
+        
+        setFormData(prev => ({
+          ...prev,
+          patient_id: appointment.patient_id,
+          appointment_id: appointment.id,
+          consultation_date: consultationDate
+        }));
+      }
+    } else {
+      // Clear appointment association
+      setFormData(prev => ({
+        ...prev,
+        appointment_id: undefined
+      }));
+    }
+  };
   
   // Debug log for dialog open state
   // Dialog state tracking removed to prevent infinite logs
@@ -196,6 +358,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   useEffect(() => {
     if (open && !isEditing) {
       setSelectedPatient(null);
+      setSelectedAppointment(null);
       setActiveStep(0);
       setVisitedSteps(new Set([0]));
       setPatientClinicalStudies([]);
@@ -365,7 +528,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         appointment_type: 'follow_up',
         status: 'scheduled',
         priority: 'normal',
-        duration_minutes: 30,
         preparation_instructions: 'Traer resultados de estudios clínicos si están disponibles'
       };
 
@@ -491,6 +653,310 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       case 0:
         return (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {/* Appointment Selection (Optional) - ANTES de la selección de paciente */}
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                📅 Cita Asociada (Opcional)
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Si seleccionas una cita existente, el paciente y fecha se auto-completarán
+              </Typography>
+              <Autocomplete
+                options={availableAppointments}
+                getOptionLabel={(option: any) => formatAppointmentDisplay(option, patients)}
+                value={selectedAppointment}
+                onChange={(_, newValue: any | null) => handleAppointmentChange(newValue)}
+                renderInput={(params: any) => (
+                  <TextField
+                    {...params}
+                    label="Seleccionar Cita (Opcional)"
+                    helperText="Busca por nombre del paciente, fecha o estado de la cita"
+                    InputProps={{
+                      ...params.InputProps,
+                      startAdornment: (
+                        <Box sx={{ mr: 1 }}>
+                          📅
+                        </Box>
+                      ),
+                    }}
+                  />
+                )}
+                renderOption={(props: any, option: any) => {
+                  const patient = patients.find(p => p.id === option.patient_id);
+                  const patientName = patient ? formatPatientNameWithAge(patient) : 'Paciente desconocido';
+                  
+                  // Handle date formatting safely
+                  let dateStr = 'Fecha inválida';
+                  let timeStr = 'Sin hora';
+                  
+                  const dateValue = option.date || option.appointment_date || option.scheduled_date;
+                  if (dateValue) {
+                    try {
+                      const dateObj = new Date(dateValue);
+                      if (!isNaN(dateObj.getTime())) {
+                        dateStr = dateObj.toLocaleDateString('es-ES', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric'
+                        });
+                      }
+                    } catch (error) {
+                      console.warn('Error parsing date in option:', dateValue, error);
+                    }
+                  }
+                  
+                  const timeValue = option.time || option.appointment_time || option.scheduled_time || option.hour;
+                  
+                  // Processing time value for option display
+                  
+                  if (timeValue) {
+                    try {
+                      if (typeof timeValue === 'string' && (timeValue.includes('T') || timeValue.includes(' '))) {
+                        const timeObj = new Date(timeValue);
+                        if (!isNaN(timeObj.getTime())) {
+                          timeStr = timeObj.toLocaleTimeString('es-ES', { 
+                            hour: '2-digit', 
+                            minute: '2-digit',
+                            hour12: true 
+                          });
+                        }
+                      } else if (typeof timeValue === 'string') {
+                        timeStr = timeValue;
+                      } else if (typeof timeValue === 'object' && timeValue !== null) {
+                        const timeObj = new Date(timeValue);
+                        if (!isNaN(timeObj.getTime())) {
+                          timeStr = timeObj.toLocaleTimeString('es-ES', { 
+                            hour: '2-digit', 
+                            minute: '2-digit',
+                            hour12: true 
+                          });
+                        }
+                      }
+                    } catch (error) {
+                      console.warn('Error parsing time in option:', timeValue, error);
+                    }
+                  }
+                  
+                  // Also try to extract time from the date field if it contains both date and time
+                  if (timeStr === 'Sin hora' && dateValue) {
+                    try {
+                      const dateObj = new Date(dateValue);
+                      if (!isNaN(dateObj.getTime())) {
+                        const hours = dateObj.getHours();
+                        const minutes = dateObj.getMinutes();
+                        if (hours !== 0 || minutes !== 0) {
+                          timeStr = dateObj.toLocaleTimeString('es-ES', { 
+                            hour: '2-digit', 
+                            minute: '2-digit',
+                            hour12: true 
+                          });
+                        }
+                      }
+                    } catch (error) {
+                      console.warn('Error extracting time from date in option:', dateValue, error);
+                    }
+                  }
+                  
+                  const statusColor = option.status === 'confirmed' ? 'success' : 
+                                     option.status === 'pending' ? 'warning' : 'default';
+                  
+                  return (
+                    <Box component="li" {...props}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+                        <Avatar sx={{ bgcolor: 'primary.main' }}>
+                          📅
+                        </Avatar>
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                            {patientName}
+                          </Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            <Typography variant="body2" color="text.secondary">
+                              {dateStr} {timeStr}
+                            </Typography>
+                            <Chip 
+                              label={option.status === 'confirmed' ? 'Confirmada' : 
+                                     option.status === 'pending' ? 'Pendiente' : option.status} 
+                              size="small" 
+                              color={statusColor}
+                              variant="outlined"
+                            />
+                          </Box>
+                        </Box>
+                      </Box>
+                    </Box>
+                  );
+                }}
+                loading={availableAppointments.length === 0}
+                noOptionsText="No hay citas disponibles para consulta"
+                clearText="Limpiar selección"
+                closeText="Cerrar"
+                openText="Abrir opciones"
+              />
+            </Box>
+
+            {/* Enhanced Selected Appointment Info */}
+            {selectedAppointment && (
+              <Paper sx={{ p: 3, bgcolor: 'warning.50', border: '1px solid', borderColor: 'warning.200', borderRadius: '12px' }}>
+                {/* Header with Appointment Basic Info */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+                  <Avatar sx={{ bgcolor: 'warning.main', width: 56, height: 56, fontSize: '1.5rem' }}>
+                    📅
+                  </Avatar>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
+                      Cita Seleccionada
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        📅 {(() => {
+                          const dateValue = selectedAppointment.date || selectedAppointment.appointment_date || selectedAppointment.scheduled_date;
+                          if (dateValue) {
+                            try {
+                              const dateObj = new Date(dateValue);
+                              if (!isNaN(dateObj.getTime())) {
+                                return dateObj.toLocaleDateString('es-ES', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric'
+                                });
+                              }
+                            } catch (error) {
+                              return 'Fecha inválida';
+                            }
+                          }
+                          return 'Sin fecha';
+                        })()}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        🕐 {(() => {
+                          const timeValue = selectedAppointment.time || selectedAppointment.appointment_time || selectedAppointment.scheduled_time || selectedAppointment.hour;
+                          if (timeValue) {
+                            try {
+                              if (typeof timeValue === 'string' && (timeValue.includes('T') || timeValue.includes(' '))) {
+                                const timeObj = new Date(timeValue);
+                                if (!isNaN(timeObj.getTime())) {
+                                  return timeObj.toLocaleTimeString('es-ES', { 
+                                    hour: '2-digit', 
+                                    minute: '2-digit',
+                                    hour12: true 
+                                  });
+                                }
+                              } else if (typeof timeValue === 'string') {
+                                return timeValue;
+                              }
+                            } catch (error) {
+                              return 'Sin hora';
+                            }
+                          }
+                          return 'Sin hora';
+                        })()}
+                      </Typography>
+                      <Chip 
+                        label={selectedAppointment.status === 'confirmed' ? 'Confirmada' : 
+                               selectedAppointment.status === 'pending' ? 'Pendiente' : selectedAppointment.status} 
+                        size="small" 
+                        color={selectedAppointment.status === 'confirmed' ? 'success' : 
+                               selectedAppointment.status === 'pending' ? 'warning' : 'default'}
+                        variant="outlined"
+                      />
+                    </Box>
+                  </Box>
+                </Box>
+
+                {/* Appointment Details Grid */}
+                <Box sx={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+                  gap: 2 
+                }}>
+                  <Box sx={{ bgcolor: 'white', p: 2, borderRadius: '8px' }}>
+                    <Typography variant="body2" sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 1,
+                      mb: 0.5,
+                      fontWeight: 600,
+                      color: 'text.secondary'
+                    }}>
+                      🏥 Tipo de Cita
+                    </Typography>
+                    <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      <strong>Tipo:</strong> {selectedAppointment.appointment_type || selectedAppointment.type || 'Consulta General'}
+                    </Typography>
+                    <Typography variant="body2">
+                      <strong>Prioridad:</strong> {selectedAppointment.priority || 'Normal'}
+                    </Typography>
+                  </Box>
+
+                  <Box sx={{ bgcolor: 'white', p: 2, borderRadius: '8px' }}>
+                    <Typography variant="body2" sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 1,
+                      mb: 0.5,
+                      fontWeight: 600,
+                      color: 'text.secondary'
+                    }}>
+                      📝 Motivo de la Consulta
+                    </Typography>
+                    <Typography variant="body2" sx={{ 
+                      maxHeight: '60px', 
+                      overflow: 'auto',
+                      wordBreak: 'break-word'
+                    }}>
+                      {selectedAppointment.reason || selectedAppointment.chief_complaint || selectedAppointment.motivo || 'No especificado'}
+                    </Typography>
+                  </Box>
+
+                  {(selectedAppointment.preparation_instructions || selectedAppointment.instructions) && (
+                    <Box sx={{ bgcolor: 'white', p: 2, borderRadius: '8px' }}>
+                      <Typography variant="body2" sx={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: 1,
+                        mb: 0.5,
+                        fontWeight: 600,
+                        color: 'text.secondary'
+                      }}>
+                        ⚠️ Instrucciones de Preparación
+                      </Typography>
+                      <Typography variant="body2" sx={{ 
+                        maxHeight: '60px', 
+                        overflow: 'auto',
+                        wordBreak: 'break-word'
+                      }}>
+                        {selectedAppointment.preparation_instructions || selectedAppointment.instructions}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {(selectedAppointment.notes || selectedAppointment.additional_notes) && (
+                    <Box sx={{ bgcolor: 'white', p: 2, borderRadius: '8px' }}>
+                      <Typography variant="body2" sx={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: 1,
+                        mb: 0.5,
+                        fontWeight: 600,
+                        color: 'text.secondary'
+                      }}>
+                        📋 Notas Adicionales
+                      </Typography>
+                      <Typography variant="body2" sx={{ 
+                        maxHeight: '60px', 
+                        overflow: 'auto',
+                        wordBreak: 'break-word'
+                      }}>
+                        {selectedAppointment.notes || selectedAppointment.additional_notes}
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+
+              </Paper>
+            )}
+
             {/* Patient Selection */}
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
               <Box sx={{ flex: 1 }}>
@@ -597,7 +1063,12 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                       <Typography component="span" sx={{ fontWeight: 600 }}>Edad:</Typography> {selectedPatient.birth_date ? `${calculateAge(selectedPatient.birth_date)} años` : 'No registrada'}
                     </Typography>
                     <Typography variant="body2" sx={{ mb: 0.5 }}>
-                      <Typography component="span" sx={{ fontWeight: 600 }}>Género:</Typography> {selectedPatient.gender || 'No especificado'}
+                      <Typography component="span" sx={{ fontWeight: 600 }}>Género:</Typography> {
+                        selectedPatient.gender === 'M' ? 'Masculino' :
+                        selectedPatient.gender === 'F' ? 'Femenino' :
+                        selectedPatient.gender === 'O' ? 'Otro' :
+                        selectedPatient.gender || 'No especificado'
+                      }
                     </Typography>
                     <Typography variant="body2" sx={{ mb: 0.5 }}>
                       <Typography component="span" sx={{ fontWeight: 600 }}>Fecha Nac:</Typography> {selectedPatient.birth_date ? new Date(selectedPatient.birth_date).toLocaleDateString('es-ES') : 'No registrada'}
@@ -1303,7 +1774,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                             Duración:
                           </Typography>
                           <Typography variant="body1">
-                            {scheduledFollowUp.duration_minutes} minutos
+                            {scheduledFollowUp.doctor?.appointment_duration || 30} minutos
                           </Typography>
                         </Box>
                         

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { apiService } from '../../services/api';
 import {
   Container,
@@ -15,6 +15,7 @@ import {
   CircularProgress,
   InputAdornment,
   IconButton,
+  FormHelperText,
   LinearProgress,
   FormControl,
   InputLabel,
@@ -37,6 +38,7 @@ import {
 import AvantLogo from '../common/AvantLogo';
 import { MEDICAL_SPECIALTIES, MEXICAN_STATES, API_CONFIG } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCatalogs } from '../../hooks/useCatalogs';
 
 interface RegistrationData {
   // Step 1: Account Info
@@ -62,9 +64,11 @@ interface RegistrationData {
   
   // Step 4: Office Data
   office_address: string;
-  office_city: string;
+  office_country: string;
   office_state_id: string;
+  office_city: string;
   office_phone: string;
+  appointment_duration: string;
 }
 
 interface PasswordValidation {
@@ -85,6 +89,8 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
   const [specialties, setSpecialties] = useState<any[]>([]);
   
   const { login } = useAuth();
+  const { countries, getStatesByCountry, loading: catalogsLoading } = useCatalogs();
+  const [selectedOfficeCountry, setSelectedOfficeCountry] = useState<string>('México');
 
   // Load specialties on component mount
   useEffect(() => {
@@ -124,9 +130,11 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
     
     // Step 4
     office_address: '',
-    office_city: '',
+    office_country: 'México',
     office_state_id: '',
-    office_phone: ''
+    office_city: '',
+    office_phone: '',
+    appointment_duration: ''
   });
 
   const validatePassword = (password: string): PasswordValidation => {
@@ -157,6 +165,22 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
     }));
     setError('');
   };
+
+  // Handle office country change and reset state
+  const handleOfficeCountryChange = (countryName: string) => {
+    setSelectedOfficeCountry(countryName);
+    setFormData(prev => ({ 
+      ...prev, 
+      office_country: countryName,
+      office_state_id: '' // Reset state when country changes
+    }));
+    setError('');
+  };
+
+  // Filtered states based on selected country
+  const filteredOfficeStates = useMemo(() => {
+    return getStatesByCountry(selectedOfficeCountry);
+  }, [selectedOfficeCountry, getStatesByCountry]);
 
   const validateStep = (step: number): boolean => {
     switch (step) {
@@ -212,12 +236,20 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
         return true;
       
       case 3:
-        const requiredStep3Fields = ['office_address', 'office_city', 'office_state_id'];
+        const requiredStep3Fields = ['office_address', 'office_city', 'office_state_id', 'appointment_duration'];
         const missingStep3Fields = requiredStep3Fields.filter(field => !formData[field as keyof RegistrationData]);
         if (missingStep3Fields.length > 0) {
           setError('Por favor, completa todos los campos obligatorios');
           return false;
         }
+        
+        // Validate appointment duration is a number and reasonable range
+        const duration = parseInt(formData.appointment_duration);
+        if (isNaN(duration) || duration < 5 || duration > 300) {
+          setError('La duración de la consulta debe ser un número entre 5 y 300 minutos');
+          return false;
+        }
+        
         return true;
       
       default:
@@ -275,6 +307,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
         office_address: formData.office_address,
         office_city: formData.office_city,
         office_state_id: parseInt(formData.office_state_id) || null,
+        appointment_duration: parseInt(formData.appointment_duration) || null,
         // Optional fields
         office_phone: formData.office_phone || '',
         // System fields
@@ -636,6 +669,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
               Datos del Consultorio
             </Typography>
             
+            {/* 1. Dirección */}
             <TextField
               fullWidth
               margin="normal"
@@ -644,9 +678,57 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
               rows={2}
               value={formData.office_address}
               onChange={handleInputChange('office_address')}
+              placeholder="Av. Reforma 123, Col. Centro"
+              helperText="Calle, número, colonia"
               required
             />
 
+            {/* 2. País y Estado */}
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Box sx={{ flex: '1 1 250px' }}>
+                <FormControl fullWidth margin="normal" required>
+                  <InputLabel>País</InputLabel>
+                  <Select
+                    value={selectedOfficeCountry}
+                    onChange={(e) => handleOfficeCountryChange(e.target.value)}
+                    label="País"
+                  >
+                    {countries.map((country) => (
+                      <MenuItem key={country.id} value={country.name}>
+                        {country.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+              <Box sx={{ flex: '1 1 250px' }}>
+                <FormControl fullWidth margin="normal" required>
+                  <InputLabel>Estado</InputLabel>
+                  <Select
+                    value={formData.office_state_id}
+                    onChange={handleInputChange('office_state_id')}
+                    label="Estado"
+                    disabled={!selectedOfficeCountry || filteredOfficeStates.length === 0}
+                  >
+                    {filteredOfficeStates.map((state: {id: number, name: string}) => (
+                      <MenuItem key={state.id} value={String(state.id)}>
+                        {state.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  <FormHelperText>
+                    {!selectedOfficeCountry 
+                      ? "Primero selecciona un país" 
+                      : filteredOfficeStates.length === 0 
+                      ? "No hay estados disponibles"
+                      : "Estado/Provincia"
+                    }
+                  </FormHelperText>
+                </FormControl>
+              </Box>
+            </Box>
+
+            {/* 3. Ciudad y Duración de Consulta */}
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
               <Box sx={{ flex: '1 1 250px' }}>
                 <TextField
@@ -655,27 +737,34 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
                   label="Ciudad"
                   value={formData.office_city}
                   onChange={handleInputChange('office_city')}
+                  placeholder="Ciudad de México"
+                  helperText="Ciudad del consultorio"
                   required
                 />
               </Box>
               <Box sx={{ flex: '1 1 250px' }}>
-                <FormControl fullWidth margin="normal" required>
-                  <InputLabel required>Estado</InputLabel>
-                  <Select
-                    value={formData.office_state_id}
-                    onChange={handleInputChange('office_state_id')}
-                    label="Estado"
-                  >
-                    {MEXICAN_STATES.map((state) => (
-                      <MenuItem key={state.code} value={state.name}>
-                        {state.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                <TextField
+                  fullWidth
+                  margin="normal"
+                  label="Duración de Consulta"
+                  value={formData.appointment_duration}
+                  onChange={(e) => {
+                    // Solo permitir números
+                    const value = e.target.value.replace(/[^0-9]/g, '');
+                    handleInputChange('appointment_duration')({ target: { value } });
+                  }}
+                  placeholder="30"
+                  helperText="Tiempo en minutos (ej: 30)"
+                  inputProps={{ maxLength: 3 }}
+                  required
+                  InputProps={{
+                    endAdornment: <InputAdornment position="end">min</InputAdornment>
+                  }}
+                />
               </Box>
             </Box>
 
+            {/* 4. Teléfono del Consultorio */}
             <TextField
               fullWidth
               margin="normal"

@@ -246,12 +246,15 @@ async def delete_schedule_exception(
 @router.get("/available-slots", response_model=List[AvailableSlot])
 async def get_available_slots(
     target_date: date,
-    duration_minutes: int = 30,
     db: Session = Depends(get_db)
 ):
     """Obtener slots disponibles para una fecha específica"""
     # TODO: Obtener doctor_id del token
     doctor_id = 1
+
+    # Get doctor's appointment_duration from persons table
+    doctor = db.query(Person).filter(Person.id == doctor_id).first()
+    duration_minutes = doctor.appointment_duration if doctor and doctor.appointment_duration else 30
     
     # Obtener día de la semana (0=Lunes, 6=Domingo)
     day_of_week = target_date.weekday()

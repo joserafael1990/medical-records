@@ -119,6 +119,7 @@ class Person(Base):
     office_state_id = Column(Integer, ForeignKey("states.id"))  # FK to states table
     office_postal_code = Column(String(5))
     office_phone = Column(String(20))  # Professional/office phone number
+    appointment_duration = Column(Integer)  # Duration of appointments in minutes (optional)
     
     # PROFESSIONAL DATA (doctors only)
     professional_license = Column(String(20), unique=True)
@@ -267,7 +268,6 @@ class Appointment(Base):
     # SCHEDULING
     appointment_date = Column(DateTime, nullable=False)
     end_time = Column(DateTime, nullable=False)
-    duration_minutes = Column(Integer, default=30)
     
     # DETAILS
     appointment_type = Column(String(50), nullable=False, default='consultation')

@@ -46,6 +46,8 @@ interface PatientBaseFields {
   address_city?: string;
   address_state_id?: string | null;
   address_postal_code?: string;
+  address_country?: string;
+  address_country_name?: string;
   nationality_id?: number;
   birth_city?: string;
   birth_state_id?: number | null;
@@ -77,7 +79,9 @@ export interface Consultation {
   id: string;
   patient_id: string;
   patient_name?: string;
-  date: string;
+  date: string; // Full datetime string for display
+  consultation_date?: string; // Alternative field name for compatibility
+  end_time?: string; // End time for time range display
   chief_complaint: string;
   history_present_illness: string;
   
@@ -168,7 +172,6 @@ export interface Appointment {
   appointment_type: AppointmentType;
   reason: string;
   notes?: string;
-  duration_minutes: number;
   status: AppointmentStatus;
   priority?: string;
   preparation_instructions?: string;
@@ -429,7 +432,6 @@ export interface ConsultationFormData {
   created_by?: string;
   status?: string;
   consultation_type?: string;
-  duration_minutes?: number;
   vital_signs?: any;
   
   // Antecedentes (parte de la evaluación clínica)
@@ -483,7 +485,6 @@ export interface AppointmentFormData {
   appointment_type: string;
   reason: string;
   notes: string;
-  duration_minutes: number;
   status: string;
   priority?: string;
   preparation_instructions?: string;
@@ -498,7 +499,6 @@ export interface AppointmentFormData {
 export interface AppointmentUpdateData {
   appointment_date?: string;
   end_time?: string;
-  duration_minutes?: number;
   appointment_type?: string;
   status?: string;
   priority?: string;
@@ -596,6 +596,7 @@ export interface DoctorProfile {
   office_state_name?: string; // State name from backend
   office_postal_code?: string;
   office_country?: string;
+  appointment_duration?: number; // Duration of appointments in minutes
   
   // Información Adicional NOM-004
   // medical_school, internship_hospital, residency_hospital removed per user request
@@ -646,7 +647,7 @@ export interface DoctorFormData {
   office_city: string;
   office_state_id: string;
   office_postal_code: string;
-  office_country: string;
+  appointment_duration: string; // Duration of appointments in minutes
   
   // Información Adicional
   // medical_school, internship_hospital, residency_hospital removed per user request

@@ -58,7 +58,7 @@ const initialFormData: DoctorFormData = {
   office_city: '',
   office_state_id: '',
   office_postal_code: '',
-  office_country: 'México',
+  appointment_duration: '',
   
   // Información Adicional
   // medical_school, internship_hospital, residency_hospital removed per user request
@@ -246,6 +246,8 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
     let transformedData: any = {
       ...data,
       birth_date: formatDateForBackend(data.birth_date),
+      appointment_duration: data.appointment_duration ? parseInt(data.appointment_duration) : null,
+      office_state_id: data.office_state_id ? parseInt(data.office_state_id) : null,
       // board_certifications and professional_memberships removed per user request
       created_by: doctorProfile 
         ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name || ''} ${doctorProfile.paternal_surname || ''}`.trim()
@@ -344,7 +346,7 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
         office_city: doctorProfile.office_city || '',
         office_state_id: String(doctorProfile.office_state_id || ''),
         office_postal_code: doctorProfile.office_postal_code || '',
-        office_country: doctorProfile.office_country || 'México',
+        appointment_duration: String(doctorProfile.appointment_duration || ''),
         // medical_school, internship_hospital, residency_hospital removed per user request
         // board_certifications and professional_memberships removed per user request
       });

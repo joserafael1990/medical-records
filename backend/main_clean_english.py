@@ -558,6 +558,7 @@ async def get_my_profile(
         "address_city": current_user.address_city,
         "address_state_id": current_user.address_state_id,
         "address_state_name": current_user.address_state.name if current_user.address_state else None,
+        "address_country_name": current_user.address_state.country.name if current_user.address_state and current_user.address_state.country else None,
         "address_postal_code": current_user.address_postal_code,
         
         # Professional Address (Office)
@@ -565,8 +566,10 @@ async def get_my_profile(
         "office_city": current_user.office_city,
         "office_state_id": current_user.office_state_id,
         "office_state_name": current_user.office_state.name if current_user.office_state else None,
+        "office_country_name": current_user.office_state.country.name if current_user.office_state and current_user.office_state.country else None,
         "office_postal_code": current_user.office_postal_code,
         "office_phone": current_user.office_phone,
+        "appointment_duration": current_user.appointment_duration,
         
         # Professional Data
         "professional_license": current_user.professional_license,
@@ -656,6 +659,7 @@ async def update_my_profile(
             "address_city": updated_doctor.address_city,
             "address_state_id": updated_doctor.address_state_id,
             "address_state_name": updated_doctor.address_state.name if updated_doctor.address_state else None,
+            "address_country_name": updated_doctor.address_state.country.name if updated_doctor.address_state and updated_doctor.address_state.country else None,
             "address_postal_code": updated_doctor.address_postal_code,
             
             # Professional Address (Office)
@@ -663,8 +667,10 @@ async def update_my_profile(
             "office_city": updated_doctor.office_city,
             "office_state_id": updated_doctor.office_state_id,
             "office_state_name": updated_doctor.office_state.name if updated_doctor.office_state else None,
+            "office_country_name": updated_doctor.office_state.country.name if updated_doctor.office_state and updated_doctor.office_state.country else None,
             "office_postal_code": updated_doctor.office_postal_code,
             "office_phone": updated_doctor.office_phone,
+            "appointment_duration": updated_doctor.appointment_duration,
             
             # Professional Data
             "professional_license": updated_doctor.professional_license,
@@ -962,7 +968,6 @@ async def get_appointments(
                 "appointment_type": appointment.appointment_type,
                 "reason": appointment.reason,
                 "notes": appointment.notes,
-                "duration_minutes": appointment.duration_minutes,
                 "status": appointment.status,
                 "priority": appointment.priority,
                 "room_number": appointment.room_number,
@@ -1079,7 +1084,7 @@ async def debug_appointments(
         print(f"🔍 DEBUG: Found {len(appointments)} total appointments for doctor {current_user.id}")
         for apt in appointments:
             cdmx_time = to_cdmx_timezone(apt.appointment_date)
-            print(f"  📅 ID: {apt.id}, Date: {apt.appointment_date} (UTC) = {cdmx_time} (CDMX), Duration: {apt.duration_minutes}min")
+            print(f"  📅 ID: {apt.id}, Date: {apt.appointment_date} (UTC) = {cdmx_time} (CDMX), Duration: {apt.doctor.appointment_duration or 30}min")
         
         return appointments
     except Exception as e:
@@ -1201,11 +1206,14 @@ async def get_consultations(
                 doctor_name = f"{consultation.doctor.first_name} {consultation.doctor.paternal_surname}".strip()
             
             consultation_date_iso = consultation.consultation_date.isoformat()
-            
+            # Calculate end_time assuming 30 minutes duration for consultations
+            consultation_end_time = consultation.consultation_date + timedelta(minutes=30)
+
             result.append({
                 "id": consultation.id,
                 "patient_id": consultation.patient_id,
                 "consultation_date": consultation_date_iso,
+                "end_time": consultation_end_time.isoformat(),
                 "chief_complaint": consultation.chief_complaint,
                 "history_present_illness": consultation.history_present_illness,
                 "family_history": consultation.family_history,
@@ -1267,11 +1275,15 @@ async def get_consultation(
         if consultation.doctor:
             doctor_name = f"{consultation.doctor.first_name} {consultation.doctor.paternal_surname}".strip()
         
+        # Calculate end_time assuming 30 minutes duration for consultations
+        consultation_end_time = consultation.consultation_date + timedelta(minutes=30)
+
         # Return complete consultation data
         result = {
             "id": consultation.id,
             "patient_id": consultation.patient_id,
             "consultation_date": consultation.consultation_date.isoformat(),
+            "end_time": consultation_end_time.isoformat(),
             "chief_complaint": consultation.chief_complaint,
             "history_present_illness": consultation.history_present_illness,
             "family_history": consultation.family_history,
@@ -1357,12 +1369,16 @@ async def create_consultation(
                 patient_name = f"{patient.first_name} {patient.paternal_surname} {patient.maternal_surname or ''}".strip()
         
         doctor_name = f"{current_user.first_name} {current_user.paternal_surname}".strip()
-        
+
+        # Calculate end_time assuming 30 minutes duration for consultations
+        consultation_end_time = new_medical_record.consultation_date + timedelta(minutes=30)
+
         # Return in API format
         result = {
             "id": new_medical_record.id,
             "patient_id": new_medical_record.patient_id,
             "consultation_date": new_medical_record.consultation_date.isoformat(),
+            "end_time": consultation_end_time.isoformat(),
             "chief_complaint": new_medical_record.chief_complaint,
             "history_present_illness": new_medical_record.history_present_illness,
             "family_history": new_medical_record.family_history,
@@ -1450,12 +1466,16 @@ async def update_consultation(
             patient_name = f"{consultation.patient.first_name} {consultation.patient.paternal_surname} {consultation.patient.maternal_surname or ''}".strip()
         
         doctor_name = f"{current_user.first_name} {current_user.paternal_surname}".strip()
-        
+
+        # Calculate end_time assuming 30 minutes duration for consultations
+        consultation_end_time = consultation.consultation_date + timedelta(minutes=30)
+
         # Return updated consultation in API format
         result = {
             "id": consultation.id,
             "patient_id": consultation.patient_id,
             "consultation_date": consultation.consultation_date.isoformat(),
+            "end_time": consultation_end_time.isoformat(),
             "chief_complaint": consultation.chief_complaint,
             "history_present_illness": consultation.history_present_illness,
             "family_history": consultation.family_history,

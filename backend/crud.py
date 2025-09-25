@@ -273,6 +273,7 @@ def get_patients_by_doctor(db: Session, doctor_id: int, skip: int = 0, limit: in
     """Get list of patients created by a specific doctor"""
     return db.query(Person).options(
         joinedload(Person.birth_state),
+        joinedload(Person.address_state).joinedload(State.country),
         joinedload(Person.specialty)
     ).filter(
         Person.person_type == 'patient',
@@ -445,7 +446,7 @@ def update_appointment(db: Session, appointment_id: int, appointment_data: schem
     
     print(f"🔄 CRUD update_appointment - ID: {appointment_id}")
     print(f"📝 Original appointment_date: {appointment.appointment_date}")
-    print(f"📝 Original duration: {appointment.duration_minutes}")
+    print(f"📝 Doctor's appointment_duration: {appointment.doctor.appointment_duration or 30}")
     print(f"📥 Update data received: {update_data}")
     
     # Handle datetime conversion for appointment_date with CDMX timezone
@@ -457,10 +458,14 @@ def update_appointment(db: Session, appointment_id: int, appointment_data: schem
         update_data['appointment_date'] = to_utc_for_storage(update_data['appointment_date'])
         print(f"🌍 Converted appointment_date to UTC: {update_data['appointment_date']}")
     
-    # Recalculate end_time if appointment_date or duration changed
-    if 'appointment_date' in update_data or 'duration_minutes' in update_data:
-        start_time = update_data.get('appointment_date', appointment.appointment_date)
-        duration = update_data.get('duration_minutes', appointment.duration_minutes)
+    # Recalculate end_time if appointment_date changed (duration comes from doctor's profile)
+    if 'appointment_date' in update_data:
+        start_time = update_data['appointment_date']
+        # Get doctor's appointment_duration from persons table
+        if appointment.doctor and appointment.doctor.appointment_duration:
+            duration = appointment.doctor.appointment_duration
+        else:
+            duration = 30  # Default fallback
         update_data['end_time'] = start_time + timedelta(minutes=duration)
         print(f"⏰ Recalculated end_time: {update_data['end_time']} (duration: {duration} min)")
     
@@ -479,14 +484,14 @@ def update_appointment(db: Session, appointment_id: int, appointment_data: schem
     
     print(f"💾 Final appointment_date before save: {appointment.appointment_date}")
     print(f"💾 Final end_time before save: {appointment.end_time}")
-    print(f"💾 Final duration before save: {appointment.duration_minutes}")
+    print(f"💾 Doctor's duration: {appointment.doctor.appointment_duration or 30} minutes")
     
     db.commit()
     db.refresh(appointment)
     
     print(f"✅ Appointment updated successfully - ID: {appointment_id}")
     print(f"📅 Final appointment date: {appointment.appointment_date}")
-    print(f"⏱️  Final duration: {appointment.duration_minutes} minutes")
+    print(f"⏱️  Doctor's duration: {appointment.doctor.appointment_duration or 30} minutes")
     
     return appointment
 

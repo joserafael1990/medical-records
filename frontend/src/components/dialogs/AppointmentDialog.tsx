@@ -62,7 +62,12 @@ const calculateAge = (birthDate: string): number => {
 // Function to format patient name with age
 const formatPatientNameWithAge = (patient: Patient): string => {
   const age = calculateAge(patient.birth_date);
-  return `${patient.first_name} ${patient.paternal_surname} ${patient.maternal_surname} (${age} años)`;
+  const fullName = [
+    patient.first_name,
+    patient.paternal_surname,
+    patient.maternal_surname && patient.maternal_surname !== 'null' ? patient.maternal_surname : ''
+  ].filter(part => part && part.trim()).join(' ');
+  return `${fullName} (${age} años)`;
 };
 
 interface AppointmentDialogProps {
@@ -78,6 +83,7 @@ interface AppointmentDialogProps {
   formErrorMessage?: string;
   fieldErrors?: Record<string, string>;
   onFormDataChange?: (formData: AppointmentFormData) => void;
+  doctorProfile?: any; // Doctor profile for appointment duration
 }
 
 const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
@@ -92,7 +98,8 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
   loading = false,
   formErrorMessage = '',
   fieldErrors = {},
-  onFormDataChange
+  onFormDataChange,
+  doctorProfile
 }) => {
   const [localFormData, setLocalFormData] = useState<AppointmentFormData>(formData);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -458,7 +465,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
               />
             </Box>
 
-            {/* Duration */}
+            {/* Duration - Auto-calculated from doctor's profile */}
             <Box sx={{ flex: 1, minWidth: 200 }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                 <TimeIcon sx={{ fontSize: 20 }} />
@@ -466,17 +473,13 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
               </Typography>
               <TextField
                 fullWidth
-                type="number"
-                label="Minutos"
-                value={localFormData.duration_minutes || 30}
-                onChange={handleFieldChange('duration_minutes')}
+                label="Minutos (del perfil del doctor)"
+                value={doctorProfile?.appointment_duration || 30}
                 size="small"
-                inputProps={{ min: 5, max: 480, step: 5 }}
-                error={hasFieldError('duration_minutes')}
-                helperText={getFieldError('duration_minutes')}
                 InputProps={{
-                  readOnly: isReadOnly
+                  readOnly: true
                 }}
+                helperText="Se obtiene automáticamente del perfil del doctor"
               />
             </Box>
           </Box>

@@ -917,7 +917,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
       {/* NOM-004 Required Fields */}
       <Grid size={{ xs: 12 }}>
         <Typography variant="h6" color="primary">
-          Información Clínica Obligatoria (NOM-004)
+          Información Clínica Obligatoria
         </Typography>
       </Grid>
 

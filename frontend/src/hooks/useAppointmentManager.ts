@@ -36,6 +36,9 @@ export interface UseAppointmentManagerReturn {
   formErrorMessage: string;
   isSubmitting: boolean;
   successMessage: string;
+
+  // Doctor profile
+  doctorProfile: any;
 }
 
 export const useAppointmentManager = (
@@ -53,18 +56,32 @@ export const useAppointmentManager = (
   const [agendaView, setAgendaView] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Doctor profile for appointment duration
+  const [currentDoctorProfile, setCurrentDoctorProfile] = useState<any>(doctorProfile);
+
+  // Update doctor profile when prop changes
+  useEffect(() => {
+    setCurrentDoctorProfile(doctorProfile);
+    // Update appointment form data when doctor profile changes
+    if (doctorProfile) {
+      setAppointmentFormData(prev => ({
+        ...prev,
+        doctor_id: doctorProfile.id || '',
+      }));
+    }
+  }, [doctorProfile]);
   
   // Dialog state
   const [appointmentDialogOpen, setAppointmentDialogOpen] = useState(false);
   const [isEditingAppointment, setIsEditingAppointment] = useState(false);
   const [appointmentFormData, setAppointmentFormData] = useState<AppointmentFormData>({
     patient_id: '',
-    doctor_id: '',
+    doctor_id: currentDoctorProfile?.id || '',
     date_time: '',
     appointment_type: 'consultation',
     reason: '',
     notes: '',
-    duration_minutes: 30,
     status: 'scheduled',
     priority: 'normal',
     preparation_instructions: '',
@@ -163,7 +180,6 @@ export const useAppointmentManager = (
       appointment_type: 'consultation',
       reason: '',
       notes: '',
-      duration_minutes: 30,
       status: 'scheduled',
       priority: 'normal',
       preparation_instructions: '',
@@ -190,7 +206,6 @@ export const useAppointmentManager = (
       appointment_type: appointment.appointment_type,
       reason: appointment.reason,
       notes: appointment.notes || '',
-      duration_minutes: appointment.duration_minutes,
       status: appointment.status,
       priority: appointment.priority || 'normal',
       preparation_instructions: appointment.preparation_instructions || '',
@@ -221,14 +236,15 @@ export const useAppointmentManager = (
         throw new Error(`Invalid date format: ${appointmentData.date_time}`);
       }
       
-      const endTime = new Date(appointmentDate.getTime() + (appointmentData.duration_minutes || 30) * 60000);
-      
+      // Get doctor's appointment duration
+      const doctorDuration = user?.doctor?.appointment_duration || doctorProfile?.appointment_duration || 30;
+      const endTime = new Date(appointmentDate.getTime() + doctorDuration * 60000);
+
       const backendData = {
         patient_id: appointmentData.patient_id,
         doctor_id: user?.doctor?.id || doctorProfile?.id || 0,
         appointment_date: appointmentDate.toISOString(),
         end_time: endTime.toISOString(),
-        duration_minutes: appointmentData.duration_minutes || 30,
         reason: appointmentData.reason,
         appointment_type: appointmentData.appointment_type || 'consultation',
         status: appointmentData.status || 'scheduled',
@@ -299,13 +315,14 @@ export const useAppointmentManager = (
         // Update existing appointment - now using CDMX native
         // Parse datetime-local input manually to avoid timezone issues
         const appointmentDate = new Date(appointmentFormData.date_time);
-        const endTime = new Date(appointmentDate.getTime() + (appointmentFormData.duration_minutes || 30) * 60000);
-        
+        // Get doctor's appointment duration
+        const doctorDuration = user?.doctor?.appointment_duration || doctorProfile?.appointment_duration || 30;
+        const endTime = new Date(appointmentDate.getTime() + doctorDuration * 60000);
+
         // Send CDMX datetime directly to backend
         const updateData = {
           appointment_date: appointmentDate.toISOString(),
           end_time: endTime.toISOString(),
-          duration_minutes: appointmentFormData.duration_minutes || 30,
           appointment_type: appointmentFormData.appointment_type || 'consultation',
           status: appointmentFormData.status || 'scheduled',
           priority: appointmentFormData.priority || 'normal',
@@ -419,14 +436,15 @@ export const useAppointmentManager = (
           throw new Error(`Invalid date format: ${appointmentFormData.date_time}`);
         }
         
-        const endTime = new Date(appointmentDate.getTime() + (appointmentFormData.duration_minutes || 30) * 60000);
-        
+        // Get doctor's appointment duration
+        const doctorDuration = user?.doctor?.appointment_duration || doctorProfile?.appointment_duration || 30;
+        const endTime = new Date(appointmentDate.getTime() + doctorDuration * 60000);
+
         const appointmentData = {
           patient_id: appointmentFormData.patient_id,
           doctor_id: user?.doctor?.id || doctorProfile?.id || 0, // Use current logged-in doctor
           appointment_date: appointmentDate.toISOString(),
           end_time: endTime.toISOString(),
-          duration_minutes: appointmentFormData.duration_minutes || 30,
           appointment_type: appointmentFormData.appointment_type || 'consultation',
           status: appointmentFormData.status || 'scheduled',
           priority: appointmentFormData.priority || 'normal',
@@ -540,7 +558,8 @@ export const useAppointmentManager = (
     setIsEditingAppointment,
     appointmentFormData,
     setAppointmentFormData,
-    
+    doctorProfile: currentDoctorProfile,
+
     // Actions
     handleNewAppointment,
     handleEditAppointment,

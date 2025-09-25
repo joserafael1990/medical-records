@@ -39,7 +39,28 @@ function AppContent() {
   const { user, logout, isAuthenticated } = useAuth();
   
   // Doctor profile information
-  const { doctorProfile } = useDoctorProfile();
+  const doctorProfileHook = useDoctorProfile();
+  const { 
+    doctorProfile, 
+    dialogOpen: doctorProfileDialogOpenFromHook,
+    isEditing: isEditingFromHook,
+    formData: formDataFromHook,
+    setFormData: setFormDataFromHook,
+    handleCancel: handleCancelFromHook,
+    handleSubmit: handleSubmitFromHook,
+    formErrorMessage: formErrorMessageFromHook,
+    setFormErrorMessage: setFormErrorMessageFromHook,
+    fieldErrors: fieldErrorsFromHook,
+    isSubmitting: isSubmittingFromHook
+  } = doctorProfileHook;
+
+  // Debug: Log dialog state changes
+  useEffect(() => {
+    console.log('🔍 APP.tsx: Dialog state changed');
+    console.log('🔍 doctorProfileDialogOpenFromHook:', doctorProfileDialogOpenFromHook);
+    console.log('🔍 isEditingFromHook:', isEditingFromHook);
+    console.log('🔍 formDataFromHook keys:', Object.keys(formDataFromHook || {}));
+  }, [doctorProfileDialogOpenFromHook, isEditingFromHook, formDataFromHook]);
   
   // Global app state using extracted hook
   const {
@@ -59,45 +80,9 @@ function AppContent() {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [medicalRecordsData, setMedicalRecordsData] = useState<any[]>([]);
 
-  // Doctor profile management (now handled by AppLayout)
-  const [isDoctorProfileLoading, setIsDoctorProfileLoading] = useState(false);
-  const [isEditingDoctorProfile, setIsEditingDoctorProfile] = useState(false);
-  const [doctorProfileDialogOpen, setDoctorProfileDialogOpen] = useState(false);
-  const [doctorProfileFormData, setDoctorProfileFormData] = useState({
-    title: '',
-    first_name: '',
-    paternal_surname: '',
-    maternal_surname: '',
-    email: '',
-    phone: '',
-    birth_date: '',
-    gender: '',
-    curp: '',
-    rfc: '',
-    professional_license: '',
-    specialty_license: '',
-    university: '',
-    graduation_year: '',
-    specialty: '',
-    subspecialty: '',
-    professional_email: '',
-    office_phone: '',
-    office_address: '',
-    office_city: '',
-    office_state_id: '',
-    office_postal_code: '',
-    office_country: ''
-  });
-  const [doctorProfileFieldErrors, setDoctorProfileFieldErrors] = useState({});
-  const [doctorProfileFormErrorMessage, setDoctorProfileFormErrorMessage] = useState('');
-  const [doctorProfileSuccessMessage, setDoctorProfileSuccessMessage] = useState('');
-  const [isDoctorProfileSubmitting, setIsDoctorProfileSubmitting] = useState(false);
+  // Doctor profile management now handled by useDoctorProfile hook
   
-  const handleEditDoctorProfile = () => {};
-  const handleCreateDoctorProfile = () => {};
-  const handleCancelDoctorProfile = () => { setDoctorProfileDialogOpen(false); };
-  const handleSubmitDoctorProfile = async () => {};
-  const clearDoctorProfileMessages = () => {};
+  // Doctor profile handlers now managed by hook
   
 
   // Patient management - using refactored hook
@@ -107,7 +92,7 @@ function AppContent() {
   const consultationManagement = useConsultationManagement();
 
   // Appointment management (doctorProfile now comes from AppLayout)
-  const appointmentManager = useAppointmentManager(patientManagement.patients, null);
+  const appointmentManager = useAppointmentManager(patientManagement.patients, doctorProfile);
 
   // Patient form data state
   const initialPatientFormData: PatientFormData = {
@@ -404,7 +389,6 @@ const handleEditConsultation = useCallback(async (consultation: any) => {
       follow_up_instructions: consultation.follow_up_instructions || '',
       status: consultation.status || 'completed',
       consultation_type: consultation.consultation_type || 'general',
-      duration_minutes: consultation.duration_minutes || 30,
       vital_signs: consultation.vital_signs || {
         blood_pressure: '',
         heart_rate: '',
@@ -929,10 +913,11 @@ const handleClinicalStudySubmit = useCallback(async () => {
         medicalRecordsData={medicalRecordsData}
         onRefreshRecords={refreshMedicalRecords}
         doctorProfile={null}
-        onSaveProfile={handleSubmitDoctorProfile}
+        onSaveProfile={() => {}}
         onLogout={handleLogout}
         user={user}
-        isLoading={isDoctorProfileLoading || patientManagement.isLoading || consultationManagement.isLoading || appointmentManager.isLoading}
+        isLoading={patientManagement.isLoading || consultationManagement.isLoading || appointmentManager.isLoading}
+        doctorProfileHook={doctorProfileHook}
       />
 
       {/* Dialog Components - These remain here as they're globally managed */}
@@ -990,6 +975,7 @@ const handleClinicalStudySubmit = useCallback(async () => {
             setFormData={consultationManagement.setConsultationFormData}
             onSubmit={handleConsultationSubmit}
             patients={patientManagement.patients}
+            appointments={appointmentManager.appointments}
             formErrorMessage={formErrorMessage}
             setFormErrorMessage={setFormErrorMessage}
             isSubmitting={isSubmitting}
@@ -998,6 +984,12 @@ const handleClinicalStudySubmit = useCallback(async () => {
               consultationManagement.setConsultationDialogOpen(false);
               patientManagement.setIsEditingPatient(false);
               consultationManagement.setCreatingPatientFromConsultation(true);
+              patientManagement.setPatientDialogOpen(true);
+            }}
+            onEditPatient={(patient: Patient) => {
+              consultationManagement.setConsultationDialogOpen(false);
+              patientManagement.setIsEditingPatient(true);
+              patientManagement.setSelectedPatient(patient);
               patientManagement.setPatientDialogOpen(true);
             }}
             clinicalStudies={currentConsultationStudies}
@@ -1044,22 +1036,29 @@ const handleClinicalStudySubmit = useCallback(async () => {
             formErrorMessage={formErrorMessage}
             fieldErrors={appointmentManager.fieldErrors}
             onFormDataChange={appointmentManager.setAppointmentFormData}
+            doctorProfile={appointmentManager.doctorProfile}
           />
         </Suspense>
 
         {/* Doctor Profile Dialog */}
         <Suspense fallback={<LoadingFallback message="Cargando perfil..." />}>
           <DoctorProfileDialog
-            open={doctorProfileDialogOpen}
-            onClose={handleCancelDoctorProfile}
-            isEditing={isEditingDoctorProfile}
-            formData={doctorProfileFormData}
-            setFormData={setDoctorProfileFormData}
-            onSubmit={handleSubmitDoctorProfile}
-            formErrorMessage={doctorProfileFormErrorMessage}
-            setFormErrorMessage={setDoctorProfileFormErrorMessage}
-            isSubmitting={isDoctorProfileSubmitting}
-            fieldErrors={doctorProfileFieldErrors}
+            open={doctorProfileDialogOpenFromHook}
+            onClose={() => {
+              console.log('🔍 DIALOG: onClose called');
+              handleCancelFromHook();
+            }}
+            isEditing={isEditingFromHook}
+            formData={formDataFromHook}
+            setFormData={setFormDataFromHook}
+            onSubmit={() => {
+              console.log('🔍 DIALOG: onSubmit called');
+              handleSubmitFromHook();
+            }}
+            formErrorMessage={formErrorMessageFromHook}
+            setFormErrorMessage={setFormErrorMessageFromHook}
+            isSubmitting={isSubmittingFromHook}
+            fieldErrors={fieldErrorsFromHook}
           />
         </Suspense>
 

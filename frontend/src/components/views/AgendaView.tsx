@@ -31,7 +31,7 @@ import {
   EventNote as EventNoteIcon
 } from '@mui/icons-material';
 import { Appointment } from '../../types';
-import { getStatusLabel, getAppointmentTypeLabel, formatAppointmentTime, getAppointmentDate } from '../../constants';
+import { getStatusLabel, getAppointmentTypeLabel, formatAppointmentTime, formatAppointmentTimeRange, getAppointmentDate } from '../../constants';
 
 interface AgendaViewProps {
   appointments: Appointment[];
@@ -239,7 +239,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
                     <TimeIcon sx={{ color: 'primary.main', fontSize: 20 }} />
                     <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                      {formatAppointmentTime(appointment.date_time)}
+                      {formatAppointmentTimeRange(appointment)}
                     </Typography>
                     <Chip 
                       label={getStatusLabel(appointment.status)} 
@@ -267,7 +267,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                     </Typography>
                   )}
                   <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                    Duración: {appointment.duration_minutes || 30} minutos
+                    Duración: {appointment.doctor?.appointment_duration || 30} minutos
                   </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 1 }}>
@@ -380,7 +380,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                           <TableRow key={appointment.id} hover>
                             <TableCell>
                               <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                {formatAppointmentTime(appointment.date_time)}
+                                {formatAppointmentTimeRange(appointment)}
                               </Typography>
                             </TableCell>
                             <TableCell>
@@ -531,7 +531,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                     {dayAppointments.slice(0, 2).map((apt) => (
                       <Chip
                         key={apt.id}
-                        label={formatAppointmentTime(apt.date_time)}
+                        label={formatAppointmentTimeRange(apt)}
                         size="small"
                         sx={{
                           height: 16,

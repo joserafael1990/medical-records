@@ -55,7 +55,11 @@ export const capitalizeWords = (str: string): string => {
 };
 
 export const formatPatientName = (patient: Patient): string => {
-  return `${patient.first_name} ${patient.paternal_surname} ${patient.maternal_surname}`;
+  return [
+    patient.first_name,
+    patient.paternal_surname,
+    patient.maternal_surname && patient.maternal_surname !== 'null' ? patient.maternal_surname : ''
+  ].filter(part => part && part.trim()).join(' ');
 };
 
 export const getInitials = (name: string): string => {

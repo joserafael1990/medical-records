@@ -4,7 +4,7 @@ import { Phone as PhoneIcon, Email as EmailIcon } from '@mui/icons-material';
 import { TableColumn } from '../components/common/SmartTable';
 import { Patient, Consultation } from '../types';
 import { calculateAge, formatDate } from '../utils';
-import { formatAppointmentTime } from '../constants';
+import { formatAppointmentTime, formatAppointmentTimeRange } from '../constants';
 
 /**
  * Hook que proporciona configuraciones de columnas para tablas médicas
@@ -177,15 +177,21 @@ export const useMedicalTableColumns = () => {
         const date = new Date(String(value));
         const isToday = date.toDateString() === new Date().toDateString();
         const rawValue = String(value);
-        const formattedTime = formatAppointmentTime(rawValue);
-        
+
+        // Create a temporary object with the consultation data for time formatting
+        // Now consultations have end_time calculated (30 minutes duration by default)
+        const consultationForTime = {
+          date_time: rawValue,
+          end_time: row.end_time || null // Use actual end_time if available
+        };
+
         return (
           <Box>
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
               {formatDate(String(value))}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              {formattedTime}
+              {formatAppointmentTimeRange(consultationForTime)}
             </Typography>
             {isToday && (
               <Chip label="Hoy" size="small" color="primary" variant="filled" sx={{ mt: 0.5 }} />

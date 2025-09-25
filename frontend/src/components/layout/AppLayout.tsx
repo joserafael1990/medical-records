@@ -20,7 +20,6 @@ import {
 import { MainNavigation } from './MainNavigation';
 import { UserProfileMenu } from './UserProfileMenu';
 import { ViewRenderer } from './ViewRenderer';
-import { useDoctorProfileCache } from '../../hooks/useDoctorProfileCache';
 
 // Create theme
 const theme = createTheme({
@@ -50,6 +49,7 @@ interface AppLayoutProps {
   onLogout: () => void;
   user: any;
   isLoading: boolean;
+  doctorProfileHook: any;
 }
 
 export const AppLayout: React.FC<AppLayoutProps> = ({
@@ -66,10 +66,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   onSaveProfile,
   onLogout,
   user,
-  isLoading
+  isLoading,
+  doctorProfileHook
 }) => {
-  // Use the hook directly to get consistent data
-  const { doctorProfile } = useDoctorProfileCache();
+  // Use the hook passed from App.tsx instead of creating a new instance
+  const { doctorProfile } = doctorProfileHook;
   const [userMenuAnchorEl, setUserMenuAnchorEl] = useState<null | HTMLElement>(null);
 
   const handleUserMenuClick = (event: React.MouseEvent<HTMLElement>) => {
@@ -170,6 +171,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             onRefreshRecords={onRefreshRecords}
             doctorProfile={doctorProfile}
             onSaveProfile={onSaveProfile}
+            doctorProfileHook={doctorProfileHook}
           />
         </Box>
       </Container>

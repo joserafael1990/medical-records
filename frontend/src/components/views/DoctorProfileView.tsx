@@ -231,34 +231,35 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
             Mi Perfil Profesional
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Información requerida según NOM-004-SSA3-2012
+            Gestiona tu información profesional
           </Typography>
         </Box>
-        {!isEditing && (
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            <Button
-              variant="contained"
-              size="large"
-              startIcon={<EditIcon />}
-              onClick={() => onEdit()}
-              sx={{ 
-                borderRadius: '12px',
-                px: 4,
-                py: 1.5,
-                fontSize: '1.1rem',
-                fontWeight: 600,
-                boxShadow: 3,
-                '&:hover': {
-                  boxShadow: 6,
-                  transform: 'translateY(-2px)'
-                },
-                transition: 'all 0.2s ease-in-out'
-              }}
-            >
-              Editar Datos
-            </Button>
-          </Box>
-        )}
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button
+            variant="contained"
+            size="large"
+            startIcon={<EditIcon />}
+            onClick={() => {
+              console.log('🔍 BUTTON: Edit button clicked, calling onEdit()');
+              onEdit();
+            }}
+            sx={{ 
+              borderRadius: '12px',
+              px: 4,
+              py: 1.5,
+              fontSize: '1.1rem',
+              fontWeight: 600,
+              boxShadow: 3,
+              '&:hover': {
+                boxShadow: 6,
+                transform: 'translateY(-2px)'
+              },
+              transition: 'all 0.2s ease-in-out'
+            }}
+          >
+            {isEditing ? 'Cancelar Edición' : 'Editar Datos'}
+          </Button>
+        </Box>
       </Box>
 
       {/* Messages */}
@@ -703,6 +704,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                 </Box>
                 
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {/* 1. Dirección */}
                   <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                       Dirección
@@ -712,6 +714,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                     </Typography>
                   </Box>
                   
+                  {/* 2. Ciudad, 3. Estado, 4. Código Postal */}
                   <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 3 }}>
                     <Box>
                       <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
@@ -741,13 +744,36 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                     </Box>
                   </Box>
                   
-                  <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                      Teléfono del Consultorio
-                    </Typography>
-                    <Typography variant="body1">
-                      {doctorProfile?.office_phone || 'No especificado'}
-                    </Typography>
+                  {/* 5. País, 6. Teléfono y 7. Duración de Citas */}
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 3 }}>
+                    <Box>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                        País
+                      </Typography>
+                      <Typography variant="body1">
+                        {(doctorProfile as any)?.office_country_name || 'No especificado'}
+                      </Typography>
+                    </Box>
+                    
+                    <Box>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                        Teléfono del Consultorio
+                      </Typography>
+                      <Typography variant="body1">
+                        {doctorProfile?.office_phone || 'No especificado'}
+                      </Typography>
+                    </Box>
+                    
+                    <Box>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                        Duración de Citas
+                      </Typography>
+                      <Typography variant="body1">
+                        {(doctorProfile as any)?.appointment_duration 
+                          ? `${(doctorProfile as any).appointment_duration} minutos`
+                          : 'No especificada'}
+                      </Typography>
+                    </Box>
                   </Box>
                 </Box>
               </CardContent>
@@ -782,22 +808,13 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                   </Typography>
                 </Box>
                 
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 3 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                   <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                       Correo Profesional
                     </Typography>
                     <Typography variant="body1">
                       {doctorProfile?.professional_email || 'No especificado'}
-                    </Typography>
-                  </Box>
-                  
-                  <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                      Teléfono del Consultorio
-                    </Typography>
-                    <Typography variant="body1">
-                      {doctorProfile?.office_phone || 'No especificado'}
                     </Typography>
                   </Box>
                 </Box>

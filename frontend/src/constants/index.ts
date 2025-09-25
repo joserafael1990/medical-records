@@ -180,6 +180,21 @@ export const formatAppointmentTime = (cdmxDateString: string): string => {
 };
 
 /**
+ * Format appointment time range from CDMX datetime strings
+ * Shows start time and end time for the appointment
+ */
+export const formatAppointmentTimeRange = (appointment: any): string => {
+  if (!appointment?.date_time || !appointment?.end_time) {
+    return formatAppointmentTime(appointment?.date_time || '') || 'Hora no disponible';
+  }
+
+  const startTime = formatAppointmentTime(appointment.date_time);
+  const endTime = formatAppointmentTime(appointment.end_time);
+
+  return `${startTime} - ${endTime}`;
+};
+
+/**
  * Get appointment date from CDMX datetime string
  * Treats input as CDMX time regardless of browser timezone
  */

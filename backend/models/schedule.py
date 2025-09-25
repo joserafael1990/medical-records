@@ -198,7 +198,6 @@ class AvailableSlot(BaseModel):
     date: date
     start_time: time
     end_time: time
-    duration_minutes: int
     slot_type: str = "consultation"
 
 class DaySchedule(BaseModel):

@@ -113,7 +113,6 @@ def create_test_appointments():
                 doctor_id=doctor.id,
                 appointment_date=utc_date,
                 end_time=end_time,
-                duration_minutes=apt_data["duration"],
                 appointment_type=apt_data["type"],
                 reason=apt_data["reason"],
                 notes=apt_data["notes"],

@@ -22,6 +22,7 @@ interface ViewRendererProps {
   onRefreshRecords: () => void;
   doctorProfile: any;
   onSaveProfile: (profile: any) => void;
+  doctorProfileHook: any;
 }
 
 export const ViewRenderer: React.FC<ViewRendererProps> = ({
@@ -34,7 +35,8 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
   medicalRecordsData,
   onRefreshRecords,
   doctorProfile,
-  onSaveProfile
+  onSaveProfile,
+  doctorProfileHook
 }) => {
   return (
     <Box sx={{ width: { xs: '100%', md: '75%' } }}>
@@ -113,40 +115,16 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
       {activeView === 'profile' && (
         <Suspense fallback={<LoadingFallback message="Cargando perfil..." />}>
           <DoctorProfileView
-            doctorProfile={doctorProfile}
-            isLoading={false}
-            onEdit={() => {}}
-            isEditing={false}
+            doctorProfile={doctorProfileHook.doctorProfile}
+            isLoading={doctorProfileHook.isLoading}
+            onEdit={doctorProfileHook.handleEdit}
+            isEditing={doctorProfileHook.isEditing}
             onSave={onSaveProfile}
-            formData={{
-              title: '',
-              first_name: '',
-              paternal_surname: '',
-              maternal_surname: '',
-              email: '',
-              phone: '',
-              birth_date: '',
-              gender: '',
-              curp: '',
-              rfc: '',
-              professional_license: '',
-              specialty_license: '',
-              university: '',
-              graduation_year: '',
-              specialty: '',
-              subspecialty: '',
-              professional_email: '',
-              office_phone: '',
-              office_address: '',
-              office_city: '',
-              office_state_id: '',
-              office_postal_code: '',
-              office_country: ''
-            }}
-            setFormData={() => {}}
-            onCancel={() => {}}
-            successMessage=""
-            errorMessage=""
+            formData={doctorProfileHook.formData}
+            setFormData={doctorProfileHook.setFormData}
+            onCancel={doctorProfileHook.handleCancel}
+            successMessage={doctorProfileHook.successMessage}
+            errorMessage={doctorProfileHook.formErrorMessage}
           />
         </Suspense>
       )}

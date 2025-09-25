@@ -140,6 +140,7 @@ class DoctorCreate(PersonBase):
     office_address: Optional[str] = None
     office_postal_code: Optional[str] = None
     office_phone: Optional[str] = None
+    appointment_duration: Optional[int] = None  # Duration in minutes
     
     # Professional data
     professional_license: Optional[str] = None
@@ -184,6 +185,7 @@ class DoctorUpdate(BaseSchema):
     office_state_id: Optional[int] = None  # FK to states table
     office_postal_code: Optional[str] = None
     office_phone: Optional[str] = None
+    appointment_duration: Optional[int] = None  # Duration in minutes
     
     # Professional data
     professional_license: Optional[str] = None
@@ -246,6 +248,7 @@ class PersonUpdate(BaseSchema):
     office_address: Optional[str] = None
     office_postal_code: Optional[str] = None
     office_phone: Optional[str] = None
+    appointment_duration: Optional[int] = None  # Duration in minutes
     
     # Professional data (doctors)
     professional_license: Optional[str] = None
@@ -354,7 +357,6 @@ class AppointmentBase(BaseSchema):
     doctor_id: int
     appointment_date: datetime
     end_time: datetime
-    duration_minutes: int = 30
     appointment_type: str = 'consultation'
     status: str = 'scheduled'
     priority: str = 'normal'
@@ -373,7 +375,6 @@ class AppointmentCreate(AppointmentBase):
 class AppointmentUpdate(BaseSchema):
     appointment_date: Optional[datetime] = None
     end_time: Optional[datetime] = None
-    duration_minutes: Optional[int] = None
     appointment_type: Optional[str] = None
     status: Optional[str] = None
     priority: Optional[str] = None
