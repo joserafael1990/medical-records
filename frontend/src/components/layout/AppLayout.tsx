@@ -13,6 +13,7 @@ import {
   Chip,
   LinearProgress
 } from '@mui/material';
+import { twitterTheme } from '../../themes/twitterTheme';
 import {
   AccountCircle as ProfileIcon,
   NotificationsNone as NotificationIcon
@@ -21,18 +22,8 @@ import { MainNavigation } from './MainNavigation';
 import { UserProfileMenu } from './UserProfileMenu';
 import { ViewRenderer } from './ViewRenderer';
 
-// Create theme
-const theme = createTheme({
-  palette: {
-    mode: 'light',
-    primary: {
-      main: '#1976d2',
-    },
-    secondary: {
-      main: '#dc004e',
-    },
-  },
-});
+// Use Twitter-inspired theme
+const theme = twitterTheme;
 
 interface AppLayoutProps {
   activeView: string;
