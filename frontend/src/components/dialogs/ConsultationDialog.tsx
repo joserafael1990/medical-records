@@ -57,6 +57,10 @@ import {
   Schedule as StatusIcon,
   Description as NotesIcon
 } from '@mui/icons-material';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { es } from 'date-fns/locale';
 
 import { Patient, Consultation, Appointment, ConsultationFormData, ClinicalStudy } from '../../types';
 import { getAppointmentDate, getCurrentCDMXDateTime } from '../../constants';
@@ -1206,21 +1210,33 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             {/* Date and Time */}
             <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
               <Box sx={{ flex: 1 }}>
-                <TextField
-                  label="Fecha de Consulta"
-                  type="date"
-                  value={formData.date && formData.date.includes('T') ? formData.date.split('T')[0] : ''}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    const dateValue = e.target.value;
-                    const timeValue = formData.date && formData.date.includes('T') ? formData.date.split('T')[1] : '09:00';
-                    setFormData(prev => ({ 
-                      ...prev, 
-                      date: `${dateValue}T${timeValue}` 
-                    }));
-                  }}
-                  InputLabelProps={{ shrink: true }}
-                  fullWidth
-                  required
+                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
+                  <DatePicker
+                    label="Fecha de Consulta"
+                    value={formData.date && formData.date.includes('T') ? new Date(formData.date.split('T')[0]) : null}
+                    onChange={(newValue) => {
+                      if (newValue) {
+                        const dateValue = newValue.toISOString().split('T')[0];
+                        const timeValue = formData.date && formData.date.includes('T') ? formData.date.split('T')[1] : '09:00';
+                        setFormData(prev => ({ 
+                          ...prev, 
+                          date: `${dateValue}T${timeValue}`
+                        }));
+                      } else {
+                        setFormData(prev => ({ 
+                          ...prev, 
+                          date: ''
+                        }));
+                      }
+                    }}
+                    slotProps={{
+                      textField: {
+                        fullWidth: true,
+                        required: true
+                      }
+                    }}
+                  />
+                </LocalizationProvider>
                   error={!!fieldErrors?.date}
                   helperText={fieldErrors?.date}
                 />

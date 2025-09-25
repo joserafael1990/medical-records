@@ -19,14 +19,14 @@ import {
   Autocomplete,
   Alert,
   Collapse,
-  Paper
+  Paper,
+  CircularProgress
 } from '@mui/material';
 import {
   Close as CloseIcon,
   Person as PersonIcon,
   PersonAdd as PersonAddIcon,
   Schedule as ScheduleIcon,
-  AccessTime as TimeIcon,
   Event as EventIcon,
   Notes as NotesIcon,
   Edit as EditIcon,
@@ -35,7 +35,12 @@ import {
   Badge as BadgeIcon,
   LocalHospital as HospitalIcon
 } from '@mui/icons-material';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { es } from 'date-fns/locale';
 import { Patient, AppointmentFormData } from '../../types';
+import { apiService } from '../../services/api';
 import { ErrorRibbon } from '../common/ErrorRibbon';
 
 // Utility function to calculate age from birth date
@@ -101,8 +106,67 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
   onFormDataChange,
   doctorProfile
 }) => {
+  
+  // State for available time slots
+  const [availableTimes, setAvailableTimes] = useState<any[]>([]);
+  const [loadingTimes, setLoadingTimes] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string>('');
+  const [selectedTime, setSelectedTime] = useState<string>('');
   const [localFormData, setLocalFormData] = useState<AppointmentFormData>(formData);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+
+  // Function to load available times for a specific date
+  const loadAvailableTimes = async (date: string) => {
+    if (!date) return;
+    
+    try {
+      setLoadingTimes(true);
+      console.log('🔧 Loading available times for date:', date);
+      
+      const response = await apiService.getAvailableTimesForBooking(date);
+      console.log('🔧 Available times response:', response);
+      
+      setAvailableTimes(response.available_times || []);
+    } catch (error) {
+      console.error('❌ Error loading available times:', error);
+      setAvailableTimes([]);
+    } finally {
+      setLoadingTimes(false);
+    }
+  };
+
+  // Handle date change and load available times
+  const handleDateChange = (newDate: string) => {
+    console.log('🔧 Date changed to:', newDate);
+    setSelectedDate(newDate);
+    setSelectedTime(''); // Reset selected time when date changes
+    
+    if (newDate) {
+      // Extract date part for API call (YYYY-MM-DD)
+      const dateOnly = newDate.split('T')[0];
+      loadAvailableTimes(dateOnly);
+    } else {
+      setAvailableTimes([]);
+    }
+  };
+
+  // Handle time selection
+  const handleTimeChange = (time: string) => {
+    console.log('🔧 Time selected:', time);
+    setSelectedTime(time);
+    
+    if (selectedDate && time) {
+      // Combine date and time for datetime-local input
+      const dateOnly = selectedDate.split('T')[0];
+      const dateTime = `${dateOnly}T${time}`;
+      console.log('🔧 Combined datetime:', dateTime);
+      
+      // Update form data
+      const updatedFormData = { ...localFormData, date_time: dateTime };
+      setLocalFormData(updatedFormData);
+      onFormDataChange?.(updatedFormData);
+    }
+  };
 
   // Determine if fields should be read-only
   // RULE: Read-only ONLY for EXISTING appointments (isEditing=true) that were originally cancelled
@@ -122,7 +186,24 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     } else {
       setSelectedPatient(null);
     }
-  }, [formData, patients]);
+    
+    // Initialize date and time from existing formData when dialog opens
+    if (open && formData.date_time) {
+      const dateTime = formData.date_time;
+      const [datePart, timePart] = dateTime.split('T');
+      setSelectedDate(dateTime);
+      setSelectedTime(timePart || '');
+      
+      // Load available times for the date
+      if (datePart) {
+        loadAvailableTimes(datePart);
+      }
+    } else if (open) {
+      setSelectedDate('');
+      setSelectedTime('');
+      setAvailableTimes([]);
+    }
+  }, [formData, patients, open]);
 
   const handleFieldChange = (field: keyof AppointmentFormData) => (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | any
@@ -444,44 +525,80 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
 
           {/* Date and Time Row */}
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-            {/* Date and Time */}
+            {/* Date Selection */}
             <Box sx={{ flex: 1, minWidth: 250 }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                 <EventIcon sx={{ fontSize: 20 }} />
-                Fecha y Hora
+                Fecha
               </Typography>
-              <TextField
-                fullWidth
-                type="datetime-local"
-                value={localFormData.date_time || ''}
-                onChange={handleFieldChange('date_time')}
-                size="small"
-                error={hasFieldError('date_time')}
-                helperText={getFieldError('date_time')}
-                InputLabelProps={{ shrink: true }}
-                InputProps={{
-                  readOnly: isReadOnly
-                }}
-              />
+              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
+                <DatePicker
+                  label="Seleccionar fecha"
+                  value={selectedDate ? new Date(selectedDate) : null}
+                  onChange={(newValue) => {
+                    if (newValue) {
+                      const isoDate = newValue.toISOString().split('T')[0] + 'T00:00';
+                      handleDateChange(isoDate);
+                    } else {
+                      handleDateChange('');
+                    }
+                  }}
+                  disabled={isReadOnly}
+                  slotProps={{
+                    textField: {
+                      size: 'small',
+                      fullWidth: true,
+                      error: hasFieldError('date_time'),
+                      helperText: hasFieldError('date_time') ? getFieldError('date_time') : 'Selecciona una fecha para ver horarios disponibles'
+                    }
+                  }}
+                />
+              </LocalizationProvider>
             </Box>
 
-            {/* Duration - Auto-calculated from doctor's profile */}
-            <Box sx={{ flex: 1, minWidth: 200 }}>
+            {/* Time Selection */}
+            <Box sx={{ flex: 1, minWidth: 250 }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <TimeIcon sx={{ fontSize: 20 }} />
-                Duración
+                <ScheduleIcon sx={{ fontSize: 20 }} />
+                Hora Disponible
+                {loadingTimes && <CircularProgress size={16} />}
               </Typography>
-              <TextField
-                fullWidth
-                label="Minutos (del perfil del doctor)"
-                value={doctorProfile?.appointment_duration || 30}
-                size="small"
-                InputProps={{
-                  readOnly: true
-                }}
-                helperText="Se obtiene automáticamente del perfil del doctor"
-              />
+              <FormControl fullWidth size="small" error={hasFieldError('date_time')}>
+                <InputLabel>Seleccionar horario</InputLabel>
+                <Select
+                  value={selectedTime}
+                  onChange={(e) => handleTimeChange(e.target.value)}
+                  label="Seleccionar horario"
+                  disabled={!selectedDate || loadingTimes || isReadOnly || availableTimes.length === 0}
+                >
+                  {availableTimes.map((timeSlot) => (
+                    <MenuItem key={timeSlot.time} value={timeSlot.time}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <ScheduleIcon sx={{ fontSize: 16, color: 'primary.main' }} />
+                        <Typography>{timeSlot.display}</Typography>
+                        <Chip 
+                          label={`${timeSlot.duration_minutes} min`} 
+                          size="small" 
+                          variant="outlined" 
+                          color="primary"
+                        />
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+                {!loadingTimes && selectedDate && availableTimes.length === 0 && (
+                  <Alert severity="info" sx={{ mt: 1 }}>
+                    No hay horarios disponibles para esta fecha
+                  </Alert>
+                )}
+                {!selectedDate && (
+                  <Alert severity="info" sx={{ mt: 1 }}>
+                    Selecciona primero una fecha
+                  </Alert>
+                )}
+              </FormControl>
             </Box>
+
           </Box>
 
           {/* Type and Status Row */}

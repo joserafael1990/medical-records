@@ -932,7 +932,14 @@ class ApiService {
 
   async getAvailableSlots(targetDate: string): Promise<any[]> {
     const response = await this.api.get(API_CONFIG.ENDPOINTS.AGENDA.AVAILABLE_SLOTS, {
-      params: { target_date: targetDate }
+      params: { target_date: targetDate, doctor_id: 42 }
+    });
+    return response.data;
+  }
+
+  async getAvailableTimesForBooking(date: string): Promise<any> {
+    const response = await this.api.get('/api/schedule/available-times', {
+      params: { date }
     });
     return response.data;
   }
@@ -1205,6 +1212,7 @@ export const {
   getWeeklyAgenda,
   getMonthlyAgenda,
   getAvailableSlots,
+  getAvailableTimesForBooking,
   createAppointment,
   createAgendaAppointment,
   updateAppointment,

@@ -42,15 +42,16 @@ interface ScheduleConfigDialogProps {
   onSave?: () => void;
 }
 
+interface TimeBlock {
+  id?: number;
+  start_time: string;
+  end_time: string;
+}
+
 interface ScheduleTemplate {
   id?: number;
   day_of_week: number;
-  start_time: string;
-  end_time: string;
-  consultation_duration: number;
-  break_duration: number;
-  lunch_start?: string;
-  lunch_end?: string;
+  time_blocks: TimeBlock[];
   is_active: boolean;
 }
 
@@ -138,10 +139,10 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
     }
   };
 
-  const updateDaySchedule = async (dayIndex: number, scheduleData: Partial<ScheduleTemplate>) => {
+  const updateDaySchedule = async (dayIndex: number, scheduleData: Partial<ScheduleTemplate>, shouldReload: boolean = false) => {
     try {
       setError(null);
-      console.log('🔧 updateDaySchedule called:', { dayIndex, scheduleData });
+      console.log('🔧 updateDaySchedule called:', { dayIndex, scheduleData, shouldReload });
       
       const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklySchedule;
       const existingSchedule = weeklySchedule[dayKey];
@@ -151,18 +152,28 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
         console.log('🔧 Updating existing schedule:', existingSchedule.id);
         const response = await apiService.put(`/api/schedule/templates/${existingSchedule.id}`, scheduleData);
         console.log('🔧 Update response:', response.data);
+        
+        // Update local state immediately for fast UI response
         setWeeklySchedule(prev => ({
           ...prev,
           [dayKey]: response.data
         }));
+        
+        // Only reload if explicitly requested (for complex operations like time block changes)
+        if (shouldReload) {
+          console.log('🔧 Reloading weekly schedule after update...');
+          await loadWeeklySchedule();
+        }
       } else {
-        // Crear nuevo
+        // Crear nuevo con un bloque de tiempo por defecto
         const newSchedule = {
           day_of_week: dayIndex,
-          start_time: '09:00',
-          end_time: '18:00',
-          consultation_duration: 30,
-          break_duration: 0,
+          time_blocks: [
+            {
+              start_time: '09:00',
+              end_time: '18:00'
+            }
+          ],
           is_active: true,
           ...scheduleData
         };
@@ -171,21 +182,15 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
         const response = await apiService.post('/api/schedule/templates', newSchedule);
         console.log('🔧 Create response:', response.data);
         
-        // Manejar la respuesta del backend que devuelve un objeto con success
-        const scheduleResponse = response.data.success ? {
-          id: response.data.id,
-          day_of_week: response.data.day_of_week,
-          start_time: response.data.start_time,
-          end_time: response.data.end_time,
-          consultation_duration: newSchedule.consultation_duration,
-          break_duration: newSchedule.break_duration,
-          is_active: newSchedule.is_active
-        } : response.data;
-        
+        // Update local state
         setWeeklySchedule(prev => ({
           ...prev,
-          [dayKey]: scheduleResponse
+          [dayKey]: response.data
         }));
+        
+        // Always reload after creation to ensure fresh ID and data
+        console.log('🔧 Reloading weekly schedule after creation...');
+        await loadWeeklySchedule();
       }
       
       setSuccess('Horario actualizado exitosamente');
@@ -196,9 +201,113 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
     }
   };
 
+  const addTimeBlock = async (dayIndex: number) => {
+    const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklySchedule;
+    const existingSchedule = weeklySchedule[dayKey];
+    
+    if (existingSchedule) {
+      const newTimeBlock: TimeBlock = {
+        start_time: '09:00',
+        end_time: '17:00'
+      };
+      
+      const updatedTimeBlocks = [...(existingSchedule.time_blocks || []), newTimeBlock];
+      const updatedSchedule = {
+        ...existingSchedule,
+        time_blocks: updatedTimeBlocks
+      };
+      
+      // Actualizar estado local inmediatamente para respuesta rápida de UI
+      setWeeklySchedule(prev => ({
+        ...prev,
+        [dayKey]: updatedSchedule
+      }));
+
+      // Guardar cambios en el servidor
+      await updateDaySchedule(dayIndex, {
+        day_of_week: dayIndex,
+        time_blocks: updatedTimeBlocks,
+        is_active: existingSchedule.is_active
+      }, true); // Reload after time block changes
+    }
+  };
+
+  const removeTimeBlock = async (dayIndex: number, blockIndex: number) => {
+    const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklySchedule;
+    const existingSchedule = weeklySchedule[dayKey];
+    
+    if (existingSchedule && existingSchedule.time_blocks) {
+      const updatedTimeBlocks = existingSchedule.time_blocks.filter((_, index) => index !== blockIndex);
+      
+      const updatedSchedule = {
+        ...existingSchedule,
+        time_blocks: updatedTimeBlocks
+      };
+      
+      // Actualizar estado local inmediatamente para respuesta rápida de UI
+      setWeeklySchedule(prev => ({
+        ...prev,
+        [dayKey]: updatedSchedule
+      }));
+
+      // Guardar cambios en el servidor
+      await updateDaySchedule(dayIndex, {
+        day_of_week: dayIndex,
+        time_blocks: updatedTimeBlocks,
+        is_active: existingSchedule.is_active
+      }, true); // Reload after time block changes
+    }
+  };
+
+  const updateTimeBlock = (dayIndex: number, blockIndex: number, field: 'start_time' | 'end_time', value: string) => {
+    const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklySchedule;
+    const existingSchedule = weeklySchedule[dayKey];
+    
+    if (existingSchedule && existingSchedule.time_blocks) {
+      const updatedTimeBlocks = existingSchedule.time_blocks.map((block, index) => {
+        if (index === blockIndex) {
+          return { ...block, [field]: value };
+        }
+        return block;
+      });
+      
+      const updatedSchedule = {
+        ...existingSchedule,
+        time_blocks: updatedTimeBlocks
+      };
+      
+      // Solo actualizar estado local durante edición (no guardar en servidor aún)
+      setWeeklySchedule(prev => ({
+        ...prev,
+        [dayKey]: updatedSchedule
+      }));
+    }
+  };
+
+  const saveTimeBlockChanges = async (dayIndex: number) => {
+    const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklySchedule;
+    const existingSchedule = weeklySchedule[dayKey];
+    
+    if (existingSchedule) {
+      // Guardar cambios en el servidor
+      await updateDaySchedule(dayIndex, {
+        day_of_week: dayIndex,
+        time_blocks: existingSchedule.time_blocks,
+        is_active: existingSchedule.is_active
+      }, false); // No need to reload since we already have the correct local state
+    }
+  };
+
   const toggleDayActive = async (dayIndex: number, isActive: boolean) => {
     console.log('🔧 toggleDayActive called:', { dayIndex, isActive });
-    await updateDaySchedule(dayIndex, { is_active: isActive });
+    const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklySchedule;
+    const existingSchedule = weeklySchedule[dayKey];
+    
+    await updateDaySchedule(dayIndex, { 
+      is_active: isActive,
+      day_of_week: dayIndex,
+      time_blocks: existingSchedule?.time_blocks || []
+    });
   };
 
   const toggleDayExpanded = (dayKey: string) => {
@@ -215,9 +324,6 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
     });
   };
 
-  const updateTimeField = async (dayIndex: number, field: string, value: string) => {
-    await updateDaySchedule(dayIndex, { [field]: value });
-  };
 
   const formatTime = (timeString?: string): Date | null => {
     if (!timeString) return null;
@@ -242,6 +348,7 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
     const schedule = weeklySchedule[dayKey];
     const isActive = schedule?.is_active ?? false;
     const isExpanded = expandedDays.has(day.key);
+    const timeBlocks = schedule?.time_blocks || [];
 
     return (
       <Accordion 
@@ -284,41 +391,82 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
             <Typography variant="h6" sx={{ flexGrow: 1 }}>
               {day.label}
             </Typography>
-            {isActive && schedule && (
+            {isActive && timeBlocks.length > 0 && (
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                {timeBlocks.map((block, index) => (
               <Chip
-                label={`${schedule.start_time} - ${schedule.end_time}`}
+                    key={index}
+                    label={`${block.start_time} - ${block.end_time}`}
                 variant="outlined"
                 size="small"
                 icon={<TimeIcon />}
               />
+                ))}
+              </Box>
             )}
           </Box>
         </AccordionSummary>
         
         {isExpanded && (
           <AccordionDetails>
-            <Grid container spacing={3}>
-              {/* Horarios principales */}
-              <Grid size={{ xs: 12, md: 6 }}>
                 <Box sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Horario de Trabajo
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                  Horarios de Trabajo
+                </Typography>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<AddIcon />}
+                  onClick={() => addTimeBlock(day.index)}
+                  disabled={!isActive}
+                >
+                  Agregar Horario
+                </Button>
+              </Box>
+              
+              {timeBlocks.length === 0 && isActive && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Agregue al menos un horario de trabajo para este día.
+                </Alert>
+              )}
+
+              {timeBlocks.map((block, blockIndex) => (
+                <Card key={blockIndex} sx={{ mb: 2, border: '1px solid #eff3f4' }}>
+                  <CardContent sx={{ pb: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                      <Typography variant="subtitle2" color="primary">
+                        Horario {blockIndex + 1}
                   </Typography>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() => removeTimeBlock(day.index, blockIndex)}
+                        disabled={timeBlocks.length === 1}
+                      >
+                        <CloseIcon />
+                      </IconButton>
+                    </Box>
+                    
                   <Grid container spacing={2}>
                     <Grid size={{ xs: 6 }}>
                       <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
                         <TimePicker
                           label="Hora de inicio"
-                          value={formatTime(schedule?.start_time)}
+                            value={formatTime(block.start_time)}
                           onChange={(newValue) => {
                             if (newValue) {
-                              updateTimeField(day.index, 'start_time', formatTimeToString(newValue));
+                                updateTimeBlock(day.index, blockIndex, 'start_time', formatTimeToString(newValue));
                             }
                           }}
                           slotProps={{
                             textField: {
                               size: "small",
-                              fullWidth: true
+                              fullWidth: true,
+                              onBlur: () => {
+                                // Save to server when user finishes editing
+                                saveTimeBlockChanges(day.index);
+                              }
                             }
                           }}
                         />
@@ -328,112 +476,44 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
                       <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
                         <TimePicker
                           label="Hora de fin"
-                          value={formatTime(schedule?.end_time)}
+                            value={formatTime(block.end_time)}
                           onChange={(newValue) => {
                             if (newValue) {
-                              updateTimeField(day.index, 'end_time', formatTimeToString(newValue));
+                                updateTimeBlock(day.index, blockIndex, 'end_time', formatTimeToString(newValue));
                             }
                           }}
                           slotProps={{
                             textField: {
                               size: "small",
-                              fullWidth: true
+                              fullWidth: true,
+                              onBlur: () => {
+                                // Save to server when user finishes editing
+                                saveTimeBlockChanges(day.index);
+                              }
                             }
                           }}
                         />
                       </LocalizationProvider>
                     </Grid>
                   </Grid>
-                </Box>
-              </Grid>
-
-              {/* Configuración de consultas */}
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Configuración de Consultas
+                  </CardContent>
+                </Card>
+              ))}
+              
+              {timeBlocks.length > 0 && (
+                <Alert severity="success" icon={<TimeIcon />} sx={{ mt: 2 }}>
+                  <Typography variant="body2">
+                    <strong>Ejemplo para {day.label}:</strong><br />
+                    {timeBlocks.map((block, index) => (
+                      <span key={index}>
+                        {block.start_time} - {block.end_time}
+                        {index < timeBlocks.length - 1 ? ', ' : ''}
+                      </span>
+                    ))}
                   </Typography>
-                  <Grid container spacing={2}>
-                    <Grid size={{ xs: 6 }}>
-                      <TextField
-                        label="Duración (min)"
-                        type="number"
-                        size="small"
-                        fullWidth
-                        value={schedule?.consultation_duration || 30}
-                        onChange={(e) => {
-                          updateDaySchedule(day.index, { 
-                            consultation_duration: parseInt(e.target.value) || 30 
-                          });
-                        }}
-                        inputProps={{ min: 15, max: 120, step: 5 }}
-                      />
-                    </Grid>
-                    <Grid size={{ xs: 6 }}>
-                      <TextField
-                        label="Descanso (min)"
-                        type="number"
-                        size="small"
-                        fullWidth
-                        value={schedule?.break_duration || 0}
-                        onChange={(e) => {
-                          updateDaySchedule(day.index, { 
-                            break_duration: parseInt(e.target.value) || 0 
-                          });
-                        }}
-                        inputProps={{ min: 0, max: 30, step: 5 }}
-                      />
-                    </Grid>
-                  </Grid>
+                </Alert>
+              )}
                 </Box>
-              </Grid>
-
-              {/* Horario de almuerzo */}
-              <Grid size={{ xs: 12 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <LunchIcon sx={{ mr: 1 }} />
-                  <Typography variant="subtitle2">
-                    Horario de Almuerzo (Opcional)
-                  </Typography>
-                </Box>
-                <Grid container spacing={2}>
-                  <Grid size={{ xs: 6, md: 3 }}>
-                    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
-                      <TimePicker
-                        label="Inicio almuerzo"
-                        value={formatTime(schedule?.lunch_start)}
-                        onChange={(newValue) => {
-                          updateTimeField(day.index, 'lunch_start', formatTimeToString(newValue));
-                        }}
-                        slotProps={{
-                          textField: {
-                            size: "small",
-                            fullWidth: true
-                          }
-                        }}
-                      />
-                    </LocalizationProvider>
-                  </Grid>
-                  <Grid size={{ xs: 6, md: 3 }}>
-                    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
-                      <TimePicker
-                        label="Fin almuerzo"
-                        value={formatTime(schedule?.lunch_end)}
-                        onChange={(newValue) => {
-                          updateTimeField(day.index, 'lunch_end', formatTimeToString(newValue));
-                        }}
-                        slotProps={{
-                          textField: {
-                            size: "small",
-                            fullWidth: true
-                          }
-                        }}
-                      />
-                    </LocalizationProvider>
-                  </Grid>
-                </Grid>
-              </Grid>
-            </Grid>
           </AccordionDetails>
         )}
       </Accordion>

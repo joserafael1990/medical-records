@@ -845,6 +845,10 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
         onSave={() => {
           console.log('🔧 ScheduleConfigDialog - onSave called');
           setScheduleConfigDialogOpen(false);
+          // Force reload the dialog when it opens again
+          setTimeout(() => {
+            console.log('🔧 Schedule saved - data will refresh when dialog reopens');
+          }, 100);
         }}
       />
 
