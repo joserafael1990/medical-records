@@ -16,7 +16,7 @@ class ScheduleTemplate(Base):
     __tablename__ = "schedule_templates"
     
     id = Column(Integer, primary_key=True, index=True)
-    doctor_id = Column(String, ForeignKey("doctor_profiles.id"), nullable=False)
+    doctor_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
     
     # Día de la semana (0=Lunes, 1=Martes, ..., 6=Domingo)
     day_of_week = Column(Integer, nullable=False)  # 0-6
@@ -53,7 +53,7 @@ class ScheduleException(Base):
     __tablename__ = "schedule_exceptions"
     
     id = Column(Integer, primary_key=True, index=True)
-    doctor_id = Column(String, ForeignKey("doctor_profiles.id"), nullable=False)
+    doctor_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
     template_id = Column(Integer, ForeignKey("schedule_templates.id"), nullable=True)
     
     # Fecha específica de la excepción
@@ -87,7 +87,7 @@ class ScheduleSlot(Base):
     __tablename__ = "schedule_slots"
     
     id = Column(Integer, primary_key=True, index=True)
-    doctor_id = Column(String, ForeignKey("doctor_profiles.id"), nullable=False)
+    doctor_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
     
     # Fecha y hora específica del slot
     slot_date = Column(DateTime, nullable=False)

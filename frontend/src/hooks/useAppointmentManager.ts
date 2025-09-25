@@ -53,7 +53,22 @@ export const useAppointmentManager = (
   // State
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
+
+  // Debug logging for setSelectedDate
+  const debugSetSelectedDate = useCallback((date: Date | ((prevState: Date) => Date)) => {
+    console.log('useAppointmentManager - setSelectedDate called with:', typeof date === 'function' ? 'function' : date.toDateString());
+    console.log('useAppointmentManager - Current selectedDate before:', selectedDate.toDateString());
+    setSelectedDate(date as any);
+    console.log('useAppointmentManager - selectedDate updated to:', (date as Date).toDateString());
+  }, [selectedDate]);
   const [agendaView, setAgendaView] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+
+  // Debug logging for setAgendaView
+  const debugSetAgendaView = useCallback((view: 'daily' | 'weekly' | 'monthly' | ((prevState: 'daily' | 'weekly' | 'monthly') => 'daily' | 'weekly' | 'monthly')) => {
+    console.log('useAppointmentManager - setAgendaView called with:', typeof view === 'function' ? 'function' : view, 'current agendaView:', agendaView);
+    setAgendaView(view as any);
+    console.log('useAppointmentManager - agendaView updated');
+  }, [agendaView]);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -260,7 +275,8 @@ export const useAppointmentManager = (
       const targetDate = appointmentDate.toDateString() !== currentDate.toDateString() ? appointmentDate : selectedDate;
       
       if (appointmentDate.toDateString() !== currentDate.toDateString()) {
-        setSelectedDate(appointmentDate);
+        console.log('🔄 Appointment created for different date, navigating to:', appointmentDate.toDateString());
+        debugSetSelectedDate(appointmentDate);
       }
       
       // Refresh appointments after successful creation using the correct date
@@ -513,7 +529,7 @@ export const useAppointmentManager = (
         // Compare just the date parts (ignore time)
         if (appointmentDate.toDateString() !== currentDate.toDateString()) {
           console.log('🔄 Appointment created for different date, navigating to:', appointmentDate.toDateString());
-          setSelectedDate(appointmentDate);
+          debugSetSelectedDate(appointmentDate);
         }
       }
       
@@ -523,7 +539,7 @@ export const useAppointmentManager = (
     } finally {
       setIsSubmitting(false);
     }
-  }, [isEditingAppointment, appointmentFormData, showSuccessMessage, selectedDate, setSelectedDate, user, doctorProfile]);
+  }, [isEditingAppointment, appointmentFormData, showSuccessMessage, selectedDate, debugSetSelectedDate, user, doctorProfile]);
 
   // Handle cancel appointment
   const handleCancelAppointment = useCallback(() => {
@@ -544,9 +560,9 @@ export const useAppointmentManager = (
     appointments,
     setAppointments,
     selectedDate,
-    setSelectedDate,
+    setSelectedDate: debugSetSelectedDate,
     agendaView,
-    setAgendaView,
+    setAgendaView: debugSetAgendaView,
     selectedAppointment,
     setSelectedAppointment,
     isLoading,

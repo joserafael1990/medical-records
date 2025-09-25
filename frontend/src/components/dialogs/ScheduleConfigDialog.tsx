@@ -87,6 +87,7 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
   const [success, setSuccess] = useState<string | null>(null);
   const [weeklySchedule, setWeeklySchedule] = useState<WeeklySchedule>({});
   const [hasExistingSchedule, setHasExistingSchedule] = useState(false);
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     console.log('🔧 ScheduleConfigDialog - useEffect triggered, open:', open);
@@ -100,17 +101,20 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
     try {
       setLoading(true);
       setError(null);
+      console.log('🔧 Loading weekly schedule...');
       
       const response = await apiService.get('/api/schedule/templates/weekly');
+      console.log('🔧 Weekly schedule response:', response.data);
       setWeeklySchedule(response.data);
       
       // Verificar si ya existe algún horario configurado
       const hasSchedule = Object.values(response.data).some(schedule => schedule !== null);
       setHasExistingSchedule(hasSchedule);
+      console.log('🔧 Has existing schedule:', hasSchedule);
       
     } catch (err: any) {
+      console.error('🔧 Error loading schedule:', err);
       setError('Error cargando configuración de horarios');
-      console.error('Error loading schedule:', err);
     } finally {
       setLoading(false);
     }
@@ -137,13 +141,16 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
   const updateDaySchedule = async (dayIndex: number, scheduleData: Partial<ScheduleTemplate>) => {
     try {
       setError(null);
+      console.log('🔧 updateDaySchedule called:', { dayIndex, scheduleData });
       
       const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklySchedule;
       const existingSchedule = weeklySchedule[dayKey];
       
       if (existingSchedule?.id) {
         // Actualizar existente
+        console.log('🔧 Updating existing schedule:', existingSchedule.id);
         const response = await apiService.put(`/api/schedule/templates/${existingSchedule.id}`, scheduleData);
+        console.log('🔧 Update response:', response.data);
         setWeeklySchedule(prev => ({
           ...prev,
           [dayKey]: response.data
@@ -160,22 +167,52 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
           ...scheduleData
         };
         
+        console.log('🔧 Creating new schedule:', newSchedule);
         const response = await apiService.post('/api/schedule/templates', newSchedule);
+        console.log('🔧 Create response:', response.data);
+        
+        // Manejar la respuesta del backend que devuelve un objeto con success
+        const scheduleResponse = response.data.success ? {
+          id: response.data.id,
+          day_of_week: response.data.day_of_week,
+          start_time: response.data.start_time,
+          end_time: response.data.end_time,
+          consultation_duration: newSchedule.consultation_duration,
+          break_duration: newSchedule.break_duration,
+          is_active: newSchedule.is_active
+        } : response.data;
+        
         setWeeklySchedule(prev => ({
           ...prev,
-          [dayKey]: response.data
+          [dayKey]: scheduleResponse
         }));
       }
       
       setSuccess('Horario actualizado exitosamente');
       
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Error actualizando horario');
+      console.error('🔧 Error updating schedule:', err);
+      setError(err.response?.data?.detail || err.response?.data?.error || 'Error actualizando horario');
     }
   };
 
   const toggleDayActive = async (dayIndex: number, isActive: boolean) => {
+    console.log('🔧 toggleDayActive called:', { dayIndex, isActive });
     await updateDaySchedule(dayIndex, { is_active: isActive });
+  };
+
+  const toggleDayExpanded = (dayKey: string) => {
+    console.log('🔧 toggleDayExpanded called:', dayKey);
+    setExpandedDays(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(dayKey)) {
+        newSet.delete(dayKey);
+      } else {
+        newSet.add(dayKey);
+      }
+      console.log('🔧 New expanded days:', Array.from(newSet));
+      return newSet;
+    });
   };
 
   const updateTimeField = async (dayIndex: number, field: string, value: string) => {
@@ -204,9 +241,14 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
     const dayKey = day.key as keyof WeeklySchedule;
     const schedule = weeklySchedule[dayKey];
     const isActive = schedule?.is_active ?? false;
+    const isExpanded = expandedDays.has(day.key);
 
     return (
-      <Accordion key={day.key} expanded={isActive}>
+      <Accordion 
+        key={day.key} 
+        expanded={isExpanded}
+        onChange={() => toggleDayExpanded(day.key)}
+      >
         <AccordionSummary
           expandIcon={<ExpandMoreIcon />}
           sx={{
@@ -215,18 +257,29 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
               backgroundColor: 'action.hover'
             }
           }}
+          onClick={(e) => {
+            // Prevenir que el click del switch propague al accordion
+            if ((e.target as HTMLElement).closest('.MuiSwitch-root')) {
+              e.stopPropagation();
+            }
+          }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
             <FormControlLabel
               control={
                 <Switch
                   checked={isActive}
-                  onChange={(e) => toggleDayActive(day.index, e.target.checked)}
+                  onChange={(e) => {
+                    e.stopPropagation(); // Prevenir propagación al accordion
+                    console.log('🔧 Switch clicked for day:', day.label, 'new value:', e.target.checked);
+                    toggleDayActive(day.index, e.target.checked);
+                  }}
                   color="primary"
                 />
               }
               label=""
               sx={{ mr: 2 }}
+              onClick={(e) => e.stopPropagation()} // Prevenir propagación al accordion
             />
             <Typography variant="h6" sx={{ flexGrow: 1 }}>
               {day.label}
@@ -242,7 +295,7 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
           </Box>
         </AccordionSummary>
         
-        {isActive && (
+        {isExpanded && (
           <AccordionDetails>
             <Grid container spacing={3}>
               {/* Horarios principales */}

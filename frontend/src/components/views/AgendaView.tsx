@@ -432,6 +432,8 @@ const AgendaView: React.FC<AgendaViewProps> = ({
   };
 
   const renderMonthlyView = () => {
+    console.log('AgendaView - renderMonthlyView called with selectedDate:', selectedDate.toDateString());
+
     // Get all days in the current month
     const year = selectedDate.getFullYear();
     const month = selectedDate.getMonth();
@@ -494,6 +496,16 @@ const AgendaView: React.FC<AgendaViewProps> = ({
             const dayAppointments = getAppointmentsForDate(day);
             const isToday = day.toDateString() === new Date().toDateString();
             const isSelected = day.toDateString() === selectedDate.toDateString();
+
+  console.log('AgendaView - Day clicked:', {
+    day: day.toDateString(),
+    selectedDate: selectedDate.toDateString(),
+    isSelected,
+    agendaView
+  });
+
+  // Add debug logging for render
+  console.log('AgendaView - Render called with selectedDate:', selectedDate.toDateString(), 'agendaView:', agendaView);
             
             return (
               <Box
@@ -513,7 +525,14 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                     boxShadow: 1
                   }
                 }}
-                onClick={() => setSelectedDate(day)}
+                onClick={() => {
+                  console.log('AgendaView - Click on day:', day.toDateString());
+                  console.log('AgendaView - Current selectedDate before:', selectedDate.toDateString());
+                  console.log('AgendaView - Are they equal?', day.toDateString() === selectedDate.toDateString());
+                  setSelectedDate(day);
+                  console.log('AgendaView - setSelectedDate called with:', day.toDateString());
+                  console.log('AgendaView - Component should re-render now');
+                }}
               >
                 <Typography
                   variant="body2"
@@ -556,6 +575,8 @@ const AgendaView: React.FC<AgendaViewProps> = ({
     );
   };
 
+  console.log('AgendaView - Main render called with selectedDate:', selectedDate.toDateString(), 'agendaView:', agendaView);
+
   return (
     <Box>
       {/* Header */}
@@ -566,7 +587,11 @@ const AgendaView: React.FC<AgendaViewProps> = ({
         <Box sx={{ display: 'flex', gap: 2 }}>
           <Button
             variant={agendaView === 'daily' ? 'contained' : 'outlined'}
-            onClick={() => setAgendaView('daily')}
+            onClick={() => {
+              console.log('AgendaView - Daily view button clicked, current agendaView:', agendaView);
+              setAgendaView('daily');
+              console.log('AgendaView - setAgendaView called with daily');
+            }}
             size="small"
             sx={{ 
               borderRadius: '8px',
@@ -582,7 +607,11 @@ const AgendaView: React.FC<AgendaViewProps> = ({
           </Button>
           <Button
             variant={agendaView === 'weekly' ? 'contained' : 'outlined'}
-            onClick={() => setAgendaView('weekly')}
+            onClick={() => {
+              console.log('AgendaView - Weekly view button clicked, current agendaView:', agendaView);
+              setAgendaView('weekly');
+              console.log('AgendaView - setAgendaView called with weekly');
+            }}
             size="small"
             sx={{ 
               borderRadius: '8px',
@@ -598,7 +627,11 @@ const AgendaView: React.FC<AgendaViewProps> = ({
           </Button>
           <Button
             variant={agendaView === 'monthly' ? 'contained' : 'outlined'}
-            onClick={() => setAgendaView('monthly')}
+            onClick={() => {
+              console.log('AgendaView - Monthly view button clicked, current agendaView:', agendaView);
+              setAgendaView('monthly');
+              console.log('AgendaView - setAgendaView called with monthly');
+            }}
             size="small"
             sx={{ 
               borderRadius: '8px',

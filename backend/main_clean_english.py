@@ -19,6 +19,7 @@ import schemas
 import auth
 from database import get_db, Person, Specialty, Country, State, EmergencyRelationship, Appointment, MedicalRecord
 from appointment_service import AppointmentService
+from routes import schedule
 
 # ============================================================================
 # GLOBAL TIMEZONE CONFIGURATION
@@ -109,6 +110,13 @@ app.add_middleware(
 
 # Security
 security = HTTPBearer()
+
+# ============================================================================
+# ROUTER REGISTRATION
+# ============================================================================
+
+# Include schedule router
+app.include_router(schedule.router)
 
 # ============================================================================
 # AUTHENTICATION DEPENDENCY

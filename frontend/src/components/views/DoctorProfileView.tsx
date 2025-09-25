@@ -233,8 +233,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
           <Typography variant="body2" color="text.secondary">
             Gestiona tu información profesional
           </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        </Box>KPIs         <Box sx={{ display: 'flex', gap: 2 }}>
           <Button
             variant="contained"
             size="large"
