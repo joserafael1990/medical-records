@@ -20,6 +20,7 @@ import {
 import { DashboardData } from '../../types';
 import { getAppointmentDate, formatAppointmentTimeRange, getAppointmentTypeLabel } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
+import { useDoctorProfileCache } from '../../hooks/useDoctorProfileCache';
 
 interface DashboardViewProps {
   dashboardData: DashboardData | null;
@@ -37,17 +38,24 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   onNewConsultation 
 }) => {
   const { user } = useAuth();
+  const { doctorProfile } = useDoctorProfileCache();
   
   // Generate personalized greeting
   const getPersonalizedGreeting = () => {
+    // Try to get title from doctor profile first, then fallback to auth context
+    const title = doctorProfile?.title || user?.doctor?.title;
+    
     if (!user?.doctor) {
       return 'Hola, Doctor';
     }
     
-    const { title, first_name, paternal_surname, maternal_surname } = user.doctor;
+    const { first_name, paternal_surname, maternal_surname } = user.doctor;
     const fullName = [first_name, paternal_surname, maternal_surname].filter(Boolean).join(' ');
     
-    return `Hola, ${title} ${fullName}`;
+    // Use title if available, otherwise default to "Doctor"
+    const displayTitle = title || 'Doctor';
+    
+    return `Hola, ${displayTitle} ${fullName}`;
   };
   
   // Calculate today's appointments dynamically
