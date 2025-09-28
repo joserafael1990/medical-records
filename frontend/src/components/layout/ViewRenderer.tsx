@@ -45,6 +45,8 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
           <DashboardView 
             dashboardData={dashboardData}
             appointments={appointmentManager.appointments}
+            onNewAppointment={appointmentManager.handleNewAppointment}
+            onNewConsultation={consultationManagement.handleNewConsultation}
           />
         </Suspense>
       )}

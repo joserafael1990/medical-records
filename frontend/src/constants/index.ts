@@ -129,14 +129,13 @@ export const MEDICAL_CONSTANTS = {
 export const APPOINTMENT_STATUS_LABELS = {
   'scheduled': 'Programada',
   'confirmed': 'Confirmada',
-  'in_progress': 'En Progreso',
   'completed': 'Completada',
-  'cancelled': 'Cancelada',
-  'no_show': 'No Asistió'
+  'cancelled': 'Cancelada'
 } as const;
 
 export const APPOINTMENT_TYPE_LABELS = {
   'consultation': 'Consulta',
+  'first_visit': 'Primera vez',
   'follow_up': 'Seguimiento',
   'emergency': 'Urgencia',
   'routine_check': 'Revisión'
@@ -200,7 +199,8 @@ export const formatAppointmentTimeRange = (appointment: any): string => {
  */
 export const getAppointmentDate = (cdmxDateString: string): Date => {
   // Parse CDMX datetime string manually to avoid timezone interpretation
-  const dateParts = cdmxDateString.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  // Handle both "T" and space separators between date and time
+  const dateParts = cdmxDateString.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
   if (!dateParts) {
     console.warn('Invalid date format for getAppointmentDate:', cdmxDateString);
     return new Date();

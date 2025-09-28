@@ -914,6 +914,7 @@ class ApiService {
   async getAppointments(filters?: {
     date?: string;
     status?: string;
+    available_for_consultation?: boolean;
   }): Promise<Appointment[]> {
     const response = await this.api.get<Appointment[]>(API_CONFIG.ENDPOINTS.APPOINTMENTS, { 
       params: filters 

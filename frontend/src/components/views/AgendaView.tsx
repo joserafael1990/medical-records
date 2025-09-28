@@ -28,10 +28,13 @@ import {
   Today as TodayIcon,
   ExpandMore as ExpandMoreIcon,
   Person as PersonIcon,
-  EventNote as EventNoteIcon
+  EventNote as EventNoteIcon,
+  Check as ConfirmIcon,
+  Cancel as CancelIcon
 } from '@mui/icons-material';
 import { Appointment } from '../../types';
 import { getStatusLabel, getAppointmentTypeLabel, formatAppointmentTime, formatAppointmentTimeRange, getAppointmentDate } from '../../constants';
+import { apiService } from '../../services/api';
 
 interface AgendaViewProps {
   appointments: Appointment[];
@@ -61,6 +64,40 @@ const AgendaView: React.FC<AgendaViewProps> = ({
     agenda_view: agendaView
   });
   const [expandedAccordion, setExpandedAccordion] = useState<string | false>(false);
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+
+  // Handle appointment status changes
+  const handleConfirmAppointment = async (appointmentId: string) => {
+    try {
+      setUpdatingStatus(appointmentId);
+      await apiService.updateAppointment(appointmentId, { status: 'confirmed' });
+      // Reload appointments by triggering a refresh in the parent component
+      window.location.reload(); // Temporary solution - ideally should update state
+    } catch (error) {
+      console.error('Error confirming appointment:', error);
+      alert('Error al confirmar la cita. Intenta nuevamente.');
+    } finally {
+      setUpdatingStatus(null);
+    }
+  };
+
+  const handleCancelAppointment = async (appointmentId: string) => {
+    if (!window.confirm('¿Estás seguro de que deseas cancelar esta cita?')) {
+      return;
+    }
+    
+    try {
+      setUpdatingStatus(appointmentId);
+      await apiService.updateAppointment(appointmentId, { status: 'cancelled' });
+      // Reload appointments by triggering a refresh in the parent component
+      window.location.reload(); // Temporary solution - ideally should update state
+    } catch (error) {
+      console.error('Error cancelling appointment:', error);
+      alert('Error al cancelar la cita. Intenta nuevamente.');
+    } finally {
+      setUpdatingStatus(null);
+    }
+  };
   
   // Removed debug logs
 
@@ -121,14 +158,20 @@ const AgendaView: React.FC<AgendaViewProps> = ({
   // Filter appointments by date - simplified for CDMX native
   const getAppointmentsForDate = (date: Date) => {
     const targetDateStr = date.toDateString();
-    return appointments.filter(apt => {
-      if (!apt.date_time) return false;
-      const aptDate = getAppointmentDate(apt.date_time);
+    
+    const filtered = appointments.filter(apt => {
+      // Try both date_time and appointment_date fields
+      const dateToUse = apt.date_time || apt.appointment_date;
+      if (!dateToUse) return false;
+      const aptDate = getAppointmentDate(dateToUse);
       const aptDateStr = aptDate.toDateString();
       
       
       return aptDateStr === targetDateStr;
     });
+    
+    
+    return filtered;
   };
 
   // Sort appointments by time - using CDMX native
@@ -220,7 +263,12 @@ const AgendaView: React.FC<AgendaViewProps> = ({
     const rawAppointments = getAppointmentsForDate(selectedDate);
     const dayAppointments = rawAppointments;
     
-    
+    console.log('🔍 renderDailyView DEBUG:', {
+      selectedDate: selectedDate.toDateString(),
+      rawAppointments_count: rawAppointments.length,
+      dayAppointments_count: dayAppointments.length,
+      total_appointments_available: appointments.length
+    });
 
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }} key={`daily-${selectedDate.toDateString()}-${dayAppointments.length}`}>
@@ -272,14 +320,41 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                 </Box>
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   <Tooltip title="Editar cita">
-                  <IconButton
-                    onClick={() => handleEditAppointment(appointment)}
-                    size="small"
-                    sx={{ color: 'primary.main' }}
-                  >
-                    <EditIcon />
-                  </IconButton>
+                    <IconButton
+                      onClick={() => handleEditAppointment(appointment)}
+                      size="small"
+                      sx={{ color: 'primary.main' }}
+                    >
+                      <EditIcon />
+                    </IconButton>
                   </Tooltip>
+                  
+                  {/* Status change buttons - only show for active appointments */}
+                  {appointment.status === 'scheduled' && (
+                    <Tooltip title="Confirmar cita">
+                      <IconButton
+                        onClick={() => handleConfirmAppointment(appointment.id)}
+                        size="small"
+                        sx={{ color: 'success.main' }}
+                        disabled={updatingStatus === appointment.id}
+                      >
+                        <ConfirmIcon />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                  
+                  {(appointment.status === 'scheduled' || appointment.status === 'confirmed') && (
+                    <Tooltip title="Cancelar cita">
+                      <IconButton
+                        onClick={() => handleCancelAppointment(appointment.id)}
+                        size="small"
+                        sx={{ color: 'error.main' }}
+                        disabled={updatingStatus === appointment.id}
+                      >
+                        <CancelIcon />
+                      </IconButton>
+                    </Tooltip>
+                  )}
                 </Box>
               </Box>
             </Card>
@@ -401,14 +476,43 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                               />
                             </TableCell>
                             <TableCell>
-                              <Tooltip title="Editar cita">
-                                <IconButton
-                                  onClick={() => handleEditAppointment(appointment)}
-                                  size="small"
-                                >
-                                  <EditIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
+                              <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                <Tooltip title="Editar cita">
+                                  <IconButton
+                                    onClick={() => handleEditAppointment(appointment)}
+                                    size="small"
+                                  >
+                                    <EditIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                                
+                                {/* Status change buttons - only show for active appointments */}
+                                {appointment.status === 'scheduled' && (
+                                  <Tooltip title="Confirmar cita">
+                                    <IconButton
+                                      onClick={() => handleConfirmAppointment(appointment.id)}
+                                      size="small"
+                                      sx={{ color: 'success.main' }}
+                                      disabled={updatingStatus === appointment.id}
+                                    >
+                                      <ConfirmIcon fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                )}
+                                
+                                {(appointment.status === 'scheduled' || appointment.status === 'confirmed') && (
+                                  <Tooltip title="Cancelar cita">
+                                    <IconButton
+                                      onClick={() => handleCancelAppointment(appointment.id)}
+                                      size="small"
+                                      sx={{ color: 'error.main' }}
+                                      disabled={updatingStatus === appointment.id}
+                                    >
+                                      <CancelIcon fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                )}
+                              </Box>
                             </TableCell>
                           </TableRow>
                         ))}

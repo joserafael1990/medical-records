@@ -285,10 +285,22 @@ DATOS OBLIGATORIOS
             />
           </Box>
           
-          {/* Domicilio de Residencia */}
+          
+          {/* Antecedentes Médicos movidos a Evaluación Clínica en Consultas */}
+          {/* Los antecedentes heredofamiliares, patológicos y no patológicos */}
+          {/* ahora se capturan durante la consulta médica como parte de la evaluación clínica */}
+
+          {/* SECCIÓN: INFORMACIÓN OPCIONAL */}
+          <Box sx={{ width: '100%' }}>
+            <Typography variant="h6" sx={{ color: '#1976d2', fontWeight: 'bold', mt: 3, mb: 2 }}>
+              📝 DATOS OPCIONALES
+            </Typography>
+          </Box>
+
+          {/* Domicilio de Residencia - OPCIONAL */}
           <Box sx={{ width: '100%', mt: 2 }}>
-            <Typography variant="h6" sx={{ color: 'primary.main', display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-              🏠 Domicilio de Residencia
+            <Typography variant="h6" sx={{ color: '#1976d2', display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+              🏠 Domicilio de Residencia (Opcional)
             </Typography>
           </Box>
 
@@ -301,14 +313,13 @@ DATOS OBLIGATORIOS
               multiline
               rows={2}
               error={!!fieldErrors.address_street}
-              helperText={fieldErrors.address_street || "Calle, número, colonia"}
+              helperText={fieldErrors.address_street || "Calle, número, colonia (opcional)"}
               placeholder="Av. Insurgentes Sur 123, Col. Roma Norte"
-              required
             />
           </Box>
 
-          {/* Orden: Dirección completa, País, Estado, Ciudad, Código Postal */}
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 2 }}>
+          {/* País, Estado y Ciudad en la misma línea para mejor legibilidad */}
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 2 }}>
             <Autocomplete
               options={countries}
               getOptionLabel={(option) => option.name}
@@ -321,10 +332,9 @@ DATOS OBLIGATORIOS
               renderInput={(params) => (
                 <TextField
                   {...params}
-                  label="País"
-                  required
+                  label="País (Opcional)"
                   error={!!fieldErrors.address_country}
-                  helperText={fieldErrors.address_country || "Selecciona el país"}
+                  helperText={fieldErrors.address_country || "Selecciona el país (opcional)"}
                 />
               )}
             />
@@ -340,31 +350,30 @@ DATOS OBLIGATORIOS
               renderInput={(params) => (
                 <TextField
                   {...params}
-                  label="Estado/Provincia"
-                  required
+                  label="Estado/Provincia (Opcional)"
                   error={!!fieldErrors.address_state_id}
                   helperText={fieldErrors.address_state_id || 
                     (!selectedAddressCountry ? "Primero selecciona un país" :
                      filteredStates.length === 0 ? "No hay estados disponibles" : 
-                     "Selecciona el estado")}
+                     "Selecciona el estado (opcional)")}
                 />
               )}
             />
-          </Box>
-
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 2 }}>
             <TextField
-              label="Ciudad"
+              label="Ciudad (Opcional)"
               value={formData.address_city || (isEditing ? selectedPatient?.city || selectedPatient?.address_city || '' : '')}
               onChange={(e) => onFormDataChange('address_city', e.target.value)}
               fullWidth
-              required
               error={!!fieldErrors.address_city}
-              helperText={fieldErrors.address_city}
+              helperText={fieldErrors.address_city || "Ciudad de residencia (opcional)"}
               placeholder="Ciudad de México"
             />
+          </Box>
+
+          {/* Código Postal en línea separada */}
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 2fr' }, gap: 2 }}>
             <TextField
-              label="Código Postal"
+              label="Código Postal (Opcional)"
               value={formData.address_postal_code || (isEditing ? selectedPatient?.zip_code || selectedPatient?.postal_code || selectedPatient?.address_postal_code || '' : '')}
               onChange={(e) => {
                 // Solo permitir números
@@ -372,23 +381,13 @@ DATOS OBLIGATORIOS
                 onFormDataChange('address_postal_code', value);
               }}
               fullWidth
-              required
               error={!!fieldErrors.address_postal_code}
-              helperText={fieldErrors.address_postal_code || "Solo números (5 dígitos)"}
+              helperText={fieldErrors.address_postal_code || "Solo números, 5 dígitos (opcional)"}
               placeholder="12345"
               inputProps={{ maxLength: 5 }}
             />
-          </Box>
-          
-          {/* Antecedentes Médicos movidos a Evaluación Clínica en Consultas */}
-          {/* Los antecedentes heredofamiliares, patológicos y no patológicos */}
-          {/* ahora se capturan durante la consulta médica como parte de la evaluación clínica */}
-
-          {/* SECCIÓN: INFORMACIÓN OPCIONAL */}
-          <Box sx={{ width: '100%' }}>
-            <Typography variant="h6" sx={{ color: '#1976d2', fontWeight: 'bold', mt: 3, mb: 2 }}>
-              📝 DATOS OPCIONALES
-            </Typography>
+            {/* Espacio vacío para mantener el layout balanceado */}
+            <Box />
           </Box>
 
           {/* 1. País de Nacimiento */}

@@ -18,7 +18,7 @@ import {
   TrendingUp as TrendingUpIcon
 } from '@mui/icons-material';
 import { DashboardData } from '../../types';
-import { getAppointmentDate, formatAppointmentTimeRange } from '../../constants';
+import { getAppointmentDate, formatAppointmentTimeRange, getAppointmentTypeLabel } from '../../constants';
 
 interface DashboardViewProps {
   dashboardData: DashboardData | null;
@@ -291,7 +291,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                           textDecoration: appointment.status === 'cancelled' || appointment.status === 'canceled' ? 'line-through' : 'none'
                         }}
                       >
-                        {appointment.appointment_type || appointment.reason || 'Consulta médica'}
+                        {getAppointmentTypeLabel(appointment.appointment_type) || appointment.reason || 'Consulta médica'}
                       </Typography>
                     </Box>
                     <Chip

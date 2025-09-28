@@ -25,11 +25,15 @@ interface ConsultationManagementState {
   tempClinicalStudies: ClinicalStudy[];
   // Missing properties for patient creation flow
   creatingPatientFromConsultation: boolean;
+  // All available appointments for consultation dialog
+  allAvailableAppointments: any[];
 }
 
 interface ConsultationManagementActions {
   // Data operations
   fetchConsultations: () => Promise<void>;
+  loadAllAppointments: () => Promise<void>;
+  setAllAvailableAppointments: (appointments: any[]) => void;
   createConsultation: (data: ConsultationFormData) => Promise<Consultation>;
   updateConsultation: (id: string, data: ConsultationFormData) => Promise<Consultation>;
   deleteConsultation: (id: string) => Promise<void>;
@@ -77,6 +81,7 @@ export const useConsultationManagement = (): ConsultationManagementReturn => {
   const [consultationStudies, setConsultationStudies] = useState<ClinicalStudy[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [allAvailableAppointments, setAllAvailableAppointments] = useState<any[]>([]);
   
   // Temporary state for new consultations
   const [tempConsultationId, setTempConsultationId] = useState<string | null>(null);
@@ -120,6 +125,23 @@ export const useConsultationManagement = (): ConsultationManagementReturn => {
       console.error('❌ Error loading clinical studies from backend:', error?.message || 'Unknown error');
       setConsultationStudies([]);
       throw error;
+    }
+  }, []);
+
+  // Load all available appointments for consultation dialog
+  const loadAllAppointments = useCallback(async () => {
+    try {
+      console.log('🔄 Loading available appointments for consultation...');
+      const appointments = await apiService.getAppointments({ 
+        available_for_consultation: true 
+      });
+      console.log('✅ Loaded available appointments:', appointments.length);
+      console.log('📋 Sample appointment:', appointments[0]);
+      
+      setAllAvailableAppointments(appointments);
+    } catch (error: any) {
+      console.error('❌ Error loading available appointments:', error?.message || 'Unknown error');
+      setAllAvailableAppointments([]);
     }
   }, []);
 
@@ -281,8 +303,12 @@ export const useConsultationManagement = (): ConsultationManagementReturn => {
     setSelectedConsultation(null);
     setIsEditingConsultation(false);
     resetConsultationFormData();
+    
+    // Load all appointments when opening consultation dialog
+    loadAllAppointments();
+    
     setConsultationDialogOpen(true);
-  }, [resetConsultationFormData]);
+  }, [resetConsultationFormData, loadAllAppointments]);
 
   const handleEditConsultation = useCallback((consultation: Consultation) => {
     setSelectedConsultation(consultation);
@@ -333,9 +359,12 @@ export const useConsultationManagement = (): ConsultationManagementReturn => {
     tempConsultationId,
     tempClinicalStudies,
     creatingPatientFromConsultation,
+    allAvailableAppointments,
     
     // Actions
     fetchConsultations,
+    loadAllAppointments,
+    setAllAvailableAppointments,
     createConsultation,
     updateConsultation,
     deleteConsultation,

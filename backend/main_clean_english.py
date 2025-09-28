@@ -932,13 +932,14 @@ async def get_dashboard_stats():
 
 @app.get("/api/appointments")
 async def get_appointments(
-    db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user),
+    db: Session = Depends(get_db),
     skip: int = 0,
     limit: int = 100,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    status: Optional[str] = None
+    status: Optional[str] = None,
+    available_for_consultation: bool = False
 ):
     """Get list of appointments with optional filters"""
     try:
@@ -953,7 +954,7 @@ async def get_appointments(
         if end_date:
             end_date_obj = datetime.fromisoformat(end_date).date()
         
-        # Get appointments using the service
+        # Get appointments using the service with authenticated user
         appointments = AppointmentService.get_appointments(
             db=db,
             skip=skip,
@@ -961,7 +962,8 @@ async def get_appointments(
             start_date=start_date_obj,
             end_date=end_date_obj,
             status=status,
-            doctor_id=str(current_user.id)  # Filter by current doctor
+            doctor_id=str(current_user.id),  # Use authenticated doctor ID
+            available_for_consultation=available_for_consultation
         )
         
         # Transform to include patient information
@@ -999,6 +1001,7 @@ async def get_appointments(
 
 @app.get("/api/appointments/calendar")
 async def get_calendar_appointments(
+    date: str = None,
     target_date: str = None,
     start_date: str = None,
     end_date: str = None,
@@ -1007,8 +1010,8 @@ async def get_calendar_appointments(
 ):
     """Get calendar appointments for specific date or date range - CDMX timezone aware"""
     try:
-        print(f"📅 Getting calendar appointments for user {current_user.id}")
-        print(f"📊 Parameters: target_date={target_date}, start_date={start_date}, end_date={end_date}")
+        # Use 'date' parameter if provided (for daily view), otherwise fall back to 'target_date'
+        effective_target_date = date or target_date
         
         # Build the base query
         query = db.query(Appointment).options(
@@ -1016,7 +1019,6 @@ async def get_calendar_appointments(
             joinedload(Appointment.doctor)
         ).filter(Appointment.doctor_id == current_user.id)
         
-        print(f"🔍 Base query built for doctor_id: {current_user.id}")
         
         # Handle different date filtering scenarios with CDMX timezone
         if start_date and end_date:
@@ -1039,9 +1041,9 @@ async def get_calendar_appointments(
             print(f"📅 Fetching appointments from {parsed_start} to {parsed_end} (CDMX timezone)")
             print(f"🌍 UTC range: {utc_start} to {utc_end}")
             
-        elif target_date:
+        elif effective_target_date:
             # Single date query for daily view
-            parsed_date = datetime.fromisoformat(target_date).date()
+            parsed_date = datetime.fromisoformat(effective_target_date).date()
             
             # Create naive datetime bounds for the day (assuming appointments are stored in local time)
             day_start = datetime.combine(parsed_date, datetime.min.time())
@@ -1051,8 +1053,6 @@ async def get_calendar_appointments(
                 Appointment.appointment_date >= day_start,
                 Appointment.appointment_date <= day_end
             )
-            print(f"📅 Fetching appointments for {parsed_date} (local time)")
-            print(f"🔍 Local day bounds: {day_start} to {day_end}")
             
         else:
             # Default to today in CDMX timezone
@@ -1067,7 +1067,6 @@ async def get_calendar_appointments(
                 Appointment.appointment_date >= utc_start,
                 Appointment.appointment_date <= utc_end
             )
-            print(f"📅 Fetching appointments for today: {today_cdmx} (CDMX timezone)")
         
         # Execute query and return results
         appointments = query.order_by(Appointment.appointment_date).all()
@@ -1365,6 +1364,21 @@ async def create_consultation(
         db.add(new_medical_record)
         db.commit()
         db.refresh(new_medical_record)
+        
+        # If consultation is associated with an appointment, mark appointment as completed
+        appointment_id = consultation_data.get("appointment_id")
+        if appointment_id:
+            try:
+                appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+                if appointment and appointment.doctor_id == current_user.id:
+                    appointment.status = 'completed'
+                    db.commit()
+                    print(f"✅ Appointment {appointment_id} marked as completed")
+                else:
+                    print(f"⚠️ Appointment {appointment_id} not found or access denied")
+            except Exception as e:
+                print(f"❌ Error updating appointment status: {str(e)}")
+                # Don't fail the consultation creation if appointment update fails
         
         # Get patient name for response
         patient_name = "Paciente No Identificado"
@@ -1701,6 +1715,87 @@ async def debug_user_profile(email: str, db: Session = Depends(get_db)):
         "professional_license": user.professional_license,
         "university": user.university
     }
+
+# ============================================================================
+# DEBUG ENDPOINTS
+# ============================================================================
+
+@app.get("/api/debug/appointments/{doctor_email}")
+async def debug_appointments(doctor_email: str, db: Session = Depends(get_db)):
+    """Debug endpoint to check appointments for a specific doctor"""
+    try:
+        # Find doctor by email
+        doctor = db.query(Person).filter(Person.email == doctor_email).first()
+        if not doctor:
+            return {"error": f"Doctor with email {doctor_email} not found"}
+        
+        # Get all appointments for this doctor
+        appointments = db.query(Appointment).filter(Appointment.doctor_id == doctor.id).all()
+        
+        result = {
+            "doctor_id": doctor.id,
+            "doctor_name": f"{doctor.first_name} {doctor.paternal_surname}",
+            "doctor_email": doctor.email,
+            "total_appointments": len(appointments),
+            "appointments": []
+        }
+        
+        for apt in appointments:
+            patient = db.query(Person).filter(Person.id == apt.patient_id).first()
+            result["appointments"].append({
+                "id": apt.id,
+                "appointment_date": apt.appointment_date.isoformat() if apt.appointment_date else None,
+                "end_time": apt.end_time.isoformat() if apt.end_time else None,
+                "status": apt.status,
+                "reason": apt.reason,
+                "patient_name": f"{patient.first_name} {patient.paternal_surname}" if patient else "Unknown"
+            })
+        
+        return result
+        
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/api/appointments-temp")
+async def get_appointments_temp(db: Session = Depends(get_db)):
+    """Temporary endpoint without authentication to get appointments with patient names"""
+    try:
+        # Get all appointments with patient information
+        appointments = db.query(Appointment).options(
+            joinedload(Appointment.patient),
+            joinedload(Appointment.doctor)
+        ).all()
+        
+        result = []
+        for apt in appointments:
+            patient_name = "Paciente desconocido"
+            if apt.patient:
+                patient_name = f"{apt.patient.first_name} {apt.patient.paternal_surname}"
+            
+            result.append({
+                "id": apt.id,
+                "appointment_date": apt.appointment_date.isoformat() if apt.appointment_date else None,
+                "end_time": apt.end_time.isoformat() if apt.end_time else None,
+                "status": apt.status,
+                "reason": apt.reason,
+                "patient_id": apt.patient_id,
+                "doctor_id": apt.doctor_id,
+                "patient_name": patient_name,
+                # For compatibility with frontend
+                "date": apt.appointment_date.isoformat() if apt.appointment_date else None,
+                "time": apt.appointment_date.strftime("%H:%M") if apt.appointment_date else None,
+                "patient": {
+                    "first_name": apt.patient.first_name if apt.patient else "",
+                    "paternal_surname": apt.patient.paternal_surname if apt.patient else "",
+                    "maternal_surname": apt.patient.maternal_surname if apt.patient else ""
+                } if apt.patient else None
+            })
+        
+        return result
+        
+    except Exception as e:
+        print(f"❌ Error in get_appointments_temp: {str(e)}")
+        return []
 
 # ============================================================================
 # SERVER

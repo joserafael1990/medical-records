@@ -391,24 +391,24 @@ def update_medical_record(db: Session, record_id: int, record_data: schemas.Medi
 
 def create_appointment(db: Session, appointment_data: schemas.AppointmentCreate, doctor_id: int) -> Appointment:
     """Create a new appointment"""
+    from appointment_service import AppointmentService
+    
     # Generate appointment code
     last_appointment = db.query(Appointment).order_by(desc(Appointment.id)).first()
     appointment_number = (last_appointment.id + 1) if last_appointment else 1
     appointment_code = f"APT{appointment_number:08d}"
     
-    # Prepare appointment data
+    # Prepare appointment data for the service
     appointment_dict = appointment_data.dict()
     appointment_dict['doctor_id'] = doctor_id
+    appointment_dict['appointment_code'] = appointment_code
     
-    db_appointment = Appointment(
-        appointment_code=appointment_code,
-        **appointment_dict
-    )
+    # Remove end_time if present since AppointmentService will calculate it automatically
+    if 'end_time' in appointment_dict:
+        del appointment_dict['end_time']
     
-    db.add(db_appointment)
-    db.commit()
-    db.refresh(db_appointment)
-    return db_appointment
+    # Use AppointmentService to create the appointment with automatic end_time calculation
+    return AppointmentService.create_appointment(db, appointment_dict)
 
 def get_appointment(db: Session, appointment_id: int) -> Optional[Appointment]:
     """Get appointment by ID"""

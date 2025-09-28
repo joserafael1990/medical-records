@@ -561,7 +561,17 @@ const handleViewConsultation = useCallback(async (consultation: any) => {
     }
     
     setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
+    
+    // Generate a detailed error message if validation fails
+    if (Object.keys(errors).length > 0) {
+      const errorList = Object.values(errors);
+      setFormErrorMessage(`Se encontraron ${errorList.length} error${errorList.length !== 1 ? 'es' : ''}:\n• ${errorList.join('\n• ')}`);
+      return false;
+    }
+    
+    // Clear error message if validation passes
+    setFormErrorMessage('');
+    return true;
   };
 
   // Clean patient data before sending to backend
@@ -584,11 +594,32 @@ const handleViewConsultation = useCallback(async (consultation: any) => {
   const handlePatientSubmit = async () => {
     setIsSubmitting(true);
     setFormErrorMessage('');
-    setFieldErrors({});
 
     // Client-side validation first
     if (!validatePatientForm()) {
-      setFormErrorMessage('Por favor corrija los errores antes de continuar');
+      const errorFields = Object.entries(fieldErrors);
+      const errorCount = errorFields.length;
+      
+      // Create detailed error message
+      const fieldTranslations: {[key: string]: string} = {
+        'first_name': 'Nombre',
+        'paternal_surname': 'Apellido Paterno', 
+        'maternal_surname': 'Apellido Materno',
+        'birth_date': 'Fecha de Nacimiento',
+        'gender': 'Género',
+        'primary_phone': 'Teléfono',
+        'email': 'Email',
+        'curp': 'CURP',
+        'rfc': 'RFC',
+        'civil_status': 'Estado Civil'
+      };
+      
+      const errorList = errorFields.map(([field, message]) => {
+        const translatedField = fieldTranslations[field] || field;
+        return `• ${translatedField}: ${message}`;
+      }).join('\n');
+      
+      setFormErrorMessage(`Por favor corrija los siguientes ${errorCount} error${errorCount !== 1 ? 'es' : ''}:\n\n${errorList}`);
       setIsSubmitting(false);
       return;
     }
@@ -651,7 +682,14 @@ const handleViewConsultation = useCallback(async (consultation: any) => {
             }
           });
           setFieldErrors(fieldErrorsFromServer);
-          setFormErrorMessage('Por favor corrija los errores marcados en el formulario');
+          
+          // Create a detailed error message listing specific issues
+          const errorList = Object.values(fieldErrorsFromServer);
+          if (errorList.length > 0) {
+            setFormErrorMessage(`Se encontraron ${errorList.length} error${errorList.length !== 1 ? 'es' : ''}:\n• ${errorList.join('\n• ')}`);
+          } else {
+            setFormErrorMessage('Por favor corrija los errores marcados en el formulario');
+          }
         } else {
           setFormErrorMessage(error.response.data.detail);
         }
@@ -923,10 +961,11 @@ const handleClinicalStudySubmit = useCallback(async () => {
       {/* Dialog Components - These remain here as they're globally managed */}
 
         {/* Patient Dialog */}
-        <Suspense fallback={<LoadingFallback message="Cargando formulario..." />}>
-          <PatientDialog
-            key={`patient-dialog-${patientManagement.isEditingPatient ? 'edit' : 'create'}-${patientManagement.selectedPatient?.id || 'new'}`}
-            open={patientManagement.patientDialogOpen}
+        {patientManagement.patientDialogOpen && (
+          <Suspense fallback={<LoadingFallback message="Cargando formulario..." />}>
+            <PatientDialog
+              key={`patient-dialog-${patientManagement.isEditingPatient ? 'edit' : 'create'}-${patientManagement.selectedPatient?.id || 'new'}`}
+              open={patientManagement.patientDialogOpen}
             onClose={() => {
               patientManagement.setPatientDialogOpen(false);
               setFormErrorMessage('');
@@ -958,13 +997,15 @@ const handleClinicalStudySubmit = useCallback(async () => {
               setIsSubmitting(false);
             }
           } : undefined}
-          />
-        </Suspense>
+            />
+          </Suspense>
+        )}
 
         {/* Consultation Dialog */}
-        <Suspense fallback={<LoadingFallback message="Cargando formulario de consulta..." />}>
-          <ConsultationDialog
-            open={consultationManagement.consultationDialogOpen}
+        {consultationManagement.consultationDialogOpen && (
+          <Suspense fallback={<LoadingFallback message="Cargando formulario de consulta..." />}>
+            <ConsultationDialog
+              open={consultationManagement.consultationDialogOpen}
             onClose={() => {
               consultationManagement.setConsultationDialogOpen(false);
               setFormErrorMessage('');
@@ -975,7 +1016,7 @@ const handleClinicalStudySubmit = useCallback(async () => {
             setFormData={consultationManagement.setConsultationFormData}
             onSubmit={handleConsultationSubmit}
             patients={patientManagement.patients}
-            appointments={appointmentManager.appointments}
+            appointments={consultationManagement.allAvailableAppointments}
             formErrorMessage={formErrorMessage}
             setFormErrorMessage={setFormErrorMessage}
             isSubmitting={isSubmitting}
@@ -1010,40 +1051,44 @@ const handleClinicalStudySubmit = useCallback(async () => {
               setFormErrorMessage(error.response?.data?.detail || 'Error al crear cita de seguimiento');
             }
           }}
-          />
-        </Suspense>
+            />
+          </Suspense>
+        )}
 
         {/* Appointment Dialog */}
-        <Suspense fallback={<LoadingFallback message="Cargando formulario de cita..." />}>
-          <AppointmentDialog
-            open={appointmentManager.appointmentDialogOpen}
-            onClose={() => {
-              appointmentManager.setAppointmentDialogOpen(false);
-              setFormErrorMessage('');
-              setFieldErrors({});
-            }}
-            onSubmit={appointmentManager.handleAppointmentSubmit}
-            onNewPatient={() => {
-              appointmentManager.setAppointmentDialogOpen(false);
-              patientManagement.setIsEditingPatient(false);
-              consultationManagement.setCreatingPatientFromConsultation(true);
-              patientManagement.setPatientDialogOpen(true);
-            }}
-            formData={appointmentManager.appointmentFormData}
-            patients={patientManagement.patients}
-            isEditing={appointmentManager.isEditingAppointment}
-            loading={isSubmitting}
-            formErrorMessage={formErrorMessage}
-            fieldErrors={appointmentManager.fieldErrors}
-            onFormDataChange={appointmentManager.setAppointmentFormData}
-            doctorProfile={appointmentManager.doctorProfile}
-          />
-        </Suspense>
+        {appointmentManager.appointmentDialogOpen && (
+          <Suspense fallback={<LoadingFallback message="Cargando formulario de cita..." />}>
+            <AppointmentDialog
+              open={appointmentManager.appointmentDialogOpen}
+              onClose={() => {
+                appointmentManager.setAppointmentDialogOpen(false);
+                setFormErrorMessage('');
+                setFieldErrors({});
+              }}
+              onSubmit={appointmentManager.handleAppointmentSubmit}
+              onNewPatient={() => {
+                appointmentManager.setAppointmentDialogOpen(false);
+                patientManagement.setIsEditingPatient(false);
+                consultationManagement.setCreatingPatientFromConsultation(true);
+                patientManagement.setPatientDialogOpen(true);
+              }}
+              formData={appointmentManager.appointmentFormData}
+              patients={patientManagement.patients}
+              isEditing={appointmentManager.isEditingAppointment}
+              loading={isSubmitting}
+              formErrorMessage={formErrorMessage}
+              fieldErrors={appointmentManager.fieldErrors}
+              onFormDataChange={appointmentManager.setAppointmentFormData}
+              doctorProfile={appointmentManager.doctorProfile}
+            />
+          </Suspense>
+        )}
 
         {/* Doctor Profile Dialog */}
-        <Suspense fallback={<LoadingFallback message="Cargando perfil..." />}>
-          <DoctorProfileDialog
-            open={doctorProfileDialogOpenFromHook}
+        {doctorProfileDialogOpenFromHook && (
+          <Suspense fallback={<LoadingFallback message="Cargando perfil..." />}>
+            <DoctorProfileDialog
+              open={doctorProfileDialogOpenFromHook}
             onClose={() => {
               console.log('🔍 DIALOG: onClose called');
               handleCancelFromHook();
@@ -1059,30 +1104,33 @@ const handleClinicalStudySubmit = useCallback(async () => {
             setFormErrorMessage={setFormErrorMessageFromHook}
             isSubmitting={isSubmittingFromHook}
             fieldErrors={fieldErrorsFromHook}
-          />
-        </Suspense>
+            />
+          </Suspense>
+        )}
 
         {/* Clinical Study Dialog */}
-        <Suspense fallback={<LoadingFallback message="Cargando formulario de estudio clínico..." />}>
-          <ClinicalStudyDialog
-            open={clinicalStudyDialogOpen}
-            onClose={() => {
-              setClinicalStudyDialogOpen(false);
-              setSelectedClinicalStudy(null);
-              setIsEditingClinicalStudy(false);
-              setClinicalStudyFormErrorMessage('');
-              setClinicalStudyFieldErrors({});
-            }}
-            isEditing={isEditingClinicalStudy}
-            formData={clinicalStudyFormData}
-            setFormData={setClinicalStudyFormData}
-            onSubmit={handleClinicalStudySubmit}
-            formErrorMessage={clinicalStudyFormErrorMessage}
-            setFormErrorMessage={setClinicalStudyFormErrorMessage}
-            isSubmitting={isClinicalStudySubmitting}
-            fieldErrors={clinicalStudyFieldErrors}
-          />
-        </Suspense>
+        {clinicalStudyDialogOpen && (
+          <Suspense fallback={<LoadingFallback message="Cargando formulario de estudio clínico..." />}>
+            <ClinicalStudyDialog
+              open={clinicalStudyDialogOpen}
+              onClose={() => {
+                setClinicalStudyDialogOpen(false);
+                setSelectedClinicalStudy(null);
+                setIsEditingClinicalStudy(false);
+                setClinicalStudyFormErrorMessage('');
+                setClinicalStudyFieldErrors({});
+              }}
+              isEditing={isEditingClinicalStudy}
+              formData={clinicalStudyFormData}
+              setFormData={setClinicalStudyFormData}
+              onSubmit={handleClinicalStudySubmit}
+              formErrorMessage={clinicalStudyFormErrorMessage}
+              setFormErrorMessage={setClinicalStudyFormErrorMessage}
+              isSubmitting={isClinicalStudySubmitting}
+              fieldErrors={clinicalStudyFieldErrors}
+            />
+          </Suspense>
+        )}
 
         {/* Logout Confirmation Dialog */}
         <LogoutConfirmDialog

@@ -34,9 +34,9 @@ class AppointmentService:
     @staticmethod
     def create_appointment(db: Session, appointment_data: dict) -> Appointment:
         """Create a new appointment"""
-        # Generate ID if not provided
-        if 'id' not in appointment_data or not appointment_data['id']:
-            appointment_data['id'] = f"APT{str(uuid.uuid4())[:8].upper()}"
+        # Remove ID from appointment_data - let PostgreSQL auto-generate it
+        if 'id' in appointment_data:
+            del appointment_data['id']
         
         # Calculate end_time based on appointment_date and doctor's appointment_duration
         start_time = appointment_data['appointment_date']
@@ -60,10 +60,8 @@ class AppointmentService:
         # Set created_at in UTC
         appointment_data['created_at'] = now_cdmx().astimezone(pytz.utc)
         
-        # Get patient name for easier querying
-        patient = db.query(Person).filter(Person.id == appointment_data['patient_id']).first()
-        if patient:
-            appointment_data['doctor_name'] = f"{patient.first_name} {patient.paternal_surname}"
+        # Remove any invalid fields that don't exist in the Appointment model
+        # Note: patient and doctor names are available through relationships, not stored fields
         
         appointment = Appointment(**appointment_data)
         db.add(appointment)
@@ -80,10 +78,15 @@ class AppointmentService:
         end_date: Optional[date] = None,
         status: Optional[str] = None,
         patient_id: Optional[str] = None,
-        doctor_id: Optional[str] = None
+        doctor_id: Optional[str] = None,
+        available_for_consultation: bool = False
     ) -> List[Appointment]:
         """Get appointments with filters"""
-        query = db.query(Appointment)
+        from sqlalchemy.orm import joinedload
+        query = db.query(Appointment).options(
+            joinedload(Appointment.patient),
+            joinedload(Appointment.doctor)
+        )
         
         # Date range filter
         if start_date:
@@ -91,8 +94,10 @@ class AppointmentService:
         if end_date:
             query = query.filter(func.date(Appointment.appointment_date) <= end_date)
         
-        # Status filter
-        if status:
+        # Status filter for available appointments (for consultation dropdown)
+        if available_for_consultation:
+            query = query.filter(Appointment.status.in_(['scheduled', 'confirmed']))
+        elif status:
             query = query.filter(Appointment.status == status)
         
         # Patient filter

@@ -63,7 +63,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
 
 import { Patient, Consultation, Appointment, ConsultationFormData, ClinicalStudy } from '../../types';
-import { getAppointmentDate, getCurrentCDMXDateTime } from '../../constants';
+import { getAppointmentDate, getCurrentCDMXDateTime, getStatusLabel } from '../../constants';
 import { ErrorRibbon } from '../common/ErrorRibbon';
 import ClinicalStudiesSection from '../common/ClinicalStudiesSection';
 import { apiService } from '../../services/api';
@@ -102,8 +102,31 @@ const formatPatientNameWithAge = (patient: Patient): string => {
 
 // Function to format appointment for display
 const formatAppointmentDisplay = (appointment: any, patients: Patient[]): string => {
-  const patient = patients.find(p => p.id === appointment.patient_id);
-  const patientName = patient ? formatPatientNameWithAge(patient) : 'Paciente desconocido';
+  
+  const patient = patients.find(p => {
+    // Try both string and number comparison
+    return String(p.id) === String(appointment.patient_id);
+  });
+  
+  // Try to get patient name from appointment data itself if patient not found in array
+  let patientName = 'Paciente desconocido';
+  
+  // Priority 1: Use patient_name directly from appointment (from temp endpoint)
+  if (appointment.patient_name) {
+    patientName = appointment.patient_name;
+  } 
+  // Priority 2: Use patient from patients array (includes age calculation)
+  else if (patient) {
+    patientName = formatPatientNameWithAge(patient);
+  } 
+  // Priority 3: Try patient object in appointment
+  else if (appointment.patient) {
+    if (typeof appointment.patient === 'string') {
+      patientName = appointment.patient;
+    } else if (appointment.patient.first_name) {
+      patientName = formatPatientNameWithAge(appointment.patient);
+    }
+  }
   
   // Handle different date formats and properties
   let dateStr = 'Fecha inválida';
@@ -319,33 +342,56 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     if (appointment) {
       // When an appointment is selected, auto-select the patient
       const patient = patients.find(p => p.id === appointment.patient_id);
+      
       if (patient) {
+        // Patient found in the limited patients array
         setSelectedPatient(patient);
-        
-        // Handle date conversion safely
-        let consultationDate = '';
-        const dateValue = appointment.date || appointment.appointment_date || appointment.scheduled_date;
-        
-        // Processing selected appointment data
-        
-        if (dateValue) {
-          try {
-            const dateObj = new Date(dateValue);
-            if (!isNaN(dateObj.getTime())) {
-              consultationDate = dateObj.toISOString().split('T')[0];
-            }
-          } catch (error) {
-            console.warn('Error converting appointment date:', dateValue, error);
-          }
-        }
-        
-        setFormData(prev => ({
-          ...prev,
-          patient_id: appointment.patient_id,
-          appointment_id: appointment.id,
-          consultation_date: consultationDate
-        }));
+      } else if (appointment.patient_name) {
+        // Patient not in limited array, but we have patient_name from appointment
+        // Create a temporary patient object for display
+        const tempPatient: Patient = {
+          id: appointment.patient_id,
+          first_name: appointment.patient_name.split(' ')[0] || 'Paciente',
+          paternal_surname: appointment.patient_name.split(' ')[1] || 'Desconocido',
+          maternal_surname: appointment.patient_name.split(' ')[2] || '',
+          full_name: appointment.patient_name,
+          email: '',
+          primary_phone: '',
+          birth_date: '',
+          gender: '',
+          curp: '',
+          rfc: '',
+          age: 0,
+          created_at: '',
+          total_visits: 0,
+          is_active: true,
+          address: ''
+        };
+        setSelectedPatient(tempPatient);
       }
+      
+      // Handle date conversion safely
+      let consultationDate = '';
+      const dateValue = appointment.date || appointment.appointment_date || appointment.scheduled_date;
+      
+      if (dateValue) {
+        try {
+          const dateObj = new Date(dateValue);
+          if (!isNaN(dateObj.getTime())) {
+            consultationDate = dateObj.toISOString().split('T')[0];
+          }
+        } catch (error) {
+          console.warn('Error converting appointment date:', dateValue, error);
+        }
+      }
+      
+      // Always set the appointment data, even if patient not found in limited patients array
+      setFormData(prev => ({
+        ...prev,
+        patient_id: appointment.patient_id,
+        appointment_id: appointment.id,
+        consultation_date: consultationDate
+      }));
     } else {
       // Clear appointment association
       setFormData(prev => ({
@@ -385,6 +431,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     time: '',
     reason: ''
   });
+  const [followUpAvailableTimes, setFollowUpAvailableTimes] = useState<any[]>([]);
+  const [loadingFollowUpTimes, setLoadingFollowUpTimes] = useState(false);
 
   // Load patient clinical studies when patient is selected
   useEffect(() => {
@@ -521,8 +569,28 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     }
 
     try {
+      console.log('🔄 handleScheduleFollowUp called with data:', {
+        selectedPatient: selectedPatient?.id,
+        followUpFormData,
+        onCreateAppointment: !!onCreateAppointment
+      });
+      
+      // Ensure time format is correct (HH:MM:SS)
+      let timeFormatted = followUpFormData.time;
+      if (timeFormatted && !timeFormatted.includes(':')) {
+        console.warn('Invalid time format:', timeFormatted);
+        setFormErrorMessage('Formato de hora inválido. Selecciona una hora válida.');
+        return;
+      }
+      
+      // Add seconds if not present (HH:MM -> HH:MM:00)
+      if (timeFormatted && timeFormatted.split(':').length === 2) {
+        timeFormatted = `${timeFormatted}:00`;
+      }
+      
       // Combine date and time for the appointment
-      const appointmentDateTime = `${followUpFormData.date}T${followUpFormData.time}`;
+      const appointmentDateTime = `${followUpFormData.date}T${timeFormatted}`;
+      console.log('🔧 Constructed appointmentDateTime:', appointmentDateTime);
       
       // Create appointment data
       const appointmentData = {
@@ -587,6 +655,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         }
       }
       
+      console.log('✅ Follow-up appointment scheduling completed successfully');
       setShowScheduleFollowUp(false);
       setFollowUpFormData({ date: '', time: '', reason: '' });
       
@@ -622,11 +691,42 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     setFollowUpFormData({ date: '', time: '', reason: '' });
   };
 
+  // Function to load available times for follow-up appointments
+  const loadFollowUpAvailableTimes = async (date: string) => {
+    if (!date) return;
+    
+    try {
+      setLoadingFollowUpTimes(true);
+      console.log('🔧 Loading follow-up available times for date:', date);
+      
+      const response = await apiService.getAvailableTimesForBooking(date);
+      console.log('🔧 Follow-up available times response:', response);
+      
+      setFollowUpAvailableTimes(response.available_times || []);
+    } catch (error) {
+      console.error('❌ Error loading follow-up available times:', error);
+      setFollowUpAvailableTimes([]);
+    } finally {
+      setLoadingFollowUpTimes(false);
+    }
+  };
+
   const handleFollowUpFormChange = useCallback((field: string, value: string) => {
     setFollowUpFormData((prev: { date: string; time: string; reason: string }) => ({
       ...prev,
       [field]: value
     }));
+
+    // If date changed, load available times
+    if (field === 'date' && value) {
+      loadFollowUpAvailableTimes(value);
+      // Reset selected time when date changes
+      setFollowUpFormData((prev: { date: string; time: string; reason: string }) => ({
+        ...prev,
+        [field]: value,
+        time: '' // Reset time when date changes
+      }));
+    }
   }, []);
 
   const isStepValid = (step: number) => {
@@ -687,7 +787,14 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 )}
                 renderOption={(props: any, option: any) => {
                   const patient = patients.find(p => p.id === option.patient_id);
-                  const patientName = patient ? formatPatientNameWithAge(patient) : 'Paciente desconocido';
+                  
+                  // Use same logic as formatAppointmentDisplay - prioritize option.patient_name
+                  let patientName = 'Paciente desconocido';
+                  if (option.patient_name) {
+                    patientName = option.patient_name;
+                  } else if (patient) {
+                    patientName = formatPatientNameWithAge(patient);
+                  }
                   
                   // Handle date formatting safely
                   let dateStr = 'Fecha inválida';
@@ -779,8 +886,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                               {dateStr} {timeStr}
                             </Typography>
                             <Chip 
-                              label={option.status === 'confirmed' ? 'Confirmada' : 
-                                     option.status === 'pending' ? 'Pendiente' : option.status} 
+                              label={getStatusLabel(option.status)} 
                               size="small" 
                               color={statusColor}
                               variant="outlined"
@@ -834,7 +940,11 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                       </Typography>
                       <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         🕐 {(() => {
+                          // Try to get time from multiple possible sources
                           const timeValue = selectedAppointment.time || selectedAppointment.appointment_time || selectedAppointment.scheduled_time || selectedAppointment.hour;
+                          const dateValue = selectedAppointment.date || selectedAppointment.appointment_date || selectedAppointment.scheduled_date || selectedAppointment.date_time;
+                          
+                          // First try dedicated time fields
                           if (timeValue) {
                             try {
                               if (typeof timeValue === 'string' && (timeValue.includes('T') || timeValue.includes(' '))) {
@@ -850,9 +960,32 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                                 return timeValue;
                               }
                             } catch (error) {
-                              return 'Sin hora';
+                              console.warn('Error parsing dedicated time field:', error);
                             }
                           }
+                          
+                          // If no dedicated time field, try to extract from date
+                          if (dateValue) {
+                            try {
+                              const dateObj = new Date(dateValue);
+                              if (!isNaN(dateObj.getTime())) {
+                                // Check if the date contains meaningful time information (not just 00:00:00)
+                                const hours = dateObj.getHours();
+                                const minutes = dateObj.getMinutes();
+                                if (hours !== 0 || minutes !== 0) {
+                                  return dateObj.toLocaleTimeString('es-ES', { 
+                                    hour: '2-digit', 
+                                    minute: '2-digit',
+                                    hour12: true 
+                                  });
+                                }
+                              }
+                            } catch (error) {
+                              console.warn('Error extracting time from date:', error);
+                            }
+                          }
+                          
+                          console.warn('Could not extract time from appointment:', { timeValue, dateValue, selectedAppointment });
                           return 'Sin hora';
                         })()}
                       </Typography>
@@ -1214,6 +1347,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   <DatePicker
                     label="Fecha de Consulta"
                     value={formData.date && formData.date.includes('T') ? new Date(formData.date.split('T')[0]) : null}
+                    minDate={new Date()}
                     onChange={(newValue) => {
                       if (newValue) {
                         const dateValue = newValue.toISOString().split('T')[0];
@@ -1237,9 +1371,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                     }}
                   />
                 </LocalizationProvider>
-                  error={!!fieldErrors?.date}
-                  helperText={fieldErrors?.date}
-                />
               </Box>
               <Box sx={{ flex: 1 }}>
                 <TextField
@@ -1636,24 +1767,64 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                       
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-                          <TextField
-                            label="Fecha de Seguimiento"
-                            type="date"
-                            value={followUpFormData.date}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleFollowUpFormChange('date', e.target.value)}
-                            InputLabelProps={{ shrink: true }}
-                            fullWidth
-                            helperText="Fecha recomendada para revisar resultados"
-                          />
-                          <TextField
-                            label="Hora"
-                            type="time"
-                            value={followUpFormData.time}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleFollowUpFormChange('time', e.target.value)}
-                            InputLabelProps={{ shrink: true }}
-                            fullWidth
-                            helperText="Hora preferida"
-                          />
+                          <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
+                            <DatePicker
+                              label="Fecha de Seguimiento"
+                              value={followUpFormData.date ? new Date(followUpFormData.date) : null}
+                              minDate={new Date()}
+                              onChange={(newValue) => {
+                                const dateStr = newValue ? newValue.toISOString().split('T')[0] : '';
+                                handleFollowUpFormChange('date', dateStr);
+                              }}
+                              slotProps={{
+                                textField: {
+                                  fullWidth: true,
+                                  helperText: "Fecha recomendada para revisar resultados"
+                                }
+                              }}
+                            />
+                          </LocalizationProvider>
+                          <Box>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <ScheduleIcon sx={{ fontSize: 20 }} />
+                              Hora Disponible
+                              {loadingFollowUpTimes && <CircularProgress size={16} />}
+                            </Typography>
+                            <FormControl fullWidth size="small">
+                              <InputLabel>Seleccionar horario</InputLabel>
+                              <Select
+                                value={followUpFormData.time}
+                                onChange={(e) => handleFollowUpFormChange('time', e.target.value)}
+                                label="Seleccionar horario"
+                                disabled={!followUpFormData.date || loadingFollowUpTimes || followUpAvailableTimes.length === 0}
+                              >
+                                {followUpAvailableTimes.map((timeSlot) => (
+                                  <MenuItem key={timeSlot.time} value={timeSlot.time}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                      <ScheduleIcon sx={{ fontSize: 16, color: 'primary.main' }} />
+                                      <Typography>{timeSlot.display}</Typography>
+                                      <Chip 
+                                        label={`${timeSlot.duration_minutes} min`} 
+                                        size="small" 
+                                        variant="outlined" 
+                                        color="primary"
+                                      />
+                                    </Box>
+                                  </MenuItem>
+                                ))}
+                                {followUpAvailableTimes.length === 0 && !loadingFollowUpTimes && followUpFormData.date && (
+                                  <MenuItem disabled>
+                                    <Typography color="text.secondary">No hay horarios disponibles</Typography>
+                                  </MenuItem>
+                                )}
+                              </Select>
+                              {!followUpFormData.date && (
+                                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                                  Selecciona una fecha para ver horarios disponibles
+                                </Typography>
+                              )}
+                            </FormControl>
+                          </Box>
                         </Box>
                         
                         <TextField

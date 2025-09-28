@@ -27,7 +27,7 @@ export interface UseAppointmentManagerReturn {
   // Actions
   handleNewAppointment: () => void;
   handleEditAppointment: (appointment: Appointment) => void;
-  handleAppointmentSubmit: () => Promise<void>;
+  handleAppointmentSubmit: (submittedFormData?: any) => Promise<void>;
   createAppointmentDirect: (appointmentData: any) => Promise<any>;
   handleCancelAppointment: () => void;
   
@@ -192,7 +192,7 @@ export const useAppointmentManager = (
       patient_id: '',
       doctor_id: '',
       date_time: currentDateTime, // Current CDMX time
-      appointment_type: 'consultation',
+      appointment_type: '', // Empty by default - user must select
       reason: '',
       notes: '',
       status: 'scheduled',
@@ -321,16 +321,23 @@ export const useAppointmentManager = (
   }, [user, doctorProfile, selectedDate, agendaView, setAppointments]);
 
   // Handle appointment submit
-  const handleAppointmentSubmit = useCallback(async () => {
+  const handleAppointmentSubmit = useCallback(async (submittedFormData?: any) => {
+    console.log('🔄 useAppointmentManager - handleAppointmentSubmit called');
+    console.log('🔄 useAppointmentManager - submittedFormData:', submittedFormData);
+    
     setIsSubmitting(true);
     setFieldErrors({});
     setFormErrorMessage('');
+
+    // Use submitted form data if provided, otherwise use hook's state
+    const formDataToUse = submittedFormData || appointmentFormData;
+    console.log('🔄 useAppointmentManager - formDataToUse:', formDataToUse);
 
     try {
       if (isEditingAppointment && selectedAppointment) {
         // Update existing appointment - now using CDMX native
         // Parse datetime-local input manually to avoid timezone issues
-        const appointmentDate = new Date(appointmentFormData.date_time);
+        const appointmentDate = new Date(formDataToUse.date_time);
         // Get doctor's appointment duration
         const doctorDuration = user?.doctor?.appointment_duration || doctorProfile?.appointment_duration || 30;
         const endTime = new Date(appointmentDate.getTime() + doctorDuration * 60000);
@@ -339,17 +346,17 @@ export const useAppointmentManager = (
         const updateData = {
           appointment_date: appointmentDate.toISOString(),
           end_time: endTime.toISOString(),
-          appointment_type: appointmentFormData.appointment_type || 'consultation',
-          status: appointmentFormData.status || 'scheduled',
-          priority: appointmentFormData.priority || 'normal',
-          reason: appointmentFormData.reason || '',
-          notes: appointmentFormData.notes || '',
-          preparation_instructions: appointmentFormData.preparation_instructions || undefined,
-          follow_up_required: appointmentFormData.confirmation_required || false,
-          room_number: appointmentFormData.room_number || undefined,
-          estimated_cost: appointmentFormData.estimated_cost ? 
-            parseFloat(appointmentFormData.estimated_cost) : undefined,
-          insurance_covered: appointmentFormData.insurance_covered || false
+          appointment_type: formDataToUse.appointment_type || 'consultation',
+          status: formDataToUse.status || 'scheduled',
+          priority: formDataToUse.priority || 'normal',
+          reason: formDataToUse.reason || '',
+          notes: formDataToUse.notes || '',
+          preparation_instructions: formDataToUse.preparation_instructions || undefined,
+          follow_up_required: formDataToUse.confirmation_required || false,
+          room_number: formDataToUse.room_number || undefined,
+          estimated_cost: formDataToUse.estimated_cost ? 
+            parseFloat(formDataToUse.estimated_cost) : undefined,
+          insurance_covered: formDataToUse.insurance_covered || false
         };
         
         console.log('🔄 Updating appointment:', selectedAppointment.id, 'with CDMX native data');
@@ -432,24 +439,24 @@ export const useAppointmentManager = (
         showSuccessMessage('Cita actualizada exitosamente');
       } else {
         // Transform form data to backend format - now using CDMX native
-        console.log('🔄 useAppointmentManager - Current appointmentFormData:', appointmentFormData);
-        console.log('🔄 useAppointmentManager - appointmentFormData.date_time:', appointmentFormData.date_time);
-        console.log('🔄 useAppointmentManager - typeof date_time:', typeof appointmentFormData.date_time);
+        console.log('🔄 useAppointmentManager - Current formDataToUse:', formDataToUse);
+        console.log('🔄 useAppointmentManager - formDataToUse.date_time:', formDataToUse.date_time);
+        console.log('🔄 useAppointmentManager - typeof date_time:', typeof formDataToUse.date_time);
         
-        const dateTimeStr = appointmentFormData.date_time.includes(':') && !appointmentFormData.date_time.includes(':00') 
-          ? `${appointmentFormData.date_time}:00` 
-          : appointmentFormData.date_time;
+        const dateTimeStr = formDataToUse.date_time.includes(':') && !formDataToUse.date_time.includes(':00') 
+          ? `${formDataToUse.date_time}:00` 
+          : formDataToUse.date_time;
         console.log('🔄 useAppointmentManager - Final dateTimeStr:', dateTimeStr);
         
         const appointmentDate = new Date(dateTimeStr);
         
         if (isNaN(appointmentDate.getTime())) {
           console.error('🔄 useAppointmentManager - Failed to parse date:', { 
-            original: appointmentFormData.date_time, 
+            original: formDataToUse.date_time, 
             processed: dateTimeStr,
-            formData: appointmentFormData 
+            formData: formDataToUse 
           });
-          throw new Error(`Invalid date format: ${appointmentFormData.date_time}`);
+          throw new Error(`Invalid date format: ${formDataToUse.date_time}`);
         }
         
         // Get doctor's appointment duration
@@ -457,21 +464,21 @@ export const useAppointmentManager = (
         const endTime = new Date(appointmentDate.getTime() + doctorDuration * 60000);
 
         const appointmentData = {
-          patient_id: appointmentFormData.patient_id,
+          patient_id: formDataToUse.patient_id,
           doctor_id: user?.doctor?.id || doctorProfile?.id || 0, // Use current logged-in doctor
           appointment_date: appointmentDate.toISOString(),
           end_time: endTime.toISOString(),
-          appointment_type: appointmentFormData.appointment_type || 'consultation',
-          status: appointmentFormData.status || 'scheduled',
-          priority: appointmentFormData.priority || 'normal',
-          reason: appointmentFormData.reason || '',
-          notes: appointmentFormData.notes || '',
-          preparation_instructions: appointmentFormData.preparation_instructions || undefined,
-          follow_up_required: appointmentFormData.confirmation_required || false,
-          room_number: appointmentFormData.room_number || undefined,
-          estimated_cost: appointmentFormData.estimated_cost ? 
-            parseFloat(appointmentFormData.estimated_cost) : undefined,
-          insurance_covered: appointmentFormData.insurance_covered || false
+          appointment_type: formDataToUse.appointment_type || 'consultation',
+          status: formDataToUse.status || 'scheduled',
+          priority: formDataToUse.priority || 'normal',
+          reason: formDataToUse.reason || '',
+          notes: formDataToUse.notes || '',
+          preparation_instructions: formDataToUse.preparation_instructions || undefined,
+          follow_up_required: formDataToUse.confirmation_required || false,
+          room_number: formDataToUse.room_number || undefined,
+          estimated_cost: formDataToUse.estimated_cost ? 
+            parseFloat(formDataToUse.estimated_cost) : undefined,
+          insurance_covered: formDataToUse.insurance_covered || false
         };
         
         console.log('🔍 Creating appointment with CDMX native data');
