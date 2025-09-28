@@ -19,6 +19,7 @@ import {
 } from '@mui/icons-material';
 import { DashboardData } from '../../types';
 import { getAppointmentDate, formatAppointmentTimeRange, getAppointmentTypeLabel } from '../../constants';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface DashboardViewProps {
   dashboardData: DashboardData | null;
@@ -35,6 +36,20 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   onNewAppointment, 
   onNewConsultation 
 }) => {
+  const { user } = useAuth();
+  
+  // Generate personalized greeting
+  const getPersonalizedGreeting = () => {
+    if (!user?.doctor) {
+      return 'Hola, Doctor';
+    }
+    
+    const { title, first_name, paternal_surname, maternal_surname } = user.doctor;
+    const fullName = [first_name, paternal_surname, maternal_surname].filter(Boolean).join(' ');
+    
+    return `Hola, ${title} ${fullName}`;
+  };
+  
   // Calculate today's appointments dynamically
   const today = new Date().toDateString();
   const todayAppointmentsFiltered = appointments.filter(apt => {
@@ -79,7 +94,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
       {/* Welcome Header */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" sx={{ mb: 1, fontWeight: 600 }}>
-          Buenos días, {dashboardData?.physician || 'Dr. García'}
+          {getPersonalizedGreeting()}
         </Typography>
         <Typography variant="body1" color="text.secondary">
           Aquí tienes un resumen de tu día y métricas de eficiencia.
