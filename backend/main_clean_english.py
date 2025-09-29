@@ -460,8 +460,30 @@ async def register_doctor(
             db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
+                detail="El email ya está registrado en el sistema"
             )
+        
+        # Check if CURP already exists
+        if doctor_data.curp:
+            existing_curp = db.query(Person).filter(Person.curp == doctor_data.curp).first()
+            if existing_curp:
+                db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="El CURP ya está registrado en el sistema"
+                )
+        
+        # Check if professional license already exists
+        if doctor_data.professional_license:
+            existing_license = db.query(Person).filter(
+                Person.professional_license == doctor_data.professional_license
+            ).first()
+            if existing_license:
+                db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="La cédula profesional ya está registrada en el sistema"
+                )
         
         # Create doctor
         doctor = crud.create_doctor_safe(db, doctor_data)
@@ -488,10 +510,30 @@ async def register_doctor(
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Registration error: {str(e)}"
-        )
+        error_str = str(e).lower()
+        
+        # Handle specific database constraint violations
+        if "unique constraint" in error_str:
+            if "email" in error_str:
+                detail = "El email ya está registrado en el sistema"
+            elif "curp" in error_str:
+                detail = "El CURP ya está registrado en el sistema"
+            elif "professional_license" in error_str:
+                detail = "La cédula profesional ya está registrada en el sistema"
+            elif "username" in error_str:
+                detail = "El nombre de usuario ya está registrado en el sistema"
+            else:
+                detail = "Ya existe un registro con esos datos en el sistema"
+            
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=detail
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error interno del servidor. Por favor, intente nuevamente."
+            )
 
 @app.post("/api/auth/login")
 async def login(

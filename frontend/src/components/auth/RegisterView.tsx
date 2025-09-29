@@ -335,7 +335,22 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
 
     } catch (error: any) {
       console.error('Registration error:', error);
-      setError(error.message || 'Error durante el registro. Intenta nuevamente.');
+      
+      // Extract specific error message from API response
+      let errorMessage = 'Error durante el registro. Intenta nuevamente.';
+      
+      if (error.response?.data?.detail) {
+        // Use the specific error message from the backend
+        errorMessage = error.response.data.detail;
+      } else if (error.response?.status === 400) {
+        errorMessage = 'Los datos proporcionados no son válidos. Por favor, revise la información.';
+      } else if (error.response?.status === 500) {
+        errorMessage = 'Error interno del servidor. Por favor, intente nuevamente más tarde.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
