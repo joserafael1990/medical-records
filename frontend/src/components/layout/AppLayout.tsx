@@ -21,47 +21,35 @@ import {
 import { MainNavigation } from './MainNavigation';
 import { UserProfileMenu } from './UserProfileMenu';
 import { ViewRenderer } from './ViewRenderer';
+import { useDoctorProfile } from '../../hooks/useDoctorProfile';
+import { useAppState } from '../../hooks/useAppState';
+import { usePatientManagement } from '../../hooks/usePatientManagement';
+import { useConsultationManagement } from '../../hooks/useConsultationManagement';
+import { useAppointmentManager } from '../../hooks/useAppointmentManager';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Use Twitter-inspired theme
 const theme = twitterTheme;
 
 interface AppLayoutProps {
-  activeView: string;
-  onViewChange: (view: string) => void;
-  dashboardData: any;
-  onRefreshDashboard: () => void;
-  patientManagement: any;
-  consultationManagement: any;
-  appointmentManager: any;
-  medicalRecordsData: any;
-  onRefreshRecords: () => void;
-  doctorProfile: any;
-  onSaveProfile: (profile: any) => void;
-  onLogout: () => void;
-  user: any;
-  isLoading: boolean;
-  doctorProfileHook: any;
+  // Opcional: se puede pasar onLogout desde AuthContext
+  onLogout?: () => void;
 }
 
 export const AppLayout: React.FC<AppLayoutProps> = ({
-  activeView,
-  onViewChange,
-  dashboardData,
-  onRefreshDashboard,
-  patientManagement,
-  consultationManagement,
-  appointmentManager,
-  medicalRecordsData,
-  onRefreshRecords,
-  doctorProfile: doctorProfileFromProps,
-  onSaveProfile,
-  onLogout,
-  user,
-  isLoading,
-  doctorProfileHook
+  onLogout
 }) => {
-  // Use the hook passed from App.tsx instead of creating a new instance
-  const { doctorProfile } = doctorProfileHook;
+  // Initialize all hooks internally
+  const { user } = useAuth();
+  const appState = useAppState();
+  const doctorProfileHook = useDoctorProfile();
+  const patientManagement = usePatientManagement();
+  const consultationManagement = useConsultationManagement();
+  const appointmentManager = useAppointmentManager(patientManagement.patients, doctorProfileHook.doctorProfile);
+  
+  // Extract values from hooks
+  const { activeView, setActiveView: onViewChange } = appState;
+  const { doctorProfile, isLoading } = doctorProfileHook;
   const [userMenuAnchorEl, setUserMenuAnchorEl] = useState<null | HTMLElement>(null);
 
   const handleUserMenuClick = (event: React.MouseEvent<HTMLElement>) => {
@@ -153,15 +141,15 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           {/* Main Content Area */}
           <ViewRenderer
             activeView={activeView}
-            dashboardData={dashboardData}
-            onRefreshDashboard={onRefreshDashboard}
+            dashboardData={{}} // TODO: Implementar dashboard data
+            onRefreshDashboard={() => {}} // TODO: Implementar refresh dashboard
             patientManagement={patientManagement}
             consultationManagement={consultationManagement}
             appointmentManager={appointmentManager}
-            medicalRecordsData={medicalRecordsData}
-            onRefreshRecords={onRefreshRecords}
+            medicalRecordsData={{}} // TODO: Implementar medical records data
+            onRefreshRecords={() => {}} // TODO: Implementar refresh records
             doctorProfile={doctorProfile}
-            onSaveProfile={onSaveProfile}
+            onSaveProfile={doctorProfileHook.handleSubmit}
             doctorProfileHook={doctorProfileHook}
           />
         </Box>

@@ -308,7 +308,22 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                     onClick={() => onEdit()}
                     sx={{ 
                       borderRadius: '8px',
-                      fontSize: '0.75rem'
+                      fontSize: '0.75rem',
+                      fontWeight: 500,
+                      textTransform: 'none',
+                      px: 2,
+                      py: 0.5,
+                      border: '1.5px solid',
+                      borderColor: 'warning.main',
+                      color: 'warning.main',
+                      '&:hover': {
+                        backgroundColor: 'warning.main',
+                        color: 'white',
+                        borderColor: 'warning.main',
+                        transform: 'translateY(-1px)',
+                        boxShadow: 1
+                      },
+                      transition: 'all 0.2s ease-in-out'
                     }}
                   >
                     Completar
@@ -477,7 +492,24 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                       setDigitalSignatureMode('info');
                       setDigitalSignatureDialogOpen(true);
                     }}
-                    sx={{ ml: 1 }}
+                    sx={{ 
+                      ml: 1,
+                      minWidth: '120px',
+                      borderRadius: '8px',
+                      fontWeight: 500,
+                      textTransform: 'none',
+                      px: 2,
+                      py: 0.75,
+                      border: '1.5px solid',
+                      '&:hover': {
+                        backgroundColor: 'primary.main',
+                        color: 'white',
+                        borderColor: 'primary.main',
+                        transform: 'translateY(-1px)',
+                        boxShadow: 2
+                      },
+                      transition: 'all 0.2s ease-in-out'
+                    }}
                   >
                     Ver Certificado
                   </Button>
@@ -498,7 +530,22 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                       setDigitalSignatureMode('generate');
                       setDigitalSignatureDialogOpen(true);
                     }}
-                    sx={{ ml: 1 }}
+                    sx={{ 
+                      ml: 1,
+                      minWidth: '120px',
+                      borderRadius: '8px',
+                      fontWeight: 500,
+                      textTransform: 'none',
+                      px: 2,
+                      py: 0.75,
+                      backgroundColor: 'secondary.main',
+                      '&:hover': {
+                        backgroundColor: 'secondary.dark',
+                        transform: 'translateY(-1px)',
+                        boxShadow: 4
+                      },
+                      transition: 'all 0.2s ease-in-out'
+                    }}
                   >
                     Generar
                   </Button>
@@ -528,7 +575,26 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                       setScheduleConfigDialogOpen(true);
                       console.log('🔧 setScheduleConfigDialogOpen(true) called');
                     }}
-                    sx={{ ml: 1 }}
+                    sx={{ 
+                      ml: 1,
+                      minWidth: '120px',
+                      borderRadius: '8px',
+                      fontWeight: 500,
+                      textTransform: 'none',
+                      px: 2,
+                      py: 0.75,
+                      border: '1.5px solid',
+                      borderColor: 'primary.main',
+                      color: 'primary.main',
+                      '&:hover': {
+                        backgroundColor: 'primary.main',
+                        color: 'white',
+                        borderColor: 'primary.main',
+                        transform: 'translateY(-1px)',
+                        boxShadow: 2
+                      },
+                      transition: 'all 0.2s ease-in-out'
+                    }}
                   >
                     Configurar
                   </Button>
@@ -857,3 +923,4 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
 };
 
 export default memo(DoctorProfileView);
+

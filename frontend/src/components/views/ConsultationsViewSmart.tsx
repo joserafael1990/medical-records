@@ -1,226 +1,245 @@
-import React, { memo, useMemo } from 'react';
+import React from 'react';
 import {
   Box,
   Typography,
+  Card,
+  CardContent,
+  Grid,
   Button,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   Paper,
-  Fade
+  Chip,
+  IconButton
 } from '@mui/material';
 import {
-  Add as AddIcon
+  Add as AddIcon,
+  Edit as EditIcon,
+  Visibility as ViewIcon,
+  LocalHospital as HospitalIcon,
+  Person as PersonIcon
 } from '@mui/icons-material';
-import { Patient, Consultation, Appointment } from '../../types';
-import { ErrorRibbon } from '../common/ErrorRibbon';
-import { IntelligentSearch, useIntelligentSearch } from '../common/IntelligentSearch';
-import { SmartTable } from '../common/SmartTable';
-import { useMedicalTableColumns } from '../../hooks/useMedicalTableColumns';
-import { calculateAge } from '../../utils';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 interface ConsultationsViewSmartProps {
-  consultations: Consultation[];
-  patients: Patient[];
-  appointments: Appointment[];
-  successMessage: string;
-  setSuccessMessage: (message: string) => void;
-  handleNewConsultation: () => void;
-  handleEditConsultation: (consultation: Consultation) => void;
-  isLoading?: boolean;
+  consultations?: any[];
+  patients?: any[];
+  appointments?: any[];
+  successMessage?: string;
+  setSuccessMessage?: (message: string) => void;
+  handleNewConsultation?: () => void;
+  handleEditConsultation?: (consultation: any) => void;
 }
 
-/**
- * Vista mejorada de consultas usando SmartTable con ordenamiento inteligente
- */
 const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
-  consultations,
-  patients,
-  appointments,
+  consultations = [],
+  patients = [],
+  appointments = [],
   successMessage,
   setSuccessMessage,
   handleNewConsultation,
-  handleEditConsultation,
-  isLoading = false
+  handleEditConsultation
 }) => {
-  // Hook de búsqueda inteligente
-  const {
-    searchTerm,
-    setSearchTerm,
-    debouncedSearchTerm,
-    filters,
-    addFilter,
-    removeFilter,
-    clearAllFilters
-  } = useIntelligentSearch();
+  const getConsultationTypeLabel = (type: string) => {
+    switch (type) {
+      case 'primera-vez':
+        return 'Primera Vez';
+      case 'seguimiento':
+        return 'Seguimiento';
+      case 'urgencia':
+        return 'Urgencia';
+      default:
+        return type;
+    }
+  };
 
-  // Configuración de columnas
-  const { consultationColumns } = useMedicalTableColumns();
+  const getConsultationTypeColor = (type: string) => {
+    switch (type) {
+      case 'primera-vez':
+        return 'primary';
+      case 'seguimiento':
+        return 'success';
+      case 'urgencia':
+        return 'error';
+      default:
+        return 'default';
+    }
+  };
 
-  // Filtrado de consultas con búsqueda inteligente
-  const filteredConsultations = useMemo(() => {
-    if (!debouncedSearchTerm.trim()) return consultations;
-
-    const searchLower = debouncedSearchTerm.toLowerCase();
-    return consultations.filter(consultation => {
-      // Buscar información del paciente asociado
-      const patient = patients.find(p => p.id === consultation.patient_id);
-      
-      const searchableFields = [
-        consultation.id,
-        consultation.chief_complaint,
-        consultation.primary_diagnosis,
-        consultation.treatment_plan,
-        consultation.prognosis,
-        patient?.full_name,
-        patient?.first_name,
-        patient?.paternal_surname,
-        patient?.maternal_surname,
-        patient?.primary_phone,
-        patient?.email
-      ].filter(Boolean);
-
-      return searchableFields.some(field => 
-        field?.toString().toLowerCase().includes(searchLower)
-      );
-    });
-  }, [consultations, patients, debouncedSearchTerm]);
-
-  // Enriquecer datos de consultas con información de pacientes
-  const enrichedConsultations = useMemo(() => {
-    return filteredConsultations.map(consultation => {
-      const patient = patients.find(p => p.id === consultation.patient_id);
-      
-      return {
-        ...consultation,
-        patient_name: patient?.full_name || consultation.patient_name || 'Paciente No Identificado',
-        patient_phone: patient?.primary_phone,
-        patient_email: patient?.email,
-        patient_age: patient?.birth_date ? calculateAge(patient.birth_date) : undefined,
-        status: 'Programada'
-      };
-    });
-  }, [filteredConsultations, patients]);
-
-  // Filtros disponibles
-  const availableFilters = [
-    { key: 'today', label: 'Hoy', value: 'hoy', color: 'primary' as const },
-    { key: 'pending', label: 'Pendientes', value: 'Programada', color: 'warning' as const },
-    { key: 'completed', label: 'Completadas', value: 'Completada', color: 'success' as const },
-    { key: 'urgent', label: 'Urgentes', value: 'urgente', color: 'error' as const }
-  ];
-
-  // Estadísticas
-  const stats = useMemo(() => {
-    const today = new Date().toDateString();
-    const todayConsultations = consultations.filter(c => 
-      new Date(c.date).toDateString() === today
-    );
-    
-    // Citas agendadas para hoy (pendientes)
-    const todayAppointments = appointments.filter(apt => {
-      if (!apt.date_time) return false;
-      const aptDate = new Date(apt.date_time);
-      return aptDate.toDateString() === today && 
-             (apt.status === 'scheduled' || apt.status === 'confirmed' || !apt.status);
-    });
-    
-    return {
-      total: consultations.length,
-      today: todayConsultations.length,
-      pending: todayAppointments.length, // Citas agendadas para hoy
-      completed: consultations.length - todayConsultations.length // Consultas completadas (excluyendo las de hoy)
-    };
-  }, [consultations, appointments]);
+  const totalConsultations = consultations.length;
+  const todayConsultations = consultations.filter(consultation => {
+    const consultationDate = new Date(consultation.date);
+    const today = new Date();
+    return consultationDate.toDateString() === today.toDateString();
+  });
 
   return (
-    <Box sx={{ p: 3, maxWidth: 1400, mx: 'auto' }}>
-      {/* Error Message */}
-      {successMessage && (
-        <ErrorRibbon
-          message={successMessage}
-          severity="success"
-          onClose={() => setSuccessMessage('')}
-          sx={{ mb: 3 }}
-        />
-      )}
-
+    <Box sx={{ p: 3 }}>
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 600, mb: 1 }}>
-            Consultas Médicas
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            Gestiona las consultas médicas de manera inteligente
-          </Typography>
-        </Box>
+        <Typography variant="h4" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <HospitalIcon />
+          Consultas Médicas
+        </Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={handleNewConsultation}
-          sx={{ 
-            borderRadius: '12px',
-            px: 3,
-            py: 1.5,
-            fontWeight: 600,
-            textTransform: 'none'
-          }}
+          sx={{ borderRadius: 2 }}
         >
           Nueva Consulta
         </Button>
       </Box>
 
-      {/* Stats Cards */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2, mb: 3 }}>
-        {[
-          { label: 'Total Consultas', value: stats.total, color: 'primary' },
-          { label: 'Hoy', value: stats.today, color: 'info' },
-          { label: 'Pendientes', value: stats.pending, color: 'warning' },
-          { label: 'Completadas', value: stats.completed, color: 'success' }
-        ].map((stat, index) => (
-          <Paper
-            key={index}
-            sx={{
-              p: 2,
-              textAlign: 'center',
-              borderRadius: '16px',
-              border: '1px solid',
-              borderColor: 'divider'
-            }}
-          >
-            <Typography variant="h4" sx={{ fontWeight: 700, color: `${stat.color}.main` }}>
-              {stat.value}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {stat.label}
-            </Typography>
-          </Paper>
-        ))}
+      {/* Statistics Cards */}
+      <Box sx={{ display: 'flex', gap: 3, mb: 3, flexWrap: 'wrap' }}>
+        <Box sx={{ flex: 1, minWidth: 200 }}>
+          <Card sx={{ boxShadow: 1 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Total Consultas
+              </Typography>
+              <Typography variant="h3" color="primary">
+                {totalConsultations}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 200 }}>
+          <Card sx={{ boxShadow: 1 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Consultas Hoy
+              </Typography>
+              <Typography variant="h3" color="success.main">
+                {todayConsultations.length}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 200 }}>
+          <Card sx={{ boxShadow: 1 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Pacientes Atendidos
+              </Typography>
+              <Typography variant="h3" color="secondary.main">
+                {patients.length}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Box>
       </Box>
 
-      {/* Search and Filters */}
-      <Paper sx={{ p: 3, borderRadius: '16px', mb: 3 }}>
-        <IntelligentSearch
-          searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
-          placeholder="Buscar consultas por paciente, motivo, diagnóstico..."
-          filters={filters}
-          onFilterRemove={removeFilter}
-        />
-      </Paper>
-
-      {/* Smart Table */}
-      <Fade in={true} timeout={800}>
-        <Paper sx={{ borderRadius: '16px', overflow: 'hidden' }}>
-          <SmartTable
-            data={enrichedConsultations}
-            columns={consultationColumns}
-            onRowClick={handleEditConsultation}
-            isLoading={isLoading}
-            emptyMessage="No se encontraron consultas"
-          />
-        </Paper>
-      </Fade>
+      {/* Consultations Table */}
+      <Card sx={{ boxShadow: 1 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            Historial de Consultas
+          </Typography>
+          
+          {consultations.length === 0 ? (
+            <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'grey.50' }}>
+              <Typography variant="body1" color="text.secondary">
+                No hay consultas registradas
+              </Typography>
+              <Button
+                variant="outlined"
+                startIcon={<AddIcon />}
+                onClick={handleNewConsultation}
+                sx={{ mt: 2 }}
+              >
+                Registrar Primera Consulta
+              </Button>
+            </Paper>
+          ) : (
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Paciente</TableCell>
+                    <TableCell>Fecha</TableCell>
+                    <TableCell>Tipo</TableCell>
+                    <TableCell>Diagnóstico</TableCell>
+                    <TableCell>Acciones</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {consultations.map((consultation, index) => (
+                    <TableRow
+                      key={consultation.id || index}
+                      sx={{
+                        '&:hover': {
+                          backgroundColor: 'grey.50'
+                        }
+                      }}
+                    >
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <PersonIcon color="action" />
+                          <Box>
+                            <Typography variant="subtitle2">
+                              {consultation.patient?.first_name} {consultation.patient?.last_name}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              ID: {consultation.patient?.id}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {consultation.date ? format(new Date(consultation.date), 'dd/MM/yyyy HH:mm') : 'N/A'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={getConsultationTypeLabel(consultation.consultation_type || 'seguimiento')}
+                          color={getConsultationTypeColor(consultation.consultation_type || 'seguimiento') as any}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {consultation.diagnosis || 'Sin diagnóstico registrado'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => {
+                              // Lógica para ver detalles
+                              console.log('Ver consulta:', consultation.id);
+                            }}
+                          >
+                            <ViewIcon />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            color="secondary"
+                            onClick={() => handleEditConsultation?.(consultation)}
+                          >
+                            <EditIcon />
+                          </IconButton>
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </CardContent>
+      </Card>
     </Box>
   );
 };
 
-export default memo(ConsultationsViewSmart);
+export default ConsultationsViewSmart;

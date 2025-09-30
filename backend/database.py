@@ -271,7 +271,7 @@ class Appointment(Base):
     
     # DETAILS
     appointment_type = Column(String(50), nullable=False, default='consultation')
-    status = Column(String(20), default='scheduled')
+    status = Column(String(20), default='confirmed')
     priority = Column(String(20), default='normal')
     
     # CLINICAL INFORMATION

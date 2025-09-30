@@ -26,6 +26,10 @@ import {
   Chip,
   Avatar
 } from '@mui/material';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { es } from 'date-fns/locale';
 import {
   Close as CloseIcon,
   Person as PersonIcon,
@@ -402,17 +406,27 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
                   <MenuItem value="O">Otro</MenuItem>
                 </Select>
               </FormControl>
-              <TextField
-                label="Fecha de Nacimiento"
-                type="date"
-                value={formData.birth_date ? formData.birth_date.split('T')[0] : ''}
-                onChange={(e) => setFormData(prev => ({ ...prev, birth_date: e.target.value }))}
-                fullWidth
-                required
-                InputLabelProps={{ shrink: true }}
-                error={!!fieldErrors.birth_date}
-                helperText={fieldErrors.birth_date}
-              />
+              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
+                <DatePicker
+                  label="Fecha de Nacimiento *"
+                  value={formData.birth_date ? new Date(formData.birth_date.split('T')[0]) : null}
+                  maxDate={new Date()}
+                  onChange={(newValue) => {
+                    if (newValue) {
+                      const dateValue = newValue.toISOString().split('T')[0];
+                      setFormData(prev => ({ ...prev, birth_date: dateValue }));
+                    } else {
+                      setFormData(prev => ({ ...prev, birth_date: '' }));
+                    }
+                  }}
+                  slotProps={{
+                    textField: {
+                      fullWidth: true,
+                      required: true
+                    }
+                  }}
+                />
+              </LocalizationProvider>
             </Box>
 
             <Divider sx={{ my: 2 }} />

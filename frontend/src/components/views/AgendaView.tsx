@@ -1,866 +1,276 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   Box,
   Typography,
-  Button,
-  Paper,
   Card,
+  CardContent,
+  Grid,
+  Button,
   Chip,
   IconButton,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Tooltip
+  Paper,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction
 } from '@mui/material';
 import {
   Add as AddIcon,
-  CalendarToday as CalendarIcon,
-  AccessTime as TimeIcon,
   Edit as EditIcon,
-  NavigateBefore as PrevIcon,
-  NavigateNext as NextIcon,
+  Cancel as CancelIcon,
   Today as TodayIcon,
-  ExpandMore as ExpandMoreIcon,
-  Person as PersonIcon,
-  EventNote as EventNoteIcon,
-  Check as ConfirmIcon,
-  Cancel as CancelIcon
+  CalendarMonth as CalendarIcon,
+  AccessTime as TimeIcon
 } from '@mui/icons-material';
-import { Appointment } from '../../types';
-import { getStatusLabel, getAppointmentTypeLabel, formatAppointmentTime, formatAppointmentTimeRange, getAppointmentDate } from '../../constants';
-import { apiService } from '../../services/api';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 interface AgendaViewProps {
-  appointments: Appointment[];
-  selectedDate: Date;
-  setSelectedDate: (date: Date) => void;
-  agendaView: 'daily' | 'weekly' | 'monthly';
-  setAgendaView: (view: 'daily' | 'weekly' | 'monthly') => void;
-  handleNewAppointment: () => void;
-  handleEditAppointment: (appointment: Appointment) => void;
+  appointments?: any[];
+  selectedDate?: Date;
+  setSelectedDate?: (date: Date) => void;
+  agendaView?: 'daily' | 'weekly' | 'monthly';
+  setAgendaView?: (view: 'daily' | 'weekly' | 'monthly') => void;
+  handleNewAppointment?: () => void;
+  handleEditAppointment?: (appointment: any) => void;
+  refreshAppointments?: () => void;
 }
 
 const AgendaView: React.FC<AgendaViewProps> = ({
-  appointments,
-  selectedDate,
+  appointments = [],
+  selectedDate = new Date(),
   setSelectedDate,
-  agendaView,
+  agendaView = 'daily',
   setAgendaView,
   handleNewAppointment,
-  handleEditAppointment
+  handleEditAppointment,
+  refreshAppointments
 }) => {
-  // DEBUG: Log agenda state
-  console.log('📅 AGENDA VIEW STATE:', {
-    total_appointments: appointments.length,
-    selected_date: selectedDate.toDateString(),
-    today_date: new Date().toDateString(),
-    is_today_selected: selectedDate.toDateString() === new Date().toDateString(),
-    agenda_view: agendaView
+  const todayAppointments = appointments.filter(apt => {
+    const aptDate = new Date(apt.date_time);
+    return aptDate.toDateString() === selectedDate.toDateString();
   });
-  const [expandedAccordion, setExpandedAccordion] = useState<string | false>(false);
-  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
 
-  // Handle appointment status changes
-  const handleConfirmAppointment = async (appointmentId: string) => {
-    try {
-      setUpdatingStatus(appointmentId);
-      await apiService.updateAppointment(appointmentId, { status: 'confirmed' });
-      // Reload appointments by triggering a refresh in the parent component
-      window.location.reload(); // Temporary solution - ideally should update state
-    } catch (error) {
-      console.error('Error confirming appointment:', error);
-      alert('Error al confirmar la cita. Intenta nuevamente.');
-    } finally {
-      setUpdatingStatus(null);
-    }
-  };
-
-  const handleCancelAppointment = async (appointmentId: string) => {
-    if (!window.confirm('¿Estás seguro de que deseas cancelar esta cita?')) {
-      return;
-    }
-    
-    try {
-      setUpdatingStatus(appointmentId);
-      await apiService.updateAppointment(appointmentId, { status: 'cancelled' });
-      // Reload appointments by triggering a refresh in the parent component
-      window.location.reload(); // Temporary solution - ideally should update state
-    } catch (error) {
-      console.error('Error cancelling appointment:', error);
-      alert('Error al cancelar la cita. Intenta nuevamente.');
-    } finally {
-      setUpdatingStatus(null);
-    }
-  };
-  
-  // Removed debug logs
-
-  // Date navigation functions
-  const navigateDate = (direction: 'prev' | 'next') => {
-    const newDate = new Date(selectedDate);
-    if (agendaView === 'daily') {
-      newDate.setDate(selectedDate.getDate() + (direction === 'next' ? 1 : -1));
-    } else if (agendaView === 'weekly') {
-      newDate.setDate(selectedDate.getDate() + (direction === 'next' ? 7 : -7));
-    } else if (agendaView === 'monthly') {
-      newDate.setMonth(selectedDate.getMonth() + (direction === 'next' ? 1 : -1));
-    }
-    setSelectedDate(newDate);
-  };
-
-  const goToToday = () => {
-    setSelectedDate(new Date());
-  };
-
-  // Get status color
   const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
+    switch (status) {
       case 'confirmed':
-      case 'confirmada':
         return 'success';
-      case 'completed':
-      case 'completada':
-        return 'primary';
       case 'cancelled':
-      case 'cancelada':
         return 'error';
-      case 'no_show':
-      case 'no se presentó':
-        return 'warning';
+      case 'completed':
+        return 'primary';
       default:
         return 'default';
     }
   };
 
-
-  // Generate week dates for weekly view
-  const getWeekDates = () => {
-    const start = new Date(selectedDate);
-    const day = start.getDay();
-    const diff = start.getDate() - day; // First day of week
-    start.setDate(diff);
-    
-    const weekDates = [];
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(start);
-      date.setDate(start.getDate() + i);
-      weekDates.push(date);
-    }
-    return weekDates;
-  };
-
-  // Filter appointments by date - simplified for CDMX native
-  const getAppointmentsForDate = (date: Date) => {
-    const targetDateStr = date.toDateString();
-    
-    const filtered = appointments.filter(apt => {
-      // Try both date_time and appointment_date fields
-      const dateToUse = apt.date_time || apt.appointment_date;
-      if (!dateToUse) return false;
-      const aptDate = getAppointmentDate(dateToUse);
-      const aptDateStr = aptDate.toDateString();
-      
-      
-      return aptDateStr === targetDateStr;
-    });
-    
-    
-    return filtered;
-  };
-
-  // Sort appointments by time - using CDMX native
-  const sortAppointmentsByTime = (appointments: Appointment[]) => {
-    return [...appointments].sort((a, b) => {
-      const dateA = getAppointmentDate(a.date_time);
-      const dateB = getAppointmentDate(b.date_time);
-      return dateA.getTime() - dateB.getTime();
-    });
-  };
-
-  // Calculate appointment statistics based on current view and date range
-  const calculateAppointmentStats = () => {
-    let dateRange: Date[] = [];
-    
-    if (agendaView === 'daily') {
-      dateRange = [selectedDate];
-    } else if (agendaView === 'weekly') {
-      dateRange = getWeekDates();
-    } else if (agendaView === 'monthly') {
-      // Get all days in the current month
-      const year = selectedDate.getFullYear();
-      const month = selectedDate.getMonth();
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      
-      for (let day = 1; day <= daysInMonth; day++) {
-        dateRange.push(new Date(year, month, day));
-      }
-    }
-    
-    // Filter appointments within the date range - simplified for CDMX native
-    const appointmentsInRange = appointments.filter(apt => {
-      if (!apt.date_time) return false;
-      const aptDate = getAppointmentDate(apt.date_time);
-      const matches = dateRange.some(date => 
-        aptDate.toDateString() === date.toDateString()
-      );
-      
-      const today = new Date().toDateString();
-      
-      return matches;
-    });
-    
-    
-    // Calculate stats by status
-    const stats = {
-      total: appointmentsInRange.length,
-      scheduled: appointmentsInRange.filter(apt => 
-        apt.status === 'scheduled' || apt.status === 'confirmed' || !apt.status
-      ).length,
-      completed: appointmentsInRange.filter(apt => apt.status === 'completed').length,
-      cancelled: appointmentsInRange.filter(apt => 
-        apt.status === 'cancelled' || apt.status === 'no_show'
-      ).length,
-      inProgress: appointmentsInRange.filter(apt => apt.status === 'in_progress').length
-    };
-    
-    return stats;
-  };
-
-  const appointmentStats = calculateAppointmentStats();
-
-  const handleAccordionChange = (panel: string) => (event: any, isExpanded: boolean) => {
-    setExpandedAccordion(isExpanded ? panel : false);
-  };
-
-  const formatDateHeader = () => {
-    if (agendaView === 'daily') {
-      return selectedDate.toLocaleDateString('es-MX', { 
-              weekday: 'long', 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric' 
-      });
-    } else if (agendaView === 'weekly') {
-      const weekDates = getWeekDates();
-      const start = weekDates[0];
-      const end = weekDates[6];
-      return `${start.toLocaleDateString('es-MX', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('es-MX', { month: 'short', day: 'numeric', year: 'numeric' })}`;
-    } else {
-      return selectedDate.toLocaleDateString('es-MX', { 
-              year: 'numeric', 
-              month: 'long' 
-      });
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'confirmed':
+        return 'Confirmada';
+      case 'cancelled':
+        return 'Cancelada';
+      case 'completed':
+        return 'Completada';
+      default:
+        return status;
     }
   };
-
-  const renderDailyView = () => {
-    const rawAppointments = getAppointmentsForDate(selectedDate);
-    const dayAppointments = rawAppointments;
-    
-    console.log('🔍 renderDailyView DEBUG:', {
-      selectedDate: selectedDate.toDateString(),
-      rawAppointments_count: rawAppointments.length,
-      dayAppointments_count: dayAppointments.length,
-      total_appointments_available: appointments.length
-    });
-
-    return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }} key={`daily-${selectedDate.toDateString()}-${dayAppointments.length}`}>
-          {dayAppointments.length > 0 ? (
-          dayAppointments.map((appointment) => (
-            <Card key={appointment.id} sx={{ 
-              p: 3,
-              borderColor: 'red',
-              '&:hover': {
-                borderColor: 'primary.main',
-                boxShadow: 1
-              }
-            }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <Box sx={{ flex: 1 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                    <TimeIcon sx={{ color: 'primary.main', fontSize: 20 }} />
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                      {formatAppointmentTimeRange(appointment)}
-                    </Typography>
-                    <Chip 
-                      label={getStatusLabel(appointment.status)} 
-                      size="small"
-                      color={getStatusColor(appointment.status)}
-                    />
-                    <Chip 
-                      label={getAppointmentTypeLabel(appointment.appointment_type)}
-                      size="small"
-                      variant="outlined"
-                    />
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                    <PersonIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                    {appointment.patient_name || 'Paciente'}
-                  </Typography>
-                  </Box>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    <strong>Motivo:</strong> {appointment.reason || 'No especificado'}
-                  </Typography>
-                  {appointment.notes && (
-                    <Typography variant="body2" color="text.secondary">
-                      <strong>Notas:</strong> {appointment.notes}
-                    </Typography>
-                  )}
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                    Duración: {appointment.doctor?.appointment_duration || 30} minutos
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  <Tooltip title="Editar cita">
-                    <IconButton
-                      onClick={() => handleEditAppointment(appointment)}
-                      size="small"
-                      sx={{ color: 'primary.main' }}
-                    >
-                      <EditIcon />
-                    </IconButton>
-                  </Tooltip>
-                  
-                  {/* Status change buttons - only show for active appointments */}
-                  {appointment.status === 'scheduled' && (
-                    <Tooltip title="Confirmar cita">
-                      <IconButton
-                        onClick={() => handleConfirmAppointment(appointment.id)}
-                        size="small"
-                        sx={{ color: 'success.main' }}
-                        disabled={updatingStatus === appointment.id}
-                      >
-                        <ConfirmIcon />
-                      </IconButton>
-                    </Tooltip>
-                  )}
-                  
-                  {(appointment.status === 'scheduled' || appointment.status === 'confirmed') && (
-                    <Tooltip title="Cancelar cita">
-                      <IconButton
-                        onClick={() => handleCancelAppointment(appointment.id)}
-                        size="small"
-                        sx={{ color: 'error.main' }}
-                        disabled={updatingStatus === appointment.id}
-                      >
-                        <CancelIcon />
-                      </IconButton>
-                    </Tooltip>
-                  )}
-                </Box>
-              </Box>
-            </Card>
-          ))
-        ) : (
-          <Paper sx={{ p: 4, textAlign: 'center' }}>
-            <CalendarIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-            <Typography variant="h6" color="text.secondary" sx={{ mb: 1 }}>
-              No hay citas programadas
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              No tienes citas programadas para este día
-            </Typography>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={handleNewAppointment}
-              sx={{ borderRadius: '12px' }}
-            >
-              Programar Cita
-            </Button>
-          </Paper>
-        )}
-      </Box>
-    );
-  };
-
-  const renderWeeklyView = () => {
-    const weekDates = getWeekDates();
-    const weekDays = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-
-    return (
-      <Box>
-        {weekDates.map((date, index) => {
-          const dayAppointments = sortAppointmentsByTime(getAppointmentsForDate(date));
-          const isToday = date.toDateString() === new Date().toDateString();
-          const panelId = `panel-${index}`;
-
-          return (
-            <Accordion 
-              key={index}
-              expanded={expandedAccordion === panelId}
-              onChange={handleAccordionChange(panelId)}
-              sx={{ 
-                mb: 1,
-                '&:before': { display: 'none' },
-                backgroundColor: isToday ? 'primary.light' : 'background.paper',
-                opacity: isToday ? 1 : 0.9
-              }}
-            >
-              <AccordionSummary
-                expandIcon={<ExpandMoreIcon />}
-                sx={{
-                  backgroundColor: isToday ? 'primary.main' : 'background.default',
-                  color: isToday ? 'primary.contrastText' : 'text.primary',
-                  '&:hover': {
-                    backgroundColor: isToday ? 'primary.dark' : 'action.hover'
-                  }
-                }}
-              >
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                      {weekDays[date.getDay()]}
-                    </Typography>
-                    <Typography variant="body1">
-                      {date.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}
-                    </Typography>
-                    {isToday && (
-                      <Chip label="Hoy" size="small" sx={{ backgroundColor: 'primary.contrastText', color: 'primary.main' }} />
-                    )}
-                  </Box>
-                  <Chip 
-                    label={`${dayAppointments.length} cita${dayAppointments.length !== 1 ? 's' : ''}`}
-                    size="small"
-                    sx={{ 
-                      backgroundColor: isToday ? 'primary.contrastText' : 'primary.main',
-                      color: isToday ? 'primary.main' : 'primary.contrastText'
-                    }}
-                  />
-                </Box>
-              </AccordionSummary>
-              <AccordionDetails sx={{ p: 2 }}>
-                {dayAppointments.length > 0 ? (
-                  <TableContainer>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Hora</TableCell>
-                          <TableCell>Paciente</TableCell>
-                          <TableCell>Motivo</TableCell>
-                          <TableCell>Estado</TableCell>
-                          <TableCell>Acciones</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {dayAppointments.map((appointment) => (
-                          <TableRow key={appointment.id} hover>
-                            <TableCell>
-                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                {formatAppointmentTimeRange(appointment)}
-                              </Typography>
-                            </TableCell>
-                            <TableCell>
-                              <Typography variant="body2">
-                                {appointment.patient_name || 'Paciente'}
-                              </Typography>
-                            </TableCell>
-                            <TableCell>
-                              <Typography variant="body2" color="text.secondary">
-                                {appointment.reason || 'No especificado'}
-                              </Typography>
-                            </TableCell>
-                            <TableCell>
-                              <Chip 
-                                label={getStatusLabel(appointment.status)} 
-                                size="small"
-                                color={getStatusColor(appointment.status)}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                <Tooltip title="Editar cita">
-                                  <IconButton
-                                    onClick={() => handleEditAppointment(appointment)}
-                                    size="small"
-                                  >
-                                    <EditIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                                
-                                {/* Status change buttons - only show for active appointments */}
-                                {appointment.status === 'scheduled' && (
-                                  <Tooltip title="Confirmar cita">
-                                    <IconButton
-                                      onClick={() => handleConfirmAppointment(appointment.id)}
-                                      size="small"
-                                      sx={{ color: 'success.main' }}
-                                      disabled={updatingStatus === appointment.id}
-                                    >
-                                      <ConfirmIcon fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
-                                )}
-                                
-                                {(appointment.status === 'scheduled' || appointment.status === 'confirmed') && (
-                                  <Tooltip title="Cancelar cita">
-                                    <IconButton
-                                      onClick={() => handleCancelAppointment(appointment.id)}
-                                      size="small"
-                                      sx={{ color: 'error.main' }}
-                                      disabled={updatingStatus === appointment.id}
-                                    >
-                                      <CancelIcon fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
-                                )}
-                              </Box>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                ) : (
-                  <Box sx={{ textAlign: 'center', py: 2 }}>
-                    <EventNoteIcon sx={{ fontSize: 32, color: 'text.secondary', mb: 1 }} />
-                    <Typography variant="body2" color="text.secondary">
-                      No hay citas programadas
-                    </Typography>
-                  </Box>
-                )}
-              </AccordionDetails>
-            </Accordion>
-          );
-        })}
-      </Box>
-    );
-  };
-
-  const renderMonthlyView = () => {
-    console.log('AgendaView - renderMonthlyView called with selectedDate:', selectedDate.toDateString());
-
-    // Get all days in the current month
-    const year = selectedDate.getFullYear();
-    const month = selectedDate.getMonth();
-    
-    // Get first day of month and how many days in month
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    
-    // Get first day of week (0 = Sunday, 1 = Monday, etc.)
-    const firstDayOfWeek = firstDay.getDay();
-    
-    // Create array of all days to display (including previous/next month padding)
-    const days: (Date | null)[] = [];
-    
-    // Add padding days from previous month
-    for (let i = 0; i < firstDayOfWeek; i++) {
-      days.push(null);
-    }
-    
-    // Add all days of current month
-    for (let day = 1; day <= daysInMonth; day++) {
-      days.push(new Date(year, month, day));
-    }
-    
-    // Split days into weeks (arrays of 7 days)
-    const weeks: (Date | null)[][] = [];
-    for (let i = 0; i < days.length; i += 7) {
-      weeks.push(days.slice(i, i + 7));
-    }
-    
-    return (
-      <Paper sx={{ p: 3, borderRadius: 2, boxShadow: 2 }}>
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, mb: 2 }}>
-          {/* Day headers */}
-          {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map((day) => (
-            <Box 
-              key={day} 
-              sx={{ 
-                p: 1, 
-                textAlign: 'center', 
-                fontWeight: 600, 
-                color: 'primary.main',
-                bgcolor: 'grey.100',
-                borderRadius: 1
-              }}
-            >
-              {day}
-            </Box>
-          ))}
-        </Box>
-        
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1 }}>
-          {weeks.flat().map((day, index) => {
-            if (!day) {
-              // Empty cell for padding
-              return <Box key={`empty-${index}`} sx={{ height: 80 }} />;
-            }
-            
-            const dayAppointments = getAppointmentsForDate(day);
-            const isToday = day.toDateString() === new Date().toDateString();
-            const isSelected = day.toDateString() === selectedDate.toDateString();
-
-  console.log('AgendaView - Day clicked:', {
-    day: day.toDateString(),
-    selectedDate: selectedDate.toDateString(),
-    isSelected,
-    agendaView
-  });
-
-  // Add debug logging for render
-  console.log('AgendaView - Render called with selectedDate:', selectedDate.toDateString(), 'agendaView:', agendaView);
-            
-            return (
-              <Box
-                key={day.toISOString()}
-                sx={{
-                  height: 80,
-                  p: 1,
-                  border: '2px solid',
-                  borderColor: isSelected ? 'primary.main' : isToday ? 'primary.light' : 'grey.300',
-                  bgcolor: isToday ? 'rgba(25, 118, 210, 0.1)' : isSelected ? 'rgba(25, 118, 210, 0.2)' : 'background.paper',
-                  borderRadius: 1,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease-in-out',
-                  '&:hover': {
-                    bgcolor: 'action.hover',
-                    transform: 'scale(1.02)',
-                    boxShadow: 1
-                  }
-                }}
-                onClick={() => {
-                  console.log('AgendaView - Click on day:', day.toDateString());
-                  console.log('AgendaView - Current selectedDate before:', selectedDate.toDateString());
-                  console.log('AgendaView - Are they equal?', day.toDateString() === selectedDate.toDateString());
-                  setSelectedDate(day);
-                  console.log('AgendaView - setSelectedDate called with:', day.toDateString());
-                  console.log('AgendaView - Component should re-render now');
-                }}
-              >
-                <Typography
-                  variant="body2"
-                  sx={{
-                    fontWeight: isToday ? 600 : 400,
-                    color: isToday ? 'primary.main' : 'text.primary',
-                    mb: 0.5
-                  }}
-                >
-                  {day.getDate()}
-                </Typography>
-                
-                {dayAppointments.length > 0 && (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-                    {dayAppointments.slice(0, 2).map((apt) => (
-                      <Chip
-                        key={apt.id}
-                        label={formatAppointmentTimeRange(apt)}
-                        size="small"
-                        sx={{
-                          height: 16,
-                          fontSize: '0.6rem',
-                          bgcolor: 'success.light',
-                          color: 'success.contrastText'
-                        }}
-                      />
-                    ))}
-                    {dayAppointments.length > 2 && (
-                      <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'text.secondary' }}>
-                        +{dayAppointments.length - 2} más
-                      </Typography>
-                    )}
-                  </Box>
-                )}
-              </Box>
-            );
-          })}
-        </Box>
-      </Paper>
-    );
-  };
-
-  console.log('AgendaView - Main render called with selectedDate:', selectedDate.toDateString(), 'agendaView:', agendaView);
 
   return (
-    <Box>
+    <Box sx={{ p: 3 }}>
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 600 }}>
+        <Typography variant="h4" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <CalendarIcon />
           Agenda Médica
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <Button
-            variant={agendaView === 'daily' ? 'contained' : 'outlined'}
-            onClick={() => {
-              console.log('AgendaView - Daily view button clicked, current agendaView:', agendaView);
-              setAgendaView('daily');
-              console.log('AgendaView - setAgendaView called with daily');
-            }}
-            size="small"
-            sx={{ 
-              borderRadius: '8px',
-              bgcolor: agendaView === 'daily' ? 'primary.main' : 'transparent',
-              color: agendaView === 'daily' ? 'white' : 'primary.main',
-              borderColor: 'primary.main',
-              '&:hover': {
-                bgcolor: agendaView === 'daily' ? 'primary.dark' : 'primary.50'
-              }
-            }}
-          >
-            Diaria
-          </Button>
-          <Button
-            variant={agendaView === 'weekly' ? 'contained' : 'outlined'}
-            onClick={() => {
-              console.log('AgendaView - Weekly view button clicked, current agendaView:', agendaView);
-              setAgendaView('weekly');
-              console.log('AgendaView - setAgendaView called with weekly');
-            }}
-            size="small"
-            sx={{ 
-              borderRadius: '8px',
-              bgcolor: agendaView === 'weekly' ? 'primary.main' : 'transparent',
-              color: agendaView === 'weekly' ? 'white' : 'primary.main',
-              borderColor: 'primary.main',
-              '&:hover': {
-                bgcolor: agendaView === 'weekly' ? 'primary.dark' : 'primary.50'
-              }
-            }}
-          >
-            Semanal
-          </Button>
-          <Button
-            variant={agendaView === 'monthly' ? 'contained' : 'outlined'}
-            onClick={() => {
-              console.log('AgendaView - Monthly view button clicked, current agendaView:', agendaView);
-              setAgendaView('monthly');
-              console.log('AgendaView - setAgendaView called with monthly');
-            }}
-            size="small"
-            sx={{ 
-              borderRadius: '8px',
-              bgcolor: agendaView === 'monthly' ? 'primary.main' : 'transparent',
-              color: agendaView === 'monthly' ? 'white' : 'primary.main',
-              borderColor: 'primary.main',
-              '&:hover': {
-                bgcolor: agendaView === 'monthly' ? 'primary.dark' : 'primary.50'
-              }
-            }}
-          >
-            Mensual
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleNewAppointment}
-            sx={{ borderRadius: '12px' }}
-          >
-            Nueva Cita
-          </Button>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={handleNewAppointment}
+          sx={{ borderRadius: 2 }}
+        >
+          Nueva Cita
+        </Button>
+      </Box>
+
+      {/* Date and View Controls */}
+      <Card sx={{ mb: 3, boxShadow: 1 }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <TodayIcon color="primary" />
+              <Typography variant="h6">
+                {format(selectedDate, "EEEE, d 'de' MMMM 'de' yyyy")}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                variant={agendaView === 'daily' ? 'contained' : 'outlined'}
+                size="small"
+                onClick={() => setAgendaView?.('daily')}
+              >
+                Día
+              </Button>
+              <Button
+                variant={agendaView === 'weekly' ? 'contained' : 'outlined'}
+                size="small"
+                onClick={() => setAgendaView?.('weekly')}
+              >
+                Semana
+              </Button>
+              <Button
+                variant={agendaView === 'monthly' ? 'contained' : 'outlined'}
+                size="small"
+                onClick={() => setAgendaView?.('monthly')}
+              >
+                Mes
+              </Button>
+            </Box>
+          </Box>
+        </CardContent>
+      </Card>
+
+      {/* Appointments Summary */}
+      <Box sx={{ display: 'flex', gap: 3, mb: 3, flexWrap: 'wrap' }}>
+        <Box sx={{ flex: 1, minWidth: 200 }}>
+          <Card sx={{ boxShadow: 1 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Citas de Hoy
+              </Typography>
+              <Typography variant="h3" color="primary">
+                {todayAppointments.length}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 200 }}>
+          <Card sx={{ boxShadow: 1 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Confirmadas
+              </Typography>
+              <Typography variant="h3" color="success.main">
+                {todayAppointments.filter(apt => apt.status === 'confirmed').length}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 200 }}>
+          <Card sx={{ boxShadow: 1 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Canceladas
+              </Typography>
+              <Typography variant="h3" color="error.main">
+                {todayAppointments.filter(apt => apt.status === 'cancelled').length}
+              </Typography>
+            </CardContent>
+          </Card>
         </Box>
       </Box>
 
-      {/* Appointment Statistics */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 2, mb: 3 }}>
-        {[
-          { 
-            label: 'Total Citas', 
-            value: appointmentStats.total, 
-            color: 'primary',
-            subtitle: agendaView === 'daily' ? 'hoy' : agendaView === 'weekly' ? 'esta semana' : 'este mes'
-          },
-          { 
-            label: 'Programadas', 
-            value: appointmentStats.scheduled, 
-            color: 'info',
-            subtitle: 'confirmadas'
-          },
-          { 
-            label: 'En Progreso', 
-            value: appointmentStats.inProgress, 
-            color: 'warning',
-            subtitle: 'en consulta'
-          },
-          { 
-            label: 'Completadas', 
-            value: appointmentStats.completed, 
-            color: 'success',
-            subtitle: 'finalizadas'
-          },
-          { 
-            label: 'Canceladas', 
-            value: appointmentStats.cancelled, 
-            color: 'error',
-            subtitle: 'no realizadas'
-          }
-        ].map((stat, index) => (
-          <Paper
-            key={index}
-            sx={{
-              p: 2,
-              textAlign: 'center',
-              borderRadius: '16px',
-              border: '1px solid',
-              borderColor: 'divider',
-              '&:hover': {
-                boxShadow: 2,
-                transform: 'translateY(-1px)',
-                transition: 'all 0.2s ease-in-out'
-              }
-            }}
-          >
-            <Typography variant="h4" sx={{ fontWeight: 700, color: `${stat.color}.main`, mb: 0.5 }}>
-              {stat.value}
-            </Typography>
-            <Typography variant="body2" color="text.primary" sx={{ fontWeight: 500, mb: 0.25 }}>
-              {stat.label}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {stat.subtitle}
-            </Typography>
-          </Paper>
-        ))}
-      </Box>
-
-      {/* Date Navigation */}
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', justifyContent: 'space-between' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <CalendarIcon sx={{ color: 'primary.main' }} />
-            <Typography variant="h6" sx={{ fontWeight: 500 }}>
-              {formatDateHeader()}
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Tooltip title={`${agendaView === 'daily' ? 'Día' : agendaView === 'weekly' ? 'Semana' : 'Mes'} anterior`}>
-              <IconButton onClick={() => navigateDate('prev')} size="small">
-                <PrevIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Ir a hoy">
+      {/* Appointments List */}
+      <Card sx={{ boxShadow: 1 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <TimeIcon />
+            Citas del Día
+          </Typography>
+          
+          {todayAppointments.length === 0 ? (
+            <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'grey.50' }}>
+              <Typography variant="body1" color="text.secondary">
+                No hay citas programadas para hoy
+              </Typography>
               <Button
                 variant="outlined"
-                size="small"
-                onClick={goToToday}
-                startIcon={<TodayIcon />}
-                sx={{ borderRadius: '8px' }}
+                startIcon={<AddIcon />}
+                onClick={handleNewAppointment}
+                sx={{ mt: 2 }}
               >
-                Hoy
+                Programar Primera Cita
               </Button>
-            </Tooltip>
-            <Tooltip title={`${agendaView === 'daily' ? 'Día' : agendaView === 'weekly' ? 'Semana' : 'Mes'} siguiente`}>
-              <IconButton onClick={() => navigateDate('next')} size="small">
-                <NextIcon />
-              </IconButton>
-            </Tooltip>
-          </Box>
-        </Box>
-      </Paper>
-
-      {/* Appointments Content */}
-      {agendaView === 'daily' ? renderDailyView() : agendaView === 'weekly' ? renderWeeklyView() : renderMonthlyView()}
+            </Paper>
+          ) : (
+            <List>
+              {todayAppointments.map((appointment, index) => (
+                <ListItem
+                  key={appointment.id || index}
+                  sx={{
+                    border: 1,
+                    borderColor: 'grey.200',
+                    borderRadius: 2,
+                    mb: 1,
+                    boxShadow: 1,
+                    '&:hover': {
+                      borderColor: 'primary.main',
+                      boxShadow: 2
+                    }
+                  }}
+                >
+                  <ListItemText
+                    primary={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Typography variant="subtitle1" fontWeight="bold">
+                          {appointment.patient?.first_name} {appointment.patient?.last_name}
+                        </Typography>
+                        <Chip
+                          label={getStatusLabel(appointment.status)}
+                          color={getStatusColor(appointment.status) as any}
+                          size="small"
+                        />
+                      </Box>
+                    }
+                    secondary={
+                      <Box sx={{ mt: 1 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          <TimeIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: 'middle' }} />
+                          {format(new Date(appointment.date_time), 'HH:mm')}
+                        </Typography>
+                        {appointment.reason && (
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                            Motivo: {appointment.reason}
+                          </Typography>
+                        )}
+                      </Box>
+                    }
+                  />
+                  <ListItemSecondaryAction>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Button
+                        size="small"
+                        startIcon={<EditIcon />}
+                        onClick={() => handleEditAppointment?.(appointment)}
+                      >
+                        Editar
+                      </Button>
+                      {appointment.status === 'confirmed' && (
+                        <Button
+                          size="small"
+                          color="error"
+                          startIcon={<CancelIcon />}
+                          onClick={() => {
+                            // Lógica para cancelar cita
+                            console.log('Cancelar cita:', appointment.id);
+                          }}
+                        >
+                          Cancelar
+                        </Button>
+                      )}
+                    </Box>
+                  </ListItemSecondaryAction>
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </CardContent>
+      </Card>
     </Box>
   );
 };
 
 export default AgendaView;
+

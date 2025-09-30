@@ -47,6 +47,7 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
             appointments={appointmentManager.appointments}
             onNewAppointment={appointmentManager.handleNewAppointment}
             onNewConsultation={consultationManagement.handleNewConsultation}
+            doctorProfile={doctorProfile}
           />
         </Suspense>
       )}
@@ -110,6 +111,7 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
             setAgendaView={appointmentManager.setAgendaView}
             handleNewAppointment={appointmentManager.handleNewAppointment}
             handleEditAppointment={appointmentManager.handleEditAppointment}
+            refreshAppointments={appointmentManager.refreshAppointments}
           />
         </Suspense>
       )}
@@ -141,3 +143,4 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
     </Box>
   );
 };
+

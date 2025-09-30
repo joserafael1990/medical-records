@@ -73,10 +73,10 @@ async def create_schedule_template(
     try:
         # Check if template already exists for this doctor+day
         existing_template = db.query(ScheduleTemplateModel).filter(
-            ScheduleTemplateModel.doctor_id == doctor_id,
+        ScheduleTemplateModel.doctor_id == doctor_id,
             ScheduleTemplateModel.day_of_week == day_of_week
-        ).first()
-        
+    ).first()
+    
         if existing_template:
             print(f"🔧 Found existing template {existing_template.id} for day {day_of_week}, deleting...")
             # Delete existing time blocks
@@ -323,7 +323,7 @@ async def update_schedule_template(
     for field, value in template_update.items():
         if hasattr(db_template, field):
             setattr(db_template, field, value)
-        
+    
     db_template.updated_at = datetime.utcnow()
     
     # Update time blocks if provided

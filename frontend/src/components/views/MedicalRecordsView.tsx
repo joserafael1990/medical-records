@@ -28,6 +28,10 @@ import {
   CardContent,
   CardActions,
 } from '@mui/material';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { es } from 'date-fns/locale';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -594,31 +598,51 @@ const MedicalRecordsView: React.FC<MedicalRecordsViewProps> = ({
           </Grid>
           
           <Grid size={{ xs: 12, md: 2 }}>
-            <TextField
-              fullWidth
-              label="Fecha desde"
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              InputLabelProps={{ shrink: true }}
-              InputProps={{
-                startAdornment: <DateRangeIcon sx={{ color: 'action.active', mr: 1 }} />,
-              }}
-            />
+            <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
+              <DatePicker
+                label="Fecha desde"
+                value={dateFrom ? new Date(dateFrom) : null}
+                onChange={(newValue) => {
+                  if (newValue) {
+                    setDateFrom(newValue.toISOString().split('T')[0]);
+                  } else {
+                    setDateFrom('');
+                  }
+                }}
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    InputProps: {
+                      startAdornment: <DateRangeIcon sx={{ color: 'action.active', mr: 1 }} />,
+                    }
+                  }
+                }}
+              />
+            </LocalizationProvider>
           </Grid>
           
           <Grid size={{ xs: 12, md: 2 }}>
-            <TextField
-              fullWidth
-              label="Fecha hasta"
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              InputLabelProps={{ shrink: true }}
-              InputProps={{
-                startAdornment: <DateRangeIcon sx={{ color: 'action.active', mr: 1 }} />,
-              }}
-            />
+            <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
+              <DatePicker
+                label="Fecha hasta"
+                value={dateTo ? new Date(dateTo) : null}
+                onChange={(newValue) => {
+                  if (newValue) {
+                    setDateTo(newValue.toISOString().split('T')[0]);
+                  } else {
+                    setDateTo('');
+                  }
+                }}
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    InputProps: {
+                      startAdornment: <DateRangeIcon sx={{ color: 'action.active', mr: 1 }} />,
+                    }
+                  }
+                }}
+              />
+            </LocalizationProvider>
           </Grid>
           
           <Grid size={{ xs: 12, md: 1 }}>
@@ -901,17 +925,27 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
 
       {/* Consultation Date */}
       <Grid size={{ xs: 12, md: 6 }}>
-        <TextField
-          fullWidth
-          required
-          label="Fecha de Consulta"
-          type="date"
-          value={formData.consultation_date}
-          onChange={(e) => handleChange('consultation_date', e.target.value)}
-          InputLabelProps={{ shrink: true }}
-          error={!!errors.consultation_date}
-          helperText={errors.consultation_date}
-        />
+        <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
+          <DatePicker
+            label="Fecha de Consulta *"
+            value={formData.consultation_date ? new Date(formData.consultation_date) : null}
+            minDate={new Date()}
+            onChange={(newValue) => {
+              if (newValue) {
+                handleChange('consultation_date', newValue.toISOString().split('T')[0]);
+              } else {
+                handleChange('consultation_date', '');
+              }
+            }}
+            slotProps={{
+              textField: {
+                fullWidth: true,
+                error: !!errors.consultation_date,
+                helperText: errors.consultation_date
+              }
+            }}
+          />
+        </LocalizationProvider>
       </Grid>
 
       {/* NOM-004 Required Fields */}
@@ -1029,10 +1063,9 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
       <Grid size={{ xs: 12, md: 6 }}>
         <TextField
           fullWidth
-          required
           multiline
           rows={3}
-          label="Instrucciones de Seguimiento"
+          label="Instrucciones de Seguimiento (Opcional)"
           value={formData.follow_up_instructions}
           onChange={(e) => handleChange('follow_up_instructions', e.target.value)}
         />

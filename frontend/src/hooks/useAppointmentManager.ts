@@ -30,6 +30,7 @@ export interface UseAppointmentManagerReturn {
   handleAppointmentSubmit: (submittedFormData?: any) => Promise<void>;
   createAppointmentDirect: (appointmentData: any) => Promise<any>;
   handleCancelAppointment: () => void;
+  refreshAppointments: () => Promise<void>;
   
   // Form state
   fieldErrors: { [key: string]: string };
@@ -54,21 +55,7 @@ export const useAppointmentManager = (
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
 
-  // Debug logging for setSelectedDate
-  const debugSetSelectedDate = useCallback((date: Date | ((prevState: Date) => Date)) => {
-    console.log('useAppointmentManager - setSelectedDate called with:', typeof date === 'function' ? 'function' : date.toDateString());
-    console.log('useAppointmentManager - Current selectedDate before:', selectedDate.toDateString());
-    setSelectedDate(date as any);
-    console.log('useAppointmentManager - selectedDate updated to:', (date as Date).toDateString());
-  }, [selectedDate]);
   const [agendaView, setAgendaView] = useState<'daily' | 'weekly' | 'monthly'>('daily');
-
-  // Debug logging for setAgendaView
-  const debugSetAgendaView = useCallback((view: 'daily' | 'weekly' | 'monthly' | ((prevState: 'daily' | 'weekly' | 'monthly') => 'daily' | 'weekly' | 'monthly')) => {
-    console.log('useAppointmentManager - setAgendaView called with:', typeof view === 'function' ? 'function' : view, 'current agendaView:', agendaView);
-    setAgendaView(view as any);
-    console.log('useAppointmentManager - agendaView updated');
-  }, [agendaView]);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -80,7 +67,7 @@ export const useAppointmentManager = (
     setCurrentDoctorProfile(doctorProfile);
     // Update appointment form data when doctor profile changes
     if (doctorProfile) {
-      setAppointmentFormData(prev => ({
+      setAppointmentFormData((prev: AppointmentFormData) => ({
         ...prev,
         doctor_id: doctorProfile.id || '',
       }));
@@ -97,7 +84,7 @@ export const useAppointmentManager = (
     appointment_type: 'consultation',
     reason: '',
     notes: '',
-    status: 'scheduled',
+    status: 'confirmed',
     priority: 'normal',
     preparation_instructions: '',
     confirmation_required: false,
@@ -137,17 +124,28 @@ export const useAppointmentManager = (
       return;
     }
     
-    // Removed debug logs to prevent console spam
+    console.log('🔄 useAppointmentManager useEffect triggered:', {
+      agendaView,
+      selectedDate: selectedDate.toDateString(),
+      doctorId: user?.doctor?.id
+    });
     
-    // Simple timeout to prevent rapid successive calls
+    // Use a longer timeout to prevent rapid successive calls and add abort controller
+    let abortController = new AbortController();
     const timeoutId = setTimeout(async () => {
       try {
-        setIsLoading(true);
+        // Don't show loading for quick refreshes to prevent flickering
         const dateToFetch = new Date(selectedDate);
         let data: any[] = [];
+        let dateStr = '';
 
         if (agendaView === 'daily') {
-          const dateStr = dateToFetch.toISOString().split('T')[0];
+          // Fix timezone issue - use local date string instead of ISO
+          const year = dateToFetch.getFullYear();
+          const month = String(dateToFetch.getMonth() + 1).padStart(2, '0');
+          const day = String(dateToFetch.getDate()).padStart(2, '0');
+          dateStr = `${year}-${month}-${day}`;
+          console.log('📡 Calling getDailyAgenda for:', dateStr, 'selectedDate was:', selectedDate.toDateString());
           data = await apiService.getDailyAgenda(dateStr);
         } else if (agendaView === 'weekly') {
           const start = new Date(dateToFetch);
@@ -158,30 +156,48 @@ export const useAppointmentManager = (
           const end = new Date(start);
           end.setDate(start.getDate() + 6);
           
-          const startStr = start.toISOString().split('T')[0];
-          const endStr = end.toISOString().split('T')[0];
+          // Fix timezone issue for weekly view
+          const startStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+          const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
           data = await apiService.getWeeklyAgenda(startStr, endStr);
         } else if (agendaView === 'monthly') {
           const start = new Date(dateToFetch.getFullYear(), dateToFetch.getMonth(), 1);
           const end = new Date(dateToFetch.getFullYear(), dateToFetch.getMonth() + 1, 0);
           
-          const startStr = start.toISOString().split('T')[0];
-          const endStr = end.toISOString().split('T')[0];
+          // Fix timezone issue for monthly view
+          const startStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+          const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
           data = await apiService.getMonthlyAgenda(startStr, endStr);
         }
 
-        // API response received
-        setAppointments(data);
+        // Only update if not aborted
+        if (!abortController.signal.aborted) {
+          console.log('📋 Setting appointments:', { 
+            count: data.length, 
+            dateRequested: dateStr || 'N/A',
+            data: data.map(apt => ({
+              id: apt.id,
+              patient_name: apt.patient_name,
+              date_time: apt.date_time,
+              appointment_date: apt.appointment_date,
+              status: apt.status
+            }))
+          });
+          setAppointments(data);
+        }
       } catch (error) {
-        console.error('Error fetching appointments:', error);
-        setAppointments([]);
-      } finally {
-        setIsLoading(false);
+        if (!abortController.signal.aborted) {
+          console.error('Error fetching appointments:', error);
+          setAppointments([]);
+        }
       }
-    }, 100);
+    }, 300); // Increased timeout to reduce rapid calls
     
-    // Cleanup timeout on unmount or dependency change
-    return () => clearTimeout(timeoutId);
+    // Cleanup timeout and abort controller on unmount or dependency change
+    return () => {
+      clearTimeout(timeoutId);
+      abortController.abort();
+    };
   }, [agendaView, selectedDate, user?.doctor?.id]); // Only depend on doctor ID to prevent infinite loops
 
   // Handle new appointment
@@ -276,7 +292,7 @@ export const useAppointmentManager = (
       
       if (appointmentDate.toDateString() !== currentDate.toDateString()) {
         console.log('🔄 Appointment created for different date, navigating to:', appointmentDate.toDateString());
-        debugSetSelectedDate(appointmentDate);
+        setSelectedDate(appointmentDate);
       }
       
       // Refresh appointments after successful creation using the correct date
@@ -536,7 +552,7 @@ export const useAppointmentManager = (
         // Compare just the date parts (ignore time)
         if (appointmentDate.toDateString() !== currentDate.toDateString()) {
           console.log('🔄 Appointment created for different date, navigating to:', appointmentDate.toDateString());
-          debugSetSelectedDate(appointmentDate);
+          setSelectedDate(appointmentDate);
         }
       }
       
@@ -546,7 +562,7 @@ export const useAppointmentManager = (
     } finally {
       setIsSubmitting(false);
     }
-  }, [isEditingAppointment, appointmentFormData, showSuccessMessage, selectedDate, debugSetSelectedDate, user, doctorProfile]);
+  }, [isEditingAppointment, appointmentFormData, showSuccessMessage, selectedDate, setSelectedDate, user, doctorProfile]);
 
   // Handle cancel appointment
   const handleCancelAppointment = useCallback(() => {
@@ -562,14 +578,61 @@ export const useAppointmentManager = (
   // Debug: log when appointments state changes
   // Track appointments state for debugging when needed
 
+  // Refresh appointments function - can be called from child components
+  const refreshAppointments = useCallback(async () => {
+    if (!user?.doctor?.id) {
+      return;
+    }
+
+    try {
+      const dateToRefresh = new Date(selectedDate);
+      let data: any[] = [];
+
+      if (agendaView === 'daily') {
+        // Fix timezone issue - use local date string instead of ISO
+        const year = dateToRefresh.getFullYear();
+        const month = String(dateToRefresh.getMonth() + 1).padStart(2, '0');
+        const day = String(dateToRefresh.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
+        data = await apiService.getDailyAgenda(dateStr);
+      } else if (agendaView === 'weekly') {
+        const start = new Date(dateToRefresh);
+        const day = start.getDay();
+        const diff = start.getDate() - day;
+        start.setDate(diff);
+        
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        
+        // Fix timezone issue for weekly view
+        const startStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+        const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
+        data = await apiService.getWeeklyAgenda(startStr, endStr);
+      } else if (agendaView === 'monthly') {
+        const start = new Date(dateToRefresh.getFullYear(), dateToRefresh.getMonth(), 1);
+        const end = new Date(dateToRefresh.getFullYear(), dateToRefresh.getMonth() + 1, 0);
+        
+        // Fix timezone issue for monthly view
+        const startStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+        const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
+        data = await apiService.getMonthlyAgenda(startStr, endStr);
+      }
+
+      setAppointments(data);
+    } catch (error) {
+      console.error('Error refreshing appointments:', error);
+      setAppointments([]);
+    }
+  }, [user?.doctor?.id, selectedDate, agendaView]);
+
   return {
     // State
     appointments,
     setAppointments,
     selectedDate,
-    setSelectedDate: debugSetSelectedDate,
+    setSelectedDate: setSelectedDate,
     agendaView,
-    setAgendaView: debugSetAgendaView,
+    setAgendaView: setAgendaView,
     selectedAppointment,
     setSelectedAppointment,
     isLoading,
@@ -589,6 +652,7 @@ export const useAppointmentManager = (
     handleAppointmentSubmit,
     createAppointmentDirect,
     handleCancelAppointment,
+    refreshAppointments,
     
     // Form state
     fieldErrors,

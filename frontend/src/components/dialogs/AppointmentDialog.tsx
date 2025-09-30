@@ -217,7 +217,6 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
       console.log('  - appointment_type:', localFormData.appointment_type);
       console.log('  - selectedDate:', selectedDate);
       console.log('  - selectedTime:', selectedTime);
-      console.log('  - reason:', localFormData.reason);
       if (localFormData.appointment_type === 'first_visit') {
         console.log('  - newPatientData:', newPatientData);
       } else {
@@ -257,11 +256,6 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
       return false;
     }
     
-    // Check if reason is provided
-    if (!localFormData.reason?.trim()) {
-      console.log('❌ Missing reason');
-      return false;
-    }
     
     console.log('✅ Form is complete!');
     return true;
@@ -281,8 +275,8 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     // Set default status for new appointments
     const updatedFormData = {
       ...formData,
-      // Always set status to 'scheduled' for new appointments, preserve existing status for edits
-      status: formData.status || 'scheduled'
+      // Always set status to 'confirmed' for new appointments, preserve existing status for edits
+      status: formData.status || 'confirmed'
     };
     setLocalFormData(updatedFormData);
     
@@ -419,8 +413,6 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
           emergency_contact_relationship: '',
           
           // Medical information (optional)
-          blood_type: '',
-          allergies: '',
           current_medications: '',
           medical_history: '',
           chronic_conditions: '',
@@ -443,7 +435,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
         const finalFormData = {
           ...localFormData,
           patient_id: newPatient.id,
-          status: localFormData.status || 'scheduled'
+          status: localFormData.status || 'confirmed'
         };
 
         // Call onSubmit directly with the final form data
@@ -457,7 +449,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
       // Regular flow for existing patients
       const finalFormData = {
         ...localFormData,
-        status: localFormData.status || 'scheduled'
+        status: localFormData.status || 'confirmed'
       };
       
       // Call onSubmit directly with the final form data
@@ -532,10 +524,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                   <em>Seleccione una opción</em>
                 </MenuItem>
                 <MenuItem value="first_visit">Primera vez</MenuItem>
-                <MenuItem value="consultation">Consulta</MenuItem>
                 <MenuItem value="follow_up">Seguimiento</MenuItem>
-                <MenuItem value="emergency">Emergencia</MenuItem>
-                <MenuItem value="routine_check">Revisión de Rutina</MenuItem>
               </Select>
               {hasFieldError('appointment_type') && (
                 <Typography variant="caption" color="error" sx={{ mt: 0.5 }}>
@@ -588,18 +577,28 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                       size="small"
                       disabled={isReadOnly}
                     />
-                    <TextField
-                      label="Fecha de Nacimiento"
-                      type="date"
-                      value={newPatientData.birth_date}
-                      onChange={(e) => handleNewPatientFieldChange('birth_date', e.target.value)}
-                      size="small"
-                      required
-                      disabled={isReadOnly}
-                      InputLabelProps={{ shrink: true }}
-                      error={hasFieldError('newPatient.birth_date')}
-                      helperText={getFieldError('newPatient.birth_date')}
-                    />
+                    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
+                      <DatePicker
+                        label="Fecha de Nacimiento *"
+                        value={newPatientData.birth_date ? new Date(newPatientData.birth_date) : null}
+                        maxDate={new Date()}
+                        onChange={(newValue) => {
+                          if (newValue) {
+                            const dateValue = newValue.toISOString().split('T')[0];
+                            handleNewPatientFieldChange('birth_date', dateValue);
+                          } else {
+                            handleNewPatientFieldChange('birth_date', '');
+                          }
+                        }}
+                        disabled={isReadOnly}
+                        slotProps={{
+                          textField: {
+                            size: 'small',
+                            required: true
+                          }
+                        }}
+                      />
+                    </LocalizationProvider>
                     <FormControl size="small" required error={hasFieldError('newPatient.gender')}>
                       <InputLabel>Género</InputLabel>
                       <Select
@@ -610,6 +609,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                       >
                         <MenuItem value="M">Masculino</MenuItem>
                         <MenuItem value="F">Femenino</MenuItem>
+                        <MenuItem value="O">Otro</MenuItem>
                       </Select>
                     </FormControl>
                     <TextField
@@ -783,7 +783,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                             Género
                           </Typography>
                           <Typography variant="body1">
-                            {selectedPatient.gender === 'M' ? 'Masculino' : selectedPatient.gender === 'F' ? 'Femenino' : 'No especificado'}
+                            {selectedPatient.gender === 'M' ? 'Masculino' : selectedPatient.gender === 'F' ? 'Femenino' : selectedPatient.gender === 'O' ? 'Otro' : 'No especificado'}
                           </Typography>
                         </Box>
                         
@@ -917,29 +917,6 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
             </Box>
           )}
 
-          {/* Reason */}
-          <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <NotesIcon sx={{ fontSize: 20 }} />
-              Motivo de la Consulta
-              <Typography component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Typography>
-            </Typography>
-            <TextField
-              fullWidth
-              multiline
-              rows={2}
-              label="Describe el motivo de la cita"
-              value={localFormData.reason || ''}
-              onChange={handleFieldChange('reason')}
-              size="small"
-              error={hasFieldError('reason') || (!localFormData.reason || localFormData.reason.trim() === '')}
-              helperText={getFieldError('reason') || ((!localFormData.reason || localFormData.reason.trim() === '') ? 'Campo requerido' : '')}
-              placeholder="Ej: Consulta general, dolor de cabeza, revisión, etc."
-              InputProps={{
-                readOnly: isReadOnly
-              }}
-            />
-          </Box>
 
           {/* Priority */}
           <Box>
@@ -955,10 +932,8 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                 label="Prioridad"
                 disabled={isReadOnly}
               >
-                <MenuItem value="low">Baja</MenuItem>
                 <MenuItem value="normal">Normal</MenuItem>
                 <MenuItem value="high">Alta</MenuItem>
-                <MenuItem value="urgent">Urgente</MenuItem>
               </Select>
             </FormControl>
           </Box>
@@ -968,6 +943,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
               <NotesIcon sx={{ fontSize: 20 }} />
               Instrucciones de Preparación
+              <Typography component="span" sx={{ color: 'text.secondary', ml: 1, fontSize: '0.875rem', fontWeight: 400 }}>(Opcional)</Typography>
             </Typography>
             <TextField
               fullWidth
@@ -988,6 +964,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
           <Box>
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
               Notas Adicionales
+              <Typography component="span" sx={{ color: 'text.secondary', ml: 1, fontSize: '0.875rem', fontWeight: 400 }}>(Opcional)</Typography>
             </Typography>
             <TextField
               fullWidth

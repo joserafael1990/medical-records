@@ -21,7 +21,11 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Avatar
+  Avatar,
+  Card,
+  CardContent,
+  Chip,
+  Grid
 } from '@mui/material';
 import {
   Visibility,
@@ -33,12 +37,51 @@ import {
   Work,
   School,
   Business,
-  Save
+  Save,
+  Schedule,
+  AccessTime,
+  Add as AddIcon
 } from '@mui/icons-material';
 import AvantLogo from '../common/AvantLogo';
 import { MEDICAL_SPECIALTIES, MEXICAN_STATES, API_CONFIG } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCatalogs } from '../../hooks/useCatalogs';
+import { TimePicker } from '@mui/x-date-pickers/TimePicker';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { es } from 'date-fns/locale';
+
+interface TimeBlock {
+  start_time: string;
+  end_time: string;
+}
+
+interface DaySchedule {
+  day_of_week: number;
+  is_active: boolean;
+  time_blocks: TimeBlock[];
+}
+
+interface WeeklyScheduleData {
+  monday?: DaySchedule;
+  tuesday?: DaySchedule;
+  wednesday?: DaySchedule;
+  thursday?: DaySchedule;
+  friday?: DaySchedule;
+  saturday?: DaySchedule;
+  sunday?: DaySchedule;
+}
+
+const DAYS_OF_WEEK = [
+  { key: 'monday', label: 'Lunes', index: 0 },
+  { key: 'tuesday', label: 'Martes', index: 1 },
+  { key: 'wednesday', label: 'Miércoles', index: 2 },
+  { key: 'thursday', label: 'Jueves', index: 3 },
+  { key: 'friday', label: 'Viernes', index: 4 },
+  { key: 'saturday', label: 'Sábado', index: 5 },
+  { key: 'sunday', label: 'Domingo', index: 6 }
+];
 
 interface RegistrationData {
   // Step 1: Account Info
@@ -69,6 +112,9 @@ interface RegistrationData {
   office_city: string;
   office_phone: string;
   appointment_duration: string;
+  
+  // Step 5: Schedule Data
+  scheduleData: WeeklyScheduleData;
 }
 
 interface PasswordValidation {
@@ -134,8 +180,107 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
     office_state_id: '',
     office_city: '',
     office_phone: '',
-    appointment_duration: ''
+    appointment_duration: '',
+    
+    // Step 5: Schedule Data
+    scheduleData: {}
   });
+
+  // Funciones para manejo de horarios
+  const formatTime = (timeString?: string): Date | null => {
+    if (!timeString) return null;
+    
+    try {
+      const [hours, minutes] = timeString.split(':');
+      const date = new Date();
+      date.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+      return date;
+    } catch {
+      return null;
+    }
+  };
+
+  const formatTimeToString = (date: Date | null): string => {
+    if (!date) return '';
+    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  };
+
+  const updateDaySchedule = (dayIndex: number, isActive: boolean) => {
+    const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklyScheduleData;
+    
+    setFormData(prev => ({
+      ...prev,
+      scheduleData: {
+        ...prev.scheduleData,
+        [dayKey]: isActive ? {
+          day_of_week: dayIndex,
+          is_active: true,
+          time_blocks: [{ start_time: '09:00', end_time: '17:00' }]
+        } : undefined
+      }
+    }));
+  };
+
+  const addTimeBlock = (dayIndex: number) => {
+    const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklyScheduleData;
+    const currentDay = formData.scheduleData[dayKey];
+    
+    if (currentDay) {
+      setFormData(prev => ({
+        ...prev,
+        scheduleData: {
+          ...prev.scheduleData,
+          [dayKey]: {
+            ...currentDay,
+            time_blocks: [...currentDay.time_blocks, { start_time: '09:00', end_time: '17:00' }]
+          }
+        }
+      }));
+    }
+  };
+
+  const removeTimeBlock = (dayIndex: number, blockIndex: number) => {
+    const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklyScheduleData;
+    const currentDay = formData.scheduleData[dayKey];
+    
+    if (currentDay && currentDay.time_blocks.length > 1) {
+      setFormData(prev => ({
+        ...prev,
+        scheduleData: {
+          ...prev.scheduleData,
+          [dayKey]: {
+            ...currentDay,
+            time_blocks: currentDay.time_blocks.filter((_, index) => index !== blockIndex)
+          }
+        }
+      }));
+    }
+  };
+
+  const updateTimeBlock = (dayIndex: number, blockIndex: number, field: 'start_time' | 'end_time', value: string) => {
+    const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklyScheduleData;
+    const currentDay = formData.scheduleData[dayKey];
+    
+    if (currentDay) {
+      const updatedTimeBlocks = currentDay.time_blocks.map((block, index) => {
+        if (index === blockIndex) {
+          return { ...block, [field]: value };
+        }
+        return block;
+      });
+      
+      setFormData(prev => ({
+        ...prev,
+        scheduleData: {
+          ...prev.scheduleData,
+          [dayKey]: {
+            ...currentDay,
+            time_blocks: updatedTimeBlocks
+          }
+        }
+      }));
+    }
+  };
 
   const validatePassword = (password: string): PasswordValidation => {
     return {
@@ -252,6 +397,23 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
         
         return true;
       
+      case 4:
+        // Validate that at least one day has been configured
+        const activeDays = Object.values(formData.scheduleData).filter(day => day?.is_active);
+        if (activeDays.length === 0) {
+          setError('Por favor, configura al menos un día de atención');
+          return false;
+        }
+        
+        // Validate that each active day has at least one time block
+        const daysWithoutTimeBlocks = activeDays.filter(day => !day.time_blocks || day.time_blocks.length === 0);
+        if (daysWithoutTimeBlocks.length > 0) {
+          setError('Todos los días activos deben tener al menos un horario configurado');
+          return false;
+        }
+        
+        return true;
+      
       default:
         return true;
     }
@@ -281,7 +443,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
   };
 
   const handleSubmit = async () => {
-    if (!validateStep(3)) return;
+    if (!validateStep(4)) return;
 
     setIsLoading(true);
     setError('');
@@ -339,12 +501,16 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
       // Extract specific error message from API response
       let errorMessage = 'Error durante el registro. Intenta nuevamente.';
       
-      if (error.response?.data?.detail) {
-        // Use the specific error message from the backend
+      // The API service transforms errors into ApiError format with { detail: string, status: number }
+      if (error.detail) {
+        // Use the specific error message from the API service
+        errorMessage = error.detail;
+      } else if (error.response?.data?.detail) {
+        // Fallback: Use the raw response if available
         errorMessage = error.response.data.detail;
-      } else if (error.response?.status === 400) {
+      } else if (error.status === 400 || error.response?.status === 400) {
         errorMessage = 'Los datos proporcionados no son válidos. Por favor, revise la información.';
-      } else if (error.response?.status === 500) {
+      } else if (error.status === 500 || error.response?.status === 500) {
         errorMessage = 'Error interno del servidor. Por favor, intente nuevamente más tarde.';
       } else if (error.message) {
         errorMessage = error.message;
@@ -376,6 +542,11 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
       label: 'Datos del Consultorio',
       icon: <Business />,
       description: 'Dirección y contacto'
+    },
+    {
+      label: 'Horarios de Atención',
+      icon: <Schedule />,
+      description: 'Configura tus horarios de trabajo'
     }
   ];
 
@@ -551,18 +722,28 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
 
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
               <Box sx={{ flex: '1 1 250px' }}>
-                <TextField
-                  fullWidth
-                  margin="normal"
-                  label="Fecha de Nacimiento"
-                  type="date"
-                  value={formData.birth_date}
-                  onChange={handleInputChange('birth_date')}
-                  required
-                  InputLabelProps={{
-                    shrink: true,
-                  }}
-                />
+                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
+                  <DatePicker
+                    label="Fecha de Nacimiento *"
+                    value={formData.birth_date ? new Date(formData.birth_date) : null}
+                    maxDate={new Date()}
+                    onChange={(newValue) => {
+                      if (newValue) {
+                        const dateValue = newValue.toISOString().split('T')[0];
+                        setFormData(prev => ({ ...prev, birth_date: dateValue }));
+                      } else {
+                        setFormData(prev => ({ ...prev, birth_date: '' }));
+                      }
+                    }}
+                    slotProps={{
+                      textField: {
+                        fullWidth: true,
+                        margin: 'normal',
+                        required: true
+                      }
+                    }}
+                  />
+                </LocalizationProvider>
               </Box>
               <Box sx={{ flex: '1 1 250px' }}>
                 <TextField
@@ -794,6 +975,255 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
               helperText="Solo números (opcional)"
               inputProps={{ maxLength: 15 }}
             />
+          </Box>
+        );
+
+      case 4:
+        return (
+          <Box>
+            <Typography variant="h6" gutterBottom>
+              Horarios de Atención
+            </Typography>
+            
+            <Box sx={{ mb: 3 }}>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                <Typography variant="body2">
+                  <strong>¿Cómo funciona?</strong><br />
+                  • Para cada día, haz click en <strong>"Agregar Horarios"</strong> para activarlo<br />
+                  • Puedes tener múltiples horarios por día (ej: mañana y tarde)<br />
+                  • Los pacientes solo podrán agendar en los horarios que configures
+                </Typography>
+              </Alert>
+            </Box>
+
+            <Box>
+              {DAYS_OF_WEEK.map(day => {
+                const dayKey = day.key as keyof WeeklyScheduleData;
+                const schedule = formData.scheduleData[dayKey];
+                const isActive = schedule?.is_active ?? false;
+                const timeBlocks = schedule?.time_blocks || [];
+
+                return (
+                  <Card 
+                    key={day.key} 
+                    sx={{ 
+                      mb: 2,
+                      border: isActive ? '2px solid' : '1px solid',
+                      borderColor: isActive ? 'primary.main' : 'divider',
+                      backgroundColor: isActive ? 'primary.50' : 'background.paper',
+                      transition: 'all 0.2s ease-in-out',
+                      '&:hover': {
+                        boxShadow: 2,
+                        transform: 'translateY(-1px)'
+                      }
+                    }}
+                  >
+                    <CardContent sx={{ pb: 1 }}>
+                      {/* Header del día */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                          <Typography variant="h6" sx={{ fontWeight: 600, mr: 2 }}>
+                            {day.label}
+                          </Typography>
+                          
+                          {/* Estado visual más claro */}
+                          {isActive ? (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Chip
+                                label="Disponible"
+                                color="primary"
+                                size="small"
+                                icon={<AccessTime />}
+                                variant="filled"
+                              />
+                              {timeBlocks.length > 0 && (
+                                <Typography variant="body2" color="text.secondary">
+                                  {timeBlocks.length} horario{timeBlocks.length > 1 ? 's' : ''}
+                                </Typography>
+                              )}
+                            </Box>
+                          ) : (
+                            <Chip
+                              label="No disponible"
+                              color="default"
+                              size="small"
+                              variant="outlined"
+                            />
+                          )}
+                          
+                          {/* Mostrar resumen de horarios */}
+                          {isActive && timeBlocks.length > 0 && (
+                            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', ml: 2 }}>
+                              {timeBlocks.map((block, index) => (
+                                <Chip
+                                  key={index}
+                                  label={`${block.start_time} - ${block.end_time}`}
+                                  variant="outlined"
+                                  size="small"
+                                  sx={{ backgroundColor: 'white' }}
+                                />
+                              ))}
+                            </Box>
+                          )}
+                        </Box>
+                        
+                        {/* Botones de acción más claros */}
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                          {!isActive ? (
+                            <Button
+                              variant="contained"
+                              size="small"
+                              startIcon={<AddIcon />}
+                              onClick={() => updateDaySchedule(day.index, true)}
+                              sx={{
+                                borderRadius: '8px',
+                                textTransform: 'none',
+                                fontWeight: 500
+                              }}
+                            >
+                              Agregar Horarios
+                            </Button>
+                          ) : (
+                            <>
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<AddIcon />}
+                                onClick={() => addTimeBlock(day.index)}
+                                sx={{
+                                  borderRadius: '8px',
+                                  textTransform: 'none',
+                                  fontWeight: 500
+                                }}
+                              >
+                                Nuevo Horario
+                              </Button>
+                              <Button
+                                variant="text"
+                                size="small"
+                                color="error"
+                                onClick={() => updateDaySchedule(day.index, false)}
+                                sx={{
+                                  borderRadius: '8px',
+                                  textTransform: 'none',
+                                  fontWeight: 500
+                                }}
+                              >
+                                Desactivar
+                              </Button>
+                            </>
+                          )}
+                        </Box>
+                      </Box>
+
+                      {/* Configuración de horarios (solo si está activo) */}
+                      {isActive && (
+                        <Box sx={{ mt: 2 }}>
+                          {timeBlocks.length === 0 && (
+                            <Alert severity="info" sx={{ mb: 2 }}>
+                              <Typography variant="body2">
+                                <strong>¡Agrega tu primer horario!</strong><br />
+                                Haz click en "Nuevo Horario" para definir cuándo atiendes este día.
+                              </Typography>
+                            </Alert>
+                          )}
+
+                          {timeBlocks.map((block, blockIndex) => (
+                            <Card key={blockIndex} sx={{ mb: 2, border: '1px solid', borderColor: 'divider', backgroundColor: 'background.default' }}>
+                              <CardContent sx={{ py: 2 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                                  <Typography variant="subtitle2" color="primary" sx={{ fontWeight: 600 }}>
+                                    Horario {blockIndex + 1}
+                                  </Typography>
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => removeTimeBlock(day.index, blockIndex)}
+                                    disabled={timeBlocks.length === 1}
+                                    sx={{
+                                      '&:hover': {
+                                        backgroundColor: 'error.50'
+                                      }
+                                    }}
+                                  >
+                                    <Cancel />
+                                  </IconButton>
+                                </Box>
+                                
+                                <Grid container spacing={2}>
+                                  <Grid item xs={6}>
+                                    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
+                                      <TimePicker
+                                        label="Hora de inicio"
+                                        value={formatTime(block.start_time)}
+                                        onChange={(newValue) => {
+                                          if (newValue) {
+                                            updateTimeBlock(day.index, blockIndex, 'start_time', formatTimeToString(newValue));
+                                          }
+                                        }}
+                                        closeOnSelect={true}
+                                        openTo="hours"
+                                        slotProps={{
+                                          textField: {
+                                            size: "small",
+                                            fullWidth: true
+                                          },
+                                          actionBar: {
+                                            actions: []
+                                          }
+                                        }}
+                                      />
+                                    </LocalizationProvider>
+                                  </Grid>
+                                  <Grid item xs={6}>
+                                    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
+                                      <TimePicker
+                                        label="Hora de fin"
+                                        value={formatTime(block.end_time)}
+                                        onChange={(newValue) => {
+                                          if (newValue) {
+                                            updateTimeBlock(day.index, blockIndex, 'end_time', formatTimeToString(newValue));
+                                          }
+                                        }}
+                                        closeOnSelect={true}
+                                        openTo="hours"
+                                        slotProps={{
+                                          textField: {
+                                            size: "small",
+                                            fullWidth: true
+                                          },
+                                          actionBar: {
+                                            actions: []
+                                          }
+                                        }}
+                                      />
+                                    </LocalizationProvider>
+                                  </Grid>
+                                </Grid>
+                              </CardContent>
+                            </Card>
+                          ))}
+                          
+                          {timeBlocks.length > 0 && (
+                            <Alert severity="success" icon={<AccessTime />} sx={{ mt: 2 }}>
+                              <Typography variant="body2">
+                                <strong>Resumen para {day.label}:</strong><br />
+                                Los pacientes podrán agendar citas de {timeBlocks.map((block, index) => (
+                                  <span key={index}>
+                                    {block.start_time} a {block.end_time}
+                                    {index < timeBlocks.length - 1 ? ', ' : ''}
+                                  </span>
+                                ))}
+                              </Typography>
+                            </Alert>
+                          )}
+                        </Box>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </Box>
           </Box>
         );
 
