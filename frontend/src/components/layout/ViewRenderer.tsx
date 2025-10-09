@@ -1,0 +1,146 @@
+import React, { Suspense } from 'react';
+import { Box } from '@mui/material';
+import {
+  DashboardView,
+  PatientsViewSmart,
+  ConsultationsViewSmart,
+  AgendaView,
+  MedicalRecordsView,
+  DoctorProfileView
+} from '../lazy';
+import { ConsultationDetailView } from '../';
+import { LoadingFallback } from '../';
+
+interface ViewRendererProps {
+  activeView: string;
+  dashboardData: any;
+  onRefreshDashboard: () => void;
+  patientManagement: any;
+  consultationManagement: any;
+  appointmentManager: any;
+  medicalRecordsData: any;
+  onRefreshRecords: () => void;
+  doctorProfile: any;
+  onSaveProfile: (profile: any) => void;
+  doctorProfileHook: any;
+}
+
+export const ViewRenderer: React.FC<ViewRendererProps> = ({
+  activeView,
+  dashboardData,
+  onRefreshDashboard,
+  patientManagement,
+  consultationManagement,
+  appointmentManager,
+  medicalRecordsData,
+  onRefreshRecords,
+  doctorProfile,
+  onSaveProfile,
+  doctorProfileHook
+}) => {
+  return (
+    <Box sx={{ width: { xs: '100%', md: '75%' } }}>
+      {activeView === 'dashboard' && (
+        <Suspense fallback={<LoadingFallback message="Cargando dashboard..." />}>
+          <DashboardView 
+            dashboardData={dashboardData}
+            appointments={appointmentManager.appointments}
+            onNewAppointment={appointmentManager.handleNewAppointment}
+            onNewConsultation={consultationManagement.handleNewConsultation}
+            doctorProfile={doctorProfile}
+          />
+        </Suspense>
+      )}
+
+      {activeView === 'patients' && (
+        <Suspense fallback={<LoadingFallback message="Cargando pacientes..." />}>
+          <PatientsViewSmart
+            patients={patientManagement.patients}
+            consultations={consultationManagement.consultations}
+            successMessage=""
+            setSuccessMessage={() => {}}
+            handleNewPatient={() => patientManagement.openPatientDialog()}
+            handleEditPatient={(patient) => patientManagement.openPatientDialog(patient)}
+          />
+        </Suspense>
+      )}
+
+      {activeView === 'consultations' && !consultationManagement.consultationDetailView && (
+        <Suspense fallback={<LoadingFallback message="Cargando consultas..." />}>
+          <ConsultationsViewSmart
+            consultations={consultationManagement.consultations}
+            patients={patientManagement.patients}
+            appointments={appointmentManager.appointments}
+            successMessage=""
+            setSuccessMessage={() => {}}
+            handleNewConsultation={consultationManagement.handleNewConsultation}
+            handleEditConsultation={consultationManagement.handleEditConsultation}
+          />
+        </Suspense>
+      )}
+
+      {activeView === 'consultations' && consultationManagement.consultationDetailView && consultationManagement.selectedConsultation && (
+        <Suspense fallback={<LoadingFallback message="Cargando detalles..." />}>
+          <ConsultationDetailView
+            consultation={consultationManagement.selectedConsultation}
+            onBack={consultationManagement.exitDetailView}
+            onEdit={() => {}}
+          />
+        </Suspense>
+      )}
+
+      {activeView === 'medical-records' && (
+        <Suspense fallback={<LoadingFallback message="Cargando expedientes médicos..." />}>
+          <MedicalRecordsView
+            patients={patientManagement.patients}
+            onCreateRecord={async () => {}}
+            onUpdateRecord={async () => {}}
+            isLoading={false}
+            onRefresh={() => {}}
+          />
+        </Suspense>
+      )}
+
+      {activeView === 'agenda' && (
+        <Suspense fallback={<LoadingFallback message="Cargando agenda..." />}>
+          <AgendaView
+            appointments={appointmentManager.appointments}
+            selectedDate={appointmentManager.selectedDate}
+            setSelectedDate={appointmentManager.setSelectedDate}
+            agendaView={appointmentManager.agendaView}
+            setAgendaView={appointmentManager.setAgendaView}
+            handleNewAppointment={appointmentManager.handleNewAppointment}
+            handleEditAppointment={appointmentManager.handleEditAppointment}
+            refreshAppointments={appointmentManager.refreshAppointments}
+          />
+        </Suspense>
+      )}
+
+      {activeView === 'profile' && (
+        <Suspense fallback={<LoadingFallback message="Cargando perfil..." />}>
+          <DoctorProfileView
+            doctorProfile={doctorProfileHook.doctorProfile}
+            isLoading={doctorProfileHook.isLoading}
+            onEdit={doctorProfileHook.handleEdit}
+            isEditing={doctorProfileHook.isEditing}
+            onSave={onSaveProfile}
+            formData={doctorProfileHook.formData}
+            setFormData={doctorProfileHook.setFormData}
+            onCancel={doctorProfileHook.handleCancel}
+            successMessage={doctorProfileHook.successMessage}
+            errorMessage={doctorProfileHook.formErrorMessage}
+          />
+        </Suspense>
+      )}
+
+      {/* WhatsApp and Analytics views not implemented yet */}
+      {(activeView === 'whatsapp' || activeView === 'analytics') && (
+        <Box sx={{ p: 3, textAlign: 'center' }}>
+          <h2>Vista en desarrollo</h2>
+          <p>Esta funcionalidad estará disponible próximamente.</p>
+        </Box>
+      )}
+    </Box>
+  );
+};
+

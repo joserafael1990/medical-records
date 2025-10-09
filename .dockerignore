@@ -1,0 +1,105 @@
+# Version control
+.git/
+.gitignore
+.svn/
+.hg/
+
+# IDE/editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+
+# Node.js artifacts
+node_modules/
+npm-debug.log
+yarn-debug.log
+
+# Build outputs
+build/
+dist/
+out/
+
+# Test and debug files
+test/
+tests/
+*_test.go
+debug/
+*.log
+
+# Go artifacts
+/vendor/
+*.test
+.go-cache/
+
+# Java artifacts
+target/
+*.class
+.gradle/
+
+# Environment and secrets
+.env*
+*.env
+*.pem
+*.key
+*.crt
+config.local.*
+*.local.yml
+
+# Temporary and local files
+tmp/
+temp/
+*.tmp
+.local/
+local/
+
+# Documentation and guides
+docs/
+*.md
+README*
+
+# Docker files
+Dockerfile*
+docker-compose*
+
+# Project-specific patterns
+frontend/.babelrc
+frontend/.eslintrc.js
+frontend/jest.config.js
+frontend/env.example
+frontend/env.production
+
+# Ignore backup scripts (if not needed in container)
+backend/_backup_scripts/
+
+# Ignore migration scripts (if not needed in container)
+migration_birth_place_to_birth_city.sql
+migration_remove_duration_minutes.sql
+run_migration.py
+run_migration_remove_duration.py
+start_backend.sh
+
+# Ignore other temp or example files
+*.example
+*.production
+
+# Exclude frontend test files
+frontend/src/__tests__/
+
+# Exclude frontend docs
+frontend/src/docs/
+
+# Exclude frontend styles (if not needed)
+frontend/src/styles/
+
+# Exclude frontend public (if not needed)
+# Uncomment if public/ is not needed in container
+# frontend/public/

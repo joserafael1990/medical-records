@@ -1,0 +1,390 @@
+/**
+ * Consultation Management Hook
+ * Centralized hook for all consultation-related operations extracted from App.tsx
+ */
+
+import { useState, useCallback } from 'react';
+import { apiService } from '../services/api';
+import type { Consultation, ConsultationFormData, ClinicalStudy } from '../types';
+import { getCurrentCDMXDateTime } from '../constants';
+
+
+interface ConsultationManagementState {
+  consultations: Consultation[];
+  selectedConsultation: Consultation | null;
+  consultationDialogOpen: boolean;
+  isEditingConsultation: boolean;
+  consultationDetailView: boolean;
+  consultationFormData: ConsultationFormData;
+  consultationStudies: ClinicalStudy[];
+  consultationSearchTerm: string;
+  isSubmitting: boolean;
+  isLoading: boolean;
+  // Temporary state for new consultations
+  tempConsultationId: string | null;
+  tempClinicalStudies: ClinicalStudy[];
+  // Missing properties for patient creation flow
+  creatingPatientFromConsultation: boolean;
+  // All available appointments for consultation dialog
+  allAvailableAppointments: any[];
+}
+
+interface ConsultationManagementActions {
+  // Data operations
+  fetchConsultations: () => Promise<void>;
+  loadAllAppointments: () => Promise<void>;
+  setAllAvailableAppointments: (appointments: any[]) => void;
+  createConsultation: (data: ConsultationFormData) => Promise<Consultation>;
+  updateConsultation: (id: string, data: ConsultationFormData) => Promise<Consultation>;
+  deleteConsultation: (id: string) => Promise<void>;
+  
+  // Clinical studies
+  loadConsultationStudies: (consultationId: string) => Promise<void>;
+  setConsultationStudies: (studies: ClinicalStudy[]) => void;
+  
+  // Temporary state management
+  setTempConsultationId: (id: string | null) => void;
+  setTempClinicalStudies: (studies: ClinicalStudy[]) => void;
+  
+  // UI state management
+  setConsultations: (consultations: Consultation[] | ((prev: Consultation[]) => Consultation[])) => void;
+  setSelectedConsultation: (consultation: Consultation | null) => void;
+  setConsultationDialogOpen: (open: boolean) => void;
+  setIsEditingConsultation: (editing: boolean) => void;
+  setConsultationDetailView: (view: boolean) => void;
+  setConsultationFormData: (data: ConsultationFormData | ((prev: ConsultationFormData) => ConsultationFormData)) => void;
+  setConsultationSearchTerm: (term: string) => void;
+  setCreatingPatientFromConsultation: (creating: boolean) => void;
+  
+  // Handler functions that were in App.tsx
+  handleNewConsultation: () => void;
+  handleEditConsultation: (consultation: Consultation) => void;
+  handleBackFromConsultationDetail: () => void;
+  
+  // Utility functions
+  resetConsultationForm: () => void;
+  openConsultationDialog: (consultation?: Consultation) => void;
+  closeConsultationDialog: () => void;
+}
+
+export type ConsultationManagementReturn = ConsultationManagementState & ConsultationManagementActions;
+
+// Function moved to imports section above
+
+export const useConsultationManagement = (): ConsultationManagementReturn => {
+  // State
+  const [consultations, setConsultations] = useState<Consultation[]>([]);
+  const [selectedConsultation, setSelectedConsultation] = useState<Consultation | null>(null);
+  const [consultationDialogOpen, setConsultationDialogOpen] = useState(false);
+  const [isEditingConsultation, setIsEditingConsultation] = useState(false);
+  const [consultationDetailView, setConsultationDetailView] = useState(false);
+  const [consultationStudies, setConsultationStudies] = useState<ClinicalStudy[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [allAvailableAppointments, setAllAvailableAppointments] = useState<any[]>([]);
+  
+  // Temporary state for new consultations
+  const [tempConsultationId, setTempConsultationId] = useState<string | null>(null);
+  const [tempClinicalStudies, setTempClinicalStudies] = useState<ClinicalStudy[]>([]);
+  
+  // Additional state
+  const [consultationSearchTerm, setConsultationSearchTerm] = useState('');
+  const [creatingPatientFromConsultation, setCreatingPatientFromConsultation] = useState(false);
+  
+  // Form data with default values
+  const [consultationFormData, setConsultationFormData] = useState<ConsultationFormData>(() => ({
+    patient_id: '',
+    date: getCurrentCDMXDateTime(),
+    chief_complaint: '',
+    history_present_illness: '',
+    family_history: '',
+    personal_pathological_history: '',
+    personal_non_pathological_history: '',
+    physical_examination: '',
+    primary_diagnosis: '',
+    secondary_diagnoses: '',
+    treatment_plan: '',
+    therapeutic_plan: '',
+    follow_up_instructions: '',
+    prognosis: '',
+    laboratory_results: '',
+    imaging_studies: '',
+    interconsultations: '',
+    doctor_name: '',
+    doctor_professional_license: '',
+    doctor_specialty: ''
+  }));
+
+  // Load consultation studies
+  const loadConsultationStudies = useCallback(async (consultationId: string) => {
+    try {
+      // NOTE: Clinical studies API endpoint not yet implemented in backend
+      const studies: ClinicalStudy[] = [];
+      setConsultationStudies(studies);
+    } catch (error: any) {
+      console.error('❌ Error loading clinical studies from backend:', error?.message || 'Unknown error');
+      setConsultationStudies([]);
+      throw error;
+    }
+  }, []);
+
+  // Load all available appointments for consultation dialog
+  const loadAllAppointments = useCallback(async () => {
+    try {
+      console.log('🔄 Loading available appointments for consultation...');
+      const appointments = await apiService.getAppointments({ 
+        available_for_consultation: true 
+      });
+      console.log('✅ Loaded available appointments:', appointments.length);
+      console.log('📋 Sample appointment:', appointments[0]);
+      
+      setAllAvailableAppointments(appointments);
+    } catch (error: any) {
+      console.error('❌ Error loading available appointments:', error?.message || 'Unknown error');
+      setAllAvailableAppointments([]);
+    }
+  }, []);
+
+  // localStorage functions removed - backend-only approach
+
+  // Fetch consultations from API
+  const fetchConsultations = useCallback(async () => {
+    try {
+      console.log('🔄 Fetching consultations from backend...');
+      const data = await apiService.getConsultations();
+      console.log('📊 Raw consultations data from API:', data);
+      
+      // Transform consultation data
+      const transformedData = data.map((consultation: any) => ({
+        ...consultation,
+        patient_name: consultation.patient_name || 
+                    `${consultation.patient?.first_name || ''} ${consultation.patient?.paternal_surname || ''}`.trim(),
+        date: consultation.date || consultation.consultation_date,
+        id: consultation.id || consultation.consultation_id
+      }));
+      
+      console.log('✅ Transformed consultations:', transformedData);
+      console.log(`📈 Total consultations loaded: ${transformedData.length}`);
+      setConsultations(transformedData);
+    } catch (error: any) {
+      console.error('❌ Error fetching consultations:', error?.message || 'Unknown error');
+      setConsultations([]);
+    }
+  }, []);
+
+  // Create new consultation
+  const createConsultation = useCallback(async (data: ConsultationFormData): Promise<Consultation> => {
+    setIsSubmitting(true);
+    try {
+      const newConsultation = await apiService.createConsultation(data.patient_id.toString(), data);
+      await fetchConsultations(); // Refresh list
+      return newConsultation;
+    } catch (error: any) {
+      throw new Error(error.message || 'Error al crear consulta');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [fetchConsultations]);
+
+  // Update existing consultation
+  const updateConsultation = useCallback(async (id: string, data: ConsultationFormData): Promise<Consultation> => {
+    setIsSubmitting(true);
+    try {
+      const updatedConsultation = await apiService.updateConsultation(id, data);
+      await fetchConsultations(); // Refresh list
+      return updatedConsultation;
+    } catch (error: any) {
+      throw new Error(error.message || 'Error al actualizar consulta');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [fetchConsultations]);
+
+  // Delete consultation
+  const deleteConsultation = useCallback(async (id: string): Promise<void> => {
+    setIsSubmitting(true);
+    try {
+      await apiService.deleteConsultation(id);
+      await fetchConsultations(); // Refresh list
+    } catch (error: any) {
+      throw new Error(error.message || 'Error al eliminar consulta');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [fetchConsultations]);
+
+  // Reset form state (keeps dialog open for new consultations)
+  const resetConsultationFormData = useCallback(() => {
+    const currentDateTime = getCurrentCDMXDateTime();
+    setConsultationFormData({
+      patient_id: '',
+      date: currentDateTime,
+      chief_complaint: '',
+      history_present_illness: '',
+      family_history: '',
+      personal_pathological_history: '',
+      personal_non_pathological_history: '',
+      physical_examination: '',
+      primary_diagnosis: '',
+      secondary_diagnoses: '',
+      treatment_plan: '',
+      therapeutic_plan: '',
+      follow_up_instructions: '',
+      prognosis: '',
+      laboratory_results: '',
+      imaging_studies: '',
+      interconsultations: '',
+      doctor_name: '',
+      doctor_professional_license: '',
+      doctor_specialty: ''
+    });
+  }, []);
+
+  // Reset form state and close dialog
+  const resetConsultationForm = useCallback(() => {
+    setSelectedConsultation(null);
+    setIsEditingConsultation(false);
+    setConsultationDialogOpen(false);
+    setConsultationDetailView(false);
+    setConsultationStudies([]);
+    resetConsultationFormData();
+  }, [resetConsultationFormData]);
+
+  // Open consultation dialog for create/edit
+  const openConsultationDialog = useCallback((consultation?: Consultation) => {
+    if (consultation) {
+      setSelectedConsultation(consultation);
+      setIsEditingConsultation(true);
+      // Populate form with consultation data
+      setConsultationFormData({
+        patient_id: consultation.patient_id,
+        date: consultation.date || getCurrentCDMXDateTime(),
+        chief_complaint: consultation.chief_complaint || '',
+        history_present_illness: consultation.history_present_illness || '',
+        family_history: consultation.family_history || '',
+        personal_pathological_history: consultation.personal_pathological_history || '',
+        personal_non_pathological_history: consultation.personal_non_pathological_history || '',
+        physical_examination: consultation.physical_examination || '',
+        primary_diagnosis: consultation.primary_diagnosis || '',
+        secondary_diagnoses: consultation.secondary_diagnoses || '',
+        treatment_plan: consultation.treatment_plan || '',
+        therapeutic_plan: consultation.therapeutic_plan || '',
+        follow_up_instructions: consultation.follow_up_instructions || '',
+        prognosis: consultation.prognosis || '',
+        laboratory_results: consultation.laboratory_results || '',
+        imaging_studies: consultation.imaging_studies || '',
+        interconsultations: consultation.interconsultations || '',
+        doctor_name: consultation.doctor_name || '',
+        doctor_professional_license: consultation.doctor_professional_license || '',
+        doctor_specialty: consultation.doctor_specialty || ''
+      });
+      
+      // Load clinical studies for this consultation
+      if (consultation.id) {
+        loadConsultationStudies(consultation.id);
+      }
+    } else {
+      resetConsultationForm();
+    }
+    setConsultationDialogOpen(true);
+  }, [loadConsultationStudies, resetConsultationForm]);
+
+  // Close consultation dialog
+  const closeConsultationDialog = useCallback(() => {
+    setConsultationDialogOpen(false);
+    setConsultationDetailView(false);
+    setSelectedConsultation(null);
+    setIsEditingConsultation(false);
+  }, []);
+
+  // Handler functions
+  const handleNewConsultation = useCallback(() => {
+    console.log('🆕 handleNewConsultation called - opening dialog');
+    setSelectedConsultation(null);
+    setIsEditingConsultation(false);
+    resetConsultationFormData();
+    
+    // Load all appointments when opening consultation dialog
+    loadAllAppointments();
+    
+    setConsultationDialogOpen(true);
+  }, [resetConsultationFormData, loadAllAppointments]);
+
+  const handleEditConsultation = useCallback((consultation: Consultation) => {
+    setSelectedConsultation(consultation);
+    setConsultationFormData({
+      patient_id: consultation.patient_id,
+      date: consultation.date || getCurrentCDMXDateTime(),
+      chief_complaint: consultation.chief_complaint || '',
+      history_present_illness: consultation.history_present_illness || '',
+      family_history: consultation.family_history || '',
+      personal_pathological_history: consultation.personal_pathological_history || '',
+      personal_non_pathological_history: consultation.personal_non_pathological_history || '',
+      physical_examination: consultation.physical_examination || '',
+      primary_diagnosis: consultation.primary_diagnosis || '',
+      secondary_diagnoses: consultation.secondary_diagnoses || '',
+      treatment_plan: consultation.treatment_plan || '',
+      therapeutic_plan: consultation.therapeutic_plan || '',
+      follow_up_instructions: consultation.follow_up_instructions || '',
+      prognosis: consultation.prognosis || '',
+      laboratory_results: consultation.laboratory_results || '',
+      imaging_studies: consultation.imaging_studies || '',
+      interconsultations: consultation.interconsultations || '',
+      doctor_name: consultation.doctor_name || '',
+      doctor_professional_license: consultation.doctor_professional_license || '',
+      doctor_specialty: consultation.doctor_specialty || ''
+    });
+    setIsEditingConsultation(true);
+    setConsultationDialogOpen(true);
+  }, []);
+
+  const handleBackFromConsultationDetail = useCallback(() => {
+    setConsultationDetailView(false);
+    setSelectedConsultation(null);
+  }, []);
+
+
+  return {
+    // State
+    consultations,
+    selectedConsultation,
+    consultationDialogOpen,
+    isEditingConsultation,
+    consultationDetailView,
+    consultationFormData,
+    consultationStudies,
+    consultationSearchTerm,
+    isSubmitting,
+    isLoading,
+    tempConsultationId,
+    tempClinicalStudies,
+    creatingPatientFromConsultation,
+    allAvailableAppointments,
+    
+    // Actions
+    fetchConsultations,
+    loadAllAppointments,
+    setAllAvailableAppointments,
+    createConsultation,
+    updateConsultation,
+    deleteConsultation,
+    loadConsultationStudies,
+    setConsultationStudies,
+    setTempConsultationId,
+    setTempClinicalStudies,
+    setConsultations,
+    setSelectedConsultation,
+    setConsultationDialogOpen,
+    setIsEditingConsultation,
+    setConsultationDetailView,
+    setConsultationFormData,
+    setConsultationSearchTerm,
+    setCreatingPatientFromConsultation,
+    handleNewConsultation,
+    handleEditConsultation,
+    handleBackFromConsultationDetail,
+    resetConsultationForm,
+    openConsultationDialog,
+    closeConsultationDialog
+  };
+};

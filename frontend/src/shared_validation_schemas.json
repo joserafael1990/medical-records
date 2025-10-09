@@ -1,0 +1,146 @@
+{
+  "patterns": {
+    "curp": "^[A-Z]{4}\\d{6}[HM][A-Z]{5}[A-Z0-9]\\d$",
+    "email": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
+    "phone_mexico": "^(\\+52\\s?)?(\\d{10}|\\d{3}\\s?\\d{3}\\s?\\d{4})$",
+    "professional_license": "^\\d{7,8}$",
+    "postal_code_mexico": "^\\d{5}$",
+    "rfc": "^[A-Z&]{3,4}\\d{6}[A-Z0-9]{3}$"
+  },
+  "messages": {
+    "es": {
+      "required": "Este campo es obligatorio",
+      "email": "Ingresa un correo electrónico válido",
+      "curp": "CURP inválida. Formato: AAAA######HAAAAA#",
+      "rfc": "RFC inválido. Formato: AAA######AAA o AAAA######AAA",
+      "phone": "Número de teléfono inválido. Formato: +52 ### ### ####",
+      "professional_license": "Cédula profesional debe tener 7-8 dígitos",
+      "postal_code": "Código postal debe tener 5 dígitos",
+      "min_length": "Debe tener al menos {min} caracteres",
+      "max_length": "No puede exceder {max} caracteres",
+      "date_format": "Formato de fecha inválido",
+      "future_date": "La fecha no puede ser futura",
+      "past_date": "La fecha no puede ser pasada"
+    },
+    "en": {
+      "required": "This field is required",
+      "email": "Enter a valid email address",
+      "curp": "Invalid CURP. Format: AAAA######HAAAAA#",
+      "phone": "Invalid phone number. Format: +52 ### ### ####",
+      "professional_license": "Professional license must have 7-8 digits",
+      "postal_code": "Postal code must have 5 digits",
+      "min_length": "Must be at least {min} characters",
+      "max_length": "Cannot exceed {max} characters",
+      "date_format": "Invalid date format",
+      "future_date": "Date cannot be in the future",
+      "past_date": "Date cannot be in the past"
+    }
+  },
+  "nom004_required_fields": {
+    "patient": [
+      "first_name",
+      "paternal_surname",
+      "birth_date",
+      "gender",
+      "address_street",
+      "address_city",
+      "address_state_id",
+      "address_postal_code"
+    ],
+    "consultation": [
+      "patient_id",
+      "chief_complaint",
+      "history_present_illness",
+      "family_history",
+      "personal_pathological_history",
+      "personal_non_pathological_history",
+      "physical_examination",
+      "primary_diagnosis",
+      "treatment_plan",
+      "follow_up_instructions"
+    ]
+  },
+  "field_constraints": {
+    "name": {
+      "min_length": 2,
+      "max_length": 50
+    },
+    "curp": {
+      "length": 18
+    },
+    "phone": {
+      "min_length": 10,
+      "max_length": 15
+    },
+    "email": {
+      "max_length": 100
+    },
+    "address": {
+      "max_length": 500
+    },
+    "professional_license": {
+      "min_length": 7,
+      "max_length": 8
+    },
+    "postal_code": {
+      "length": 5
+    }
+  },
+  "dropdown_values": {
+    "gender": [
+      { "value": "M", "label_es": "Masculino", "label_en": "Male" },
+      { "value": "F", "label_es": "Femenino", "label_en": "Female" }
+    ],
+    "civil_status": [
+      { "value": "single", "label_es": "Soltero(a)", "label_en": "Single" },
+      { "value": "married", "label_es": "Casado(a)", "label_en": "Married" },
+      { "value": "divorced", "label_es": "Divorciado(a)", "label_en": "Divorced" },
+      { "value": "widowed", "label_es": "Viudo(a)", "label_en": "Widowed" },
+      { "value": "free_union", "label_es": "Unión libre", "label_en": "Free union" }
+    ],
+    "blood_type": [
+      { "value": "A+", "label_es": "A+", "label_en": "A+" },
+      { "value": "A-", "label_es": "A-", "label_en": "A-" },
+      { "value": "B+", "label_es": "B+", "label_en": "B+" },
+      { "value": "B-", "label_es": "B-", "label_en": "B-" },
+      { "value": "AB+", "label_es": "AB+", "label_en": "AB+" },
+      { "value": "AB-", "label_es": "AB-", "label_en": "AB-" },
+      { "value": "O+", "label_es": "O+", "label_en": "O+" },
+      { "value": "O-", "label_es": "O-", "label_en": "O-" }
+    ],
+    "mexican_states": [
+      { "value": "AGS", "label": "Aguascalientes" },
+      { "value": "BC", "label": "Baja California" },
+      { "value": "BCS", "label": "Baja California Sur" },
+      { "value": "CAM", "label": "Campeche" },
+      { "value": "CHIS", "label": "Chiapas" },
+      { "value": "CHIH", "label": "Chihuahua" },
+      { "value": "COAH", "label": "Coahuila" },
+      { "value": "COL", "label": "Colima" },
+      { "value": "CDMX", "label": "Ciudad de México" },
+      { "value": "DGO", "label": "Durango" },
+      { "value": "GTO", "label": "Guanajuato" },
+      { "value": "GRO", "label": "Guerrero" },
+      { "value": "HGO", "label": "Hidalgo" },
+      { "value": "JAL", "label": "Jalisco" },
+      { "value": "MEX", "label": "Estado de México" },
+      { "value": "MICH", "label": "Michoacán" },
+      { "value": "MOR", "label": "Morelos" },
+      { "value": "NAY", "label": "Nayarit" },
+      { "value": "NL", "label": "Nuevo León" },
+      { "value": "OAX", "label": "Oaxaca" },
+      { "value": "PUE", "label": "Puebla" },
+      { "value": "QRO", "label": "Querétaro" },
+      { "value": "QROO", "label": "Quintana Roo" },
+      { "value": "SLP", "label": "San Luis Potosí" },
+      { "value": "SIN", "label": "Sinaloa" },
+      { "value": "SON", "label": "Sonora" },
+      { "value": "TAB", "label": "Tabasco" },
+      { "value": "TAMPS", "label": "Tamaulipas" },
+      { "value": "TLAX", "label": "Tlaxcala" },
+      { "value": "VER", "label": "Veracruz" },
+      { "value": "YUC", "label": "Yucatán" },
+      { "value": "ZAC", "label": "Zacatecas" }
+    ]
+  }
+}

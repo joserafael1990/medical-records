@@ -1,0 +1,33 @@
+{
+  "short_name": "AVANT",
+  "name": "AVANT - Sistema de Historias Clínicas",
+  "description": "Sistema Integral de Historias Clínicas para profesionales de la salud",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "logo192.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192"
+    },
+    {
+      "src": "logo512.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#0B5394",
+  "background_color": "#ffffff",
+  "categories": ["medical", "health", "productivity"],
+  "orientation": "portrait-primary"
+}

@@ -1,0 +1,55 @@
+services:
+  python-backend:
+    build:
+      context: ./backend
+      dockerfile: ../backendDockerfile
+    restart: unless-stopped
+    init: true
+    ports:
+      - "8000:8000"  # FastAPI default port
+    networks:
+      - appnet
+    # env_file: ./backend/.env  # Uncomment if .env file exists
+    depends_on:
+      - postgres-db  # Ensure DB is up before backend starts
+
+  typescript-frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../frontendDockerfile
+    restart: unless-stopped
+    init: true
+    ports:
+      - "3000:3000"  # React app default port
+    networks:
+      - appnet
+    # env_file: ./frontend/.env  # Uncomment if .env file exists
+    depends_on:
+      - python-backend  # Frontend expects backend to be up
+
+  postgres-db:
+    image: postgres:latest
+    restart: unless-stopped
+    networks:
+      - appnet
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: historias_clinicas
+    ports:
+      - "5432:5432"  # Expose for local dev
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  appnet:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    # Persistent storage for PostgreSQL
