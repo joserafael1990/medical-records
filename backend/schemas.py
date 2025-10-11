@@ -140,6 +140,7 @@ class DoctorCreate(PersonBase):
     office_address: Optional[str] = None
     office_postal_code: Optional[str] = None
     office_phone: Optional[str] = None
+    office_timezone: Optional[str] = 'America/Mexico_City'  # Doctor office timezone
     appointment_duration: Optional[int] = None  # Duration in minutes
     
     # Professional data
@@ -185,6 +186,7 @@ class DoctorUpdate(BaseSchema):
     office_state_id: Optional[int] = None  # FK to states table
     office_postal_code: Optional[str] = None
     office_phone: Optional[str] = None
+    office_timezone: Optional[str] = 'America/Mexico_City'  # Doctor office timezone
     appointment_duration: Optional[int] = None  # Duration in minutes
     
     # Professional data
@@ -248,6 +250,7 @@ class PersonUpdate(BaseSchema):
     office_address: Optional[str] = None
     office_postal_code: Optional[str] = None
     office_phone: Optional[str] = None
+    office_timezone: Optional[str] = 'America/Mexico_City'  # Doctor office timezone
     appointment_duration: Optional[int] = None  # Duration in minutes
     
     # Professional data (doctors)

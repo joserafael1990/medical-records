@@ -27,6 +27,10 @@ import { usePatientManagement } from '../../hooks/usePatientManagement';
 import { useConsultationManagement } from '../../hooks/useConsultationManagement';
 import { useAppointmentManager } from '../../hooks/useAppointmentManager';
 import { useAuth } from '../../contexts/AuthContext';
+// Dialog imports
+import PatientDialog from '../dialogs/PatientDialog'; // ✅ Now implemented!
+import ConsultationDialog from '../dialogs/ConsultationDialog'; // ✅ Now implemented!  
+import AppointmentDialog from '../dialogs/AppointmentDialog'; // ✅ This one works!
 
 // Use Twitter-inspired theme
 const theme = twitterTheme;
@@ -52,9 +56,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   const { doctorProfile, isLoading } = doctorProfileHook;
   const [userMenuAnchorEl, setUserMenuAnchorEl] = useState<null | HTMLElement>(null);
 
-  const handleUserMenuClick = (event: React.MouseEvent<HTMLElement>) => {
-    setUserMenuAnchorEl(event.currentTarget);
-  };
+         const handleUserMenuClick = (event: React.MouseEvent<HTMLElement>) => {
+           setUserMenuAnchorEl(event.currentTarget);
+         };
 
   const handleUserMenuClose = () => {
     setUserMenuAnchorEl(null);
@@ -118,8 +122,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         {isLoading && <LinearProgress />}
       </AppBar>
 
-      {/* User Profile Menu */}
-      <UserProfileMenu
+             {/* User Profile Menu */}
+             <UserProfileMenu
         anchorEl={userMenuAnchorEl}
         open={Boolean(userMenuAnchorEl)}
         onClose={handleUserMenuClose}
@@ -154,6 +158,61 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           />
         </Box>
       </Container>
+
+      {/* Global Dialogs - Rendered here so they work from any view */}
+      {patientManagement.patientDialogOpen && (
+        <PatientDialog
+          open={patientManagement.patientDialogOpen}
+          onClose={patientManagement.closePatientDialog}
+          patient={patientManagement.selectedPatient}
+          onSubmit={async (data) => {
+            if (patientManagement.selectedPatient) {
+              await patientManagement.updatePatient(patientManagement.selectedPatient.id, data);
+            } else {
+              await patientManagement.createPatient(data);
+            }
+            patientManagement.closePatientDialog();
+            patientManagement.fetchPatients();
+          }}
+        />
+      )}
+
+      {consultationManagement.consultationDialogOpen && (
+        <ConsultationDialog
+          open={consultationManagement.consultationDialogOpen}
+          onClose={consultationManagement.closeConsultationDialog}
+          patients={patientManagement.patients}
+          consultation={consultationManagement.selectedConsultation}
+          doctorProfile={doctorProfile}
+          onSubmit={async (data) => {
+            if (consultationManagement.selectedConsultation) {
+              await consultationManagement.updateConsultation(consultationManagement.selectedConsultation.id, data);
+            } else {
+              await consultationManagement.createConsultation(data);
+            }
+            consultationManagement.closeConsultationDialog();
+            consultationManagement.fetchConsultations();
+          }}
+        />
+      )}
+
+      {appointmentManager.appointmentDialogOpen && (
+        <AppointmentDialog
+          open={appointmentManager.appointmentDialogOpen}
+          onClose={appointmentManager.handleCancelAppointment}
+          onSubmit={appointmentManager.handleAppointmentSubmit}
+          onNewPatient={patientManagement.openPatientDialog}
+          onEditPatient={(patient) => patientManagement.openPatientDialog(patient)}
+          formData={appointmentManager.appointmentFormData}
+          patients={patientManagement.patients}
+          isEditing={appointmentManager.isEditingAppointment}
+          loading={appointmentManager.isSubmitting}
+          formErrorMessage={appointmentManager.appointmentFormErrorMessage}
+          fieldErrors={appointmentManager.appointmentFieldErrors}
+          onFormDataChange={appointmentManager.setAppointmentFormData}
+          doctorProfile={doctorProfile}
+        />
+      )}
     </ThemeProvider>
   );
 };

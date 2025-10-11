@@ -2,13 +2,15 @@ services:
   python-backend:
     build:
       context: ./backend
-      dockerfile: ../backendDockerfile
+      dockerfile: Dockerfile
     restart: unless-stopped
     init: true
     ports:
       - "8000:8000"  # FastAPI default port
     networks:
       - appnet
+    environment:
+      - MEDICAL_ENCRYPTION_KEY=17TAemFFyvzzOSCNdm9fISoQjiWzlWAgVJslIOYaGpU=
     # env_file: ./backend/.env  # Uncomment if .env file exists
     depends_on:
       - postgres-db  # Ensure DB is up before backend starts
@@ -16,16 +18,29 @@ services:
   typescript-frontend:
     build:
       context: ./frontend
-      dockerfile: ../frontendDockerfile
+      dockerfile: Dockerfile.dev  # Use development Dockerfile
     restart: unless-stopped
     init: true
     ports:
       - "3000:3000"  # React app default port
     networks:
       - appnet
+    environment:
+      - NODE_OPTIONS=--max-old-space-size=8192  # 8GB memory limit
+      - GENERATE_SOURCEMAP=false
+      - TSC_COMPILE_ON_ERROR=true
+      - ESLINT_NO_DEV_ERRORS=true
+      - SKIP_PREFLIGHT_CHECK=true
+      - DISABLE_ESLINT_PLUGIN=true
+      - FAST_REFRESH=false
+      - CI=true
     # env_file: ./frontend/.env  # Uncomment if .env file exists
     depends_on:
       - python-backend  # Frontend expects backend to be up
+    deploy:
+      resources:
+        limits:
+          memory: 10G  # Limit container memory to 10GB
 
   postgres-db:
     image: postgres:latest
@@ -33,15 +48,15 @@ services:
     networks:
       - appnet
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: historias_user
+      POSTGRES_PASSWORD: historias_pass
       POSTGRES_DB: historias_clinicas
     ports:
       - "5432:5432"  # Expose for local dev
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U historias_user"]
       interval: 10s
       timeout: 5s
       retries: 5

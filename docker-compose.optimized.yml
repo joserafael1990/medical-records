@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  # Database
+  postgres-db:
+    image: postgres:15.4
+    container_name: medical-records-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: historias_clinicas
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: mysecretpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend + Frontend (served as static files)
+  medical-records-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend-frontend
+    container_name: medical-records-app
+    restart: unless-stopped
+    ports:
+      - "3000:80"     # Web interface (frontend + API)
+    environment:
+      - DATABASE_URL=postgresql://postgres:mysecretpassword@postgres-db:5432/historias_clinicas
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+

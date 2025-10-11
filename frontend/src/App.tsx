@@ -6,6 +6,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
 import { AuthProvider } from './contexts/AuthContext';
 import { AppLayout } from './components/layout/AppLayout';
+import { useAuth } from './contexts/AuthContext';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 
@@ -56,6 +57,12 @@ const theme = createTheme({
   },
 });
 
+const AppWithAuth: React.FC = () => {
+  const { logout } = useAuth();
+  
+  return <AppLayout onLogout={logout} />;
+};
+
 const App: React.FC = () => {
   console.log('🚀 AVANT App iniciando con React + Material-UI');
   
@@ -66,7 +73,7 @@ const App: React.FC = () => {
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
           <AuthProvider>
             <ProtectedRoute>
-              <AppLayout />
+              <AppWithAuth />
             </ProtectedRoute>
           </AuthProvider>
         </LocalizationProvider>

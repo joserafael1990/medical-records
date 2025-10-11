@@ -20,12 +20,33 @@ def now_cdmx() -> datetime:
     """Get current datetime in CDMX timezone"""
     return datetime.now(SYSTEM_TIMEZONE)
 
-def to_utc_for_storage(dt: datetime) -> datetime:
+def get_doctor_timezone(db: Session, doctor_id: int) -> str:
+    """Get doctor's office timezone from database"""
+    doctor = db.query(Person).filter(Person.id == doctor_id).first()
+    if doctor and doctor.office_timezone:
+        return doctor.office_timezone
+    return 'America/Mexico_City'  # Default fallback
+
+def now_in_timezone(timezone_str: str = 'America/Mexico_City') -> datetime:
+    """Get current datetime in specified timezone"""
+    tz = pytz.timezone(timezone_str)
+    return datetime.now(tz)
+
+def to_utc_for_storage(dt: datetime, doctor_timezone: str = 'America/Mexico_City') -> datetime:
     """Convert datetime to UTC for database storage"""
     if dt.tzinfo is None:
-        # Assume CDMX if naive
-        dt = SYSTEM_TIMEZONE.localize(dt)
+        # Assume doctor timezone if naive
+        tz = pytz.timezone(doctor_timezone)
+        dt = tz.localize(dt)
     return dt.astimezone(pytz.utc)
+
+def from_utc_to_timezone(dt: datetime, doctor_timezone: str = 'America/Mexico_City') -> datetime:
+    """Convert UTC datetime to doctor's timezone"""
+    if dt.tzinfo is None:
+        # Assume UTC if naive
+        dt = pytz.utc.localize(dt)
+    tz = pytz.timezone(doctor_timezone)
+    return dt.astimezone(tz)
 
 
 class AppointmentService:
@@ -38,27 +59,47 @@ class AppointmentService:
         if 'id' in appointment_data:
             del appointment_data['id']
         
+        # Get doctor's timezone and appointment duration
+        doctor_id = appointment_data.get('doctor_id')
+        doctor_timezone = 'America/Mexico_City'  # Default fallback
+        duration_minutes = 30  # Default fallback
+        
+        if doctor_id:
+            doctor = db.query(Person).filter(Person.id == doctor_id).first()
+            if doctor:
+                doctor_timezone = doctor.office_timezone if doctor.office_timezone else 'America/Mexico_City'
+                duration_minutes = doctor.appointment_duration if doctor.appointment_duration else 30
+        
         # Calculate end_time based on appointment_date and doctor's appointment_duration
         start_time = appointment_data['appointment_date']
         if isinstance(start_time, str):
-            start_time = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+            # Parse the datetime string
+            if start_time.endswith('Z'):
+                # If it ends with Z, treat it as UTC and convert to doctor's timezone first
+                start_time = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                # Convert from UTC to doctor's timezone, then back to UTC for storage
+                tz = pytz.timezone(doctor_timezone)
+                start_time_utc = start_time.astimezone(pytz.utc)
+                # Get the local time in doctor's timezone
+                local_time = start_time_utc.astimezone(tz)
+                # Create a new datetime with just the date/time components in doctor's timezone
+                start_time = datetime.combine(local_time.date(), local_time.time())
+                start_time = tz.localize(start_time)
+            else:
+                # If no timezone info, assume it's in doctor's timezone
+                start_time = datetime.fromisoformat(start_time)
+                tz = pytz.timezone(doctor_timezone)
+                start_time = tz.localize(start_time)
 
         # Convert to UTC for storage
-        start_time = to_utc_for_storage(start_time)
+        start_time = start_time.astimezone(pytz.utc)
         appointment_data['appointment_date'] = start_time
-
-        # Get doctor's appointment_duration from persons table
-        doctor = db.query(Person).filter(Person.id == appointment_data['doctor_id']).first()
-        if doctor and doctor.appointment_duration:
-            duration_minutes = doctor.appointment_duration
-        else:
-            duration_minutes = 30  # Default fallback
 
         end_time = start_time + timedelta(minutes=duration_minutes)
         appointment_data['end_time'] = end_time
         
         # Set created_at in UTC
-        appointment_data['created_at'] = now_cdmx().astimezone(pytz.utc)
+        appointment_data['created_at'] = now_in_timezone(doctor_timezone).astimezone(pytz.utc)
         
         # Remove any invalid fields that don't exist in the Appointment model
         # Note: patient and doctor names are available through relationships, not stored fields
@@ -96,7 +137,7 @@ class AppointmentService:
         
         # Status filter for available appointments (for consultation dropdown)
         if available_for_consultation:
-            query = query.filter(Appointment.status.in_(['scheduled', 'confirmed']))
+            query = query.filter(Appointment.status.in_(['confirmed']))
         elif status:
             query = query.filter(Appointment.status == status)
         
@@ -271,7 +312,6 @@ class AppointmentService:
             query = query.filter(Appointment.doctor_id == doctor_id)
         
         total = query.count()
-        scheduled = query.filter(Appointment.status == "scheduled").count()
         confirmed = query.filter(Appointment.status == "confirmed").count()
         completed = query.filter(Appointment.status == "completed").count()
         cancelled = query.filter(Appointment.status == "cancelled").count()
@@ -295,7 +335,6 @@ class AppointmentService:
         
         return {
             "total": total,
-            "scheduled": scheduled,
             "confirmed": confirmed,
             "completed": completed,
             "cancelled": cancelled,

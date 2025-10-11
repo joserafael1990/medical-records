@@ -47,6 +47,7 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
             appointments={appointmentManager.appointments}
             onNewAppointment={appointmentManager.handleNewAppointment}
             onNewConsultation={consultationManagement.handleNewConsultation}
+            onNewPatient={patientManagement.openPatientDialog}
             doctorProfile={doctorProfile}
           />
         </Suspense>
@@ -111,6 +112,7 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
             setAgendaView={appointmentManager.setAgendaView}
             handleNewAppointment={appointmentManager.handleNewAppointment}
             handleEditAppointment={appointmentManager.handleEditAppointment}
+            cancelAppointment={appointmentManager.cancelAppointment}
             refreshAppointments={appointmentManager.refreshAppointments}
           />
         </Suspense>
@@ -123,12 +125,17 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
             isLoading={doctorProfileHook.isLoading}
             onEdit={doctorProfileHook.handleEdit}
             isEditing={doctorProfileHook.isEditing}
+            dialogOpen={doctorProfileHook.dialogOpen}
             onSave={onSaveProfile}
             formData={doctorProfileHook.formData}
             setFormData={doctorProfileHook.setFormData}
             onCancel={doctorProfileHook.handleCancel}
             successMessage={doctorProfileHook.successMessage}
             errorMessage={doctorProfileHook.formErrorMessage}
+            formErrorMessage={doctorProfileHook.formErrorMessage}
+            setFormErrorMessage={doctorProfileHook.setFormErrorMessage}
+            isSubmitting={doctorProfileHook.isSubmitting}
+            fieldErrors={doctorProfileHook.fieldErrors}
           />
         </Suspense>
       )}

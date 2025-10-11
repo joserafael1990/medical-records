@@ -132,14 +132,10 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     
     try {
       setLoadingTimes(true);
-      console.log('🔧 Loading available times for date:', date);
-      
       const response = await apiService.getAvailableTimesForBooking(date);
-      console.log('🔧 Available times response:', response);
-      
       setAvailableTimes(response.available_times || []);
     } catch (error) {
-      console.error('❌ Error loading available times:', error);
+      console.error('Error loading available times:', error);
       setAvailableTimes([]);
     } finally {
       setLoadingTimes(false);
@@ -148,7 +144,6 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
 
   // Handle date change and load available times
   const handleDateChange = (newDate: string) => {
-    console.log('🔧 Date changed to:', newDate);
     setSelectedDate(newDate);
     setSelectedTime(''); // Reset selected time when date changes
     
@@ -163,14 +158,12 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
 
   // Handle time selection
   const handleTimeChange = (time: string) => {
-    console.log('🔧 Time selected:', time);
     setSelectedTime(time);
     
     if (selectedDate && time) {
       // Combine date and time for datetime-local input
       const dateOnly = selectedDate.split('T')[0];
       const dateTime = `${dateOnly}T${time}`;
-      console.log('🔧 Combined datetime:', dateTime);
       
       // Update form data
       const updatedFormData = { ...localFormData, date_time: dateTime };
@@ -211,23 +204,8 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
 
   // Determine if the form is complete and ready to submit
   const isFormComplete = () => {
-    // Debug: Log validation state
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 isFormComplete() Debug:');
-      console.log('  - appointment_type:', localFormData.appointment_type);
-      console.log('  - selectedDate:', selectedDate);
-      console.log('  - selectedTime:', selectedTime);
-      if (localFormData.appointment_type === 'first_visit') {
-        console.log('  - newPatientData:', newPatientData);
-      } else {
-        console.log('  - selectedPatient:', selectedPatient);
-        console.log('  - patient_id:', localFormData.patient_id);
-      }
-    }
-
     // Check if appointment type is selected
     if (!localFormData.appointment_type) {
-      console.log('❌ No appointment type selected');
       return false;
     }
     
@@ -239,25 +217,20 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
           !newPatientData.birth_date || 
           !newPatientData.gender || 
           !newPatientData.primary_phone) {
-        console.log('❌ Missing new patient data');
         return false;
       }
     } else {
       // For other types, check if patient is selected
       if (!selectedPatient || !localFormData.patient_id) {
-        console.log('❌ No patient selected');
         return false;
       }
     }
     
     // Check if date and time are selected
     if (!selectedDate || !selectedTime) {
-      console.log('❌ Missing date or time:', { selectedDate, selectedTime });
       return false;
     }
     
-    
-    console.log('✅ Form is complete!');
     return true;
   };
 
@@ -310,11 +283,6 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
   ) => {
     const value = event.target ? event.target.value : event;
     
-    // Debug: Log field changes
-    if (process.env.NODE_ENV === 'development' && (field === 'patient_id' || field === 'reason')) {
-      console.log(`🔄 Field change - ${field}:`, value);
-    }
-    
     const newFormData = {
       ...localFormData,
       [field]: value
@@ -329,11 +297,6 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
   };
 
   const handlePatientChange = (patient: Patient | null) => {
-    // Debug: Log patient selection
-    if (process.env.NODE_ENV === 'development') {
-      console.log('👤 Patient selected:', patient?.full_name, 'ID:', patient?.id);
-    }
-    
     setSelectedPatient(patient);
     const newFormData = {
       ...localFormData,
@@ -349,35 +312,14 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
   };
 
   const handleSubmit = async () => {
-    console.log('🚀 handleSubmit called!');
-    
-    // Debug: Log current form state before submission
-    if (process.env.NODE_ENV === 'development') {
-      console.group('🔍 AppointmentDialog Debug');
-      console.log('📋 localFormData:', localFormData);
-      console.log('👤 selectedPatient:', selectedPatient);
-      console.log('🆕 newPatientData:', newPatientData);
-      console.log('📝 Form validation check:');
-      console.log('  - appointment_type:', localFormData.appointment_type);
-      console.log('  - patient_id:', localFormData.patient_id);
-      console.log('  - reason:', localFormData.reason);
-      console.log('  - date_time:', localFormData.date_time);
-      console.log('  - selectedDate:', selectedDate);
-      console.log('  - selectedTime:', selectedTime);
-      console.groupEnd();
-    }
-
     // Validate that all required fields are complete before proceeding
     if (!isFormComplete()) {
-      console.error('❌ Form is not complete, cannot submit');
       return;
     }
 
     // Handle "Primera vez" (first visit) - create patient inline
     if (localFormData.appointment_type === 'first_visit') {
       try {
-        console.log('🆕 Creating new patient for first visit...');
-
         // Create patient first - map to PatientFormData interface
         const patientData: PatientFormData = {
           // Basic information (required)
@@ -429,7 +371,6 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
         };
 
         const newPatient = await apiService.createPatient(patientData);
-        console.log('✅ New patient created:', newPatient);
 
         // Now create appointment with the new patient
         const finalFormData = {
@@ -442,7 +383,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
         onSubmit(finalFormData);
         
       } catch (error) {
-        console.error('❌ Error creating patient:', error);
+        console.error('Error creating patient:', error);
         // Handle error - could show error message to user
       }
     } else {
@@ -465,10 +406,15 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     return Boolean(getFieldError(field));
   };
 
+  const handleClose = () => {
+    onClose();
+  };
+
+
   return (
     <Dialog 
       open={open} 
-      onClose={onClose} 
+      onClose={handleClose} 
       maxWidth="md" 
       fullWidth
       PaperProps={{
@@ -490,7 +436,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
             {isEditing ? 'Editar Cita' : 'Nueva Cita'}
           </Typography>
         </Box>
-        <IconButton onClick={onClose} size="small">
+        <IconButton onClick={handleClose} size="small">
           <CloseIcon />
         </IconButton>
       </DialogTitle>

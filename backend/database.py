@@ -4,7 +4,7 @@ Database: PostgreSQL with numeric IDs
 Compliance: 100% Mexican NOMs
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Date, Text, Boolean, ForeignKey, DECIMAL
+from sqlalchemy import Column, Integer, String, DateTime, Date, Time, Text, Boolean, ForeignKey, DECIMAL
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy import create_engine
@@ -119,6 +119,7 @@ class Person(Base):
     office_state_id = Column(Integer, ForeignKey("states.id"))  # FK to states table
     office_postal_code = Column(String(5))
     office_phone = Column(String(20))  # Professional/office phone number
+    office_timezone = Column(String(50), default='America/Mexico_City')  # Doctor office timezone
     appointment_duration = Column(Integer)  # Duration of appointments in minutes (optional)
     
     # PROFESSIONAL DATA (doctors only)
@@ -169,6 +170,7 @@ class Person(Base):
     appointments_as_doctor = relationship("Appointment", foreign_keys="Appointment.doctor_id", back_populates="doctor")
     vital_signs = relationship("VitalSigns", foreign_keys="VitalSigns.patient_id", back_populates="patient")
     vital_signs_recorded = relationship("VitalSigns", foreign_keys="VitalSigns.recorded_by", back_populates="doctor")
+    
     
     # PROPERTIES
     @property
@@ -347,8 +349,15 @@ class VitalSigns(Base):
 # CONFIGURACIÓN DE BASE DE DATOS
 # ============================================================================
 
+# Import schedule models to ensure they are registered with Base
+try:
+    from models.schedule import ScheduleTemplate, ScheduleException, ScheduleSlot
+    print("✅ Schedule models imported successfully")
+except ImportError as e:
+    print(f"⚠️ Warning: Could not import schedule models: {e}")
+
 # Database URL from environment variable or default
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://historias_user:historias_pass@localhost:5432/historias_clinicas")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://historias_user:historias_pass@postgres-db:5432/historias_clinicas")
 
 # SQLAlchemy setup
 engine = create_engine(DATABASE_URL, echo=False)
@@ -361,6 +370,7 @@ def get_db():
         yield db
     finally:
         db.close()
+
 
 def init_db():
     """Inicializar base de datos - solo crear tablas que no existen"""

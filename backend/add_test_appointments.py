@@ -46,7 +46,7 @@ def create_test_appointments():
                 "duration": 60,
                 "type": "consultation",
                 "reason": "Evaluación trastorno bipolar",
-                "status": "scheduled",
+                "status": "confirmed",
                 "notes": "Ajuste de estabilizadores del ánimo"
             },
             {
@@ -55,7 +55,7 @@ def create_test_appointments():
                 "duration": 30,
                 "type": "consultation", 
                 "reason": "sadsa",
-                "status": "scheduled",
+                "status": "confirmed",
                 "notes": ""
             },
             {
@@ -64,7 +64,7 @@ def create_test_appointments():
                 "duration": 30,
                 "type": "consultation",
                 "reason": "lola",
-                "status": "scheduled",
+                "status": "confirmed",
                 "notes": ""
             },
             {

@@ -932,7 +932,7 @@ class ApiService {
   }
 
   async getAvailableSlots(targetDate: string): Promise<any[]> {
-    const response = await this.api.get(API_CONFIG.ENDPOINTS.AGENDA.AVAILABLE_SLOTS, {
+    const response = await this.api.get(API_CONFIG.ENDPOINTS.DAILY_AGENDA, {
       params: { target_date: targetDate, doctor_id: 42 }
     });
     return response.data;
@@ -949,7 +949,7 @@ class ApiService {
   async getDailyAgenda(targetDate?: string): Promise<Appointment[]> {
     // If no target date provided, use today's date
     const dateToUse = targetDate || new Date().toISOString().split('T')[0];
-    const response = await this.api.get<Appointment[]>(API_CONFIG.ENDPOINTS.AGENDA.DAILY, {
+    const response = await this.api.get<Appointment[]>(API_CONFIG.ENDPOINTS.DAILY_AGENDA, {
       params: { date: dateToUse }
     });
     
@@ -970,7 +970,7 @@ class ApiService {
     if (startDate) params.start_date = startDate;
     if (endDate) params.end_date = endDate;
     
-    const response = await this.api.get<Appointment[]>(API_CONFIG.ENDPOINTS.AGENDA.WEEKLY, {
+    const response = await this.api.get<Appointment[]>(API_CONFIG.ENDPOINTS.WEEKLY_AGENDA, {
       params
     });
     
@@ -991,7 +991,7 @@ class ApiService {
     if (startDate) params.start_date = startDate;
     if (endDate) params.end_date = endDate;
     
-    const response = await this.api.get<Appointment[]>(API_CONFIG.ENDPOINTS.AGENDA.DAILY, {
+    const response = await this.api.get<Appointment[]>(API_CONFIG.ENDPOINTS.DAILY_AGENDA, {
       params
     });
     
@@ -1080,6 +1080,11 @@ class ApiService {
 
   async getStates(): Promise<Array<{id: number, name: string}>> {
     const response = await this.api.get('/api/catalogs/states');
+    return response.data;
+  }
+
+  async getTimezones(): Promise<Array<{value: string, label: string}>> {
+    const response = await this.api.get('/api/catalogs/timezones');
     return response.data;
   }
 
@@ -1225,6 +1230,7 @@ export const {
   updateDoctorProfile,
   getSpecialties,
   getStates,
+  getTimezones,
   login,
   register,
   getDashboardData,

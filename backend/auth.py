@@ -132,45 +132,30 @@ def get_user_from_token(db: Session, token: str) -> Optional[Person]:
     """
     payload = verify_token(token)
     if payload is None:
-        print("❌ TOKEN: verify_token returned None")
         return None
-    
-    print(f"🔍 TOKEN: Payload = {payload}")
     
     # Try to get user_id first (more reliable)
     user_id = payload.get("user_id")
-    print(f"🔍 TOKEN: user_id from payload = {user_id}")
     if user_id is not None:
         user = db.query(Person).filter(Person.id == user_id).first()
         if user:
-            print(f"✅ TOKEN: Found user by user_id {user_id}: {user.first_name} {user.paternal_surname} (ID: {user.id})")
             return user
     
     # Standard JWT: 'sub' contains the user ID (subject)
     user_id_from_sub = payload.get("sub")
-    print(f"🔍 TOKEN: sub from payload = {user_id_from_sub} (type: {type(user_id_from_sub)})")
     if user_id_from_sub is not None:
         try:
             # Convert to integer if it's a string
             user_id = int(user_id_from_sub)
-            print(f"🔍 TOKEN: Converted sub to integer: {user_id}")
             user = db.query(Person).filter(Person.id == user_id).first()
             if user:
-                print(f"✅ TOKEN: Found user by sub {user_id}: {user.first_name} {user.paternal_surname} (ID: {user.id})")
                 return user
-            else:
-                print(f"❌ TOKEN: No user found with ID {user_id}")
-        except (ValueError, TypeError) as e:
-            print(f"❌ TOKEN: Could not convert sub to int: {e}")
+        except (ValueError, TypeError):
             # If sub is not a number, try as username (fallback)
             user = db.query(Person).filter(Person.username == str(user_id_from_sub)).first()
             if user:
-                print(f"✅ TOKEN: Found user by username {user_id_from_sub}: {user.first_name} {user.paternal_surname} (ID: {user.id})")
                 return user
-            else:
-                print(f"❌ TOKEN: No user found with username {user_id_from_sub}")
             
-    print("❌ TOKEN: No user found by any method")
     return None
 
 # ============================================================================

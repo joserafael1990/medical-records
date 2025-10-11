@@ -72,8 +72,6 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
   onClose,
   onSave
 }) => {
-  // Debug logging
-  console.log('🔧 ScheduleConfigDialog - Rendered with props:', { open, onClose: !!onClose, onSave: !!onSave });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,9 +80,7 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
   const [hasExistingSchedule, setHasExistingSchedule] = useState(false);
 
   useEffect(() => {
-    console.log('🔧 ScheduleConfigDialog - useEffect triggered, open:', open);
     if (open) {
-      console.log('🔧 ScheduleConfigDialog - Loading weekly schedule...');
       loadWeeklySchedule();
     }
   }, [open]);
@@ -93,19 +89,19 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
     try {
       setLoading(true);
       setError(null);
-      console.log('🔧 Loading weekly schedule...');
       
       const response = await apiService.get('/api/schedule/templates/weekly');
-      console.log('🔧 Weekly schedule response:', response.data);
       setWeeklySchedule(response.data);
       
-      // Verificar si ya existe algún horario configurado
-      const hasSchedule = Object.values(response.data).some(schedule => schedule !== null);
+      // Verificar si ya existe algún horario configurado con datos válidos
+      const hasSchedule = Object.values(response.data).some(schedule => 
+        schedule !== null && 
+        schedule.time_blocks && 
+        schedule.time_blocks.some(block => block.start_time && block.end_time)
+      );
       setHasExistingSchedule(hasSchedule);
-      console.log('🔧 Has existing schedule:', hasSchedule);
       
     } catch (err: any) {
-      console.error('🔧 Error loading schedule:', err);
       setError('Error cargando configuración de horarios');
     } finally {
       setLoading(false);
@@ -117,11 +113,20 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
       setSaving(true);
       setError(null);
       
-      await apiService.post('/api/schedule/generate-weekly-template');
-      setSuccess('Horario por defecto generado exitosamente');
+      const response = await apiService.post('/api/schedule/generate-weekly-template');
       
-      // Recargar la configuración
-      await loadWeeklySchedule();
+      // Usar directamente la respuesta del servidor
+      setWeeklySchedule(response.data);
+      
+      // Verificar si ya existe algún horario configurado con datos válidos
+      const hasSchedule = Object.values(response.data).some(schedule => 
+        schedule !== null && 
+        schedule.time_blocks && 
+        schedule.time_blocks.some(block => block.start_time && block.end_time)
+      );
+      setHasExistingSchedule(hasSchedule);
+      
+      setSuccess('Horario por defecto generado exitosamente');
       
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Error generando horario por defecto');
@@ -133,16 +138,13 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
   const updateDaySchedule = async (dayIndex: number, scheduleData: Partial<ScheduleTemplate>, shouldReload: boolean = false) => {
     try {
       setError(null);
-      console.log('🔧 updateDaySchedule called:', { dayIndex, scheduleData, shouldReload });
       
       const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklySchedule;
       const existingSchedule = weeklySchedule[dayKey];
       
       if (existingSchedule?.id) {
         // Actualizar existente
-        console.log('🔧 Updating existing schedule:', existingSchedule.id);
         const response = await apiService.put(`/api/schedule/templates/${existingSchedule.id}`, scheduleData);
-        console.log('🔧 Update response:', response.data);
         
         // Update local state immediately for fast UI response
         setWeeklySchedule(prev => ({
@@ -152,7 +154,6 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
         
         // Only reload if explicitly requested (for complex operations like time block changes)
         if (shouldReload) {
-          console.log('🔧 Reloading weekly schedule after update...');
           await loadWeeklySchedule();
         }
       } else {
@@ -169,9 +170,7 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
           ...scheduleData
         };
         
-        console.log('🔧 Creating new schedule:', newSchedule);
         const response = await apiService.post('/api/schedule/templates', newSchedule);
-        console.log('🔧 Create response:', response.data);
         
         // Update local state
         setWeeklySchedule(prev => ({
@@ -180,46 +179,48 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
         }));
         
         // Always reload after creation to ensure fresh ID and data
-        console.log('🔧 Reloading weekly schedule after creation...');
         await loadWeeklySchedule();
       }
       
       setSuccess('Horario actualizado exitosamente');
       
     } catch (err: any) {
-      console.error('🔧 Error updating schedule:', err);
       setError(err.response?.data?.detail || err.response?.data?.error || 'Error actualizando horario');
     }
   };
 
   const addTimeBlock = async (dayIndex: number) => {
-    const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklySchedule;
-    const existingSchedule = weeklySchedule[dayKey];
-    
-    if (existingSchedule) {
-      const newTimeBlock: TimeBlock = {
-        start_time: '09:00',
-        end_time: '17:00'
-      };
+    try {
+      const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklySchedule;
+      const existingSchedule = weeklySchedule[dayKey];
       
-      const updatedTimeBlocks = [...(existingSchedule.time_blocks || []), newTimeBlock];
-      const updatedSchedule = {
-        ...existingSchedule,
-        time_blocks: updatedTimeBlocks
-      };
-      
-      // Actualizar estado local inmediatamente para respuesta rápida de UI
-      setWeeklySchedule(prev => ({
-        ...prev,
-        [dayKey]: updatedSchedule
-      }));
+      if (existingSchedule) {
+        const newTimeBlock: TimeBlock = {
+          start_time: '09:00',
+          end_time: '17:00'
+        };
+        
+        const updatedTimeBlocks = [...(existingSchedule.time_blocks || []), newTimeBlock];
+        const updatedSchedule = {
+          ...existingSchedule,
+          time_blocks: updatedTimeBlocks
+        };
+        
+        // Actualizar estado local inmediatamente para respuesta rápida de UI
+        setWeeklySchedule(prev => ({
+          ...prev,
+          [dayKey]: updatedSchedule
+        }));
 
-      // Guardar cambios en el servidor
-      await updateDaySchedule(dayIndex, {
-        day_of_week: dayIndex,
-        time_blocks: updatedTimeBlocks,
-        is_active: existingSchedule.is_active
-      }, true); // Reload after time block changes
+        // Guardar cambios en el servidor
+        await updateDaySchedule(dayIndex, {
+          day_of_week: dayIndex,
+          time_blocks: updatedTimeBlocks,
+          is_active: existingSchedule.is_active
+        }, false); // No need to reload since we already have the correct local state
+      }
+    } catch (error) {
+      console.error('Error in addTimeBlock:', error);
     }
   };
 
@@ -246,7 +247,7 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
         day_of_week: dayIndex,
         time_blocks: updatedTimeBlocks,
         is_active: existingSchedule.is_active
-      }, true); // Reload after time block changes
+      }, false); // No need to reload since we already have the correct local state
     }
   };
 
@@ -290,7 +291,6 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
   };
 
   const toggleDayActive = async (dayIndex: number, isActive: boolean) => {
-    console.log('🔧 toggleDayActive called:', { dayIndex, isActive });
     const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklySchedule;
     const existingSchedule = weeklySchedule[dayKey];
     
@@ -378,15 +378,21 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
               {/* Mostrar resumen de horarios */}
               {isActive && timeBlocks.length > 0 && (
                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', ml: 2 }}>
-                  {timeBlocks.map((block, index) => (
-                    <Chip
-                      key={index}
-                      label={`${block.start_time} - ${block.end_time}`}
-                      variant="outlined"
-                      size="small"
-                      sx={{ backgroundColor: 'white' }}
-                    />
-                  ))}
+                  {timeBlocks.map((block, index) => {
+                    // Solo mostrar horarios que tengan valores válidos
+                    if (block.start_time && block.end_time) {
+                      return (
+                        <Chip
+                          key={index}
+                          label={`${block.start_time} - ${block.end_time}`}
+                          variant="outlined"
+                          size="small"
+                          sx={{ backgroundColor: 'white' }}
+                        />
+                      );
+                    }
+                    return null;
+                  })}
                 </Box>
               )}
             </Box>
@@ -536,16 +542,18 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
                 </Card>
               ))}
               
-              {timeBlocks.length > 0 && (
+              {timeBlocks.length > 0 && timeBlocks.some(block => block.start_time && block.end_time) && (
                 <Alert severity="success" icon={<TimeIcon />} sx={{ mt: 2 }}>
                   <Typography variant="body2">
                     <strong>Resumen para {day.label}:</strong><br />
-                    Los pacientes podrán agendar citas de {timeBlocks.map((block, index) => (
-                      <span key={index}>
-                        {block.start_time} a {block.end_time}
-                        {index < timeBlocks.length - 1 ? ', ' : ''}
-                      </span>
-                    ))}
+                    Los pacientes podrán agendar citas de {timeBlocks
+                      .filter(block => block.start_time && block.end_time)
+                      .map((block, index) => (
+                        <span key={index}>
+                          {block.start_time} a {block.end_time}
+                          {index < timeBlocks.filter(b => b.start_time && b.end_time).length - 1 ? ', ' : ''}
+                        </span>
+                      ))}
                   </Typography>
                 </Alert>
               )}

@@ -30,6 +30,7 @@ export interface UseAppointmentManagerReturn {
   handleAppointmentSubmit: (submittedFormData?: any) => Promise<void>;
   createAppointmentDirect: (appointmentData: any) => Promise<any>;
   handleCancelAppointment: () => void;
+  cancelAppointment: (appointmentId: number) => Promise<void>;
   refreshAppointments: () => Promise<void>;
   
   // Form state
@@ -46,7 +47,6 @@ export const useAppointmentManager = (
   patients: any[],
   doctorProfile: any
 ): UseAppointmentManagerReturn => {
-  // Removed initialization log to prevent console spam
   
   // Auth context
   const { user } = useAuth();
@@ -124,11 +124,6 @@ export const useAppointmentManager = (
       return;
     }
     
-    console.log('🔄 useAppointmentManager useEffect triggered:', {
-      agendaView,
-      selectedDate: selectedDate.toDateString(),
-      doctorId: user?.doctor?.id
-    });
     
     // Use a longer timeout to prevent rapid successive calls and add abort controller
     let abortController = new AbortController();
@@ -145,7 +140,7 @@ export const useAppointmentManager = (
           const month = String(dateToFetch.getMonth() + 1).padStart(2, '0');
           const day = String(dateToFetch.getDate()).padStart(2, '0');
           dateStr = `${year}-${month}-${day}`;
-          console.log('📡 Calling getDailyAgenda for:', dateStr, 'selectedDate was:', selectedDate.toDateString());
+          // console.log('📡 Calling getDailyAgenda for:', dateStr, 'selectedDate was:', selectedDate.toDateString());
           data = await apiService.getDailyAgenda(dateStr);
         } else if (agendaView === 'weekly') {
           const start = new Date(dateToFetch);
@@ -172,17 +167,17 @@ export const useAppointmentManager = (
 
         // Only update if not aborted
         if (!abortController.signal.aborted) {
-          console.log('📋 Setting appointments:', { 
-            count: data.length, 
-            dateRequested: dateStr || 'N/A',
-            data: data.map(apt => ({
-              id: apt.id,
-              patient_name: apt.patient_name,
-              date_time: apt.date_time,
-              appointment_date: apt.appointment_date,
-              status: apt.status
-            }))
-          });
+          // console.log('📋 Setting appointments:', { 
+          //   count: data.length, 
+          //   dateRequested: dateStr || 'N/A',
+          //   data: data.map(apt => ({
+          //     id: apt.id,
+          //     patient_name: apt.patient_name,
+          //     date_time: apt.date_time,
+          //     appointment_date: apt.appointment_date,
+          //     status: apt.status
+          //   }))
+          // });
           setAppointments(data);
         }
       } catch (error) {
@@ -211,7 +206,7 @@ export const useAppointmentManager = (
       appointment_type: '', // Empty by default - user must select
       reason: '',
       notes: '',
-      status: 'scheduled',
+      status: 'confirmed',
       priority: 'normal',
       preparation_instructions: '',
       confirmation_required: false,
@@ -278,7 +273,7 @@ export const useAppointmentManager = (
         end_time: endTime.toISOString(),
         reason: appointmentData.reason,
         appointment_type: appointmentData.appointment_type || 'consultation',
-        status: appointmentData.status || 'scheduled',
+        status: appointmentData.status || 'confirmed',
         priority: appointmentData.priority || 'normal',
         preparation_instructions: appointmentData.preparation_instructions || '',
         notes: appointmentData.notes || ''
@@ -291,7 +286,7 @@ export const useAppointmentManager = (
       const targetDate = appointmentDate.toDateString() !== currentDate.toDateString() ? appointmentDate : selectedDate;
       
       if (appointmentDate.toDateString() !== currentDate.toDateString()) {
-        console.log('🔄 Appointment created for different date, navigating to:', appointmentDate.toDateString());
+        // console.log('🔄 Appointment created for different date, navigating to:', appointmentDate.toDateString());
         setSelectedDate(appointmentDate);
       }
       
@@ -338,8 +333,8 @@ export const useAppointmentManager = (
 
   // Handle appointment submit
   const handleAppointmentSubmit = useCallback(async (submittedFormData?: any) => {
-    console.log('🔄 useAppointmentManager - handleAppointmentSubmit called');
-    console.log('🔄 useAppointmentManager - submittedFormData:', submittedFormData);
+    // console.log('🔄 useAppointmentManager - handleAppointmentSubmit called');
+    // console.log('🔄 useAppointmentManager - submittedFormData:', submittedFormData);
     
     setIsSubmitting(true);
     setFieldErrors({});
@@ -347,7 +342,7 @@ export const useAppointmentManager = (
 
     // Use submitted form data if provided, otherwise use hook's state
     const formDataToUse = submittedFormData || appointmentFormData;
-    console.log('🔄 useAppointmentManager - formDataToUse:', formDataToUse);
+    // console.log('🔄 useAppointmentManager - formDataToUse:', formDataToUse);
 
     try {
       if (isEditingAppointment && selectedAppointment) {
@@ -363,7 +358,7 @@ export const useAppointmentManager = (
           appointment_date: appointmentDate.toISOString(),
           end_time: endTime.toISOString(),
           appointment_type: formDataToUse.appointment_type || 'consultation',
-          status: formDataToUse.status || 'scheduled',
+          status: formDataToUse.status || 'confirmed',
           priority: formDataToUse.priority || 'normal',
           reason: formDataToUse.reason || '',
           notes: formDataToUse.notes || '',
@@ -375,7 +370,7 @@ export const useAppointmentManager = (
           insurance_covered: formDataToUse.insurance_covered || false
         };
         
-        console.log('🔄 Updating appointment:', selectedAppointment.id, 'with CDMX native data');
+        // console.log('🔄 Updating appointment:', selectedAppointment.id, 'with CDMX native data');
         const updatedAppointment = await apiService.updateAppointment(selectedAppointment.id, updateData);
         
         // Transform the updated appointment response to match frontend format
@@ -388,32 +383,32 @@ export const useAppointmentManager = (
             updatedAppointment.patient_name || selectedAppointment.patient_name
         };
         
-        console.log('🔧 Appointment transformation details:', {
-          original: selectedAppointment,
-          backendResponse: updatedAppointment,
-          transformed: transformedAppointment,
-          dateField: {
-            original: selectedAppointment.date_time,
-            backend: updatedAppointment.appointment_date || updatedAppointment.date_time,
-            final: transformedAppointment.date_time
-          },
-          statusField: {
-            original: selectedAppointment.status,
-            backend: updatedAppointment.status,
-            final: transformedAppointment.status,
-            formData: appointmentFormData.status
-          }
-        });
+        // console.log('🔧 Appointment transformation details:', {
+        //   original: selectedAppointment,
+        //   backendResponse: updatedAppointment,
+        //   transformed: transformedAppointment,
+        //   dateField: {
+        //     original: selectedAppointment.date_time,
+        //     backend: updatedAppointment.appointment_date || updatedAppointment.date_time,
+        //     final: transformedAppointment.date_time
+        //   },
+        //   statusField: {
+        //     original: selectedAppointment.status,
+        //     backend: updatedAppointment.status,
+        //     final: transformedAppointment.status,
+        //     formData: appointmentFormData.status
+        //   }
+        // });
         
         // Update the appointment in the current list instead of refetching all
-        console.log('🔄 Updating local appointment in state:', {
-          originalAppointment: selectedAppointment,
-          transformedAppointment: transformedAppointment,
-          appointmentId: selectedAppointment.id
-        });
+        // console.log('🔄 Updating local appointment in state:', {
+        //   originalAppointment: selectedAppointment,
+        //   transformedAppointment: transformedAppointment,
+        //   appointmentId: selectedAppointment.id
+        // });
         
             // Refresh appointments after successful update (stable approach)
-            console.log('🔄 Appointment updated successfully, refreshing data...');
+            // console.log('🔄 Appointment updated successfully, refreshing data...');
 
             // Fetch fresh data without clearing state abruptly
             setTimeout(async () => {
@@ -455,14 +450,14 @@ export const useAppointmentManager = (
         showSuccessMessage('Cita actualizada exitosamente');
       } else {
         // Transform form data to backend format - now using CDMX native
-        console.log('🔄 useAppointmentManager - Current formDataToUse:', formDataToUse);
-        console.log('🔄 useAppointmentManager - formDataToUse.date_time:', formDataToUse.date_time);
-        console.log('🔄 useAppointmentManager - typeof date_time:', typeof formDataToUse.date_time);
+        // console.log('🔄 useAppointmentManager - Current formDataToUse:', formDataToUse);
+        // console.log('🔄 useAppointmentManager - formDataToUse.date_time:', formDataToUse.date_time);
+        // console.log('🔄 useAppointmentManager - typeof date_time:', typeof formDataToUse.date_time);
         
         const dateTimeStr = formDataToUse.date_time.includes(':') && !formDataToUse.date_time.includes(':00') 
           ? `${formDataToUse.date_time}:00` 
           : formDataToUse.date_time;
-        console.log('🔄 useAppointmentManager - Final dateTimeStr:', dateTimeStr);
+        // console.log('🔄 useAppointmentManager - Final dateTimeStr:', dateTimeStr);
         
         const appointmentDate = new Date(dateTimeStr);
         
@@ -479,13 +474,20 @@ export const useAppointmentManager = (
         const doctorDuration = user?.doctor?.appointment_duration || doctorProfile?.appointment_duration || 30;
         const endTime = new Date(appointmentDate.getTime() + doctorDuration * 60000);
 
+        // Get doctor's timezone for proper date handling
+        const doctorTimezone = user?.doctor?.office_timezone || doctorProfile?.office_timezone || 'America/Mexico_City';
+        
+        // Create dates in doctor's timezone
+        const appointmentDateInTimezone = new Date(appointmentDate.toLocaleString("en-US", {timeZone: doctorTimezone}));
+        const endTimeInTimezone = new Date(endTime.toLocaleString("en-US", {timeZone: doctorTimezone}));
+        
         const appointmentData = {
           patient_id: formDataToUse.patient_id,
           doctor_id: user?.doctor?.id || doctorProfile?.id || 0, // Use current logged-in doctor
-          appointment_date: appointmentDate.toISOString(),
-          end_time: endTime.toISOString(),
+          appointment_date: appointmentDateInTimezone.toISOString(),
+          end_time: endTimeInTimezone.toISOString(),
           appointment_type: formDataToUse.appointment_type || 'consultation',
-          status: formDataToUse.status || 'scheduled',
+          status: formDataToUse.status || 'confirmed',
           priority: formDataToUse.priority || 'normal',
           reason: formDataToUse.reason || '',
           notes: formDataToUse.notes || '',
@@ -497,7 +499,7 @@ export const useAppointmentManager = (
           insurance_covered: formDataToUse.insurance_covered || false
         };
         
-        console.log('🔍 Creating appointment with CDMX native data');
+        // console.log('🔍 Creating appointment with CDMX native data');
         await apiService.createAgendaAppointment(appointmentData);
         showSuccessMessage('Cita creada exitosamente');
       }
@@ -506,7 +508,7 @@ export const useAppointmentManager = (
       
       // Refresh appointments after creating new appointment
       if (!isEditingAppointment) {
-        console.log('🔄 New appointment created, refreshing data...');
+        // console.log('🔄 New appointment created, refreshing data...');
         
         // Refresh appointments after successful creation
         setTimeout(async () => {
@@ -551,7 +553,7 @@ export const useAppointmentManager = (
         
         // Compare just the date parts (ignore time)
         if (appointmentDate.toDateString() !== currentDate.toDateString()) {
-          console.log('🔄 Appointment created for different date, navigating to:', appointmentDate.toDateString());
+          // console.log('🔄 Appointment created for different date, navigating to:', appointmentDate.toDateString());
           setSelectedDate(appointmentDate);
         }
       }
@@ -572,6 +574,57 @@ export const useAppointmentManager = (
     setFieldErrors({});
     setFormErrorMessage('');
   }, []);
+
+  // Cancel appointment
+  const cancelAppointment = useCallback(async (appointmentId: number) => {
+    console.log('🔄 cancelAppointment called with ID:', appointmentId);
+    try {
+      console.log('🔄 Calling apiService.cancelAppointment...');
+      await apiService.cancelAppointment(appointmentId.toString());
+      console.log('✅ Appointment cancelled successfully');
+      showSuccessMessage('Cita cancelada exitosamente');
+      
+      // Refresh appointments after cancellation
+      setTimeout(async () => {
+        try {
+          let refreshData: any[] = [];
+          const dateToRefresh = new Date(selectedDate);
+          
+          if (agendaView === 'daily') {
+            const dateStr = dateToRefresh.toISOString().split('T')[0];
+            refreshData = await apiService.getDailyAgenda(dateStr);
+          } else if (agendaView === 'weekly') {
+            const start = new Date(dateToRefresh);
+            const day = start.getDay();
+            const diff = start.getDate() - day;
+            start.setDate(diff);
+
+            const end = new Date(start);
+            end.setDate(start.getDate() + 6);
+
+            const startStr = start.toISOString().split('T')[0];
+            const endStr = end.toISOString().split('T')[0];
+            refreshData = await apiService.getWeeklyAgenda(startStr, endStr);
+          } else if (agendaView === 'monthly') {
+            const start = new Date(dateToRefresh.getFullYear(), dateToRefresh.getMonth(), 1);
+            const end = new Date(dateToRefresh.getFullYear(), dateToRefresh.getMonth() + 1, 0);
+            
+            const startStr = start.toISOString().split('T')[0];
+            const endStr = end.toISOString().split('T')[0];
+            refreshData = await apiService.getMonthlyAgenda(startStr, endStr);
+          }
+          
+          setAppointments(refreshData);
+        } catch (error) {
+          console.error('❌ Error refreshing appointments:', error);
+        }
+      }, 300);
+      
+    } catch (error: any) {
+      console.error('Error canceling appointment:', error);
+      setFormErrorMessage('Error al cancelar la cita');
+    }
+  }, [selectedDate, agendaView, showSuccessMessage, setAppointments]);
 
   // Removed duplicate useEffect - appointments are already fetched by the main useEffect above
 
@@ -652,6 +705,7 @@ export const useAppointmentManager = (
     handleAppointmentSubmit,
     createAppointmentDirect,
     handleCancelAppointment,
+    cancelAppointment,
     refreshAppointments,
     
     // Form state

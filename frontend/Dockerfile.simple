@@ -12,7 +12,7 @@ RUN npm install
 COPY . .
 
 # Set memory limits and disable problematic features
-ENV NODE_OPTIONS="--max-old-space-size=8192"
+ENV NODE_OPTIONS="--max-old-space-size=6144"
 ENV GENERATE_SOURCEMAP=false
 ENV TSC_COMPILE_ON_ERROR=true
 ENV ESLINT_NO_DEV_ERRORS=true
@@ -22,8 +22,22 @@ ENV FAST_REFRESH=false
 ENV CI=true
 ENV DISABLE_OPENCOLLECTIVE=true
 
+# Build the app
+RUN npm run build
+
+# Production stage - serve with nginx
+FROM nginx:alpine
+
+# Copy built app to nginx
+COPY --from=0 /app/build /usr/share/nginx/html
+
+# Copy custom nginx config
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
 # Expose port
 EXPOSE 3000
 
-# Start the development server
-CMD ["npm", "start"]
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]
+
+

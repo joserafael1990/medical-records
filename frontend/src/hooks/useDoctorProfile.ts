@@ -58,6 +58,7 @@ const initialFormData: DoctorFormData = {
   office_city: '',
   office_state_id: '',
   office_postal_code: '',
+  office_timezone: 'America/Mexico_City',
   appointment_duration: '',
   
   // Información Adicional
@@ -159,8 +160,8 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
     }
     
     // Validación especial para año de graduación
-    if (data.graduation_year?.trim()) {
-      const year = parseInt(data.graduation_year);
+    if (data.graduation_year && String(data.graduation_year).trim()) {
+      const year = parseInt(String(data.graduation_year));
       const currentYear = new Date().getFullYear();
       if (isNaN(year) || year < 1950 || year > currentYear) {
         errors.graduation_year = `El año debe estar entre 1950 y ${currentYear}`;
@@ -276,38 +277,14 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
       transformedData = fieldsToSend;
     }
 
-    const response = await fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(transformedData),
-    });
-
-    if (!response.ok) {
-      let errorMessage = 'Error saving profile';
-      try {
-        const errorData = await response.json();
-        if (errorData.detail) {
-          if (Array.isArray(errorData.detail)) {
-            // Errores de validación de Pydantic
-            const validationErrors = errorData.detail.map((err: any) => 
-              `${err.loc?.join('.') || 'field'}: ${err.msg}`
-            ).join(', ');
-            errorMessage = `Validation errors: ${validationErrors}`;
-          } else {
-            errorMessage = errorData.detail;
-          }
-        }
-        console.error('Full error response:', errorData);
-      } catch (e) {
-        console.error('Error parsing error response:', e);
-      }
-      throw new Error(errorMessage);
+    // Use apiService instead of fetch to ensure authentication headers are included
+    if (method === 'PUT') {
+      const savedProfile = await apiService.updateDoctorProfile(transformedData);
+      setDoctorProfile(savedProfile);
+    } else {
+      const savedProfile = await apiService.createDoctorProfile(transformedData);
+      setDoctorProfile(savedProfile);
     }
-
-    const savedProfile = await response.json();
-    setDoctorProfile(savedProfile);
   };
 
   // ============================================================================
@@ -346,6 +323,7 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
         office_city: doctorProfile.office_city || '',
         office_state_id: String(doctorProfile.office_state_id || ''),
         office_postal_code: doctorProfile.office_postal_code || '',
+        office_timezone: doctorProfile.office_timezone || 'America/Mexico_City',
         appointment_duration: String(doctorProfile.appointment_duration || ''),
         // medical_school, internship_hospital, residency_hospital removed per user request
         // board_certifications and professional_memberships removed per user request
@@ -354,7 +332,7 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
     }
     setDialogOpen(true);
     clearMessages();
-  }, [doctorProfile, clearMessages]);
+  }, [doctorProfile, clearMessages, dialogOpen]);
 
   const handleCreate = useCallback(() => {
     setFormData(initialFormData);

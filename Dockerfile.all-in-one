@@ -1,0 +1,94 @@
+# Multi-stage Dockerfile for all-in-one medical records system
+FROM node:22.13.1-slim AS frontend-builder
+
+# Build React frontend
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm ci --only=production
+
+COPY frontend/ ./
+RUN npm run build
+
+# Production stage with Python backend, PostgreSQL, and served frontend
+FROM python:3.11-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    postgresql postgresql-contrib \
+    nginx \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set up PostgreSQL
+USER postgres
+RUN /etc/init.d/postgresql start && \
+    psql --command "CREATE USER postgres WITH SUPERUSER PASSWORD 'mysecretpassword';" && \
+    createdb -O postgres historias_clinicas && \
+    /etc/init.d/postgresql stop
+
+# Switch back to root for Python setup
+USER root
+
+# Set up Python backend
+WORKDIR /app
+COPY backend/requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY backend/ ./
+
+# Copy built frontend
+COPY --from=frontend-builder /app/frontend/build /app/frontend/build
+
+# Configure nginx to serve frontend and proxy API
+RUN echo 'server { \
+    listen 80; \
+    server_name localhost; \
+    \
+    # Serve React frontend \
+    location / { \
+        root /app/frontend/build; \
+        index index.html; \
+        try_files $uri $uri/ /index.html; \
+    } \
+    \
+    # Proxy API requests to backend \
+    location /api/ { \
+        proxy_pass http://localhost:8000; \
+        proxy_set_header Host $host; \
+        proxy_set_header X-Real-IP $remote_addr; \
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; \
+        proxy_set_header X-Forwarded-Proto $scheme; \
+    } \
+    \
+    location /health { \
+        proxy_pass http://localhost:8000; \
+        proxy_set_header Host $host; \
+        proxy_set_header X-Real-IP $remote_addr; \
+    } \
+}' > /etc/nginx/sites-available/default
+
+# Create startup script
+RUN echo '#!/bin/bash \
+set -e \
+\
+# Start PostgreSQL \
+service postgresql start \
+\
+# Wait for PostgreSQL to be ready \
+while ! pg_isready -h localhost -p 5432 -U postgres; do \
+  echo "Waiting for PostgreSQL..." \
+  sleep 1 \
+done \
+\
+# Start FastAPI backend in background \
+cd /app \
+export DATABASE_URL="postgresql://postgres:mysecretpassword@localhost:5432/historias_clinicas" \
+uvicorn main_clean_english:app --host 0.0.0.0 --port 8000 --workers 1 &
+\
+# Start nginx in foreground \
+nginx -g "daemon off;"' > /start.sh && chmod +x /start.sh
+
+EXPOSE 80
+
+CMD ["/start.sh"]
+

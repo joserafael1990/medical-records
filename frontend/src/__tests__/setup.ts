@@ -120,7 +120,7 @@ export const createMockAppointment = (overrides = {}) => ({
   date_time: '2024-01-01T10:00:00Z',
   appointment_type: 'consultation' as const,
   reason: 'Consulta de rutina',
-  status: 'scheduled' as const,
+  status: 'confirmed' as const,
   created_at: '2024-01-01T09:00:00Z',
   updated_at: '2024-01-01T09:00:00Z',
   ...overrides

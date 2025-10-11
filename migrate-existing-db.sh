@@ -195,3 +195,4 @@ echo "   - Create initial admin user"
 echo "   - Import medical catalogs"
 echo ""
 print_success "Your medical records system is ready to deploy! 🚀"
+

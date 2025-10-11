@@ -72,7 +72,6 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
-    command: npm start
 
 networks:
   medical-records-network:

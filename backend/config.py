@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     """
     
     # Database Configuration
-    DATABASE_URL: str = "postgresql://historias_user:historias_pass@localhost:5432/historias_clinicas"
+    DATABASE_URL: str = "postgresql://historias_user:historias_pass@postgres-db:5432/historias_clinicas"
     DB_HOST: str = "localhost"
     DB_PORT: int = 5432
     DB_NAME: str = "historias_clinicas"

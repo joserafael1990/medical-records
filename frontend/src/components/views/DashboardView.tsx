@@ -29,6 +29,7 @@ interface DashboardViewProps {
   appointments?: any[];
   onNewAppointment?: () => void;
   onNewConsultation?: () => void;
+  onNewPatient?: () => void;
   doctorProfile?: any;
 }
 
@@ -37,8 +38,17 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   appointments = [],
   onNewAppointment,
   onNewConsultation,
+  onNewPatient,
   doctorProfile
 }) => {
+  // Debug: Log props when component renders
+  // console.log('🔍 DashboardView: Component rendered with props:', {
+  //   onNewAppointment: !!onNewAppointment,
+  //   onNewConsultation: !!onNewConsultation,
+  //   onNewPatient: !!onNewPatient,
+  //   appointmentsCount: appointments.length
+  // });
+
   const today = new Date();
   const todayAppointments = appointments.filter(apt => {
     const aptDate = new Date(apt.date_time);
@@ -71,16 +81,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     {
       label: 'Nuevo Paciente',
       icon: <PersonIcon />,
-      action: () => console.log('Nuevo paciente'),
+      action: onNewPatient,
       color: 'info',
       description: 'Agregar nuevo paciente'
-    },
-    {
-      label: 'Ordenar Estudio',
-      icon: <ScienceIcon />,
-      action: () => console.log('Nuevo estudio'),
-      color: 'warning',
-      description: 'Solicitar estudio médico'
     }
   ];
 
@@ -241,7 +244,14 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 size="large"
                 color={action.color as any}
                 startIcon={action.icon}
-                onClick={action.action}
+                onClick={(e) => {
+                  // console.log('🔍 DashboardView: Button clicked!', action.label, action.action);
+                  if (action.action) {
+                    action.action();
+                  } else {
+                    // console.log('❌ DashboardView: No action handler for', action.label);
+                  }
+                }}
                 sx={{
                   py: 2,
                   px: 3,
