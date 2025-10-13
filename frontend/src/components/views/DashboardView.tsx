@@ -27,6 +27,7 @@ import { es } from 'date-fns/locale';
 interface DashboardViewProps {
   dashboardData?: any;
   appointments?: any[];
+  consultations?: any[];
   onNewAppointment?: () => void;
   onNewConsultation?: () => void;
   onNewPatient?: () => void;
@@ -36,6 +37,7 @@ interface DashboardViewProps {
 const DashboardView: React.FC<DashboardViewProps> = ({
   dashboardData,
   appointments = [],
+  consultations = [],
   onNewAppointment,
   onNewConsultation,
   onNewPatient,
@@ -56,12 +58,17 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   });
 
   const confirmedAppointments = todayAppointments.filter(apt => apt.status === 'confirmed');
-  const completedConsultations = appointments.filter(apt => apt.status === 'completed').length;
+  
+  // Calcular consultas completadas basándose en las consultas reales creadas hoy
+  const todayConsultations = consultations.filter(consultation => {
+    const consultationDate = new Date(consultation.consultation_date || consultation.date);
+    return consultationDate.toDateString() === today.toDateString();
+  });
+  const completedConsultations = todayConsultations.length;
+  
   const totalPatients = dashboardData?.totalPatients || 156;
 
-  const doctorName = doctorProfile?.first_name 
-    ? `Dr. ${doctorProfile.first_name} ${doctorProfile.last_name || ''}`.trim()
-    : 'Doctor';
+  const doctorName = doctorProfile?.full_name || 'Doctor';
 
   const quickActions = [
     {
@@ -146,6 +153,26 @@ const DashboardView: React.FC<DashboardViewProps> = ({
       </Paper>
 
       {/* Statistics Cards */}
+
+      <Box sx={{ flex: 1, minWidth: 200 }}>
+          <Card sx={{ 
+            bgcolor: 'background.paper',
+            '&:hover': {
+              boxShadow: '0 1px 3px rgba(0,0,0,0.12)'
+            }
+          }}>
+            <CardContent sx={{ textAlign: 'center', py: 3 }}>
+              <TrendingIcon sx={{ fontSize: 40, mb: 1, color: 'warning.main' }} />
+              <Typography variant="h2" sx={{ mb: 1, color: 'text.primary' }}>
+                {confirmedAppointments.length}
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                Citas Confirmadas
+              </Typography>
+            </CardContent>
+          </Card>
+        </Box>
+
       <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: 'wrap' }}>
         <Box sx={{ flex: 1, minWidth: 200 }}>
           <Card sx={{ 
@@ -166,24 +193,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           </Card>
         </Box>
 
-        <Box sx={{ flex: 1, minWidth: 200 }}>
-          <Card sx={{ 
-            bgcolor: 'background.paper',
-            '&:hover': {
-              boxShadow: '0 1px 3px rgba(0,0,0,0.12)'
-            }
-          }}>
-            <CardContent sx={{ textAlign: 'center', py: 3 }}>
-              <PersonIcon sx={{ fontSize: 40, mb: 1, color: 'secondary.main' }} />
-              <Typography variant="h2" sx={{ mb: 1, color: 'text.primary' }}>
-                {totalPatients}
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                Pacientes Totales
-              </Typography>
-            </CardContent>
-          </Card>
-        </Box>
 
         <Box sx={{ flex: 1, minWidth: 200 }}>
           <Card sx={{ 
@@ -204,24 +213,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           </Card>
         </Box>
 
-        <Box sx={{ flex: 1, minWidth: 200 }}>
-          <Card sx={{ 
-            bgcolor: 'background.paper',
-            '&:hover': {
-              boxShadow: '0 1px 3px rgba(0,0,0,0.12)'
-            }
-          }}>
-            <CardContent sx={{ textAlign: 'center', py: 3 }}>
-              <TrendingIcon sx={{ fontSize: 40, mb: 1, color: 'warning.main' }} />
-              <Typography variant="h2" sx={{ mb: 1, color: 'text.primary' }}>
-                {confirmedAppointments.length}
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                Confirmadas
-              </Typography>
-            </CardContent>
-          </Card>
-        </Box>
+
       </Box>
 
       {/* Quick Actions */}

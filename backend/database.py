@@ -98,6 +98,7 @@ class Person(Base):
     
     # BIRTH LOCATION (NOM-024)
     birth_state_id = Column(Integer, ForeignKey("states.id"))  # For Mexicans
+    birth_country_id = Column(Integer, ForeignKey("countries.id"))  # Country of birth
     foreign_birth_place = Column(String(200))  # For foreigners
     
     # CONTACT INFORMATION
@@ -105,12 +106,10 @@ class Person(Base):
     primary_phone = Column(String(20))
     
     # PERSONAL ADDRESS
-    address_street = Column(Text)
-    address_ext_number = Column(String(20))
-    address_int_number = Column(String(20))
-    address_neighborhood = Column(String(100))
+    home_address = Column(Text)
     address_city = Column(String(100))  # Free text field for city
     address_state_id = Column(Integer, ForeignKey("states.id"))  # FK to states table
+    address_country_id = Column(Integer, ForeignKey("countries.id"))  # FK to countries table
     address_postal_code = Column(String(5))
     
     # PROFESSIONAL ADDRESS (doctors only)
@@ -133,8 +132,6 @@ class Person(Base):
     professional_seal = Column(String(500))
     
     # MEDICAL DATA (patients only)
-    blood_type = Column(String(5))
-    allergies = Column(Text)
     chronic_conditions = Column(Text)
     current_medications = Column(Text)
     insurance_provider = Column(String(100))
@@ -159,7 +156,9 @@ class Person(Base):
     # RELATIONSHIPS
     specialty = relationship("Specialty", back_populates="doctors")
     birth_state = relationship("State", foreign_keys=[birth_state_id], overlaps="persons_birth")
+    birth_country = relationship("Country", foreign_keys=[birth_country_id])
     address_state = relationship("State", foreign_keys=[address_state_id], overlaps="persons_address")
+    address_country = relationship("Country", foreign_keys=[address_country_id])
     office_state = relationship("State", foreign_keys=[office_state_id], overlaps="persons_office")
     emergency_relationship = relationship("EmergencyRelationship", back_populates="persons")
     
@@ -205,14 +204,10 @@ class Person(Base):
     def complete_address(self):
         """Formatted complete address"""
         parts = []
-        if self.address_street:
-            parts.append(self.address_street)
-        if self.address_ext_number:
-            parts.append(f"#{self.address_ext_number}")
-        if self.address_int_number:
-            parts.append(f"Int. {self.address_int_number}")
-        if self.address_neighborhood:
-            parts.append(f"Col. {self.address_neighborhood}")
+        if self.home_address:
+            parts.append(self.home_address)
+        if self.address_city:
+            parts.append(self.address_city)
         if self.address_postal_code:
             parts.append(f"C.P. {self.address_postal_code}")
         return ', '.join(parts) if parts else None

@@ -85,13 +85,14 @@ class PersonBase(BaseSchema):
     maternal_surname: Optional[str] = None
     curp: Optional[str] = None
     rfc: Optional[str] = None
-    birth_date: date
-    gender: str
+    birth_date: Optional[date] = None
+    gender: Optional[str] = None
     civil_status: Optional[str] = None
     birth_city: Optional[str] = None
     
     # Birth location
     birth_state_id: Optional[int] = None
+    birth_country_id: Optional[int] = None
     foreign_birth_place: Optional[str] = None
     
     # Contact
@@ -99,12 +100,10 @@ class PersonBase(BaseSchema):
     primary_phone: Optional[str] = None
     
     # Personal address
-    address_street: Optional[str] = None
-    address_ext_number: Optional[str] = None
-    address_int_number: Optional[str] = None
-    address_neighborhood: Optional[str] = None
+    home_address: Optional[str] = None
     address_city: Optional[str] = None
     address_state_id: Optional[int] = None
+    address_country_id: Optional[int] = None
     address_postal_code: Optional[str] = None
     
     # Emergency contact
@@ -172,12 +171,10 @@ class DoctorUpdate(BaseSchema):
     foreign_birth_place: Optional[str] = None
     
     # Personal address
-    address_street: Optional[str] = None
-    address_ext_number: Optional[str] = None
-    address_int_number: Optional[str] = None
-    address_neighborhood: Optional[str] = None
+    home_address: Optional[str] = None
     address_city: Optional[str] = None
     address_state_id: Optional[int] = None
+    address_country_id: Optional[int] = None
     address_postal_code: Optional[str] = None
     
     # Professional address
@@ -209,8 +206,6 @@ class PatientCreate(PersonBase):
     person_type: Literal['patient'] = 'patient'
     
     # Medical data
-    blood_type: Optional[str] = None
-    allergies: Optional[str] = None
     chronic_conditions: Optional[str] = None
     current_medications: Optional[str] = None
     insurance_provider: Optional[str] = None
@@ -231,6 +226,7 @@ class PersonUpdate(BaseSchema):
     
     # Birth location
     birth_state_id: Optional[int] = None
+    birth_country_id: Optional[int] = None
     foreign_birth_place: Optional[str] = None
     
     # Contact
@@ -238,12 +234,10 @@ class PersonUpdate(BaseSchema):
     primary_phone: Optional[str] = None
     
     # Personal address
-    address_street: Optional[str] = None
-    address_ext_number: Optional[str] = None
-    address_int_number: Optional[str] = None
-    address_neighborhood: Optional[str] = None
+    home_address: Optional[str] = None
     address_city: Optional[str] = None
     address_state_id: Optional[int] = None
+    address_country_id: Optional[int] = None
     address_postal_code: Optional[str] = None
     
     # Professional address (doctors)
@@ -262,8 +256,6 @@ class PersonUpdate(BaseSchema):
     subspecialty: Optional[str] = None
     
     # Medical data (patients)
-    blood_type: Optional[str] = None
-    allergies: Optional[str] = None
     chronic_conditions: Optional[str] = None
     current_medications: Optional[str] = None
     insurance_provider: Optional[str] = None

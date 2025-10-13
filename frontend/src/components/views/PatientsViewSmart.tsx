@@ -65,7 +65,6 @@ const PatientsViewSmart: React.FC<PatientsViewSmartProps> = ({
         patient.primary_phone,
         patient.email,
         patient.id,
-        patient.blood_type,
         patient.address
       ].filter(Boolean);
 
@@ -165,7 +164,7 @@ const PatientsViewSmart: React.FC<PatientsViewSmartProps> = ({
         <IntelligentSearch
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
-          placeholder="Buscar por nombre, teléfono, email, ID, tipo de sangre..."
+          placeholder="Buscar por nombre, teléfono, email, ID..."
           filters={filters}
           onFilterRemove={removeFilter}
           onFilterClick={handleFilterClick}

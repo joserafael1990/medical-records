@@ -98,16 +98,6 @@
       { "value": "widowed", "label_es": "Viudo(a)", "label_en": "Widowed" },
       { "value": "free_union", "label_es": "Unión libre", "label_en": "Free union" }
     ],
-    "blood_type": [
-      { "value": "A+", "label_es": "A+", "label_en": "A+" },
-      { "value": "A-", "label_es": "A-", "label_en": "A-" },
-      { "value": "B+", "label_es": "B+", "label_en": "B+" },
-      { "value": "B-", "label_es": "B-", "label_en": "B-" },
-      { "value": "AB+", "label_es": "AB+", "label_en": "AB+" },
-      { "value": "AB-", "label_es": "AB-", "label_en": "AB-" },
-      { "value": "O+", "label_es": "O+", "label_en": "O+" },
-      { "value": "O-", "label_es": "O-", "label_en": "O-" }
-    ],
     "mexican_states": [
       { "value": "AGS", "label": "Aguascalientes" },
       { "value": "BC", "label": "Baja California" },

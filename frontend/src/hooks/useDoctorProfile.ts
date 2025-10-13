@@ -28,7 +28,7 @@ interface UseDoctorProfileReturn {
 
 const initialFormData: DoctorFormData = {
   // Información Personal
-  title: '',
+  title: 'Dr.',
   first_name: '',
   paternal_surname: '',
   maternal_surname: '',
@@ -57,6 +57,7 @@ const initialFormData: DoctorFormData = {
   office_address: '',
   office_city: '',
   office_state_id: '',
+  office_country: 'México',
   office_postal_code: '',
   office_timezone: 'America/Mexico_City',
   appointment_duration: '',
@@ -196,6 +197,12 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
         errors.office_state_id = 'El estado es requerido';
       }
     }
+    
+    if (!isEditMode || data.office_country?.trim()) {
+      if (!data.office_country?.trim()) {
+        errors.office_country = 'El país es requerido';
+      }
+    }
 
     // Validaciones de formato - siempre aplicar si el campo tiene contenido
     if (data.professional_email?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.professional_email)) {
@@ -322,6 +329,7 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
         office_address: doctorProfile.office_address || '',
         office_city: doctorProfile.office_city || '',
         office_state_id: String(doctorProfile.office_state_id || ''),
+        office_country: (doctorProfile as any).office_country || 'México',
         office_postal_code: doctorProfile.office_postal_code || '',
         office_timezone: doctorProfile.office_timezone || 'America/Mexico_City',
         appointment_duration: String(doctorProfile.appointment_duration || ''),

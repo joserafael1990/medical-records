@@ -184,6 +184,10 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           patients={patientManagement.patients}
           consultation={consultationManagement.selectedConsultation}
           doctorProfile={doctorProfile}
+          onNewPatient={() => {
+            consultationManagement.closeConsultationDialog();
+            patientManagement.openPatientDialog();
+          }}
           onSubmit={async (data) => {
             if (consultationManagement.selectedConsultation) {
               await consultationManagement.updateConsultation(consultationManagement.selectedConsultation.id, data);

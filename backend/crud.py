@@ -200,6 +200,9 @@ def create_patient_with_code(db: Session, patient_data: schemas.PatientCreate, p
     foreign_key_fields = [
         'emergency_contact_relationship',
         'birth_state_id',
+        'birth_country_id',
+        'address_state_id',
+        'address_country_id',
         'city_residence_id'
     ]
     

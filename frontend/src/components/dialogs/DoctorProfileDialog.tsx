@@ -11,7 +11,11 @@ import {
   IconButton,
   Divider,
   CircularProgress,
-  Alert
+  Alert,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -38,6 +42,7 @@ interface DoctorFormData {
   office_address: string;
   office_city: string;
   office_state_id: string;
+  office_country: string;
   office_postal_code: string;
   office_timezone: string;
   appointment_duration: string;
@@ -97,16 +102,9 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
   }, [open]);
 
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | any) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    if (fieldErrors[name]) {
-      setFormErrorMessage('');
-    }
-  };
-
-  const handleSelectChange = (e: any) => {
-    const { name, value } = e.target;
+    console.log('🔄 handleChange called:', { name, value });
     setFormData(prev => ({ ...prev, [name]: value }));
     if (fieldErrors[name]) {
       setFormErrorMessage('');
@@ -162,9 +160,9 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
 
       <DialogContent sx={{ px: 3, py: 2 }}>
         {formErrorMessage && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {formErrorMessage}
-          </Alert>
+          <Box sx={{ mb: 2, p: 2, bgcolor: 'error.main', borderRadius: 1 }}>
+            <Typography color="white">{formErrorMessage}</Typography>
+          </Box>
         )}
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -234,6 +232,58 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
               helperText={fieldErrors.birth_date}
               InputLabelProps={{ shrink: true }}
             />
+            <TextField
+              name="gender"
+              label="Género"
+              value={formData.gender || ''}
+              onChange={handleChange}
+              size="small"
+              required
+              error={!!fieldErrors.gender}
+              helperText={fieldErrors.gender}
+              select
+              SelectProps={{
+                native: true,
+                style: { zIndex: 9999 }
+              }}
+              InputLabelProps={{
+                shrink: true
+              }}
+              sx={{
+                '& .MuiSelect-select': {
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  paddingRight: '32px !important',
+                  minHeight: 'auto !important'
+                },
+                '& .MuiInputLabel-root': {
+                  '&.Mui-focused': {
+                    color: 'primary.main'
+                  },
+                  transform: 'translate(14px, -9px) scale(0.75)',
+                  '&.MuiInputLabel-shrink': {
+                    transform: 'translate(14px, -9px) scale(0.75)'
+                  }
+                },
+                '& .MuiOutlinedInput-root': {
+                  '& fieldset': {
+                    borderColor: 'rgba(0, 0, 0, 0.23)'
+                  },
+                  '&:hover fieldset': {
+                    borderColor: 'rgba(0, 0, 0, 0.87)'
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: 'primary.main'
+                  }
+                }
+              }}
+            >
+              <option value="">Seleccione</option>
+              <option value="M">Masculino</option>
+              <option value="F">Femenino</option>
+              <option value="O">Otro</option>
+            </TextField>
             </Box>
 
           {/* Información Profesional */}
@@ -242,6 +292,27 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
               </Typography>
 
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+              <TextField
+                name="title"
+                label="Título"
+                value={formData.title || ''}
+                onChange={handleChange}
+                size="small"
+                required
+                error={!!fieldErrors.title}
+                helperText={fieldErrors.title}
+                select
+                SelectProps={{
+                  native: true,
+                  style: { zIndex: 9999 }
+                }}
+              >
+                <option value="Dr.">Dr.</option>
+                <option value="Dra.">Dra.</option>
+                <option value="Lic.">Lic.</option>
+                <option value="M.C.">M.C.</option>
+                <option value="Esp.">Esp.</option>
+              </TextField>
               <TextField
               name="professional_license"
               label="Cédula Profesional *"
@@ -318,7 +389,7 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
                     onChange={(e) => {
                       const stateName = e.target.value;
                       const state = states.find(s => s.name === stateName);
-                      handleSelectChange({
+                      handleChange({
                         target: {
                           name: 'office_state_id',
                           value: state ? state.id.toString() : ''
@@ -334,6 +405,38 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
                       native: true,
                       style: { zIndex: 9999 }
                     }}
+                    InputLabelProps={{
+                      shrink: true
+                    }}
+                    sx={{
+                      '& .MuiSelect-select': {
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        paddingRight: '32px !important',
+                        minHeight: 'auto !important'
+                      },
+                      '& .MuiInputLabel-root': {
+                        '&.Mui-focused': {
+                          color: 'primary.main'
+                        },
+                        transform: 'translate(14px, -9px) scale(0.75)',
+                        '&.MuiInputLabel-shrink': {
+                          transform: 'translate(14px, -9px) scale(0.75)'
+                        }
+                      },
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': {
+                          borderColor: 'rgba(0, 0, 0, 0.23)'
+                        },
+                        '&:hover fieldset': {
+                          borderColor: 'rgba(0, 0, 0, 0.87)'
+                        },
+                        '&.Mui-focused fieldset': {
+                          borderColor: 'primary.main'
+                        }
+                      }
+                    }}
                   >
                     <option value="">Seleccione</option>
                     {states.map(state => (
@@ -342,6 +445,78 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
                       </option>
                     ))}
                   </TextField>
+              <TextField
+              name="office_country"
+              label="País *"
+              value={formData.office_country || 'México'}
+              onChange={handleChange}
+              size="small"
+              required
+              error={!!fieldErrors.office_country}
+              helperText={fieldErrors.office_country}
+              select
+              SelectProps={{
+                native: true,
+                style: { zIndex: 9999 }
+              }}
+              InputLabelProps={{
+                shrink: true
+              }}
+              sx={{
+                '& .MuiSelect-select': {
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  paddingRight: '32px !important',
+                  minHeight: 'auto !important'
+                },
+                '& .MuiInputLabel-root': {
+                  '&.Mui-focused': {
+                    color: 'primary.main'
+                  },
+                  transform: 'translate(14px, -9px) scale(0.75)',
+                  '&.MuiInputLabel-shrink': {
+                    transform: 'translate(14px, -9px) scale(0.75)'
+                  }
+                },
+                '& .MuiOutlinedInput-root': {
+                  '& fieldset': {
+                    borderColor: 'rgba(0, 0, 0, 0.23)'
+                  },
+                  '&:hover fieldset': {
+                    borderColor: 'rgba(0, 0, 0, 0.87)'
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: 'primary.main'
+                  }
+                }
+              }}
+            >
+              <option value="">Seleccione</option>
+              <option value="México">México</option>
+              <option value="Estados Unidos">Estados Unidos</option>
+              <option value="Canadá">Canadá</option>
+              <option value="España">España</option>
+              <option value="Argentina">Argentina</option>
+              <option value="Colombia">Colombia</option>
+              <option value="Chile">Chile</option>
+              <option value="Perú">Perú</option>
+              <option value="Brasil">Brasil</option>
+              <option value="Venezuela">Venezuela</option>
+              <option value="Ecuador">Ecuador</option>
+              <option value="Guatemala">Guatemala</option>
+              <option value="Cuba">Cuba</option>
+              <option value="Bolivia">Bolivia</option>
+              <option value="República Dominicana">República Dominicana</option>
+              <option value="Honduras">Honduras</option>
+              <option value="Paraguay">Paraguay</option>
+              <option value="El Salvador">El Salvador</option>
+              <option value="Nicaragua">Nicaragua</option>
+              <option value="Costa Rica">Costa Rica</option>
+              <option value="Panamá">Panamá</option>
+              <option value="Uruguay">Uruguay</option>
+              <option value="Otro">Otro</option>
+            </TextField>
               <TextField
               name="office_postal_code"
                 label="Código Postal"
@@ -363,6 +538,38 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
                   native: true,
                   style: { zIndex: 9999 }
                 }}
+                InputLabelProps={{
+                  shrink: true
+                }}
+                sx={{
+                  '& .MuiSelect-select': {
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    paddingRight: '32px !important',
+                    minHeight: 'auto !important'
+                  },
+                  '& .MuiInputLabel-root': {
+                    '&.Mui-focused': {
+                      color: 'primary.main'
+                    },
+                    transform: 'translate(14px, -9px) scale(0.75)',
+                    '&.MuiInputLabel-shrink': {
+                      transform: 'translate(14px, -9px) scale(0.75)'
+                    }
+                  },
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': {
+                      borderColor: 'rgba(0, 0, 0, 0.23)'
+                    },
+                    '&:hover fieldset': {
+                      borderColor: 'rgba(0, 0, 0, 0.87)'
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: 'primary.main'
+                    }
+                  }
+                }}
               >
                 {timezones.map(timezone => (
                   <option key={timezone.value} value={timezone.value}>
@@ -370,6 +577,22 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
                   </option>
                 ))}
               </TextField>
+              <TextField
+                name="appointment_duration"
+                label="Duración de Consulta (minutos) *"
+                value={formData.appointment_duration || ''}
+                onChange={handleChange}
+                size="small"
+                type="number"
+                required
+                error={!!fieldErrors.appointment_duration}
+                helperText={fieldErrors.appointment_duration}
+                inputProps={{
+                  min: 15,
+                  max: 120,
+                  step: 15
+                }}
+              />
           </Box>
         </Box>
       </DialogContent>

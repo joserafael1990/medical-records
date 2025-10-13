@@ -112,13 +112,13 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
   const getEmptyFieldsCount = () => {
     const fields = [
       'university', 'graduation_year', 'specialty_license', 'office_address',
-      'office_city', 'office_state_id', 'office_phone', 'appointment_duration', 'office_timezone'
+      'office_city', 'office_state_id', 'office_country', 'office_phone', 'appointment_duration', 'office_timezone', 'gender'
     ];
     return fields.filter(field => !doctorProfile[field]).length;
   };
 
   const emptyFieldsCount = getEmptyFieldsCount();
-  const completionPercentage = Math.round(((9 - emptyFieldsCount) / 9) * 100);
+  const completionPercentage = Math.round(((11 - emptyFieldsCount) / 11) * 100);
 
   return (
     <React.Fragment>
@@ -145,7 +145,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
             </Avatar>
         <Box>
               <Typography variant="h4" component="h1" gutterBottom>
-                {doctorProfile.full_name || `${doctorProfile.first_name} ${doctorProfile.paternal_surname}`}
+                {doctorProfile.full_name || `${doctorProfile.title || ''} ${doctorProfile.first_name} ${doctorProfile.paternal_surname}`.trim()}
           </Typography>
               <Typography variant="h6" color="text.secondary" gutterBottom>
                 {doctorProfile.specialty_name || 'Especialidad no especificada'}
@@ -199,9 +199,9 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
         </Alert>
       )}
       {errorMessage && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {errorMessage}
-        </Alert>
+        <Box sx={{ mb: 3, p: 2, bgcolor: 'error.main', borderRadius: 1 }}>
+          <Typography color="white">{errorMessage}</Typography>
+        </Box>
       )}
 
         {/* Profile Information Cards */}
@@ -214,6 +214,15 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                 Información Personal
                 </Typography>
               <List dense>
+                <ListItem>
+                  <ListItemIcon>
+                    <BadgeIcon color="action" />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary="Título" 
+                    secondary={doctorProfile.title || 'No especificado'} 
+                  />
+                </ListItem>
                 <ListItem>
                   <ListItemIcon>
                     <BadgeIcon color="action" />
@@ -248,6 +257,15 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                   <ListItemText
                     primary="Fecha de Nacimiento"
                     secondary={formatDate(doctorProfile.birth_date)} 
+                  />
+                </ListItem>
+                <ListItem>
+                  <ListItemIcon>
+                    <PersonIcon color="action" />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Género"
+                    secondary={doctorProfile.gender === 'M' ? 'Masculino' : doctorProfile.gender === 'F' ? 'Femenino' : doctorProfile.gender === 'O' ? 'Otro' : 'No especificado'} 
                   />
                 </ListItem>
               </List>
@@ -329,6 +347,24 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                     <ListItemText 
                       primary="Ciudad" 
                       secondary={doctorProfile.office_city || 'No especificada'} 
+                    />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemIcon>
+                      <LocationIcon color="action" />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="Estado" 
+                      secondary={doctorProfile.office_state_name || 'No especificado'} 
+                    />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemIcon>
+                      <LocationIcon color="action" />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="País" 
+                      secondary={doctorProfile.office_country_name || 'México'} 
                     />
                   </ListItem>
                 </List>

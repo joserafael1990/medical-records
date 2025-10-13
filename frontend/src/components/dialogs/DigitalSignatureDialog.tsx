@@ -696,9 +696,9 @@ const DigitalSignatureDialog: React.FC<DigitalSignatureDialogProps> = ({
         )}
 
         {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
+          <Box sx={{ mb: 2, p: 2, bgcolor: 'error.main', borderRadius: 1 }}>
+            <Typography color="white">{error}</Typography>
+          </Box>
         )}
 
         {success && (

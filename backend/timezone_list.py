@@ -82,6 +82,6 @@ TIMEZONES = [
 
 def get_timezone_options():
     """Return timezone options formatted for dropdown"""
-    return [(tz[0], f"{tz[1]} ({tz[0]})") for tz in TIMEZONES]
+    return [(tz[0], tz[1]) for tz in TIMEZONES]
 
 

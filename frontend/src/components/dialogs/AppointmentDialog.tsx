@@ -115,6 +115,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [localFormData, setLocalFormData] = useState<AppointmentFormData>(formData);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [validationError, setValidationError] = useState<string>('');
   
   // State for inline patient creation (first visit)
   const [newPatientData, setNewPatientData] = useState({
@@ -188,8 +189,6 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
       return (
         newPatientData.first_name && 
         newPatientData.paternal_surname && 
-        newPatientData.birth_date && 
-        newPatientData.gender && 
         newPatientData.primary_phone
       );
     } else {
@@ -199,23 +198,21 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
 
   // Determine if patient selection should be enabled (separate from appointment fields)
   const isPatientSelectionEnabled = () => {
-    return localFormData.appointment_type && localFormData.appointment_type !== 'first_visit';
+    return patients.length > 0 && localFormData.appointment_type && localFormData.appointment_type !== 'first_visit';
   };
 
   // Determine if the form is complete and ready to submit
   const isFormComplete = () => {
-    // Check if appointment type is selected
-    if (!localFormData.appointment_type) {
+    // Check if appointment type is selected (or automatically set when no patients)
+    if (!localFormData.appointment_type && patients.length > 0) {
       return false;
     }
     
     // Check patient data based on appointment type
-    if (localFormData.appointment_type === 'first_visit') {
-      // For first visit, check new patient data
+    if (localFormData.appointment_type === 'first_visit' || patients.length === 0) {
+      // For first visit, check new patient data (birth_date and gender are optional)
       if (!newPatientData.first_name || 
           !newPatientData.paternal_surname || 
-          !newPatientData.birth_date || 
-          !newPatientData.gender || 
           !newPatientData.primary_phone) {
         return false;
       }
@@ -231,7 +228,57 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
       return false;
     }
     
+    // Additional validation: ensure selected time is in available times
+    if (selectedTime && availableTimes.length > 0) {
+      const isTimeValid = availableTimes.some(timeSlot => timeSlot.time === selectedTime);
+      if (!isTimeValid) {
+        return false;
+      }
+    }
+    
     return true;
+  };
+
+  // Get validation error message
+  const getValidationErrorMessage = () => {
+    const errors = [];
+    
+    // Check appointment type
+    if (!localFormData.appointment_type && patients.length > 0) {
+      errors.push('Selecciona el tipo de consulta');
+    }
+    
+    // Check patient data
+    if (localFormData.appointment_type === 'first_visit' || patients.length === 0) {
+      if (!newPatientData.first_name) errors.push('El nombre es requerido');
+      if (!newPatientData.paternal_surname) errors.push('El apellido paterno es requerido');
+      if (!newPatientData.primary_phone) errors.push('El teléfono es requerido');
+      // birth_date and gender are optional for first visit appointments
+    } else {
+      if (!selectedPatient || !localFormData.patient_id) {
+        errors.push('Selecciona un paciente');
+      }
+    }
+    
+    // Check date and time with more specific messages
+    if (!selectedDate) {
+      errors.push('La fecha es requerida');
+    } else if (!selectedTime) {
+      // If date is selected but no time, be more specific
+      if (availableTimes.length === 0) {
+        errors.push('No hay horarios disponibles para la fecha seleccionada');
+      } else {
+        errors.push('Debe seleccionar un horario disponible para la cita');
+      }
+    } else if (selectedTime && availableTimes.length > 0) {
+      // Check if selected time is valid
+      const isTimeValid = availableTimes.some(timeSlot => timeSlot.time === selectedTime);
+      if (!isTimeValid) {
+        errors.push('El horario seleccionado no está disponible');
+      }
+    }
+    
+    return errors.length > 0 ? errors.join(', ') : '';
   };
 
   // Determine if fields should be read-only
@@ -249,7 +296,9 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     const updatedFormData = {
       ...formData,
       // Always set status to 'confirmed' for new appointments, preserve existing status for edits
-      status: formData.status || 'confirmed'
+      status: formData.status || 'confirmed',
+      // If no patients exist, automatically set appointment type to first_visit
+      appointment_type: patients.length === 0 ? 'first_visit' : formData.appointment_type
     };
     setLocalFormData(updatedFormData);
     
@@ -312,10 +361,46 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
   };
 
   const handleSubmit = async () => {
+    // Clear previous validation errors
+    setValidationError('');
+    
+    // Debug logging
+    console.log('🔍 Validating appointment form...');
+    console.log('Selected Date:', selectedDate);
+    console.log('Selected Time:', selectedTime);
+    console.log('Available Times:', availableTimes.length);
+    console.log('Form Complete:', isFormComplete());
+    
     // Validate that all required fields are complete before proceeding
     if (!isFormComplete()) {
+      const errorMessage = getValidationErrorMessage();
+      console.log('❌ Validation failed:', errorMessage);
+      setValidationError(errorMessage);
       return;
     }
+    
+    // Additional explicit validation for time slot
+    if (!selectedTime || selectedTime.trim() === '') {
+      console.log('❌ Explicit time validation failed - no time selected');
+      setValidationError('Debe seleccionar un horario disponible para la cita');
+      return;
+    }
+    
+    // Validate that selected time exists in available times
+    if (availableTimes.length > 0) {
+      const isTimeValid = availableTimes.some(timeSlot => timeSlot.time === selectedTime);
+      if (!isTimeValid) {
+        console.log('❌ Selected time is not in available times');
+        setValidationError('El horario seleccionado no está disponible');
+        return;
+      }
+    } else {
+      console.log('❌ No available times for selected date');
+      setValidationError('No hay horarios disponibles para la fecha seleccionada');
+      return;
+    }
+    
+    console.log('✅ Validation passed, proceeding with submission...');
 
     // Handle "Primera vez" (first visit) - create patient inline
     if (localFormData.appointment_type === 'first_visit') {
@@ -450,46 +535,66 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
             <ErrorRibbon message={formErrorMessage} />
           </Box>
         </Collapse>
+        
+        {/* Validation Error Messages */}
+        {validationError && (
+          <Box 
+            data-testid="validation-error-message"
+            sx={{ 
+              mb: 2, 
+              p: 2, 
+              bgcolor: 'error.main', 
+              borderRadius: 1,
+              backgroundColor: '#d32f2f !important' // Force red background
+            }}
+          >
+            <Typography color="white" sx={{ color: 'white !important' }}>
+              {validationError}
+            </Typography>
+          </Box>
+        )}
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-          {/* STEP 1: Appointment Type - FIRST */}
-          <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <MedicalServicesIcon sx={{ fontSize: 20 }} />
-              Tipo de Consulta
-              <Typography component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Typography>
-            </Typography>
-            <FormControl fullWidth size="small" error={hasFieldError('appointment_type')}>
-              <Select
-                value={localFormData.appointment_type || ''}
-                onChange={handleFieldChange('appointment_type')}
-                disabled={isReadOnly}
-                displayEmpty
-              >
-                <MenuItem value="" disabled>
-                  <em>Seleccione una opción</em>
-                </MenuItem>
-                <MenuItem value="first_visit">Primera vez</MenuItem>
-                <MenuItem value="follow_up">Seguimiento</MenuItem>
-              </Select>
-              {hasFieldError('appointment_type') && (
-                <Typography variant="caption" color="error" sx={{ mt: 0.5 }}>
-                  {getFieldError('appointment_type')}
-                </Typography>
-              )}
-            </FormControl>
-          </Box>
+          {/* STEP 1: Appointment Type - Only show if there are existing patients */}
+          {patients.length > 0 && (
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <MedicalServicesIcon sx={{ fontSize: 20 }} />
+                Tipo de Consulta
+                <Typography component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Typography>
+              </Typography>
+              <FormControl fullWidth size="small" error={hasFieldError('appointment_type')}>
+                <Select
+                  value={localFormData.appointment_type || ''}
+                  onChange={handleFieldChange('appointment_type')}
+                  disabled={isReadOnly}
+                  displayEmpty
+                >
+                  <MenuItem value="" disabled>
+                    <em>Seleccione una opción</em>
+                  </MenuItem>
+                  <MenuItem value="first_visit">Primera vez</MenuItem>
+                  <MenuItem value="follow_up">Seguimiento</MenuItem>
+                </Select>
+                {hasFieldError('appointment_type') && (
+                  <Typography variant="caption" color="error" sx={{ mt: 0.5 }}>
+                    {getFieldError('appointment_type')}
+                  </Typography>
+                )}
+              </FormControl>
+            </Box>
+          )}
 
-          {/* STEP 2: Patient Section - Conditional based on appointment type */}
-          {localFormData.appointment_type && (
+          {/* STEP 2: Patient Section - Conditional based on appointment type or no patients */}
+          {(localFormData.appointment_type || patients.length === 0) && (
             <Box>
               <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                 <PersonIcon sx={{ fontSize: 20 }} />
-                {localFormData.appointment_type === 'first_visit' ? 'Datos del Nuevo Paciente' : 'Seleccionar Paciente'}
+                {(localFormData.appointment_type === 'first_visit' || patients.length === 0) ? 'Datos del Nuevo Paciente' : 'Seleccionar Paciente'}
                 <Typography component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Typography>
               </Typography>
               
-              {localFormData.appointment_type === 'first_visit' ? (
+              {(localFormData.appointment_type === 'first_visit' || patients.length === 0) ? (
                 /* Inline Patient Creation for First Visit */
                 <Box sx={{ bgcolor: 'primary.50', p: 3, borderRadius: 2, border: '1px solid', borderColor: 'primary.200' }}>
                   <Typography variant="body2" color="primary.main" sx={{ mb: 2, fontWeight: 500 }}>
@@ -523,41 +628,6 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                       size="small"
                       disabled={isReadOnly}
                     />
-                    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
-                      <DatePicker
-                        label="Fecha de Nacimiento *"
-                        value={newPatientData.birth_date ? new Date(newPatientData.birth_date) : null}
-                        maxDate={new Date()}
-                        onChange={(newValue) => {
-                          if (newValue) {
-                            const dateValue = newValue.toISOString().split('T')[0];
-                            handleNewPatientFieldChange('birth_date', dateValue);
-                          } else {
-                            handleNewPatientFieldChange('birth_date', '');
-                          }
-                        }}
-                        disabled={isReadOnly}
-                        slotProps={{
-                          textField: {
-                            size: 'small',
-                            required: true
-                          }
-                        }}
-                      />
-                    </LocalizationProvider>
-                    <FormControl size="small" required error={hasFieldError('newPatient.gender')}>
-                      <InputLabel>Género</InputLabel>
-                      <Select
-                        value={newPatientData.gender}
-                        onChange={(e) => handleNewPatientFieldChange('gender', e.target.value)}
-                        label="Género"
-                        disabled={isReadOnly}
-                      >
-                        <MenuItem value="M">Masculino</MenuItem>
-                        <MenuItem value="F">Femenino</MenuItem>
-                        <MenuItem value="O">Otro</MenuItem>
-                      </Select>
-                    </FormControl>
                     <TextField
                       label="Teléfono"
                       value={newPatientData.primary_phone}
@@ -764,6 +834,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
               <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                 <EventIcon sx={{ fontSize: 20 }} />
                 Fecha
+                <Typography component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Typography>
               </Typography>
               <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
                 <DatePicker
@@ -796,9 +867,15 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
               <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                 <ScheduleIcon sx={{ fontSize: 20 }} />
                 Hora Disponible
+                <Typography component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Typography>
                 {loadingTimes && <CircularProgress size={16} />}
               </Typography>
-              <FormControl fullWidth size="small" error={hasFieldError('date_time')}>
+              <FormControl 
+                fullWidth 
+                size="small" 
+                error={hasFieldError('date_time') || (validationError && (!selectedTime || selectedTime.trim() === ''))}
+                required
+              >
                 <InputLabel>Seleccionar horario</InputLabel>
                 <Select
                   value={selectedTime}
@@ -830,6 +907,14 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                   <Alert severity="info" sx={{ mt: 1 }}>
                     Selecciona primero una fecha
                   </Alert>
+                )}
+                {validationError && (!selectedTime || selectedTime.trim() === '') && selectedDate && (
+                  <Typography variant="caption" color="error" sx={{ mt: 1, display: 'block' }}>
+                    {availableTimes.length > 0 
+                      ? 'Debe seleccionar un horario disponible' 
+                      : 'No hay horarios disponibles para esta fecha'
+                    }
+                  </Typography>
                 )}
               </FormControl>
             </Box>
@@ -944,7 +1029,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
           <Button 
             onClick={handleSubmit}
             variant="contained"
-            disabled={loading || !isFormComplete()}
+            disabled={loading}
             sx={{ minWidth: 120 }}
           >
             {loading ? 'Guardando...' : (isEditing ? 'Actualizar' : 'Crear Cita')}

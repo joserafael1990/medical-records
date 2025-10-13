@@ -1274,9 +1274,9 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
             </Typography>
 
             {error && (
-              <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
-                {error}
-              </Alert>
+              <Box sx={{ width: '100%', mb: 2, p: 2, bgcolor: 'error.main', borderRadius: 1 }}>
+                <Typography color="white">{error}</Typography>
+              </Box>
             )}
 
             <Box sx={{ width: '100%', mt: 3 }}>

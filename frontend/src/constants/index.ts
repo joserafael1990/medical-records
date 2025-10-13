@@ -22,9 +22,10 @@ export const API_CONFIG = {
     WEEKLY_AGENDA: '/api/appointments/calendar',
     CANCEL_APPOINTMENT: (id: number) => `/api/appointments/${id}/cancel`,
     
-    // Medical Records
+    // Medical Records / Consultations
     MEDICAL_RECORDS: '/api/medical-records',
     MEDICAL_RECORD_BY_ID: (id: number) => `/api/medical-records/${id}`,
+    CONSULTATIONS: '/api/consultations',
     
     // Clinical Studies
     CLINICAL_STUDIES: '/api/clinical-studies',
@@ -32,6 +33,12 @@ export const API_CONFIG = {
     
     // Catalogs
     SPECIALTIES: '/api/catalogs/specialties',
+    STATES: '/api/catalogs/states',
+    COUNTRIES: '/api/catalogs/countries',
+    EMERGENCY_RELATIONSHIPS: '/api/catalogs/emergency-relationships',
+    
+    // Health Check
+    HEALTH: '/api/health',
   }
 };
 

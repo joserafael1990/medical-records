@@ -11,7 +11,11 @@ import {
   Typography,
   Box,
   MenuItem,
-  Divider
+  Divider,
+  FormControl,
+  InputLabel,
+  Select,
+  FormHelperText
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -20,7 +24,16 @@ import {
   Email as EmailIcon,
   Badge as BadgeIcon
 } from '@mui/icons-material';
+import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { es } from 'date-fns/locale';
 import type { Patient, PatientFormData } from '../../types';
+import { apiService } from '../../services/api';
+
+interface EmergencyRelationship {
+  code: string;
+  name: string;
+}
 
 interface PatientDialogProps {
   open: boolean;
@@ -47,8 +60,7 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
     email: '',
     primary_phone: '',
     phone: '',
-    address_street: '',
-    address: '',
+    home_address: '',
     curp: '',
     rfc: '',
     civil_status: '',
@@ -58,14 +70,14 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
     state: '',
     address_postal_code: '',
     zip_code: '',
+    address_country_id: '',
     country: '',
     birth_city: '',
     birth_state_id: '',
+    birth_country_id: '',
     emergency_contact_name: '',
     emergency_contact_phone: '',
     emergency_contact_relationship: '',
-    blood_type: '',
-    allergies: '',
     chronic_conditions: '',
     current_medications: '',
     medical_history: '',
@@ -78,96 +90,228 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [emergencyRelationships, setEmergencyRelationships] = useState<EmergencyRelationship[]>([]);
+  const [countries, setCountries] = useState<Array<{id: number, name: string}>>([]);
+  const [states, setStates] = useState<Array<{id: number, name: string}>>([]);
+  const [birthStates, setBirthStates] = useState<Array<{id: number, name: string}>>([]);
+
+  // Load emergency relationships, countries and states when dialog opens
+  useEffect(() => {
+    const loadData = async () => {
+      if (open) {
+        try {
+          const [relationships, countriesData] = await Promise.all([
+            apiService.getEmergencyRelationships(),
+            apiService.getCountries()
+          ]);
+          console.log('🔍 Emergency relationships loaded:', relationships);
+          console.log('🌍 Countries loaded:', countriesData);
+          setEmergencyRelationships(relationships);
+          setCountries(countriesData);
+        } catch (error) {
+          console.error('Error loading data:', error);
+        }
+      }
+    };
+    loadData();
+  }, [open]);
+
+  // Load states when formData has country IDs
+  useEffect(() => {
+    const loadStatesForCountries = async () => {
+      try {
+        // Load states for address country
+        if (formData.address_country_id) {
+          const addressStatesData = await apiService.getStates(parseInt(formData.address_country_id));
+          setStates(addressStatesData);
+        }
+        
+        // Load states for birth country
+        if (formData.birth_country_id) {
+          const birthStatesData = await apiService.getStates(parseInt(formData.birth_country_id));
+          setBirthStates(birthStatesData);
+        }
+      } catch (error) {
+        console.error('Error loading states for countries:', error);
+      }
+    };
+
+    if (formData.address_country_id || formData.birth_country_id) {
+      loadStatesForCountries();
+    }
+  }, [formData.address_country_id, formData.birth_country_id]);
 
   useEffect(() => {
-    if (patient && open) {
-      setFormData({
-        first_name: patient.first_name || '',
-        paternal_surname: patient.paternal_surname || '',
-        maternal_surname: patient.maternal_surname || '',
-        birth_date: patient.birth_date || '',
-        date_of_birth: patient.birth_date || '',
-        gender: patient.gender || '',
-        email: patient.email || '',
-        primary_phone: patient.primary_phone || '',
-        phone: patient.primary_phone || '',
-        address_street: patient.address_street || '',
-        address: patient.address_street || '',
-        curp: patient.curp || '',
-        rfc: patient.rfc || '',
-        civil_status: patient.civil_status || '',
-        address_city: patient.address_city || '',
-        city: patient.address_city || '',
-        address_state_id: '',
-        state: '',
-        address_postal_code: patient.address_postal_code || '',
-        zip_code: patient.address_postal_code || '',
-        country: '',
-        birth_city: patient.birth_city || '',
-        birth_state_id: '',
-        emergency_contact_name: patient.emergency_contact_name || '',
-        emergency_contact_phone: patient.emergency_contact_phone || '',
-        emergency_contact_relationship: patient.emergency_contact_relationship || '',
-        blood_type: patient.blood_type || '',
-        allergies: patient.allergies || '',
-        chronic_conditions: patient.chronic_conditions || '',
-        current_medications: patient.current_medications || '',
-        medical_history: '',
-        insurance_provider: patient.insurance_provider || '',
-        insurance_policy_number: '',
-        active: true,
-        is_active: true
-      });
-    } else if (!open) {
-      // Reset form when dialog closes
-      setFormData({
-        first_name: '',
-        paternal_surname: '',
-        maternal_surname: '',
-        birth_date: '',
-        date_of_birth: '',
-        gender: '',
-        email: '',
-        primary_phone: '',
-        phone: '',
-        address_street: '',
-        address: '',
-        curp: '',
-        rfc: '',
-        civil_status: '',
-        address_city: '',
-        city: '',
-        address_state_id: '',
-        state: '',
-        address_postal_code: '',
-        zip_code: '',
-        country: '',
-        birth_city: '',
-        birth_state_id: '',
-        emergency_contact_name: '',
-        emergency_contact_phone: '',
-        emergency_contact_relationship: '',
-        blood_type: '',
-        allergies: '',
-        chronic_conditions: '',
-        current_medications: '',
-        medical_history: '',
-        insurance_provider: '',
-        insurance_policy_number: '',
-        active: true,
-        is_active: true
-      });
-      setError('');
-    }
+    const loadPatientData = async () => {
+      if (patient && open) {
+        try {
+          // Get decrypted patient data from API
+          const decryptedPatient = await apiService.getPatient(patient.id.toString());
+          console.log('🔍 Decrypted patient data:', decryptedPatient);
+          console.log('🔍 Emergency contact data:', {
+            name: decryptedPatient.emergency_contact_name,
+            phone: decryptedPatient.emergency_contact_phone,
+            relationship: decryptedPatient.emergency_contact_relationship
+          });
+          setFormData({
+            first_name: decryptedPatient.first_name || '',
+            paternal_surname: decryptedPatient.paternal_surname || '',
+            maternal_surname: decryptedPatient.maternal_surname || '',
+            birth_date: decryptedPatient.birth_date || '',
+            date_of_birth: decryptedPatient.birth_date || '',
+            gender: decryptedPatient.gender || '',
+            email: decryptedPatient.email || '',
+            primary_phone: decryptedPatient.primary_phone || '',
+            phone: decryptedPatient.primary_phone || '',
+            home_address: decryptedPatient.home_address || '',
+            curp: decryptedPatient.curp || '',
+            rfc: decryptedPatient.rfc || '',
+            civil_status: decryptedPatient.civil_status || '',
+            address_city: decryptedPatient.address_city || '',
+            city: decryptedPatient.address_city || '',
+            address_state_id: decryptedPatient.address_state_id?.toString() || '',
+            state: '',
+            address_postal_code: decryptedPatient.address_postal_code || '',
+            zip_code: decryptedPatient.address_postal_code || '',
+            address_country_id: decryptedPatient.address_country_id?.toString() || '',
+            country: '',
+            birth_city: decryptedPatient.birth_city || '',
+            birth_state_id: decryptedPatient.birth_state_id?.toString() || '',
+            birth_country_id: decryptedPatient.birth_country_id?.toString() || '',
+            emergency_contact_name: decryptedPatient.emergency_contact_name || '',
+            emergency_contact_phone: decryptedPatient.emergency_contact_phone || '',
+            emergency_contact_relationship: decryptedPatient.emergency_contact_relationship || '',
+            chronic_conditions: decryptedPatient.chronic_conditions || '',
+            current_medications: decryptedPatient.current_medications || '',
+            medical_history: '',
+            insurance_provider: decryptedPatient.insurance_provider || '',
+            insurance_policy_number: '',
+            active: true,
+            is_active: true
+          });
+          console.log('🔍 FormData set with emergency contact:', {
+            name: decryptedPatient.emergency_contact_name || '',
+            phone: decryptedPatient.emergency_contact_phone || '',
+            relationship: decryptedPatient.emergency_contact_relationship || ''
+          });
+        } catch (error) {
+          console.error('Error loading decrypted patient data:', error);
+          // Fallback to encrypted data if API call fails
+          setFormData({
+            first_name: patient.first_name || '',
+            paternal_surname: patient.paternal_surname || '',
+            maternal_surname: patient.maternal_surname || '',
+            birth_date: patient.birth_date || '',
+            date_of_birth: patient.birth_date || '',
+            gender: patient.gender || '',
+            email: patient.email || '',
+            primary_phone: patient.primary_phone || '',
+            phone: patient.primary_phone || '',
+            home_address: patient.home_address || '',
+            curp: patient.curp || '',
+            rfc: patient.rfc || '',
+            civil_status: patient.civil_status || '',
+            address_city: patient.address_city || '',
+            city: patient.address_city || '',
+            address_state_id: patient.address_state_id?.toString() || '',
+            state: '',
+            address_postal_code: patient.address_postal_code || '',
+            zip_code: patient.address_postal_code || '',
+            address_country_id: patient.address_country_id?.toString() || '',
+            country: '',
+            birth_city: patient.birth_city || '',
+            birth_state_id: patient.birth_state_id?.toString() || '',
+            birth_country_id: patient.birth_country_id?.toString() || '',
+            emergency_contact_name: patient.emergency_contact_name || '',
+            emergency_contact_phone: patient.emergency_contact_phone || '',
+            emergency_contact_relationship: patient.emergency_contact_relationship || '',
+            chronic_conditions: patient.chronic_conditions || '',
+            current_medications: patient.current_medications || '',
+            medical_history: '',
+            insurance_provider: patient.insurance_provider || '',
+            insurance_policy_number: '',
+            active: true,
+            is_active: true
+          });
+        }
+      } else if (!open) {
+        // Reset form when dialog closes
+        setFormData({
+          first_name: '',
+          paternal_surname: '',
+          maternal_surname: '',
+          birth_date: '',
+          date_of_birth: '',
+          gender: '',
+          email: '',
+          primary_phone: '',
+          phone: '',
+          home_address: '',
+          curp: '',
+          rfc: '',
+          civil_status: '',
+          address_city: '',
+          city: '',
+          address_state_id: '',
+          state: '',
+          address_postal_code: '',
+          zip_code: '',
+          address_country_id: '',
+          country: '',
+          birth_city: '',
+          birth_state_id: '',
+          birth_country_id: '',
+          emergency_contact_name: '',
+          emergency_contact_phone: '',
+          emergency_contact_relationship: '',
+          chronic_conditions: '',
+          current_medications: '',
+          medical_history: '',
+          insurance_provider: '',
+          insurance_policy_number: '',
+          active: true,
+          is_active: true
+        });
+        setError('');
+      }
+    };
+
+    loadPatientData();
   }, [patient, open]);
 
   const handleChange = (field: keyof PatientFormData) => (
-    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | { name?: string; value: unknown }>
   ) => {
-    setFormData(prev => ({ ...prev, [field]: event.target.value }));
+    const value = event.target.value;
+    setFormData(prev => ({ ...prev, [field]: value }));
     // Clear error for this field when user starts typing
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
+  const handleCountryChange = async (field: 'address_country_id' | 'birth_country_id', countryId: string) => {
+    setFormData(prev => ({ ...prev, [field]: countryId }));
+    
+    // Load states for selected country
+    if (countryId) {
+      try {
+        const statesData = await apiService.getStates(parseInt(countryId));
+        if (field === 'address_country_id') {
+          setStates(statesData);
+        } else {
+          setBirthStates(statesData);
+        }
+      } catch (error) {
+        console.error('Error loading states:', error);
+      }
+    }
+    
+    // Clear related fields when country changes
+    if (field === 'address_country_id') {
+      setFormData(prev => ({ ...prev, address_state_id: '' }));
+    } else {
+      setFormData(prev => ({ ...prev, birth_state_id: '' }));
     }
   };
 
@@ -185,6 +329,10 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
     }
     if (!formData.birth_date) {
       setError('La fecha de nacimiento es requerida');
+      return;
+    }
+    if (!formData.primary_phone.trim()) {
+      setError('El teléfono de contacto es requerido');
       return;
     }
     if (!formData.gender) {
@@ -225,8 +373,19 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
 
       <DialogContent>
         {error && (
-          <Box sx={{ mb: 2, p: 2, bgcolor: 'error.light', borderRadius: 1 }}>
-            <Typography color="error">{error}</Typography>
+          <Box 
+            data-testid="error-message"
+            sx={{ 
+              mb: 2, 
+              p: 2, 
+              bgcolor: 'error.main', 
+              borderRadius: 1,
+              backgroundColor: '#d32f2f !important' // Force red background
+            }}
+          >
+            <Typography color="white" sx={{ color: 'white !important' }}>
+              {error}
+            </Typography>
           </Box>
         )}
 
@@ -240,20 +399,20 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: '1fr 1fr' }, gap: 2 }}>
 
               <TextField
-                label="Nombre *"
+                label="Nombre"
                 name="first_name"
                 value={formData.first_name}
-                onChange={handleChange}
+                onChange={handleChange('first_name')}
                 size="small"
                 required
                 error={!!errors.first_name}
                 helperText={errors.first_name}
               />
               <TextField
-                label="Apellido Paterno *"
+                label="Apellido Paterno"
                 name="paternal_surname"
                 value={formData.paternal_surname}
-                onChange={handleChange}
+                onChange={handleChange('paternal_surname')}
                 size="small"
                 required
                 error={!!errors.paternal_surname}
@@ -263,24 +422,35 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
                 label="Apellido Materno"
                 name="maternal_surname"
                 value={formData.maternal_surname}
-                onChange={handleChange}
+                onChange={handleChange('maternal_surname')}
                 size="small"
                 error={!!errors.maternal_surname}
                 helperText={errors.maternal_surname}
               />
 
-              <TextField
-                label="Fecha de Nacimiento *"
-                name="birth_date"
-                type="date"
-                value={formData.birth_date}
-                onChange={handleDateChange}
-                size="small"
-                required
-                InputLabelProps={{ shrink: true }}
-                error={!!errors.birth_date}
-                helperText={errors.birth_date}
-              />
+              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
+                <DatePicker
+                  label="Fecha de Nacimiento *"
+                  value={formData.birth_date ? new Date(formData.birth_date) : null}
+                  onChange={(newValue) => {
+                    if (newValue) {
+                      const formattedDate = newValue.toISOString().split('T')[0];
+                      handleChange('birth_date')({ target: { value: formattedDate } } as any);
+                    } else {
+                      handleChange('birth_date')({ target: { value: '' } } as any);
+                    }
+                  }}
+                  slotProps={{
+                    textField: {
+                      size: "small",
+                      required: true,
+                      error: !!errors.birth_date,
+                      helperText: errors.birth_date,
+                      fullWidth: true
+                    }
+                  }}
+                />
+              </LocalizationProvider>
               <FormControl size="small" required error={!!errors.gender} fullWidth>
                 <InputLabel id="gender-label">Género *</InputLabel>
                 <Select
@@ -288,7 +458,7 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
                   value={formData.gender}
                   labelId="gender-label"
                   label="Género *"
-                  onChange={handleChange}
+                  onChange={handleChange('gender')}
                   sx={{ minWidth: 120 }}
                 >
                   <MenuItem value=""><em>Seleccione</em></MenuItem>
@@ -313,8 +483,9 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
                 label="Teléfono"
                 name="primary_phone"
                 value={formData.primary_phone}
-                onChange={handleChange}
+                onChange={handleChange('primary_phone')}
                 size="small"
+                required
                 error={!!errors.primary_phone}
                 helperText={errors.primary_phone}
               />
@@ -323,7 +494,7 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
                 name="email"
                 type="email"
                 value={formData.email}
-                onChange={handleChange}
+                onChange={handleChange('email')}
                 size="small"
                 error={!!errors.email}
                 helperText={errors.email}
@@ -331,15 +502,69 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
 
               <TextField
                 label="Dirección"
-                name="address_street"
-                value={formData.address_street}
-                onChange={handleChange}
+                name="home_address"
+                value={formData.home_address}
+                onChange={handleChange('home_address')}
                 size="small"
                 fullWidth
                 sx={{ gridColumn: '1 / -1' }}
-                error={!!errors.address_street}
-                helperText={errors.address_street}
+                error={!!errors.home_address}
+                helperText={errors.home_address}
               />
+
+              <TextField
+                label="Ciudad"
+                name="address_city"
+                value={formData.address_city}
+                onChange={handleChange('address_city')}
+                size="small"
+                error={!!errors.address_city}
+                helperText={errors.address_city}
+              />
+
+              <TextField
+                label="Código Postal"
+                name="address_postal_code"
+                value={formData.address_postal_code}
+                onChange={handleChange('address_postal_code')}
+                size="small"
+                inputProps={{ maxLength: 5 }}
+                error={!!errors.address_postal_code}
+                helperText={errors.address_postal_code || "Opcional"}
+              />
+
+              <FormControl size="small" error={!!errors.address_country_id}>
+                <InputLabel>País</InputLabel>
+                <Select
+                  value={formData.address_country_id}
+                  onChange={(e) => handleCountryChange('address_country_id', e.target.value as string)}
+                  label="País"
+                >
+                  {countries.map((country) => (
+                    <MenuItem key={country.id} value={country.id.toString()}>
+                      {country.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {errors.address_country_id && <FormHelperText>{errors.address_country_id}</FormHelperText>}
+              </FormControl>
+
+              <FormControl size="small" error={!!errors.address_state_id}>
+                <InputLabel>Estado</InputLabel>
+                <Select
+                  value={formData.address_state_id}
+                  onChange={handleChange('address_state_id')}
+                  label="Estado"
+                  disabled={!formData.address_country_id}
+                >
+                  {states.map((state) => (
+                    <MenuItem key={state.id} value={state.id.toString()}>
+                      {state.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {errors.address_state_id && <FormHelperText>{errors.address_state_id}</FormHelperText>}
+              </FormControl>
             </Box>
           </Box>
 
@@ -355,45 +580,193 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
                 label="CURP"
                 name="curp"
                 value={formData.curp}
-                onChange={handleChange}
+                onChange={handleChange('curp')}
                 size="small"
                 inputProps={{ maxLength: 18 }}
                 error={!!errors.curp}
                 helperText={errors.curp}
               />
-              <FormControl size="small" error={!!errors.blood_type} fullWidth>
-                <InputLabel id="blood-type-label">Tipo de Sangre</InputLabel>
+              <TextField
+                label="RFC"
+                name="rfc"
+                value={formData.rfc}
+                onChange={handleChange('rfc')}
+                size="small"
+                inputProps={{ maxLength: 13 }}
+                error={!!errors.rfc}
+                helperText={errors.rfc}
+              />
+              <FormControl size="small" error={!!errors.civil_status} fullWidth>
+                <InputLabel id="civil-status-label">Estado Civil</InputLabel>
                 <Select
-                  name="blood_type"
-                  value={formData.blood_type}
-                  labelId="blood-type-label"
-                  label="Tipo de Sangre"
-                  onChange={handleChange}
-                  sx={{ minWidth: 140 }}
+                  name="civil_status"
+                  value={formData.civil_status}
+                  labelId="civil-status-label"
+                  label="Estado Civil"
+                  onChange={handleChange('civil_status')}
                 >
                   <MenuItem value=""><em>Seleccione</em></MenuItem>
-                  <MenuItem value="A+">A+</MenuItem>
-                  <MenuItem value="A-">A-</MenuItem>
-                  <MenuItem value="B+">B+</MenuItem>
-                  <MenuItem value="B-">B-</MenuItem>
-                  <MenuItem value="AB+">AB+</MenuItem>
-                  <MenuItem value="AB-">AB-</MenuItem>
-                  <MenuItem value="O+">O+</MenuItem>
-                  <MenuItem value="O-">O-</MenuItem>
+                  <MenuItem value="single">Soltero(a)</MenuItem>
+                  <MenuItem value="married">Casado(a)</MenuItem>
+                  <MenuItem value="divorced">Divorciado(a)</MenuItem>
+                  <MenuItem value="widowed">Viudo(a)</MenuItem>
+                  <MenuItem value="free_union">Unión libre</MenuItem>
                 </Select>
-                {errors.blood_type && <FormHelperText>{errors.blood_type}</FormHelperText>}
+                {errors.civil_status && <FormHelperText>{errors.civil_status}</FormHelperText>}
+              </FormControl>
+            </Box>
+          </Box>
+
+
+          {/* Birth Information Section */}
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <PersonIcon sx={{ fontSize: 20 }} />
+              Información de Nacimiento
+            </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+              <TextField
+                label="Ciudad de Nacimiento"
+                name="birth_city"
+                value={formData.birth_city}
+                onChange={handleChange('birth_city')}
+                size="small"
+                error={!!errors.birth_city}
+                helperText={errors.birth_city}
+              />
+
+              <FormControl size="small" error={!!errors.birth_country_id}>
+                <InputLabel>País de Nacimiento</InputLabel>
+                <Select
+                  value={formData.birth_country_id}
+                  onChange={(e) => handleCountryChange('birth_country_id', e.target.value as string)}
+                  label="País de Nacimiento"
+                >
+                  {countries.map((country) => (
+                    <MenuItem key={country.id} value={country.id.toString()}>
+                      {country.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {errors.birth_country_id && <FormHelperText>{errors.birth_country_id}</FormHelperText>}
               </FormControl>
 
+              <FormControl size="small" error={!!errors.birth_state_id}>
+                <InputLabel>Estado de Nacimiento</InputLabel>
+                <Select
+                  value={formData.birth_state_id}
+                  onChange={handleChange('birth_state_id')}
+                  label="Estado de Nacimiento"
+                  disabled={!formData.birth_country_id}
+                >
+                  {birthStates.map((state) => (
+                    <MenuItem key={state.id} value={state.id.toString()}>
+                      {state.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {errors.birth_state_id && <FormHelperText>{errors.birth_state_id}</FormHelperText>}
+              </FormControl>
+            </Box>
+          </Box>
+
+          {/* Emergency Contact Section */}
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <PhoneIcon sx={{ fontSize: 20 }} />
+              Contacto de Emergencia
+            </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
               <TextField
-                label="Alergias"
-                name="allergies"
-                value={formData.allergies}
-                onChange={handleChange}
+                label="Nombre del Contacto"
+                name="emergency_contact_name"
+                value={formData.emergency_contact_name}
+                onChange={handleChange('emergency_contact_name')}
                 size="small"
-                fullWidth
+                error={!!errors.emergency_contact_name}
+                helperText={errors.emergency_contact_name}
+              />
+              <TextField
+                label="Teléfono del Contacto"
+                name="emergency_contact_phone"
+                value={formData.emergency_contact_phone}
+                onChange={handleChange('emergency_contact_phone')}
+                size="small"
+                error={!!errors.emergency_contact_phone}
+                helperText={errors.emergency_contact_phone}
+              />
+              <FormControl size="small" error={!!errors.emergency_contact_relationship} fullWidth>
+                <InputLabel id="emergency-relationship-label">Relación con el Paciente</InputLabel>
+                <Select
+                  name="emergency_contact_relationship"
+                  value={formData.emergency_contact_relationship}
+                  labelId="emergency-relationship-label"
+                  label="Relación con el Paciente"
+                  onChange={handleChange('emergency_contact_relationship')}
+                  sx={{ gridColumn: '1 / -1' }}
+                >
+                  <MenuItem value=""><em>Seleccione</em></MenuItem>
+                  {emergencyRelationships.map((relationship) => (
+                    <MenuItem key={relationship.code} value={relationship.code}>
+                      {relationship.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {errors.emergency_contact_relationship && <FormHelperText>{errors.emergency_contact_relationship}</FormHelperText>}
+              </FormControl>
+            </Box>
+          </Box>
+
+          {/* Medical Information Section */}
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <BadgeIcon sx={{ fontSize: 20 }} />
+              Información Médica
+            </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+              <TextField
+                label="Condiciones Crónicas"
+                name="chronic_conditions"
+                value={formData.chronic_conditions}
+                onChange={handleChange('chronic_conditions')}
+                size="small"
                 multiline
                 rows={2}
+                fullWidth
                 sx={{ gridColumn: '1 / -1' }}
+                error={!!errors.chronic_conditions}
+                helperText={errors.chronic_conditions}
+              />
+              <TextField
+                label="Medicamentos Actuales"
+                name="current_medications"
+                value={formData.current_medications}
+                onChange={handleChange('current_medications')}
+                size="small"
+                multiline
+                rows={2}
+                fullWidth
+                sx={{ gridColumn: '1 / -1' }}
+                error={!!errors.current_medications}
+                helperText={errors.current_medications}
+              />
+              <TextField
+                label="Proveedor de Seguro"
+                name="insurance_provider"
+                value={formData.insurance_provider}
+                onChange={handleChange('insurance_provider')}
+                size="small"
+                error={!!errors.insurance_provider}
+                helperText={errors.insurance_provider}
+              />
+              <TextField
+                label="Número de Póliza"
+                name="insurance_policy_number"
+                value={formData.insurance_policy_number}
+                onChange={handleChange('insurance_policy_number')}
+                size="small"
+                error={!!errors.insurance_policy_number}
+                helperText={errors.insurance_policy_number}
               />
             </Box>
           </Box>

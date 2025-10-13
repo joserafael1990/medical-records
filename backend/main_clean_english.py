@@ -127,7 +127,7 @@ def encrypt_sensitive_data(data: dict, data_type: str = "patient") -> dict:
         # Map field names to actual database field names
         db_field_map = {
             'phone': 'primary_phone',
-            'address': 'address_street',
+            'address': 'home_address',
             'emergency_contact': 'emergency_contact_phone'
         }
         db_field = db_field_map.get(field, field)
@@ -172,7 +172,7 @@ def decrypt_sensitive_data(data: dict, data_type: str = "patient") -> dict:
         # Map field names to actual database field names
         db_field_map = {
             'phone': 'primary_phone',
-            'address': 'address_street',
+            'address': 'home_address',
             'emergency_contact': 'emergency_contact_phone'
         }
         db_field = db_field_map.get(field, field)
@@ -644,91 +644,35 @@ async def generate_weekly_template(
         # Delete existing templates for this doctor
         db.execute(text("DELETE FROM schedule_templates WHERE doctor_id = :doctor_id"), 
                   {"doctor_id": current_user.id})
+        db.commit()
         
-        # Default schedule template
-        default_schedule = [
-            {"day_of_week": 0, "start_time": "09:00", "end_time": "17:00", "is_active": True},
-            {"day_of_week": 1, "start_time": "09:00", "end_time": "17:00", "is_active": True},
-            {"day_of_week": 2, "start_time": "09:00", "end_time": "17:00", "is_active": True},
-            {"day_of_week": 3, "start_time": "09:00", "end_time": "17:00", "is_active": True},
-            {"day_of_week": 4, "start_time": "09:00", "end_time": "17:00", "is_active": True},
-            {"day_of_week": 5, "start_time": "10:00", "end_time": "14:00", "is_active": False},
-            {"day_of_week": 6, "start_time": "10:00", "end_time": "14:00", "is_active": False}
-        ]
-        
-        # Create templates in database using SQL
-        for day_data in default_schedule:
-            params = {
-                "doctor_id": current_user.id,
-                "day_of_week": day_data["day_of_week"],
-                "start_time": day_data["start_time"],
-                "end_time": day_data["end_time"],
-                "consultation_duration": 30,
-                "break_duration": 10,
-                "lunch_start": "13:00" if day_data["is_active"] else None,
-                "lunch_end": "14:00" if day_data["is_active"] else None,
-                "is_active": day_data["is_active"]
-            }
-            
-            api_logger.info("Creating schedule template", doctor_id=current_user.id, day=day_data["day_of_week"], params=params)
-            
-            db.execute(text("""
-                INSERT INTO schedule_templates 
-                (doctor_id, day_of_week, start_time, end_time, consultation_duration, 
-                 break_duration, lunch_start, lunch_end, is_active, created_at, updated_at)
-                VALUES (:doctor_id, :day_of_week, :start_time, :end_time, :consultation_duration,
-                        :break_duration, :lunch_start, :lunch_end, :is_active, NOW(), NOW())
-            """), params)
+        # Create a simple template for Monday only
+        db.execute(text("""
+            INSERT INTO schedule_templates 
+            (doctor_id, day_of_week, start_time, end_time, consultation_duration, 
+             break_duration, lunch_start, lunch_end, is_active, created_at, updated_at)
+            VALUES (:doctor_id, :day_of_week, :start_time, :end_time, :consultation_duration,
+                    :break_duration, :lunch_start, :lunch_end, :is_active, NOW(), NOW())
+        """), {
+            "doctor_id": current_user.id,
+            "day_of_week": 0,
+            "start_time": "09:00",
+            "end_time": "17:00",
+            "consultation_duration": 30,
+            "break_duration": 10,
+            "lunch_start": "13:00",
+            "lunch_end": "14:00",
+            "is_active": True
+        })
         
         db.commit()
         
-        # Query the created templates
-        result = db.execute(text("""
-            SELECT id, day_of_week, start_time, end_time, consultation_duration,
-                   break_duration, lunch_start, lunch_end, is_active
-            FROM schedule_templates 
-            WHERE doctor_id = :doctor_id
-            ORDER BY day_of_week
-        """), {"doctor_id": current_user.id})
-        
-        templates = result.fetchall()
-        
-        # Transform to frontend format
-        weekly_schedule = {
-            "monday": None,
-            "tuesday": None,
-            "wednesday": None,
-            "thursday": None,
-            "friday": None,
-            "saturday": None,
-            "sunday": None
-        }
-        
-        day_names = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-        
-        for template in templates:
-            day_name = day_names[template.day_of_week]
-            if template.is_active:
-                weekly_schedule[day_name] = {
-                    "id": template.id,
-                    "day_of_week": template.day_of_week,
-                    "start_time": template.start_time.strftime("%H:%M") if template.start_time else None,
-                    "end_time": template.end_time.strftime("%H:%M") if template.end_time else None,
-                    "consultation_duration": template.consultation_duration,
-                    "break_duration": template.break_duration,
-                    "lunch_start": template.lunch_start.strftime("%H:%M") if template.lunch_start else None,
-                    "lunch_end": template.lunch_end.strftime("%H:%M") if template.lunch_end else None,
-                    "is_active": template.is_active,
-                    "time_blocks": template.time_blocks if template.time_blocks else [
-                        {
-                            "start_time": template.start_time.strftime("%H:%M") if template.start_time else None,
-                            "end_time": template.end_time.strftime("%H:%M") if template.end_time else None
-                        }
-                    ]
-                }
-        
         api_logger.info("Weekly template generated and saved", doctor_id=current_user.id)
-        return weekly_schedule
+        return {
+            "message": "Horario por defecto generado exitosamente",
+            "doctor_id": current_user.id,
+            "templates_created": 1
+        }
         
     except Exception as e:
         db.rollback()
@@ -771,7 +715,7 @@ async def get_weekly_schedule_templates(
         # Query templates from database using SQL
         result = db.execute(text("""
             SELECT id, day_of_week, start_time, end_time, consultation_duration,
-                   break_duration, lunch_start, lunch_end, is_active, time_blocks
+                   break_duration, lunch_start, lunch_end, is_active
             FROM schedule_templates 
             WHERE doctor_id = :doctor_id
             ORDER BY day_of_week
@@ -805,7 +749,7 @@ async def get_weekly_schedule_templates(
                     "lunch_start": template.lunch_start.strftime("%H:%M") if template.lunch_start else None,
                     "lunch_end": template.lunch_end.strftime("%H:%M") if template.lunch_end else None,
                     "is_active": template.is_active,
-                    "time_blocks": template.time_blocks if template.time_blocks else [
+                    "time_blocks": [
                         {
                             "start_time": template.start_time.strftime("%H:%M") if template.start_time else None,
                             "end_time": template.end_time.strftime("%H:%M") if template.end_time else None
@@ -850,9 +794,9 @@ async def create_schedule_template(
         result = db.execute(text("""
             INSERT INTO schedule_templates 
             (doctor_id, day_of_week, start_time, end_time, consultation_duration, 
-             break_duration, lunch_start, lunch_end, is_active, created_at, updated_at)
+             break_duration, lunch_start, lunch_end, is_active, time_blocks, created_at, updated_at)
             VALUES (:doctor_id, :day_of_week, :start_time, :end_time, :consultation_duration,
-                    :break_duration, :lunch_start, :lunch_end, :is_active, NOW(), NOW())
+                    :break_duration, :lunch_start, :lunch_end, :is_active, :time_blocks, NOW(), NOW())
             RETURNING id
         """), {
             "doctor_id": current_user.id,
@@ -863,7 +807,8 @@ async def create_schedule_template(
             "break_duration": 10,
             "lunch_start": "13:00" if is_active else None,
             "lunch_end": "14:00" if is_active else None,
-            "is_active": is_active
+            "is_active": is_active,
+            "time_blocks": json.dumps(time_blocks)
         })
         
         template_id = result.fetchone()[0]
@@ -943,7 +888,7 @@ async def update_schedule_template(
         # Return the updated template data
         result = db.execute(text("""
             SELECT id, day_of_week, start_time, end_time, consultation_duration,
-                   break_duration, lunch_start, lunch_end, is_active, time_blocks
+                   break_duration, lunch_start, lunch_end, is_active
             FROM schedule_templates 
             WHERE id = :template_id AND doctor_id = :doctor_id
         """), {"template_id": template_id, "doctor_id": current_user.id})
@@ -965,7 +910,7 @@ async def update_schedule_template(
                 "lunch_start": template.lunch_start.strftime("%H:%M") if template.lunch_start else None,
                 "lunch_end": template.lunch_end.strftime("%H:%M") if template.lunch_end else None,
                 "is_active": template.is_active,
-                "time_blocks": template.time_blocks if template.time_blocks else [
+                "time_blocks": [
                     {
                         "start_time": template.start_time.strftime("%H:%M") if template.start_time else None,
                         "end_time": template.end_time.strftime("%H:%M") if template.end_time else None
@@ -1008,7 +953,7 @@ async def get_available_times(
         
         # Get schedule template for this day
         cursor.execute("""
-            SELECT time_blocks 
+            SELECT start_time, end_time
             FROM schedule_templates 
             WHERE doctor_id = %s AND day_of_week = %s AND is_active = true
         """, (current_user.id, day_of_week))
@@ -1018,7 +963,10 @@ async def get_available_times(
             api_logger.info("No schedule found for this day", doctor_id=current_user.id, day_of_week=day_of_week)
             return {"available_times": []}
         
-        time_blocks = schedule_result[0] or []
+        # Create time blocks from start_time and end_time
+        start_time = schedule_result[0]
+        end_time = schedule_result[1]
+        time_blocks = [{"start_time": start_time.strftime("%H:%M") if start_time else None, "end_time": end_time.strftime("%H:%M") if end_time else None}] if start_time and end_time else []
         
         # Get doctor's appointment duration (from persons table)
         cursor.execute("""
@@ -1256,73 +1204,82 @@ async def get_my_profile(
             detail="Only doctors can access this endpoint"
         )
     
+    # Load the user with relationships to get state and country names
+    user_with_relations = db.query(Person).options(
+        joinedload(Person.office_state).joinedload(State.country),
+        joinedload(Person.specialty)
+    ).filter(Person.id == current_user.id).first()
+    
+    if not user_with_relations:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Doctor profile not found"
+        )
+    
     # Get specialty name
     specialty_name = None
-    if current_user.specialty_id:
-        specialty = db.query(Specialty).filter(Specialty.id == current_user.specialty_id).first()
-        specialty_name = specialty.name if specialty else None
+    if user_with_relations.specialty_id:
+        specialty_name = user_with_relations.specialty.name if user_with_relations.specialty else None
     
     return {
-        "id": current_user.id,
-        "person_code": current_user.person_code,
-        "person_type": current_user.person_type,
-        "title": current_user.title,
-        "first_name": current_user.first_name,
-        "paternal_surname": current_user.paternal_surname,
-        "maternal_surname": current_user.maternal_surname,
-        "full_name": current_user.full_name,
-        "email": current_user.email,
-        "primary_phone": current_user.primary_phone,
-        "birth_date": current_user.birth_date,
-        "gender": current_user.gender,
-        "civil_status": current_user.civil_status,
-        "curp": current_user.curp,
-        "rfc": current_user.rfc,
-        "birth_city": current_user.birth_city,
-        "birth_state_id": current_user.birth_state_id,
-        "foreign_birth_place": current_user.foreign_birth_place,
+        "id": user_with_relations.id,
+        "person_code": user_with_relations.person_code,
+        "person_type": user_with_relations.person_type,
+        "title": user_with_relations.title,
+        "first_name": user_with_relations.first_name,
+        "paternal_surname": user_with_relations.paternal_surname,
+        "maternal_surname": user_with_relations.maternal_surname,
+        "full_name": user_with_relations.full_name,
+        "email": user_with_relations.email,
+        "primary_phone": user_with_relations.primary_phone,
+        "birth_date": user_with_relations.birth_date,
+        "gender": user_with_relations.gender,
+        "civil_status": user_with_relations.civil_status,
+        "curp": user_with_relations.curp,
+        "rfc": user_with_relations.rfc,
+        "birth_city": user_with_relations.birth_city,
+        "birth_state_id": user_with_relations.birth_state_id,
+        "foreign_birth_place": user_with_relations.foreign_birth_place,
         
         # Personal Address
-        "address_street": current_user.address_street,
-        "address_ext_number": current_user.address_ext_number,
-        "address_int_number": current_user.address_int_number,
-        "address_neighborhood": current_user.address_neighborhood,
-        "address_city": current_user.address_city,
-        "address_state_id": current_user.address_state_id,
-        "address_state_name": current_user.address_state.name if current_user.address_state else None,
-        "address_country_name": current_user.address_state.country.name if current_user.address_state and current_user.address_state.country else None,
-        "address_postal_code": current_user.address_postal_code,
+        "home_address": user_with_relations.home_address,
+        "address_city": user_with_relations.address_city,
+        "address_state_id": user_with_relations.address_state_id,
+        "address_state_name": user_with_relations.address_state.name if user_with_relations.address_state else None,
+        "address_country_name": user_with_relations.address_state.country.name if user_with_relations.address_state and user_with_relations.address_state.country else None,
+        "address_postal_code": user_with_relations.address_postal_code,
         
         # Professional Address (Office)
-        "office_address": current_user.office_address,
-        "office_city": current_user.office_city,
-        "office_state_id": current_user.office_state_id,
-        "office_state_name": current_user.office_state.name if current_user.office_state else None,
-        "office_country_name": current_user.office_state.country.name if current_user.office_state and current_user.office_state.country else None,
-        "office_postal_code": current_user.office_postal_code,
-        "office_phone": current_user.office_phone,
-        "appointment_duration": current_user.appointment_duration,
+        "office_address": user_with_relations.office_address,
+        "office_city": user_with_relations.office_city,
+        "office_state_id": user_with_relations.office_state_id,
+        "office_state_name": user_with_relations.office_state.name if user_with_relations.office_state else None,
+        "office_country_name": user_with_relations.office_state.country.name if user_with_relations.office_state and user_with_relations.office_state.country else None,
+        "office_postal_code": user_with_relations.office_postal_code,
+        "office_phone": user_with_relations.office_phone,
+        "office_timezone": user_with_relations.office_timezone,
+        "appointment_duration": user_with_relations.appointment_duration,
         
         # Professional Data
-        "professional_license": current_user.professional_license,
-        "specialty_id": current_user.specialty_id,
+        "professional_license": user_with_relations.professional_license,
+        "specialty_id": user_with_relations.specialty_id,
         "specialty_name": specialty_name,
-        "specialty_license": current_user.specialty_license,
-        "university": current_user.university,
-        "graduation_year": current_user.graduation_year,
-        "subspecialty": current_user.subspecialty,
-        "digital_signature": current_user.digital_signature,
-        "professional_seal": current_user.professional_seal,
+        "specialty_license": user_with_relations.specialty_license,
+        "university": user_with_relations.university,
+        "graduation_year": user_with_relations.graduation_year,
+        "subspecialty": user_with_relations.subspecialty,
+        "digital_signature": user_with_relations.digital_signature,
+        "professional_seal": user_with_relations.professional_seal,
         
         # Emergency Contact
-        "emergency_contact_name": current_user.emergency_contact_name,
-        "emergency_contact_phone": current_user.emergency_contact_phone,
-        "emergency_contact_relationship": current_user.emergency_contact_relationship,
+        "emergency_contact_name": user_with_relations.emergency_contact_name,
+        "emergency_contact_phone": user_with_relations.emergency_contact_phone,
+        "emergency_contact_relationship": user_with_relations.emergency_contact_relationship,
         
         # System
-        "is_active": current_user.is_active,
-        "created_at": current_user.created_at,
-        "updated_at": current_user.updated_at
+        "is_active": user_with_relations.is_active,
+        "created_at": user_with_relations.created_at,
+        "updated_at": user_with_relations.updated_at
     }
 
 @app.post("/api/doctors")
@@ -1384,10 +1341,7 @@ async def update_my_profile(
             "foreign_birth_place": updated_doctor.foreign_birth_place,
             
             # Personal Address
-            "address_street": updated_doctor.address_street,
-            "address_ext_number": updated_doctor.address_ext_number,
-            "address_int_number": updated_doctor.address_int_number,
-            "address_neighborhood": updated_doctor.address_neighborhood,
+            "home_address": updated_doctor.home_address,
             "address_city": updated_doctor.address_city,
             "address_state_id": updated_doctor.address_state_id,
             "address_state_name": updated_doctor.address_state.name if updated_doctor.address_state else None,
@@ -1439,29 +1393,108 @@ async def get_patients(
     skip: int = 0,
     limit: int = 100
 ):
-    """Get list of patients created by the current doctor"""
+    """Get list of patients created by the current doctor with decrypted sensitive data"""
     try:
-        # Only return patients created by the current doctor
-        result = crud.get_patients_by_doctor(db, doctor_id=current_user.id, skip=skip, limit=limit)
-        
-        # Debug: Check emergency contact data
-        for patient in result:
-            print(f"🔍 Patient {patient.id} emergency contact:")
-            print(f"  - Name: {patient.emergency_contact_name}")
-            print(f"  - Phone: {patient.emergency_contact_phone}")
-            print(f"  - Relationship: {patient.emergency_contact_relationship}")
-        
-        return result
-    except Exception as e:
-        print(f"❌ Error in get_patients: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        # Fallback to simple query if relationships fail, but still filter by doctor
+        print(f"🔍 DEBUG: get_patients endpoint called for doctor {current_user.id}")
+        # Simple query to get patients
         patients = db.query(Person).filter(
             Person.person_type == 'patient',
             Person.created_by == current_user.id
         ).offset(skip).limit(limit).all()
-        return patients
+        print(f"🔍 DEBUG: Found {len(patients)} patients")
+        
+        # Decrypt sensitive data for each patient
+        decrypted_patients = []
+        for patient in patients:
+            # Create patient data dictionary with only existing fields
+            patient_data = {
+                'id': patient.id,
+                'person_code': getattr(patient, 'person_code', None),
+                'person_type': patient.person_type,
+                'first_name': patient.first_name,
+                'paternal_surname': patient.paternal_surname,
+                'maternal_surname': patient.maternal_surname,
+                'birth_date': patient.birth_date,
+                'gender': patient.gender,
+                'civil_status': getattr(patient, 'civil_status', None),
+                'home_address': getattr(patient, 'home_address', None),
+                'address_city': getattr(patient, 'address_city', None),
+                'address_state_id': getattr(patient, 'address_state_id', None),
+                'address_country_id': getattr(patient, 'address_country_id', None),
+                'address_postal_code': getattr(patient, 'address_postal_code', None),
+                'birth_city': getattr(patient, 'birth_city', None),
+                'birth_state_id': getattr(patient, 'birth_state_id', None),
+                'birth_country_id': getattr(patient, 'birth_country_id', None),
+                'emergency_contact_name': getattr(patient, 'emergency_contact_name', None),
+                'emergency_contact_relationship': getattr(patient, 'emergency_contact_relationship', None),
+                'chronic_conditions': getattr(patient, 'chronic_conditions', None),
+                'current_medications': getattr(patient, 'current_medications', None),
+                'insurance_provider': getattr(patient, 'insurance_provider', None),
+                'insurance_policy_number': getattr(patient, 'insurance_policy_number', None),
+                'active': getattr(patient, 'active', True),
+                'is_active': getattr(patient, 'is_active', True),
+                'created_at': getattr(patient, 'created_at', None),
+                'updated_at': getattr(patient, 'updated_at', None),
+                'created_by': getattr(patient, 'created_by', None),
+                'full_name': getattr(patient, 'full_name', None)
+            }
+            
+            # Decrypt sensitive fields
+            if getattr(patient, 'curp', None):
+                try:
+                    patient_data['curp'] = encryption_service.decrypt_sensitive_data(patient.curp)
+                except Exception as e:
+                    print(f"⚠️ Could not decrypt CURP for patient {patient.id}: {str(e)}")
+                    patient_data['curp'] = patient.curp
+            
+            if getattr(patient, 'email', None):
+                try:
+                    patient_data['email'] = encryption_service.decrypt_sensitive_data(patient.email)
+                except Exception as e:
+                    print(f"⚠️ Could not decrypt email for patient {patient.id}: {str(e)}")
+                    patient_data['email'] = patient.email
+            
+            if getattr(patient, 'primary_phone', None):
+                try:
+                    print(f"🔓 Attempting to decrypt phone for patient {patient.id}: {patient.primary_phone[:40]}...")
+                    decrypted_phone = encryption_service.decrypt_sensitive_data(patient.primary_phone)
+                    patient_data['primary_phone'] = decrypted_phone
+                    print(f"✅ Successfully decrypted phone for patient {patient.id}: {decrypted_phone}")
+                except Exception as e:
+                    print(f"⚠️ Could not decrypt phone for patient {patient.id}: {str(e)}")
+                    patient_data['primary_phone'] = patient.primary_phone
+            
+            if getattr(patient, 'emergency_contact_phone', None):
+                try:
+                    patient_data['emergency_contact_phone'] = encryption_service.decrypt_sensitive_data(patient.emergency_contact_phone)
+                except Exception as e:
+                    print(f"⚠️ Could not decrypt emergency phone for patient {patient.id}: {str(e)}")
+                    patient_data['emergency_contact_phone'] = patient.emergency_contact_phone
+            
+            if getattr(patient, 'rfc', None):
+                try:
+                    patient_data['rfc'] = encryption_service.decrypt_sensitive_data(patient.rfc)
+                except Exception as e:
+                    print(f"⚠️ Could not decrypt RFC for patient {patient.id}: {str(e)}")
+                    patient_data['rfc'] = patient.rfc
+            
+            if getattr(patient, 'insurance_policy_number', None):
+                try:
+                    patient_data['insurance_policy_number'] = encryption_service.decrypt_sensitive_data(patient.insurance_policy_number)
+                except Exception as e:
+                    print(f"⚠️ Could not decrypt insurance for patient {patient.id}: {str(e)}")
+                    patient_data['insurance_policy_number'] = patient.insurance_policy_number
+            
+            decrypted_patients.append(patient_data)
+        
+        api_logger.info("Patient list retrieved and decrypted", doctor_id=current_user.id, count=len(decrypted_patients))
+        return decrypted_patients
+        
+    except Exception as e:
+        print(f"❌ Error in get_patients: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error retrieving patients: {str(e)}")
 
 @app.get("/api/patients/{patient_id}")
 async def get_patient(
@@ -1529,11 +1562,10 @@ async def get_patient(
             'curp': decrypted_curp,
             'email': decrypted_email,
             'primary_phone': decrypted_phone,
-            'address_street': patient.address_street,
-            'address_ext_number': patient.address_ext_number,
-            'address_int_number': patient.address_int_number,
-            'address_neighborhood': patient.address_neighborhood,
+            'home_address': patient.home_address,
             'address_city': patient.address_city,
+            'address_state_id': patient.address_state_id,
+            'address_country_id': patient.address_country_id,
             'address_postal_code': patient.address_postal_code,
             'emergency_contact_name': patient.emergency_contact_name,
             'emergency_contact_phone': patient.emergency_contact_phone,
@@ -1542,10 +1574,10 @@ async def get_patient(
             'insurance_provider': patient.insurance_provider,
             'birth_date': patient.birth_date.isoformat() if patient.birth_date else None,
             'birth_city': patient.birth_city,
+            'birth_state_id': patient.birth_state_id,
+            'birth_country_id': patient.birth_country_id,
             'gender': patient.gender,
             'civil_status': patient.civil_status,
-            'blood_type': patient.blood_type,
-            'allergies': patient.allergies,
             'chronic_conditions': patient.chronic_conditions,
             'current_medications': patient.current_medications,
             'created_at': patient.created_at.isoformat(),
@@ -1653,7 +1685,7 @@ async def create_patient(
 @app.put("/api/patients/{patient_id}")
 async def update_patient(
     patient_id: int,
-    patient_data: schemas.PatientCreate,
+    patient_data: schemas.PersonUpdate,
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):

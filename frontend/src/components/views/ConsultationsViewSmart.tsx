@@ -122,18 +122,6 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
             </CardContent>
           </Card>
         </Box>
-        <Box sx={{ flex: 1, minWidth: 200 }}>
-          <Card sx={{ boxShadow: 1 }}>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Pacientes Atendidos
-              </Typography>
-              <Typography variant="h3" color="secondary.main">
-                {patients.length}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Box>
       </Box>
 
       {/* Consultations Table */}

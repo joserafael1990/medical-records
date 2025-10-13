@@ -92,22 +92,6 @@ export const useMedicalTableColumns = () => {
       )
     },
     {
-      key: 'blood_type',
-      label: 'Tipo Sangre',
-      sortable: true,
-      align: 'center',
-      width: '12%',
-      render: (value: Patient[keyof Patient]) => value ? (
-        <Chip 
-          label={String(value)} 
-          size="small" 
-          color="error"
-          variant="filled"
-          sx={{ fontWeight: 600 }}
-        />
-      ) : '-'
-    },
-    {
       key: 'total_visits',
       label: 'Consultas',
       sortable: true,

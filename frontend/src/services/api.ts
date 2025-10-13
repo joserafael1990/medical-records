@@ -29,7 +29,10 @@ class ApiService {
   private api: AxiosInstance;
 
   // Helper method to map frontend gender values to backend format
-  private mapGenderToBackend(gender: string): string {
+  private mapGenderToBackend(gender: string): string | null {
+    if (!gender || gender.trim() === '') {
+      return null;
+    }
     const genderMap: { [key: string]: string } = {
       'Masculino': 'M',
       'Femenino': 'F',
@@ -687,7 +690,7 @@ class ApiService {
       // Required fields - don't convert to null
       first_name: patientData.first_name || '',
       paternal_surname: patientData.paternal_surname || '',
-      birth_date: patientData.birth_date || patientData.date_of_birth || '',
+      birth_date: patientData.birth_date || patientData.date_of_birth || null,
       gender: this.mapGenderToBackend(patientData.gender || ''),
       
       // Optional fields - can be null
@@ -698,23 +701,27 @@ class ApiService {
       rfc: patientData.rfc === '' ? null : patientData.rfc,
       birth_city: patientData.birth_city === '' ? null : patientData.birth_city,
       birth_state_id: patientData.birth_state_id ? parseInt(patientData.birth_state_id) : null,
+      birth_country_id: patientData.birth_country_id ? parseInt(patientData.birth_country_id) : null,
       civil_status: patientData.civil_status === '' ? null : patientData.civil_status,
       
       // Address fields
-      address_street: patientData.address_street || patientData.address || '',
+      home_address: patientData.home_address || '',
       address_city: patientData.address_city || patientData.city || '',
       address_state_id: patientData.address_state_id ? parseInt(patientData.address_state_id) : null,
+      address_country_id: patientData.address_country_id ? parseInt(patientData.address_country_id) : null,
       address_postal_code: patientData.address_postal_code || '',
       
       // Default values
-      nationality_id: 1, // Default to Mexico (ID 1)
       
       // Medical fields
-      blood_type: patientData.blood_type === '' ? null : patientData.blood_type,
-      allergies: patientData.allergies === '' ? null : patientData.allergies,
       chronic_conditions: patientData.chronic_conditions === '' ? null : patientData.chronic_conditions,
       current_medications: patientData.current_medications === '' ? null : patientData.current_medications,
-      insurance_provider: patientData.insurance_provider === '' ? null : patientData.insurance_provider
+      insurance_provider: patientData.insurance_provider === '' ? null : patientData.insurance_provider,
+      
+      // Emergency contact fields
+      emergency_contact_name: patientData.emergency_contact_name === '' ? null : patientData.emergency_contact_name,
+      emergency_contact_phone: patientData.emergency_contact_phone === '' ? null : patientData.emergency_contact_phone,
+      emergency_contact_relationship: patientData.emergency_contact_relationship === '' ? null : patientData.emergency_contact_relationship
     };
     
     console.log('🧹 Cleaned data for backend:', cleanedData);
@@ -732,6 +739,7 @@ class ApiService {
       } else if (error.response?.status === 422) {
         // Validation errors
         const detail = error.response.data?.detail;
+        console.log('🚨 422 Validation Error Details:', detail);
         if (Array.isArray(detail)) {
           // Field validation errors
           const fieldErrors = detail.map((err: any) => {
@@ -771,8 +779,8 @@ class ApiService {
       // Required fields with proper mapping
       first_name: patientData.first_name || '',
       paternal_surname: patientData.paternal_surname || '',
-      birth_date: patientData.birth_date || patientData.date_of_birth || '',
-      gender: patientData.gender ? this.mapGenderToBackend(patientData.gender) : '',
+      birth_date: patientData.birth_date || patientData.date_of_birth || null,
+      gender: this.mapGenderToBackend(patientData.gender || ''),
       
       // Optional fields - can be null
       maternal_surname: patientData.maternal_surname === '' ? null : patientData.maternal_surname,
@@ -782,20 +790,19 @@ class ApiService {
       rfc: patientData.rfc === '' ? null : patientData.rfc,
       birth_city: patientData.birth_city === '' ? null : patientData.birth_city,
       birth_state_id: patientData.birth_state_id ? parseInt(patientData.birth_state_id) : null,
+      birth_country_id: patientData.birth_country_id ? parseInt(patientData.birth_country_id) : null,
       civil_status: patientData.civil_status === '' ? null : patientData.civil_status,
       
       // Address fields
-      address_street: patientData.address_street || patientData.address || '',
+      home_address: patientData.home_address || '',
       address_city: patientData.address_city || patientData.city || '',
       address_state_id: patientData.address_state_id ? parseInt(patientData.address_state_id) : null,
+      address_country_id: patientData.address_country_id ? parseInt(patientData.address_country_id) : null,
       address_postal_code: patientData.address_postal_code || '',
       
       // Default values
-      nationality_id: 1, // Default to Mexico (ID 1)
       
       // Medical fields
-      blood_type: patientData.blood_type === '' ? null : patientData.blood_type,
-      allergies: patientData.allergies === '' ? null : patientData.allergies,
       chronic_conditions: patientData.chronic_conditions === '' ? null : patientData.chronic_conditions,
       current_medications: patientData.current_medications === '' ? null : patientData.current_medications,
       insurance_provider: patientData.insurance_provider === '' ? null : patientData.insurance_provider,
@@ -1078,8 +1085,19 @@ class ApiService {
     return response.data;
   }
 
-  async getStates(): Promise<Array<{id: number, name: string}>> {
-    const response = await this.api.get('/api/catalogs/states');
+  async getCountries(): Promise<Array<{id: number, name: string}>> {
+    const response = await this.api.get('/api/catalogs/countries');
+    return response.data;
+  }
+
+  async getStates(countryId?: number): Promise<Array<{id: number, name: string}>> {
+    const url = countryId ? `/api/catalogs/states?country_id=${countryId}` : '/api/catalogs/states';
+    const response = await this.api.get(url);
+    return response.data;
+  }
+
+  async getEmergencyRelationships(): Promise<Array<{code: string, name: string}>> {
+    const response = await this.api.get('/api/catalogs/emergency-relationships');
     return response.data;
   }
 
@@ -1229,7 +1247,9 @@ export const {
   createDoctorProfile,
   updateDoctorProfile,
   getSpecialties,
+  getCountries,
   getStates,
+  getEmergencyRelationships,
   getTimezones,
   login,
   register,

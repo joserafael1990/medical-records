@@ -46,6 +46,7 @@ import {
   FilterList as FilterIcon,
   DateRange as DateRangeIcon,
   Print as PrintIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import { Patient, MedicalRecord, MedicalRecordFormData } from '../../types';
 import { apiService } from '../../services/api';
@@ -543,9 +544,12 @@ const MedicalRecordsView: React.FC<MedicalRecordsViewProps> = ({
 
       {/* Messages */}
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
+        <Box sx={{ mb: 2, p: 2, bgcolor: 'error.main', borderRadius: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography color="white">{error}</Typography>
+          <IconButton size="small" onClick={() => setError(null)} sx={{ color: 'white' }}>
+            <CloseIcon />
+          </IconButton>
+        </Box>
       )}
       {successMessage && (
         <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessMessage(null)}>
