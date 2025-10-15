@@ -185,8 +185,9 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
   const areAppointmentFieldsEnabled = () => {
     if (!localFormData.appointment_type) return false;
     
-    if (localFormData.appointment_type === 'first_visit') {
-      return (
+    if (localFormData.appointment_type === 'primera vez') {
+      // For "primera vez", enable if patient is selected OR new patient data is provided
+      return localFormData.patient_id || (
         newPatientData.first_name && 
         newPatientData.paternal_surname && 
         newPatientData.primary_phone
@@ -198,7 +199,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
 
   // Determine if patient selection should be enabled (separate from appointment fields)
   const isPatientSelectionEnabled = () => {
-    return patients.length > 0 && localFormData.appointment_type && localFormData.appointment_type !== 'first_visit';
+    return patients.length > 0 && localFormData.appointment_type;
   };
 
   // Determine if the form is complete and ready to submit
@@ -209,11 +210,11 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     }
     
     // Check patient data based on appointment type
-    if (localFormData.appointment_type === 'first_visit' || patients.length === 0) {
-      // For first visit, check new patient data (birth_date and gender are optional)
-      if (!newPatientData.first_name || 
+    if (localFormData.appointment_type === 'primera vez' || patients.length === 0) {
+      // For "primera vez", check if patient is selected OR new patient data is provided
+      if (!localFormData.patient_id && (!newPatientData.first_name || 
           !newPatientData.paternal_surname || 
-          !newPatientData.primary_phone) {
+          !newPatientData.primary_phone)) {
         return false;
       }
     } else {
@@ -249,11 +250,19 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     }
     
     // Check patient data
-    if (localFormData.appointment_type === 'first_visit' || patients.length === 0) {
-      if (!newPatientData.first_name) errors.push('El nombre es requerido');
-      if (!newPatientData.paternal_surname) errors.push('El apellido paterno es requerido');
-      if (!newPatientData.primary_phone) errors.push('El teléfono es requerido');
-      // birth_date and gender are optional for first visit appointments
+    if (localFormData.appointment_type === 'primera vez' || patients.length === 0) {
+      // For "primera vez", check if patient is selected OR new patient data is provided
+      if (!localFormData.patient_id && !newPatientData.first_name) {
+        errors.push('Selecciona un paciente existente o completa los datos del nuevo paciente');
+      }
+      
+      // If creating new patient, validate required fields
+      if (!localFormData.patient_id && newPatientData.first_name) {
+        if (!newPatientData.first_name) errors.push('El nombre es requerido');
+        if (!newPatientData.paternal_surname) errors.push('El apellido paterno es requerido');
+        if (!newPatientData.primary_phone) errors.push('El teléfono es requerido');
+        // birth_date and gender are optional for first visit appointments
+      }
     } else {
       if (!selectedPatient || !localFormData.patient_id) {
         errors.push('Selecciona un paciente');
@@ -297,8 +306,8 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
       ...formData,
       // Always set status to 'confirmed' for new appointments, preserve existing status for edits
       status: formData.status || 'confirmed',
-      // If no patients exist, automatically set appointment type to first_visit
-      appointment_type: patients.length === 0 ? 'first_visit' : formData.appointment_type
+      // If no patients exist, automatically set appointment type to primera vez
+      appointment_type: patients.length === 0 ? 'primera vez' : formData.appointment_type
     };
     setLocalFormData(updatedFormData);
     
@@ -354,6 +363,18 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     
     setLocalFormData(newFormData);
     
+    // Clear new patient data when selecting existing patient
+    if (patient) {
+      setNewPatientData({
+        first_name: '',
+        paternal_surname: '',
+        maternal_surname: '',
+        birth_date: '',
+        gender: '',
+        primary_phone: ''
+      });
+    }
+    
     // Sync with parent component in real-time
     if (onFormDataChange) {
       onFormDataChange(newFormData);
@@ -402,8 +423,8 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     
     console.log('✅ Validation passed, proceeding with submission...');
 
-    // Handle "Primera vez" (first visit) - create patient inline
-    if (localFormData.appointment_type === 'first_visit') {
+    // Handle "Primera vez" (first visit) - create patient inline if no patient selected
+    if (localFormData.appointment_type === 'primera vez' && !localFormData.patient_id) {
       try {
         // Create patient first - map to PatientFormData interface
         const patientData: PatientFormData = {
@@ -560,7 +581,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
             <Box>
               <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                 <MedicalServicesIcon sx={{ fontSize: 20 }} />
-                Tipo de Consulta
+                Tipo de Consulta - obligatorio
                 <Typography component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Typography>
               </Typography>
               <FormControl fullWidth size="small" error={hasFieldError('appointment_type')}>
@@ -573,8 +594,8 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                   <MenuItem value="" disabled>
                     <em>Seleccione una opción</em>
                   </MenuItem>
-                  <MenuItem value="first_visit">Primera vez</MenuItem>
-                  <MenuItem value="follow_up">Seguimiento</MenuItem>
+                  <MenuItem value="primera vez">Primera vez</MenuItem>
+                  <MenuItem value="seguimiento">Seguimiento</MenuItem>
                 </Select>
                 {hasFieldError('appointment_type') && (
                   <Typography variant="caption" color="error" sx={{ mt: 0.5 }}>
@@ -590,11 +611,87 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
             <Box>
               <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                 <PersonIcon sx={{ fontSize: 20 }} />
-                {(localFormData.appointment_type === 'first_visit' || patients.length === 0) ? 'Datos del Nuevo Paciente' : 'Seleccionar Paciente'}
+                Seleccionar Paciente
                 <Typography component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Typography>
               </Typography>
               
-              {(localFormData.appointment_type === 'first_visit' || patients.length === 0) ? (
+              {/* Patient Selection - Same structure as ConsultationDialog */}
+              {patients.length === 0 ? (
+                <Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    No hay pacientes registrados. Crear un nuevo paciente para continuar.
+                  </Typography>
+                  {onNewPatient && (
+                    <Button
+                      variant="contained"
+                      startIcon={<PersonAddIcon />}
+                      onClick={onNewPatient}
+                      sx={{ mt: 1 }}
+                    >
+                      Crear Nuevo Paciente
+                    </Button>
+                  )}
+                </Box>
+              ) : (
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                  <Box sx={{ flex: 1 }}>
+                    <Autocomplete
+                      options={patients}
+                      getOptionLabel={(option) => formatPatientNameWithAge(option)}
+                      value={selectedPatient}
+                      onChange={(_, newValue) => handlePatientChange(newValue)}
+                      disabled={isReadOnly || !isPatientSelectionEnabled()}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Seleccionar Paciente"
+                          required
+                          error={hasFieldError('patient_id') || (!localFormData.patient_id && localFormData.appointment_type !== 'primera vez')}
+                          helperText={getFieldError('patient_id') || (!localFormData.patient_id && localFormData.appointment_type !== 'primera vez' ? 'Campo requerido' : '')}
+                        />
+                      )}
+                      renderOption={(props, option) => (
+                        <Box component="li" {...props}>
+                          <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
+                            {option.first_name[0]}{option.paternal_surname[0]}
+                          </Avatar>
+                          <Box>
+                            <Typography variant="body1">{formatPatientNameWithAge(option)}</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {option.primary_phone} • {option.email}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      )}
+                      loading={patients.length === 0}
+                      loadingText="Cargando pacientes..."
+                      noOptionsText="No se encontraron pacientes"
+                    />
+                  </Box>
+                  {onNewPatient && (
+                    <Button
+                      variant="outlined"
+                      onClick={onNewPatient}
+                      startIcon={<PersonAddIcon />}
+                      sx={{ whiteSpace: 'nowrap', height: 40 }}
+                    >
+                      Nuevo
+                    </Button>
+                  )}
+                </Box>
+              )}
+              
+              {/* Show inline patient creation for "primera vez" when no patient selected and patients exist */}
+              {localFormData.appointment_type === 'primera vez' && !localFormData.patient_id && patients.length > 0 ? (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2, textAlign: 'center' }}>
+                    O complete los datos para crear un nuevo paciente:
+                  </Typography>
+                </Box>
+              ) : null}
+              
+              {/* Show inline patient creation for "primera vez" when no patient selected */}
+              {localFormData.appointment_type === 'primera vez' && !localFormData.patient_id ? (
                 /* Inline Patient Creation for First Visit */
                 <Box sx={{ bgcolor: 'primary.50', p: 3, borderRadius: 2, border: '1px solid', borderColor: 'primary.200' }}>
                   <Typography variant="body2" color="primary.main" sx={{ mb: 2, fontWeight: 500 }}>
@@ -608,6 +705,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                       size="small"
                       required
                       disabled={isReadOnly}
+                      placeholder="Nombre(s) - obligatorio"
                       error={hasFieldError('newPatient.first_name')}
                       helperText={getFieldError('newPatient.first_name')}
                     />
@@ -618,6 +716,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                       size="small"
                       required
                       disabled={isReadOnly}
+                      placeholder="Apellido Paterno - obligatorio"
                       error={hasFieldError('newPatient.paternal_surname')}
                       helperText={getFieldError('newPatient.paternal_surname')}
                     />
@@ -627,6 +726,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                       onChange={(e) => handleNewPatientFieldChange('maternal_surname', e.target.value)}
                       size="small"
                       disabled={isReadOnly}
+                      placeholder="Apellido Materno - opcional"
                     />
                     <TextField
                       label="Teléfono"
@@ -635,6 +735,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                       size="small"
                       required
                       disabled={isReadOnly}
+                      placeholder="Teléfono - obligatorio"
                       error={hasFieldError('newPatient.primary_phone')}
                       helperText={getFieldError('newPatient.primary_phone')}
                     />
@@ -833,12 +934,12 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
             <Box sx={{ flex: 1, minWidth: 250 }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                 <EventIcon sx={{ fontSize: 20 }} />
-                Fecha
+                Fecha - obligatorio
                 <Typography component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Typography>
               </Typography>
               <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
                 <DatePicker
-                  label="Seleccionar fecha"
+                  label="Seleccionar fecha - obligatorio"
                   value={selectedDate ? new Date(selectedDate) : null}
                   minDate={new Date()}
                   onChange={(newValue) => {
@@ -866,7 +967,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
             <Box sx={{ flex: 1, minWidth: 250 }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                 <ScheduleIcon sx={{ fontSize: 20 }} />
-                Hora Disponible
+                Hora Disponible - obligatorio
                 <Typography component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Typography>
                 {loadingTimes && <CircularProgress size={16} />}
               </Typography>
@@ -876,11 +977,11 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                 error={hasFieldError('date_time') || (validationError && (!selectedTime || selectedTime.trim() === ''))}
                 required
               >
-                <InputLabel>Seleccionar horario</InputLabel>
+                <InputLabel>Seleccionar horario - obligatorio</InputLabel>
                 <Select
                   value={selectedTime}
                   onChange={(e) => handleTimeChange(e.target.value)}
-                  label="Seleccionar horario"
+                  label="Seleccionar horario - obligatorio"
                   disabled={!selectedDate || loadingTimes || isReadOnly || availableTimes.length === 0}
                 >
                   {availableTimes.map((timeSlot) => (
@@ -953,14 +1054,14 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
           <Box>
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
               <EventIcon sx={{ fontSize: 20 }} />
-              Prioridad
+              Prioridad - opcional
             </Typography>
             <FormControl fullWidth size="small">
-              <InputLabel>Prioridad</InputLabel>
+              <InputLabel>Prioridad - opcional</InputLabel>
               <Select
                 value={localFormData.priority || 'normal'}
                 onChange={handleFieldChange('priority')}
-                label="Prioridad"
+                label="Prioridad - opcional"
                 disabled={isReadOnly}
               >
                 <MenuItem value="normal">Normal</MenuItem>
@@ -973,14 +1074,14 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
           <Box>
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
               <NotesIcon sx={{ fontSize: 20 }} />
-              Instrucciones de Preparación
+              Instrucciones de Preparación - opcional
               <Typography component="span" sx={{ color: 'text.secondary', ml: 1, fontSize: '0.875rem', fontWeight: 400 }}>(Opcional)</Typography>
             </Typography>
             <TextField
               fullWidth
               multiline
               rows={2}
-              label="Instrucciones de preparación"
+              label="Instrucciones de preparación - opcional"
               value={localFormData.preparation_instructions || ''}
               onChange={handleFieldChange('preparation_instructions')}
               size="small"
@@ -994,14 +1095,14 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
           {/* Notes */}
           <Box>
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-              Notas Adicionales
+              Notas Adicionales - opcional
               <Typography component="span" sx={{ color: 'text.secondary', ml: 1, fontSize: '0.875rem', fontWeight: 400 }}>(Opcional)</Typography>
             </Typography>
             <TextField
               fullWidth
               multiline
               rows={2}
-              label="Notas opcionales"
+              label="Notas opcionales - opcional"
               value={localFormData.notes || ''}
               onChange={handleFieldChange('notes')}
               size="small"

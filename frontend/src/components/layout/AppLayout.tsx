@@ -184,6 +184,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           patients={patientManagement.patients}
           consultation={consultationManagement.selectedConsultation}
           doctorProfile={doctorProfile}
+          appointments={appointmentManager.appointments}
           onNewPatient={() => {
             consultationManagement.closeConsultationDialog();
             patientManagement.openPatientDialog();

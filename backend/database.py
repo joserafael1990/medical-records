@@ -267,7 +267,7 @@ class Appointment(Base):
     end_time = Column(DateTime, nullable=False)
     
     # DETAILS
-    appointment_type = Column(String(50), nullable=False, default='consultation')
+    appointment_type = Column(String(50), nullable=False, default='consulta')
     status = Column(String(20), default='confirmed')
     priority = Column(String(20), default='normal')
     

@@ -352,7 +352,7 @@ class AppointmentBase(BaseSchema):
     doctor_id: int
     appointment_date: datetime
     end_time: Optional[datetime] = None  # Now optional - calculated automatically by backend
-    appointment_type: str = 'consultation'
+    appointment_type: str = 'consulta'
     status: str = 'confirmed'
     priority: str = 'normal'
     reason: str

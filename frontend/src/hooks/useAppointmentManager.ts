@@ -272,7 +272,7 @@ export const useAppointmentManager = (
         appointment_date: appointmentDate.toISOString(),
         end_time: endTime.toISOString(),
         reason: appointmentData.reason,
-        appointment_type: appointmentData.appointment_type || 'consultation',
+        appointment_type: appointmentData.appointment_type, // Keep the original value without fallback
         status: appointmentData.status || 'confirmed',
         priority: appointmentData.priority || 'normal',
         preparation_instructions: appointmentData.preparation_instructions || '',

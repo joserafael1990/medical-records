@@ -724,7 +724,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
               <Box sx={{ flex: '1 1 250px' }}>
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
                   <DatePicker
-                    label="Fecha de Nacimiento *"
+                    label="Fecha de Nacimiento"
                     value={formData.birth_date ? new Date(formData.birth_date) : null}
                     maxDate={new Date()}
                     onChange={(newValue) => {

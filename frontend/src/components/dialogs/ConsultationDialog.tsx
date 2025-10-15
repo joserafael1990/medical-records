@@ -32,7 +32,8 @@ import {
   Edit as EditIcon,
   Phone as PhoneIcon,
   Email as EmailIcon,
-  Badge as BadgeIcon
+  Badge as BadgeIcon,
+  Schedule as ScheduleIcon
 } from '@mui/icons-material';
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -64,6 +65,9 @@ interface ConsultationFormData {
   doctor_name: string;
   doctor_professional_license: string;
   doctor_specialty: string;
+  // New fields for appointment selection
+  has_appointment: boolean;
+  appointment_id: string;
 }
 
 interface ConsultationDialogProps {
@@ -74,6 +78,7 @@ interface ConsultationDialogProps {
   patients: Patient[];
   doctorProfile?: any;
   onNewPatient?: () => void;
+  appointments?: any[]; // Add appointments prop
 }
 
 // Utility function to calculate age from birth date
@@ -114,7 +119,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   onSubmit,
   patients,
   doctorProfile,
-  onNewPatient
+  onNewPatient,
+  appointments = []
 }) => {
   const isEditing = !!consultation;
 
@@ -140,11 +146,15 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       ? `Dr. ${doctorProfile.first_name} ${doctorProfile.last_name}`.trim()
       : '',
     doctor_professional_license: doctorProfile?.professional_license || '',
-    doctor_specialty: doctorProfile?.specialty || ''
+    doctor_specialty: doctorProfile?.specialty || '',
+    // New fields
+    has_appointment: false,
+    appointment_id: ''
   };
 
   const [formData, setFormData] = useState<ConsultationFormData>(initialFormData);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [selectedAppointment, setSelectedAppointment] = useState<any | null>(null);
   const [patientEditData, setPatientEditData] = useState<PatientFormData | null>(null);
   const [countries, setCountries] = useState<any[]>([]);
   const [states, setStates] = useState<any[]>([]);
@@ -318,6 +328,37 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     }
   };
 
+  const handleAppointmentChange = async (appointment: any | null) => {
+    setSelectedAppointment(appointment);
+    
+    if (appointment) {
+      // Set patient from appointment
+      const patient = patients.find(p => p.id === appointment.patient_id);
+      if (patient) {
+        setSelectedPatient(patient);
+        setFormData(prev => ({ ...prev, patient_id: patient.id.toString(), appointment_id: appointment.id.toString() }));
+        
+        // Load full patient data for editing
+        try {
+          const fullPatientData = await apiService.getPatient(patient.id);
+          setPatientEditData(fullPatientData);
+        } catch (error) {
+          console.error('Error loading patient data:', error);
+          setPatientEditData(null);
+        }
+      }
+    } else {
+      setSelectedPatient(null);
+      setPatientEditData(null);
+      setFormData(prev => ({ ...prev, patient_id: '', appointment_id: '' }));
+    }
+  };
+
+  // Filter appointments to show only non-cancelled ones
+  const availableAppointments = appointments.filter(appointment => 
+    appointment.status !== 'cancelled' && appointment.status !== 'canceled'
+  );
+
   const handleSubmit = async () => {
     setError(null);
     
@@ -395,7 +436,82 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         )}
         
         <Box component="form" sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
-          {/* Patient Selection */}
+          {/* Appointment Question */}
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <CalendarIcon sx={{ fontSize: 20 }} />
+              ¿Consulta con previa cita?
+              <Typography component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Typography>
+            </Typography>
+            <FormControl size="small" fullWidth>
+              <InputLabel>Seleccione una opción</InputLabel>
+              <Select
+                value={formData.has_appointment ? 'yes' : formData.has_appointment === false ? 'no' : ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const hasAppointment = value === 'yes';
+                  setFormData(prev => ({ 
+                    ...prev, 
+                    has_appointment: hasAppointment,
+                    appointment_id: hasAppointment ? prev.appointment_id : ''
+                  }));
+                  if (!hasAppointment) {
+                    setSelectedAppointment(null);
+                    setSelectedPatient(null);
+                    setPatientEditData(null);
+                  }
+                }}
+                label="Seleccione una opción"
+              >
+                <MenuItem value="yes">Sí</MenuItem>
+                <MenuItem value="no">No</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+
+          {/* Appointment Selection - Only show if has_appointment is true */}
+          {formData.has_appointment && (
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <ScheduleIcon sx={{ fontSize: 20 }} />
+                Seleccionar Cita
+                <Typography component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Typography>
+              </Typography>
+              <FormControl size="small" fullWidth>
+                <InputLabel>Citas Programadas</InputLabel>
+                <Select
+                  value={formData.appointment_id || ''}
+                  onChange={(e) => {
+                    const appointmentId = e.target.value;
+                    const appointment = availableAppointments.find(apt => apt.id.toString() === appointmentId);
+                    handleAppointmentChange(appointment);
+                  }}
+                  label="Citas Programadas"
+                >
+                  {availableAppointments.map((appointment) => {
+                    const patient = patients.find(p => p.id === appointment.patient_id);
+                    const appointmentDate = new Date(appointment.appointment_date).toLocaleDateString('es-ES');
+                    const appointmentTime = new Date(appointment.appointment_date).toLocaleTimeString('es-ES', { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    });
+                    // Get consultation type
+                    const consultationType = appointment.appointment_type === 'primera vez' ? 'Primera vez' : 
+                                           appointment.appointment_type === 'seguimiento' ? 'Seguimiento' : 
+                                           appointment.appointment_type || 'No especificado';
+                    return (
+                      <MenuItem key={appointment.id} value={appointment.id.toString()}>
+                        {patient ? `${patient.first_name} ${patient.paternal_surname}` : 'Paciente no encontrado'} - {appointmentDate} {appointmentTime} - {consultationType}
+                      </MenuItem>
+                    );
+                  })}
+                </Select>
+              </FormControl>
+            </Box>
+          )}
+
+          {/* Patient Selection - Only show if has_appointment is false or no appointment selected */}
+          {!formData.has_appointment && (
           <Box>
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
               <PersonIcon sx={{ fontSize: 20 }} />
@@ -478,6 +594,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               </Box>
             )}
           </Box>
+          )}
 
           {/* Patient Data Section - Show when patient is selected */}
           {selectedPatient && patientEditData && (

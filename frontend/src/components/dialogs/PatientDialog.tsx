@@ -1,3 +1,4 @@
+// Cache buster: 2024-10-15-05-10
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -399,38 +400,41 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: '1fr 1fr' }, gap: 2 }}>
 
               <TextField
-                label="Nombre"
+                label="Nombre - obligatorio"
                 name="first_name"
                 value={formData.first_name}
                 onChange={handleChange('first_name')}
                 size="small"
                 required
+                placeholder="Nombre - obligatorio"
                 error={!!errors.first_name}
                 helperText={errors.first_name}
               />
               <TextField
-                label="Apellido Paterno"
+                label="Apellido Paterno - obligatorio"
                 name="paternal_surname"
                 value={formData.paternal_surname}
                 onChange={handleChange('paternal_surname')}
                 size="small"
                 required
+                placeholder="Apellido Paterno - obligatorio"
                 error={!!errors.paternal_surname}
                 helperText={errors.paternal_surname}
               />
               <TextField
-                label="Apellido Materno"
+                label="Apellido Materno - opcional"
                 name="maternal_surname"
                 value={formData.maternal_surname}
                 onChange={handleChange('maternal_surname')}
                 size="small"
+                placeholder="Apellido Materno - opcional"
                 error={!!errors.maternal_surname}
                 helperText={errors.maternal_surname}
               />
 
               <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
                 <DatePicker
-                  label="Fecha de Nacimiento *"
+                  label="Fecha de Nacimiento - opcional"
                   value={formData.birth_date ? new Date(formData.birth_date) : null}
                   onChange={(newValue) => {
                     if (newValue) {
@@ -451,13 +455,13 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
                   }}
                 />
               </LocalizationProvider>
-              <FormControl size="small" required error={!!errors.gender} fullWidth>
-                <InputLabel id="gender-label">Género *</InputLabel>
+              <FormControl size="small" error={!!errors.gender} fullWidth>
+                <InputLabel id="gender-label">Género - opcional</InputLabel>
                 <Select
                   name="gender"
                   value={formData.gender}
                   labelId="gender-label"
-                  label="Género *"
+                  label="Género - opcional"
                   onChange={handleChange('gender')}
                   sx={{ minWidth: 120 }}
                 >
@@ -480,65 +484,70 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
 
               <TextField
-                label="Teléfono"
+                label="Teléfono - obligatorio"
                 name="primary_phone"
                 value={formData.primary_phone}
                 onChange={handleChange('primary_phone')}
                 size="small"
                 required
+                placeholder="Teléfono - obligatorio"
                 error={!!errors.primary_phone}
                 helperText={errors.primary_phone}
               />
               <TextField
-                label="Email"
+                label="Email - opcional"
                 name="email"
                 type="email"
                 value={formData.email}
                 onChange={handleChange('email')}
                 size="small"
+                placeholder="Email - opcional"
                 error={!!errors.email}
                 helperText={errors.email}
               />
 
               <TextField
-                label="Dirección"
+                label="Dirección - opcional"
                 name="home_address"
                 value={formData.home_address}
                 onChange={handleChange('home_address')}
                 size="small"
                 fullWidth
                 sx={{ gridColumn: '1 / -1' }}
+                placeholder="Dirección - opcional"
                 error={!!errors.home_address}
                 helperText={errors.home_address}
               />
 
               <TextField
-                label="Ciudad"
+                label="Ciudad - opcional"
                 name="address_city"
                 value={formData.address_city}
                 onChange={handleChange('address_city')}
                 size="small"
+                placeholder="Ciudad - opcional"
                 error={!!errors.address_city}
                 helperText={errors.address_city}
               />
 
               <TextField
-                label="Código Postal"
+                label="Código Postal - opcional"
                 name="address_postal_code"
                 value={formData.address_postal_code}
                 onChange={handleChange('address_postal_code')}
                 size="small"
                 inputProps={{ maxLength: 5 }}
+                placeholder="Código Postal - opcional"
                 error={!!errors.address_postal_code}
-                helperText={errors.address_postal_code || "Opcional"}
+                helperText={errors.address_postal_code}
               />
 
               <FormControl size="small" error={!!errors.address_country_id}>
-                <InputLabel>País</InputLabel>
+                <InputLabel>País - opcional</InputLabel>
                 <Select
                   value={formData.address_country_id}
                   onChange={(e) => handleCountryChange('address_country_id', e.target.value as string)}
-                  label="País"
+                  label="País - opcional"
                 >
                   {countries.map((country) => (
                     <MenuItem key={country.id} value={country.id.toString()}>
@@ -550,11 +559,11 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
               </FormControl>
 
               <FormControl size="small" error={!!errors.address_state_id}>
-                <InputLabel>Estado</InputLabel>
+                <InputLabel>Estado - opcional</InputLabel>
                 <Select
                   value={formData.address_state_id}
                   onChange={handleChange('address_state_id')}
-                  label="Estado"
+                  label="Estado - opcional"
                   disabled={!formData.address_country_id}
                 >
                   {states.map((state) => (
@@ -577,32 +586,34 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
 
               <TextField
-                label="CURP"
+                label="CURP - opcional"
                 name="curp"
                 value={formData.curp}
                 onChange={handleChange('curp')}
                 size="small"
                 inputProps={{ maxLength: 18 }}
+                placeholder="CURP - opcional"
                 error={!!errors.curp}
                 helperText={errors.curp}
               />
               <TextField
-                label="RFC"
+                label="RFC - opcional"
                 name="rfc"
                 value={formData.rfc}
                 onChange={handleChange('rfc')}
                 size="small"
                 inputProps={{ maxLength: 13 }}
+                placeholder="RFC - opcional"
                 error={!!errors.rfc}
                 helperText={errors.rfc}
               />
               <FormControl size="small" error={!!errors.civil_status} fullWidth>
-                <InputLabel id="civil-status-label">Estado Civil</InputLabel>
+                <InputLabel id="civil-status-label">Estado Civil - opcional</InputLabel>
                 <Select
                   name="civil_status"
                   value={formData.civil_status}
                   labelId="civil-status-label"
-                  label="Estado Civil"
+                  label="Estado Civil - opcional"
                   onChange={handleChange('civil_status')}
                 >
                   <MenuItem value=""><em>Seleccione</em></MenuItem>
@@ -626,21 +637,22 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
             </Typography>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
               <TextField
-                label="Ciudad de Nacimiento"
+                label="Ciudad de Nacimiento - opcional"
                 name="birth_city"
                 value={formData.birth_city}
                 onChange={handleChange('birth_city')}
                 size="small"
+                placeholder="Ciudad de Nacimiento - opcional"
                 error={!!errors.birth_city}
                 helperText={errors.birth_city}
               />
 
               <FormControl size="small" error={!!errors.birth_country_id}>
-                <InputLabel>País de Nacimiento</InputLabel>
+                <InputLabel>País de Nacimiento - opcional</InputLabel>
                 <Select
                   value={formData.birth_country_id}
                   onChange={(e) => handleCountryChange('birth_country_id', e.target.value as string)}
-                  label="País de Nacimiento"
+                  label="País de Nacimiento - opcional"
                 >
                   {countries.map((country) => (
                     <MenuItem key={country.id} value={country.id.toString()}>
@@ -652,11 +664,11 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
               </FormControl>
 
               <FormControl size="small" error={!!errors.birth_state_id}>
-                <InputLabel>Estado de Nacimiento</InputLabel>
+                <InputLabel>Estado de Nacimiento - opcional</InputLabel>
                 <Select
                   value={formData.birth_state_id}
                   onChange={handleChange('birth_state_id')}
-                  label="Estado de Nacimiento"
+                  label="Estado de Nacimiento - opcional"
                   disabled={!formData.birth_country_id}
                 >
                   {birthStates.map((state) => (
@@ -678,30 +690,32 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
             </Typography>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
               <TextField
-                label="Nombre del Contacto"
+                label="Nombre del Contacto - opcional"
                 name="emergency_contact_name"
                 value={formData.emergency_contact_name}
                 onChange={handleChange('emergency_contact_name')}
                 size="small"
+                placeholder="Nombre del Contacto - opcional"
                 error={!!errors.emergency_contact_name}
                 helperText={errors.emergency_contact_name}
               />
               <TextField
-                label="Teléfono del Contacto"
+                label="Teléfono del Contacto - opcional"
                 name="emergency_contact_phone"
                 value={formData.emergency_contact_phone}
                 onChange={handleChange('emergency_contact_phone')}
                 size="small"
+                placeholder="Teléfono del Contacto - opcional"
                 error={!!errors.emergency_contact_phone}
                 helperText={errors.emergency_contact_phone}
               />
               <FormControl size="small" error={!!errors.emergency_contact_relationship} fullWidth>
-                <InputLabel id="emergency-relationship-label">Relación con el Paciente</InputLabel>
+                <InputLabel id="emergency-relationship-label">Relación con el Paciente - opcional</InputLabel>
                 <Select
                   name="emergency_contact_relationship"
                   value={formData.emergency_contact_relationship}
                   labelId="emergency-relationship-label"
-                  label="Relación con el Paciente"
+                  label="Relación con el Paciente - opcional"
                   onChange={handleChange('emergency_contact_relationship')}
                   sx={{ gridColumn: '1 / -1' }}
                 >
@@ -725,7 +739,7 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
             </Typography>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
               <TextField
-                label="Condiciones Crónicas"
+                label="Condiciones Crónicas - opcional"
                 name="chronic_conditions"
                 value={formData.chronic_conditions}
                 onChange={handleChange('chronic_conditions')}
@@ -734,11 +748,12 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
                 rows={2}
                 fullWidth
                 sx={{ gridColumn: '1 / -1' }}
+                placeholder="Condiciones Crónicas - opcional"
                 error={!!errors.chronic_conditions}
                 helperText={errors.chronic_conditions}
               />
               <TextField
-                label="Medicamentos Actuales"
+                label="Medicamentos Actuales - opcional"
                 name="current_medications"
                 value={formData.current_medications}
                 onChange={handleChange('current_medications')}
@@ -747,24 +762,27 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
                 rows={2}
                 fullWidth
                 sx={{ gridColumn: '1 / -1' }}
+                placeholder="Medicamentos Actuales - opcional"
                 error={!!errors.current_medications}
                 helperText={errors.current_medications}
               />
               <TextField
-                label="Proveedor de Seguro"
+                label="Proveedor de Seguro - opcional"
                 name="insurance_provider"
                 value={formData.insurance_provider}
                 onChange={handleChange('insurance_provider')}
                 size="small"
+                placeholder="Proveedor de Seguro - opcional"
                 error={!!errors.insurance_provider}
                 helperText={errors.insurance_provider}
               />
               <TextField
-                label="Número de Póliza"
+                label="Número de Póliza - opcional"
                 name="insurance_policy_number"
                 value={formData.insurance_policy_number}
                 onChange={handleChange('insurance_policy_number')}
                 size="small"
+                placeholder="Número de Póliza - opcional"
                 error={!!errors.insurance_policy_number}
                 helperText={errors.insurance_policy_number}
               />
