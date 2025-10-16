@@ -103,6 +103,7 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
   };
 
   if (isLoading) {
+    console.log('🔬 ClinicalStudiesSection: Showing loading state');
     return (
       <Box sx={{ p: 3 }}>
         <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
@@ -116,6 +117,8 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
       </Box>
     );
   }
+
+  console.log('🔬 ClinicalStudiesSection: Not loading, studies count:', studies.length);
 
   return (
     <Box sx={{ p: 3 }}>

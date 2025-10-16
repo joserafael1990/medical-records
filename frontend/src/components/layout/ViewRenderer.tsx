@@ -75,7 +75,6 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
             setSuccessMessage={() => {}}
             handleNewConsultation={consultationManagement.handleNewConsultation}
             handleEditConsultation={consultationManagement.handleEditConsultation}
-            handleViewConsultation={consultationManagement.handleViewConsultation}
           />
         </Suspense>
       )}

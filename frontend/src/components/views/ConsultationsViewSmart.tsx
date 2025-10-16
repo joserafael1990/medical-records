@@ -13,13 +13,10 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Chip,
-  IconButton
+  Chip
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Edit as EditIcon,
-  Visibility as ViewIcon,
   LocalHospital as HospitalIcon,
   Person as PersonIcon
 } from '@mui/icons-material';
@@ -34,7 +31,6 @@ interface ConsultationsViewSmartProps {
   setSuccessMessage?: (message: string) => void;
   handleNewConsultation?: () => void;
   handleEditConsultation?: (consultation: any) => void;
-  handleViewConsultation?: (consultation: any) => void;
 }
 
 const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
@@ -44,8 +40,7 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
   successMessage,
   setSuccessMessage,
   handleNewConsultation,
-  handleEditConsultation,
-  handleViewConsultation
+  handleEditConsultation
 }) => {
   const getConsultationTypeLabel = (type: string) => {
     switch (type) {
@@ -92,6 +87,11 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
   });
   
   const todayConsultations = todayAppointments.length;
+
+  // Handle row click to edit consultation
+  const handleRowClick = (consultation: any) => {
+    handleEditConsultation?.(consultation);
+  };
 
   return (
     <Box sx={{ p: 3 }}>
@@ -169,14 +169,15 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
                     <TableCell>Fecha</TableCell>
                     <TableCell>Tipo</TableCell>
                     <TableCell>Diagnóstico</TableCell>
-                    <TableCell>Acciones</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {consultations.map((consultation, index) => (
                     <TableRow
                       key={consultation.id || index}
+                      onClick={() => handleRowClick(consultation)}
                       sx={{
+                        cursor: 'pointer',
                         '&:hover': {
                           backgroundColor: 'grey.50'
                         }
@@ -209,27 +210,8 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2" sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {consultation.diagnosis || 'Sin diagnóstico registrado'}
+                          {consultation.primary_diagnosis || 'Sin diagnóstico registrado'}
                         </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                          <IconButton
-                            size="small"
-                            color="primary"
-                            onClick={() => handleViewConsultation?.(consultation)}
-                            title="Ver detalles de la consulta"
-                          >
-                            <ViewIcon />
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            color="secondary"
-                            onClick={() => handleEditConsultation?.(consultation)}
-                          >
-                            <EditIcon />
-                          </IconButton>
-                        </Box>
                       </TableCell>
                     </TableRow>
                   ))}

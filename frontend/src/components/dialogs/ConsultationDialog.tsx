@@ -214,12 +214,33 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           const patient = patients.find(p => p.id === consultation.patient_id);
           setSelectedPatient(patient || null);
         }
+
+        // Load clinical studies for existing consultation
+        console.log('🔬 Loading clinical studies for consultation:', consultation.id);
+        console.log('🔬 Clinical studies hook state:', {
+          isLoading: clinicalStudiesHook.isLoading,
+          studies: clinicalStudiesHook.studies,
+          error: clinicalStudiesHook.error
+        });
+        clinicalStudiesHook.fetchStudies(String(consultation.id));
       } else {
         setFormData(initialFormData);
         setSelectedPatient(null);
+        
+        // Clear clinical studies for new consultation
+        clinicalStudiesHook.clearTemporaryStudies();
       }
     }
   }, [open, consultation, patients, doctorProfile]);
+
+  // Refresh clinical studies when clinical study dialog closes (for existing consultations)
+  useEffect(() => {
+    if (isEditing && consultation && !clinicalStudiesHook.clinicalStudyDialogOpen) {
+      // Refresh studies when clinical study dialog closes
+      console.log('🔬 Refreshing clinical studies after dialog close');
+      clinicalStudiesHook.fetchStudies(String(consultation.id));
+    }
+  }, [clinicalStudiesHook.clinicalStudyDialogOpen, isEditing, consultation]);
 
   // Load countries, emergency relationships, and patients for appointments
   useEffect(() => {
@@ -557,7 +578,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     }
     
     clinicalStudiesHook.openAddDialog(
-      'temp_consultation', // Temporary ID for new consultation
+      isEditing ? String(consultation.id) : 'temp_consultation', // Use real ID when editing
       selectedPatient.id,
       doctorProfile?.full_name || 'Dr. Usuario Sistema'
     );
@@ -1298,7 +1319,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           <Box sx={{ mt: 3 }}>
             <Divider sx={{ mb: 2 }} />
             <ClinicalStudiesSection
-              consultationId="temp_consultation"
+              consultationId={isEditing ? String(consultation.id) : "temp_consultation"}
               patientId={selectedPatient.id}
               studies={clinicalStudiesHook.studies}
               isLoading={clinicalStudiesHook.isLoading}
@@ -1343,3 +1364,4 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 };
 
 export default ConsultationDialog;
+
