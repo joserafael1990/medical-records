@@ -184,7 +184,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           patients={patientManagement.patients}
           consultation={consultationManagement.selectedConsultation}
           doctorProfile={doctorProfile}
-          appointments={appointmentManager.appointments}
+          appointments={consultationManagement.allAvailableAppointments}
           onNewPatient={() => {
             consultationManagement.closeConsultationDialog();
             patientManagement.openPatientDialog();
@@ -197,6 +197,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             }
             consultationManagement.closeConsultationDialog();
             consultationManagement.fetchConsultations();
+            // Also refresh patients list in case a new patient was created
+            patientManagement.fetchPatients();
           }}
         />
       )}

@@ -48,21 +48,29 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
   const getConsultationTypeLabel = (type: string) => {
     switch (type) {
       case 'primera-vez':
-        return 'Primera Vez';
+      case 'Primera vez':
+      case 'first_visit':
+        return 'Primera vez';
       case 'seguimiento':
+      case 'Seguimiento':
+      case 'follow_up':
         return 'Seguimiento';
       case 'urgencia':
         return 'Urgencia';
       default:
-        return type;
+        return type || 'Seguimiento';
     }
   };
 
   const getConsultationTypeColor = (type: string) => {
     switch (type) {
       case 'primera-vez':
+      case 'Primera vez':
+      case 'first_visit':
         return 'primary';
       case 'seguimiento':
+      case 'Seguimiento':
+      case 'follow_up':
         return 'success';
       case 'urgencia':
         return 'error';
@@ -72,11 +80,16 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
   };
 
   const totalConsultations = consultations.length;
-  const todayConsultations = consultations.filter(consultation => {
-    const consultationDate = new Date(consultation.date);
+  
+  // Calculate today's appointments that can be converted to consultations
+  const todayAppointments = appointments.filter(appointment => {
+    const appointmentDate = new Date(appointment.appointment_date || appointment.date_time);
     const today = new Date();
-    return consultationDate.toDateString() === today.toDateString();
+    return appointmentDate.toDateString() === today.toDateString() && 
+           appointment.status === 'confirmed';
   });
+  
+  const todayConsultations = todayAppointments.length;
 
   return (
     <Box sx={{ p: 3 }}>
@@ -114,10 +127,10 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
           <Card sx={{ boxShadow: 1 }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
-                Consultas Hoy
+                Citas de Hoy
               </Typography>
               <Typography variant="h3" color="success.main">
-                {todayConsultations.length}
+                {todayConsultations}
               </Typography>
             </CardContent>
           </Card>
@@ -172,10 +185,10 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
                           <PersonIcon color="action" />
                           <Box>
                             <Typography variant="subtitle2">
-                              {consultation.patient?.first_name} {consultation.patient?.last_name}
+                              {consultation.patient_name || 'Paciente no encontrado'}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
-                              ID: {consultation.patient?.id}
+                              ID: {consultation.patient_id}
                             </Typography>
                           </Box>
                         </Box>

@@ -14,10 +14,7 @@ import {
   Add as AddIcon,
   Person as PersonIcon,
   CalendarToday as CalendarIcon,
-  Assignment as AssignmentIcon,
-  Science as ScienceIcon,
   TrendingUp as TrendingIcon,
-  Schedule as ScheduleIcon,
   LocalHospital as HospitalIcon,
   Notifications as NotificationIcon
 } from '@mui/icons-material';
@@ -59,14 +56,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 
   const confirmedAppointments = todayAppointments.filter(apt => apt.status === 'confirmed');
   
-  // Calcular consultas completadas basándose en las consultas reales creadas hoy
-  const todayConsultations = consultations.filter(consultation => {
-    const consultationDate = new Date(consultation.consultation_date || consultation.date);
-    return consultationDate.toDateString() === today.toDateString();
-  });
-  const completedConsultations = todayConsultations.length;
-  
-  const totalPatients = dashboardData?.totalPatients || 156;
+  // Calcular consultas completadas - total de consultas (no solo las de hoy)
+  const completedConsultations = consultations.length;
 
   const doctorName = doctorProfile?.full_name || 'Doctor';
 
@@ -162,7 +153,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             }
           }}>
             <CardContent sx={{ textAlign: 'center', py: 3 }}>
-              <TrendingIcon sx={{ fontSize: 40, mb: 1, color: 'warning.main' }} />
+              <TrendingIcon sx={{ fontSize: 40, mb: 1, color: 'success.main' }} />
               <Typography variant="h2" sx={{ mb: 1, color: 'text.primary' }}>
                 {confirmedAppointments.length}
               </Typography>
@@ -181,7 +172,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             }
           }}>
             <CardContent sx={{ textAlign: 'center', py: 3 }}>
-              <HospitalIcon sx={{ fontSize: 40, mb: 1, color: 'success.main' }} />
+              <HospitalIcon sx={{ fontSize: 40, mb: 1, color: 'primary.main' }} />
               <Typography variant="h2" sx={{ mb: 1, color: 'text.primary' }}>
                 {completedConsultations}
               </Typography>

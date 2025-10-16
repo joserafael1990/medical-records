@@ -62,8 +62,9 @@ export const useAppointmentManager = (
   // Doctor profile for appointment duration
   const [currentDoctorProfile, setCurrentDoctorProfile] = useState<any>(doctorProfile);
 
-  // Update doctor profile when prop changes
+  // Load appointments initially and when doctor profile changes
   useEffect(() => {
+    console.log('🔄 useAppointmentManager useEffect - doctorProfile:', doctorProfile);
     setCurrentDoctorProfile(doctorProfile);
     // Update appointment form data when doctor profile changes
     if (doctorProfile) {
@@ -72,7 +73,47 @@ export const useAppointmentManager = (
         doctor_id: doctorProfile.id || '',
       }));
     }
+    
+    // Load appointments regardless of doctor profile (they are global)
+    const loadAppointments = async () => {
+      try {
+        console.log('🔄 Loading appointments (doctorProfile effect)...');
+        setIsLoading(true);
+        const appointmentsData = await apiService.getAppointments();
+        console.log('✅ Appointments loaded (doctorProfile effect):', appointmentsData?.length || 0);
+        setAppointments(appointmentsData || []);
+      } catch (error) {
+        console.error('❌ Error loading appointments (doctorProfile effect):', error);
+        setAppointments([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    loadAppointments();
   }, [doctorProfile]);
+
+  // Load appointments on component mount (independent of doctorProfile)
+  useEffect(() => {
+    console.log('🚀 useAppointmentManager mounted - loading appointments immediately');
+    const loadAppointmentsOnMount = async () => {
+      try {
+        console.log('🔄 Loading appointments on mount...');
+        console.log('🔄 API Service available:', !!apiService);
+        console.log('🔄 User context:', user);
+        const appointmentsData = await apiService.getAppointments();
+        console.log('✅ Appointments loaded on mount:', appointmentsData?.length || 0);
+        console.log('✅ Appointments data:', appointmentsData);
+        setAppointments(appointmentsData || []);
+      } catch (error) {
+        console.error('❌ Error loading appointments on mount:', error);
+        console.error('❌ Error details:', error);
+      }
+    };
+    
+    // Load immediately on mount
+    loadAppointmentsOnMount();
+  }, []); // Empty dependency array = run on mount
   
   // Dialog state
   const [appointmentDialogOpen, setAppointmentDialogOpen] = useState(false);
@@ -354,6 +395,7 @@ export const useAppointmentManager = (
         const endTime = new Date(appointmentDate.getTime() + doctorDuration * 60000);
 
         // Send CDMX datetime directly to backend
+        console.log('🔍 useAppointmentManager - appointment_type being sent:', formDataToUse.appointment_type);
         const updateData = {
           appointment_date: appointmentDate.toISOString(),
           end_time: endTime.toISOString(),
@@ -481,12 +523,29 @@ export const useAppointmentManager = (
         const appointmentDateInTimezone = new Date(appointmentDate.toLocaleString("en-US", {timeZone: doctorTimezone}));
         const endTimeInTimezone = new Date(endTime.toLocaleString("en-US", {timeZone: doctorTimezone}));
         
+        // Map appointment types to standardized values
+        const mapAppointmentType = (type: string) => {
+          switch (type) {
+            case 'primera vez':
+              return 'Primera vez';
+            case 'seguimiento':
+              return 'Seguimiento';
+            case 'first_visit':
+              return 'Primera vez';
+            case 'follow_up':
+              return 'Seguimiento';
+            default:
+              return type || 'Consulta';
+          }
+        };
+
+        console.log('🔍 useAppointmentManager - creating appointment with type:', formDataToUse.appointment_type);
         const appointmentData = {
           patient_id: formDataToUse.patient_id,
           doctor_id: user?.doctor?.id || doctorProfile?.id || 0, // Use current logged-in doctor
           appointment_date: appointmentDateInTimezone.toISOString(),
           end_time: endTimeInTimezone.toISOString(),
-          appointment_type: formDataToUse.appointment_type || 'consultation',
+          appointment_type: mapAppointmentType(formDataToUse.appointment_type),
           status: formDataToUse.status || 'confirmed',
           priority: formDataToUse.priority || 'normal',
           reason: formDataToUse.reason || '',
@@ -499,8 +558,9 @@ export const useAppointmentManager = (
           insurance_covered: formDataToUse.insurance_covered || false
         };
         
-        // console.log('🔍 Creating appointment with CDMX native data');
+        console.log('🔍 Creating appointment with CDMX native data');
         await apiService.createAgendaAppointment(appointmentData);
+        console.log('✅ Appointment created successfully, refreshing data...');
         showSuccessMessage('Cita creada exitosamente');
       }
       
@@ -513,6 +573,9 @@ export const useAppointmentManager = (
         // Refresh appointments after successful creation
         setTimeout(async () => {
           try {
+            console.log('🔄 Starting appointment refresh after creation...');
+            console.log('🔄 Current agendaView:', agendaView);
+            console.log('🔄 Current selectedDate:', selectedDate.toDateString());
             
             let refreshData: any[] = [];
             const dateToRefresh = new Date(selectedDate);
@@ -541,7 +604,10 @@ export const useAppointmentManager = (
             } else {
               refreshData = await apiService.getAppointments();
             }
+            console.log('✅ Appointments refreshed successfully:', refreshData?.length || 0);
+            console.log('📋 Sample refreshed appointment:', refreshData?.[0]);
             setAppointments(refreshData);
+            console.log('✅ setAppointments called with:', refreshData?.length || 0, 'appointments');
           } catch (error) {
             console.error('❌ Error refreshing appointments:', error);
           }

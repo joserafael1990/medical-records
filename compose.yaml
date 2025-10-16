@@ -12,6 +12,11 @@ services:
     environment:
       - MEDICAL_ENCRYPTION_KEY=17TAemFFyvzzOSCNdm9fISoQjiWzlWAgVJslIOYaGpU=
     # env_file: ./backend/.env  # Uncomment if .env file exists
+    volumes:
+      # Mount backend source code for hot reload (exclude venv)
+      - ./backend:/app
+      - /app/__pycache__  # Exclude Python cache
+      - backend_venv:/app/.venv  # Use named volume for virtual environment
     depends_on:
       - postgres-db  # Ensure DB is up before backend starts
 
@@ -32,9 +37,15 @@ services:
       - ESLINT_NO_DEV_ERRORS=true
       - SKIP_PREFLIGHT_CHECK=true
       - DISABLE_ESLINT_PLUGIN=true
-      - FAST_REFRESH=false
-      - CI=true
+      - FAST_REFRESH=true  # Enable hot reload
+      - CI=false  # Disable CI mode for development
     # env_file: ./frontend/.env  # Uncomment if .env file exists
+    volumes:
+      # Mount frontend source code for hot reload
+      - ./frontend:/app
+      - /app/node_modules  # Exclude node_modules (use container's version)
+      - /app/build  # Exclude build directory
+      - /app/dist  # Exclude dist directory
     depends_on:
       - python-backend  # Frontend expects backend to be up
     deploy:
@@ -68,3 +79,5 @@ networks:
 volumes:
   postgres_data:
     # Persistent storage for PostgreSQL
+  backend_venv:
+    # Virtual environment for backend (to avoid conflicts with volume mounts)

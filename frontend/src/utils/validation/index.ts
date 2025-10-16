@@ -327,14 +327,13 @@ export const MEDICAL_VALIDATION_RULES = {
       { type: 'phone' as const, message: getValidationMessage('phone') }
     ],
     date_of_birth: [
-      { type: 'required' as const, message: getValidationMessage('required') },
       { type: 'date' as const, value: { allowFuture: false }, message: getValidationMessage('future_date') }
     ],
     curp: [
       { type: 'curp' as const, message: getValidationMessage('curp') }
     ],
     gender: [
-      { type: 'required' as const, message: getValidationMessage('required') }
+      // No validation rules - gender is optional
     ]
   },
   

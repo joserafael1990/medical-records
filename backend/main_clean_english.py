@@ -1822,13 +1822,27 @@ async def get_appointments(
             start_date=start_date_obj,
             end_date=end_date_obj,
             status=status,
-            doctor_id=str(current_user.id),  # Use authenticated doctor ID
+            doctor_id=current_user.id,  # Use authenticated doctor ID
             available_for_consultation=available_for_consultation
         )
         
         # Transform to include patient information
         result = []
         for appointment in appointments:
+            # Safely access patient information
+            patient_name = "Paciente no encontrado"
+            if appointment.patient:
+                first_name = appointment.patient.first_name or ""
+                paternal_surname = appointment.patient.paternal_surname or ""
+                maternal_surname = appointment.patient.maternal_surname or ""
+                
+                # Build full name
+                name_parts = [first_name, paternal_surname]
+                if maternal_surname and maternal_surname != "null":
+                    name_parts.append(maternal_surname)
+                
+                patient_name = " ".join(filter(None, name_parts)) or "Paciente sin nombre"
+            
             apt_dict = {
                 "id": str(appointment.id),
                 "patient_id": str(appointment.patient_id),
@@ -1847,7 +1861,8 @@ async def get_appointments(
                 "cancelled_at": appointment.cancelled_at.isoformat() if appointment.cancelled_at else None,
                 "created_at": appointment.created_at.isoformat(),
                 "updated_at": appointment.updated_at.isoformat() if appointment.updated_at else None,
-                "patient_name": f"{appointment.patient.first_name} {appointment.patient.paternal_surname}" if appointment.patient else "Unknown Patient"
+                "patient_name": patient_name,
+                "patient": appointment.patient  # Include full patient object for frontend
             }
             result.append(apt_dict)
         
@@ -2179,6 +2194,7 @@ async def get_consultations(
                 "imaging_studies": consultation.laboratory_results,  # Alias for compatibility
                 "notes": consultation.notes,
                 "interconsultations": consultation.notes,  # Map notes to interconsultations for frontend compatibility
+                "consultation_type": getattr(consultation, 'consultation_type', 'Seguimiento'),
                 "created_by": consultation.created_by,
                 "created_at": consultation.created_at.isoformat(),
                 "patient_name": patient_name,
@@ -2249,6 +2265,7 @@ async def get_consultation(
             "imaging_studies": consultation.laboratory_results,  # Alias for compatibility
             "notes": consultation.notes,
             "interconsultations": consultation.notes,  # Map notes to interconsultations for frontend compatibility
+            "consultation_type": getattr(consultation, 'consultation_type', 'Seguimiento'),
             "created_by": consultation.created_by,
             "created_at": consultation.created_at.isoformat(),
             "patient_name": patient_name,
@@ -2304,6 +2321,7 @@ async def create_consultation(
             secondary_diagnoses=encrypted_consultation_data.get("secondary_diagnoses", ""),
             laboratory_results=encrypted_consultation_data.get("laboratory_results", ""),
             notes=encrypted_consultation_data.get("notes") or encrypted_consultation_data.get("interconsultations", ""),
+            consultation_type=encrypted_consultation_data.get("consultation_type", "Seguimiento"),
             created_by=current_user.id
         )
         
@@ -2393,6 +2411,7 @@ async def create_consultation(
             "imaging_studies": new_medical_record.laboratory_results,  # Alias for compatibility
             "notes": new_medical_record.notes,
             "interconsultations": new_medical_record.notes,  # Map notes to interconsultations for frontend compatibility
+            "consultation_type": new_medical_record.consultation_type,
             "created_by": new_medical_record.created_by,
             "created_at": new_medical_record.created_at.isoformat(),
             "patient_name": patient_name,
@@ -2460,6 +2479,7 @@ async def update_consultation(
         consultation.prognosis = consultation_data.get("prognosis", consultation.prognosis)
         consultation.laboratory_results = consultation_data.get("laboratory_results", consultation.laboratory_results)
         consultation.notes = consultation_data.get("notes") or consultation_data.get("interconsultations") or consultation.notes
+        consultation.consultation_type = consultation_data.get("consultation_type", consultation.consultation_type)
         
         # Save changes
         db.commit()
@@ -2497,6 +2517,7 @@ async def update_consultation(
             "imaging_studies": consultation.laboratory_results,  # Alias for compatibility
             "notes": consultation.notes,
             "interconsultations": consultation.notes,  # Map notes to interconsultations for frontend compatibility
+            "consultation_type": consultation.consultation_type,
             "created_by": consultation.created_by,
             "created_at": consultation.created_at.isoformat(),
             "updated_at": consultation.updated_at.isoformat(),

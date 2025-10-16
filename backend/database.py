@@ -237,6 +237,9 @@ class MedicalRecord(Base):
     follow_up_instructions = Column(Text, nullable=False)
     prognosis = Column(Text, nullable=False)
     
+    # CONSULTATION TYPE
+    consultation_type = Column(String(50), default='Seguimiento')
+    
     # OPTIONAL FIELDS
     secondary_diagnoses = Column(Text)
     differential_diagnosis = Column(Text)

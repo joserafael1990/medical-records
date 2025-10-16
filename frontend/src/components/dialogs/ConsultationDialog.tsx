@@ -126,7 +126,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
   const initialFormData: ConsultationFormData = {
     patient_id: '',
-    date: new Date().toISOString().split('T')[0],
+    date: new Date().toISOString(),
     chief_complaint: '',
     history_present_illness: '',
     family_history: '',
@@ -148,7 +148,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     doctor_professional_license: doctorProfile?.professional_license || '',
     doctor_specialty: doctorProfile?.specialty || '',
     // New fields
-    has_appointment: false,
+    has_appointment: undefined as any,
     appointment_id: ''
   };
 
@@ -160,9 +160,18 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   const [states, setStates] = useState<any[]>([]);
   const [birthStates, setBirthStates] = useState<any[]>([]);
   const [emergencyRelationships, setEmergencyRelationships] = useState<any[]>([]);
+  const [appointmentPatients, setAppointmentPatients] = useState<any[]>([]);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // State for inline patient creation
+  const [newPatientData, setNewPatientData] = useState({
+    first_name: '',
+    paternal_surname: '',
+    maternal_surname: '',
+    primary_phone: ''
+  });
 
   useEffect(() => {
     if (open) {
@@ -173,7 +182,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         setFormData({
           ...initialFormData,
           patient_id: consultation.patient_id || '',
-          date: consultation.date ? consultation.date.split('T')[0] : new Date().toISOString().split('T')[0],
+          date: consultation.date ? consultation.date : new Date().toISOString(),
           chief_complaint: consultation.chief_complaint || '',
           history_present_illness: consultation.history_present_illness || '',
           family_history: consultation.family_history || '',
@@ -206,7 +215,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     }
   }, [open, consultation, patients, doctorProfile]);
 
-  // Load countries and emergency relationships
+  // Load countries, emergency relationships, and patients for appointments
   useEffect(() => {
     const loadInitialData = async () => {
       try {
@@ -216,6 +225,23 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         ]);
         setCountries(countriesData);
         setEmergencyRelationships(relationshipsData);
+
+        // Load patients for appointments if appointments exist
+        if (appointments && appointments.length > 0) {
+          const patientIds = appointments.map(apt => apt.patient_id).filter(id => id);
+          console.log('🔍 ConsultationDialog - loading patients for appointment IDs:', patientIds);
+          
+          // Get all patients to find the ones referenced in appointments
+          const allPatients = await apiService.getPatients();
+          const appointmentPatients = allPatients.filter(patient => 
+            patientIds.includes(patient.id)
+          );
+          console.log('🔍 ConsultationDialog - found appointment patients:', appointmentPatients.length);
+          
+          // Set the appointment patients for use in the dropdown
+          setAppointmentPatients(appointmentPatients);
+          console.log('🔍 ConsultationDialog - set appointment patients:', appointmentPatients.length);
+        }
       } catch (error) {
         console.error('Error loading initial data:', error);
       }
@@ -224,7 +250,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     if (open) {
       loadInitialData();
     }
-  }, [open]);
+  }, [open, appointments]);
 
   // Load states when patient data changes
   useEffect(() => {
@@ -264,7 +290,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   };
 
   const handleDateChange = (newValue: Date | null) => {
-    const dateString = newValue ? newValue.toISOString().split('T')[0] : '';
+    const dateString = newValue ? newValue.toISOString() : '';
     setFormData(prev => ({ ...prev, date: dateString }));
     if (errors.date) {
       setErrors(prev => {
@@ -332,26 +358,45 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     setSelectedAppointment(appointment);
     
     if (appointment) {
-      // Set patient from appointment
-      const patient = patients.find(p => p.id === appointment.patient_id);
+      // Use patient from appointment object (comes from backend) or find in local patients list
+      const patient = appointment.patient || patients.find(p => p.id === appointment.patient_id);
+      
       if (patient) {
         setSelectedPatient(patient);
         setFormData(prev => ({ ...prev, patient_id: patient.id.toString(), appointment_id: appointment.id.toString() }));
         
-        // Load full patient data for editing
+        // Always load fresh patient data from API to ensure decryption
         try {
+          console.log('🔍 Loading decrypted patient data for ID:', patient.id);
           const fullPatientData = await apiService.getPatient(patient.id);
+          console.log('✅ Loaded decrypted patient data:', {
+            id: fullPatientData.id,
+            name: fullPatientData.first_name,
+            phone: fullPatientData.primary_phone
+          });
           setPatientEditData(fullPatientData);
         } catch (error) {
-          console.error('Error loading patient data:', error);
+          console.error('❌ Error loading decrypted patient data:', error);
           setPatientEditData(null);
         }
+      } else {
+        console.warn('No patient found for appointment:', appointment.id);
+        setSelectedPatient(null);
+        setPatientEditData(null);
       }
     } else {
       setSelectedPatient(null);
       setPatientEditData(null);
       setFormData(prev => ({ ...prev, patient_id: '', appointment_id: '' }));
     }
+  };
+
+  // Handle new patient field changes
+  const handleNewPatientFieldChange = (field: string, value: string) => {
+    setNewPatientData(prev => ({
+      ...prev,
+      [field]: value
+    }));
   };
 
   // Filter appointments to show only non-cancelled ones
@@ -362,15 +407,68 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   const handleSubmit = async () => {
     setError(null);
     
-    // Basic validation
-    if (!selectedPatient) {
-      setError('Por favor, selecciona un paciente');
+    // Basic validation - check if patient is selected OR new patient data is provided
+    if (!selectedPatient && (!newPatientData.first_name || !newPatientData.paternal_surname)) {
+      setError('Por favor, selecciona un paciente existente o completa los datos básicos del nuevo paciente (nombre y apellido paterno son requeridos)');
       return;
     }
 
     if (!formData.chief_complaint.trim()) {
       setError('El motivo de consulta es requerido');
       return;
+    }
+
+    // Create new patient if no patient is selected
+    let finalPatientId = selectedPatient?.id;
+    
+    if (!selectedPatient && newPatientData.first_name && newPatientData.paternal_surname) {
+      try {
+        // Create new patient with basic data
+        const patientData: PatientFormData = {
+          first_name: newPatientData.first_name,
+          paternal_surname: newPatientData.paternal_surname,
+          maternal_surname: newPatientData.maternal_surname || '',
+          email: '',
+          date_of_birth: '',
+          birth_date: '',
+          phone: newPatientData.primary_phone || '',
+          primary_phone: newPatientData.primary_phone || '',
+          gender: '',
+          civil_status: '',
+          home_address: '',
+          curp: '',
+          rfc: '',
+          address_city: '',
+          city: '',
+          address_state_id: '',
+          state: '',
+          address_postal_code: '',
+          zip_code: '',
+          address_country_id: '',
+          country: '',
+          birth_city: '',
+          birth_state_id: '',
+          birth_country_id: '',
+          emergency_contact_name: '',
+          emergency_contact_phone: '',
+          emergency_contact_relationship: '',
+          chronic_conditions: '',
+          current_medications: '',
+          medical_history: '',
+          insurance_provider: '',
+          insurance_policy_number: '',
+          active: true,
+          is_active: true
+        };
+
+        const newPatient = await apiService.createPatient(patientData);
+        finalPatientId = newPatient.id;
+        console.log('✅ New patient created successfully:', newPatient);
+      } catch (error) {
+        console.error('Error creating patient:', error);
+        setError('Error al crear el nuevo paciente');
+        return;
+      }
     }
 
     // Update patient data if modified
@@ -387,7 +485,18 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
     setLoading(true);
     try {
-      await onSubmit(formData);
+      // Determine consultation type based on whether it's a new patient
+      const isNewPatient = !selectedPatient && newPatientData.first_name && newPatientData.paternal_surname;
+      const consultationType = isNewPatient ? 'Primera vez' : 'Seguimiento';
+      
+      // Update formData with final patient ID and consultation type
+      const finalFormData = {
+        ...formData,
+        patient_id: finalPatientId?.toString() || '',
+        consultation_type: consultationType
+      };
+      
+      await onSubmit(finalFormData);
       // Consulta creada exitosamente - sin mostrar diálogo
     } catch (err: any) {
       console.error('Error saving consultation:', err);
@@ -436,6 +545,10 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         )}
         
         <Box component="form" sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
+          {/* Debug: Log form data */}
+          {console.log('🔍 ConsultationDialog render - formData.has_appointment:', formData.has_appointment)}
+          {console.log('🔍 ConsultationDialog render - appointments length:', appointments?.length)}
+          
           {/* Appointment Question */}
           <Box>
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -446,7 +559,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             <FormControl size="small" fullWidth>
               <InputLabel>Seleccione una opción</InputLabel>
               <Select
-                value={formData.has_appointment ? 'yes' : formData.has_appointment === false ? 'no' : ''}
+                value={formData.has_appointment === true ? 'yes' : formData.has_appointment === false ? 'no' : ''}
                 onChange={(e) => {
                   const value = e.target.value;
                   const hasAppointment = value === 'yes';
@@ -489,19 +602,39 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   label="Citas Programadas"
                 >
                   {availableAppointments.map((appointment) => {
-                    const patient = patients.find(p => p.id === appointment.patient_id);
+                    // Use patient information from the appointment object (comes from backend)
+                    const patient = appointment.patient;
+                    
                     const appointmentDate = new Date(appointment.appointment_date).toLocaleDateString('es-ES');
                     const appointmentTime = new Date(appointment.appointment_date).toLocaleTimeString('es-ES', { 
                       hour: '2-digit', 
                       minute: '2-digit' 
                     });
-                    // Get consultation type
-                    const consultationType = appointment.appointment_type === 'primera vez' ? 'Primera vez' : 
-                                           appointment.appointment_type === 'seguimiento' ? 'Seguimiento' : 
-                                           appointment.appointment_type || 'No especificado';
+                    // Get consultation type - normalize display
+                    const getConsultationTypeDisplay = (type: string) => {
+                      switch (type) {
+                        case 'primera vez':
+                        case 'first_visit':
+                        case 'Primera vez':
+                          return 'Primera vez';
+                        case 'seguimiento':
+                        case 'follow_up':
+                        case 'Seguimiento':
+                          return 'Seguimiento';
+                        default:
+                          return type || 'No especificado';
+                      }
+                    };
+                    
+                    const consultationType = getConsultationTypeDisplay(appointment.appointment_type);
+                    
+                    // Use patient_name from backend or fallback to patient object
+                    const patientName = appointment.patient_name || 
+                                      (patient ? `${patient.first_name || ''} ${patient.paternal_surname || ''}`.trim() : 'Paciente no encontrado');
+                    
                     return (
                       <MenuItem key={appointment.id} value={appointment.id.toString()}>
-                        {patient ? `${patient.first_name} ${patient.paternal_surname}` : 'Paciente no encontrado'} - {appointmentDate} {appointmentTime} - {consultationType}
+                        {patientName} - {appointmentDate} {appointmentTime} - {consultationType}
                       </MenuItem>
                     );
                   })}
@@ -581,19 +714,60 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                     noOptionsText="No se encontraron pacientes"
                   />
                 </Box>
-                {onNewPatient && (
-                  <Button
-                    variant="outlined"
-                    onClick={onNewPatient}
-                    startIcon={<PersonAddIcon />}
-                    sx={{ whiteSpace: 'nowrap', height: 40 }}
-                  >
-                    Nuevo
-                  </Button>
-                )}
+                
               </Box>
             )}
           </Box>
+          )}
+
+          {/* Inline New Patient Creation Form - Only show if no appointment and no patient selected */}
+          {!formData.has_appointment && !selectedPatient && (
+            <Box sx={{ mt: 2 }}>
+              <Divider sx={{ my: 2 }}>
+                <Typography variant="body2" color="text.secondary">
+                  O complete los datos para crear un nuevo paciente:
+                </Typography>
+              </Divider>
+              
+              <Box sx={{ bgcolor: 'primary.50', p: 3, borderRadius: 2, border: '1px solid', borderColor: 'primary.200' }}>
+                <Typography variant="body2" color="primary.main" sx={{ mb: 2, fontWeight: 500 }}>
+                  📝 Complete los datos básicos del nuevo paciente
+                </Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                  <TextField
+                    label="Nombre(s)"
+                    value={newPatientData.first_name}
+                    onChange={(e) => handleNewPatientFieldChange('first_name', e.target.value)}
+                    size="small"
+                    required
+                    placeholder="Nombre(s) - obligatorio"
+                  />
+                  <TextField
+                    label="Apellido Paterno"
+                    value={newPatientData.paternal_surname}
+                    onChange={(e) => handleNewPatientFieldChange('paternal_surname', e.target.value)}
+                    size="small"
+                    required
+                    placeholder="Apellido Paterno - obligatorio"
+                  />
+                  <TextField
+                    label="Apellido Materno"
+                    value={newPatientData.maternal_surname}
+                    onChange={(e) => handleNewPatientFieldChange('maternal_surname', e.target.value)}
+                    size="small"
+                    placeholder="Apellido Materno - opcional"
+                  />
+                  <TextField
+                    label="Teléfono"
+                    value={newPatientData.primary_phone}
+                    onChange={(e) => handleNewPatientFieldChange('primary_phone', e.target.value)}
+                    size="small"
+                    required
+                    placeholder="Teléfono - opcional"
+                  />
+                </Box>
+              </Box>
+            </Box>
           )}
 
           {/* Patient Data Section - Show when patient is selected */}

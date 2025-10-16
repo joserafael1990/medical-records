@@ -219,15 +219,6 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                     <BadgeIcon color="action" />
                   </ListItemIcon>
                   <ListItemText 
-                    primary="Título" 
-                    secondary={doctorProfile.title || 'No especificado'} 
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon>
-                    <BadgeIcon color="action" />
-                  </ListItemIcon>
-                  <ListItemText 
                     primary="CURP" 
                     secondary={doctorProfile.curp || 'No especificada'} 
                   />
@@ -280,6 +271,15 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                 Información Profesional
               </Typography>
               <List dense>
+                <ListItem>
+                  <ListItemIcon>
+                    <BadgeIcon color="action" />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary="Título" 
+                    secondary={doctorProfile.title || 'No especificado'} 
+                  />
+                </ListItem>
                 <ListItem>
                   <ListItemIcon>
                     <BadgeIcon color="action" />

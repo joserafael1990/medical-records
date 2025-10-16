@@ -118,8 +118,8 @@ class AppointmentService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         status: Optional[str] = None,
-        patient_id: Optional[str] = None,
-        doctor_id: Optional[str] = None,
+        patient_id: Optional[int] = None,
+        doctor_id: Optional[int] = None,
         available_for_consultation: bool = False
     ) -> List[Appointment]:
         """Get appointments with filters"""
@@ -148,6 +148,12 @@ class AppointmentService:
         # Doctor filter
         if doctor_id:
             query = query.filter(Appointment.doctor_id == doctor_id)
+        
+        # Filter by patients created by the current doctor (for privacy/security)
+        # Only show appointments for patients created by the current doctor
+        query = query.join(Person, Appointment.patient_id == Person.id).filter(
+            Person.created_by == doctor_id
+        )
         
         # Order by appointment date
         return query.order_by(asc(Appointment.appointment_date)).offset(skip).limit(limit).all()

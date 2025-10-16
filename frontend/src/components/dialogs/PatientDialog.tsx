@@ -328,18 +328,8 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
       setError('El apellido paterno es requerido');
       return;
     }
-    if (!formData.birth_date) {
-      setError('La fecha de nacimiento es requerida');
-      return;
-    }
-    if (!formData.primary_phone.trim()) {
-      setError('El teléfono de contacto es requerido');
-      return;
-    }
-    if (!formData.gender) {
-      setError('El género es requerido');
-      return;
-    }
+    // Birth date and gender are optional - no validation needed
+    // Phone is optional for patient creation
 
     setLoading(true);
     try {
@@ -447,7 +437,6 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
                   slotProps={{
                     textField: {
                       size: "small",
-                      required: true,
                       error: !!errors.birth_date,
                       helperText: errors.birth_date,
                       fullWidth: true

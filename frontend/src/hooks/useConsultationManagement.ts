@@ -3,10 +3,11 @@
  * Centralized hook for all consultation-related operations extracted from App.tsx
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { apiService } from '../services/api';
 import type { Consultation, ConsultationFormData, ClinicalStudy } from '../types';
 import { getCurrentCDMXDateTime } from '../constants';
+import { useAuth } from '../contexts/AuthContext';
 
 
 interface ConsultationManagementState {
@@ -72,6 +73,9 @@ export type ConsultationManagementReturn = ConsultationManagementState & Consult
 // Function moved to imports section above
 
 export const useConsultationManagement = (): ConsultationManagementReturn => {
+  // Authentication
+  const { isAuthenticated } = useAuth();
+  
   // State
   const [consultations, setConsultations] = useState<Consultation[]>([]);
   const [selectedConsultation, setSelectedConsultation] = useState<Consultation | null>(null);
@@ -145,12 +149,27 @@ export const useConsultationManagement = (): ConsultationManagementReturn => {
     }
   }, []);
 
+  // Load consultations on mount - only if authenticated
+  useEffect(() => {
+    console.log('🔄 useConsultationManagement useEffect triggered, isAuthenticated:', isAuthenticated);
+    if (!isAuthenticated) {
+      console.log('❌ User not authenticated, skipping consultation load');
+      return;
+    }
+    
+    console.log('✅ User authenticated, loading consultations...');
+    fetchConsultations().catch(error => {
+      console.warn('⚠️ Could not load consultations on mount:', error.message);
+    });
+  }, [isAuthenticated]); // Run when authentication status changes
+
   // localStorage functions removed - backend-only approach
 
   // Fetch consultations from API
   const fetchConsultations = useCallback(async () => {
     try {
       console.log('🔄 Fetching consultations from backend...');
+      console.log('🔍 About to call apiService.getConsultations()');
       const data = await apiService.getConsultations();
       console.log('📊 Raw consultations data from API:', data);
       

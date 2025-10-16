@@ -212,6 +212,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     // Check patient data based on appointment type
     if (localFormData.appointment_type === 'primera vez' || patients.length === 0) {
       // For "primera vez", check if patient is selected OR new patient data is provided
+      // Only name, surname and phone are required for appointment creation
       if (!localFormData.patient_id && (!newPatientData.first_name || 
           !newPatientData.paternal_surname || 
           !newPatientData.primary_phone)) {
@@ -252,8 +253,10 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     // Check patient data
     if (localFormData.appointment_type === 'primera vez' || patients.length === 0) {
       // For "primera vez", check if patient is selected OR new patient data is provided
-      if (!localFormData.patient_id && !newPatientData.first_name) {
-        errors.push('Selecciona un paciente existente o completa los datos del nuevo paciente');
+      if (!localFormData.patient_id && (!newPatientData.first_name || 
+          !newPatientData.paternal_surname || 
+          !newPatientData.primary_phone)) {
+        errors.push('Selecciona un paciente existente o completa los datos básicos del nuevo paciente (nombre, apellido y teléfono son requeridos)');
       }
       
       // If creating new patient, validate required fields
@@ -486,6 +489,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
         };
 
         // Call onSubmit directly with the final form data
+        console.log('🔍 AppointmentDialog - finalFormData being sent:', finalFormData);
         onSubmit(finalFormData);
         
       } catch (error) {
@@ -500,6 +504,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
       };
       
       // Call onSubmit directly with the final form data
+      console.log('🔍 AppointmentDialog - finalFormData (existing patient):', finalFormData);
       onSubmit(finalFormData);
     }
   };
@@ -668,16 +673,6 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                       noOptionsText="No se encontraron pacientes"
                     />
                   </Box>
-                  {onNewPatient && (
-                    <Button
-                      variant="outlined"
-                      onClick={onNewPatient}
-                      startIcon={<PersonAddIcon />}
-                      sx={{ whiteSpace: 'nowrap', height: 40 }}
-                    >
-                      Nuevo
-                    </Button>
-                  )}
                 </Box>
               )}
               
