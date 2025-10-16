@@ -26,6 +26,7 @@ import { useAppState } from '../../hooks/useAppState';
 import { usePatientManagement } from '../../hooks/usePatientManagement';
 import { useConsultationManagement } from '../../hooks/useConsultationManagement';
 import { useAppointmentManager } from '../../hooks/useAppointmentManager';
+import { useMedicalRecords } from '../../hooks/useMedicalRecords';
 import { useAuth } from '../../contexts/AuthContext';
 // Dialog imports
 import PatientDialog from '../dialogs/PatientDialog'; // ✅ Now implemented!
@@ -50,6 +51,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   const patientManagement = usePatientManagement();
   const consultationManagement = useConsultationManagement();
   const appointmentManager = useAppointmentManager(patientManagement.patients, doctorProfileHook.doctorProfile);
+  const medicalRecordsHook = useMedicalRecords();
   
   // Extract values from hooks
   const { activeView, setActiveView: onViewChange } = appState;
@@ -150,8 +152,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             patientManagement={patientManagement}
             consultationManagement={consultationManagement}
             appointmentManager={appointmentManager}
-            medicalRecordsData={{}} // TODO: Implementar medical records data
-            onRefreshRecords={() => {}} // TODO: Implementar refresh records
+            medicalRecordsHook={medicalRecordsHook}
             doctorProfile={doctorProfile}
             onSaveProfile={doctorProfileHook.handleSubmit}
             doctorProfileHook={doctorProfileHook}
@@ -191,14 +192,20 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           }}
           onSubmit={async (data) => {
             if (consultationManagement.selectedConsultation) {
-              await consultationManagement.updateConsultation(consultationManagement.selectedConsultation.id, data);
+              const updatedConsultation = await consultationManagement.updateConsultation(consultationManagement.selectedConsultation.id, data);
+              consultationManagement.closeConsultationDialog();
+              consultationManagement.fetchConsultations();
+              // Also refresh patients list in case a new patient was created
+              patientManagement.fetchPatients();
+              return updatedConsultation;
             } else {
-              await consultationManagement.createConsultation(data);
+              const createdConsultation = await consultationManagement.createConsultation(data);
+              consultationManagement.closeConsultationDialog();
+              consultationManagement.fetchConsultations();
+              // Also refresh patients list in case a new patient was created
+              patientManagement.fetchPatients();
+              return createdConsultation;
             }
-            consultationManagement.closeConsultationDialog();
-            consultationManagement.fetchConsultations();
-            // Also refresh patients list in case a new patient was created
-            patientManagement.fetchPatients();
           }}
         />
       )}

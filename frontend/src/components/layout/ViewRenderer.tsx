@@ -8,7 +8,7 @@ import {
   MedicalRecordsView,
   DoctorProfileView
 } from '../lazy';
-import { ConsultationDetailView } from '../';
+import { ConsultationDetailView, MedicalRecordDetailView } from '../';
 import { LoadingFallback } from '../';
 
 interface ViewRendererProps {
@@ -18,8 +18,7 @@ interface ViewRendererProps {
   patientManagement: any;
   consultationManagement: any;
   appointmentManager: any;
-  medicalRecordsData: any;
-  onRefreshRecords: () => void;
+  medicalRecordsHook: any;
   doctorProfile: any;
   onSaveProfile: (profile: any) => void;
   doctorProfileHook: any;
@@ -32,8 +31,7 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
   patientManagement,
   consultationManagement,
   appointmentManager,
-  medicalRecordsData,
-  onRefreshRecords,
+  medicalRecordsHook,
   doctorProfile,
   onSaveProfile,
   doctorProfileHook
@@ -77,6 +75,7 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
             setSuccessMessage={() => {}}
             handleNewConsultation={consultationManagement.handleNewConsultation}
             handleEditConsultation={consultationManagement.handleEditConsultation}
+            handleViewConsultation={consultationManagement.handleViewConsultation}
           />
         </Suspense>
       )}
@@ -85,20 +84,39 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
         <Suspense fallback={<LoadingFallback message="Cargando detalles..." />}>
           <ConsultationDetailView
             consultation={consultationManagement.selectedConsultation}
-            onBack={consultationManagement.exitDetailView}
+            onBack={consultationManagement.handleBackFromConsultationDetail}
             onEdit={() => {}}
+            doctorName={doctorProfile?.full_name || 'Dr. Usuario Sistema'}
           />
         </Suspense>
       )}
 
-      {activeView === 'medical-records' && (
+      {activeView === 'medical-records' && !medicalRecordsHook.detailView && (
         <Suspense fallback={<LoadingFallback message="Cargando expedientes médicos..." />}>
           <MedicalRecordsView
             patients={patientManagement.patients}
-            onCreateRecord={async () => {}}
-            onUpdateRecord={async () => {}}
-            isLoading={false}
-            onRefresh={() => {}}
+            onCreateRecord={medicalRecordsHook.createMedicalRecord}
+            onUpdateRecord={medicalRecordsHook.updateMedicalRecord}
+            isLoading={medicalRecordsHook.isLoading}
+            onRefresh={medicalRecordsHook.fetchMedicalRecords}
+            onViewRecord={medicalRecordsHook.viewRecord}
+          />
+        </Suspense>
+      )}
+
+      {activeView === 'medical-records' && medicalRecordsHook.detailView && medicalRecordsHook.selectedRecord && (
+        <Suspense fallback={<LoadingFallback message="Cargando detalles del expediente..." />}>
+          <MedicalRecordDetailView
+            record={medicalRecordsHook.selectedRecord}
+            onBack={medicalRecordsHook.backFromDetail}
+            onEdit={(record) => {
+              // TODO: Implement edit functionality
+              console.log('Edit record:', record);
+            }}
+            onPrint={(record) => {
+              // TODO: Implement print functionality
+              console.log('Print record:', record);
+            }}
           />
         </Suspense>
       )}

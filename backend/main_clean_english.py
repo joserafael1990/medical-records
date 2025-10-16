@@ -21,7 +21,7 @@ import uuid
 import crud
 import schemas
 import auth
-from database import get_db, Person, Specialty, Country, State, EmergencyRelationship, Appointment, MedicalRecord
+from database import get_db, Person, Specialty, Country, State, EmergencyRelationship, Appointment, MedicalRecord, ClinicalStudy
 from appointment_service import AppointmentService
 # from routes import schedule  # Temporarily disabled due to table conflicts
 # Temporarily disable schedule_clean import due to model conflicts
@@ -372,10 +372,65 @@ async def get_clinical_studies_by_patient(
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
-    """Get clinical studies for a specific patient"""
-    # TODO: Implement actual clinical studies table and logic
-    # For now, return empty list to prevent frontend errors
-    return []
+    """Get all clinical studies for a specific patient"""
+    print(f"🔬 Getting clinical studies for patient: {patient_id}")
+    
+    try:
+        # Verify patient exists and user has access
+        patient = db.query(Person).filter(
+            Person.id == patient_id,
+            Person.person_type == "patient",
+            Person.created_by == current_user.id  # Only show patients created by current user
+        ).first()
+        
+        if not patient:
+            print(f"🔬 Patient {patient_id} not found or no access")
+            return []
+        
+        # Get clinical studies for this patient
+        studies = db.query(ClinicalStudy).filter(
+            ClinicalStudy.patient_id == patient_id,
+            ClinicalStudy.created_by == current_user.id  # Only show studies created by current user
+        ).order_by(ClinicalStudy.ordered_date.desc()).all()
+        
+        # Convert to response format
+        studies_data = []
+        for study in studies:
+            study_data = {
+                "id": str(study.id),
+                "consultation_id": str(study.consultation_id),
+                "patient_id": str(study.patient_id),
+                "study_type": study.study_type,
+                "study_name": study.study_name,
+                "study_description": study.study_description,
+                "ordered_date": study.ordered_date.isoformat() if study.ordered_date else None,
+                "performed_date": study.performed_date.isoformat() if study.performed_date else None,
+                "results_date": study.results_date.isoformat() if study.results_date else None,
+                "status": study.status,
+                "urgency": study.urgency,
+                "clinical_indication": study.clinical_indication,
+                "relevant_history": study.relevant_history,
+                "results_text": study.results_text,
+                "interpretation": study.interpretation,
+                "ordering_doctor": study.ordering_doctor,
+                "performing_doctor": study.performing_doctor,
+                "institution": study.institution,
+                "file_name": study.file_name,
+                "file_path": study.file_path,
+                "file_type": study.file_type,
+                "file_size": study.file_size,
+                "created_by": str(study.created_by) if study.created_by else None,
+                "created_at": study.created_at.isoformat() if study.created_at else None,
+                "updated_at": study.updated_at.isoformat() if study.updated_at else None
+            }
+            studies_data.append(study_data)
+        
+        print(f"🔬 Found {len(studies_data)} clinical studies for patient {patient_id}")
+        return studies_data
+        
+    except Exception as e:
+        print(f"❌ Error getting clinical studies for patient {patient_id}: {e}")
+        return []
 
 @app.get("/api/clinical-studies/consultation/{consultation_id}")
 async def get_clinical_studies_by_consultation(
@@ -384,105 +439,63 @@ async def get_clinical_studies_by_consultation(
     current_user: Person = Depends(get_current_user)
 ):
     """Get clinical studies for a specific consultation"""
-    # TODO: Implement actual clinical studies table and logic
-    # For now, return empty list to prevent frontend errors
-    return []
-
-@app.get("/api/clinical-studies/patient/{patient_id}")
-async def get_clinical_studies_by_patient(
-    patient_id: int,
-    db: Session = Depends(get_db),
-    current_user: Person = Depends(get_current_user)
-):
-    """Get all clinical studies for a specific patient"""
-    print(f"🔬 Getting clinical studies for patient: {patient_id}")
+    print(f"🔬 Getting clinical studies for consultation: {consultation_id}")
     
-    # TODO: Implement actual clinical studies table and logic
-    # For now, return mock historical studies for demonstration
-    # Check if patient exists in our database first
-    patient = db.query(Person).filter(
-        Person.id == patient_id,
-        Person.person_type == "patient"
-    ).first()
-    
-    if not patient:
-        print(f"🔬 Patient {patient_id} not found in database")
+    try:
+        # Verify consultation exists and user has access
+        consultation = db.query(MedicalRecord).filter(
+            MedicalRecord.id == consultation_id,
+            MedicalRecord.created_by == current_user.id  # Only show consultations created by current user
+        ).first()
+        
+        if not consultation:
+            print(f"🔬 Consultation {consultation_id} not found or no access")
+            return []
+        
+        # Get clinical studies for this consultation
+        studies = db.query(ClinicalStudy).filter(
+            ClinicalStudy.consultation_id == consultation_id,
+            ClinicalStudy.created_by == current_user.id  # Only show studies created by current user
+        ).order_by(ClinicalStudy.ordered_date.desc()).all()
+        
+        # Convert to response format
+        studies_data = []
+        for study in studies:
+            study_data = {
+                "id": str(study.id),
+                "consultation_id": str(study.consultation_id),
+                "patient_id": str(study.patient_id),
+                "study_type": study.study_type,
+                "study_name": study.study_name,
+                "study_description": study.study_description,
+                "ordered_date": study.ordered_date.isoformat() if study.ordered_date else None,
+                "performed_date": study.performed_date.isoformat() if study.performed_date else None,
+                "results_date": study.results_date.isoformat() if study.results_date else None,
+                "status": study.status,
+                "urgency": study.urgency,
+                "clinical_indication": study.clinical_indication,
+                "relevant_history": study.relevant_history,
+                "results_text": study.results_text,
+                "interpretation": study.interpretation,
+                "ordering_doctor": study.ordering_doctor,
+                "performing_doctor": study.performing_doctor,
+                "institution": study.institution,
+                "file_name": study.file_name,
+                "file_path": study.file_path,
+                "file_type": study.file_type,
+                "file_size": study.file_size,
+                "created_by": str(study.created_by) if study.created_by else None,
+                "created_at": study.created_at.isoformat() if study.created_at else None,
+                "updated_at": study.updated_at.isoformat() if study.updated_at else None
+            }
+            studies_data.append(study_data)
+        
+        print(f"🔬 Found {len(studies_data)} clinical studies for consultation {consultation_id}")
+        return studies_data
+        
+    except Exception as e:
+        print(f"❌ Error getting clinical studies for consultation {consultation_id}: {e}")
         return []
-    
-    print(f"🔬 Patient found: {patient.first_name} {patient.paternal_surname}")
-    
-    # Return mock studies only for existing patients
-    mock_historical_studies = [
-        {
-            "id": "HIST-001",
-            "consultation_id": "CONS-001",
-            "patient_id": str(patient_id),
-            "study_type": "quimica_clinica",
-            "study_name": "Perfil lipídico completo",
-            "study_description": "Análisis de colesterol total, HDL, LDL y triglicéridos",
-            "ordered_date": "2024-08-20",
-            "status": "completed",
-            "results_text": "Colesterol total: 180 mg/dL, HDL: 45 mg/dL, LDL: 110 mg/dL, Triglicéridos: 125 mg/dL",
-            "interpretation": "Valores dentro de rangos normales",
-            "ordering_doctor": "Dr. Rafael García Hernández - Cédula Profesional: 12345678",
-            "performing_doctor": "Dr. María González",
-            "institution": "Laboratorio Clínico Central",
-            "urgency": "normal",
-            "clinical_indication": "Control rutinario de dislipidemia",
-            "relevant_history": "Antecedente familiar de hipercolesterolemia",
-            "created_by": "Dr. Rafael García",
-            "created_at": "2024-08-20T10:00:00.000Z",
-            "updated_at": "2024-08-22T14:30:00.000Z",
-            "performed_date": "2024-08-22"
-        },
-        {
-            "id": "HIST-002",
-            "consultation_id": "CONS-002",
-            "patient_id": str(patient_id),
-            "study_type": "radiologia_simple",
-            "study_name": "Radiografía de tórax PA y lateral",
-            "study_description": "Proyecciones posteroanterior y lateral de tórax",
-            "ordered_date": "2024-07-15",
-            "status": "completed",
-            "results_text": "Campos pulmonares libres, sin evidencia de consolidación. Silueta cardiaca de forma y tamaño normal. Estructuras mediastinales sin alteraciones.",
-            "interpretation": "Estudio radiológico normal",
-            "ordering_doctor": "Dr. Rafael García Hernández - Cédula Profesional: 12345678",
-            "performing_doctor": "Dr. Ana Torres Radióloga",
-            "institution": "Hospital General - Departamento de Imagenología",
-            "urgency": "normal",
-            "clinical_indication": "Evaluación por dolor torácico inespecífico",
-            "relevant_history": "Dolor torácico de 2 días de evolución",
-            "created_by": "Dr. Rafael García",
-            "created_at": "2024-07-15T09:30:00.000Z",
-            "updated_at": "2024-07-15T16:45:00.000Z",
-            "performed_date": "2024-07-15"
-        },
-        {
-            "id": "HIST-003",
-            "consultation_id": "CONS-003",
-            "patient_id": str(patient_id),
-            "study_type": "hematologia",
-            "study_name": "Biometría hemática completa",
-            "study_description": "Conteo de células sanguíneas, hemoglobina y hematocrito",
-            "ordered_date": "2024-06-10",
-            "status": "completed",
-            "results_text": "Leucocitos: 7,200/μL, Eritrocitos: 4.5 M/μL, Hemoglobina: 14.2 g/dL, Hematocrito: 42%, Plaquetas: 285,000/μL",
-            "interpretation": "Biometría hemática dentro de parámetros normales",
-            "ordering_doctor": "Dr. Rafael García Hernández - Cédula Profesional: 12345678",
-            "performing_doctor": "Dr. Carlos Mendoza",
-            "institution": "Laboratorio Clínico Central",
-            "urgency": "normal",
-            "clinical_indication": "Chequeo médico anual",
-            "relevant_history": "Control médico preventivo",
-            "created_by": "Dr. Rafael García",
-            "created_at": "2024-06-10T11:00:00.000Z",
-            "updated_at": "2024-06-10T17:30:00.000Z",
-            "performed_date": "2024-06-10"
-        }
-    ]
-    
-    print(f"🔬 Returning {len(mock_historical_studies)} historical studies for patient {patient_id}")
-    return mock_historical_studies
 
 @app.post("/api/clinical-studies")
 async def create_clinical_study(
@@ -493,36 +506,105 @@ async def create_clinical_study(
     """Create a new clinical study"""
     print(f"🔬 Creating clinical study with data: {study_data}")
     
-    # TODO: Implement actual clinical studies table and logic
-    # For now, return a properly structured mock response
-    import random
-    mock_id = random.randint(1000, 9999)
-    
-    # Return the data in the structure the frontend expects
-    mock_response = {
-        "id": str(mock_id),
-        "consultation_id": study_data.get("consultation_id"),
-        "patient_id": str(study_data.get("patient_id", "")),
-        "study_type": study_data.get("study_type", "hematologia"),
-        "study_name": study_data.get("study_name", "Estudio Mock"),
-        "study_description": study_data.get("study_description", ""),
-        "ordered_date": study_data.get("ordered_date"),
-        "status": study_data.get("status", "pending"),
-        "results_text": study_data.get("results_text", ""),
-        "interpretation": study_data.get("interpretation", ""),
-        "ordering_doctor": study_data.get("ordering_doctor", ""),
-        "performing_doctor": study_data.get("performing_doctor", ""),
-        "institution": study_data.get("institution", ""),
-        "urgency": study_data.get("urgency", "normal"),
-        "clinical_indication": study_data.get("clinical_indication", ""),
-        "relevant_history": study_data.get("relevant_history", ""),
-        "created_by": study_data.get("created_by", ""),
-        "created_at": "2025-09-23T19:22:00.000Z",
-        "updated_at": "2025-09-23T19:22:00.000Z"
-    }
-    
-    print(f"🔬 Returning mock clinical study: {mock_response}")
-    return mock_response
+    try:
+        # Validate required fields
+        required_fields = ['consultation_id', 'patient_id', 'study_type', 'study_name', 'clinical_indication', 'ordering_doctor']
+        for field in required_fields:
+            if not study_data.get(field):
+                raise HTTPException(status_code=400, detail=f"Field '{field}' is required")
+        
+        # Verify consultation exists and user has access
+        consultation = db.query(MedicalRecord).filter(
+            MedicalRecord.id == int(study_data['consultation_id']),
+            MedicalRecord.created_by == current_user.id
+        ).first()
+        
+        if not consultation:
+            raise HTTPException(status_code=404, detail="Consultation not found or no access")
+        
+        # Verify patient exists and user has access
+        patient = db.query(Person).filter(
+            Person.id == int(study_data['patient_id']),
+            Person.person_type == "patient",
+            Person.created_by == current_user.id
+        ).first()
+        
+        if not patient:
+            raise HTTPException(status_code=404, detail="Patient not found or no access")
+        
+        # Generate study code
+        study_code = f"CS{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        
+        # Create new clinical study
+        new_study = ClinicalStudy(
+            study_code=study_code,
+            consultation_id=int(study_data['consultation_id']),
+            patient_id=int(study_data['patient_id']),
+            doctor_id=current_user.id,
+            study_type=study_data['study_type'],
+            study_name=study_data['study_name'],
+            study_description=study_data.get('study_description'),
+            ordered_date=datetime.fromisoformat(study_data['ordered_date'].replace('Z', '+00:00')) if study_data.get('ordered_date') else datetime.utcnow(),
+            performed_date=datetime.fromisoformat(study_data['performed_date'].replace('Z', '+00:00')) if study_data.get('performed_date') else None,
+            results_date=datetime.fromisoformat(study_data['results_date'].replace('Z', '+00:00')) if study_data.get('results_date') else None,
+            status=study_data.get('status', 'pending'),
+            urgency=study_data.get('urgency', 'normal'),
+            clinical_indication=study_data['clinical_indication'],
+            relevant_history=study_data.get('relevant_history'),
+            results_text=study_data.get('results_text'),
+            interpretation=study_data.get('interpretation'),
+            ordering_doctor=study_data['ordering_doctor'],
+            performing_doctor=study_data.get('performing_doctor'),
+            institution=study_data.get('institution'),
+            file_name=study_data.get('file_name'),
+            file_path=study_data.get('file_path'),
+            file_type=study_data.get('file_type'),
+            file_size=study_data.get('file_size'),
+            created_by=current_user.id
+        )
+        
+        db.add(new_study)
+        db.commit()
+        db.refresh(new_study)
+        
+        # Return created study
+        response_data = {
+            "id": str(new_study.id),
+            "consultation_id": str(new_study.consultation_id),
+            "patient_id": str(new_study.patient_id),
+            "study_type": new_study.study_type,
+            "study_name": new_study.study_name,
+            "study_description": new_study.study_description,
+            "ordered_date": new_study.ordered_date.isoformat() if new_study.ordered_date else None,
+            "performed_date": new_study.performed_date.isoformat() if new_study.performed_date else None,
+            "results_date": new_study.results_date.isoformat() if new_study.results_date else None,
+            "status": new_study.status,
+            "urgency": new_study.urgency,
+            "clinical_indication": new_study.clinical_indication,
+            "relevant_history": new_study.relevant_history,
+            "results_text": new_study.results_text,
+            "interpretation": new_study.interpretation,
+            "ordering_doctor": new_study.ordering_doctor,
+            "performing_doctor": new_study.performing_doctor,
+            "institution": new_study.institution,
+            "file_name": new_study.file_name,
+            "file_path": new_study.file_path,
+            "file_type": new_study.file_type,
+            "file_size": new_study.file_size,
+            "created_by": str(new_study.created_by) if new_study.created_by else None,
+            "created_at": new_study.created_at.isoformat() if new_study.created_at else None,
+            "updated_at": new_study.updated_at.isoformat() if new_study.updated_at else None
+        }
+        
+        print(f"✅ Clinical study created successfully: {new_study.id}")
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error creating clinical study: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error creating clinical study")
 
 @app.put("/api/clinical-studies/{study_id}")
 async def update_clinical_study(
@@ -532,12 +614,83 @@ async def update_clinical_study(
     current_user: Person = Depends(get_current_user)
 ):
     """Update a clinical study"""
-    # TODO: Implement actual clinical studies table and logic
-    return {
-        "id": study_id,
-        "message": "Clinical study update endpoint not implemented yet",
-        "status": "pending_implementation"
-    }
+    print(f"🔬 Updating clinical study {study_id} with data: {study_data}")
+    
+    try:
+        # Find the study and verify access
+        study = db.query(ClinicalStudy).filter(
+            ClinicalStudy.id == study_id,
+            ClinicalStudy.created_by == current_user.id
+        ).first()
+        
+        if not study:
+            raise HTTPException(status_code=404, detail="Clinical study not found or no access")
+        
+        # Update fields
+        updateable_fields = [
+            'study_type', 'study_name', 'study_description', 'status', 'urgency',
+            'clinical_indication', 'relevant_history', 'results_text', 'interpretation',
+            'ordering_doctor', 'performing_doctor', 'institution',
+            'file_name', 'file_path', 'file_type', 'file_size'
+        ]
+        
+        for field in updateable_fields:
+            if field in study_data:
+                setattr(study, field, study_data[field])
+        
+        # Handle date fields
+        if 'ordered_date' in study_data and study_data['ordered_date']:
+            study.ordered_date = datetime.fromisoformat(study_data['ordered_date'].replace('Z', '+00:00'))
+        
+        if 'performed_date' in study_data and study_data['performed_date']:
+            study.performed_date = datetime.fromisoformat(study_data['performed_date'].replace('Z', '+00:00'))
+        
+        if 'results_date' in study_data and study_data['results_date']:
+            study.results_date = datetime.fromisoformat(study_data['results_date'].replace('Z', '+00:00'))
+        
+        study.updated_at = datetime.utcnow()
+        
+        db.commit()
+        db.refresh(study)
+        
+        # Return updated study
+        response_data = {
+            "id": str(study.id),
+            "consultation_id": str(study.consultation_id),
+            "patient_id": str(study.patient_id),
+            "study_type": study.study_type,
+            "study_name": study.study_name,
+            "study_description": study.study_description,
+            "ordered_date": study.ordered_date.isoformat() if study.ordered_date else None,
+            "performed_date": study.performed_date.isoformat() if study.performed_date else None,
+            "results_date": study.results_date.isoformat() if study.results_date else None,
+            "status": study.status,
+            "urgency": study.urgency,
+            "clinical_indication": study.clinical_indication,
+            "relevant_history": study.relevant_history,
+            "results_text": study.results_text,
+            "interpretation": study.interpretation,
+            "ordering_doctor": study.ordering_doctor,
+            "performing_doctor": study.performing_doctor,
+            "institution": study.institution,
+            "file_name": study.file_name,
+            "file_path": study.file_path,
+            "file_type": study.file_type,
+            "file_size": study.file_size,
+            "created_by": str(study.created_by) if study.created_by else None,
+            "created_at": study.created_at.isoformat() if study.created_at else None,
+            "updated_at": study.updated_at.isoformat() if study.updated_at else None
+        }
+        
+        print(f"✅ Clinical study updated successfully: {study.id}")
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error updating clinical study {study_id}: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error updating clinical study")
 
 @app.delete("/api/clinical-studies/{study_id}")
 async def delete_clinical_study(
@@ -546,8 +699,31 @@ async def delete_clinical_study(
     current_user: Person = Depends(get_current_user)
 ):
     """Delete a clinical study"""
-    # TODO: Implement actual clinical studies table and logic
-    return {"message": "Clinical study deleted (mock)", "status": "pending_implementation"}
+    print(f"🔬 Deleting clinical study: {study_id}")
+    
+    try:
+        # Find the study and verify access
+        study = db.query(ClinicalStudy).filter(
+            ClinicalStudy.id == study_id,
+            ClinicalStudy.created_by == current_user.id
+        ).first()
+        
+        if not study:
+            raise HTTPException(status_code=404, detail="Clinical study not found or no access")
+        
+        # Delete the study
+        db.delete(study)
+        db.commit()
+        
+        print(f"✅ Clinical study deleted successfully: {study_id}")
+        return {"message": "Clinical study deleted successfully", "id": study_id}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error deleting clinical study {study_id}: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error deleting clinical study")
 
 @app.post("/api/test-patient-creation")
 async def test_patient_creation():
@@ -2163,7 +2339,19 @@ async def get_consultations(
         for consultation in consultations:
             patient_name = "Paciente No Identificado"
             if consultation.patient:
-                patient_name = f"{consultation.patient.first_name} {consultation.patient.paternal_surname} {consultation.patient.maternal_surname or ''}".strip()
+                # Decrypt patient data before constructing name
+                try:
+                    decrypted_first_name = encryption_service.decrypt_sensitive_data(consultation.patient.first_name)
+                    decrypted_paternal_surname = encryption_service.decrypt_sensitive_data(consultation.patient.paternal_surname)
+                    decrypted_maternal_surname = consultation.patient.maternal_surname
+                    if decrypted_maternal_surname:
+                        decrypted_maternal_surname = encryption_service.decrypt_sensitive_data(decrypted_maternal_surname)
+                    
+                    patient_name = f"{decrypted_first_name} {decrypted_paternal_surname} {decrypted_maternal_surname or ''}".strip()
+                except Exception as e:
+                    print(f"⚠️ Could not decrypt patient data for consultation {consultation.id}: {str(e)}")
+                    # Fallback to encrypted values if decryption fails
+                    patient_name = f"{consultation.patient.first_name} {consultation.patient.paternal_surname} {consultation.patient.maternal_surname or ''}".strip()
             
             doctor_name = "Doctor"
             if consultation.doctor:
@@ -2173,27 +2361,63 @@ async def get_consultations(
             # Calculate end_time assuming 30 minutes duration for consultations
             consultation_end_time = consultation.consultation_date + timedelta(minutes=30)
 
+            # Decrypt consultation data with error handling
+            try:
+                decrypted_consultation_data = decrypt_sensitive_data({
+                    "chief_complaint": consultation.chief_complaint,
+                    "history_present_illness": consultation.history_present_illness,
+                    "family_history": consultation.family_history,
+                    "personal_pathological_history": consultation.personal_pathological_history,
+                    "personal_non_pathological_history": consultation.personal_non_pathological_history,
+                    "physical_examination": consultation.physical_examination,
+                    "primary_diagnosis": consultation.primary_diagnosis,
+                    "secondary_diagnoses": consultation.secondary_diagnoses,
+                    "treatment_plan": consultation.treatment_plan,
+                    "follow_up_instructions": consultation.follow_up_instructions,
+                    "prognosis": consultation.prognosis,
+                    "laboratory_results": consultation.laboratory_results,
+                    "notes": consultation.notes
+                }, "consultation")
+            except Exception as e:
+                print(f"⚠️ Could not decrypt consultation data for consultation {consultation.id}: {str(e)}")
+                # Use original encrypted data if decryption fails
+                decrypted_consultation_data = {
+                    "chief_complaint": consultation.chief_complaint,
+                    "history_present_illness": consultation.history_present_illness,
+                    "family_history": consultation.family_history,
+                    "personal_pathological_history": consultation.personal_pathological_history,
+                    "personal_non_pathological_history": consultation.personal_non_pathological_history,
+                    "physical_examination": consultation.physical_examination,
+                    "primary_diagnosis": consultation.primary_diagnosis,
+                    "secondary_diagnoses": consultation.secondary_diagnoses,
+                    "treatment_plan": consultation.treatment_plan,
+                    "follow_up_instructions": consultation.follow_up_instructions,
+                    "prognosis": consultation.prognosis,
+                    "laboratory_results": consultation.laboratory_results,
+                    "notes": consultation.notes
+                }
+
             result.append({
                 "id": consultation.id,
                 "patient_id": consultation.patient_id,
                 "consultation_date": consultation_date_iso,
                 "end_time": consultation_end_time.isoformat(),
-                "chief_complaint": consultation.chief_complaint,
-                "history_present_illness": consultation.history_present_illness,
-                "family_history": consultation.family_history,
-                "personal_pathological_history": consultation.personal_pathological_history,
-                "personal_non_pathological_history": consultation.personal_non_pathological_history,
-                "physical_examination": consultation.physical_examination,
-                "primary_diagnosis": consultation.primary_diagnosis,
-                "secondary_diagnoses": consultation.secondary_diagnoses,
-                "treatment_plan": consultation.treatment_plan,
-                "therapeutic_plan": consultation.treatment_plan,  # Alias for compatibility
-                "follow_up_instructions": consultation.follow_up_instructions,
-                "prognosis": consultation.prognosis,
-                "laboratory_results": consultation.laboratory_results,
-                "imaging_studies": consultation.laboratory_results,  # Alias for compatibility
-                "notes": consultation.notes,
-                "interconsultations": consultation.notes,  # Map notes to interconsultations for frontend compatibility
+                "chief_complaint": decrypted_consultation_data.get("chief_complaint", ""),
+                "history_present_illness": decrypted_consultation_data.get("history_present_illness", ""),
+                "family_history": decrypted_consultation_data.get("family_history", ""),
+                "personal_pathological_history": decrypted_consultation_data.get("personal_pathological_history", ""),
+                "personal_non_pathological_history": decrypted_consultation_data.get("personal_non_pathological_history", ""),
+                "physical_examination": decrypted_consultation_data.get("physical_examination", ""),
+                "primary_diagnosis": decrypted_consultation_data.get("primary_diagnosis", ""),
+                "secondary_diagnoses": decrypted_consultation_data.get("secondary_diagnoses", ""),
+                "treatment_plan": decrypted_consultation_data.get("treatment_plan", ""),
+                "therapeutic_plan": decrypted_consultation_data.get("treatment_plan", ""),  # Alias for compatibility
+                "follow_up_instructions": decrypted_consultation_data.get("follow_up_instructions", ""),
+                "prognosis": decrypted_consultation_data.get("prognosis", ""),
+                "laboratory_results": decrypted_consultation_data.get("laboratory_results", ""),
+                "imaging_studies": decrypted_consultation_data.get("laboratory_results", ""),  # Alias for compatibility
+                "notes": decrypted_consultation_data.get("notes", ""),
+                "interconsultations": decrypted_consultation_data.get("notes", ""),
                 "consultation_type": getattr(consultation, 'consultation_type', 'Seguimiento'),
                 "created_by": consultation.created_by,
                 "created_at": consultation.created_at.isoformat(),
@@ -2233,7 +2457,19 @@ async def get_consultation(
         # Get patient name
         patient_name = "Paciente No Identificado"
         if consultation.patient:
-            patient_name = f"{consultation.patient.first_name} {consultation.patient.paternal_surname} {consultation.patient.maternal_surname or ''}".strip()
+            # Decrypt patient data before constructing name
+            try:
+                decrypted_first_name = encryption_service.decrypt_sensitive_data(consultation.patient.first_name)
+                decrypted_paternal_surname = encryption_service.decrypt_sensitive_data(consultation.patient.paternal_surname)
+                decrypted_maternal_surname = consultation.patient.maternal_surname
+                if decrypted_maternal_surname:
+                    decrypted_maternal_surname = encryption_service.decrypt_sensitive_data(decrypted_maternal_surname)
+                
+                patient_name = f"{decrypted_first_name} {decrypted_paternal_surname} {decrypted_maternal_surname or ''}".strip()
+            except Exception as e:
+                print(f"⚠️ Could not decrypt patient data for consultation {consultation.id}: {str(e)}")
+                # Fallback to encrypted values if decryption fails
+                patient_name = f"{consultation.patient.first_name} {consultation.patient.paternal_surname} {consultation.patient.maternal_surname or ''}".strip()
         
         # Get doctor name
         doctor_name = "Doctor"
@@ -2243,28 +2479,64 @@ async def get_consultation(
         # Calculate end_time assuming 30 minutes duration for consultations
         consultation_end_time = consultation.consultation_date + timedelta(minutes=30)
 
+        # Decrypt consultation data with error handling
+        try:
+            decrypted_consultation_data = decrypt_sensitive_data({
+                "chief_complaint": consultation.chief_complaint,
+                "history_present_illness": consultation.history_present_illness,
+                "family_history": consultation.family_history,
+                "personal_pathological_history": consultation.personal_pathological_history,
+                "personal_non_pathological_history": consultation.personal_non_pathological_history,
+                "physical_examination": consultation.physical_examination,
+                "primary_diagnosis": consultation.primary_diagnosis,
+                "secondary_diagnoses": consultation.secondary_diagnoses,
+                "treatment_plan": consultation.treatment_plan,
+                "follow_up_instructions": consultation.follow_up_instructions,
+                "prognosis": consultation.prognosis,
+                "laboratory_results": consultation.laboratory_results,
+                "notes": consultation.notes
+            }, "consultation")
+        except Exception as e:
+            print(f"⚠️ Could not decrypt consultation data for consultation {consultation.id}: {str(e)}")
+            # Use original encrypted data if decryption fails
+            decrypted_consultation_data = {
+                "chief_complaint": consultation.chief_complaint,
+                "history_present_illness": consultation.history_present_illness,
+                "family_history": consultation.family_history,
+                "personal_pathological_history": consultation.personal_pathological_history,
+                "personal_non_pathological_history": consultation.personal_non_pathological_history,
+                "physical_examination": consultation.physical_examination,
+                "primary_diagnosis": consultation.primary_diagnosis,
+                "secondary_diagnoses": consultation.secondary_diagnoses,
+                "treatment_plan": consultation.treatment_plan,
+                "follow_up_instructions": consultation.follow_up_instructions,
+                "prognosis": consultation.prognosis,
+                "laboratory_results": consultation.laboratory_results,
+                "notes": consultation.notes
+            }
+
         # Return complete consultation data
         result = {
             "id": consultation.id,
             "patient_id": consultation.patient_id,
             "consultation_date": consultation.consultation_date.isoformat(),
             "end_time": consultation_end_time.isoformat(),
-            "chief_complaint": consultation.chief_complaint,
-            "history_present_illness": consultation.history_present_illness,
-            "family_history": consultation.family_history,
-            "personal_pathological_history": consultation.personal_pathological_history,
-            "personal_non_pathological_history": consultation.personal_non_pathological_history,
-            "physical_examination": consultation.physical_examination,
-            "primary_diagnosis": consultation.primary_diagnosis,
-            "secondary_diagnoses": consultation.secondary_diagnoses,
-            "treatment_plan": consultation.treatment_plan,
-            "therapeutic_plan": consultation.treatment_plan,  # Alias for compatibility
-            "follow_up_instructions": consultation.follow_up_instructions,
-            "prognosis": consultation.prognosis,
-            "laboratory_results": consultation.laboratory_results,
-            "imaging_studies": consultation.laboratory_results,  # Alias for compatibility
-            "notes": consultation.notes,
-            "interconsultations": consultation.notes,  # Map notes to interconsultations for frontend compatibility
+            "chief_complaint": decrypted_consultation_data.get("chief_complaint", ""),
+            "history_present_illness": decrypted_consultation_data.get("history_present_illness", ""),
+            "family_history": decrypted_consultation_data.get("family_history", ""),
+            "personal_pathological_history": decrypted_consultation_data.get("personal_pathological_history", ""),
+            "personal_non_pathological_history": decrypted_consultation_data.get("personal_non_pathological_history", ""),
+            "physical_examination": decrypted_consultation_data.get("physical_examination", ""),
+            "primary_diagnosis": decrypted_consultation_data.get("primary_diagnosis", ""),
+            "secondary_diagnoses": decrypted_consultation_data.get("secondary_diagnoses", ""),
+            "treatment_plan": decrypted_consultation_data.get("treatment_plan", ""),
+            "therapeutic_plan": decrypted_consultation_data.get("treatment_plan", ""),  # Alias for compatibility
+            "follow_up_instructions": decrypted_consultation_data.get("follow_up_instructions", ""),
+            "prognosis": decrypted_consultation_data.get("prognosis", ""),
+            "laboratory_results": decrypted_consultation_data.get("laboratory_results", ""),
+            "imaging_studies": decrypted_consultation_data.get("laboratory_results", ""),  # Alias for compatibility
+            "notes": decrypted_consultation_data.get("notes", ""),
+            "interconsultations": decrypted_consultation_data.get("notes", ""),
             "consultation_type": getattr(consultation, 'consultation_type', 'Seguimiento'),
             "created_by": consultation.created_by,
             "created_at": consultation.created_at.isoformat(),

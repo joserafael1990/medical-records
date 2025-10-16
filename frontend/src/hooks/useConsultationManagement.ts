@@ -60,6 +60,7 @@ interface ConsultationManagementActions {
   // Handler functions that were in App.tsx
   handleNewConsultation: () => void;
   handleEditConsultation: (consultation: Consultation) => void;
+  handleViewConsultation: (consultation: Consultation) => void;
   handleBackFromConsultationDetail: () => void;
   
   // Utility functions
@@ -357,6 +358,11 @@ export const useConsultationManagement = (): ConsultationManagementReturn => {
     setConsultationDialogOpen(true);
   }, []);
 
+  const handleViewConsultation = useCallback((consultation: Consultation) => {
+    setSelectedConsultation(consultation);
+    setConsultationDetailView(true);
+  }, []);
+
   const handleBackFromConsultationDetail = useCallback(() => {
     setConsultationDetailView(false);
     setSelectedConsultation(null);
@@ -401,6 +407,7 @@ export const useConsultationManagement = (): ConsultationManagementReturn => {
     setCreatingPatientFromConsultation,
     handleNewConsultation,
     handleEditConsultation,
+    handleViewConsultation,
     handleBackFromConsultationDetail,
     resetConsultationForm,
     openConsultationDialog,

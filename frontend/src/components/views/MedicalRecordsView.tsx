@@ -58,6 +58,7 @@ interface MedicalRecordsViewProps {
   onUpdateRecord: (id: number, data: MedicalRecordFormData) => Promise<void>;
   isLoading: boolean;
   onRefresh: () => void;
+  onViewRecord?: (record: MedicalRecord) => void;
 }
 
 const MedicalRecordsView: React.FC<MedicalRecordsViewProps> = ({ 
@@ -65,7 +66,8 @@ const MedicalRecordsView: React.FC<MedicalRecordsViewProps> = ({
   onCreateRecord, 
   onUpdateRecord, 
   isLoading, 
-  onRefresh 
+  onRefresh,
+  onViewRecord
 }) => {
   const [medicalRecords, setMedicalRecords] = useState<MedicalRecord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -305,8 +307,12 @@ const MedicalRecordsView: React.FC<MedicalRecordsViewProps> = ({
 
   // Handle view record
   const handleViewRecord = (record: MedicalRecord) => {
-    setSelectedRecord(record);
-    setViewDialogOpen(true);
+    if (onViewRecord) {
+      onViewRecord(record);
+    } else {
+      setSelectedRecord(record);
+      setViewDialogOpen(true);
+    }
   };
 
   // Handle edit dialog open

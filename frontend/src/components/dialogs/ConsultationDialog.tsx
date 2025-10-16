@@ -38,9 +38,12 @@ import {
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
-import { Patient, PatientFormData } from '../../types';
+import { Patient, PatientFormData, ClinicalStudy } from '../../types';
 import { MEDICAL_VALIDATION_RULES, validateForm } from '../../utils/validation';
 import { apiService } from '../../services/api';
+import ClinicalStudiesSection from '../common/ClinicalStudiesSection';
+import ClinicalStudyDialog from './ClinicalStudyDialog';
+import { useClinicalStudies } from '../../hooks/useClinicalStudies';
 // import { useSnackbar } from '../../contexts/SnackbarContext';
 
 // Define ConsultationFormData interface based on the hook
@@ -74,7 +77,7 @@ interface ConsultationDialogProps {
   open: boolean;
   onClose: () => void;
   consultation?: any | null;
-  onSubmit: (data: ConsultationFormData) => Promise<void>;
+  onSubmit: (data: ConsultationFormData) => Promise<any>;
   patients: Patient[];
   doctorProfile?: any;
   onNewPatient?: () => void;
@@ -164,6 +167,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Clinical studies management
+  const clinicalStudiesHook = useClinicalStudies();
 
   // State for inline patient creation
   const [newPatientData, setNewPatientData] = useState({
@@ -496,7 +502,38 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         consultation_type: consultationType
       };
       
-      await onSubmit(finalFormData);
+      const createdConsultation = await onSubmit(finalFormData);
+      console.log('🔬 Consultation creation result:', createdConsultation);
+      console.log('🔬 Created consultation ID:', createdConsultation?.id);
+      
+      // Save clinical studies if any were added
+      if (clinicalStudiesHook.studies.length > 0 && createdConsultation?.id) {
+        console.log('🔬 Saving clinical studies for consultation:', createdConsultation.id);
+        console.log('🔬 Studies to save:', clinicalStudiesHook.studies);
+        
+        for (const study of clinicalStudiesHook.studies) {
+          const studyData = {
+            ...study,
+            consultation_id: createdConsultation.id,
+            patient_id: finalPatientId
+          };
+          
+          try {
+            console.log('🔬 Study data to send:', studyData);
+            await clinicalStudiesHook.createStudy(studyData);
+            console.log('✅ Clinical study saved:', study.study_name);
+          } catch (error) {
+            console.error('❌ Error saving clinical study:', error);
+            console.error('❌ Study data that failed:', studyData);
+            // Continue with other studies even if one fails
+          }
+        }
+      } else {
+        console.log('🔬 No clinical studies to save or consultation not created');
+        console.log('🔬 Studies count:', clinicalStudiesHook.studies.length);
+        console.log('🔬 Consultation ID:', createdConsultation?.id);
+      }
+      
       // Consulta creada exitosamente - sin mostrar diálogo
     } catch (err: any) {
       console.error('Error saving consultation:', err);
@@ -507,7 +544,38 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   };
 
   const handleClose = () => {
+    // Clear temporary clinical studies when closing dialog
+    clinicalStudiesHook.clearTemporaryStudies();
     onClose();
+  };
+
+  // Clinical studies handlers
+  const handleAddStudy = () => {
+    if (!selectedPatient) {
+      setError('Debe seleccionar un paciente antes de agregar estudios clínicos');
+      return;
+    }
+    
+    clinicalStudiesHook.openAddDialog(
+      'temp_consultation', // Temporary ID for new consultation
+      selectedPatient.id,
+      doctorProfile?.full_name || 'Dr. Usuario Sistema'
+    );
+  };
+
+  const handleEditStudy = (study: ClinicalStudy) => {
+    clinicalStudiesHook.openEditDialog(study);
+  };
+
+  const handleDeleteStudy = async (studyId: string) => {
+    if (window.confirm('¿Estás seguro de que quieres eliminar este estudio clínico?')) {
+      try {
+        await clinicalStudiesHook.deleteStudy(studyId);
+      } catch (error) {
+        console.error('Error deleting clinical study:', error);
+        setError('Error al eliminar el estudio clínico');
+      }
+    }
   };
 
   return (
@@ -1224,6 +1292,24 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             />
           </Box>
         </Box>
+
+        {/* Clinical Studies Section - Only show if patient is selected */}
+        {selectedPatient && (
+          <Box sx={{ mt: 3 }}>
+            <Divider sx={{ mb: 2 }} />
+            <ClinicalStudiesSection
+              consultationId="temp_consultation"
+              patientId={selectedPatient.id}
+              studies={clinicalStudiesHook.studies}
+              isLoading={clinicalStudiesHook.isLoading}
+              onAddStudy={handleAddStudy}
+              onEditStudy={handleEditStudy}
+              onDeleteStudy={handleDeleteStudy}
+              onViewFile={clinicalStudiesHook.viewFile}
+              onDownloadFile={clinicalStudiesHook.downloadFile}
+            />
+          </Box>
+        )}
       </DialogContent>
 
       <Divider />
@@ -1240,6 +1326,18 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           {loading ? 'Guardando...' : (isEditing ? 'Actualizar Consulta' : 'Crear Consulta')}
         </Button>
       </DialogActions>
+
+      {/* Clinical Study Dialog */}
+      <ClinicalStudyDialog
+        open={clinicalStudiesHook.clinicalStudyDialogOpen}
+        onClose={clinicalStudiesHook.closeDialog}
+        onSubmit={clinicalStudiesHook.submitForm}
+        formData={clinicalStudiesHook.clinicalStudyFormData}
+        onFormDataChange={clinicalStudiesHook.updateFormData}
+        isEditing={clinicalStudiesHook.isEditingClinicalStudy}
+        isSubmitting={clinicalStudiesHook.isSubmitting}
+        error={clinicalStudiesHook.error}
+      />
     </Dialog>
   );
 };

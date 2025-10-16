@@ -97,10 +97,11 @@ export const PRIORITY_LEVELS = {
 } as const;
 
 // Urgency Levels
-export const URGENCY_LEVELS = {
-  'normal': 'Normal',
-  'urgent': 'Urgente'
-} as const;
+export const URGENCY_LEVELS = [
+  { value: 'normal', label: 'Normal', color: '#4caf50' },
+  { value: 'urgent', label: 'Urgente', color: '#ff9800' },
+  { value: 'stat', label: 'STAT', color: '#f44336' }
+] as const;
 
 // Gender Options
 export const GENDER_OPTIONS = {
@@ -185,6 +186,28 @@ export const SUCCESS_MESSAGES = {
   STUDY_CREATED: 'Estudio creado exitosamente',
   RECORD_CREATED: 'Historia clínica creada exitosamente'
 };
+
+// Clinical Studies Constants
+export const STUDY_STATUS_OPTIONS = [
+  { value: 'pending', label: 'Pendiente', color: '#ff9800' },
+  { value: 'in_progress', label: 'En Proceso', color: '#2196f3' },
+  { value: 'completed', label: 'Completado', color: '#4caf50' },
+  { value: 'cancelled', label: 'Cancelado', color: '#f44336' },
+  { value: 'failed', label: 'Fallido', color: '#9e9e9e' }
+] as const;
+
+export const STUDY_TYPES = [
+  { value: 'hematologia', label: 'Hematología' },
+  { value: 'bioquimica', label: 'Bioquímica' },
+  { value: 'microbiologia', label: 'Microbiología' },
+  { value: 'radiologia', label: 'Radiología' },
+  { value: 'ecografia', label: 'Ecografía' },
+  { value: 'tomografia', label: 'Tomografía' },
+  { value: 'resonancia', label: 'Resonancia Magnética' },
+  { value: 'endoscopia', label: 'Endoscopía' },
+  { value: 'biopsia', label: 'Biopsia' },
+  { value: 'otro', label: 'Otro' }
+] as const;
 
 // Feature Flags
 export const FEATURE_FLAGS = {

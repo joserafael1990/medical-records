@@ -167,6 +167,8 @@ class Person(Base):
     medical_records_as_doctor = relationship("MedicalRecord", foreign_keys="MedicalRecord.doctor_id", back_populates="doctor")
     appointments_as_patient = relationship("Appointment", foreign_keys="Appointment.patient_id", back_populates="patient")
     appointments_as_doctor = relationship("Appointment", foreign_keys="Appointment.doctor_id", back_populates="doctor")
+    clinical_studies_as_patient = relationship("ClinicalStudy", foreign_keys="ClinicalStudy.patient_id", back_populates="patient")
+    clinical_studies_as_doctor = relationship("ClinicalStudy", foreign_keys="ClinicalStudy.doctor_id", back_populates="doctor")
     vital_signs = relationship("VitalSigns", foreign_keys="VitalSigns.patient_id", back_populates="patient")
     vital_signs_recorded = relationship("VitalSigns", foreign_keys="VitalSigns.recorded_by", back_populates="doctor")
     
@@ -307,6 +309,56 @@ class Appointment(Base):
     # RELATIONSHIPS
     patient = relationship("Person", foreign_keys=[patient_id], back_populates="appointments_as_patient")
     doctor = relationship("Person", foreign_keys=[doctor_id], back_populates="appointments_as_doctor")
+
+class ClinicalStudy(Base):
+    __tablename__ = "clinical_studies"
+    
+    id = Column(Integer, primary_key=True)
+    study_code = Column(String(20), unique=True)
+    consultation_id = Column(Integer, ForeignKey("medical_records.id"), nullable=False)
+    patient_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
+    doctor_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
+    
+    # STUDY INFORMATION
+    study_type = Column(String(50), nullable=False)  # hematologia, bioquimica, radiologia, etc.
+    study_name = Column(String(200), nullable=False)
+    study_description = Column(Text)
+    
+    # DATES
+    ordered_date = Column(DateTime, nullable=False)
+    performed_date = Column(DateTime)
+    results_date = Column(DateTime)
+    
+    # STATUS AND URGENCY
+    status = Column(String(20), default='pending')  # pending, in_progress, completed, cancelled, failed
+    urgency = Column(String(20), default='normal')  # normal, urgent, stat
+    
+    # MEDICAL INFORMATION
+    clinical_indication = Column(Text, nullable=False)
+    relevant_history = Column(Text)
+    results_text = Column(Text)
+    interpretation = Column(Text)
+    
+    # MEDICAL STAFF
+    ordering_doctor = Column(String(200), nullable=False)
+    performing_doctor = Column(String(200))
+    institution = Column(String(200))
+    
+    # FILE ATTACHMENTS
+    file_name = Column(String(255))
+    file_path = Column(String(500))
+    file_type = Column(String(50))
+    file_size = Column(Integer)  # in bytes
+    
+    # SYSTEM
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("persons.id"))
+    
+    # RELATIONSHIPS
+    consultation = relationship("MedicalRecord", backref="clinical_studies")
+    patient = relationship("Person", foreign_keys=[patient_id], back_populates="clinical_studies_as_patient")
+    doctor = relationship("Person", foreign_keys=[doctor_id], back_populates="clinical_studies_as_doctor")
 
 class VitalSigns(Base):
     __tablename__ = "vital_signs"

@@ -5,6 +5,7 @@ export { default as PatientsViewSmart } from './views/PatientsViewSmart';
 export { default as ConsultationsView } from './views/ConsultationsView';
 export { default as ConsultationsViewSmart } from './views/ConsultationsViewSmart';
 export { default as ConsultationDetailView } from './views/ConsultationDetailView';
+export { default as MedicalRecordDetailView } from './views/MedicalRecordDetailView';
 export { default as DoctorProfileView } from './views/DoctorProfileView';
 export { default as AgendaView } from './views/AgendaView';
 

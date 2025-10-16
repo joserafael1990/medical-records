@@ -34,6 +34,7 @@ interface ConsultationsViewSmartProps {
   setSuccessMessage?: (message: string) => void;
   handleNewConsultation?: () => void;
   handleEditConsultation?: (consultation: any) => void;
+  handleViewConsultation?: (consultation: any) => void;
 }
 
 const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
@@ -43,7 +44,8 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
   successMessage,
   setSuccessMessage,
   handleNewConsultation,
-  handleEditConsultation
+  handleEditConsultation,
+  handleViewConsultation
 }) => {
   const getConsultationTypeLabel = (type: string) => {
     switch (type) {
@@ -215,10 +217,8 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
                           <IconButton
                             size="small"
                             color="primary"
-                            onClick={() => {
-                              // Lógica para ver detalles
-                              console.log('Ver consulta:', consultation.id);
-                            }}
+                            onClick={() => handleViewConsultation?.(consultation)}
+                            title="Ver detalles de la consulta"
                           >
                             <ViewIcon />
                           </IconButton>

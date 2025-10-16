@@ -56,10 +56,19 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
   const [filteredStudies, setFilteredStudies] = useState<ClinicalStudy[]>([]);
 
   useEffect(() => {
-    const consultationStudies = studies.filter(
-      study => study.consultation_id === consultationId && study.patient_id === patientId
-    );
+    console.log('🔬 ClinicalStudiesSection useEffect triggered');
+    console.log('🔬 Studies:', studies);
+    console.log('🔬 ConsultationId:', consultationId, 'Type:', typeof consultationId);
+    console.log('🔬 PatientId:', patientId, 'Type:', typeof patientId);
     
+    const consultationStudies = studies.filter(study => {
+      console.log('🔬 Checking study:', study.id, 'consultation_id:', study.consultation_id, 'patient_id:', study.patient_id);
+      console.log('🔬 Comparison - consultation_id:', study.consultation_id === consultationId, 'patient_id:', study.patient_id === patientId);
+      // Convert both to strings for comparison
+      return String(study.consultation_id) === String(consultationId) && String(study.patient_id) === String(patientId);
+    });
+    
+    console.log('🔬 Filtered studies:', consultationStudies);
     setFilteredStudies(consultationStudies);
   }, [studies, consultationId, patientId]);
 

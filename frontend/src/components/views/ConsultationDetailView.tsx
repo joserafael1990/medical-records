@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -38,16 +38,18 @@ import {
   Science as ScienceIcon,
   Visibility as VisibilityIcon
 } from '@mui/icons-material';
-import { ConsultationResponse, ClinicalStudy } from '../../types';
+import { ClinicalStudy } from '../../types';
 import { formatDateTime } from '../../utils';
+import ClinicalStudiesSection from '../common/ClinicalStudiesSection';
+import ClinicalStudyDialog from '../dialogs/ClinicalStudyDialog';
+import { useClinicalStudies } from '../../hooks/useClinicalStudies';
 
 interface ConsultationDetailViewProps {
-  consultation: ConsultationResponse;
+  consultation: any; // TODO: Define proper ConsultationResponse type
   onBack: () => void;
-  onEdit: (consultation: ConsultationResponse) => void;
-  onPrint?: (consultation: ConsultationResponse) => void;
-  clinicalStudies?: ClinicalStudy[];
-  onEditClinicalStudy?: (study: ClinicalStudy) => void;
+  onEdit: (consultation: any) => void;
+  onPrint?: (consultation: any) => void;
+  doctorName?: string;
 }
 
 const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
@@ -55,21 +57,51 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
   onBack,
   onEdit,
   onPrint,
-  clinicalStudies = [],
-  onEditClinicalStudy
+  doctorName = 'Dr. Usuario Sistema'
 }) => {
-  // Filter clinical studies for this consultation
-  const consultationStudies = clinicalStudies.filter(study => 
-    study.consultation_id === consultation.id
-  );
-  
-  console.log('🔍 ConsultationDetailView - Filtering studies:', {
-    consultation_id: consultation.id,
-    total_studies: clinicalStudies.length,
-    filtered_studies: consultationStudies.length,
-    all_studies: clinicalStudies,
-    filtered: consultationStudies
-  });
+  // Clinical studies management
+  const clinicalStudiesHook = useClinicalStudies();
+
+  // Load clinical studies when consultation changes
+  useEffect(() => {
+    console.log('🔬 ConsultationDetailView useEffect triggered');
+    console.log('🔬 Consultation object:', consultation);
+    console.log('🔬 Consultation ID:', consultation?.id);
+    
+    if (consultation?.id) {
+      console.log('🔬 Loading clinical studies for consultation:', consultation.id);
+      console.log('🔬 Consultation ID type:', typeof consultation.id);
+      // Convert to string if it's a number
+      const consultationId = String(consultation.id);
+      console.log('🔬 Converted consultation ID:', consultationId);
+      clinicalStudiesHook.fetchStudies(consultationId);
+    } else {
+      console.log('🔬 No consultation ID found, skipping fetchStudies');
+    }
+  }, [consultation?.id, clinicalStudiesHook.fetchStudies]);
+
+  // Handle clinical study operations
+  const handleAddStudy = () => {
+    clinicalStudiesHook.openAddDialog(
+      consultation.id,
+      consultation.patient_id,
+      doctorName
+    );
+  };
+
+  const handleEditStudy = (study: ClinicalStudy) => {
+    clinicalStudiesHook.openEditDialog(study);
+  };
+
+  const handleDeleteStudy = async (studyId: string) => {
+    if (window.confirm('¿Estás seguro de que quieres eliminar este estudio clínico?')) {
+      try {
+        await clinicalStudiesHook.deleteStudy(studyId);
+      } catch (error) {
+        console.error('Error deleting clinical study:', error);
+      }
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -339,87 +371,19 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
               </Typography>
             </Paper>
 
-            {/* Clinical Studies */}
-            <Paper sx={{ p: 3, borderRadius: '16px' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <ScienceIcon sx={{ color: 'primary.main', mr: 1 }} />
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                  Estudios Clínicos
-                </Typography>
-                {consultationStudies.length > 0 && (
-                  <Chip 
-                    size="small" 
-                    label={consultationStudies.length} 
-                    color="primary" 
-                    variant="outlined" 
-                    sx={{ ml: 1 }}
-                  />
-                )}
-              </Box>
-
-              {consultationStudies.length === 0 ? (
-                <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                  No se han solicitado estudios clínicos para esta consulta.
-                </Typography>
-              ) : (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  {consultationStudies.map((study) => (
-                    <Card 
-                      key={study.id} 
-                      variant="outlined" 
-                      sx={{ 
-                        borderRadius: '12px',
-                        '&:hover': {
-                          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                          cursor: onEditClinicalStudy ? 'pointer' : 'default'
-                        }
-                      }}
-                      onClick={() => onEditClinicalStudy && onEditClinicalStudy(study)}
-                    >
-                      <CardContent sx={{ p: 2 }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                          <Box sx={{ flex: 1 }}>
-                            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5 }}>
-                              {study.study_name}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                              {study.study_type} • Solicitado el {formatDate(study.ordered_date)}
-                            </Typography>
-                            {study.study_description && (
-                              <Typography variant="body2" sx={{ mb: 1 }}>
-                                {study.study_description}
-                              </Typography>
-                            )}
-                          </Box>
-                          <Chip
-                            label={study.status === 'pending' ? 'Pendiente' : 
-                                  study.status === 'in_progress' ? 'En Proceso' :
-                                  study.status === 'completed' ? 'Completado' : 
-                                  study.status === 'cancelled' ? 'Cancelado' : study.status}
-                            color={getStatusColor(study.status) as any}
-                            size="small"
-                            variant="outlined"
-                          />
-                        </Box>
-                        
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
-                          <Typography variant="caption" color="text.secondary">
-                            <strong>Médico solicitante:</strong> {study.ordering_doctor}
-                          </Typography>
-                          {study.urgency && study.urgency !== 'normal' && (
-                            <Chip
-                              label={study.urgency === 'urgent' ? 'Urgente' : study.urgency === 'stat' ? 'STAT' : study.urgency}
-                              color="error"
-                              size="small"
-                              variant="outlined"
-                            />
-                          )}
-                        </Box>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </Box>
-              )}
+            {/* Clinical Studies Section */}
+            <Paper sx={{ borderRadius: '16px', overflow: 'hidden' }}>
+              <ClinicalStudiesSection
+                consultationId={String(consultation.id)}
+                patientId={String(consultation.patient_id)}
+                studies={clinicalStudiesHook.studies}
+                isLoading={clinicalStudiesHook.isLoading}
+                onAddStudy={handleAddStudy}
+                onEditStudy={handleEditStudy}
+                onDeleteStudy={handleDeleteStudy}
+                onViewFile={clinicalStudiesHook.viewFile}
+                onDownloadFile={clinicalStudiesHook.downloadFile}
+              />
             </Paper>
 
             {/* Additional Information */}
@@ -518,6 +482,18 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
           </Box>
         </Box>
       </Box>
+
+      {/* Clinical Study Dialog */}
+      <ClinicalStudyDialog
+        open={clinicalStudiesHook.clinicalStudyDialogOpen}
+        onClose={clinicalStudiesHook.closeDialog}
+        onSubmit={clinicalStudiesHook.submitForm}
+        formData={clinicalStudiesHook.clinicalStudyFormData}
+        onFormDataChange={clinicalStudiesHook.updateFormData}
+        isEditing={clinicalStudiesHook.isEditingClinicalStudy}
+        isSubmitting={clinicalStudiesHook.isSubmitting}
+        error={clinicalStudiesHook.error}
+      />
     </Box>
   );
 };
