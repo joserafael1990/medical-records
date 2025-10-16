@@ -1,6 +1,6 @@
 {
-  "short_name": "AVANT",
-  "name": "AVANT - Sistema de Historias Clínicas",
+  "short_name": "CORTEX",
+  "name": "CORTEX - Sistema de Historias Clínicas",
   "description": "Sistema Integral de Historias Clínicas para profesionales de la salud",
   "icons": [
     {
@@ -26,7 +26,7 @@
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#0B5394",
+  "theme_color": "#1e3a8a",
   "background_color": "#ffffff",
   "categories": ["medical", "health", "productivity"],
   "orientation": "portrait-primary"

@@ -1,5 +1,5 @@
 """
-Configuration module for AVANT Medical System
+Configuration module for CORTEX Medical System
 Manages environment variables and application settings
 """
 import os
@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     # Application Configuration
     APP_ENV: str = "development"
     APP_VERSION: str = "1.0.0"
-    APP_NAME: str = "AVANT Backend API"
+    APP_NAME: str = "CORTEX Backend API"
     SECRET_KEY: str = "your-secret-key-here-change-in-production"
     JWT_SECRET_KEY: str = "your-jwt-secret-key-here"
     JWT_ALGORITHM: str = "HS256"
@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SMTP_USERNAME: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
-    EMAIL_FROM: str = "noreply@avant-medical.com"
+    EMAIL_FROM: str = "noreply@cortex-medical.com"
     
     # File Upload Configuration
     MAX_FILE_SIZE: int = 10485760  # 10MB

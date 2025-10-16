@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # =============================================================================
-# AVANT Medical System - Development Server Startup Script
+# CORTEX Medical System - Development Server Startup Script
 # =============================================================================
 
 set -e  # Exit on any error
 
-echo "🏥 Starting AVANT Medical System Development Environment..."
+echo "🏥 Starting CORTEX Medical System Development Environment..."
 echo "============================================================"
 
 # Function to check if a command exists
@@ -115,7 +115,7 @@ fi
 
 echo ""
 echo "============================================================"
-echo "🎉 AVANT Medical System is ready!"
+echo "🎉 CORTEX Medical System is ready!"
 echo "   📱 Frontend: http://localhost:3000"
 echo "   🔧 Backend API: http://localhost:8000"
 echo "   📚 API Docs: http://localhost:8000/docs"

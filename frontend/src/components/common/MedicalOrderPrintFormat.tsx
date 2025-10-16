@@ -40,10 +40,10 @@ const MedicalOrderPrintFormat: React.FC<MedicalOrderPrintFormatProps> = ({
   patient,
   doctorInfo,
   institutionInfo = {
-    name: 'AVANT Medical System',
+    name: 'CORTEX Medical System',
     address: 'Av. Revolución 123, Col. Centro, Ciudad de México',
     phone: '+52 (55) 1234-5678',
-    email: 'contacto@avant.medical'
+    email: 'contacto@cortex.medical'
   }
 }) => {
   const formatDate = (dateString: string) => {

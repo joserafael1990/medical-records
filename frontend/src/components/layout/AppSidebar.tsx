@@ -20,7 +20,7 @@ import {
   Add as AddIcon,
   CalendarToday as CalendarIcon
 } from '@mui/icons-material';
-import AvantLogo from '../common/AvantLogo';
+import CortexLogo from '../common/CortexLogo';
 
 interface AppSidebarProps {
   activeView: string;
@@ -97,7 +97,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Logo Section */}
       <Box sx={{ p: 3, textAlign: 'center' }}>
-        <AvantLogo variant="full" />
+        <CortexLogo variant="full" />
         <Typography variant="h6" sx={{ mt: 2, fontWeight: 600, color: 'primary.main' }}>
           Historias Clínicas
         </Typography>

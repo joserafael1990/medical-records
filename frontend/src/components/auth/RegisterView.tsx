@@ -42,7 +42,7 @@ import {
   AccessTime,
   Add as AddIcon
 } from '@mui/icons-material';
-import AvantLogo from '../common/AvantLogo';
+import CortexLogo from '../common/CortexLogo';
 import { MEDICAL_SPECIALTIES, MEXICAN_STATES, API_CONFIG } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCatalogs } from '../../hooks/useCatalogs';
@@ -724,7 +724,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
               <Box sx={{ flex: '1 1 250px' }}>
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
                   <DatePicker
-                    label="Fecha de Nacimiento"
+                    label="Fecha de Nacimiento *"
                     value={formData.birth_date ? new Date(formData.birth_date) : null}
                     maxDate={new Date()}
                     onChange={(newValue) => {
@@ -1262,7 +1262,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
               >
                 Volver al login
               </Button>
-              <AvantLogo variant="full" sx={{ fontSize: 40, color: 'primary.main' }} />
+              <CortexLogo variant="full" sx={{ fontSize: 40, color: 'primary.main' }} />
             </Box>
 
             <Typography variant="h4" gutterBottom>
@@ -1270,7 +1270,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
             </Typography>
 
             <Typography variant="body2" color="text.secondary" gutterBottom>
-              Únete a AVANT y gestiona tu práctica médica de manera profesional
+              Únete a CORTEX y gestiona tu práctica médica de manera profesional
             </Typography>
 
             {error && (

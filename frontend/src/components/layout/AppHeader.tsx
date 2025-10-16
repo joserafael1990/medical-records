@@ -19,7 +19,7 @@ import {
   ExitToApp as LogoutIcon,
   ArrowBack as ArrowBackIcon
 } from '@mui/icons-material';
-import AvantLogo from '../common/AvantLogo';
+import CortexLogo from '../common/CortexLogo';
 
 interface AppHeaderProps {
   activeView: string;
@@ -113,7 +113,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({
           )}
           
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <AvantLogo variant="icon" />
+            <CortexLogo variant="icon" />
             <Typography 
               variant="h6" 
               sx={{ 

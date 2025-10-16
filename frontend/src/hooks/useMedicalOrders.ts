@@ -228,7 +228,7 @@ export const useMedicalOrders = ({
           </head>
           <body>
             <div class="header">
-              <h1>AVANT - Sistema Médico</h1>
+              <h1>CORTEX - Sistema Médico</h1>
               <div class="title">ORDEN MÉDICA</div>
               <div class="subtitle">${order.study_type}</div>
             </div>

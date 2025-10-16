@@ -145,7 +145,7 @@ const DigitalSignatureDialog: React.FC<DigitalSignatureDialogProps> = ({
       // Por ahora simulamos la respuesta
       const mockCertInfo: CertificateInfo = {
         certificate_id: "12345678",
-        subject_name: "CN=Dr. Juan Pérez,O=Sistema Médico AVANT",
+        subject_name: "CN=Dr. Juan Pérez,O=Sistema Médico CORTEX",
         not_before: new Date().toISOString(),
         not_after: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
         key_usage: ["digital_signature", "non_repudiation"],

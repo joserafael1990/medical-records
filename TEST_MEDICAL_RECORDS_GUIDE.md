@@ -86,7 +86,7 @@ The system now has **comprehensive test data** for user `t.garcia@avant.com` to 
 #### 🖨️ **Print Medical Records**
 - Click the **print icon** (🖨️) 
 - See professional medical document formatting
-- Includes AVANT branding and official layout
+- Includes CORTEX branding and official layout
 - Perfect for medical practice documentation
 
 #### ➕ **Create New Records**

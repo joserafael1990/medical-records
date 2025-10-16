@@ -77,7 +77,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       <AppBar position="static" elevation={1}>
         <Toolbar>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1, fontWeight: 600 }}>
-            AVANT Medical System
+            CORTEX Medical System
           </Typography>
           
           {/* Status indicators */}

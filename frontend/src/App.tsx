@@ -64,7 +64,7 @@ const AppWithAuth: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  console.log('🚀 AVANT App iniciando con React + Material-UI');
+  console.log('🚀 CORTEX App iniciando con React + Material-UI');
   
   return (
     <ErrorBoundary>

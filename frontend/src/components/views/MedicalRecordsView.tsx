@@ -382,7 +382,7 @@ const MedicalRecordsView: React.FC<MedicalRecordsViewProps> = ({
           </head>
           <body>
             <div class="header">
-              <h1>AVANT - Sistema de Historias Clínicas</h1>
+              <h1>CORTEX - Sistema de Historias Clínicas</h1>
               <h2>Expediente Médico</h2>
               <p>Código: ${record.record_code || `#${record.id}`}</p>
             </div>

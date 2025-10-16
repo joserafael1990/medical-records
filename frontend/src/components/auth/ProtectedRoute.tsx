@@ -31,7 +31,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
           }} 
         />
         <Box sx={{ textAlign: 'center', opacity: 0.7 }}>
-          Cargando AVANT...
+          Cargando CORTEX...
         </Box>
       </Box>
     );

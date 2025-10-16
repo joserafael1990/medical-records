@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# AVANT Medical System - Frontend Server Startup
+# CORTEX Medical System - Frontend Server Startup
 # =============================================================================
 
 cd "/Users/rafa.garcia/Documents/software projects/Historias clinicas/frontend"

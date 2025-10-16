@@ -128,7 +128,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 ¡Bienvenido, {doctorName}! 👋
               </Typography>
               <Typography variant="body1" sx={{ opacity: 0.9 }}>
-                {format(today, "EEEE, d 'de' MMMM 'de' yyyy")}
+                {format(today, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
               </Typography>
             </Box>
           </Box>
@@ -153,8 +153,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({
       </Paper>
 
       {/* Statistics Cards */}
-
-      <Box sx={{ flex: 1, minWidth: 200 }}>
+      <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: 'wrap' }}>
+        <Box sx={{ flex: 1, minWidth: 200 }}>
           <Card sx={{ 
             bgcolor: 'background.paper',
             '&:hover': {
@@ -172,27 +172,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             </CardContent>
           </Card>
         </Box>
-
-      <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: 'wrap' }}>
-        <Box sx={{ flex: 1, minWidth: 200 }}>
-          <Card sx={{ 
-            bgcolor: 'background.paper',
-            '&:hover': {
-              boxShadow: '0 1px 3px rgba(0,0,0,0.12)'
-            }
-          }}>
-            <CardContent sx={{ textAlign: 'center', py: 3 }}>
-              <ScheduleIcon sx={{ fontSize: 40, mb: 1, color: 'primary.main' }} />
-              <Typography variant="h2" sx={{ mb: 1, color: 'text.primary' }}>
-                {todayAppointments.length}
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                Citas de Hoy
-              </Typography>
-            </CardContent>
-          </Card>
-        </Box>
-
 
         <Box sx={{ flex: 1, minWidth: 200 }}>
           <Card sx={{ 
@@ -212,8 +191,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             </CardContent>
           </Card>
         </Box>
-
-
       </Box>
 
       {/* Quick Actions */}

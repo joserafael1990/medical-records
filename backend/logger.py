@@ -1,5 +1,5 @@
 """
-Structured logging configuration for AVANT Medical System
+Structured logging configuration for CORTEX Medical System
 Provides consistent, structured logging across the application
 """
 import logging
@@ -24,7 +24,7 @@ class RequestContextProcessor:
     
     def __call__(self, logger: logging.Logger, method_name: str, event_dict: Dict[str, Any]) -> Dict[str, Any]:
         # Add timestamp and service info
-        event_dict["service"] = "avant-backend"
+        event_dict["service"] = "cortex-backend"
         event_dict["version"] = getattr(settings, 'APP_VERSION', '1.0.0')
         event_dict["environment"] = getattr(settings, 'APP_ENV', 'development')
         return event_dict
@@ -80,8 +80,8 @@ def get_logger(name: str = __name__) -> structlog.stdlib.BoundLogger:
 setup_logging()
 
 # Export commonly used loggers
-logger = get_logger("avant")
-api_logger = get_logger("avant.api")
-db_logger = get_logger("avant.database")
-auth_logger = get_logger("avant.auth")
-validation_logger = get_logger("avant.validation")
+logger = get_logger("cortex")
+api_logger = get_logger("cortex.api")
+db_logger = get_logger("cortex.database")
+auth_logger = get_logger("cortex.auth")
+validation_logger = get_logger("cortex.validation")

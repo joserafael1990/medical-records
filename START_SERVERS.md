@@ -1,4 +1,4 @@
-# 🚀 AVANT Medical System - Server Startup Guide
+# 🚀 CORTEX Medical System - Server Startup Guide
 
 ## Quick Start Options
 
@@ -68,5 +68,5 @@ Historias clinicas/
 - **Force kill**: Use Activity Monitor or `kill` command with process ID
 
 ---
-*AVANT Medical System - Clean, organized, and ready for development! 🏥*
+*CORTEX Medical System - Clean, organized, and ready for development! 🏥*
 

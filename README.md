@@ -1,4 +1,4 @@
-# 🏥 Sistema de Historias Clínicas Médicas - AVANT
+# 🏥 Sistema de Historias Clínicas Médicas - CORTEX
 
 Sistema completo de gestión de historias clínicas médicas desarrollado con React, TypeScript, FastAPI y PostgreSQL.
 

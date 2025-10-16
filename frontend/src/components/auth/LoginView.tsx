@@ -19,7 +19,7 @@ import {
   VisibilityOff,
   Warning as WarningIcon
 } from '@mui/icons-material';
-import AvantLogo from '../common/AvantLogo';
+import CortexLogo from '../common/CortexLogo';
 import { useAuth } from '../../contexts/AuthContext';
 
 const LoginView: React.FC = () => {
@@ -97,7 +97,7 @@ const LoginView: React.FC = () => {
           }}
         >
           <Box sx={{ mb: 4 }}>
-            <AvantLogo variant="full" sx={{ fontSize: 60, color: 'primary.main' }} />
+            <CortexLogo variant="full" sx={{ fontSize: 60, color: 'primary.main' }} />
           </Box>
 
           {/* Error Display with Context */}
