@@ -31,6 +31,7 @@ import {
   ChevronRight as ChevronRightIcon
 } from '@mui/icons-material';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, addDays, addWeeks, addMonths, isSameDay, isSameMonth } from 'date-fns';
+import { formatTime } from '../../utils/formatters';
 import { es } from 'date-fns/locale';
 
 interface AgendaViewProps {
@@ -197,7 +198,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                       {dayAppointments.map((appointment, index) => (
                         <Card key={index} sx={{ mb: 1, p: 1, bgcolor: 'primary.light', color: 'primary.contrastText' }}>
                           <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
-                            {format(new Date(appointment.date_time), 'HH:mm', { locale: es })}
+                            {formatTime(appointment.date_time)}
                           </Typography>
                           <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
                             {appointment.patient?.first_name} {appointment.patient?.paternal_surname}
@@ -283,7 +284,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                         {dayAppointments.slice(0, 2).map((appointment, index) => (
                           <Chip
                             key={index}
-                            label={`${format(new Date(appointment.date_time), 'HH:mm')} ${appointment.patient?.first_name}`}
+                            label={`${formatTime(appointment.date_time)} ${appointment.patient?.first_name}`}
                             size="small"
                             sx={{ 
                               mb: 0.5, 
@@ -346,7 +347,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                 <Box sx={{ mt: 1 }}>
                   <Typography variant="body2" color="text.secondary">
                     <TimeIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: 'middle' }} />
-                    {format(new Date(appointment.date_time), 'HH:mm', { locale: es })}
+                    {formatTime(appointment.date_time)}
                   </Typography>
                   {appointment.reason && (
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>

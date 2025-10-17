@@ -16,6 +16,7 @@ import {
   Chip
 } from '@mui/material';
 import { format } from 'date-fns';
+import { formatDateTimeShort } from '../../utils/dateHelpers';
 import { 
   MedicalOrder,
   Patient,
@@ -56,7 +57,7 @@ const MedicalOrderPrintFormat: React.FC<MedicalOrderPrintFormatProps> = ({
 
   const formatDateTime = (dateString: string) => {
     try {
-      return format(new Date(dateString), 'dd/MM/yyyy HH:mm');
+      return formatDateTimeShort(dateString);
     } catch {
       return 'Fecha inválida';
     }

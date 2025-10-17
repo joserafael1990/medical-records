@@ -1,4 +1,32 @@
 // ============================================================================
+// PATIENT TYPES
+// ============================================================================
+
+export interface Patient {
+  id: number;
+  first_name: string;
+  paternal_surname: string;
+  maternal_surname?: string;
+  email?: string;
+  primary_phone?: string;
+  birth_date?: string;
+  gender?: string;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  emergency_contact_relationship?: string;
+  created_by: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApiError {
+  message: string;
+  status?: number;
+  details?: any;
+  fieldErrors?: Record<string, string>;
+}
+
+// ============================================================================
 // MEDICAL RECORDS TYPES
 // ============================================================================
 
@@ -116,4 +144,123 @@ export interface CreateClinicalStudyData {
 
 export interface UpdateClinicalStudyData extends Partial<CreateClinicalStudyData> {
   id: string;
+}
+
+// ============================================================================
+// STUDY CATALOG TYPES
+// ============================================================================
+
+export interface StudyCategory {
+  id: number;
+  code: string;
+  name: string;
+  description?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StudyNormalValue {
+  id: number;
+  study_id: number;
+  age_min?: number;
+  age_max?: number;
+  gender?: 'M' | 'F' | 'B';
+  min_value?: number;
+  max_value?: number;
+  unit?: string;
+  notes?: string;
+  created_at: string;
+}
+
+export interface StudyCatalog {
+  id: number;
+  code: string;
+  name: string;
+  category_id: number;
+  subcategory?: string;
+  description?: string;
+  preparation?: string;
+  methodology?: string;
+  duration_hours?: number;
+  specialty?: string;
+  is_active: boolean;
+  regulatory_compliance?: any;
+  created_at: string;
+  updated_at: string;
+  category?: StudyCategory;
+  normal_values: StudyNormalValue[];
+}
+
+export interface StudyTemplateItem {
+  id: number;
+  template_id: number;
+  study_id: number;
+  order_index: number;
+  created_at: string;
+  study?: StudyCatalog;
+}
+
+export interface StudyTemplate {
+  id: number;
+  name: string;
+  description?: string;
+  specialty?: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+  template_items: StudyTemplateItem[];
+}
+
+export interface StudyTemplateCreate {
+  name: string;
+  description?: string;
+  specialty?: string;
+  study_ids: number[];
+}
+
+export interface StudySearchFilters {
+  category_id?: number;
+  subcategory?: string;
+  name?: string;
+  code?: string;
+  specialty?: string;
+  duration_hours?: number;
+  has_normal_values?: boolean;
+  is_active?: boolean;
+}
+
+export interface StudyRecommendation {
+  study: StudyCatalog;
+  reason: string;
+  priority: 'high' | 'medium' | 'low';
+}
+
+// ============================================================================
+// VITAL SIGNS TYPES
+// ============================================================================
+
+export interface VitalSign {
+  id: number;
+  name: string;
+  created_at?: string;
+}
+
+export interface ConsultationVitalSign {
+  id: number;
+  consultation_id: number;
+  vital_sign_id: number;
+  vital_sign_name: string;
+  value: string;
+  unit?: string;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface VitalSignFormData {
+  vital_sign_id: number;
+  value: string;
+  unit?: string;
+  notes?: string;
 }

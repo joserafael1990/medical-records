@@ -5,7 +5,6 @@ export { default as PatientsViewSmart } from './views/PatientsViewSmart';
 export { default as ConsultationsView } from './views/ConsultationsView';
 export { default as ConsultationsViewSmart } from './views/ConsultationsViewSmart';
 export { default as ConsultationDetailView } from './views/ConsultationDetailView';
-export { default as MedicalRecordDetailView } from './views/MedicalRecordDetailView';
 export { default as DoctorProfileView } from './views/DoctorProfileView';
 export { default as AgendaView } from './views/AgendaView';
 
@@ -21,6 +20,12 @@ export { default as VirtualizedTable } from './common/VirtualizedTable';
 export { default as LoadingFallback } from './common/LoadingFallback';
 export { default as MedicalOrdersSection } from './common/MedicalOrdersSection';
 export { default as MedicalOrderPrintFormat } from './common/MedicalOrderPrintFormat';
+export { StudyCatalogSelector } from './common/StudyCatalogSelector';
+export { PrintPrescriptionButton } from './common/PrintPrescriptionButton';
+export { PrintMedicalOrderButton } from './common/PrintMedicalOrderButton';
+export { PrintButtons } from './common/PrintButtons';
+export { PDFTestComponent } from './common/PDFTestComponent';
+export { SimplePDFTest } from './common/SimplePDFTest';
 
 // UX Improvements
 export { SmartLoadingState, useSmartLoading } from './common/SmartLoadingState';

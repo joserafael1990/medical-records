@@ -620,7 +620,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                 <Typography component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Typography>
               </Typography>
               
-              {/* Patient Selection - Same structure as ConsultationDialog */}
+              {/* Patient Selection Logic */}
               {patients.length === 0 ? (
                 <Box>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -637,7 +637,63 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                     </Button>
                   )}
                 </Box>
+              ) : localFormData.appointment_type === 'primera vez' && !localFormData.patient_id ? (
+                // Show inline patient creation for "primera vez"
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2, textAlign: 'center' }}>
+                    Complete los datos para crear un nuevo paciente:
+                  </Typography>
+                  <Box sx={{ bgcolor: 'primary.50', p: 3, borderRadius: 2, border: '1px solid', borderColor: 'primary.200' }}>
+                    <Typography variant="body2" color="primary.main" sx={{ mb: 2, fontWeight: 500 }}>
+                      📝 Complete los datos básicos del nuevo paciente
+                    </Typography>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                      <TextField
+                        label="Nombre(s)"
+                        value={newPatientData.first_name}
+                        onChange={(e) => handleNewPatientFieldChange('first_name', e.target.value)}
+                        size="small"
+                        required
+                        disabled={isReadOnly}
+                        placeholder="Nombre(s) - obligatorio"
+                        error={hasFieldError('newPatient.first_name')}
+                        helperText={getFieldError('newPatient.first_name')}
+                      />
+                      <TextField
+                        label="Apellido Paterno"
+                        value={newPatientData.paternal_surname}
+                        onChange={(e) => handleNewPatientFieldChange('paternal_surname', e.target.value)}
+                        size="small"
+                        required
+                        disabled={isReadOnly}
+                        placeholder="Apellido Paterno - obligatorio"
+                        error={hasFieldError('newPatient.paternal_surname')}
+                        helperText={getFieldError('newPatient.paternal_surname')}
+                      />
+                      <TextField
+                        label="Apellido Materno"
+                        value={newPatientData.maternal_surname}
+                        onChange={(e) => handleNewPatientFieldChange('maternal_surname', e.target.value)}
+                        size="small"
+                        disabled={isReadOnly}
+                        placeholder="Apellido Materno - opcional"
+                      />
+                      <TextField
+                        label="Teléfono"
+                        value={newPatientData.primary_phone}
+                        onChange={(e) => handleNewPatientFieldChange('primary_phone', e.target.value)}
+                        size="small"
+                        required
+                        disabled={isReadOnly}
+                        placeholder="Teléfono - obligatorio"
+                        error={hasFieldError('newPatient.primary_phone')}
+                        helperText={getFieldError('newPatient.primary_phone')}
+                      />
+                    </Box>
+                  </Box>
+                </Box>
               ) : (
+                // Show patient selection for "seguimiento" or when patient is selected
                 <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
                   <Box sx={{ flex: 1 }}>
                     <Autocomplete
@@ -651,8 +707,8 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                           {...params}
                           label="Seleccionar Paciente"
                           required
-                          error={hasFieldError('patient_id') || (!localFormData.patient_id && localFormData.appointment_type !== 'primera vez')}
-                          helperText={getFieldError('patient_id') || (!localFormData.patient_id && localFormData.appointment_type !== 'primera vez' ? 'Campo requerido' : '')}
+                          error={hasFieldError('patient_id') || (!localFormData.patient_id)}
+                          helperText={getFieldError('patient_id') || (!localFormData.patient_id ? 'Campo requerido' : '')}
                         />
                       )}
                       renderOption={(props, option) => (
@@ -675,253 +731,9 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                   </Box>
                 </Box>
               )}
-              
-              {/* Show inline patient creation for "primera vez" when no patient selected and patients exist */}
-              {localFormData.appointment_type === 'primera vez' && !localFormData.patient_id && patients.length > 0 ? (
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2, textAlign: 'center' }}>
-                    O complete los datos para crear un nuevo paciente:
-                  </Typography>
-                </Box>
-              ) : null}
-              
-              {/* Show inline patient creation for "primera vez" when no patient selected */}
-              {localFormData.appointment_type === 'primera vez' && !localFormData.patient_id ? (
-                /* Inline Patient Creation for First Visit */
-                <Box sx={{ bgcolor: 'primary.50', p: 3, borderRadius: 2, border: '1px solid', borderColor: 'primary.200' }}>
-                  <Typography variant="body2" color="primary.main" sx={{ mb: 2, fontWeight: 500 }}>
-                    📝 Complete los datos básicos del nuevo paciente
-                  </Typography>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-                    <TextField
-                      label="Nombre(s)"
-                      value={newPatientData.first_name}
-                      onChange={(e) => handleNewPatientFieldChange('first_name', e.target.value)}
-                      size="small"
-                      required
-                      disabled={isReadOnly}
-                      placeholder="Nombre(s) - obligatorio"
-                      error={hasFieldError('newPatient.first_name')}
-                      helperText={getFieldError('newPatient.first_name')}
-                    />
-                    <TextField
-                      label="Apellido Paterno"
-                      value={newPatientData.paternal_surname}
-                      onChange={(e) => handleNewPatientFieldChange('paternal_surname', e.target.value)}
-                      size="small"
-                      required
-                      disabled={isReadOnly}
-                      placeholder="Apellido Paterno - obligatorio"
-                      error={hasFieldError('newPatient.paternal_surname')}
-                      helperText={getFieldError('newPatient.paternal_surname')}
-                    />
-                    <TextField
-                      label="Apellido Materno"
-                      value={newPatientData.maternal_surname}
-                      onChange={(e) => handleNewPatientFieldChange('maternal_surname', e.target.value)}
-                      size="small"
-                      disabled={isReadOnly}
-                      placeholder="Apellido Materno - opcional"
-                    />
-                    <TextField
-                      label="Teléfono"
-                      value={newPatientData.primary_phone}
-                      onChange={(e) => handleNewPatientFieldChange('primary_phone', e.target.value)}
-                      size="small"
-                      required
-                      disabled={isReadOnly}
-                      placeholder="Teléfono - obligatorio"
-                      error={hasFieldError('newPatient.primary_phone')}
-                      helperText={getFieldError('newPatient.primary_phone')}
-                    />
-                  </Box>
-                </Box>
-              ) : (
-                /* Existing Patient Selection */
-                <Box>
-                  <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-                    <Box sx={{ flex: 1 }}>
-                      <Autocomplete
-                        options={patients}
-                        getOptionLabel={(option) => formatPatientNameWithAge(option)}
-                        value={selectedPatient}
-                        onChange={(_, newValue) => handlePatientChange(newValue)}
-                        disabled={isReadOnly || !isPatientSelectionEnabled()}
-                        renderInput={(params) => (
-                          <TextField
-                            {...params}
-                            label="Seleccionar Paciente"
-                            required
-                            error={hasFieldError('patient_id') || (!localFormData.patient_id)}
-                            helperText={getFieldError('patient_id') || (!localFormData.patient_id ? 'Campo requerido' : '')}
-                          />
-                        )}
-                        renderOption={(props, option) => (
-                          <Box component="li" {...props}>
-                            <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
-                              {option.first_name[0]}{option.paternal_surname[0]}
-                            </Avatar>
-                            <Box>
-                              <Typography variant="body1">{formatPatientNameWithAge(option)}</Typography>
-                              <Typography variant="body2" color="text.secondary">
-                                {option.primary_phone} • {option.email}
-                              </Typography>
-                            </Box>
-                          </Box>
-                        )}
-                        loading={patients.length === 0}
-                        loadingText="Cargando pacientes..."
-                        noOptionsText="No se encontraron pacientes"
-                      />
-                    </Box>
-                    <Button
-                      variant="outlined"
-                      onClick={onNewPatient}
-                      startIcon={<PersonAddIcon />}
-                      sx={{ whiteSpace: 'nowrap', height: 40 }}
-                      disabled={isReadOnly || !isPatientSelectionEnabled()}
-                    >
-                      Nuevo
-                    </Button>
-                  </Box>
-
-                  {/* Selected Patient Information */}
-                  {selectedPatient && (
-                    <Paper sx={{ 
-                      p: 3, 
-                      bgcolor: 'primary.50', 
-                      border: '1px solid', 
-                      borderColor: 'primary.200', 
-                      borderRadius: '12px',
-                      mt: 2
-                    }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                        <Typography variant="h6" sx={{ 
-                          fontWeight: 600, 
-                          color: 'primary.main',
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: 1 
-                        }}>
-                          <PersonIcon sx={{ fontSize: 20 }} />
-                          Datos del Paciente
-                        </Typography>
-                        {onEditPatient && (
-                          <Button
-                            variant="outlined"
-                            size="small"
-                            startIcon={<EditIcon />}
-                            onClick={() => onEditPatient(selectedPatient)}
-                            disabled={isReadOnly || !isPatientSelectionEnabled()}
-                            sx={{
-                              bgcolor: 'white',
-                              borderColor: 'primary.main',
-                              color: 'primary.main',
-                              '&:hover': {
-                                bgcolor: 'primary.100'
-                              }
-                            }}
-                          >
-                            Editar Datos
-                          </Button>
-                        )}
-                      </Box>
-                      
-                      {/* Patient Header */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                        <Avatar sx={{ bgcolor: 'primary.main', width: 48, height: 48, fontSize: '1.2rem' }}>
-                          {selectedPatient.first_name[0]}{selectedPatient.paternal_surname[0]}
-                        </Avatar>
-                        <Box sx={{ flex: 1 }}>
-                          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                            {selectedPatient.full_name}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {selectedPatient.birth_date ? `${calculateAge(selectedPatient.birth_date)} años` : 'Edad no registrada'}
-                          </Typography>
-                        </Box>
-                      </Box>
-
-                      {/* Patient Details Grid */}
-                      <Box sx={{ 
-                        display: 'grid', 
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-                        gap: 2 
-                      }}>
-                        <Box sx={{ bgcolor: 'white', p: 2, borderRadius: '8px' }}>
-                          <Typography variant="body2" sx={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            gap: 1,
-                            fontWeight: 600, 
-                            color: 'text.secondary', 
-                            mb: 1 
-                          }}>
-                            <PhoneIcon sx={{ fontSize: 16 }} />
-                            Teléfono
-                          </Typography>
-                          <Typography variant="body1">
-                            {selectedPatient.primary_phone || selectedPatient.phone || 'No registrado'}
-                          </Typography>
-                        </Box>
-                        
-                        <Box sx={{ bgcolor: 'white', p: 2, borderRadius: '8px' }}>
-                          <Typography variant="body2" sx={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            gap: 1,
-                            fontWeight: 600, 
-                            color: 'text.secondary', 
-                            mb: 1 
-                          }}>
-                            <EmailIcon sx={{ fontSize: 16 }} />
-                            Email
-                          </Typography>
-                          <Typography variant="body1">
-                            {selectedPatient.email || 'No registrado'}
-                          </Typography>
-                        </Box>
-                        
-                        <Box sx={{ bgcolor: 'white', p: 2, borderRadius: '8px' }}>
-                          <Typography variant="body2" sx={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            gap: 1,
-                            fontWeight: 600, 
-                            color: 'text.secondary', 
-                            mb: 1 
-                          }}>
-                            <BadgeIcon sx={{ fontSize: 16 }} />
-                            Género
-                          </Typography>
-                          <Typography variant="body1">
-                            {selectedPatient.gender === 'M' ? 'Masculino' : selectedPatient.gender === 'F' ? 'Femenino' : selectedPatient.gender === 'O' ? 'Otro' : 'No especificado'}
-                          </Typography>
-                        </Box>
-                        
-                        <Box sx={{ bgcolor: 'white', p: 2, borderRadius: '8px' }}>
-                          <Typography variant="body2" sx={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            gap: 1,
-                            fontWeight: 600, 
-                            color: 'text.secondary', 
-                            mb: 1 
-                          }}>
-                            <HospitalIcon sx={{ fontSize: 16 }} />
-                            Visitas
-                          </Typography>
-                          <Typography variant="body1">
-                            {selectedPatient.total_visits || 0} consultas
-                          </Typography>
-                        </Box>
-                      </Box>
-                    </Paper>
-                  )}
-                </Box>
-              )}
             </Box>
           )}
+          
           {/* STEP 3: Date, Time and Other Fields */}
           {/* Date and Time Row */}
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>

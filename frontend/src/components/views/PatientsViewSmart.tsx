@@ -14,6 +14,7 @@ import { ErrorRibbon } from '../common/ErrorRibbon';
 import { IntelligentSearch, useIntelligentSearch } from '../common/IntelligentSearch';
 import { SmartTable } from '../common/SmartTable';
 import { useMedicalTableColumns } from '../../hooks/useMedicalTableColumns';
+import { normalizeText } from '../../utils';
 
 interface PatientsViewSmartProps {
   patients: Patient[];
@@ -55,7 +56,7 @@ const PatientsViewSmart: React.FC<PatientsViewSmartProps> = ({
   const filteredPatients = useMemo(() => {
     if (!debouncedSearchTerm.trim()) return patients;
 
-    const searchLower = debouncedSearchTerm.toLowerCase();
+    const normalizedSearchTerm = normalizeText(debouncedSearchTerm);
     return patients.filter(patient => {
       const searchableFields = [
         patient.full_name,
@@ -69,7 +70,7 @@ const PatientsViewSmart: React.FC<PatientsViewSmartProps> = ({
       ].filter(Boolean);
 
       return searchableFields.some(field => 
-        field?.toString().toLowerCase().includes(searchLower)
+        normalizeText(field?.toString() || '').includes(normalizedSearchTerm)
       );
     });
   }, [patients, debouncedSearchTerm]);

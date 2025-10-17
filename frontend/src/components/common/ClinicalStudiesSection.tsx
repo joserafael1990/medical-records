@@ -108,7 +108,7 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
       <Box sx={{ p: 3 }}>
         <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
           <ScienceIcon color="primary" />
-          Estudios Clínicos
+          Solicitar nuevos Estudios clínicos
         </Typography>
         <LinearProgress />
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
@@ -125,7 +125,7 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <ScienceIcon color="primary" />
-          Estudios Clínicos
+          Solicitar nuevos Estudios clínicos
           {filteredStudies.length > 0 && (
             <Chip 
               size="small" 
@@ -214,7 +214,7 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <PersonIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
                       <Typography variant="caption" color="text.secondary">
-                        Dr. {study.ordering_doctor}
+                         {study.ordering_doctor}
                       </Typography>
                     </Box>
 

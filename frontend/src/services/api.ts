@@ -1133,7 +1133,7 @@ class ApiService {
   // RETRY MECHANISM
   // ============================================================================
 
-  async withRetry<T>(operation: () => Promise<T>, maxRetries = API_CONFIG.RETRY_ATTEMPTS): Promise<T> {
+  async withRetry<T>(operation: () => Promise<T>, maxRetries = 3): Promise<T> {
     let lastError: any;
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -1185,16 +1185,6 @@ class ApiService {
     await this.api.delete(`${API_CONFIG.ENDPOINTS.CLINICAL_STUDIES}/${studyId}`);
   }
 
-  // Medical Records methods
-  async getMedicalRecords(): Promise<any[]> {
-    try {
-      const response = await this.api.get('/api/medical-records');
-      return Array.isArray(response.data) ? response.data : [];
-    } catch (error) {
-      console.warn('Medical records endpoint not implemented yet');
-      return [];
-    }
-  }
 }
 
 // ============================================================================

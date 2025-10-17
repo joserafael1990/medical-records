@@ -27,7 +27,7 @@ def to_utc_for_storage(dt: datetime) -> datetime:
     return dt.astimezone(pytz.utc)
 
 from database import (
-    Person, MedicalRecord, Appointment, VitalSigns,
+    Person, MedicalRecord, Appointment, VitalSign, ConsultationVitalSign,
     Country, State, Specialty, EmergencyRelationship
 )
 import schemas
@@ -339,6 +339,9 @@ def search_persons(db: Session, search_term: str, person_type: Optional[str] = N
 
 def create_medical_record(db: Session, record_data: schemas.MedicalRecordCreate) -> MedicalRecord:
     """Create a new medical record"""
+    print(f"🔬 Creating medical record with data: {record_data.dict()}")
+    print(f"🔬 Laboratory analysis field: {record_data.laboratory_analysis}")
+    
     # Generate record code
     last_record = db.query(MedicalRecord).order_by(desc(MedicalRecord.id)).first()
     record_number = (last_record.id + 1) if last_record else 1
@@ -518,33 +521,10 @@ def cancel_appointment(db: Session, appointment_id: int, reason: str, cancelled_
 # VITAL SIGNS OPERATIONS
 # ============================================================================
 
-def create_vital_signs(db: Session, vital_signs_data: schemas.VitalSignsCreate) -> VitalSigns:
-    """Create new vital signs record"""
-    db_vital_signs = VitalSigns(**vital_signs_data.dict())
-    db.add(db_vital_signs)
-    db.commit()
-    db.refresh(db_vital_signs)
-    return db_vital_signs
-
-def get_vital_signs_by_patient(db: Session, patient_id: int) -> List[VitalSigns]:
-    """Get vital signs by patient"""
-    return db.query(VitalSigns).options(
-        joinedload(VitalSigns.doctor)
-    ).filter(VitalSigns.patient_id == patient_id).order_by(desc(VitalSigns.date_recorded)).all()
-
-def update_vital_signs(db: Session, vital_signs_id: int, vital_signs_data: schemas.VitalSignsUpdate) -> VitalSigns:
-    """Update vital signs"""
-    vital_signs = db.query(VitalSigns).filter(VitalSigns.id == vital_signs_id).first()
-    if not vital_signs:
-        raise HTTPException(status_code=404, detail="Vital signs not found")
-    
-    update_data = vital_signs_data.dict(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(vital_signs, field, value)
-    
-    db.commit()
-    db.refresh(vital_signs)
-    return vital_signs
+# Legacy vital signs functions - replaced by new consultation vital signs system
+# def create_vital_signs(db: Session, vital_signs_data: schemas.VitalSignsCreate) -> VitalSign:
+# def get_vital_signs_by_patient(db: Session, patient_id: int) -> List[VitalSign]:
+# def update_vital_signs(db: Session, vital_signs_id: int, vital_signs_data: schemas.VitalSignsUpdate) -> VitalSign:
 
 # ============================================================================
 # AUTHENTICATION OPERATIONS
@@ -649,3 +629,154 @@ def get_estados(db: Session, pais_id: Optional[int] = None, activo: bool = True)
 # - get_nacionalidades -> use get_nationalities  
 # - get_especialidades -> use get_specialties
 # - get_relaciones_emergencia -> use get_emergency_relationships
+
+# ============================================================================
+# STUDY CATALOG CRUD OPERATIONS
+# ============================================================================
+
+from database import StudyCategory, StudyCatalog, StudyNormalValue, StudyTemplate, StudyTemplateItem
+
+def get_study_categories(db: Session, skip: int = 0, limit: int = 100) -> List[StudyCategory]:
+    """Get all study categories"""
+    return db.query(StudyCategory).filter(StudyCategory.is_active == True).offset(skip).limit(limit).all()
+
+def get_study_category(db: Session, category_id: int) -> Optional[StudyCategory]:
+    """Get study category by ID"""
+    return db.query(StudyCategory).filter(StudyCategory.id == category_id).first()
+
+def get_study_catalog(
+    db: Session, 
+    skip: int = 0, 
+    limit: int = 100,
+    category_id: Optional[int] = None,
+    specialty: Optional[str] = None,
+    search: Optional[str] = None
+) -> List[StudyCatalog]:
+    """Get studies from catalog with filters"""
+    query = db.query(StudyCatalog).join(StudyCategory).filter(StudyCatalog.is_active == True)
+    
+    if category_id:
+        query = query.filter(StudyCatalog.category_id == category_id)
+    
+    if specialty:
+        query = query.filter(StudyCatalog.specialty.ilike(f"%{specialty}%"))
+    
+    if search:
+        query = query.filter(
+            or_(
+                StudyCatalog.name.ilike(f"%{search}%"),
+                StudyCatalog.code.ilike(f"%{search}%"),
+                StudyCatalog.description.ilike(f"%{search}%")
+            )
+        )
+    
+    return query.offset(skip).limit(limit).all()
+
+def get_study_by_id(db: Session, study_id: int) -> Optional[StudyCatalog]:
+    """Get study by ID with normal values"""
+    return db.query(StudyCatalog).options(
+        joinedload(StudyCatalog.normal_values),
+        joinedload(StudyCatalog.category)
+    ).filter(StudyCatalog.id == study_id).first()
+
+def get_study_by_code(db: Session, code: str) -> Optional[StudyCatalog]:
+    """Get study by code"""
+    return db.query(StudyCatalog).options(
+        joinedload(StudyCatalog.normal_values),
+        joinedload(StudyCatalog.category)
+    ).filter(StudyCatalog.code == code).first()
+
+def get_study_templates(
+    db: Session, 
+    skip: int = 0, 
+    limit: int = 100,
+    specialty: Optional[str] = None
+) -> List[StudyTemplate]:
+    """Get study templates with filters"""
+    query = db.query(StudyTemplate)
+    
+    if specialty:
+        query = query.filter(StudyTemplate.specialty.ilike(f"%{specialty}%"))
+    
+    return query.offset(skip).limit(limit).all()
+
+def get_study_template(db: Session, template_id: int) -> Optional[StudyTemplate]:
+    """Get study template by ID with items"""
+    return db.query(StudyTemplate).options(
+        joinedload(StudyTemplate.template_items).joinedload(StudyTemplateItem.study)
+    ).filter(StudyTemplate.id == template_id).first()
+
+def create_study_template(db: Session, template_data: schemas.StudyTemplateCreate) -> StudyTemplate:
+    """Create a new study template"""
+    template = StudyTemplate(
+        name=template_data.name,
+        description=template_data.description,
+        specialty=template_data.specialty
+    )
+    db.add(template)
+    db.flush()  # Get the ID
+    
+    # Add template items
+    for i, study_id in enumerate(template_data.study_ids):
+        template_item = StudyTemplateItem(
+            template_id=template.id,
+            study_id=study_id,
+            order_index=i
+        )
+        db.add(template_item)
+    
+    db.commit()
+    db.refresh(template)
+    return template
+
+def get_studies_by_specialty(db: Session, specialty: str) -> List[StudyCatalog]:
+    """Get studies recommended for a specific specialty"""
+    return db.query(StudyCatalog).filter(
+        and_(
+            StudyCatalog.is_active == True,
+            StudyCatalog.specialty.ilike(f"%{specialty}%")
+        )
+    ).all()
+
+def get_study_recommendations(
+    db: Session, 
+    diagnosis: Optional[str] = None,
+    specialty: Optional[str] = None
+) -> List[StudyCatalog]:
+    """Get study recommendations based on diagnosis and specialty"""
+    query = db.query(StudyCatalog).filter(StudyCatalog.is_active == True)
+    
+    if specialty:
+        query = query.filter(StudyCatalog.specialty.ilike(f"%{specialty}%"))
+    
+    # This could be enhanced with a recommendation engine
+    # For now, return studies by specialty
+    return query.limit(10).all()
+
+def search_studies(
+    db: Session,
+    search_term: str,
+    category_id: Optional[int] = None,
+    specialty: Optional[str] = None,
+    limit: int = 20
+) -> List[StudyCatalog]:
+    """Search studies with advanced filters"""
+    query = db.query(StudyCatalog).join(StudyCategory).filter(StudyCatalog.is_active == True)
+    
+    if search_term:
+        query = query.filter(
+            or_(
+                StudyCatalog.name.ilike(f"%{search_term}%"),
+                StudyCatalog.code.ilike(f"%{search_term}%"),
+                StudyCatalog.description.ilike(f"%{search_term}%"),
+                StudyCatalog.subcategory.ilike(f"%{search_term}%")
+            )
+        )
+    
+    if category_id:
+        query = query.filter(StudyCatalog.category_id == category_id)
+    
+    if specialty:
+        query = query.filter(StudyCatalog.specialty.ilike(f"%{specialty}%"))
+    
+    return query.limit(limit).all()

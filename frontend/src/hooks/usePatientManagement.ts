@@ -53,7 +53,7 @@ export interface PatientManagementActions {
 
 export type PatientManagementReturn = PatientManagementState & PatientManagementActions;
 
-export const usePatientManagement = (): PatientManagementReturn => {
+export const usePatientManagement = (onNavigate?: (view: string) => void): PatientManagementReturn => {
   // State
   const [patients, setPatients] = useState<Patient[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -122,6 +122,14 @@ export const usePatientManagement = (): PatientManagementReturn => {
     try {
       const newPatient = await apiService.createPatient(data);
       await fetchPatients(); // Refresh list
+      
+      // Navigate to patients view after successful creation
+      if (onNavigate) {
+        setTimeout(() => {
+          onNavigate('patients');
+        }, 1000); // Small delay to show success message
+      }
+      
       return newPatient;
     } catch (error: any) {
       // Let the error bubble up with specific details - the App.tsx handler will format it
@@ -129,7 +137,7 @@ export const usePatientManagement = (): PatientManagementReturn => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [fetchPatients]);
+  }, [fetchPatients, onNavigate]);
 
   // Update existing patient
   const updatePatient = useCallback(async (id: string, data: PatientFormData): Promise<Patient> => {

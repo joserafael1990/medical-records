@@ -26,7 +26,6 @@ import { useAppState } from '../../hooks/useAppState';
 import { usePatientManagement } from '../../hooks/usePatientManagement';
 import { useConsultationManagement } from '../../hooks/useConsultationManagement';
 import { useAppointmentManager } from '../../hooks/useAppointmentManager';
-import { useMedicalRecords } from '../../hooks/useMedicalRecords';
 import { useAuth } from '../../contexts/AuthContext';
 // Dialog imports
 import PatientDialog from '../dialogs/PatientDialog'; // ✅ Now implemented!
@@ -48,13 +47,14 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   const { user } = useAuth();
   const appState = useAppState();
   const doctorProfileHook = useDoctorProfile();
-  const patientManagement = usePatientManagement();
-  const consultationManagement = useConsultationManagement();
-  const appointmentManager = useAppointmentManager(patientManagement.patients, doctorProfileHook.doctorProfile);
-  const medicalRecordsHook = useMedicalRecords();
   
   // Extract values from hooks
-  const { activeView, setActiveView: onViewChange } = appState;
+  const { activeView, setActiveView: onViewChange, navigateToView } = appState;
+  
+  // Initialize management hooks with navigation function
+  const patientManagement = usePatientManagement(navigateToView);
+  const consultationManagement = useConsultationManagement(navigateToView);
+  const appointmentManager = useAppointmentManager(patientManagement.patients, doctorProfileHook.doctorProfile, navigateToView);
   const { doctorProfile, isLoading } = doctorProfileHook;
   const [userMenuAnchorEl, setUserMenuAnchorEl] = useState<null | HTMLElement>(null);
 
@@ -68,7 +68,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 
   const handleViewProfile = () => {
     handleUserMenuClose();
-    onViewChange('profile');
+    navigateToView('profile');
   };
 
   return (
@@ -141,7 +141,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           {/* Sidebar Navigation */}
           <MainNavigation
             activeView={activeView}
-            onViewChange={onViewChange}
+            onViewChange={navigateToView}
           />
 
           {/* Main Content Area */}
@@ -152,7 +152,6 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             patientManagement={patientManagement}
             consultationManagement={consultationManagement}
             appointmentManager={appointmentManager}
-            medicalRecordsHook={medicalRecordsHook}
             doctorProfile={doctorProfile}
             onSaveProfile={doctorProfileHook.handleSubmit}
             doctorProfileHook={doctorProfileHook}

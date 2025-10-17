@@ -8,7 +8,7 @@
 // ============================================================================
 
 import { VALIDATION_RULES } from '../constants';
-import type { Patient, FieldErrors, ValidationError } from '../types';
+import type { Patient } from '../types';
 
 // Re-export utilities from organized modules
 export * from './dateHelpers';
@@ -86,6 +86,15 @@ export const sortByDate = <T extends { date?: string; created_at?: string; date_
   });
 };
 
+// Normalize text by removing accents and converting to lowercase
+export const normalizeText = (text: string): string => {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove diacritical marks (accents)
+    .trim();
+};
+
 export const filterBySearchTerm = <T>(
   items: T[], 
   searchTerm: string, 
@@ -93,11 +102,11 @@ export const filterBySearchTerm = <T>(
 ): T[] => {
   if (!searchTerm.trim()) return items;
   
-  const term = searchTerm.toLowerCase();
+  const normalizedTerm = normalizeText(searchTerm);
   return items.filter(item =>
     searchFields.some(field => {
       const value = item[field];
-      return typeof value === 'string' && value.toLowerCase().includes(term);
+      return typeof value === 'string' && normalizeText(value).includes(normalizedTerm);
     })
   );
 };
@@ -116,7 +125,7 @@ export const parseApiError = (error: any): string => {
     
     if (Array.isArray(detail)) {
       return detail
-        .map((err: ValidationError) => `${err.loc?.[1] || 'Campo'}: ${err.msg}`)
+        .map((err: any) => `${err.loc?.[1] || 'Campo'}: ${err.msg}`)
         .join(', ');
     }
   }

@@ -73,7 +73,7 @@ export type ConsultationManagementReturn = ConsultationManagementState & Consult
 
 // Function moved to imports section above
 
-export const useConsultationManagement = (): ConsultationManagementReturn => {
+export const useConsultationManagement = (onNavigate?: (view: string) => void): ConsultationManagementReturn => {
   // Authentication
   const { isAuthenticated } = useAuth();
   
@@ -198,13 +198,21 @@ export const useConsultationManagement = (): ConsultationManagementReturn => {
     try {
       const newConsultation = await apiService.createConsultation(data.patient_id.toString(), data);
       await fetchConsultations(); // Refresh list
+      
+      // Navigate to consultations view after successful creation
+      if (onNavigate) {
+        setTimeout(() => {
+          onNavigate('consultations');
+        }, 1000); // Small delay to show success message
+      }
+      
       return newConsultation;
     } catch (error: any) {
       throw new Error(error.message || 'Error al crear consulta');
     } finally {
       setIsSubmitting(false);
     }
-  }, [fetchConsultations]);
+  }, [fetchConsultations, onNavigate]);
 
   // Update existing consultation
   const updateConsultation = useCallback(async (id: string, data: ConsultationFormData): Promise<Consultation> => {

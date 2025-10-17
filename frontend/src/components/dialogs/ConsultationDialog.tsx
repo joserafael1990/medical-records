@@ -19,7 +19,10 @@ import {
   FormHelperText,
   Autocomplete,
   Avatar,
-  Paper
+  Paper,
+  Grid,
+  Card,
+  CardContent
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -33,7 +36,13 @@ import {
   Phone as PhoneIcon,
   Email as EmailIcon,
   Badge as BadgeIcon,
-  Schedule as ScheduleIcon
+  Schedule as ScheduleIcon,
+  MonitorHeart as MonitorHeartIcon,
+  Favorite as HeartIcon,
+  Thermostat as ThermostatIcon,
+  Scale as ScaleIcon,
+  Height as HeightIcon,
+  LocalHospital as HospitalIcon2
 } from '@mui/icons-material';
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -42,8 +51,14 @@ import { Patient, PatientFormData, ClinicalStudy } from '../../types';
 import { MEDICAL_VALIDATION_RULES, validateForm } from '../../utils/validation';
 import { apiService } from '../../services/api';
 import ClinicalStudiesSection from '../common/ClinicalStudiesSection';
-import ClinicalStudyDialog from './ClinicalStudyDialog';
+import ClinicalStudyDialogWithCatalog from './ClinicalStudyDialogWithCatalog';
 import { useClinicalStudies } from '../../hooks/useClinicalStudies';
+import VitalSignsSection from '../common/VitalSignsSection';
+import { useVitalSigns } from '../../hooks/useVitalSigns';
+import DiagnosisSelector from '../common/DiagnosisSelector';
+import { DiagnosisCatalog } from '../../hooks/useDiagnosisCatalog';
+import { PrintButtons } from '../common/PrintButtons';
+import { PatientInfo, DoctorInfo, ConsultationInfo, MedicationInfo, StudyInfo } from '../../services/pdfService';
 // import { useSnackbar } from '../../contexts/SnackbarContext';
 
 // Define ConsultationFormData interface based on the hook
@@ -71,6 +86,9 @@ interface ConsultationFormData {
   // New fields for appointment selection
   has_appointment: boolean;
   appointment_id: string;
+  // New fields for structured diagnoses
+  primary_diagnoses: DiagnosisCatalog[];
+  secondary_diagnoses_list: DiagnosisCatalog[];
 }
 
 interface ConsultationDialogProps {
@@ -124,12 +142,22 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   doctorProfile,
   onNewPatient,
   appointments = []
-}) => {
+}: ConsultationDialogProps) => {
   const isEditing = !!consultation;
+
+  // Helper function to get current date in CDMX timezone
+  const getCDMXDateTime = () => {
+    const now = new Date();
+    // Get the current time in CDMX timezone and format it properly
+    const cdmxTimeString = now.toLocaleString("sv-SE", {timeZone: "America/Mexico_City"});
+    // Convert back to Date object and then to ISO string
+    const cdmxDate = new Date(cdmxTimeString);
+    return cdmxDate.toISOString();
+  };
 
   const initialFormData: ConsultationFormData = {
     patient_id: '',
-    date: new Date().toISOString(),
+    date: getCDMXDateTime(),
     chief_complaint: '',
     history_present_illness: '',
     family_history: '',
@@ -152,7 +180,10 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     doctor_specialty: doctorProfile?.specialty || '',
     // New fields
     has_appointment: undefined as any,
-    appointment_id: ''
+    appointment_id: '',
+    // Structured diagnoses
+    primary_diagnoses: [],
+    secondary_diagnoses_list: []
   };
 
   const [formData, setFormData] = useState<ConsultationFormData>(initialFormData);
@@ -171,6 +202,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   // Clinical studies management
   const clinicalStudiesHook = useClinicalStudies();
 
+  // Vital signs management
+  const vitalSignsHook = useVitalSigns();
+
   // State for inline patient creation
   const [newPatientData, setNewPatientData] = useState({
     first_name: '',
@@ -188,7 +222,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         setFormData({
           ...initialFormData,
           patient_id: consultation.patient_id || '',
-          date: consultation.date ? consultation.date : new Date().toISOString(),
+          date: consultation.date ? consultation.date : getCDMXDateTime(),
           chief_complaint: consultation.chief_complaint || '',
           history_present_illness: consultation.history_present_illness || '',
           family_history: consultation.family_history || '',
@@ -206,12 +240,15 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           interconsultations: consultation.interconsultations || '',
           doctor_name: consultation.doctor_name || initialFormData.doctor_name,
           doctor_professional_license: consultation.doctor_professional_license || initialFormData.doctor_professional_license,
-          doctor_specialty: consultation.doctor_specialty || initialFormData.doctor_specialty
+          doctor_specialty: consultation.doctor_specialty || initialFormData.doctor_specialty,
+          // Initialize structured diagnoses (will be loaded from API if available)
+          primary_diagnoses: consultation.primary_diagnoses || [],
+          secondary_diagnoses_list: consultation.secondary_diagnoses_list || []
         });
 
         // Find and set selected patient
         if (consultation.patient_id && patients.length > 0) {
-          const patient = patients.find(p => p.id === consultation.patient_id);
+          const patient = patients.find((p: any) => p.id === consultation.patient_id);
           setSelectedPatient(patient || null);
         }
 
@@ -223,12 +260,14 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           error: clinicalStudiesHook.error
         });
         clinicalStudiesHook.fetchStudies(String(consultation.id));
+        vitalSignsHook.fetchConsultationVitalSigns(String(consultation.id));
       } else {
         setFormData(initialFormData);
         setSelectedPatient(null);
         
-        // Clear clinical studies for new consultation
+        // Clear clinical studies and vital signs for new consultation
         clinicalStudiesHook.clearTemporaryStudies();
+        vitalSignsHook.clearTemporaryVitalSigns();
       }
     }
   }, [open, consultation, patients, doctorProfile]);
@@ -242,7 +281,16 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     }
   }, [clinicalStudiesHook.clinicalStudyDialogOpen, isEditing, consultation]);
 
-  // Load countries, emergency relationships, and patients for appointments
+  // Refresh vital signs when vital signs dialog closes (for existing consultations)
+  useEffect(() => {
+    if (isEditing && consultation && !vitalSignsHook.vitalSignDialogOpen) {
+      // Refresh vital signs when vital signs dialog closes
+      console.log('🫀 Refreshing vital signs after dialog close');
+      vitalSignsHook.fetchConsultationVitalSigns(String(consultation.id));
+    }
+  }, [vitalSignsHook.vitalSignDialogOpen, isEditing, consultation]);
+
+  // Load countries, emergency relationships, patients for appointments, and vital signs
   useEffect(() => {
     const loadInitialData = async () => {
       try {
@@ -252,15 +300,18 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         ]);
         setCountries(countriesData);
         setEmergencyRelationships(relationshipsData);
+        
+        // Load available vital signs
+        vitalSignsHook.fetchAvailableVitalSigns();
 
         // Load patients for appointments if appointments exist
         if (appointments && appointments.length > 0) {
-          const patientIds = appointments.map(apt => apt.patient_id).filter(id => id);
+          const patientIds = appointments.map((apt: any) => apt.patient_id).filter((id: any) => id);
           console.log('🔍 ConsultationDialog - loading patients for appointment IDs:', patientIds);
           
           // Get all patients to find the ones referenced in appointments
           const allPatients = await apiService.getPatients();
-          const appointmentPatients = allPatients.filter(patient => 
+          const appointmentPatients = allPatients.filter((patient: any) => 
             patientIds.includes(patient.id)
           );
           console.log('🔍 ConsultationDialog - found appointment patients:', appointmentPatients.length);
@@ -278,6 +329,73 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       loadInitialData();
     }
   }, [open, appointments]);
+
+  // Load structured diagnoses when editing a consultation
+  useEffect(() => {
+    const loadStructuredDiagnoses = async () => {
+      if (consultation && consultation.id) {
+        try {
+          // TODO: Load structured diagnoses from API when backend endpoint is available
+          // For now, we'll parse from the text fields if they contain CIE-10 codes
+          const parseDiagnosesFromText = (text: string): DiagnosisCatalog[] => {
+            if (!text) return [];
+            
+            // Simple parsing for CIE-10 codes (e.g., "E11.9 - Diabetes mellitus tipo 2")
+            const diagnosisEntries = text.split(';').map(entry => entry.trim()).filter(entry => entry);
+            return diagnosisEntries.map((entry, index) => {
+              const [code, ...nameParts] = entry.split(' - ');
+              const name = nameParts.join(' - ');
+              
+              return {
+                id: index + 1, // Temporary ID
+                code: code?.trim() || '',
+                name: name?.trim() || entry,
+                category_id: 0,
+                description: '',
+                synonyms: [],
+                severity_level: undefined,
+                is_chronic: false,
+                is_contagious: false,
+                age_group: undefined,
+                gender_specific: undefined,
+                specialty: undefined,
+                is_active: true,
+                created_at: '',
+                updated_at: '',
+                category: {
+                  id: 0,
+                  code: '',
+                  name: '',
+                  level: 1,
+                  is_active: true,
+                  created_at: '',
+                  updated_at: ''
+                }
+              };
+            });
+          };
+
+          // Parse primary diagnoses
+          if (consultation.primary_diagnosis) {
+            const parsedPrimary = parseDiagnosesFromText(consultation.primary_diagnosis);
+            setFormData((prev: ConsultationFormData) => ({ ...prev, primary_diagnoses: parsedPrimary }));
+          }
+
+          // Parse secondary diagnoses
+          if (consultation.secondary_diagnoses) {
+            const parsedSecondary = parseDiagnosesFromText(consultation.secondary_diagnoses);
+            setFormData((prev: ConsultationFormData) => ({ ...prev, secondary_diagnoses_list: parsedSecondary }));
+          }
+        } catch (error) {
+          console.error('Error loading structured diagnoses:', error);
+        }
+      }
+    };
+
+    if (open && consultation) {
+      loadStructuredDiagnoses();
+    }
+  }, [open, consultation]);
 
   // Load states when patient data changes
   useEffect(() => {
@@ -306,9 +424,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | { name?: string; value: unknown }>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name as string]: value }));
+    setFormData((prev: ConsultationFormData) => ({ ...prev, [name as string]: value }));
     if (errors[name as string]) {
-      setErrors(prev => {
+      setErrors((prev: { [key: string]: string }) => {
         const newErrors = { ...prev };
         delete newErrors[name as string];
         return newErrors;
@@ -317,10 +435,16 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   };
 
   const handleDateChange = (newValue: Date | null) => {
-    const dateString = newValue ? newValue.toISOString() : '';
-    setFormData(prev => ({ ...prev, date: dateString }));
+    let dateString = '';
+    if (newValue) {
+      // Convert to CDMX timezone before sending
+      const cdmxTimeString = newValue.toLocaleString("sv-SE", {timeZone: "America/Mexico_City"});
+      const cdmxDate = new Date(cdmxTimeString);
+      dateString = cdmxDate.toISOString();
+    }
+    setFormData((prev: ConsultationFormData) => ({ ...prev, date: dateString }));
     if (errors.date) {
-      setErrors(prev => {
+      setErrors((prev: { [key: string]: string }) => {
         const newErrors = { ...prev };
         delete newErrors.date;
         return newErrors;
@@ -328,9 +452,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     }
   };
 
-  const handlePatientChange = async (patient: Patient | null) => {
+  const handlePatientChange = async (patient: any | null) => {
     setSelectedPatient(patient);
-    setFormData(prev => ({ ...prev, patient_id: patient?.id || '' }));
+    setFormData((prev: ConsultationFormData) => ({ ...prev, patient_id: patient?.id || '' }));
     
     // Load full patient data for editing
     if (patient) {
@@ -346,7 +470,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     }
     
     if (errors.patient_id) {
-      setErrors(prev => {
+      setErrors((prev: { [key: string]: string }) => {
         const newErrors = { ...prev };
         delete newErrors.patient_id;
         return newErrors;
@@ -354,8 +478,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     }
   };
 
-  const handlePatientDataChange = (field: keyof PatientFormData, value: any) => {
-    setPatientEditData(prev => prev ? { ...prev, [field]: value } : null);
+  const handlePatientDataChange = (field: keyof any, value: any) => {
+    setPatientEditData((prev: any) => prev ? { ...prev, [field]: value } : null);
   };
 
   const handleCountryChange = async (field: 'address_country_id' | 'birth_country_id', countryId: string) => {
@@ -386,11 +510,11 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     
     if (appointment) {
       // Use patient from appointment object (comes from backend) or find in local patients list
-      const patient = appointment.patient || patients.find(p => p.id === appointment.patient_id);
+      const patient = appointment.patient || patients.find((p: any) => p.id === appointment.patient_id);
       
       if (patient) {
         setSelectedPatient(patient);
-        setFormData(prev => ({ ...prev, patient_id: patient.id.toString(), appointment_id: appointment.id.toString() }));
+        setFormData((prev: ConsultationFormData) => ({ ...prev, patient_id: patient.id.toString(), appointment_id: appointment.id.toString() }));
         
         // Always load fresh patient data from API to ensure decryption
         try {
@@ -414,20 +538,20 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     } else {
       setSelectedPatient(null);
       setPatientEditData(null);
-      setFormData(prev => ({ ...prev, patient_id: '', appointment_id: '' }));
+      setFormData((prev: ConsultationFormData) => ({ ...prev, patient_id: '', appointment_id: '' }));
     }
   };
 
   // Handle new patient field changes
   const handleNewPatientFieldChange = (field: string, value: string) => {
-    setNewPatientData(prev => ({
+    setNewPatientData((prev: any) => ({
       ...prev,
       [field]: value
     }));
   };
 
   // Filter appointments to show only non-cancelled ones
-  const availableAppointments = appointments.filter(appointment => 
+  const availableAppointments = appointments.filter((appointment: any) => 
     appointment.status !== 'cancelled' && appointment.status !== 'canceled'
   );
 
@@ -520,8 +644,14 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       const finalFormData = {
         ...formData,
         patient_id: finalPatientId?.toString() || '',
-        consultation_type: consultationType
+        consultation_type: consultationType,
+        // Include structured diagnoses
+        primary_diagnoses: formData.primary_diagnoses,
+        secondary_diagnoses_list: formData.secondary_diagnoses_list
       };
+      
+      console.log('🔬 Final form data being sent:', finalFormData);
+      console.log('🔬 Laboratory results field:', finalFormData.laboratory_results);
       
       const createdConsultation = await onSubmit(finalFormData);
       console.log('🔬 Consultation creation result:', createdConsultation);
@@ -554,6 +684,31 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         console.log('🔬 Studies count:', clinicalStudiesHook.studies.length);
         console.log('🔬 Consultation ID:', createdConsultation?.id);
       }
+
+      // Save vital signs if any were added
+      if (vitalSignsHook.temporaryVitalSigns.length > 0 && createdConsultation?.id) {
+        console.log('🫀 Saving vital signs for consultation:', createdConsultation.id);
+        console.log('🫀 Vital signs to save:', vitalSignsHook.temporaryVitalSigns);
+        
+        for (const vitalSign of vitalSignsHook.temporaryVitalSigns) {
+          try {
+            console.log('🫀 Vital sign data to send:', vitalSign);
+            await vitalSignsHook.createVitalSign(String(createdConsultation.id), vitalSign);
+            console.log('✅ Vital sign saved:', vitalSign);
+          } catch (error) {
+            console.error('❌ Error saving vital sign:', error);
+            console.error('❌ Vital sign data that failed:', vitalSign);
+            // Continue with other vital signs even if one fails
+          }
+        }
+        
+        // Clear temporary vital signs after saving
+        vitalSignsHook.clearTemporaryVitalSigns();
+      } else {
+        console.log('🫀 No vital signs to save or consultation not created');
+        console.log('🫀 Vital signs count:', vitalSignsHook.temporaryVitalSigns.length);
+        console.log('🫀 Consultation ID:', createdConsultation?.id);
+      }
       
       // Consulta creada exitosamente - sin mostrar diálogo
     } catch (err: any) {
@@ -565,23 +720,38 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   };
 
   const handleClose = () => {
-    // Clear temporary clinical studies when closing dialog
-    clinicalStudiesHook.clearTemporaryStudies();
+    // Don't clear temporary studies when closing - they should persist
+    // until a new consultation dialog is opened
     onClose();
   };
 
   // Clinical studies handlers
   const handleAddStudy = () => {
-    if (!selectedPatient) {
-      setError('Debe seleccionar un paciente antes de agregar estudios clínicos');
-      return;
-    }
+    console.log('🔍 handleAddStudy called');
+    console.log('🔍 selectedPatient:', selectedPatient);
+    console.log('🔍 isEditing:', isEditing);
+    console.log('🔍 consultation:', consultation);
+    console.log('🔍 doctorProfile:', doctorProfile);
+    
+    // Allow adding studies even without a selected patient
+    // Use temp_patient ID when no patient is selected
+    const patientId = selectedPatient?.id || 'temp_patient';
+    const consultationId = isEditing ? String(consultation.id) : 'temp_consultation';
+    const doctorName = doctorProfile?.full_name || 'Dr. Usuario Sistema';
+    
+    console.log('🔍 Calling openAddDialog with:', {
+      consultationId,
+      patientId,
+      doctorName
+    });
     
     clinicalStudiesHook.openAddDialog(
-      isEditing ? String(consultation.id) : 'temp_consultation', // Use real ID when editing
-      selectedPatient.id,
-      doctorProfile?.full_name || 'Dr. Usuario Sistema'
+      consultationId,
+      patientId,
+      doctorName
     );
+    
+    console.log('🔍 openAddDialog called, dialog should be open now');
   };
 
   const handleEditStudy = (study: ClinicalStudy) => {
@@ -649,10 +819,10 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               <InputLabel>Seleccione una opción</InputLabel>
               <Select
                 value={formData.has_appointment === true ? 'yes' : formData.has_appointment === false ? 'no' : ''}
-                onChange={(e) => {
+                onChange={(e: any) => {
                   const value = e.target.value;
                   const hasAppointment = value === 'yes';
-                  setFormData(prev => ({ 
+                  setFormData((prev: ConsultationFormData) => ({ 
                     ...prev, 
                     has_appointment: hasAppointment,
                     appointment_id: hasAppointment ? prev.appointment_id : ''
@@ -683,14 +853,14 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 <InputLabel>Citas Programadas</InputLabel>
                 <Select
                   value={formData.appointment_id || ''}
-                  onChange={(e) => {
+                  onChange={(e: any) => {
                     const appointmentId = e.target.value;
-                    const appointment = availableAppointments.find(apt => apt.id.toString() === appointmentId);
+                    const appointment = availableAppointments.find((apt: any) => apt.id.toString() === appointmentId);
                     handleAppointmentChange(appointment);
                   }}
                   label="Citas Programadas"
                 >
-                  {availableAppointments.map((appointment) => {
+                  {(availableAppointments || []).map((appointment: any) => {
                     // Use patient information from the appointment object (comes from backend)
                     const patient = appointment.patient;
                     
@@ -773,10 +943,10 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 <Box sx={{ flex: 1 }}>
                   <Autocomplete
                     options={patients}
-                    getOptionLabel={(option) => formatPatientNameWithAge(option)}
+                    getOptionLabel={(option: any) => formatPatientNameWithAge(option)}
                     value={selectedPatient}
-                    onChange={(_, newValue) => handlePatientChange(newValue)}
-                    renderInput={(params) => (
+                    onChange={(_: any, newValue: any) => handlePatientChange(newValue)}
+                    renderInput={(params: any) => (
                       <TextField
                         {...params}
                         label="Seleccionar Paciente"
@@ -785,7 +955,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                         helperText={error && !selectedPatient ? 'Campo requerido' : ''}
                       />
                     )}
-                    renderOption={(props, option) => (
+                    renderOption={(props: any, option: any) => (
                       <Box component="li" {...props}>
                         <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
                           {option.first_name[0]}{option.paternal_surname[0]}
@@ -805,9 +975,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 </Box>
                 
               </Box>
+                )}
+              </Box>
             )}
-          </Box>
-          )}
 
           {/* Inline New Patient Creation Form - Only show if no appointment and no patient selected */}
           {!formData.has_appointment && !selectedPatient && (
@@ -826,7 +996,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   <TextField
                     label="Nombre(s)"
                     value={newPatientData.first_name}
-                    onChange={(e) => handleNewPatientFieldChange('first_name', e.target.value)}
+                    onChange={(e: any) => handleNewPatientFieldChange('first_name', e.target.value)}
                     size="small"
                     required
                     placeholder="Nombre(s) - obligatorio"
@@ -834,7 +1004,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   <TextField
                     label="Apellido Paterno"
                     value={newPatientData.paternal_surname}
-                    onChange={(e) => handleNewPatientFieldChange('paternal_surname', e.target.value)}
+                    onChange={(e: any) => handleNewPatientFieldChange('paternal_surname', e.target.value)}
                     size="small"
                     required
                     placeholder="Apellido Paterno - obligatorio"
@@ -842,21 +1012,21 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   <TextField
                     label="Apellido Materno"
                     value={newPatientData.maternal_surname}
-                    onChange={(e) => handleNewPatientFieldChange('maternal_surname', e.target.value)}
+                    onChange={(e: any) => handleNewPatientFieldChange('maternal_surname', e.target.value)}
                     size="small"
                     placeholder="Apellido Materno - opcional"
                   />
                   <TextField
                     label="Teléfono"
                     value={newPatientData.primary_phone}
-                    onChange={(e) => handleNewPatientFieldChange('primary_phone', e.target.value)}
+                    onChange={(e: any) => handleNewPatientFieldChange('primary_phone', e.target.value)}
                     size="small"
                     required
                     placeholder="Teléfono - opcional"
                   />
                 </Box>
               </Box>
-            </Box>
+          </Box>
           )}
 
           {/* Patient Data Section - Show when patient is selected */}
@@ -878,28 +1048,28 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                     <TextField
                       label="Nombre"
                       value={patientEditData.first_name || ''}
-                      onChange={(e) => handlePatientDataChange('first_name', e.target.value)}
+                      onChange={(e: any) => handlePatientDataChange('first_name', e.target.value)}
                       size="small"
                       required
                     />
                     <TextField
                       label="Apellido Paterno"
                       value={patientEditData.paternal_surname || ''}
-                      onChange={(e) => handlePatientDataChange('paternal_surname', e.target.value)}
+                      onChange={(e: any) => handlePatientDataChange('paternal_surname', e.target.value)}
                       size="small"
                       required
                     />
                     <TextField
                       label="Apellido Materno"
                       value={patientEditData.maternal_surname || ''}
-                      onChange={(e) => handlePatientDataChange('maternal_surname', e.target.value)}
+                      onChange={(e: any) => handlePatientDataChange('maternal_surname', e.target.value)}
                       size="small"
                     />
                     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
                       <DatePicker
                         label="Fecha de Nacimiento"
                         value={patientEditData.birth_date ? new Date(patientEditData.birth_date) : null}
-                        onChange={(newValue) => {
+                        onChange={(newValue: any) => {
                           const dateStr = newValue ? newValue.toISOString().split('T')[0] : '';
                           handlePatientDataChange('birth_date', dateStr);
                         }}
@@ -915,7 +1085,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                       <InputLabel>Género</InputLabel>
                       <Select
                         value={patientEditData.gender || ''}
-                        onChange={(e) => handlePatientDataChange('gender', e.target.value)}
+                        onChange={(e: any) => handlePatientDataChange('gender', e.target.value)}
                         label="Género"
                       >
                         <MenuItem value=""><em>Seleccione</em></MenuItem>
@@ -939,7 +1109,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                     <TextField
                       label="Teléfono"
                       value={patientEditData.primary_phone || ''}
-                      onChange={(e) => handlePatientDataChange('primary_phone', e.target.value)}
+                      onChange={(e: any) => handlePatientDataChange('primary_phone', e.target.value)}
                       size="small"
                       required
                     />
@@ -947,13 +1117,13 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                       label="Email"
                       type="email"
                       value={patientEditData.email || ''}
-                      onChange={(e) => handlePatientDataChange('email', e.target.value)}
+                      onChange={(e: any) => handlePatientDataChange('email', e.target.value)}
                       size="small"
                     />
                     <TextField
                       label="Dirección"
                       value={patientEditData.home_address || ''}
-                      onChange={(e) => handlePatientDataChange('home_address', e.target.value)}
+                      onChange={(e: any) => handlePatientDataChange('home_address', e.target.value)}
                       size="small"
                       fullWidth
                       sx={{ gridColumn: '1 / -1' }}
@@ -961,13 +1131,13 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                     <TextField
                       label="Ciudad"
                       value={patientEditData.address_city || ''}
-                      onChange={(e) => handlePatientDataChange('address_city', e.target.value)}
+                      onChange={(e: any) => handlePatientDataChange('address_city', e.target.value)}
                       size="small"
                     />
                     <TextField
                       label="Código Postal"
                       value={patientEditData.address_postal_code || ''}
-                      onChange={(e) => handlePatientDataChange('address_postal_code', e.target.value)}
+                      onChange={(e: any) => handlePatientDataChange('address_postal_code', e.target.value)}
                       size="small"
                       inputProps={{ maxLength: 5 }}
                       helperText="Opcional"
@@ -976,10 +1146,10 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                       <InputLabel>País</InputLabel>
                       <Select
                         value={patientEditData.address_country_id || ''}
-                        onChange={(e) => handleCountryChange('address_country_id', e.target.value as string)}
+                        onChange={(e: any) => handleCountryChange('address_country_id', e.target.value as string)}
                         label="País"
                       >
-                        {countries.map((country) => (
+                        {(countries || []).map((country: any) => (
                           <MenuItem key={country.id} value={country.id.toString()}>
                             {country.name}
                           </MenuItem>
@@ -990,11 +1160,11 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                       <InputLabel>Estado</InputLabel>
                       <Select
                         value={patientEditData.address_state_id || ''}
-                        onChange={(e) => handlePatientDataChange('address_state_id', e.target.value)}
+                        onChange={(e: any) => handlePatientDataChange('address_state_id', e.target.value)}
                         label="Estado"
                         disabled={!patientEditData.address_country_id}
                       >
-                        {states.map((state) => (
+                        {(states || []).map((state: any) => (
                           <MenuItem key={state.id} value={state.id.toString()}>
                             {state.name}
                           </MenuItem>
@@ -1016,14 +1186,14 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                     <TextField
                       label="CURP"
                       value={patientEditData.curp || ''}
-                      onChange={(e) => handlePatientDataChange('curp', e.target.value)}
+                      onChange={(e: any) => handlePatientDataChange('curp', e.target.value)}
                       size="small"
                       inputProps={{ maxLength: 18 }}
                     />
                     <TextField
                       label="RFC"
                       value={patientEditData.rfc || ''}
-                      onChange={(e) => handlePatientDataChange('rfc', e.target.value)}
+                      onChange={(e: any) => handlePatientDataChange('rfc', e.target.value)}
                       size="small"
                       inputProps={{ maxLength: 13 }}
                     />
@@ -1031,7 +1201,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                       <InputLabel>Estado Civil</InputLabel>
                       <Select
                         value={patientEditData.civil_status || ''}
-                        onChange={(e) => handlePatientDataChange('civil_status', e.target.value)}
+                        onChange={(e: any) => handlePatientDataChange('civil_status', e.target.value)}
                         label="Estado Civil"
                       >
                         <MenuItem value=""><em>Seleccione</em></MenuItem>
@@ -1057,17 +1227,17 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                     <TextField
                       label="Ciudad de Nacimiento"
                       value={patientEditData.birth_city || ''}
-                      onChange={(e) => handlePatientDataChange('birth_city', e.target.value)}
+                      onChange={(e: any) => handlePatientDataChange('birth_city', e.target.value)}
                       size="small"
                     />
                     <FormControl size="small">
                       <InputLabel>País de Nacimiento</InputLabel>
                       <Select
                         value={patientEditData.birth_country_id || ''}
-                        onChange={(e) => handleCountryChange('birth_country_id', e.target.value as string)}
+                        onChange={(e: any) => handleCountryChange('birth_country_id', e.target.value as string)}
                         label="País de Nacimiento"
                       >
-                        {countries.map((country) => (
+                        {(countries || []).map((country: any) => (
                           <MenuItem key={country.id} value={country.id.toString()}>
                             {country.name}
                           </MenuItem>
@@ -1078,11 +1248,11 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                       <InputLabel>Estado de Nacimiento</InputLabel>
                       <Select
                         value={patientEditData.birth_state_id || ''}
-                        onChange={(e) => handlePatientDataChange('birth_state_id', e.target.value)}
+                        onChange={(e: any) => handlePatientDataChange('birth_state_id', e.target.value)}
                         label="Estado de Nacimiento"
                         disabled={!patientEditData.birth_country_id}
                       >
-                        {birthStates.map((state) => (
+                        {(birthStates || []).map((state: any) => (
                           <MenuItem key={state.id} value={state.id.toString()}>
                             {state.name}
                           </MenuItem>
@@ -1104,25 +1274,25 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                     <TextField
                       label="Nombre del Contacto"
                       value={patientEditData.emergency_contact_name || ''}
-                      onChange={(e) => handlePatientDataChange('emergency_contact_name', e.target.value)}
+                      onChange={(e: any) => handlePatientDataChange('emergency_contact_name', e.target.value)}
                       size="small"
                     />
                     <TextField
                       label="Teléfono del Contacto"
                       value={patientEditData.emergency_contact_phone || ''}
-                      onChange={(e) => handlePatientDataChange('emergency_contact_phone', e.target.value)}
+                      onChange={(e: any) => handlePatientDataChange('emergency_contact_phone', e.target.value)}
                       size="small"
                     />
                     <FormControl size="small" fullWidth>
                       <InputLabel>Relación con el Paciente</InputLabel>
                       <Select
                         value={patientEditData.emergency_contact_relationship || ''}
-                        onChange={(e) => handlePatientDataChange('emergency_contact_relationship', e.target.value)}
+                        onChange={(e: any) => handlePatientDataChange('emergency_contact_relationship', e.target.value)}
                         label="Relación con el Paciente"
                         sx={{ gridColumn: '1 / -1' }}
                       >
                         <MenuItem value=""><em>Seleccione</em></MenuItem>
-                        {emergencyRelationships.map((relationship) => (
+                        {(emergencyRelationships || []).map((relationship: any) => (
                           <MenuItem key={relationship.code} value={relationship.code}>
                             {relationship.name}
                           </MenuItem>
@@ -1144,7 +1314,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                     <TextField
                       label="Condiciones Crónicas"
                       value={patientEditData.chronic_conditions || ''}
-                      onChange={(e) => handlePatientDataChange('chronic_conditions', e.target.value)}
+                      onChange={(e: any) => handlePatientDataChange('chronic_conditions', e.target.value)}
                       size="small"
                       multiline
                       rows={2}
@@ -1154,7 +1324,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                     <TextField
                       label="Medicamentos Actuales"
                       value={patientEditData.current_medications || ''}
-                      onChange={(e) => handlePatientDataChange('current_medications', e.target.value)}
+                      onChange={(e: any) => handlePatientDataChange('current_medications', e.target.value)}
                       size="small"
                       multiline
                       rows={2}
@@ -1164,13 +1334,13 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                     <TextField
                       label="Proveedor de Seguro"
                       value={patientEditData.insurance_provider || ''}
-                      onChange={(e) => handlePatientDataChange('insurance_provider', e.target.value)}
+                      onChange={(e: any) => handlePatientDataChange('insurance_provider', e.target.value)}
                       size="small"
                     />
                     <TextField
                       label="Número de Póliza"
                       value={patientEditData.insurance_number || ''}
-                      onChange={(e) => handlePatientDataChange('insurance_number', e.target.value)}
+                      onChange={(e: any) => handlePatientDataChange('insurance_number', e.target.value)}
                       size="small"
                     />
                   </Box>
@@ -1227,11 +1397,11 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           <Box>
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
               <MedicalServicesIcon sx={{ fontSize: 20 }} />
-              Historia de la Enfermedad Actual
+              Descripción de la Enfermedad Actual
             </Typography>
             <TextField
               name="history_present_illness"
-              label="Historia de la enfermedad actual"
+              label="Descripción de la enfermedad actual"
               value={formData.history_present_illness}
               onChange={handleChange}
               size="small"
@@ -1240,6 +1410,24 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               rows={3}
             />
           </Box>
+
+          {/* Vital Signs Section - Always show */}
+          <VitalSignsSection
+            consultationId={isEditing && consultation?.id ? String(consultation.id) : "temp_consultation"}
+            patientId={selectedPatient?.id || 0}
+            vitalSigns={vitalSignsHook.getAllVitalSigns()}
+            isLoading={vitalSignsHook.isLoading}
+            onAddVitalSign={vitalSignsHook.openAddDialog}
+            onEditVitalSign={vitalSignsHook.openEditDialog}
+            onDeleteVitalSign={(vitalSignId) => {
+              if (isEditing && consultation?.id) {
+                vitalSignsHook.deleteVitalSign(String(consultation.id), vitalSignId);
+              } else {
+                // For temporary vital signs, remove from temporary list
+                vitalSignsHook.clearTemporaryVitalSigns();
+              }
+            }}
+          />
 
           {/* Physical Examination */}
           <Box>
@@ -1259,22 +1447,102 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             />
           </Box>
 
-          {/* Primary Diagnosis */}
+          {/* Laboratory Results */}
           <Box>
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
               <MedicalServicesIcon sx={{ fontSize: 20 }} />
-              Diagnóstico Principal
+              Resultados de Laboratorio
+            </Typography>
+            <TextField
+              name="laboratory_results"
+              label="Resultados de laboratorio"
+              value={formData.laboratory_results}
+              onChange={handleChange}
+              size="small"
+              fullWidth
+              multiline
+              rows={3}
+              placeholder="Registre los resultados de análisis de laboratorio que el paciente trajo para la consulta..."
+              sx={{ mb: 2 }}
+            />
+          </Box>
+
+          {/* Structured Diagnoses */}
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <MedicalServicesIcon sx={{ fontSize: 20 }} />
+              Diagnósticos (CIE-10)
+            </Typography>
+            
+            {/* Primary Diagnoses */}
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: 'primary.main' }}>
+                Diagnósticos Principales
+              </Typography>
+              <DiagnosisSelector
+                selectedDiagnoses={formData.primary_diagnoses}
+                onDiagnosesChange={(diagnoses: any) => {
+                  setFormData((prev: ConsultationFormData) => ({ ...prev, primary_diagnoses: diagnoses }));
+                  // Update text field for backward compatibility
+                  const diagnosisText = (diagnoses || []).map((d: any) => `${d.code} - ${d.name}`).join('; ');
+                  setFormData((prev: ConsultationFormData) => ({ ...prev, primary_diagnosis: diagnosisText }));
+                }}
+                specialty={formData.doctor_specialty}
+                maxSelections={3}
+                showRecommendations={true}
+                disabled={loading}
+              />
+            </Box>
+
+            <Divider sx={{ my: 2 }} />
+
+            {/* Secondary Diagnoses */}
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: 'secondary.main' }}>
+                Diagnósticos Secundarios
+              </Typography>
+              <DiagnosisSelector
+                selectedDiagnoses={formData.secondary_diagnoses_list}
+                onDiagnosesChange={(diagnoses: any) => {
+                  setFormData((prev: ConsultationFormData) => ({ ...prev, secondary_diagnoses_list: diagnoses }));
+                  // Update text field for backward compatibility
+                  const diagnosisText = (diagnoses || []).map((d: any) => `${d.code} - ${d.name}`).join('; ');
+                  setFormData((prev: ConsultationFormData) => ({ ...prev, secondary_diagnoses: diagnosisText }));
+                }}
+                specialty={formData.doctor_specialty}
+                maxSelections={5}
+                showRecommendations={false}
+                disabled={loading}
+              />
+            </Box>
+
+            {/* Legacy text fields for backward compatibility */}
+            <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                Campos de texto (para compatibilidad)
             </Typography>
             <TextField
               name="primary_diagnosis"
-              label="Diagnóstico principal"
+                label="Diagnóstico principal (texto)"
               value={formData.primary_diagnosis}
               onChange={handleChange}
               size="small"
               fullWidth
               multiline
               rows={2}
+                sx={{ mb: 1 }}
+              />
+              <TextField
+                name="secondary_diagnoses"
+                label="Diagnósticos secundarios (texto)"
+                value={formData.secondary_diagnoses}
+              onChange={handleChange}
+              size="small"
+              fullWidth
+              multiline
+              rows={2}
             />
+            </Box>
           </Box>
 
           {/* Treatment Plan */}
@@ -1314,28 +1582,111 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           </Box>
         </Box>
 
-        {/* Clinical Studies Section - Only show if patient is selected */}
-        {selectedPatient && (
-          <Box sx={{ mt: 3 }}>
-            <Divider sx={{ mb: 2 }} />
-            <ClinicalStudiesSection
-              consultationId={isEditing ? String(consultation.id) : "temp_consultation"}
-              patientId={selectedPatient.id}
-              studies={clinicalStudiesHook.studies}
-              isLoading={clinicalStudiesHook.isLoading}
-              onAddStudy={handleAddStudy}
-              onEditStudy={handleEditStudy}
-              onDeleteStudy={handleDeleteStudy}
-              onViewFile={clinicalStudiesHook.viewFile}
-              onDownloadFile={clinicalStudiesHook.downloadFile}
-            />
-          </Box>
-        )}
+        {/* Clinical Studies Section - Always show */}
+        <Box sx={{ mt: 3 }}>
+          <Divider sx={{ mb: 2 }} />
+          <ClinicalStudiesSection
+            consultationId={isEditing ? String(consultation.id) : "temp_consultation"}
+            patientId={selectedPatient?.id || "temp_patient"}
+            studies={clinicalStudiesHook.studies}
+            isLoading={clinicalStudiesHook.isLoading}
+            onAddStudy={handleAddStudy}
+            onEditStudy={handleEditStudy}
+            onDeleteStudy={handleDeleteStudy}
+            onViewFile={clinicalStudiesHook.viewFile}
+            onDownloadFile={clinicalStudiesHook.downloadFile}
+          />
+        </Box>
       </DialogContent>
 
       <Divider />
 
-      <DialogActions sx={{ p: 2 }}>
+      <DialogActions sx={{ p: 2, flexDirection: 'column', gap: 2 }}>
+        {/* Print buttons - show when we have consultation data or are editing */}
+        {((isEditing && consultation) || consultation) && (
+          <Box sx={{ width: '100%' }}>
+            {console.log('🔍 DoctorProfile data for PDF:', doctorProfile)}
+            {console.log('🔍 Office data:', {
+              office_address: doctorProfile?.office_address,
+              office_city: doctorProfile?.office_city,
+              office_state_name: doctorProfile?.office_state_name,
+              office_country_name: doctorProfile?.office_country_name,
+              office_phone: doctorProfile?.office_phone
+            })}
+            {console.log('🔍 All doctorProfile keys:', Object.keys(doctorProfile || {}))}
+            {console.log('🔍 Full doctorProfile object:', JSON.stringify(doctorProfile, null, 2))}
+            {console.log('🔍 Specialty data:', {
+              specialty_id: doctorProfile?.specialty_id,
+              specialty_name: doctorProfile?.specialty_name,
+              specialty: doctorProfile?.specialty
+            })}
+            <PrintButtons
+              patient={{
+                id: selectedPatient?.id || 0,
+                firstName: selectedPatient?.first_name || newPatientData.first_name || '',
+                lastName: selectedPatient?.paternal_surname || newPatientData.paternal_surname || '',
+                dateOfBirth: selectedPatient?.birth_date || newPatientData.birth_date || undefined,
+                phone: selectedPatient?.phone || newPatientData.phone || undefined,
+                email: selectedPatient?.email || newPatientData.email || undefined,
+                address: selectedPatient?.address || newPatientData.address || undefined,
+                city: selectedPatient?.city || newPatientData.city || undefined,
+                state: selectedPatient?.state || newPatientData.state || undefined,
+                country: selectedPatient?.country || newPatientData.country || undefined
+              }}
+              doctor={{
+                id: doctorProfile?.id || 0,
+                firstName: doctorProfile?.first_name || 'Dr.',
+                lastName: doctorProfile?.paternal_surname || 'Usuario',
+                title: doctorProfile?.title || 'Médico',
+                specialty: doctorProfile?.specialty_name || 'No especificada',
+                license: doctorProfile?.professional_license || 'No especificada',
+                phone: doctorProfile?.office_phone || doctorProfile?.phone || 'No especificado',
+                email: doctorProfile?.email || 'No especificado',
+                address: doctorProfile?.office_address || 'No especificado',
+                city: doctorProfile?.office_city || 'No especificado',
+                state: doctorProfile?.office_state_name || 'No especificado',
+                country: doctorProfile?.office_country_name || 'No especificado'
+              }}
+              consultation={{
+                id: consultation.id,
+                date: consultation.date || formData.date,
+                time: consultation.time || '10:00',
+                type: consultation.type || formData.type,
+                reason: consultation.reason || formData.reason,
+                diagnosis: consultation.primary_diagnosis || formData.primary_diagnosis,
+                notes: consultation.notes || formData.notes
+              }}
+              medications={[
+                // You might want to add medications from the consultation
+                // For now, using sample data
+                {
+                  name: 'Paracetamol',
+                  dosage: '500mg',
+                  frequency: 'Cada 8 horas',
+                  duration: '7 días',
+                  instructions: 'Tomar con alimentos',
+                  quantity: 21
+                }
+              ]}
+              studies={(clinicalStudiesHook.studies || []).map(study => ({
+                name: study.study_name,
+                type: study.study_type,
+                category: study.study_type, // Using study_type as category
+                description: study.study_description || 'Sin descripción',
+                instructions: study.study_description || 'Seguir indicaciones del laboratorio',
+                urgency: study.urgency || 'Rutina'
+              }))}
+              variant="outlined"
+              size="small"
+              direction="row"
+              spacing={1}
+              showDivider={true}
+            />
+          </Box>
+        )}
+        
+        {/* Action buttons */}
+        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', width: '100%' }}>
         <Button onClick={handleClose} color="inherit" disabled={loading}>
           Cancelar
         </Button>
@@ -1346,10 +1697,11 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         >
           {loading ? 'Guardando...' : (isEditing ? 'Actualizar Consulta' : 'Crear Consulta')}
         </Button>
+        </Box>
       </DialogActions>
 
-      {/* Clinical Study Dialog */}
-      <ClinicalStudyDialog
+      {/* Clinical Study Dialog with Catalog */}
+      <ClinicalStudyDialogWithCatalog
         open={clinicalStudiesHook.clinicalStudyDialogOpen}
         onClose={clinicalStudiesHook.closeDialog}
         onSubmit={clinicalStudiesHook.submitForm}
@@ -1358,7 +1710,172 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         isEditing={clinicalStudiesHook.isEditingClinicalStudy}
         isSubmitting={clinicalStudiesHook.isSubmitting}
         error={clinicalStudiesHook.error}
+        specialty={doctorProfile?.specialty}
+        diagnosis={formData.primary_diagnosis}
       />
+
+      {/* Vital Signs Selection Dialog */}
+      <Dialog open={vitalSignsHook.vitalSignDialogOpen && !vitalSignsHook.isEditingVitalSign} onClose={vitalSignsHook.closeDialog} maxWidth="md" fullWidth>
+        <DialogTitle>Seleccionar Signo Vital</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Selecciona el tipo de signo vital que deseas agregar:
+          </Typography>
+          <Grid container spacing={1}>
+            {vitalSignsHook.availableVitalSigns.map((vitalSign) => {
+              const getVitalSignIcon = (name: string) => {
+                const lowerName = name.toLowerCase();
+                if (lowerName.includes('cardíaca') || lowerName.includes('cardiac')) return <HeartIcon sx={{ color: '#f44336' }} />;
+                if (lowerName.includes('temperatura')) return <ThermostatIcon sx={{ color: '#ff9800' }} />;
+                if (lowerName.includes('peso')) return <ScaleIcon sx={{ color: '#4caf50' }} />;
+                if (lowerName.includes('estatura') || lowerName.includes('altura')) return <HeightIcon sx={{ color: '#2196f3' }} />;
+                if (lowerName.includes('presión') || lowerName.includes('presion')) return <MonitorHeartIcon sx={{ color: '#9c27b0' }} />;
+                return <HospitalIcon2 sx={{ color: '#607d8b' }} />;
+              };
+
+              const getVitalSignColor = (name: string) => {
+                const lowerName = name.toLowerCase();
+                if (lowerName.includes('cardíaca') || lowerName.includes('cardiac')) return '#f44336';
+                if (lowerName.includes('temperatura')) return '#ff9800';
+                if (lowerName.includes('peso')) return '#4caf50';
+                if (lowerName.includes('estatura') || lowerName.includes('altura')) return '#2196f3';
+                if (lowerName.includes('presión') || lowerName.includes('presion')) return '#9c27b0';
+                return '#607d8b';
+              };
+
+              return (
+                <Grid item xs={12} sm={6} key={vitalSign.id}>
+                  <Card 
+                    sx={{ 
+                      cursor: 'pointer', 
+                      border: `2px solid ${getVitalSignColor(vitalSign.name)}`,
+                      backgroundColor: `${getVitalSignColor(vitalSign.name)}08`,
+                      '&:hover': { 
+                        backgroundColor: `${getVitalSignColor(vitalSign.name)}15`,
+                        transform: 'translateY(-2px)',
+                        boxShadow: `0 4px 12px ${getVitalSignColor(vitalSign.name)}40`
+                      },
+                      transition: 'all 0.2s ease-in-out'
+                    }}
+                    onClick={() => {
+                      vitalSignsHook.updateFormData({ 
+                        vital_sign_id: vitalSign.id,
+                        value: '',
+                        unit: '',
+                        notes: ''
+                      });
+                    }}
+                  >
+                    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        {getVitalSignIcon(vitalSign.name)}
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                          {vitalSign.name}
+                        </Typography>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              );
+            })}
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={vitalSignsHook.closeDialog}>Cancelar</Button>
+      </DialogActions>
+      </Dialog>
+
+      {/* Vital Sign Form Dialog */}
+      <Dialog 
+        open={vitalSignsHook.vitalSignDialogOpen && vitalSignsHook.vitalSignFormData.vital_sign_id > 0} 
+        onClose={vitalSignsHook.closeDialog} 
+        maxWidth="sm" 
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {(() => {
+              const selectedVitalSign = vitalSignsHook.availableVitalSigns.find(
+                vs => vs.id === vitalSignsHook.vitalSignFormData.vital_sign_id
+              );
+              if (!selectedVitalSign) return <MonitorHeartIcon />;
+              
+              const lowerName = selectedVitalSign.name.toLowerCase();
+              if (lowerName.includes('cardíaca') || lowerName.includes('cardiac')) return <HeartIcon sx={{ color: '#f44336' }} />;
+              if (lowerName.includes('temperatura')) return <ThermostatIcon sx={{ color: '#ff9800' }} />;
+              if (lowerName.includes('peso')) return <ScaleIcon sx={{ color: '#4caf50' }} />;
+              if (lowerName.includes('estatura') || lowerName.includes('altura')) return <HeightIcon sx={{ color: '#2196f3' }} />;
+              if (lowerName.includes('presión') || lowerName.includes('presion')) return <MonitorHeartIcon sx={{ color: '#9c27b0' }} />;
+              return <HospitalIcon2 sx={{ color: '#607d8b' }} />;
+            })()}
+            {vitalSignsHook.isEditingVitalSign ? 'Editar Signo Vital' : 'Agregar Signo Vital'}
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            {/* Show selected vital sign name */}
+            {(() => {
+              const selectedVitalSign = vitalSignsHook.availableVitalSigns.find(
+                vs => vs.id === vitalSignsHook.vitalSignFormData.vital_sign_id
+              );
+              if (selectedVitalSign) {
+                return (
+                  <Box sx={{ mb: 2, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                      {selectedVitalSign.name}
+                    </Typography>
+                  </Box>
+                );
+              }
+              return null;
+            })()}
+            
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <TextField
+                  label="Valor"
+                  value={vitalSignsHook.vitalSignFormData.value}
+                  onChange={(e) => vitalSignsHook.updateFormData({ value: e.target.value })}
+                  fullWidth
+                  required
+                  placeholder="Ingresa el valor medido"
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  label="Unidad de medida"
+                  value={vitalSignsHook.vitalSignFormData.unit}
+                  onChange={(e) => vitalSignsHook.updateFormData({ unit: e.target.value })}
+                  fullWidth
+                  placeholder="Ej: cm, kg, mmHg, °C, bpm"
+                  helperText="Especifica la unidad de medida del valor"
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  label="Notas adicionales (opcional)"
+                  value={vitalSignsHook.vitalSignFormData.notes}
+                  onChange={(e) => vitalSignsHook.updateFormData({ notes: e.target.value })}
+                  fullWidth
+                  multiline
+                  rows={2}
+                  placeholder="Observaciones o comentarios adicionales"
+                />
+              </Grid>
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={vitalSignsHook.closeDialog}>Cancelar</Button>
+          <Button 
+            onClick={() => vitalSignsHook.submitForm(isEditing && consultation?.id ? String(consultation.id) : "temp_consultation")}
+            variant="contained"
+            disabled={vitalSignsHook.isSubmitting || !vitalSignsHook.vitalSignFormData.value}
+          >
+            {vitalSignsHook.isSubmitting ? 'Guardando...' : 'Guardar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   );
 };

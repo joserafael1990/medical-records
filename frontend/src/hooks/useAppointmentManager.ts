@@ -45,7 +45,8 @@ export interface UseAppointmentManagerReturn {
 
 export const useAppointmentManager = (
   patients: any[],
-  doctorProfile: any
+  doctorProfile: any,
+  onNavigate?: (view: string) => void
 ): UseAppointmentManagerReturn => {
   
   // Auth context
@@ -562,6 +563,13 @@ export const useAppointmentManager = (
         await apiService.createAgendaAppointment(appointmentData);
         console.log('✅ Appointment created successfully, refreshing data...');
         showSuccessMessage('Cita creada exitosamente');
+        
+        // Navigate to appointments view after successful creation
+        if (onNavigate) {
+          setTimeout(() => {
+            onNavigate('agenda');
+          }, 1000); // Small delay to show success message
+        }
       }
       
       setAppointmentDialogOpen(false);

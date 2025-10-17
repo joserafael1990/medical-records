@@ -160,6 +160,12 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
 
   // Dialog management
   const openAddDialog = useCallback((consultationId: string, patientId: string, doctorName: string) => {
+    console.log('🔍 useClinicalStudies.openAddDialog called with:', {
+      consultationId,
+      patientId,
+      doctorName
+    });
+    
     setClinicalStudyFormData({
       consultation_id: consultationId,
       patient_id: patientId,
@@ -181,6 +187,8 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
     setIsEditingClinicalStudy(false);
     setSelectedClinicalStudy(null);
     setClinicalStudyDialogOpen(true);
+    
+    console.log('🔍 Dialog state set to open');
   }, []);
 
   const openEditDialog = useCallback((study: ClinicalStudy) => {

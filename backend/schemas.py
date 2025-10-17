@@ -298,6 +298,7 @@ class MedicalRecordBase(BaseSchema):
     personal_pathological_history: str
     personal_non_pathological_history: str
     physical_examination: str
+    laboratory_analysis: Optional[str] = None
     primary_diagnosis: str
     treatment_plan: str
     follow_up_instructions: str
@@ -321,6 +322,7 @@ class MedicalRecordUpdate(BaseSchema):
     personal_pathological_history: Optional[str] = None
     personal_non_pathological_history: Optional[str] = None
     physical_examination: Optional[str] = None
+    laboratory_analysis: Optional[str] = None
     primary_diagnosis: Optional[str] = None
     treatment_plan: Optional[str] = None
     follow_up_instructions: Optional[str] = None
@@ -512,3 +514,95 @@ class DashboardStats(BaseSchema):
     doctores_totales: int
     consultas_mes: int
     mis_citas_hoy: Optional[int] = None  # Solo para doctores
+
+# ============================================================================
+# STUDY CATALOG SCHEMAS
+# ============================================================================
+
+class StudyCategoryBase(BaseSchema):
+    code: str
+    name: str
+    description: Optional[str] = None
+    is_active: bool = True
+
+class StudyCategory(StudyCategoryBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+class StudyNormalValueBase(BaseSchema):
+    age_min: Optional[int] = None
+    age_max: Optional[int] = None
+    gender: Optional[Literal['M', 'F', 'B']] = None
+    min_value: Optional[Decimal] = None
+    max_value: Optional[Decimal] = None
+    unit: Optional[str] = None
+    notes: Optional[str] = None
+
+class StudyNormalValue(StudyNormalValueBase):
+    id: int
+    study_id: int
+    created_at: datetime
+
+class StudyCatalogBase(BaseSchema):
+    code: str
+    name: str
+    category_id: int
+    subcategory: Optional[str] = None
+    description: Optional[str] = None
+    preparation: Optional[str] = None
+    methodology: Optional[str] = None
+    duration_hours: Optional[int] = None
+    specialty: Optional[str] = None
+    is_active: bool = True
+    regulatory_compliance: Optional[dict] = None
+
+class StudyCatalog(StudyCatalogBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    category: Optional[StudyCategory] = None
+    normal_values: List[StudyNormalValue] = []
+
+class StudyTemplateItemBase(BaseSchema):
+    study_id: int
+    order_index: int = 0
+
+class StudyTemplateItem(StudyTemplateItemBase):
+    id: int
+    template_id: int
+    created_at: datetime
+    study: Optional[StudyCatalog] = None
+
+class StudyTemplateBase(BaseSchema):
+    name: str
+    description: Optional[str] = None
+    specialty: Optional[str] = None
+    is_default: bool = False
+
+class StudyTemplate(StudyTemplateBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    template_items: List[StudyTemplateItem] = []
+
+class StudyTemplateCreate(BaseSchema):
+    name: str
+    description: Optional[str] = None
+    specialty: Optional[str] = None
+    study_ids: List[int] = []
+
+class StudySearchFilters(BaseSchema):
+    category_id: Optional[int] = None
+    subcategory: Optional[str] = None
+    name: Optional[str] = None
+    code: Optional[str] = None
+    specialty: Optional[str] = None
+    duration_hours: Optional[int] = None
+    has_normal_values: Optional[bool] = None
+    is_active: bool = True
+
+class StudyRecommendation(BaseSchema):
+    study: StudyCatalog
+    reason: str
+    priority: Literal['high', 'medium', 'low'] = 'medium'

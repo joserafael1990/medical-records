@@ -22,9 +22,7 @@ export const API_CONFIG = {
     WEEKLY_AGENDA: '/api/appointments/calendar',
     CANCEL_APPOINTMENT: (id: number) => `/api/appointments/${id}/cancel`,
     
-    // Medical Records / Consultations
-    MEDICAL_RECORDS: '/api/medical-records',
-    MEDICAL_RECORD_BY_ID: (id: number) => `/api/medical-records/${id}`,
+    // Consultations
     CONSULTATIONS: '/api/consultations',
     
     // Clinical Studies
@@ -184,7 +182,7 @@ export const SUCCESS_MESSAGES = {
   PATIENT_UPDATED: 'Paciente actualizado exitosamente',
   PROFILE_UPDATED: 'Perfil actualizado exitosamente',
   STUDY_CREATED: 'Estudio creado exitosamente',
-  RECORD_CREATED: 'Historia clínica creada exitosamente'
+  CONSULTATION_CREATED: 'Consulta creada exitosamente'
 };
 
 // Clinical Studies Constants

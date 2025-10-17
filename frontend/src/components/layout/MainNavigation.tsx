@@ -12,7 +12,6 @@ import {
   Dashboard as DashboardIcon,
   People as PatientIcon,
   Assignment as AssignmentIcon,
-  Description as DocumentIcon,
   CalendarToday as CalendarIcon,
   WhatsApp as WhatsAppIcon,
   Analytics as AnalyticsIcon
@@ -42,11 +41,6 @@ export const MainNavigation: React.FC<MainNavigationProps> = ({
       id: 'consultations',
       label: 'Consultas',
       icon: <AssignmentIcon />
-    },
-    {
-      id: 'medical-records',
-      label: 'Expedientes',
-      icon: <DocumentIcon />
     },
     {
       id: 'agenda',

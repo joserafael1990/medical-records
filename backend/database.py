@@ -4,7 +4,7 @@ Database: PostgreSQL with numeric IDs
 Compliance: 100% Mexican NOMs
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Date, Time, Text, Boolean, ForeignKey, DECIMAL
+from sqlalchemy import Column, Integer, String, DateTime, Date, Time, Text, Boolean, ForeignKey, DECIMAL, JSON, Numeric, CheckConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy import create_engine
@@ -169,8 +169,6 @@ class Person(Base):
     appointments_as_doctor = relationship("Appointment", foreign_keys="Appointment.doctor_id", back_populates="doctor")
     clinical_studies_as_patient = relationship("ClinicalStudy", foreign_keys="ClinicalStudy.patient_id", back_populates="patient")
     clinical_studies_as_doctor = relationship("ClinicalStudy", foreign_keys="ClinicalStudy.doctor_id", back_populates="doctor")
-    vital_signs = relationship("VitalSigns", foreign_keys="VitalSigns.patient_id", back_populates="patient")
-    vital_signs_recorded = relationship("VitalSigns", foreign_keys="VitalSigns.recorded_by", back_populates="doctor")
     
     
     # PROPERTIES
@@ -234,6 +232,7 @@ class MedicalRecord(Base):
     personal_pathological_history = Column(Text, nullable=False)
     personal_non_pathological_history = Column(Text, nullable=False)
     physical_examination = Column(Text, nullable=False)
+    laboratory_analysis = Column(Text)
     primary_diagnosis = Column(Text, nullable=False)
     treatment_plan = Column(Text, nullable=False)
     follow_up_instructions = Column(Text, nullable=False)
@@ -313,11 +312,12 @@ class Appointment(Base):
 class ClinicalStudy(Base):
     __tablename__ = "clinical_studies"
     
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
     study_code = Column(String(20), unique=True)
     consultation_id = Column(Integer, ForeignKey("medical_records.id"), nullable=False)
     patient_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
     doctor_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
+    study_catalog_id = Column(Integer, ForeignKey("study_catalog.id"), nullable=True)  # New field
     
     # STUDY INFORMATION
     study_type = Column(String(50), nullable=False)  # hematologia, bioquimica, radiologia, etc.
@@ -339,6 +339,10 @@ class ClinicalStudy(Base):
     results_text = Column(Text)
     interpretation = Column(Text)
     
+    # NEW FIELDS FOR NORMALIZED CATALOG
+    results = Column(JSON)  # New field for structured results
+    normal_values = Column(JSON)  # New field for normal values
+    
     # MEDICAL STAFF
     ordering_doctor = Column(String(200), nullable=False)
     performing_doctor = Column(String(200))
@@ -359,44 +363,98 @@ class ClinicalStudy(Base):
     consultation = relationship("MedicalRecord", backref="clinical_studies")
     patient = relationship("Person", foreign_keys=[patient_id], back_populates="clinical_studies_as_patient")
     doctor = relationship("Person", foreign_keys=[doctor_id], back_populates="clinical_studies_as_doctor")
+    catalog_study = relationship("StudyCatalog", back_populates="clinical_studies")  # New relationship
 
-class VitalSigns(Base):
-    __tablename__ = "vital_signs"
-    
-    id = Column(Integer, primary_key=True)
-    patient_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
-    date_recorded = Column(DateTime, nullable=False)
-    
-    # VITAL SIGNS
-    weight = Column(String(10))
-    height = Column(String(10))
-    bmi = Column(String(10))
-    temperature = Column(String(10))
-    blood_pressure_systolic = Column(String(10))
-    blood_pressure_diastolic = Column(String(10))
-    heart_rate = Column(String(10))
-    respiratory_rate = Column(String(10))
-    oxygen_saturation = Column(String(10))
-    
-    # ADDITIONAL
-    abdominal_circumference = Column(String(10))
-    head_circumference = Column(String(10))
-    glucose_level = Column(String(10))
-    
-    # INFORMATION
-    notes = Column(Text)
-    recorded_by = Column(Integer, ForeignKey("persons.id"))
-    measurement_context = Column(String(50))
-    
-    # SYSTEM
-    created_at = Column(DateTime, default=datetime.utcnow)
-    
-    # RELATIONSHIPS
-    patient = relationship("Person", foreign_keys=[patient_id], back_populates="vital_signs")
-    doctor = relationship("Person", foreign_keys=[recorded_by], back_populates="vital_signs_recorded")
 
 # ============================================================================
 # CONFIGURACIÓN DE BASE DE DATOS
+# ============================================================================
+
+# Study Catalog Models
+class StudyCategory(Base):
+    __tablename__ = "study_categories"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(10), unique=True, nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    description = Column(Text)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    studies = relationship("StudyCatalog", back_populates="category")
+
+class StudyCatalog(Base):
+    __tablename__ = "study_catalog"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(20), unique=True, nullable=False, index=True)
+    name = Column(String(200), nullable=False)
+    category_id = Column(Integer, ForeignKey("study_categories.id"), nullable=False)
+    subcategory = Column(String(100))
+    description = Column(Text)
+    preparation = Column(Text)  # Instructions for patient preparation
+    methodology = Column(Text)
+    duration_hours = Column(Integer)  # Delivery time in hours
+    specialty = Column(String(100), index=True)
+    is_active = Column(Boolean, default=True)
+    regulatory_compliance = Column(JSON)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    category = relationship("StudyCategory", back_populates="studies")
+    normal_values = relationship("StudyNormalValue", back_populates="study", cascade="all, delete-orphan")
+    template_items = relationship("StudyTemplateItem", back_populates="study")
+    clinical_studies = relationship("ClinicalStudy", back_populates="catalog_study")
+
+class StudyNormalValue(Base):
+    __tablename__ = "study_normal_values"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    study_id = Column(Integer, ForeignKey("study_catalog.id", ondelete="CASCADE"), nullable=False)
+    age_min = Column(Integer)
+    age_max = Column(Integer)
+    gender = Column(String(1), CheckConstraint("gender IN ('M', 'F', 'B')"))
+    min_value = Column(Numeric(10, 3))
+    max_value = Column(Numeric(10, 3))
+    unit = Column(String(20))
+    notes = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    study = relationship("StudyCatalog", back_populates="normal_values")
+
+class StudyTemplate(Base):
+    __tablename__ = "study_templates"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(200), nullable=False)
+    description = Column(Text)
+    specialty = Column(String(100))
+    is_default = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    template_items = relationship("StudyTemplateItem", back_populates="template", cascade="all, delete-orphan")
+
+class StudyTemplateItem(Base):
+    __tablename__ = "study_template_items"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    template_id = Column(Integer, ForeignKey("study_templates.id", ondelete="CASCADE"), nullable=False)
+    study_id = Column(Integer, ForeignKey("study_catalog.id", ondelete="CASCADE"), nullable=False)
+    order_index = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    template = relationship("StudyTemplate", back_populates="template_items")
+    study = relationship("StudyCatalog", back_populates="template_items")
+
+# ClinicalStudy model updated with catalog reference
+
 # ============================================================================
 
 # Import schedule models to ensure they are registered with Base
@@ -421,6 +479,36 @@ def get_db():
     finally:
         db.close()
 
+
+# ============================================================================
+# VITAL SIGNS MODELS
+# ============================================================================
+
+class VitalSign(Base):
+    __tablename__ = "vital_signs"
+    
+    id = Column(Integer, primary_key=True)
+    name = Column(String(50), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    consultation_vital_signs = relationship("ConsultationVitalSign", back_populates="vital_sign")
+
+class ConsultationVitalSign(Base):
+    __tablename__ = "consultation_vital_signs"
+    
+    id = Column(Integer, primary_key=True)
+    consultation_id = Column(Integer, ForeignKey("medical_records.id"), nullable=False)
+    vital_sign_id = Column(Integer, ForeignKey("vital_signs.id"), nullable=False)
+    value = Column(String(100), nullable=False)
+    unit = Column(String(20))
+    notes = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    consultation = relationship("MedicalRecord")
+    vital_sign = relationship("VitalSign", back_populates="consultation_vital_signs")
 
 def init_db():
     """Inicializar base de datos - solo crear tablas que no existen"""

@@ -19,6 +19,7 @@ import {
   Notifications as NotificationIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
+import { formatTime } from '../../utils/formatters';
 import { es } from 'date-fns/locale';
 
 interface DashboardViewProps {
@@ -284,7 +285,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                       {appointment.patient?.first_name} {appointment.patient?.last_name}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      {format(new Date(appointment.date_time), 'HH:mm')} - {appointment.reason || 'Consulta general'}
+                      {formatTime(appointment.date_time)} - {appointment.reason || 'Consulta general'}
                     </Typography>
                   </Box>
                   <Chip

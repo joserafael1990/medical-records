@@ -7,7 +7,6 @@ export const PatientsViewSmart = lazy(() => import('../views/PatientsViewSmart')
 export const ConsultationsView = lazy(() => import('../views/ConsultationsView'));
 export const ConsultationsViewSmart = lazy(() => import('../views/ConsultationsViewSmart'));
 export const AgendaView = lazy(() => import('../views/AgendaView'));
-export const MedicalRecordsView = lazy(() => import('../views/MedicalRecordsView'));
 export const DoctorProfileView = lazy(() => import('../views/DoctorProfileView'));
 
 // Lazy load dialogs

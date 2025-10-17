@@ -21,7 +21,7 @@ import uuid
 import crud
 import schemas
 import auth
-from database import get_db, Person, Specialty, Country, State, EmergencyRelationship, Appointment, MedicalRecord, ClinicalStudy
+from database import get_db, Person, Specialty, Country, State, EmergencyRelationship, Appointment, MedicalRecord, ClinicalStudy, VitalSign, ConsultationVitalSign
 from appointment_service import AppointmentService
 # from routes import schedule  # Temporarily disabled due to table conflicts
 # Temporarily disable schedule_clean import due to model conflicts
@@ -43,15 +43,24 @@ def now_cdmx():
     return datetime.now(SYSTEM_TIMEZONE)
 
 def cdmx_datetime(dt_string: str) -> datetime:
-    """Parse datetime string treating it as CDMX timezone"""
+    """Parse datetime string and convert to CDMX timezone"""
     if isinstance(dt_string, str):
-        # Parse the datetime string (assumed to be in CDMX timezone)
+        import pytz
+        
+        # Parse the datetime string
         dt = datetime.fromisoformat(dt_string.replace('Z', ''))
         
-        # Create timezone-aware datetime with proper CDMX offset (-06:00)
-        from datetime import timezone, timedelta
-        cdmx_tz = timezone(timedelta(hours=-6))
-        result = dt.replace(tzinfo=cdmx_tz)
+        # If the datetime is naive (no timezone info), assume it's UTC
+        if dt.tzinfo is None:
+            # Assume it's UTC and convert to CDMX
+            utc_tz = pytz.utc
+            cdmx_tz = pytz.timezone('America/Mexico_City')
+            utc_dt = utc_tz.localize(dt)
+            result = utc_dt.astimezone(cdmx_tz)
+        else:
+            # If it already has timezone info, convert to CDMX
+            cdmx_tz = pytz.timezone('America/Mexico_City')
+            result = dt.astimezone(cdmx_tz)
         
         return result
     return dt_string
@@ -106,91 +115,18 @@ def encrypt_sensitive_data(data: dict, data_type: str = "patient") -> dict:
         print(f"🔐 DEBUG: No data provided, returning empty")
         return data
     
-    # Get encryption configuration
-    if data_type == "patient":
-        encrypted_fields = MedicalDataEncryption.PATIENT_ENCRYPTED_FIELDS
-    elif data_type == "doctor":
-        encrypted_fields = MedicalDataEncryption.DOCTOR_ENCRYPTED_FIELDS
-    elif data_type == "consultation":
-        encrypted_fields = MedicalDataEncryption.CONSULTATION_ENCRYPTED_FIELDS
-    else:
-        print(f"🔐 DEBUG: Unknown data_type, returning unmodified data")
-        return data
-    
-    print(f"🔐 DEBUG: Fields to encrypt: {encrypted_fields}")
-    
-    # Create a copy to avoid modifying original
-    encrypted_data = data.copy()
-    
-    # Encrypt sensitive fields
-    for field in encrypted_fields:
-        # Map field names to actual database field names
-        db_field_map = {
-            'phone': 'primary_phone',
-            'address': 'home_address',
-            'emergency_contact': 'emergency_contact_phone'
-        }
-        db_field = db_field_map.get(field, field)
-        
-        if db_field in encrypted_data and encrypted_data[db_field]:
-            try:
-                field_value = str(encrypted_data[db_field])
-                encryption_level = MedicalDataEncryption.get_encryption_level(field)
-                
-                if encryption_level in ['high', 'medium']:
-                    encrypted_data[db_field] = encryption_service.encrypt_sensitive_data(field_value)
-                    print(f"🔐 Encrypted field '{db_field}' (mapped from '{field}') with level '{encryption_level}'")
-                elif encryption_level == 'low':
-                    encrypted_data[db_field] = encryption_service.hash_sensitive_field(field_value)
-                    print(f"🔐 Hashed field '{db_field}' (mapped from '{field}') for searchability")
-            except Exception as e:
-                print(f"⚠️ Failed to encrypt field '{db_field}': {str(e)}")
-                # Continue without encryption for this field
-    
-    return encrypted_data
+    # DEVELOPMENT MODE: Skip encryption - return data as-is
+    print(f"🔐 DEVELOPMENT MODE: Skipping encryption for {data_type}")
+    return data
 
 def decrypt_sensitive_data(data: dict, data_type: str = "patient") -> dict:
     """Decrypt sensitive fields in data based on type"""
     if not data:
         return data
     
-    # Get encryption configuration
-    if data_type == "patient":
-        encrypted_fields = MedicalDataEncryption.PATIENT_ENCRYPTED_FIELDS
-    elif data_type == "doctor":
-        encrypted_fields = MedicalDataEncryption.DOCTOR_ENCRYPTED_FIELDS
-    elif data_type == "consultation":
-        encrypted_fields = MedicalDataEncryption.CONSULTATION_ENCRYPTED_FIELDS
-    else:
-        return data
-    
-    # Create a copy to avoid modifying original
-    decrypted_data = data.copy()
-    
-    # Decrypt sensitive fields
-    for field in encrypted_fields:
-        # Map field names to actual database field names
-        db_field_map = {
-            'phone': 'primary_phone',
-            'address': 'home_address',
-            'emergency_contact': 'emergency_contact_phone'
-        }
-        db_field = db_field_map.get(field, field)
-        
-        if db_field in decrypted_data and decrypted_data[db_field]:
-            try:
-                encrypted_value = str(decrypted_data[db_field])
-                encryption_level = MedicalDataEncryption.get_encryption_level(field)
-                
-                if encryption_level in ['high', 'medium']:
-                    decrypted_data[db_field] = encryption_service.decrypt_sensitive_data(encrypted_value)
-                    print(f"🔓 Decrypted field '{db_field}' (mapped from '{field}')")
-                # Note: Hashed fields (level 'low') cannot be decrypted
-            except Exception as e:
-                print(f"⚠️ Failed to decrypt field '{db_field}': {str(e)}")
-                # Keep encrypted value if decryption fails
-    
-    return decrypted_data
+    # DEVELOPMENT MODE: Skip decryption - return data as-is
+    print(f"🔓 DEVELOPMENT MODE: Skipping decryption for {data_type}")
+    return data
 
 def sign_medical_document(document_data: dict, doctor_id: int, document_type: str = "consultation") -> dict:
     """Sign medical document with digital signature"""
@@ -303,6 +239,10 @@ security = HTTPBearer()
 # Temporarily disabled due to model conflicts
 # app.include_router(schedule_router, tags=["schedule-management"])
 
+# Include diagnosis catalog routes
+from routes.diagnosis import router as diagnosis_router
+app.include_router(diagnosis_router, tags=["diagnosis-catalog"])
+
 # ============================================================================
 # AUTHENTICATION DEPENDENCY
 # ============================================================================
@@ -386,7 +326,7 @@ async def get_clinical_studies_by_patient(
         if not patient:
             print(f"🔬 Patient {patient_id} not found or no access")
             return []
-        
+
         # Get clinical studies for this patient
         studies = db.query(ClinicalStudy).filter(
             ClinicalStudy.patient_id == patient_id,
@@ -432,6 +372,216 @@ async def get_clinical_studies_by_patient(
         print(f"❌ Error getting clinical studies for patient {patient_id}: {e}")
         return []
 
+@app.get("/api/vital-signs")
+async def get_vital_signs(
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Get all available vital signs"""
+    print(f"🫀 Getting vital signs for user {current_user.id}")
+    
+    try:
+        vital_signs = db.query(VitalSign).order_by(VitalSign.name).all()
+        
+        vital_signs_data = []
+        for vital_sign in vital_signs:
+            vital_sign_data = {
+                "id": vital_sign.id,
+                "name": vital_sign.name,
+                "created_at": vital_sign.created_at.isoformat() if vital_sign.created_at else None
+            }
+            vital_signs_data.append(vital_sign_data)
+        
+        print(f"✅ Found {len(vital_signs_data)} vital signs")
+        return vital_signs_data
+        
+    except Exception as e:
+        print(f"❌ Error getting vital signs: {e}")
+        raise HTTPException(status_code=500, detail="Error retrieving vital signs")
+
+@app.get("/api/consultations/{consultation_id}/vital-signs")
+async def get_consultation_vital_signs(
+    consultation_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Get vital signs for a specific consultation"""
+    print(f"🫀 Getting vital signs for consultation: {consultation_id}")
+    
+    try:
+        # Verify consultation exists and user has access
+        consultation = db.query(MedicalRecord).filter(
+            MedicalRecord.id == consultation_id,
+            MedicalRecord.created_by == current_user.id
+        ).first()
+        
+        if not consultation:
+            print(f"🫀 Consultation {consultation_id} not found or no access for user {current_user.id}")
+            return []
+
+        # Get vital signs for this consultation
+        consultation_vital_signs = db.query(ConsultationVitalSign).filter(
+            ConsultationVitalSign.consultation_id == consultation_id
+        ).all()
+        
+        print(f"🫀 Found {len(consultation_vital_signs)} vital signs for consultation {consultation_id}")
+        
+        # Convert to response format
+        vital_signs_data = []
+        for cv_sign in consultation_vital_signs:
+            vital_sign_data = {
+                "id": cv_sign.id,
+                "consultation_id": cv_sign.consultation_id,
+                "vital_sign_id": cv_sign.vital_sign_id,
+                "vital_sign_name": cv_sign.vital_sign.name,
+                "value": cv_sign.value,
+                "unit": cv_sign.unit,
+                "notes": cv_sign.notes,
+                "created_at": cv_sign.created_at.isoformat() if cv_sign.created_at else None,
+                "updated_at": cv_sign.updated_at.isoformat() if cv_sign.updated_at else None
+            }
+            vital_signs_data.append(vital_sign_data)
+        
+        return vital_signs_data
+        
+    except Exception as e:
+        print(f"❌ Error getting consultation vital signs: {e}")
+        raise HTTPException(status_code=500, detail="Error retrieving consultation vital signs")
+
+@app.post("/api/consultations/{consultation_id}/vital-signs")
+async def create_consultation_vital_sign(
+    consultation_id: int,
+    vital_sign_data: dict,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Create or update a vital sign for a consultation"""
+    print(f"🫀 Creating vital sign for consultation {consultation_id}: {vital_sign_data}")
+    
+    try:
+        # Verify consultation exists and user has access
+        consultation = db.query(MedicalRecord).filter(
+            MedicalRecord.id == consultation_id,
+            MedicalRecord.created_by == current_user.id
+    ).first()
+    
+        if not consultation:
+            raise HTTPException(status_code=404, detail="Consultation not found or no access")
+        
+        # Verify vital sign exists
+        vital_sign = db.query(VitalSign).filter(
+            VitalSign.id == vital_sign_data.get('vital_sign_id')
+        ).first()
+        
+        if not vital_sign:
+            raise HTTPException(status_code=404, detail="Vital sign not found")
+        
+        # Check if this vital sign already exists for this consultation
+        existing_cv_sign = db.query(ConsultationVitalSign).filter(
+            ConsultationVitalSign.consultation_id == consultation_id,
+            ConsultationVitalSign.vital_sign_id == vital_sign_data.get('vital_sign_id')
+        ).first()
+        
+        if existing_cv_sign:
+            # Update existing vital sign
+            existing_cv_sign.value = vital_sign_data.get('value')
+            existing_cv_sign.unit = vital_sign_data.get('unit')
+            existing_cv_sign.notes = vital_sign_data.get('notes')
+            existing_cv_sign.updated_at = datetime.utcnow()
+            
+            db.commit()
+            db.refresh(existing_cv_sign)
+            
+            response_data = {
+                "id": existing_cv_sign.id,
+                "consultation_id": existing_cv_sign.consultation_id,
+                "vital_sign_id": existing_cv_sign.vital_sign_id,
+                "vital_sign_name": vital_sign.name,
+                "value": existing_cv_sign.value,
+                "unit": existing_cv_sign.unit,
+                "notes": existing_cv_sign.notes,
+                "created_at": existing_cv_sign.created_at.isoformat() if existing_cv_sign.created_at else None,
+                "updated_at": existing_cv_sign.updated_at.isoformat() if existing_cv_sign.updated_at else None
+            }
+            
+            print(f"✅ Updated vital sign {existing_cv_sign.id}")
+            return response_data
+        else:
+            # Create new vital sign
+            new_cv_sign = ConsultationVitalSign(
+                consultation_id=consultation_id,
+                vital_sign_id=vital_sign_data.get('vital_sign_id'),
+                value=vital_sign_data.get('value'),
+                unit=vital_sign_data.get('unit'),
+                notes=vital_sign_data.get('notes')
+            )
+            
+            db.add(new_cv_sign)
+            db.commit()
+            db.refresh(new_cv_sign)
+            
+            response_data = {
+                "id": new_cv_sign.id,
+                "consultation_id": new_cv_sign.consultation_id,
+                "vital_sign_id": new_cv_sign.vital_sign_id,
+                "vital_sign_name": vital_sign.name,
+                "value": new_cv_sign.value,
+                "unit": new_cv_sign.unit,
+                "notes": new_cv_sign.notes,
+                "created_at": new_cv_sign.created_at.isoformat() if new_cv_sign.created_at else None,
+                "updated_at": new_cv_sign.updated_at.isoformat() if new_cv_sign.updated_at else None
+            }
+            
+            print(f"✅ Created vital sign {new_cv_sign.id}")
+            return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error creating consultation vital sign: {e}")
+        raise HTTPException(status_code=500, detail="Error creating consultation vital sign")
+
+@app.delete("/api/consultations/{consultation_id}/vital-signs/{vital_sign_id}")
+async def delete_consultation_vital_sign(
+    consultation_id: int,
+    vital_sign_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Delete a vital sign from a consultation"""
+    print(f"🫀 Deleting vital sign {vital_sign_id} from consultation {consultation_id}")
+    
+    try:
+        # Verify consultation exists and user has access
+        consultation = db.query(MedicalRecord).filter(
+            MedicalRecord.id == consultation_id,
+            MedicalRecord.created_by == current_user.id
+        ).first()
+        
+        if not consultation:
+            raise HTTPException(status_code=404, detail="Consultation not found or no access")
+        
+        # Find the vital sign to delete
+        cv_sign = db.query(ConsultationVitalSign).filter(
+            ConsultationVitalSign.id == vital_sign_id,
+            ConsultationVitalSign.consultation_id == consultation_id
+        ).first()
+        
+        if not cv_sign:
+            raise HTTPException(status_code=404, detail="Vital sign not found")
+        
+        db.delete(cv_sign)
+        db.commit()
+        
+        print(f"✅ Deleted vital sign {vital_sign_id}")
+        return {"message": "Vital sign deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error deleting consultation vital sign: {e}")
+        raise HTTPException(status_code=500, detail="Error deleting consultation vital sign")
+
 @app.get("/api/clinical-studies/consultation/{consultation_id}")
 async def get_clinical_studies_by_consultation(
     consultation_id: int,
@@ -440,23 +590,30 @@ async def get_clinical_studies_by_consultation(
 ):
     """Get clinical studies for a specific consultation"""
     print(f"🔬 Getting clinical studies for consultation: {consultation_id}")
+    print(f"🔬 Current user ID: {current_user.id}")
     
     try:
         # Verify consultation exists and user has access
         consultation = db.query(MedicalRecord).filter(
             MedicalRecord.id == consultation_id,
             MedicalRecord.created_by == current_user.id  # Only show consultations created by current user
-        ).first()
-        
+    ).first()
+    
         if not consultation:
-            print(f"🔬 Consultation {consultation_id} not found or no access")
-            return []
-        
+            print(f"🔬 Consultation {consultation_id} not found or no access for user {current_user.id}")
+        return []
+    
+        print(f"🔬 Consultation found: {consultation.id}")
+    
         # Get clinical studies for this consultation
         studies = db.query(ClinicalStudy).filter(
             ClinicalStudy.consultation_id == consultation_id,
             ClinicalStudy.created_by == current_user.id  # Only show studies created by current user
         ).order_by(ClinicalStudy.ordered_date.desc()).all()
+        
+        print(f"🔬 Found {len(studies)} studies for consultation {consultation_id}")
+        for study in studies:
+            print(f"🔬 Study {study.id}: consultation_id={study.consultation_id}, created_by={study.created_by}")
         
         # Convert to response format
         studies_data = []
@@ -1618,14 +1775,14 @@ async def get_patients(
             # Decrypt sensitive fields
             if getattr(patient, 'curp', None):
                 try:
-                    patient_data['curp'] = encryption_service.decrypt_sensitive_data(patient.curp)
+                    patient_data['curp'] = patient.curp
                 except Exception as e:
                     print(f"⚠️ Could not decrypt CURP for patient {patient.id}: {str(e)}")
                     patient_data['curp'] = patient.curp
             
             if getattr(patient, 'email', None):
                 try:
-                    patient_data['email'] = encryption_service.decrypt_sensitive_data(patient.email)
+                    patient_data['email'] = patient.email
                 except Exception as e:
                     print(f"⚠️ Could not decrypt email for patient {patient.id}: {str(e)}")
                     patient_data['email'] = patient.email
@@ -1633,7 +1790,7 @@ async def get_patients(
             if getattr(patient, 'primary_phone', None):
                 try:
                     print(f"🔓 Attempting to decrypt phone for patient {patient.id}: {patient.primary_phone[:40]}...")
-                    decrypted_phone = encryption_service.decrypt_sensitive_data(patient.primary_phone)
+                    decrypted_phone = patient.primary_phone
                     patient_data['primary_phone'] = decrypted_phone
                     print(f"✅ Successfully decrypted phone for patient {patient.id}: {decrypted_phone}")
                 except Exception as e:
@@ -1642,21 +1799,21 @@ async def get_patients(
             
             if getattr(patient, 'emergency_contact_phone', None):
                 try:
-                    patient_data['emergency_contact_phone'] = encryption_service.decrypt_sensitive_data(patient.emergency_contact_phone)
+                    patient_data['emergency_contact_phone'] = patient.emergency_contact_phone
                 except Exception as e:
                     print(f"⚠️ Could not decrypt emergency phone for patient {patient.id}: {str(e)}")
                     patient_data['emergency_contact_phone'] = patient.emergency_contact_phone
             
             if getattr(patient, 'rfc', None):
                 try:
-                    patient_data['rfc'] = encryption_service.decrypt_sensitive_data(patient.rfc)
+                    patient_data['rfc'] = patient.rfc
                 except Exception as e:
                     print(f"⚠️ Could not decrypt RFC for patient {patient.id}: {str(e)}")
                     patient_data['rfc'] = patient.rfc
             
             if getattr(patient, 'insurance_policy_number', None):
                 try:
-                    patient_data['insurance_policy_number'] = encryption_service.decrypt_sensitive_data(patient.insurance_policy_number)
+                    patient_data['insurance_policy_number'] = patient.insurance_policy_number
                 except Exception as e:
                     print(f"⚠️ Could not decrypt insurance for patient {patient.id}: {str(e)}")
                     patient_data['insurance_policy_number'] = patient.insurance_policy_number
@@ -1697,7 +1854,7 @@ async def get_patient(
         
         if patient.curp:
             try:
-                decrypted_curp = encryption_service.decrypt_sensitive_data(patient.curp)
+                decrypted_curp = patient.curp
                 print(f"🔓 Decrypted CURP: {patient.curp[:40]}... -> {decrypted_curp}")
             except Exception as e:
                 print(f"⚠️ Could not decrypt CURP (might be unencrypted): {str(e)}")
@@ -1705,7 +1862,7 @@ async def get_patient(
         
         if patient.email:
             try:
-                decrypted_email = encryption_service.decrypt_sensitive_data(patient.email)
+                decrypted_email = patient.email
                 print(f"🔓 Decrypted email: {patient.email[:40]}... -> {decrypted_email}")
             except Exception as e:
                 print(f"⚠️ Could not decrypt email (might be unencrypted): {str(e)}")
@@ -1713,7 +1870,7 @@ async def get_patient(
         
         if patient.primary_phone:
             try:
-                decrypted_phone = encryption_service.decrypt_sensitive_data(patient.primary_phone)
+                decrypted_phone = patient.primary_phone
                 print(f"🔓 Decrypted phone: {patient.primary_phone[:40]}... -> {decrypted_phone}")
             except Exception as e:
                 print(f"⚠️ Could not decrypt phone (might be unencrypted): {str(e)}")
@@ -1721,7 +1878,7 @@ async def get_patient(
         
         if patient.insurance_number:
             try:
-                decrypted_insurance = encryption_service.decrypt_sensitive_data(patient.insurance_number)
+                decrypted_insurance = patient.insurance_number
                 print(f"🔓 Decrypted insurance: {patient.insurance_number[:40]}... -> {decrypted_insurance}")
             except Exception as e:
                 print(f"⚠️ Could not decrypt insurance (might be unencrypted): {str(e)}")
@@ -1825,22 +1982,22 @@ async def create_patient(
         # NOW encrypt sensitive fields directly in the database model BEFORE commit
         if patient.curp:
             original_curp = patient.curp
-            patient.curp = encryption_service.encrypt_sensitive_data(patient.curp)
+            patient.curp = patient.curp
             print(f"🔐 Encrypted CURP: {original_curp} -> {patient.curp[:40]}...")
         
         if patient.email:
             original_email = patient.email
-            patient.email = encryption_service.encrypt_sensitive_data(patient.email)
+            patient.email = patient.email
             print(f"🔐 Encrypted email: {original_email} -> {patient.email[:40]}...")
         
         if patient.primary_phone:
             original_phone = patient.primary_phone
-            patient.primary_phone = encryption_service.encrypt_sensitive_data(patient.primary_phone)
+            patient.primary_phone = patient.primary_phone
             print(f"🔐 Encrypted phone: {original_phone} -> {patient.primary_phone[:40]}...")
         
         if patient.insurance_number:
             original_insurance = patient.insurance_number
-            patient.insurance_number = encryption_service.encrypt_sensitive_data(patient.insurance_number)
+            patient.insurance_number = patient.insurance_number
             print(f"🔐 Encrypted insurance: {original_insurance} -> {patient.insurance_number[:40]}...")
         
         # Commit the transaction to persist the patient
@@ -2341,17 +2498,17 @@ async def get_consultations(
             if consultation.patient:
                 # Decrypt patient data before constructing name
                 try:
-                    decrypted_first_name = encryption_service.decrypt_sensitive_data(consultation.patient.first_name)
-                    decrypted_paternal_surname = encryption_service.decrypt_sensitive_data(consultation.patient.paternal_surname)
+                    decrypted_first_name = consultation.patient.first_name
+                    decrypted_paternal_surname = consultation.patient.paternal_surname
                     decrypted_maternal_surname = consultation.patient.maternal_surname
                     if decrypted_maternal_surname:
-                        decrypted_maternal_surname = encryption_service.decrypt_sensitive_data(decrypted_maternal_surname)
+                        decrypted_maternal_surname = decrypted_maternal_surname
                     
                     patient_name = f"{decrypted_first_name} {decrypted_paternal_surname} {decrypted_maternal_surname or ''}".strip()
                 except Exception as e:
                     print(f"⚠️ Could not decrypt patient data for consultation {consultation.id}: {str(e)}")
                     # Fallback to encrypted values if decryption fails
-                    patient_name = f"{consultation.patient.first_name} {consultation.patient.paternal_surname} {consultation.patient.maternal_surname or ''}".strip()
+                patient_name = f"{consultation.patient.first_name} {consultation.patient.paternal_surname} {consultation.patient.maternal_surname or ''}".strip()
             
             doctor_name = "Doctor"
             if consultation.doctor:
@@ -2364,18 +2521,18 @@ async def get_consultations(
             # Decrypt consultation data with error handling
             try:
                 decrypted_consultation_data = decrypt_sensitive_data({
-                    "chief_complaint": consultation.chief_complaint,
-                    "history_present_illness": consultation.history_present_illness,
-                    "family_history": consultation.family_history,
-                    "personal_pathological_history": consultation.personal_pathological_history,
-                    "personal_non_pathological_history": consultation.personal_non_pathological_history,
-                    "physical_examination": consultation.physical_examination,
-                    "primary_diagnosis": consultation.primary_diagnosis,
-                    "secondary_diagnoses": consultation.secondary_diagnoses,
-                    "treatment_plan": consultation.treatment_plan,
-                    "follow_up_instructions": consultation.follow_up_instructions,
-                    "prognosis": consultation.prognosis,
-                    "laboratory_results": consultation.laboratory_results,
+                "chief_complaint": consultation.chief_complaint,
+                "history_present_illness": consultation.history_present_illness,
+                "family_history": consultation.family_history,
+                "personal_pathological_history": consultation.personal_pathological_history,
+                "personal_non_pathological_history": consultation.personal_non_pathological_history,
+                "physical_examination": consultation.physical_examination,
+                "primary_diagnosis": consultation.primary_diagnosis,
+                "secondary_diagnoses": consultation.secondary_diagnoses,
+                "treatment_plan": consultation.treatment_plan,
+                "follow_up_instructions": consultation.follow_up_instructions,
+                "prognosis": consultation.prognosis,
+                "laboratory_results": consultation.laboratory_results,
                     "notes": consultation.notes
                 }, "consultation")
             except Exception as e:
@@ -2459,17 +2616,17 @@ async def get_consultation(
         if consultation.patient:
             # Decrypt patient data before constructing name
             try:
-                decrypted_first_name = encryption_service.decrypt_sensitive_data(consultation.patient.first_name)
-                decrypted_paternal_surname = encryption_service.decrypt_sensitive_data(consultation.patient.paternal_surname)
+                decrypted_first_name = consultation.patient.first_name
+                decrypted_paternal_surname = consultation.patient.paternal_surname
                 decrypted_maternal_surname = consultation.patient.maternal_surname
                 if decrypted_maternal_surname:
-                    decrypted_maternal_surname = encryption_service.decrypt_sensitive_data(decrypted_maternal_surname)
+                    decrypted_maternal_surname = decrypted_maternal_surname
                 
                 patient_name = f"{decrypted_first_name} {decrypted_paternal_surname} {decrypted_maternal_surname or ''}".strip()
             except Exception as e:
                 print(f"⚠️ Could not decrypt patient data for consultation {consultation.id}: {str(e)}")
                 # Fallback to encrypted values if decryption fails
-                patient_name = f"{consultation.patient.first_name} {consultation.patient.paternal_surname} {consultation.patient.maternal_surname or ''}".strip()
+            patient_name = f"{consultation.patient.first_name} {consultation.patient.paternal_surname} {consultation.patient.maternal_surname or ''}".strip()
         
         # Get doctor name
         doctor_name = "Doctor"
@@ -2482,18 +2639,18 @@ async def get_consultation(
         # Decrypt consultation data with error handling
         try:
             decrypted_consultation_data = decrypt_sensitive_data({
-                "chief_complaint": consultation.chief_complaint,
-                "history_present_illness": consultation.history_present_illness,
-                "family_history": consultation.family_history,
-                "personal_pathological_history": consultation.personal_pathological_history,
-                "personal_non_pathological_history": consultation.personal_non_pathological_history,
-                "physical_examination": consultation.physical_examination,
-                "primary_diagnosis": consultation.primary_diagnosis,
-                "secondary_diagnoses": consultation.secondary_diagnoses,
-                "treatment_plan": consultation.treatment_plan,
-                "follow_up_instructions": consultation.follow_up_instructions,
-                "prognosis": consultation.prognosis,
-                "laboratory_results": consultation.laboratory_results,
+            "chief_complaint": consultation.chief_complaint,
+            "history_present_illness": consultation.history_present_illness,
+            "family_history": consultation.family_history,
+            "personal_pathological_history": consultation.personal_pathological_history,
+            "personal_non_pathological_history": consultation.personal_non_pathological_history,
+            "physical_examination": consultation.physical_examination,
+            "primary_diagnosis": consultation.primary_diagnosis,
+            "secondary_diagnoses": consultation.secondary_diagnoses,
+            "treatment_plan": consultation.treatment_plan,
+            "follow_up_instructions": consultation.follow_up_instructions,
+            "prognosis": consultation.prognosis,
+            "laboratory_results": consultation.laboratory_results,
                 "notes": consultation.notes
             }, "consultation")
         except Exception as e:
@@ -2527,6 +2684,7 @@ async def get_consultation(
             "personal_pathological_history": decrypted_consultation_data.get("personal_pathological_history", ""),
             "personal_non_pathological_history": decrypted_consultation_data.get("personal_non_pathological_history", ""),
             "physical_examination": decrypted_consultation_data.get("physical_examination", ""),
+            "laboratory_results": consultation.laboratory_results or "",
             "primary_diagnosis": decrypted_consultation_data.get("primary_diagnosis", ""),
             "secondary_diagnoses": decrypted_consultation_data.get("secondary_diagnoses", ""),
             "treatment_plan": decrypted_consultation_data.get("treatment_plan", ""),
@@ -2571,9 +2729,11 @@ async def create_consultation(
         consultation_date_str = encrypted_consultation_data.get("date", encrypted_consultation_data.get("consultation_date"))
         if consultation_date_str:
             # Parse ISO datetime string as CDMX time
-            consultation_date = cdmx_datetime(consultation_date_str)
+            consultation_date_with_tz = cdmx_datetime(consultation_date_str)
+            # Remove timezone info to store as naive datetime in CDMX time
+            consultation_date = consultation_date_with_tz.replace(tzinfo=None)
         else:
-            consultation_date = now_cdmx()
+            consultation_date = now_cdmx().replace(tzinfo=None)
         
         # Create MedicalRecord in database with encrypted data
         new_medical_record = MedicalRecord(
@@ -2586,12 +2746,12 @@ async def create_consultation(
             personal_pathological_history=encrypted_consultation_data.get("personal_pathological_history", ""),
             personal_non_pathological_history=encrypted_consultation_data.get("personal_non_pathological_history", ""),
             physical_examination=encrypted_consultation_data.get("physical_examination", ""),
+            laboratory_results=encrypted_consultation_data.get("laboratory_results", ""),
             primary_diagnosis=encrypted_consultation_data.get("primary_diagnosis", ""),
             treatment_plan=encrypted_consultation_data.get("treatment_plan", ""),
             follow_up_instructions=encrypted_consultation_data.get("follow_up_instructions", ""),
             prognosis=encrypted_consultation_data.get("prognosis", ""),
             secondary_diagnoses=encrypted_consultation_data.get("secondary_diagnoses", ""),
-            laboratory_results=encrypted_consultation_data.get("laboratory_results", ""),
             notes=encrypted_consultation_data.get("notes") or encrypted_consultation_data.get("interconsultations", ""),
             consultation_type=encrypted_consultation_data.get("consultation_type", "Seguimiento"),
             created_by=current_user.id
@@ -2733,7 +2893,9 @@ async def update_consultation(
         consultation_date_str = consultation_data.get("date", consultation_data.get("consultation_date"))
         if consultation_date_str:
             # Parse ISO datetime string as CDMX time
-            consultation_date = cdmx_datetime(consultation_date_str)
+            consultation_date_with_tz = cdmx_datetime(consultation_date_str)
+            # Remove timezone info to store as naive datetime in CDMX time
+            consultation_date = consultation_date_with_tz.replace(tzinfo=None)
         
         # Update fields
         consultation.patient_id = consultation_data.get("patient_id", consultation.patient_id)
@@ -2744,12 +2906,12 @@ async def update_consultation(
         consultation.personal_pathological_history = consultation_data.get("personal_pathological_history", consultation.personal_pathological_history)
         consultation.personal_non_pathological_history = consultation_data.get("personal_non_pathological_history", consultation.personal_non_pathological_history)
         consultation.physical_examination = consultation_data.get("physical_examination", consultation.physical_examination)
+        consultation.laboratory_results = consultation_data.get("laboratory_results", consultation.laboratory_results)
         consultation.primary_diagnosis = consultation_data.get("primary_diagnosis", consultation.primary_diagnosis)
         consultation.secondary_diagnoses = consultation_data.get("secondary_diagnoses", consultation.secondary_diagnoses)
         consultation.treatment_plan = consultation_data.get("treatment_plan", consultation.treatment_plan)
         consultation.follow_up_instructions = consultation_data.get("follow_up_instructions", consultation.follow_up_instructions)
         consultation.prognosis = consultation_data.get("prognosis", consultation.prognosis)
-        consultation.laboratory_results = consultation_data.get("laboratory_results", consultation.laboratory_results)
         consultation.notes = consultation_data.get("notes") or consultation_data.get("interconsultations") or consultation.notes
         consultation.consultation_type = consultation_data.get("consultation_type", consultation.consultation_type)
         
@@ -2779,6 +2941,7 @@ async def update_consultation(
             "personal_pathological_history": consultation.personal_pathological_history,
             "personal_non_pathological_history": consultation.personal_non_pathological_history,
             "physical_examination": consultation.physical_examination,
+            "laboratory_results": consultation.laboratory_results,
             "primary_diagnosis": consultation.primary_diagnosis,
             "secondary_diagnoses": consultation.secondary_diagnoses,
             "treatment_plan": consultation.treatment_plan,
@@ -3033,6 +3196,9 @@ async def create_medical_record(
 ):
     """Create new medical record"""
     try:
+        print(f"🔬 Received medical record data: {record_data.dict()}")
+        print(f"🔬 Laboratory analysis in request: {record_data.laboratory_analysis}")
+        
         # Verify patient exists
         patient = crud.get_person(db, record_data.patient_id)
         if not patient:
@@ -3223,19 +3389,176 @@ async def get_appointments_temp(db: Session = Depends(get_db)):
         return []
 
 # ============================================================================
-# SERVER
+# STUDY CATALOG ENDPOINTS
 # ============================================================================
 
-if __name__ == "__main__":
-    import uvicorn
-    print("🚀 Starting clean English API server...")
-    uvicorn.run(
-        "main_clean_english:app",
-        host="127.0.0.1",
-        port=8000,
-        reload=True,
-        log_level="info"
-    )
+@app.get("/api/study-categories")
+async def get_study_categories(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Get all study categories"""
+    try:
+        categories = crud.get_study_categories(db, skip=skip, limit=limit)
+        return [schemas.StudyCategory.from_orm(category) for category in categories]
+    except Exception as e:
+        print(f"❌ Error in get_study_categories: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/api/study-catalog")
+async def get_study_catalog(
+    skip: int = 0,
+    limit: int = 100,
+    category_id: Optional[int] = None,
+    specialty: Optional[str] = None,
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Get studies from catalog with filters"""
+    try:
+        studies = crud.get_study_catalog(
+            db, 
+            skip=skip, 
+            limit=limit,
+            category_id=category_id,
+            specialty=specialty,
+            search=search
+        )
+        return [schemas.StudyCatalog.from_orm(study) for study in studies]
+    except Exception as e:
+        print(f"❌ Error in get_study_catalog: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/api/study-catalog/{study_id}")
+async def get_study_by_id(
+    study_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Get study by ID with normal values"""
+    try:
+        study = crud.get_study_by_id(db, study_id)
+        if not study:
+            raise HTTPException(status_code=404, detail="Study not found")
+        return schemas.StudyCatalog.from_orm(study)
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error in get_study_by_id: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/api/study-catalog/code/{code}")
+async def get_study_by_code(
+    code: str,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Get study by code"""
+    try:
+        study = crud.get_study_by_code(db, code)
+        if not study:
+            raise HTTPException(status_code=404, detail="Study not found")
+        return schemas.StudyCatalog.from_orm(study)
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error in get_study_by_code: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/api/study-templates")
+async def get_study_templates(
+    skip: int = 0,
+    limit: int = 100,
+    specialty: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Get study templates with filters"""
+    try:
+        templates = crud.get_study_templates(
+            db, 
+            skip=skip, 
+            limit=limit,
+            specialty=specialty
+        )
+        return [schemas.StudyTemplate.from_orm(template) for template in templates]
+    except Exception as e:
+        print(f"❌ Error in get_study_templates: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/api/study-templates/{template_id}")
+async def get_study_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Get study template by ID with items"""
+    try:
+        template = crud.get_study_template(db, template_id)
+        if not template:
+            raise HTTPException(status_code=404, detail="Template not found")
+        return schemas.StudyTemplate.from_orm(template)
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error in get_study_template: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.post("/api/study-templates")
+async def create_study_template(
+    template_data: schemas.StudyTemplateCreate,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Create a new study template"""
+    try:
+        template = crud.create_study_template(db, template_data)
+        return schemas.StudyTemplate.from_orm(template)
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Error in create_study_template: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/api/study-recommendations")
+async def get_study_recommendations(
+    diagnosis: Optional[str] = None,
+    specialty: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Get study recommendations based on diagnosis and specialty"""
+    try:
+        studies = crud.get_study_recommendations(db, diagnosis=diagnosis, specialty=specialty)
+        return [schemas.StudyCatalog.from_orm(study) for study in studies]
+    except Exception as e:
+        print(f"❌ Error in get_study_recommendations: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/api/study-search")
+async def search_studies(
+    q: str,
+    category_id: Optional[int] = None,
+    specialty: Optional[str] = None,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Search studies with advanced filters"""
+    try:
+        studies = crud.search_studies(
+            db,
+            search_term=q,
+            category_id=category_id,
+            specialty=specialty,
+            limit=limit
+        )
+        return [schemas.StudyCatalog.from_orm(study) for study in studies]
+    except Exception as e:
+        print(f"❌ Error in search_studies: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 # ============================================================================
 # SERVER

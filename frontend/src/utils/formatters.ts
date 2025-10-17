@@ -3,10 +3,10 @@
 // ============================================================================
 
 import { Patient } from '../types';
-import { calculateAge, formatDate, formatDateTime } from './dateHelpers';
+import { calculateAge, formatDate, formatDateTime, formatDateTimeShort } from './dateHelpers';
 
 // Re-export date helpers to maintain API compatibility
-export { calculateAge, formatDate, formatDateTime };
+export { calculateAge, formatDate, formatDateTime, formatDateTimeShort };
 
 /**
  * Format patient name with age

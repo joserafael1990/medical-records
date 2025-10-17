@@ -75,7 +75,7 @@ export const parseApiError = (error: any): ApiError => {
   }
 
   return { 
-    detail: message, 
+    details: message, 
     status: error.response?.status || 500,
     message, 
     fieldErrors 
