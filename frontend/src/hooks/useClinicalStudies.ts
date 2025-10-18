@@ -72,19 +72,12 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
 
   // Fetch studies for a consultation
   const fetchStudies = useCallback(async (consultationId: string) => {
-    console.log('🔬 fetchStudies called with consultationId:', consultationId);
-    console.log('🔬 fetchStudies type:', typeof consultationId);
-    
     setIsLoading(true);
     setError(null);
     
     try {
-      console.log('🔬 Fetching clinical studies for consultation:', consultationId);
       const response = await apiService.get(`/api/clinical-studies/consultation/${consultationId}`);
-      console.log('🔬 API response:', response);
-      console.log('🔬 Response data:', response.data);
       setStudies(response.data || []);
-      console.log('🔬 Clinical studies fetched and set:', response.data);
     } catch (err) {
       console.error('❌ Error fetching clinical studies:', err);
       console.error('❌ Error details:', err.response?.data);
@@ -99,15 +92,8 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
   // Create a new study
   const createStudy = useCallback(async (studyData: CreateClinicalStudyData): Promise<ClinicalStudy> => {
     try {
-      console.log('🔬 Creating clinical study with data:', studyData);
-      console.log('🔬 Study data type:', typeof studyData);
-      console.log('🔬 Study data keys:', Object.keys(studyData));
-      
       const response = await apiService.post('/api/clinical-studies', studyData);
       const newStudy = response.data;
-      
-      console.log('🔬 Backend response:', response);
-      console.log('🔬 Created study:', newStudy);
       
       // Add to local state
       setStudies(prev => [...prev, newStudy]);
@@ -125,7 +111,6 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
   // Update an existing study
   const updateStudy = useCallback(async (studyId: string, studyData: UpdateClinicalStudyData): Promise<ClinicalStudy> => {
     try {
-      console.log('🔬 Updating clinical study:', studyId, studyData);
       const response = await apiService.put(`/api/clinical-studies/${studyId}`, studyData);
       const updatedStudy = response.data;
       
@@ -145,7 +130,6 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
   // Delete a study
   const deleteStudy = useCallback(async (studyId: string) => {
     try {
-      console.log('🔬 Deleting clinical study:', studyId);
       await apiService.delete(`/api/clinical-studies/${studyId}`);
       
       // Remove from local state

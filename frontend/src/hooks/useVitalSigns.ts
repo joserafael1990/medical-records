@@ -65,7 +65,6 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     setError(null);
     
     try {
-      console.log('🫀 Fetching available vital signs...');
       const response = await apiService.get('/api/vital-signs');
       setAvailableVitalSigns(response.data);
       console.log('✅ Available vital signs fetched:', response.data.length);
@@ -80,7 +79,6 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
   // Fetch consultation vital signs
   const fetchConsultationVitalSigns = useCallback(async (consultationId: string) => {
     if (consultationId === 'temp_consultation') {
-      console.log('🫀 Skipping fetch for temp consultation');
       return;
     }
 
@@ -88,7 +86,6 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     setError(null);
     
     try {
-      console.log('🫀 Fetching consultation vital signs for:', consultationId);
       const response = await apiService.get(`/api/consultations/${consultationId}/vital-signs`);
       setConsultationVitalSigns(response.data);
       console.log('✅ Consultation vital signs fetched:', response.data.length);
@@ -108,13 +105,8 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
         throw new Error("Invalid consultation ID. Please save the consultation first.");
       }
       
-      console.log('🫀 Creating vital sign with data:', vitalSignData);
-      
       const response = await apiService.post(`/api/consultations/${consultationId}/vital-signs`, vitalSignData);
       const newVitalSign = response.data;
-      
-      console.log('🫀 Backend response:', response);
-      console.log('🫀 Created vital sign:', newVitalSign);
       
       // Add to local state
       setConsultationVitalSigns(prev => [...prev, newVitalSign]);
@@ -130,7 +122,6 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
   // Update an existing vital sign
   const updateVitalSign = useCallback(async (consultationId: string, vitalSignId: number, vitalSignData: VitalSignFormData): Promise<ConsultationVitalSign> => {
     try {
-      console.log('🫀 Updating vital sign:', vitalSignId, vitalSignData);
       
       // Use POST endpoint which handles both create and update
       const response = await apiService.post(`/api/consultations/${consultationId}/vital-signs`, vitalSignData);
@@ -152,7 +143,6 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
   // Delete a vital sign
   const deleteVitalSign = useCallback(async (consultationId: string, vitalSignId: number): Promise<void> => {
     try {
-      console.log('🫀 Deleting vital sign:', vitalSignId);
       
       await apiService.delete(`/api/consultations/${consultationId}/vital-signs/${vitalSignId}`);
       
@@ -168,9 +158,6 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
 
   // Dialog management
   const openAddDialog = useCallback((vitalSign?: VitalSign) => {
-    console.log('🫀 Opening add vital sign dialog:', vitalSign);
-    console.log('🫀 Available vital signs count:', availableVitalSigns.length);
-    console.log('🫀 Current vitalSignFormData:', vitalSignFormData);
     
     if (vitalSign) {
       setVitalSignFormData({
@@ -192,14 +179,9 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     setSelectedVitalSign(null);
     setVitalSignDialogOpen(true);
     setError(null);
-    
-    console.log('🫀 Dialog should be open now. vitalSignDialogOpen:', true);
   }, [availableVitalSigns.length, vitalSignFormData]);
 
   const openEditDialog = useCallback((vitalSign: ConsultationVitalSign) => {
-    console.log('🫀 Opening edit vital sign dialog:', vitalSign);
-    console.log('🫀 Current vitalSignDialogOpen:', vitalSignDialogOpen);
-    console.log('🫀 Current isEditingVitalSign:', isEditingVitalSign);
     
     setVitalSignFormData({
       vital_sign_id: vitalSign.vital_sign_id,
@@ -212,8 +194,6 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     setSelectedVitalSign(vitalSign);
     setVitalSignDialogOpen(true);
     setError(null);
-    
-    console.log('🫀 After setting states - should open dialog');
   }, [vitalSignDialogOpen, isEditingVitalSign]);
 
   const closeDialog = useCallback(() => {

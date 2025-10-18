@@ -170,7 +170,6 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
   const fetchConsultations = useCallback(async () => {
     try {
       console.log('🔄 Fetching consultations from backend...');
-      console.log('🔍 About to call apiService.getConsultations()');
       const data = await apiService.getConsultations();
       console.log('📊 Raw consultations data from API:', data);
       
@@ -349,13 +348,7 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
       const response = await apiService.get(`/api/consultations/${consultation.id}`);
       const fullConsultationData = response.data;
       
-      console.log('🔍 Full consultation data from backend:', fullConsultationData);
-      console.log('🔍 prescribed_medications from backend:', fullConsultationData.prescribed_medications);
-      console.log('🔍 All backend keys:', Object.keys(fullConsultationData));
-      console.log('🔍 Mapping prescribed_medications:', fullConsultationData.prescribed_medications || '');
-      
       // Update the selectedConsultation with the fresh data so the dialog's useEffect will re-run
-      console.log('🔍 About to update selectedConsultation with prescribed_medications:', fullConsultationData.prescribed_medications);
       setSelectedConsultation(fullConsultationData);
     } catch (error) {
       console.error('Error fetching consultation data:', error);

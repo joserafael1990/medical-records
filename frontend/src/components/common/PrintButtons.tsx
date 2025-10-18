@@ -31,15 +31,6 @@ export const PrintButtons: React.FC<PrintButtonsProps> = ({
   spacing = 2,
   showDivider = true
 }) => {
-  // Debug logs
-  console.log('PrintButtons props:', {
-    patient: patient?.firstName,
-    doctor: doctor?.firstName,
-    consultation: consultation?.id,
-    medicationsCount: medications?.length,
-    studiesCount: studies?.length,
-    disabled
-  });
   return (
     <Box>
       <Stack 

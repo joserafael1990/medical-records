@@ -56,19 +56,11 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
   const [filteredStudies, setFilteredStudies] = useState<ClinicalStudy[]>([]);
 
   useEffect(() => {
-    console.log('🔬 ClinicalStudiesSection useEffect triggered');
-    console.log('🔬 Studies:', studies);
-    console.log('🔬 ConsultationId:', consultationId, 'Type:', typeof consultationId);
-    console.log('🔬 PatientId:', patientId, 'Type:', typeof patientId);
-    
     const consultationStudies = studies.filter(study => {
-      console.log('🔬 Checking study:', study.id, 'consultation_id:', study.consultation_id, 'patient_id:', study.patient_id);
-      console.log('🔬 Comparison - consultation_id:', study.consultation_id === consultationId, 'patient_id:', study.patient_id === patientId);
       // Convert both to numbers for comparison
       return Number(study.consultation_id) === Number(consultationId) && Number(study.patient_id) === Number(patientId);
     });
     
-    console.log('🔬 Filtered studies:', consultationStudies);
     setFilteredStudies(consultationStudies);
   }, [studies, consultationId, patientId]);
 
@@ -103,7 +95,6 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
   };
 
   if (isLoading) {
-    console.log('🔬 ClinicalStudiesSection: Showing loading state');
     return (
       <Box sx={{ p: 3 }}>
         <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
@@ -118,7 +109,6 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
     );
   }
 
-  console.log('🔬 ClinicalStudiesSection: Not loading, studies count:', studies.length);
 
   return (
     <Box sx={{ p: 3 }}>

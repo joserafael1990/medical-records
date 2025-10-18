@@ -258,12 +258,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         }
 
         // Load clinical studies for existing consultation
-        console.log('🔬 Loading clinical studies for consultation:', consultation.id);
-        console.log('🔬 Clinical studies hook state:', {
-          isLoading: clinicalStudiesHook.isLoading,
-          studies: clinicalStudiesHook.studies,
-          error: clinicalStudiesHook.error
-        });
         clinicalStudiesHook.fetchStudies(String(consultation.id));
         vitalSignsHook.fetchConsultationVitalSigns(String(consultation.id));
       } else {
@@ -281,7 +275,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   useEffect(() => {
     if (isEditing && consultation && !clinicalStudiesHook.clinicalStudyDialogOpen) {
       // Refresh studies when clinical study dialog closes
-      console.log('🔬 Refreshing clinical studies after dialog close');
       clinicalStudiesHook.fetchStudies(String(consultation.id));
     }
   }, [clinicalStudiesHook.clinicalStudyDialogOpen, isEditing, consultation]);
@@ -290,7 +283,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   useEffect(() => {
     if (isEditing && consultation && !vitalSignsHook.vitalSignDialogOpen) {
       // Refresh vital signs when vital signs dialog closes
-      console.log('🫀 Refreshing vital signs after dialog close');
       vitalSignsHook.fetchConsultationVitalSigns(String(consultation.id));
     }
   }, [vitalSignsHook.vitalSignDialogOpen, isEditing, consultation]);
@@ -815,10 +807,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         )}
         
         <Box component="form" sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
-          {/* Debug: Log form data */}
-          {console.log('🔍 ConsultationDialog render - formData.has_appointment:', formData.has_appointment)}
-          {console.log('🔍 ConsultationDialog render - appointments length:', appointments?.length)}
-          {console.log('🔍 ConsultationDialog render - formData.prescribed_medications:', formData.prescribed_medications)}
           
           {/* Appointment Question */}
           <Box>
@@ -1668,49 +1656,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         {/* Print buttons - show when we have consultation data or are editing */}
         {((isEditing && consultation) || consultation) && (
           <Box sx={{ width: '100%' }}>
-            {console.log('🔍 DoctorProfile data for PDF:', doctorProfile)}
-            {console.log('🔍 Office data:', {
-              office_address: doctorProfile?.office_address,
-              office_city: doctorProfile?.office_city,
-              office_state_name: doctorProfile?.office_state_name,
-              office_country_name: doctorProfile?.office_country_name,
-              office_phone: doctorProfile?.office_phone
-            })}
-            {console.log('🔍 All doctorProfile keys:', Object.keys(doctorProfile || {}))}
-            {console.log('🔍 Full doctorProfile object:', JSON.stringify(doctorProfile, null, 2))}
-            {console.log('🔍 Specialty data:', {
-              specialty_id: doctorProfile?.specialty_id,
-              specialty_name: doctorProfile?.specialty_name,
-              specialty: doctorProfile?.specialty
-            })}
-            {console.log('🔍 PDF Patient Data Debug:', {
-              selectedPatient: selectedPatient ? {
-                id: selectedPatient.id,
-                first_name: selectedPatient.first_name,
-                paternal_surname: selectedPatient.paternal_surname,
-                maternal_surname: selectedPatient.maternal_surname,
-                birth_date: selectedPatient.birth_date,
-                gender: selectedPatient.gender,
-                primary_phone: selectedPatient.primary_phone
-              } : null,
-              newPatientData: {
-                first_name: newPatientData.first_name,
-                paternal_surname: newPatientData.paternal_surname,
-                maternal_surname: newPatientData.maternal_surname,
-                birth_date: newPatientData.birth_date,
-                gender: newPatientData.gender,
-                phone: newPatientData.primary_phone
-              },
-              finalPatientData: {
-                id: selectedPatient?.id || 0,
-                firstName: selectedPatient?.first_name || newPatientData.first_name || '',
-                lastName: selectedPatient?.paternal_surname || newPatientData.paternal_surname || '',
-                maternalSurname: selectedPatient?.maternal_surname || newPatientData.maternal_surname || '',
-                dateOfBirth: selectedPatient?.birth_date || newPatientData.birth_date || undefined,
-                gender: selectedPatient?.gender || newPatientData.gender || undefined,
-                phone: selectedPatient?.primary_phone || newPatientData.primary_phone || undefined
-              }
-            })}
             <PrintButtons
               patient={{
                 id: selectedPatient?.id || 0,
