@@ -60,64 +60,63 @@ Sistema completo de gestión de historias clínicas médicas desarrollado con Re
 - **Nginx** como proxy reverso
 - **PostgreSQL** como base de datos
 
-## 🚀 Instalación y Configuración
+## 🚀 Instalación Rápida
 
-### Prerrequisitos
-- Docker y Docker Compose instalados
-- Git instalado
-- Puerto 3000 y 8000 disponibles
+### ⚡ Instalación Automática (Recomendado)
 
-### 1. Clonar el Repositorio
+#### Para macOS/Linux:
+```bash
+# Clonar el repositorio
+git clone https://github.com/tu-usuario/medical-records-main.git
+cd medical-records-main
+
+# Ejecutar script de instalación automática
+./install.sh
+```
+
+#### Para Windows:
+```cmd
+REM Clonar el repositorio
+git clone https://github.com/tu-usuario/medical-records-main.git
+cd medical-records-main
+
+REM Ejecutar script de instalación automática
+install.bat
+```
+
+### 📋 Instalación Manual
+
+#### Prerrequisitos
+- **Docker Desktop** (versión 4.0 o superior)
+- **Git** instalado
+- **Navegador web** (Chrome, Firefox, Safari, etc.)
+
+#### 1. Clonar el Repositorio
 ```bash
 git clone https://github.com/tu-usuario/medical-records-main.git
 cd medical-records-main
 ```
 
-### 2. Configurar Variables de Entorno
-
-#### Backend (.env)
+#### 2. Iniciar el Sistema
 ```bash
-cp backend/env.example backend/.env
-```
-
-Editar `backend/.env`:
-```env
-DATABASE_URL=postgresql://historias_user:historias_pass@postgres-db:5432/historias_clinicas
-SECRET_KEY=tu_clave_secreta_muy_segura_aqui
-ENCRYPTION_KEY=tu_clave_de_encriptacion_32_caracteres
-```
-
-#### Frontend (.env)
-```bash
-cp frontend/env.example frontend/.env
-```
-
-Editar `frontend/.env`:
-```env
-REACT_APP_API_URL=http://localhost:8000
-REACT_APP_API_TIMEOUT=10000
-```
-
-### 3. Iniciar el Sistema
-```bash
-# Iniciar todos los servicios
-docker compose up -d
-
-# Ver logs en tiempo real
-docker compose logs -f
+# Construir y ejecutar todos los servicios
+docker-compose -f docker-compose.custom.yml up --build -d
 
 # Verificar que todo esté funcionando
-curl http://localhost:8000/health
-curl http://localhost:3000
+docker ps
 ```
 
-### 4. Configurar Base de Datos
-```bash
-# Ejecutar migraciones de base de datos
-docker compose exec python-backend python3 /app/run_migration_cleanup_address_fields.py
-docker compose exec python-backend python3 /app/run_migration_remove_blood_type_allergies.py
-docker compose exec python-backend python3 /app/run_insert_countries_states.py
-```
+#### 3. Acceder a la Aplicación
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8000
+- **Documentación API**: http://localhost:8000/docs
+
+#### 4. Credenciales de Acceso
+- **Email**: `thiago@avant.com`
+- **Contraseña**: `Password123!`
+
+### 📖 Guía Detallada
+Para instrucciones más detalladas, consulta: **[SETUP_GUIDE.md](SETUP_GUIDE.md)**
 
 ## 📁 Estructura del Proyecto
 
