@@ -25,6 +25,8 @@ export interface UseVitalSignsReturn {
   createVitalSign: (consultationId: string, vitalSignData: VitalSignFormData) => Promise<ConsultationVitalSign>;
   updateVitalSign: (consultationId: string, vitalSignId: number, vitalSignData: VitalSignFormData) => Promise<ConsultationVitalSign>;
   deleteVitalSign: (consultationId: string, vitalSignId: number) => Promise<void>;
+  clearTemporaryVitalSigns: () => void;
+  getAllVitalSigns: () => ConsultationVitalSign[];
   
   // Dialog management
   openAddDialog: (vitalSign?: VitalSign) => void;

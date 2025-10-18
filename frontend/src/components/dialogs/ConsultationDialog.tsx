@@ -73,6 +73,7 @@ interface ConsultationFormData {
   physical_examination: string;
   primary_diagnosis: string;
   secondary_diagnoses: string;
+  prescribed_medications: string;
   treatment_plan: string;
   therapeutic_plan: string;
   follow_up_instructions: string;
@@ -166,6 +167,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     physical_examination: '',
     primary_diagnosis: '',
     secondary_diagnoses: '',
+    prescribed_medications: '',
     treatment_plan: '',
     therapeutic_plan: '',
     follow_up_instructions: '',
@@ -210,6 +212,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     first_name: '',
     paternal_surname: '',
     maternal_surname: '',
+    birth_date: '',
+    gender: '',
     primary_phone: ''
   });
 
@@ -231,6 +235,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           physical_examination: consultation.physical_examination || '',
           primary_diagnosis: consultation.primary_diagnosis || '',
           secondary_diagnoses: consultation.secondary_diagnoses || '',
+          prescribed_medications: consultation.prescribed_medications || '',
           treatment_plan: consultation.treatment_plan || '',
           therapeutic_plan: consultation.therapeutic_plan || '',
           follow_up_instructions: consultation.follow_up_instructions || '',
@@ -523,9 +528,13 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           console.log('✅ Loaded decrypted patient data:', {
             id: fullPatientData.id,
             name: fullPatientData.first_name,
-            phone: fullPatientData.primary_phone
+            phone: fullPatientData.primary_phone,
+            birth_date: fullPatientData.birth_date,
+            gender: fullPatientData.gender
           });
           setPatientEditData(fullPatientData);
+          // Update selectedPatient with fresh data including birth_date and gender
+          setSelectedPatient(fullPatientData);
         } catch (error) {
           console.error('❌ Error loading decrypted patient data:', error);
           setPatientEditData(null);
@@ -652,6 +661,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       
       console.log('🔬 Final form data being sent:', finalFormData);
       console.log('🔬 Laboratory results field:', finalFormData.laboratory_results);
+      console.log('🔬 Prescribed medications field:', finalFormData.prescribed_medications);
       
       const createdConsultation = await onSubmit(finalFormData);
       console.log('🔬 Consultation creation result:', createdConsultation);
@@ -754,6 +764,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     console.log('🔍 openAddDialog called, dialog should be open now');
   };
 
+
   const handleEditStudy = (study: ClinicalStudy) => {
     clinicalStudiesHook.openEditDialog(study);
   };
@@ -807,6 +818,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           {/* Debug: Log form data */}
           {console.log('🔍 ConsultationDialog render - formData.has_appointment:', formData.has_appointment)}
           {console.log('🔍 ConsultationDialog render - appointments length:', appointments?.length)}
+          {console.log('🔍 ConsultationDialog render - formData.prescribed_medications:', formData.prescribed_medications)}
           
           {/* Appointment Question */}
           <Box>
@@ -1024,6 +1036,36 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                     required
                     placeholder="Teléfono - opcional"
                   />
+                  <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
+                    <DatePicker
+                      label="Fecha de Nacimiento"
+                      value={newPatientData.birth_date ? new Date(newPatientData.birth_date) : null}
+                      onChange={(newValue: any) => {
+                        const dateStr = newValue ? newValue.toISOString().split('T')[0] : '';
+                        handleNewPatientFieldChange('birth_date', dateStr);
+                      }}
+                      slotProps={{
+                        textField: {
+                          size: 'small',
+                          fullWidth: true,
+                          placeholder: 'Fecha de Nacimiento - opcional'
+                        }
+                      }}
+                    />
+                  </LocalizationProvider>
+                  <FormControl size="small" fullWidth>
+                    <InputLabel>Género</InputLabel>
+                    <Select
+                      value={newPatientData.gender || ''}
+                      onChange={(e: any) => handleNewPatientFieldChange('gender', e.target.value)}
+                      label="Género"
+                    >
+                      <MenuItem value=""><em>Seleccione</em></MenuItem>
+                      <MenuItem value="Masculino">Masculino</MenuItem>
+                      <MenuItem value="Femenino">Femenino</MenuItem>
+                      <MenuItem value="Otro">Otro</MenuItem>
+                    </Select>
+                  </FormControl>
                 </Box>
               </Box>
           </Box>
@@ -1089,9 +1131,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                         label="Género"
                       >
                         <MenuItem value=""><em>Seleccione</em></MenuItem>
-                        <MenuItem value="male">Masculino</MenuItem>
-                        <MenuItem value="female">Femenino</MenuItem>
-                        <MenuItem value="other">Otro</MenuItem>
+                        <MenuItem value="Masculino">Masculino</MenuItem>
+                        <MenuItem value="Femenino">Femenino</MenuItem>
+                        <MenuItem value="Otro">Otro</MenuItem>
                       </Select>
                     </FormControl>
                   </Box>
@@ -1545,6 +1587,26 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             </Box>
           </Box>
 
+          {/* Prescribed Medications */}
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <NotesIcon sx={{ fontSize: 20 }} />
+              Medicamentos Prescritos
+            </Typography>
+            <TextField
+              name="prescribed_medications"
+              label="Medicamentos prescritos"
+              value={formData.prescribed_medications}
+              onChange={handleChange}
+              size="small"
+              fullWidth
+              multiline
+              rows={3}
+              placeholder="Denominación del medicamento, presentación, dosis, vía de administración, frecuencia, duración del tratamiento, cantidad a surtir"
+              sx={{ mb: 2 }}
+            />
+          </Box>
+
           {/* Treatment Plan */}
           <Box>
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1585,6 +1647,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         {/* Clinical Studies Section - Always show */}
         <Box sx={{ mt: 3 }}>
           <Divider sx={{ mb: 2 }} />
+          
           <ClinicalStudiesSection
             consultationId={isEditing ? String(consultation.id) : "temp_consultation"}
             patientId={selectedPatient?.id || "temp_patient"}
@@ -1620,13 +1683,43 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               specialty_name: doctorProfile?.specialty_name,
               specialty: doctorProfile?.specialty
             })}
+            {console.log('🔍 PDF Patient Data Debug:', {
+              selectedPatient: selectedPatient ? {
+                id: selectedPatient.id,
+                first_name: selectedPatient.first_name,
+                paternal_surname: selectedPatient.paternal_surname,
+                maternal_surname: selectedPatient.maternal_surname,
+                birth_date: selectedPatient.birth_date,
+                gender: selectedPatient.gender,
+                primary_phone: selectedPatient.primary_phone
+              } : null,
+              newPatientData: {
+                first_name: newPatientData.first_name,
+                paternal_surname: newPatientData.paternal_surname,
+                maternal_surname: newPatientData.maternal_surname,
+                birth_date: newPatientData.birth_date,
+                gender: newPatientData.gender,
+                phone: newPatientData.primary_phone
+              },
+              finalPatientData: {
+                id: selectedPatient?.id || 0,
+                firstName: selectedPatient?.first_name || newPatientData.first_name || '',
+                lastName: selectedPatient?.paternal_surname || newPatientData.paternal_surname || '',
+                maternalSurname: selectedPatient?.maternal_surname || newPatientData.maternal_surname || '',
+                dateOfBirth: selectedPatient?.birth_date || newPatientData.birth_date || undefined,
+                gender: selectedPatient?.gender || newPatientData.gender || undefined,
+                phone: selectedPatient?.primary_phone || newPatientData.primary_phone || undefined
+              }
+            })}
             <PrintButtons
               patient={{
                 id: selectedPatient?.id || 0,
                 firstName: selectedPatient?.first_name || newPatientData.first_name || '',
                 lastName: selectedPatient?.paternal_surname || newPatientData.paternal_surname || '',
+                maternalSurname: selectedPatient?.maternal_surname || newPatientData.maternal_surname || '',
                 dateOfBirth: selectedPatient?.birth_date || newPatientData.birth_date || undefined,
-                phone: selectedPatient?.phone || newPatientData.phone || undefined,
+                gender: selectedPatient?.gender || newPatientData.gender || undefined,
+                phone: selectedPatient?.primary_phone || newPatientData.primary_phone || undefined,
                 email: selectedPatient?.email || newPatientData.email || undefined,
                 address: selectedPatient?.address || newPatientData.address || undefined,
                 city: selectedPatient?.city || newPatientData.city || undefined,
@@ -1637,9 +1730,11 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 id: doctorProfile?.id || 0,
                 firstName: doctorProfile?.first_name || 'Dr.',
                 lastName: doctorProfile?.paternal_surname || 'Usuario',
+                maternalSurname: doctorProfile?.maternal_surname || '',
                 title: doctorProfile?.title || 'Médico',
                 specialty: doctorProfile?.specialty_name || 'No especificada',
                 license: doctorProfile?.professional_license || 'No especificada',
+                university: doctorProfile?.university || 'No especificada',
                 phone: doctorProfile?.office_phone || doctorProfile?.phone || 'No especificado',
                 email: doctorProfile?.email || 'No especificado',
                 address: doctorProfile?.office_address || 'No especificado',
@@ -1654,6 +1749,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 type: consultation.type || formData.type,
                 reason: consultation.reason || formData.reason,
                 diagnosis: consultation.primary_diagnosis || formData.primary_diagnosis,
+                prescribed_medications: consultation.prescribed_medications || formData.prescribed_medications,
                 notes: consultation.notes || formData.notes
               }}
               medications={[
@@ -1783,7 +1879,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         <DialogActions>
           <Button onClick={vitalSignsHook.closeDialog}>Cancelar</Button>
       </DialogActions>
-      </Dialog>
+    </Dialog>
 
       {/* Vital Sign Form Dialog */}
       <Dialog 
@@ -1839,6 +1935,84 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   fullWidth
                   required
                   placeholder="Ingresa el valor medido"
+                  helperText={(() => {
+                    const selectedVitalSign = vitalSignsHook.availableVitalSigns.find(
+                      vs => vs.id === vitalSignsHook.vitalSignFormData.vital_sign_id
+                    );
+                    
+                    if (selectedVitalSign && selectedVitalSign.name.toLowerCase().includes('índice de masa corporal')) {
+                      const allVitalSigns = vitalSignsHook.getAllVitalSigns();
+                      const weightSign = allVitalSigns.find(vs => 
+                        vs.vital_sign_name.toLowerCase().includes('peso')
+                      );
+                      const heightSign = allVitalSigns.find(vs => 
+                        vs.vital_sign_name.toLowerCase().includes('estatura') || 
+                        vs.vital_sign_name.toLowerCase().includes('altura')
+                      );
+                      
+                      if (weightSign && heightSign) {
+                        const weight = parseFloat(weightSign.value);
+                        const height = parseFloat(heightSign.value);
+                        
+                        if (!isNaN(weight) && !isNaN(height) && height > 0) {
+                          return `Peso: ${weight} kg, Estatura: ${height} cm. Haz clic en "Calcular" para calcular automáticamente el IMC.`;
+                        } else {
+                          return 'Agrega primero el peso y la estatura para calcular automáticamente el IMC.';
+                        }
+                      } else {
+                        return 'Agrega primero el peso y la estatura para calcular automáticamente el IMC.';
+                      }
+                    }
+                    return 'Ingresa el valor medido del signo vital';
+                  })()}
+                  InputProps={{
+                    endAdornment: (() => {
+                      const selectedVitalSign = vitalSignsHook.availableVitalSigns.find(
+                        vs => vs.id === vitalSignsHook.vitalSignFormData.vital_sign_id
+                      );
+                      
+                      // Check if this is BMI and if we have weight and height
+                      if (selectedVitalSign && selectedVitalSign.name.toLowerCase().includes('índice de masa corporal')) {
+                        const allVitalSigns = vitalSignsHook.getAllVitalSigns();
+                        const weightSign = allVitalSigns.find(vs => 
+                          vs.vital_sign_name.toLowerCase().includes('peso')
+                        );
+                        const heightSign = allVitalSigns.find(vs => 
+                          vs.vital_sign_name.toLowerCase().includes('estatura') || 
+                          vs.vital_sign_name.toLowerCase().includes('altura')
+                        );
+                        
+                        if (weightSign && heightSign) {
+                          const weight = parseFloat(weightSign.value);
+                          const height = parseFloat(heightSign.value);
+                          
+                          if (!isNaN(weight) && !isNaN(height) && height > 0) {
+                            const calculateBMI = () => {
+                              const heightInMeters = height / 100; // Convert cm to meters
+                              const bmi = weight / (heightInMeters * heightInMeters);
+                              const bmiRounded = Math.round(bmi * 10) / 10; // Round to 1 decimal
+                              vitalSignsHook.updateFormData({ value: bmiRounded.toString() });
+                            };
+                            
+                            return (
+                              <Button
+                                size="small"
+                                onClick={calculateBMI}
+                                sx={{ 
+                                  minWidth: 'auto',
+                                  px: 1,
+                                  fontSize: '0.75rem'
+                                }}
+                              >
+                                Calcular
+                              </Button>
+                            );
+                          }
+                        }
+                      }
+                      return null;
+                    })()
+                  }}
                 />
               </Grid>
               <Grid item xs={12}>

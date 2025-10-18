@@ -338,8 +338,8 @@ async def get_clinical_studies_by_patient(
         for study in studies:
             study_data = {
                 "id": str(study.id),
-                "consultation_id": str(study.consultation_id),
-                "patient_id": str(study.patient_id),
+                "consultation_id": study.consultation_id,
+                "patient_id": study.patient_id,
                 "study_type": study.study_type,
                 "study_name": study.study_name,
                 "study_description": study.study_description,
@@ -601,7 +601,7 @@ async def get_clinical_studies_by_consultation(
     
         if not consultation:
             print(f"🔬 Consultation {consultation_id} not found or no access for user {current_user.id}")
-        return []
+            return []
     
         print(f"🔬 Consultation found: {consultation.id}")
     
@@ -615,13 +615,24 @@ async def get_clinical_studies_by_consultation(
         for study in studies:
             print(f"🔬 Study {study.id}: consultation_id={study.consultation_id}, created_by={study.created_by}")
         
+        if len(studies) == 0:
+            print(f"🔬 No studies found - checking if consultation exists and user has access")
+            print(f"🔬 Consultation ID: {consultation_id}, User ID: {current_user.id}")
+            # Check if there are any studies for this consultation at all
+            all_studies = db.query(ClinicalStudy).filter(
+                ClinicalStudy.consultation_id == consultation_id
+            ).all()
+            print(f"🔬 Total studies for consultation {consultation_id} (any user): {len(all_studies)}")
+            for study in all_studies:
+                print(f"🔬 Study {study.id}: created_by={study.created_by}")
+        
         # Convert to response format
         studies_data = []
         for study in studies:
             study_data = {
                 "id": str(study.id),
-                "consultation_id": str(study.consultation_id),
-                "patient_id": str(study.patient_id),
+                "consultation_id": study.consultation_id,
+                "patient_id": study.patient_id,
                 "study_type": study.study_type,
                 "study_name": study.study_name,
                 "study_description": study.study_description,
@@ -689,8 +700,11 @@ async def create_clinical_study(
         if not patient:
             raise HTTPException(status_code=404, detail="Patient not found or no access")
         
-        # Generate study code
-        study_code = f"CS{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        # Generate study code with timestamp and random component (max 20 chars)
+        import random
+        now = datetime.now()
+        # Use shorter format: CS + YYMMDDHHMMSS + 3 random digits = 18 chars total
+        study_code = f"CS{now.strftime('%y%m%d%H%M%S')}{random.randint(100, 999)}"
         
         # Create new clinical study
         new_study = ClinicalStudy(
@@ -2637,6 +2651,7 @@ async def get_consultation(
         consultation_end_time = consultation.consultation_date + timedelta(minutes=30)
 
         # Decrypt consultation data with error handling
+        print(f"🔍 DEBUG GET: Raw prescribed_medications from DB: {repr(consultation.prescribed_medications)}")
         try:
             decrypted_consultation_data = decrypt_sensitive_data({
             "chief_complaint": consultation.chief_complaint,
@@ -2647,12 +2662,14 @@ async def get_consultation(
             "physical_examination": consultation.physical_examination,
             "primary_diagnosis": consultation.primary_diagnosis,
             "secondary_diagnoses": consultation.secondary_diagnoses,
+            "prescribed_medications": consultation.prescribed_medications,
             "treatment_plan": consultation.treatment_plan,
             "follow_up_instructions": consultation.follow_up_instructions,
             "prognosis": consultation.prognosis,
             "laboratory_results": consultation.laboratory_results,
                 "notes": consultation.notes
             }, "consultation")
+            print(f"🔍 DEBUG GET: After decryption prescribed_medications: {repr(decrypted_consultation_data.get('prescribed_medications'))}")
         except Exception as e:
             print(f"⚠️ Could not decrypt consultation data for consultation {consultation.id}: {str(e)}")
             # Use original encrypted data if decryption fails
@@ -2665,6 +2682,7 @@ async def get_consultation(
                 "physical_examination": consultation.physical_examination,
                 "primary_diagnosis": consultation.primary_diagnosis,
                 "secondary_diagnoses": consultation.secondary_diagnoses,
+                "prescribed_medications": consultation.prescribed_medications,
                 "treatment_plan": consultation.treatment_plan,
                 "follow_up_instructions": consultation.follow_up_instructions,
                 "prognosis": consultation.prognosis,
@@ -2687,6 +2705,7 @@ async def get_consultation(
             "laboratory_results": consultation.laboratory_results or "",
             "primary_diagnosis": decrypted_consultation_data.get("primary_diagnosis", ""),
             "secondary_diagnoses": decrypted_consultation_data.get("secondary_diagnoses", ""),
+            "prescribed_medications": decrypted_consultation_data.get("prescribed_medications", ""),
             "treatment_plan": decrypted_consultation_data.get("treatment_plan", ""),
             "therapeutic_plan": decrypted_consultation_data.get("treatment_plan", ""),  # Alias for compatibility
             "follow_up_instructions": decrypted_consultation_data.get("follow_up_instructions", ""),
@@ -2703,6 +2722,7 @@ async def get_consultation(
             "date": consultation.consultation_date.isoformat()
         }
         
+        print(f"🔍 DEBUG GET: Final response prescribed_medications: {repr(result.get('prescribed_medications'))}")
         print(f"✅ Returning consultation {consultation_id}")
         return result
         
@@ -2720,10 +2740,15 @@ async def create_consultation(
 ):
     """Create new consultation with encrypted sensitive medical data"""
     try:
+        print(f"🔍 DEBUG: Creating consultation with data: {consultation_data}")
+        print(f"🔍 DEBUG: prescribed_medications field: {consultation_data.get('prescribed_medications', 'NOT_FOUND')}")
+        print(f"🔍 DEBUG: prescribed_medications type: {type(consultation_data.get('prescribed_medications'))}")
+        print(f"🔍 DEBUG: prescribed_medications repr: {repr(consultation_data.get('prescribed_medications'))}")
         security_logger.info("Creating consultation with encryption", operation="create_consultation", doctor_id=current_user.id, patient_id=consultation_data.get("patient_id"))
         
         # Encrypt sensitive consultation fields
         encrypted_consultation_data = encrypt_sensitive_data(consultation_data, "consultation")
+        print(f"🔍 DEBUG: After encryption - prescribed_medications: {encrypted_consultation_data.get('prescribed_medications', 'NOT_FOUND')}")
         
         # Parse consultation date
         consultation_date_str = encrypted_consultation_data.get("date", encrypted_consultation_data.get("consultation_date"))
@@ -2736,6 +2761,7 @@ async def create_consultation(
             consultation_date = now_cdmx().replace(tzinfo=None)
         
         # Create MedicalRecord in database with encrypted data
+        print(f"🔍 DEBUG: About to save prescribed_medications: {encrypted_consultation_data.get('prescribed_medications', 'NOT_FOUND')}")
         new_medical_record = MedicalRecord(
             patient_id=encrypted_consultation_data.get("patient_id"),
             doctor_id=current_user.id,
@@ -2748,6 +2774,7 @@ async def create_consultation(
             physical_examination=encrypted_consultation_data.get("physical_examination", ""),
             laboratory_results=encrypted_consultation_data.get("laboratory_results", ""),
             primary_diagnosis=encrypted_consultation_data.get("primary_diagnosis", ""),
+            prescribed_medications=encrypted_consultation_data.get("prescribed_medications", ""),
             treatment_plan=encrypted_consultation_data.get("treatment_plan", ""),
             follow_up_instructions=encrypted_consultation_data.get("follow_up_instructions", ""),
             prognosis=encrypted_consultation_data.get("prognosis", ""),
@@ -2878,6 +2905,9 @@ async def update_consultation(
     try:
         print(f"📝 Updating consultation {consultation_id} for user {current_user.id}")
         print(f"📊 Update data received: {consultation_data}")
+        print(f"🔍 DEBUG UPDATE: Starting update process for consultation {consultation_id}")
+        print(f"🔍 DEBUG UPDATE: prescribed_medications type: {type(consultation_data.get('prescribed_medications'))}")
+        print(f"🔍 DEBUG UPDATE: prescribed_medications value: {repr(consultation_data.get('prescribed_medications'))}")
         
         # Find existing consultation
         consultation = db.query(MedicalRecord).filter(
@@ -2909,6 +2939,10 @@ async def update_consultation(
         consultation.laboratory_results = consultation_data.get("laboratory_results", consultation.laboratory_results)
         consultation.primary_diagnosis = consultation_data.get("primary_diagnosis", consultation.primary_diagnosis)
         consultation.secondary_diagnoses = consultation_data.get("secondary_diagnoses", consultation.secondary_diagnoses)
+        print(f"🔍 DEBUG UPDATE: prescribed_medications from data: {consultation_data.get('prescribed_medications')}")
+        print(f"🔍 DEBUG UPDATE: prescribed_medications current: {consultation.prescribed_medications}")
+        consultation.prescribed_medications = consultation_data.get("prescribed_medications", consultation.prescribed_medications)
+        print(f"🔍 DEBUG UPDATE: prescribed_medications after assignment: {consultation.prescribed_medications}")
         consultation.treatment_plan = consultation_data.get("treatment_plan", consultation.treatment_plan)
         consultation.follow_up_instructions = consultation_data.get("follow_up_instructions", consultation.follow_up_instructions)
         consultation.prognosis = consultation_data.get("prognosis", consultation.prognosis)
@@ -2918,6 +2952,7 @@ async def update_consultation(
         # Save changes
         db.commit()
         db.refresh(consultation)
+        print(f"🔍 DEBUG UPDATE: prescribed_medications after commit: {consultation.prescribed_medications}")
         
         # Get patient and doctor names for response
         patient_name = "Paciente No Identificado"

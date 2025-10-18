@@ -150,33 +150,19 @@ export function useConsultationManagement(
     try {
       setSelectedConsultation(consultation);
       setIsEditingConsultation(true);
-      
-      setConsultationFormData({
-        patient_id: typeof consultation.patient_id === 'string' ? parseInt(consultation.patient_id) : consultation.patient_id,
-        date: consultation.date ? new Date(consultation.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-        chief_complaint: consultation.chief_complaint || '',
-        history_present_illness: consultation.history_present_illness || '',
-        family_history: consultation.family_history || '',
-        personal_pathological_history: consultation.personal_pathological_history || '',
-        personal_non_pathological_history: consultation.personal_non_pathological_history || '',
-        physical_examination: consultation.physical_examination || '',
-        primary_diagnosis: consultation.primary_diagnosis || '',
-        secondary_diagnoses: consultation.secondary_diagnoses || '',
-        treatment_plan: consultation.treatment_plan || '',
-        therapeutic_plan: consultation.therapeutic_plan || '',
-        follow_up_instructions: consultation.follow_up_instructions || '',
-        prognosis: consultation.prognosis || '',
-        laboratory_results: consultation.laboratory_results || '',
-        imaging_studies: consultation.imaging_studies || '',
-        interconsultations: consultation.interconsultations || '',
-        doctor_name: consultation.doctor_name || '',
-        doctor_professional_license: consultation.doctor_professional_license || '',
-        doctor_specialty: consultation.doctor_specialty || ''
-      });
-      
       setConsultationDialogOpen(true);
+      
+      // Fetch complete consultation data from backend
+      const response = await apiService.get(`/api/consultations/${consultation.id}`);
+      const fullConsultationData = response.data;
+      
+      console.log('🔍 Full consultation data from backend:', fullConsultationData);
+      
+      // Update the selectedConsultation with the fresh data so the dialog's useEffect will re-run
+      setSelectedConsultation(fullConsultationData);
     } catch (error) {
       console.error('❌ Error al preparar edición de consulta:', error);
+      // Keep the original consultation data if fetch fails
     }
   }, []);
 

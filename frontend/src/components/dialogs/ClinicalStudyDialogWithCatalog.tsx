@@ -120,21 +120,72 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
   };
 
   const handleSubmit = async () => {
-    if (useCatalog && selectedCatalogStudies.length > 0) {
-      // Submit multiple studies from catalog
-      for (const catalogStudy of selectedCatalogStudies) {
-        const studyData: CreateClinicalStudyData = {
-          ...formData,
-          study_name: catalogStudy.name,
-          study_type: catalogStudy.category?.code.toLowerCase() as StudyType || 'laboratorio',
-          study_description: catalogStudy.description || '',
-          clinical_indication: catalogStudy.preparation || ''
-        };
-        await onSubmit(studyData);
+    try {
+      if (useCatalog && selectedCatalogStudies.length > 0) {
+        // Submit multiple studies from catalog
+        console.log('🔬 Submitting multiple studies:', selectedCatalogStudies.length);
+        console.log('🔬 Selected studies:', selectedCatalogStudies.map(s => s.name));
+        console.log('🔬 Form data:', formData);
+        
+        let successCount = 0;
+        let errorCount = 0;
+        
+        for (let i = 0; i < selectedCatalogStudies.length; i++) {
+          const catalogStudy = selectedCatalogStudies[i];
+          console.log(`🔬 Creating study ${i + 1}/${selectedCatalogStudies.length}:`, catalogStudy.name);
+          
+          // Create a fresh studyData object for each study to avoid mutation
+          const studyData: CreateClinicalStudyData = {
+            consultation_id: formData.consultation_id,
+            patient_id: formData.patient_id,
+            study_type: (catalogStudy.category?.code.toLowerCase() as StudyType) || 'hematologia',
+            study_name: catalogStudy.name,
+            study_description: catalogStudy.description || '',
+            ordered_date: formData.ordered_date,
+            status: formData.status,
+            results_text: formData.results_text,
+            interpretation: formData.interpretation,
+            ordering_doctor: formData.ordering_doctor,
+            performing_doctor: formData.performing_doctor,
+            institution: formData.institution,
+            urgency: formData.urgency,
+            clinical_indication: catalogStudy.preparation || '',
+            relevant_history: formData.relevant_history,
+            created_by: formData.created_by
+          };
+          
+          try {
+            await onSubmit(studyData);
+            console.log(`✅ Study ${i + 1} created successfully:`, catalogStudy.name);
+            successCount++;
+          } catch (error) {
+            console.error(`❌ Error creating study ${i + 1}:`, catalogStudy.name, error);
+            console.error(`❌ Error details:`, error.response?.data || error.message);
+            errorCount++;
+            // Continue with other studies even if one fails
+          }
+        }
+        
+        console.log(`🔬 All studies processed - Success: ${successCount}, Errors: ${errorCount}`);
+        
+        // Close dialog only after all studies are processed
+        if (successCount > 0) {
+          console.log('🔬 Closing dialog after successful studies creation');
+          onClose();
+        } else {
+          console.log('🔬 No studies were created successfully, keeping dialog open');
+        }
+      } else {
+        // Submit single custom study
+        console.log('🔬 Submitting single custom study');
+        await onSubmit(formData);
+        // Close dialog after single study submission
+        console.log('🔬 Closing dialog after single study submission');
+        onClose();
       }
-    } else {
-      // Submit single custom study
-      await onSubmit(formData);
+    } catch (error) {
+      console.error('❌ Error in handleSubmit:', error);
+      throw error;
     }
   };
 

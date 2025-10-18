@@ -5,7 +5,9 @@ export interface PatientInfo {
   id: number;
   firstName: string;
   lastName: string;
+  maternalSurname?: string;
   dateOfBirth?: string;
+  gender?: string;
   phone?: string;
   email?: string;
   address?: string;
@@ -18,9 +20,11 @@ export interface DoctorInfo {
   id: number;
   firstName: string;
   lastName: string;
+  maternalSurname?: string;
   title?: string;
   specialty?: string;
   license?: string;
+  university?: string;
   phone?: string;
   email?: string;
   address?: string;
@@ -54,10 +58,41 @@ export interface ConsultationInfo {
   type: string;
   reason?: string;
   diagnosis?: string;
+  prescribed_medications?: string;
   notes?: string;
 }
 
 class PDFService {
+  private formatDateToDDMMYYYY(dateString: string): string {
+    console.log('🔍 Formatting date:', dateString);
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        console.log('❌ Invalid date:', dateString);
+        return dateString; // Return original if invalid
+      }
+      
+      const day = date.getDate().toString().padStart(2, '0');
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const year = date.getFullYear();
+      
+      const formatted = `${day}-${month}-${year}`;
+      console.log('✅ Formatted date:', formatted);
+      return formatted;
+    } catch (error) {
+      console.warn('Error formatting date:', error);
+      return dateString;
+    }
+  }
+
+  private getFullName(firstName: string, lastName: string, maternalSurname?: string): string {
+    const parts = [firstName, lastName];
+    if (maternalSurname && maternalSurname.trim()) {
+      parts.push(maternalSurname);
+    }
+    return parts.filter(part => part && part.trim()).join(' ');
+  }
+
   private async loadCortexLogo(): Promise<string | null> {
     try {
       // Try to load the logo from the public folder (using PNG favicon)
@@ -167,11 +202,15 @@ class PDFService {
     
     let currentY = startY + 8;
     
+    // Get full doctor name
+    const fullDoctorName = this.getFullName(doctor.firstName, doctor.lastName, doctor.maternalSurname);
+    
     // Doctor details table - more compact
     const doctorData = [
-      ['Médico:', `Dr. ${doctor.firstName} ${doctor.lastName}`],
+      ['Médico:', `Dr. ${fullDoctorName}`],
       ['Especialidad:', doctor.specialty || 'No especificada'],
       ['Cédula:', doctor.license || 'No especificada'],
+      ['Universidad:', doctor.university || 'No especificada'],
       ['Teléfono:', doctor.phone || 'No especificado'],
       ['Consultorio:', `${doctor.address || 'No especificado'}, ${doctor.city || 'No especificado'}, ${doctor.state || 'No especificado'}, ${doctor.country || 'No especificado'}`]
     ];
@@ -192,11 +231,21 @@ class PDFService {
       tableLineColor: [200, 200, 200]
     });
     
-    // Calculate approximate height: 5 rows * 10px per row + margins
+    // Calculate approximate height: 6 rows * 10px per row + margins
     return currentY + (doctorData.length * 10) + 10;
   }
 
   private addPatientInfo(doc: jsPDF, patient: PatientInfo, startY: number): number {
+    console.log('🔍 PDF Service - Patient data received:', {
+      id: patient.id,
+      firstName: patient.firstName,
+      lastName: patient.lastName,
+      maternalSurname: patient.maternalSurname,
+      dateOfBirth: patient.dateOfBirth,
+      gender: patient.gender,
+      phone: patient.phone
+    });
+    
     doc.setFontSize(10);
     doc.setTextColor(0, 0, 0);
     doc.setFont('helvetica', 'bold');
@@ -204,9 +253,17 @@ class PDFService {
     
     let currentY = startY + 8;
     
-    // Patient details table - only name for medical orders
+    // Get full patient name
+    const fullPatientName = this.getFullName(patient.firstName, patient.lastName, patient.maternalSurname);
+    
+    // Format date of birth
+    const formattedDateOfBirth = patient.dateOfBirth ? this.formatDateToDDMMYYYY(patient.dateOfBirth) : 'No especificada';
+    
+    // Patient details table - only essential information
     const patientData = [
-      ['Nombre:', `${patient.firstName} ${patient.lastName}`]
+      ['Nombre:', fullPatientName],
+      ['Fecha de Nacimiento:', formattedDateOfBirth],
+      ['Género:', patient.gender || 'No especificado']
     ];
     
     autoTable(doc, {
@@ -225,7 +282,7 @@ class PDFService {
       tableLineColor: [200, 200, 200]
     });
     
-    // Calculate approximate height: 1 row * 10px per row + margins
+    // Calculate approximate height: 3 rows * 10px per row + margins
     return currentY + (patientData.length * 10) + 10;
   }
 
@@ -237,12 +294,17 @@ class PDFService {
     
     let currentY = startY + 8;
     
-    // Format date to show only day, month, year (remove time part)
-    const formattedDate = consultation.date ? consultation.date.split('T')[0] : 'No especificada';
+    // Format date to dd-mm-yyyy format
+    const formattedDate = consultation.date ? this.formatDateToDDMMYYYY(consultation.date) : 'No especificada';
+    
+    // Get full patient name
+    const fullPatientName = this.getFullName(patient.firstName, patient.lastName, patient.maternalSurname);
     
     const consultationData = [
       ['Fecha:', formattedDate],
-      ['Paciente:', `${patient.firstName} ${patient.lastName}`]
+      ['Paciente:', fullPatientName],
+      ['Diagnóstico:', consultation.diagnosis || 'No especificado'],
+      ['Medicamentos Prescritos:', consultation.prescribed_medications || 'No especificados']
     ];
     
     autoTable(doc, {
@@ -261,7 +323,7 @@ class PDFService {
       tableLineColor: [200, 200, 200]
     });
     
-    // Calculate approximate height: 2 rows * 10px per row + margins
+    // Calculate approximate height: 4 rows * 10px per row + margins
     return currentY + (consultationData.length * 10) + 10;
   }
 
@@ -287,6 +349,9 @@ class PDFService {
       
       // Add doctor info first
       currentY = this.addDoctorInfo(doc, doctor, currentY);
+      
+      // Add patient info (includes birth date and gender)
+      currentY = this.addPatientInfo(doc, patient, currentY);
       
       // Add consultation info (includes patient name)
       currentY = this.addConsultationInfo(doc, consultation, patient, currentY);
@@ -354,6 +419,9 @@ class PDFService {
     
     // Add doctor info first
     currentY = this.addDoctorInfo(doc, doctor, currentY);
+    
+    // Add patient info (includes birth date and gender)
+    currentY = this.addPatientInfo(doc, patient, currentY);
     
     // Add consultation info (includes patient name)
     currentY = this.addConsultationInfo(doc, consultation, patient, currentY);

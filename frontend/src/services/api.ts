@@ -870,6 +870,9 @@ class ApiService {
       // Note: doctor fields and created_by are now assigned by the backend
     };
     
+    console.log('🔍 API Service - createConsultation payload:', payload);
+    console.log('🔍 API Service - prescribed_medications in payload:', payload.prescribed_medications);
+    
     const response = await this.api.post<Consultation>(
       API_CONFIG.ENDPOINTS.CONSULTATIONS, 
       payload

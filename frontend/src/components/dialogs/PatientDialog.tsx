@@ -455,9 +455,9 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
                   sx={{ minWidth: 120 }}
                 >
                   <MenuItem value=""><em>Seleccione</em></MenuItem>
-                  <MenuItem value="male">Masculino</MenuItem>
-                  <MenuItem value="female">Femenino</MenuItem>
-                  <MenuItem value="other">Otro</MenuItem>
+                  <MenuItem value="Masculino">Masculino</MenuItem>
+                  <MenuItem value="Femenino">Femenino</MenuItem>
+                  <MenuItem value="Otro">Otro</MenuItem>
                 </Select>
                 {errors.gender && <FormHelperText>{errors.gender}</FormHelperText>}
               </FormControl>

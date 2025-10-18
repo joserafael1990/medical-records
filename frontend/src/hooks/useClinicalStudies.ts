@@ -30,7 +30,7 @@ export interface UseClinicalStudiesReturn {
   
   // Form management
   updateFormData: (data: Partial<CreateClinicalStudyData>) => void;
-  submitForm: () => Promise<void>;
+  submitForm: (studyData?: CreateClinicalStudyData) => Promise<void>;
   
   // Utility functions
   clearTemporaryStudies: () => void;
@@ -232,57 +232,60 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
     setClinicalStudyFormData(prev => ({ ...prev, ...data }));
   }, []);
 
-  const submitForm = useCallback(async () => {
+  const submitForm = useCallback(async (studyData?: CreateClinicalStudyData) => {
     setIsSubmitting(true);
     setError(null);
     
+    // Use provided studyData or fall back to internal form data
+    const dataToSubmit = studyData || clinicalStudyFormData;
+    
+    
     try {
       if (isEditingClinicalStudy && selectedClinicalStudy) {
-        await updateStudy(selectedClinicalStudy.id, clinicalStudyFormData);
+        await updateStudy(selectedClinicalStudy.id, dataToSubmit);
       } else {
         // For new consultations, add to temporary studies list
-        if (clinicalStudyFormData.consultation_id === 'temp_consultation') {
-          console.log('🔬 Adding temporary study:', clinicalStudyFormData);
+        if (dataToSubmit.consultation_id === 'temp_consultation') {
+          
+          // Generate unique ID with timestamp and random component
+          const uniqueId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           
           const tempStudy: ClinicalStudy = {
-            id: `temp_${Date.now()}`,
-            consultation_id: clinicalStudyFormData.consultation_id,
-            patient_id: clinicalStudyFormData.patient_id,
-            study_type: clinicalStudyFormData.study_type,
-            study_name: clinicalStudyFormData.study_name,
-            study_description: clinicalStudyFormData.study_description,
-            ordered_date: clinicalStudyFormData.ordered_date,
-            performed_date: clinicalStudyFormData.performed_date,
-            results_date: clinicalStudyFormData.results_date,
-            status: clinicalStudyFormData.status,
-            urgency: clinicalStudyFormData.urgency,
-            clinical_indication: clinicalStudyFormData.clinical_indication,
-            relevant_history: clinicalStudyFormData.relevant_history,
-            results_text: clinicalStudyFormData.results_text,
-            interpretation: clinicalStudyFormData.interpretation,
-            ordering_doctor: clinicalStudyFormData.ordering_doctor,
-            performing_doctor: clinicalStudyFormData.performing_doctor,
-            institution: clinicalStudyFormData.institution,
-            file_name: clinicalStudyFormData.file_name,
-            file_path: clinicalStudyFormData.file_path,
-            file_type: clinicalStudyFormData.file_type,
-            file_size: clinicalStudyFormData.file_size,
-            created_by: clinicalStudyFormData.created_by,
+            id: uniqueId,
+            consultation_id: dataToSubmit.consultation_id,
+            patient_id: dataToSubmit.patient_id,
+            study_type: dataToSubmit.study_type,
+            study_name: dataToSubmit.study_name,
+            study_description: dataToSubmit.study_description,
+            ordered_date: dataToSubmit.ordered_date,
+            performed_date: dataToSubmit.performed_date,
+            results_text: dataToSubmit.results_text,
+            status: dataToSubmit.status,
+            urgency: dataToSubmit.urgency,
+            clinical_indication: dataToSubmit.clinical_indication,
+            relevant_history: dataToSubmit.relevant_history,
+            interpretation: dataToSubmit.interpretation,
+            ordering_doctor: dataToSubmit.ordering_doctor,
+            performing_doctor: dataToSubmit.performing_doctor,
+            institution: dataToSubmit.institution,
+            file_name: dataToSubmit.file_name,
+            file_path: dataToSubmit.file_path,
+            file_type: dataToSubmit.file_type,
+            file_size: dataToSubmit.file_size,
+            created_by: dataToSubmit.created_by,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           };
           
-          console.log('🔬 Temporary study created:', tempStudy);
-          setStudies(prev => {
-            const newStudies = [...prev, tempStudy];
-            console.log('🔬 Updated studies list:', newStudies);
-            return newStudies;
-          });
+          setStudies(prev => [...prev, tempStudy]);
         } else {
-          await createStudy(clinicalStudyFormData);
+          await createStudy(dataToSubmit);
         }
       }
-      closeDialog();
+      
+      // Close dialog after successful submission
+      // The modal will handle its own closing logic
+      // closeDialog();
     } catch (err) {
       console.error('❌ Error submitting clinical study form:', err);
       setError('Error al guardar el estudio clínico');

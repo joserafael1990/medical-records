@@ -64,8 +64,8 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
     const consultationStudies = studies.filter(study => {
       console.log('🔬 Checking study:', study.id, 'consultation_id:', study.consultation_id, 'patient_id:', study.patient_id);
       console.log('🔬 Comparison - consultation_id:', study.consultation_id === consultationId, 'patient_id:', study.patient_id === patientId);
-      // Convert both to strings for comparison
-      return String(study.consultation_id) === String(consultationId) && String(study.patient_id) === String(patientId);
+      // Convert both to numbers for comparison
+      return Number(study.consultation_id) === Number(consultationId) && Number(study.patient_id) === Number(patientId);
     });
     
     console.log('🔬 Filtered studies:', consultationStudies);

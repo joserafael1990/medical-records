@@ -338,32 +338,29 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
     setConsultationDialogOpen(true);
   }, [resetConsultationFormData, loadAllAppointments]);
 
-  const handleEditConsultation = useCallback((consultation: Consultation) => {
-    setSelectedConsultation(consultation);
-    setConsultationFormData({
-      patient_id: consultation.patient_id,
-      date: consultation.date || getCurrentCDMXDateTime(),
-      chief_complaint: consultation.chief_complaint || '',
-      history_present_illness: consultation.history_present_illness || '',
-      family_history: consultation.family_history || '',
-      personal_pathological_history: consultation.personal_pathological_history || '',
-      personal_non_pathological_history: consultation.personal_non_pathological_history || '',
-      physical_examination: consultation.physical_examination || '',
-      primary_diagnosis: consultation.primary_diagnosis || '',
-      secondary_diagnoses: consultation.secondary_diagnoses || '',
-      treatment_plan: consultation.treatment_plan || '',
-      therapeutic_plan: consultation.therapeutic_plan || '',
-      follow_up_instructions: consultation.follow_up_instructions || '',
-      prognosis: consultation.prognosis || '',
-      laboratory_results: consultation.laboratory_results || '',
-      imaging_studies: consultation.imaging_studies || '',
-      interconsultations: consultation.interconsultations || '',
-      doctor_name: consultation.doctor_name || '',
-      doctor_professional_license: consultation.doctor_professional_license || '',
-      doctor_specialty: consultation.doctor_specialty || ''
-    });
-    setIsEditingConsultation(true);
-    setConsultationDialogOpen(true);
+  const handleEditConsultation = useCallback(async (consultation: Consultation) => {
+    try {
+      // First set the basic consultation data
+      setSelectedConsultation(consultation);
+      setIsEditingConsultation(true);
+      setConsultationDialogOpen(true);
+      
+      // Fetch complete consultation data from backend
+      const response = await apiService.get(`/api/consultations/${consultation.id}`);
+      const fullConsultationData = response.data;
+      
+      console.log('🔍 Full consultation data from backend:', fullConsultationData);
+      console.log('🔍 prescribed_medications from backend:', fullConsultationData.prescribed_medications);
+      console.log('🔍 All backend keys:', Object.keys(fullConsultationData));
+      console.log('🔍 Mapping prescribed_medications:', fullConsultationData.prescribed_medications || '');
+      
+      // Update the selectedConsultation with the fresh data so the dialog's useEffect will re-run
+      console.log('🔍 About to update selectedConsultation with prescribed_medications:', fullConsultationData.prescribed_medications);
+      setSelectedConsultation(fullConsultationData);
+    } catch (error) {
+      console.error('Error fetching consultation data:', error);
+      // Keep the original consultation data if fetch fails
+    }
   }, []);
 
   const handleViewConsultation = useCallback((consultation: Consultation) => {
