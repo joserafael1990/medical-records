@@ -90,6 +90,11 @@ interface ConsultationFormData {
   // New fields for structured diagnoses
   primary_diagnoses: DiagnosisCatalog[];
   secondary_diagnoses_list: DiagnosisCatalog[];
+  // First-time consultation fields (removed duplicate _story fields)
+  // These fields are now handled by the existing _history fields:
+  // - family_history
+  // - personal_pathological_history  
+  // - personal_non_pathological_history
 }
 
 interface ConsultationDialogProps {
@@ -185,7 +190,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     appointment_id: '',
     // Structured diagnoses
     primary_diagnoses: [],
-    secondary_diagnoses_list: []
+    secondary_diagnoses_list: [],
+    // First-time consultation fields (removed duplicate _story fields)
+    // These fields are now handled by the existing _history fields
   };
 
   const [formData, setFormData] = useState<ConsultationFormData>(initialFormData);
@@ -200,6 +207,62 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // New consultation flow states
+  const [hasAppointment, setHasAppointment] = useState<boolean | null>(null);
+  const [isNewPatient, setIsNewPatient] = useState<boolean | null>(null);
+
+  // Function to determine if first-time consultation fields should be shown
+  const shouldShowFirstTimeFields = (): boolean => {
+    // Show fields if:
+    // 1. Patient is new (for new consultations)
+    // 2. OR if editing an existing consultation of type "Primera vez"
+    const isNewPatientFlow = isNewPatient === true;
+    const isEditingFirstTimeConsultation = consultation && consultation.consultation_type === 'Primera vez';
+    const shouldShow = isNewPatientFlow || isEditingFirstTimeConsultation;
+    
+    console.log('🔍 shouldShowFirstTimeFields:', { 
+      isNewPatient, 
+      isNewPatientFlow,
+      isEditingFirstTimeConsultation,
+      consultationType: consultation?.consultation_type,
+      shouldShow 
+    });
+    return shouldShow;
+  };
+
+  // Handle appointment selection change
+  const handleHasAppointmentChange = (value: boolean) => {
+    setHasAppointment(value);
+    // Reset dependent states
+    setIsNewPatient(null);
+    setSelectedAppointment(null);
+    setSelectedPatient(null);
+    setNewPatientData({
+      first_name: '',
+      paternal_surname: '',
+      maternal_surname: '',
+      birth_date: '',
+      gender: '',
+      primary_phone: ''
+    });
+  };
+
+  // Handle new patient selection change
+  const handleIsNewPatientChange = (value: boolean) => {
+    console.log('🔍 handleIsNewPatientChange called with:', value);
+    setIsNewPatient(value);
+    // Reset dependent states
+    setSelectedPatient(null);
+    setNewPatientData({
+      first_name: '',
+      paternal_surname: '',
+      maternal_surname: '',
+      birth_date: '',
+      gender: '',
+      primary_phone: ''
+    });
+  };
 
   // Clinical studies management
   const clinicalStudiesHook = useClinicalStudies();
@@ -221,7 +284,25 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     if (open) {
       setError(null);
       setErrors({});
+      // Reset consultation flow states for new consultations
+      if (!consultation) {
+        setFormData(initialFormData);
+        setHasAppointment(null);
+        setIsNewPatient(null);
+        setSelectedAppointment(null);
+        setSelectedPatient(null);
+        setNewPatientData({
+          first_name: '',
+          paternal_surname: '',
+          maternal_surname: '',
+          birth_date: '',
+          gender: '',
+          primary_phone: ''
+        });
+      }
       if (consultation) {
+        console.log('🔍 Loading existing consultation:', consultation);
+        console.log('🔍 Consultation type:', consultation.consultation_type);
         // Map consultation data to form data
         setFormData({
           ...initialFormData,
@@ -248,7 +329,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           doctor_specialty: consultation.doctor_specialty || initialFormData.doctor_specialty,
           // Initialize structured diagnoses (will be loaded from API if available)
           primary_diagnoses: consultation.primary_diagnoses || [],
-          secondary_diagnoses_list: consultation.secondary_diagnoses_list || []
+          secondary_diagnoses_list: consultation.secondary_diagnoses_list || [],
+          // First-time consultation fields (removed duplicate _story fields)
+          // These fields are now handled by the existing _history fields
         });
 
         // Find and set selected patient
@@ -559,10 +642,34 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   const handleSubmit = async () => {
     setError(null);
     
-    // Basic validation - check if patient is selected OR new patient data is provided
+    // Validation for new consultation flow
+    if (!consultation) {
+      // For new consultations, validate the flow
+      if (hasAppointment === null) {
+        setError('Por favor, selecciona si la consulta tiene previa cita');
+        return;
+      }
+      
+      if (hasAppointment === false && isNewPatient === null) {
+        setError('Por favor, selecciona si el paciente es nuevo');
+        return;
+      }
+      
+      if (hasAppointment === false && isNewPatient === false && !selectedPatient) {
+        setError('Por favor, selecciona un paciente existente');
+        return;
+      }
+      
+      if (hasAppointment === false && isNewPatient === true && (!newPatientData.first_name || !newPatientData.paternal_surname)) {
+        setError('Por favor, completa los datos básicos del nuevo paciente (nombre y apellido paterno son requeridos)');
+        return;
+      }
+    } else {
+      // For editing existing consultations, use old validation
     if (!selectedPatient && (!newPatientData.first_name || !newPatientData.paternal_surname)) {
       setError('Por favor, selecciona un paciente existente o completa los datos básicos del nuevo paciente (nombre y apellido paterno son requeridos)');
       return;
+      }
     }
 
     if (!formData.chief_complaint.trim()) {
@@ -572,6 +679,13 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
     // Create new patient if no patient is selected
     let finalPatientId = selectedPatient?.id;
+    
+    console.log('🔍 Patient creation check:', { 
+      selectedPatient: !!selectedPatient, 
+      hasNewPatientData: !!(newPatientData.first_name && newPatientData.paternal_surname),
+      isNewPatient,
+      hasAppointment
+    });
     
     if (!selectedPatient && newPatientData.first_name && newPatientData.paternal_surname) {
       try {
@@ -637,9 +751,29 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
     setLoading(true);
     try {
-      // Determine consultation type based on whether it's a new patient
-      const isNewPatient = !selectedPatient && newPatientData.first_name && newPatientData.paternal_surname;
-      const consultationType = isNewPatient ? 'Primera vez' : 'Seguimiento';
+      // Determine consultation type based on new flow
+      let consultationType = 'Seguimiento';
+      
+      if (!consultation) {
+        // For new consultations
+        if (hasAppointment === true) {
+          // If has appointment, use appointment type
+          consultationType = selectedAppointment?.consultation_type || 'Seguimiento';
+        } else if (hasAppointment === false && isNewPatient === true) {
+          // If no appointment and new patient, it's first time
+          consultationType = 'Primera vez';
+        } else if (hasAppointment === false && isNewPatient === false) {
+          // If no appointment and existing patient, it's follow-up
+          consultationType = 'Seguimiento';
+        }
+      } else {
+        // For editing existing consultations, use old logic
+        const isNewPatientEdit = !selectedPatient && newPatientData.first_name && newPatientData.paternal_surname;
+        const hasFirstTimeAppointment = selectedAppointment && selectedAppointment.consultation_type === 'Primera vez';
+        const hasSelectedPatient = selectedPatient !== null;
+        
+        consultationType = (isNewPatientEdit || hasFirstTimeAppointment || hasSelectedPatient) ? 'Primera vez' : 'Seguimiento';
+      }
       
       // Update formData with final patient ID and consultation type
       const finalFormData = {
@@ -654,6 +788,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       console.log('🔬 Final form data being sent:', finalFormData);
       console.log('🔬 Laboratory results field:', finalFormData.laboratory_results);
       console.log('🔬 Prescribed medications field:', finalFormData.prescribed_medications);
+      console.log('🔬 Family history field:', finalFormData.family_history);
+      console.log('🔬 Personal pathological history field:', finalFormData.personal_pathological_history);
+      console.log('🔬 Personal non-pathological history field:', finalFormData.personal_non_pathological_history);
       
       const createdConsultation = await onSubmit(finalFormData);
       console.log('🔬 Consultation creation result:', createdConsultation);
@@ -681,6 +818,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             // Continue with other studies even if one fails
           }
         }
+        
+        // Refresh studies to show the newly created ones
+        await clinicalStudiesHook.fetchStudies(String(createdConsultation.id));
       } else {
         console.log('🔬 No clinical studies to save or consultation not created');
         console.log('🔬 Studies count:', clinicalStudiesHook.studies.length);
@@ -808,7 +948,63 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         
         <Box component="form" sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
           
-          {/* Appointment Question */}
+          {/* New Consultation Flow - Only show for new consultations */}
+          {!consultation && (
+            <>
+              {/* Question 1: ¿Consulta con previa cita? */}
+              <Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <CalendarIcon sx={{ fontSize: 20 }} />
+                  ¿Consulta con previa cita?
+                  <Typography component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Typography>
+                </Typography>
+                <FormControl size="small" fullWidth>
+                  <InputLabel>Seleccione una opción</InputLabel>
+                  <Select
+                    value={hasAppointment === true ? 'yes' : hasAppointment === false ? 'no' : ''}
+                    onChange={(e: any) => {
+                      const value = e.target.value;
+                      const hasAppointmentValue = value === 'yes';
+                      handleHasAppointmentChange(hasAppointmentValue);
+                    }}
+                    label="Seleccione una opción"
+                  >
+                    <MenuItem value="yes">Sí</MenuItem>
+                    <MenuItem value="no">No</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
+
+              {/* Question 2: ¿Paciente nuevo? - Only show if hasAppointment is false */}
+              {hasAppointment === false && (
+                <Box>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <PersonIcon sx={{ fontSize: 20 }} />
+                    ¿Paciente nuevo?
+                    <Typography component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Typography>
+                  </Typography>
+                  <FormControl size="small" fullWidth>
+                    <InputLabel>Seleccione una opción</InputLabel>
+                    <Select
+                      value={isNewPatient === true ? 'yes' : isNewPatient === false ? 'no' : ''}
+                      onChange={(e: any) => {
+                        const value = e.target.value;
+                        const isNewPatientValue = value === 'yes';
+                        handleIsNewPatientChange(isNewPatientValue);
+                      }}
+                      label="Seleccione una opción"
+                    >
+                      <MenuItem value="yes">Sí</MenuItem>
+                      <MenuItem value="no">No</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Box>
+              )}
+            </>
+          )}
+
+          {/* Legacy Appointment Question - Only show for editing existing consultations */}
+          {consultation && (
           <Box>
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
               <CalendarIcon sx={{ fontSize: 20 }} />
@@ -840,9 +1036,10 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               </Select>
             </FormControl>
           </Box>
+          )}
 
-          {/* Appointment Selection - Only show if has_appointment is true */}
-          {formData.has_appointment && (
+          {/* Appointment Selection - Show for new consultations with appointment OR legacy editing */}
+          {((!consultation && hasAppointment === true) || (consultation && formData.has_appointment)) && (
             <Box>
               <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                 <ScheduleIcon sx={{ fontSize: 20 }} />
@@ -902,8 +1099,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             </Box>
           )}
 
-          {/* Patient Selection - Only show if has_appointment is false or no appointment selected */}
-          {!formData.has_appointment && (
+          {/* Patient Selection - Show for new consultations without appointment and existing patient OR legacy editing */}
+          {((!consultation && hasAppointment === false && isNewPatient === false) || (consultation && !formData.has_appointment)) && (
           <Box>
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
               <PersonIcon sx={{ fontSize: 20 }} />
@@ -979,8 +1176,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               </Box>
             )}
 
-          {/* Inline New Patient Creation Form - Only show if no appointment and no patient selected */}
-          {!formData.has_appointment && !selectedPatient && (
+          {/* Inline New Patient Creation Form - Show for new consultations without appointment and new patient OR legacy editing */}
+          {((!consultation && hasAppointment === false && isNewPatient === true) || (consultation && !formData.has_appointment && !selectedPatient)) && (
             <Box sx={{ mt: 2 }}>
               <Divider sx={{ my: 2 }}>
                 <Typography variant="body2" color="text.secondary">
@@ -1440,6 +1637,68 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               rows={3}
             />
           </Box>
+
+          {/* First-time consultation fields - shown conditionally */}
+          {shouldShowFirstTimeFields() && (
+            <>
+              {/* Family History */}
+              <Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <HeartIcon sx={{ fontSize: 20 }} />
+                  Antecedentes Familiares
+                </Typography>
+                <TextField
+                  name="family_history"
+                  label="Antecedentes familiares"
+                  value={formData.family_history}
+                  onChange={handleChange}
+                  size="small"
+                  fullWidth
+                  multiline
+                  rows={3}
+                  placeholder="Describa los antecedentes familiares relevantes del paciente..."
+                />
+              </Box>
+
+              {/* Personal Pathological History */}
+              <Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <HospitalIcon2 sx={{ fontSize: 20 }} />
+                  Antecedentes Patológicos
+                </Typography>
+                <TextField
+                  name="personal_pathological_history"
+                  label="Antecedentes patológicos"
+                  value={formData.personal_pathological_history}
+                  onChange={handleChange}
+                  size="small"
+                  fullWidth
+                  multiline
+                  rows={3}
+                  placeholder="Describa los antecedentes patológicos del paciente (enfermedades previas, cirugías, etc.)..."
+                />
+              </Box>
+
+              {/* Personal Non-Pathological History */}
+              <Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <PersonIcon sx={{ fontSize: 20 }} />
+                  Antecedentes No Patológicos
+                </Typography>
+                <TextField
+                  name="personal_non_pathological_history"
+                  label="Antecedentes no patológicos"
+                  value={formData.personal_non_pathological_history}
+                  onChange={handleChange}
+                  size="small"
+                  fullWidth
+                  multiline
+                  rows={3}
+                  placeholder="Describa los antecedentes no patológicos del paciente (hábitos, alimentación, ejercicio, etc.)..."
+                />
+              </Box>
+            </>
+          )}
 
           {/* Vital Signs Section - Always show */}
           <VitalSignsSection

@@ -304,6 +304,12 @@ class MedicalRecordBase(BaseSchema):
     follow_up_instructions: str
     prognosis: str
     
+    # First-time consultation fields (removed duplicate _story fields)
+    # These fields are now handled by the existing _history fields:
+    # - family_history
+    # - personal_pathological_history  
+    # - personal_non_pathological_history
+    
     # Optional fields
     secondary_diagnoses: Optional[str] = None
     differential_diagnosis: Optional[str] = None
@@ -327,6 +333,13 @@ class MedicalRecordUpdate(BaseSchema):
     treatment_plan: Optional[str] = None
     follow_up_instructions: Optional[str] = None
     prognosis: Optional[str] = None
+    
+    # First-time consultation fields (removed duplicate _story fields)
+    # These fields are now handled by the existing _history fields:
+    # - family_history
+    # - personal_pathological_history  
+    # - personal_non_pathological_history
+    
     secondary_diagnoses: Optional[str] = None
     differential_diagnosis: Optional[str] = None
     prescribed_medications: Optional[str] = None

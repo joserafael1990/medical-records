@@ -2667,7 +2667,10 @@ async def get_consultation(
             "follow_up_instructions": consultation.follow_up_instructions,
             "prognosis": consultation.prognosis,
             "laboratory_results": consultation.laboratory_results,
-                "notes": consultation.notes
+            "notes": consultation.notes,
+            "family_history": consultation.family_history,
+            "personal_pathological_history": consultation.personal_pathological_history,
+            "personal_non_pathological_history": consultation.personal_non_pathological_history
             }, "consultation")
             print(f"🔍 DEBUG GET: After decryption prescribed_medications: {repr(decrypted_consultation_data.get('prescribed_medications'))}")
         except Exception as e:
@@ -2687,7 +2690,10 @@ async def get_consultation(
                 "follow_up_instructions": consultation.follow_up_instructions,
                 "prognosis": consultation.prognosis,
                 "laboratory_results": consultation.laboratory_results,
-                "notes": consultation.notes
+                "notes": consultation.notes,
+                "family_history": consultation.family_history,
+                "personal_pathological_history": consultation.personal_pathological_history,
+                "personal_non_pathological_history": consultation.personal_non_pathological_history
             }
 
         # Return complete consultation data
@@ -2715,6 +2721,9 @@ async def get_consultation(
             "notes": decrypted_consultation_data.get("notes", ""),
             "interconsultations": decrypted_consultation_data.get("notes", ""),
             "consultation_type": getattr(consultation, 'consultation_type', 'Seguimiento'),
+            "family_history": decrypted_consultation_data.get("family_history", ""),
+            "personal_pathological_history": decrypted_consultation_data.get("personal_pathological_history", ""),
+            "personal_non_pathological_history": decrypted_consultation_data.get("personal_non_pathological_history", ""),
             "created_by": consultation.created_by,
             "created_at": consultation.created_at.isoformat(),
             "patient_name": patient_name,
@@ -2948,6 +2957,10 @@ async def update_consultation(
         consultation.prognosis = consultation_data.get("prognosis", consultation.prognosis)
         consultation.notes = consultation_data.get("notes") or consultation_data.get("interconsultations") or consultation.notes
         consultation.consultation_type = consultation_data.get("consultation_type", consultation.consultation_type)
+        # Update first-time consultation fields (using _history fields)
+        consultation.family_history = consultation_data.get("family_history", consultation.family_history)
+        consultation.personal_pathological_history = consultation_data.get("personal_pathological_history", consultation.personal_pathological_history)
+        consultation.personal_non_pathological_history = consultation_data.get("personal_non_pathological_history", consultation.personal_non_pathological_history)
         
         # Save changes
         db.commit()
@@ -2988,6 +3001,9 @@ async def update_consultation(
             "notes": consultation.notes,
             "interconsultations": consultation.notes,  # Map notes to interconsultations for frontend compatibility
             "consultation_type": consultation.consultation_type,
+            "family_history": consultation.family_history,
+            "personal_pathological_history": consultation.personal_pathological_history,
+            "personal_non_pathological_history": consultation.personal_non_pathological_history,
             "created_by": consultation.created_by,
             "created_at": consultation.created_at.isoformat(),
             "updated_at": consultation.updated_at.isoformat(),

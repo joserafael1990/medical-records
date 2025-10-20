@@ -241,6 +241,12 @@ class MedicalRecord(Base):
     # CONSULTATION TYPE
     consultation_type = Column(String(50), default='Seguimiento')
     
+    # FIRST-TIME CONSULTATION FIELDS (removed duplicate _story fields)
+    # These fields are now handled by the existing _history fields:
+    # - family_history
+    # - personal_pathological_history  
+    # - personal_non_pathological_history
+    
     # OPTIONAL FIELDS
     secondary_diagnoses = Column(Text)
     differential_diagnosis = Column(Text)
