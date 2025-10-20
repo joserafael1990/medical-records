@@ -59,6 +59,7 @@ import DiagnosisSelector from '../common/DiagnosisSelector';
 import { DiagnosisCatalog } from '../../hooks/useDiagnosisCatalog';
 import { PrintButtons } from '../common/PrintButtons';
 import { PatientInfo, DoctorInfo, ConsultationInfo, MedicationInfo, StudyInfo } from '../../services/pdfService';
+import { useToast } from '../common/ToastNotification';
 // import { useSnackbar } from '../../contexts/SnackbarContext';
 
 // Define ConsultationFormData interface based on the hook
@@ -150,6 +151,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   appointments = []
 }: ConsultationDialogProps) => {
   const isEditing = !!consultation;
+  const { showSuccess, showError } = useToast();
 
   // Helper function to get current date in CDMX timezone
   const getCDMXDateTime = () => {
@@ -212,21 +214,46 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   const [hasAppointment, setHasAppointment] = useState<boolean | null>(null);
   const [isNewPatient, setIsNewPatient] = useState<boolean | null>(null);
 
+  // Debug: Monitor selectedAppointment changes
+  useEffect(() => {
+    console.log('🔍 selectedAppointment changed:', selectedAppointment);
+    if (selectedAppointment) {
+      console.log('🔍 selectedAppointment.consultation_type:', selectedAppointment.consultation_type);
+      console.log('🔍 selectedAppointment.appointment_type:', selectedAppointment.appointment_type);
+    }
+  }, [selectedAppointment]);
+
   // Function to determine if first-time consultation fields should be shown
   const shouldShowFirstTimeFields = (): boolean => {
     // Show fields if:
     // 1. Patient is new (for new consultations)
     // 2. OR if editing an existing consultation of type "Primera vez"
+    // 3. OR if selected appointment is of type "Primera vez"
     const isNewPatientFlow = isNewPatient === true;
     const isEditingFirstTimeConsultation = consultation && consultation.consultation_type === 'Primera vez';
-    const shouldShow = isNewPatientFlow || isEditingFirstTimeConsultation;
+    const hasFirstTimeAppointment = selectedAppointment && (
+      selectedAppointment.consultation_type === 'Primera vez' || 
+      selectedAppointment.appointment_type === 'Primera vez' ||
+      selectedAppointment.appointment_type === 'primera vez' ||
+      selectedAppointment.appointment_type === 'first_visit'
+    );
+    const shouldShow = isNewPatientFlow || isEditingFirstTimeConsultation || hasFirstTimeAppointment;
     
     console.log('🔍 shouldShowFirstTimeFields:', { 
       isNewPatient, 
       isNewPatientFlow,
       isEditingFirstTimeConsultation,
+      hasFirstTimeAppointment,
+      selectedAppointmentType: selectedAppointment?.consultation_type,
+      selectedAppointmentAppointmentType: selectedAppointment?.appointment_type,
+      selectedAppointmentId: selectedAppointment?.id,
       consultationType: consultation?.consultation_type,
-      shouldShow 
+      shouldShow,
+      reason: shouldShow ? 
+        (isNewPatientFlow ? 'new patient' : 
+         isEditingFirstTimeConsultation ? 'editing first time consultation' : 
+         hasFirstTimeAppointment ? 'first time appointment selected' : 'unknown') : 
+        'no conditions met'
     });
     return shouldShow;
   };
@@ -586,9 +613,16 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   };
 
   const handleAppointmentChange = async (appointment: any | null) => {
+    console.log('🔍 handleAppointmentChange called with:', appointment);
     setSelectedAppointment(appointment);
     
     if (appointment) {
+      console.log('🔍 Appointment details:', {
+        id: appointment.id,
+        consultation_type: appointment.consultation_type,
+        appointment_date: appointment.appointment_date,
+        patient: appointment.patient
+      });
       // Use patient from appointment object (comes from backend) or find in local patients list
       const patient = appointment.patient || patients.find((p: any) => p.id === appointment.patient_id);
       
@@ -852,10 +886,31 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         console.log('🫀 Consultation ID:', createdConsultation?.id);
       }
       
-      // Consulta creada exitosamente - sin mostrar diálogo
+      // Mostrar notificación de éxito según el tipo de operación
+      if (isEditing) {
+        showSuccess(
+          'Consulta actualizada exitosamente',
+          '¡Edición completada!'
+        );
+      } else {
+        showSuccess(
+          'Consulta creada exitosamente',
+          '¡Creación completada!'
+        );
+      }
+      
+      // Cerrar el diálogo después de un breve delay para que el usuario vea la notificación
+      setTimeout(() => {
+        onClose();
+      }, 1000);
+      
     } catch (err: any) {
       console.error('Error saving consultation:', err);
       setError(err.message || 'Error al guardar consulta');
+      showError(
+        err.message || 'Error al guardar consulta',
+        'Error en la operación'
+      );
     } finally {
       setLoading(false);
     }
@@ -1620,27 +1675,30 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             />
           </Box>
 
-          {/* History of Present Illness */}
-          <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <MedicalServicesIcon sx={{ fontSize: 20 }} />
-              Descripción de la Enfermedad Actual
-            </Typography>
-            <TextField
-              name="history_present_illness"
-              label="Descripción de la enfermedad actual"
-              value={formData.history_present_illness}
-              onChange={handleChange}
-              size="small"
-              fullWidth
-              multiline
-              rows={3}
-            />
-          </Box>
-
           {/* First-time consultation fields - shown conditionally */}
-          {shouldShowFirstTimeFields() && (
+          {(() => {
+            const shouldShow = shouldShowFirstTimeFields();
+            console.log('🔍 Rendering first-time fields:', shouldShow);
+            return shouldShow;
+          })() && (
             <>
+              {/* History of Present Illness */}
+              <Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <MedicalServicesIcon sx={{ fontSize: 20 }} />
+                  Descripción de la Enfermedad Actual
+                </Typography>
+                <TextField
+                  name="history_present_illness"
+                  label="Descripción de la enfermedad actual"
+                  value={formData.history_present_illness}
+                  onChange={handleChange}
+                  size="small"
+                  fullWidth
+                  multiline
+                  rows={3}
+                />
+              </Box>
               {/* Family History */}
               <Box>
                 <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1782,7 +1840,17 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 disabled={loading}
               />
             </Box>
-
+            <TextField
+              name="primary_diagnosis"
+                label="Diagnóstico principal (texto)"
+              value={formData.primary_diagnosis}
+              onChange={handleChange}
+              size="small"
+              fullWidth
+              multiline
+              rows={2}
+                sx={{ mb: 1 }}
+              />
             <Divider sx={{ my: 2 }} />
 
             {/* Secondary Diagnoses */}
@@ -1806,21 +1874,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             </Box>
 
             {/* Legacy text fields for backward compatibility */}
-            <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-                Campos de texto (para compatibilidad)
-            </Typography>
-            <TextField
-              name="primary_diagnosis"
-                label="Diagnóstico principal (texto)"
-              value={formData.primary_diagnosis}
-              onChange={handleChange}
-              size="small"
-              fullWidth
-              multiline
-              rows={2}
-                sx={{ mb: 1 }}
-              />
+
+
               <TextField
                 name="secondary_diagnoses"
                 label="Diagnósticos secundarios (texto)"
@@ -1831,7 +1886,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               multiline
               rows={2}
             />
-            </Box>
           </Box>
 
           {/* Prescribed Medications */}

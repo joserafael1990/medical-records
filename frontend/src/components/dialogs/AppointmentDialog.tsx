@@ -43,6 +43,7 @@ import { es } from 'date-fns/locale';
 import { Patient, AppointmentFormData, PatientFormData } from '../../types';
 import { apiService } from '../../services/api';
 import { ErrorRibbon } from '../common/ErrorRibbon';
+import { useToast } from '../common/ToastNotification';
 
 // Utility function to calculate age from birth date
 const calculateAge = (birthDate: string): number => {
@@ -79,7 +80,7 @@ const formatPatientNameWithAge = (patient: Patient): string => {
 interface AppointmentDialogProps {
   open: boolean;
   onClose: () => void;
-  onSubmit: (formData: AppointmentFormData) => void;
+  onSubmit: (formData: AppointmentFormData) => Promise<void>;
   onNewPatient: () => void;
   onEditPatient?: (patient: Patient) => void;
   formData: AppointmentFormData;
@@ -107,6 +108,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
   onFormDataChange,
   doctorProfile
 }) => {
+  const { showSuccess, showError } = useToast();
   
   // State for available time slots
   const [availableTimes, setAvailableTimes] = useState<any[]>([]);
@@ -490,11 +492,25 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
 
         // Call onSubmit directly with the final form data
         console.log('🔍 AppointmentDialog - finalFormData being sent:', finalFormData);
-        onSubmit(finalFormData);
+        await onSubmit(finalFormData);
+        
+        // Show success notification
+        showSuccess(
+          'Cita creada exitosamente',
+          '¡Operación completada!'
+        );
+        
+        // Close dialog after a brief delay
+        setTimeout(() => {
+          onClose();
+        }, 1000);
         
       } catch (error) {
         console.error('Error creating patient:', error);
-        // Handle error - could show error message to user
+        showError(
+          'Error al crear la cita',
+          'Error en la operación'
+        );
       }
     } else {
       // Regular flow for existing patients
@@ -505,7 +521,34 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
       
       // Call onSubmit directly with the final form data
       console.log('🔍 AppointmentDialog - finalFormData (existing patient):', finalFormData);
-      onSubmit(finalFormData);
+      try {
+        await onSubmit(finalFormData);
+        
+        // Show success notification
+        if (isEditing) {
+          showSuccess(
+            'Cita actualizada exitosamente',
+            '¡Edición completada!'
+          );
+        } else {
+          showSuccess(
+            'Cita creada exitosamente',
+            '¡Creación completada!'
+          );
+        }
+        
+        // Close dialog after a brief delay
+        setTimeout(() => {
+          onClose();
+        }, 1000);
+        
+      } catch (error) {
+        console.error('Error saving appointment:', error);
+        showError(
+          'Error al guardar la cita',
+          'Error en la operación'
+        );
+      }
     }
   };
 

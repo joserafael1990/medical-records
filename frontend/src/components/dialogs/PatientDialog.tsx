@@ -30,6 +30,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
 import type { Patient, PatientFormData } from '../../types';
 import { apiService } from '../../services/api';
+import { useToast } from '../common/ToastNotification';
 
 interface EmergencyRelationship {
   code: string;
@@ -50,6 +51,7 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
   onSubmit
 }) => {
   const isEditing = !!patient;
+  const { showSuccess, showError } = useToast();
   
   const [formData, setFormData] = useState<PatientFormData>({
     first_name: '',
@@ -334,9 +336,31 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
     setLoading(true);
     try {
       await onSubmit(formData);
-      onClose();
+      
+      // Mostrar notificación de éxito según el tipo de operación
+      if (isEditing) {
+        showSuccess(
+          'Paciente actualizado exitosamente',
+          '¡Edición completada!'
+        );
+      } else {
+        showSuccess(
+          'Paciente creado exitosamente',
+          '¡Creación completada!'
+        );
+      }
+      
+      // Cerrar el diálogo después de un breve delay para que el usuario vea la notificación
+      setTimeout(() => {
+        onClose();
+      }, 1000);
+      
     } catch (err: any) {
       setError(err.message || 'Error al guardar paciente');
+      showError(
+        err.message || 'Error al guardar paciente',
+        'Error en la operación'
+      );
     } finally {
       setLoading(false);
     }

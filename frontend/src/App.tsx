@@ -9,6 +9,7 @@ import { AppLayout } from './components/layout/AppLayout';
 import { useAuth } from './contexts/AuthContext';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import { ToastProvider } from './components/common/ToastNotification';
 
 // Tema personalizado de Material-UI
 const theme = createTheme({
@@ -71,11 +72,13 @@ const App: React.FC = () => {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
-          <AuthProvider>
-            <ProtectedRoute>
-              <AppWithAuth />
-            </ProtectedRoute>
-          </AuthProvider>
+          <ToastProvider>
+            <AuthProvider>
+              <ProtectedRoute>
+                <AppWithAuth />
+              </ProtectedRoute>
+            </AuthProvider>
+          </ToastProvider>
         </LocalizationProvider>
       </ThemeProvider>
     </ErrorBoundary>
