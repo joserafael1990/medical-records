@@ -1,3 +1,4 @@
+
 // Cache buster: 2024-10-15-05-10
 import React, { useState, useEffect } from 'react';
 import {
@@ -31,6 +32,7 @@ import { es } from 'date-fns/locale';
 import type { Patient, PatientFormData } from '../../types';
 import { apiService } from '../../services/api';
 import { useToast } from '../common/ToastNotification';
+import { disablePaymentDetection } from '../../utils/disablePaymentDetection';
 
 interface EmergencyRelationship {
   code: string;
@@ -85,7 +87,7 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
     current_medications: '',
     medical_history: '',
     insurance_provider: '',
-    insurance_policy_number: '',
+    insurance_number: '',
     active: true,
     is_active: true
   });
@@ -102,12 +104,15 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
   useEffect(() => {
     const loadData = async () => {
       if (open) {
+        // Disable payment detection for insurance fields
+        setTimeout(() => {
+          disablePaymentDetection();
+        }, 100);
         try {
           const [relationships, countriesData] = await Promise.all([
             apiService.getEmergencyRelationships(),
             apiService.getCountries()
           ]);
-          console.log('🔍 Emergency relationships loaded:', relationships);
           console.log('🌍 Countries loaded:', countriesData);
           setEmergencyRelationships(relationships);
           setCountries(countriesData);
@@ -150,12 +155,6 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
         try {
           // Get decrypted patient data from API
           const decryptedPatient = await apiService.getPatient(patient.id.toString());
-          console.log('🔍 Decrypted patient data:', decryptedPatient);
-          console.log('🔍 Emergency contact data:', {
-            name: decryptedPatient.emergency_contact_name,
-            phone: decryptedPatient.emergency_contact_phone,
-            relationship: decryptedPatient.emergency_contact_relationship
-          });
           setFormData({
             first_name: decryptedPatient.first_name || '',
             paternal_surname: decryptedPatient.paternal_surname || '',
@@ -188,14 +187,9 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
             current_medications: decryptedPatient.current_medications || '',
             medical_history: '',
             insurance_provider: decryptedPatient.insurance_provider || '',
-            insurance_policy_number: '',
+            insurance_number: decryptedPatient.insurance_number || '',
             active: true,
             is_active: true
-          });
-          console.log('🔍 FormData set with emergency contact:', {
-            name: decryptedPatient.emergency_contact_name || '',
-            phone: decryptedPatient.emergency_contact_phone || '',
-            relationship: decryptedPatient.emergency_contact_relationship || ''
           });
         } catch (error) {
           console.error('Error loading decrypted patient data:', error);
@@ -232,7 +226,7 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
             current_medications: patient.current_medications || '',
             medical_history: '',
             insurance_provider: patient.insurance_provider || '',
-            insurance_policy_number: '',
+            insurance_number: patient.insurance_number || '',
             active: true,
             is_active: true
           });
@@ -271,7 +265,7 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
           current_medications: '',
           medical_history: '',
           insurance_provider: '',
-          insurance_policy_number: '',
+          insurance_number: '',
           active: true,
           is_active: true
         });
@@ -332,7 +326,6 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
     }
     // Birth date and gender are optional - no validation needed
     // Phone is optional for patient creation
-
     setLoading(true);
     try {
       await onSubmit(formData);
@@ -640,8 +633,6 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
               </FormControl>
             </Box>
           </Box>
-
-
           {/* Birth Information Section */}
           <Box>
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -790,14 +781,30 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
                 helperText={errors.insurance_provider}
               />
               <TextField
-                label="Número de Póliza - opcional"
-                name="insurance_policy_number"
-                value={formData.insurance_policy_number}
-                onChange={handleChange('insurance_policy_number')}
+                label="Código de Seguro - opcional"
+                name="insurance_number"
+                value={formData.insurance_number}
+                onChange={handleChange('insurance_number')}
                 size="small"
-                placeholder="Número de Póliza - opcional"
-                error={!!errors.insurance_policy_number}
-                helperText={errors.insurance_policy_number}
+                placeholder="Código de Seguro - opcional"
+                error={!!errors.insurance_number}
+                helperText={errors.insurance_number}
+                inputProps={{ 
+                  autoComplete: 'new-password',
+                  'data-form-type': 'other',
+                  'data-lpignore': 'true',
+                  'data-1p-ignore': 'true',
+                  'data-bwignore': 'true',
+                  'data-autofill': 'off',
+                  'autocapitalize': 'off',
+                  'autocorrect': 'off',
+                  'spellcheck': 'false',
+                  'name': 'medical_insurance_code',
+                  'id': 'medical_insurance_code',
+                  'type': 'text',
+                  'role': 'textbox',
+                  'aria-label': 'Código de seguro médico'
+                }}
               />
             </Box>
           </Box>
@@ -823,4 +830,3 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
 };
 
 export default PatientDialog;
-

@@ -8,8 +8,6 @@ import { apiService } from '../services/api';
 import type { Consultation, ConsultationFormData, ClinicalStudy } from '../types';
 import { getCurrentCDMXDateTime } from '../constants';
 import { useAuth } from '../contexts/AuthContext';
-
-
 interface ConsultationManagementState {
   consultations: Consultation[];
   selectedConsultation: Consultation | null;
@@ -140,7 +138,6 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
       const appointments = await apiService.getAppointments({ 
         available_for_consultation: true 
       });
-      console.log('✅ Loaded available appointments:', appointments.length);
       console.log('📋 Sample appointment:', appointments[0]);
       
       setAllAvailableAppointments(appointments);
@@ -154,11 +151,9 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
   useEffect(() => {
     console.log('🔄 useConsultationManagement useEffect triggered, isAuthenticated:', isAuthenticated);
     if (!isAuthenticated) {
-      console.log('❌ User not authenticated, skipping consultation load');
       return;
     }
     
-    console.log('✅ User authenticated, loading consultations...');
     fetchConsultations().catch(error => {
       console.warn('⚠️ Could not load consultations on mount:', error.message);
     });
@@ -182,7 +177,6 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
         id: consultation.id || consultation.consultation_id
       }));
       
-      console.log('✅ Transformed consultations:', transformedData);
       console.log(`📈 Total consultations loaded: ${transformedData.length}`);
       setConsultations(transformedData);
     } catch (error: any) {
@@ -365,8 +359,6 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
     setConsultationDetailView(false);
     setSelectedConsultation(null);
   }, []);
-
-
   return {
     // State
     consultations,

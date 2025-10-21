@@ -67,7 +67,6 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     try {
       const response = await apiService.get('/api/vital-signs');
       setAvailableVitalSigns(response.data);
-      console.log('✅ Available vital signs fetched:', response.data.length);
     } catch (err: any) {
       console.error('❌ Error fetching available vital signs:', err);
       setError(err.message || 'Error fetching available vital signs');
@@ -88,7 +87,6 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     try {
       const response = await apiService.get(`/api/consultations/${consultationId}/vital-signs`);
       setConsultationVitalSigns(response.data);
-      console.log('✅ Consultation vital signs fetched:', response.data.length);
     } catch (err: any) {
       console.error('❌ Error fetching consultation vital signs:', err);
       setError(err.message || 'Error fetching consultation vital signs');
@@ -111,7 +109,6 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
       // Add to local state
       setConsultationVitalSigns(prev => [...prev, newVitalSign]);
       
-      console.log('✅ Vital sign created:', newVitalSign);
       return newVitalSign;
     } catch (err: any) {
       console.error('❌ Error creating vital sign:', err);
@@ -132,7 +129,6 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
         prev.map(vs => vs.id === vitalSignId ? updatedVitalSign : vs)
       );
       
-      console.log('✅ Vital sign updated:', updatedVitalSign);
       return updatedVitalSign;
     } catch (err: any) {
       console.error('❌ Error updating vital sign:', err);
@@ -149,7 +145,6 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
       // Remove from local state
       setConsultationVitalSigns(prev => prev.filter(vs => vs.id !== vitalSignId));
       
-      console.log('✅ Vital sign deleted:', vitalSignId);
     } catch (err: any) {
       console.error('❌ Error deleting vital sign:', err);
       throw err;
@@ -311,4 +306,3 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     resetForm
   };
 };
-

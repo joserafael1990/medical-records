@@ -301,8 +301,6 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
     });
   };
 
-
-
   const formatTime = (timeString?: string): Date | null => {
     if (!timeString) return null;
     
@@ -681,4 +679,3 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
 };
 
 export default ScheduleConfigDialog;
-

@@ -156,7 +156,6 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
           
           try {
             await onSubmit(studyData);
-            console.log(`✅ Study ${i + 1} created successfully:`, catalogStudy.name);
             successCount++;
           } catch (error) {
             console.error(`❌ Error creating study ${i + 1}:`, catalogStudy.name, error);

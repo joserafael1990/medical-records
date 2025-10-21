@@ -68,19 +68,6 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
     getStudiesBySpecialty,
     getStudiesByCategory
   } = useStudyCatalog();
-
-  // Debug: Log when studies or categories change
-  useEffect(() => {
-    console.log('🔍 StudyCatalogSelector - Studies received:', studies.length, 'studies');
-    console.log('🔍 StudyCatalogSelector - Categories received:', categories.length, 'categories');
-    if (studies.length > 0) {
-      console.log('🔍 StudyCatalogSelector - First study:', studies[0]);
-    }
-    if (categories.length > 0) {
-      console.log('🔍 StudyCatalogSelector - First category:', categories[0]);
-    }
-  }, [studies, categories]);
-
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<StudyCategory | null>(null);
   const [selectedSpecialty, setSelectedSpecialty] = useState(specialty || '');
@@ -89,27 +76,15 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
   // Filter studies based on current filters
   const filteredStudies = useMemo(() => {
     let filtered = studies;
-
-    console.log('🔍 StudyCatalogSelector - Filtering studies:', {
-      totalStudies: studies.length,
-      selectedCategory: selectedCategory,
-      selectedSpecialty: selectedSpecialty,
-      searchTerm: searchTerm
-    });
-
     // If a category is selected, the studies should already be filtered by the backend
     // So we only need to apply additional filters (specialty and search term)
     if (selectedSpecialty) {
-      console.log('🔍 Filtering by specialty:', selectedSpecialty);
-      const beforeFilter = filtered.length;
       filtered = filtered.filter(study => 
         study.specialty && normalizeText(study.specialty).includes(normalizeText(selectedSpecialty))
       );
-      console.log('🔍 After specialty filter:', beforeFilter, '->', filtered.length);
     }
 
     if (searchTerm) {
-      console.log('🔍 Filtering by search term:', searchTerm);
       const normalizedTerm = normalizeText(searchTerm);
       const beforeFilter = filtered.length;
       filtered = filtered.filter(study =>
@@ -118,10 +93,8 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
         (study.description && normalizeText(study.description).includes(normalizedTerm)) ||
         (study.subcategory && normalizeText(study.subcategory).includes(normalizedTerm))
       );
-      console.log('🔍 After search filter:', beforeFilter, '->', filtered.length);
     }
 
-    console.log('🔍 Final filtered studies:', filtered.length);
     return filtered;
   }, [studies, selectedCategory, selectedSpecialty, searchTerm]);
 
@@ -135,10 +108,8 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
   // Fetch studies when category changes
   useEffect(() => {
     if (selectedCategory) {
-      console.log('🔍 StudyCatalogSelector - Category selected, fetching studies for category:', selectedCategory.id);
       fetchStudies({ category_id: selectedCategory.id });
     } else {
-      console.log('🔍 StudyCatalogSelector - No category selected, fetching all studies');
       fetchStudies();
     }
   }, [selectedCategory, fetchStudies]);

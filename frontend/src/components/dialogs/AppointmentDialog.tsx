@@ -391,7 +391,6 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     setValidationError('');
     
     // Debug logging
-    console.log('🔍 Validating appointment form...');
     console.log('Selected Date:', selectedDate);
     console.log('Selected Time:', selectedTime);
     console.log('Available Times:', availableTimes.length);
@@ -400,14 +399,12 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     // Validate that all required fields are complete before proceeding
     if (!isFormComplete()) {
       const errorMessage = getValidationErrorMessage();
-      console.log('❌ Validation failed:', errorMessage);
       setValidationError(errorMessage);
       return;
     }
     
     // Additional explicit validation for time slot
     if (!selectedTime || selectedTime.trim() === '') {
-      console.log('❌ Explicit time validation failed - no time selected');
       setValidationError('Debe seleccionar un horario disponible para la cita');
       return;
     }
@@ -416,17 +413,14 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     if (availableTimes.length > 0) {
       const isTimeValid = availableTimes.some(timeSlot => timeSlot.time === selectedTime);
       if (!isTimeValid) {
-        console.log('❌ Selected time is not in available times');
         setValidationError('El horario seleccionado no está disponible');
         return;
       }
     } else {
-      console.log('❌ No available times for selected date');
       setValidationError('No hay horarios disponibles para la fecha seleccionada');
       return;
     }
     
-    console.log('✅ Validation passed, proceeding with submission...');
 
     // Handle "Primera vez" (first visit) - create patient inline if no patient selected
     if (localFormData.appointment_type === 'primera vez' && !localFormData.patient_id) {
@@ -470,7 +464,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
           medical_history: '',
           chronic_conditions: '',
           insurance_provider: '',
-          insurance_policy_number: '',
+          insurance_number: '',
           
           // Mexican official fields (optional)
           curp: '',
@@ -491,7 +485,6 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
         };
 
         // Call onSubmit directly with the final form data
-        console.log('🔍 AppointmentDialog - finalFormData being sent:', finalFormData);
         await onSubmit(finalFormData);
         
         // Show success notification
@@ -520,7 +513,6 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
       };
       
       // Call onSubmit directly with the final form data
-      console.log('🔍 AppointmentDialog - finalFormData (existing patient):', finalFormData);
       try {
         await onSubmit(finalFormData);
         
@@ -563,8 +555,6 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
   const handleClose = () => {
     onClose();
   };
-
-
   return (
     <Dialog 
       open={open} 
@@ -871,8 +861,6 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
             </Box>
 
           </Box>
-
-
           {/* Cancellation Reason - Only show when status is 'cancelled' */}
           {localFormData.status === 'cancelled' && (
             <Box>
@@ -898,8 +886,6 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
               />
             </Box>
           )}
-
-
           {/* Priority */}
           <Box>
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1008,4 +994,3 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
 AppointmentDialog.displayName = 'AppointmentDialog';
 
 export default AppointmentDialog;
-

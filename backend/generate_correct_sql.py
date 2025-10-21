@@ -181,3 +181,5 @@ ON CONFLICT (code) DO NOTHING;
 if __name__ == "__main__":
     generate_correct_sql()
 
+
+

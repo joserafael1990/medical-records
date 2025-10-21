@@ -12,7 +12,6 @@ import type {
   DashboardData, 
   CompletePatientData,
   PatientFormData,
-  ConsultationFormData,
   AppointmentFormData,
   AppointmentUpdateData,
   MedicalOrder,
@@ -20,6 +19,7 @@ import type {
   OrderStatus,
   ApiError
 } from '../types';
+import type { ConsultationFormData } from '../components/dialogs/ConsultationDialog';
 
 // ============================================================================
 // AXIOS INSTANCE CONFIGURATION
@@ -34,12 +34,12 @@ class ApiService {
       return null;
     }
     const genderMap: { [key: string]: string } = {
-      'Masculino': 'M',
-      'Femenino': 'F',
-      'M': 'M',
-      'F': 'F',
-      'masculino': 'M',
-      'femenino': 'F'
+      'Masculino': 'Masculino',
+      'Femenino': 'Femenino',
+      'M': 'Masculino',
+      'F': 'Femenino',
+      'masculino': 'Masculino',
+      'femenino': 'Femenino'
     };
     return genderMap[gender] || gender;
   }
@@ -100,8 +100,26 @@ class ApiService {
         console.log('Request Headers:', error.config?.headers);
         console.log('Error Message:', error.message);
         console.log('Network Error (no response):', !error.response);
+        
+        // Detailed error logging for 422 validation errors
+        if (error.response?.status === 422) {
+          console.log('🚨 422 Validation Error Details:', error.response.data?.detail);
+          console.log('🚨 Full error response:', error.response.data);
+          if (Array.isArray(error.response.data?.detail)) {
+            const fieldErrors = error.response.data.detail.map((err: any) => {
+              const field = err.loc?.[1] || err.loc?.[0];
+              return `${field}: ${err.msg}`;
+            }).join(', ');
+            console.log('🚨 Field validation errors:', fieldErrors);
+            
+            // Show user-friendly error message
+            const firstError = error.response.data.detail[0];
+            const fieldName = firstError.loc?.[1] || firstError.loc?.[0] || 'campo';
+            const errorMessage = firstError.msg || 'Error de validación';
+            console.log('🚨 User-friendly error:', `${fieldName}: ${errorMessage}`);
+          }
+        }
         if (!error.response) {
-          console.log('🔍 Possible causes:');
           console.log('- Backend server is down');
           console.log('- CORS configuration issue');
           console.log('- Network connectivity problem');
@@ -280,11 +298,9 @@ class ApiService {
   // ============================================================================
 
   async testConnection(): Promise<{ status: string; timestamp: string }> {
-    console.log('🔍 Testing backend connectivity...');
     try {
       // Test with a simple endpoint that doesn't require auth
       const response = await this.api.get('/docs');
-      console.log('✅ Backend connectivity test passed');
       return { 
         status: 'connected', 
         timestamp: new Date().toISOString() 
@@ -300,7 +316,6 @@ class ApiService {
     try {
       // Test patients endpoint - should return 403 if not authenticated
       await this.api.get('/api/patients');
-      console.log('✅ Patients endpoint accessible (authenticated)');
       return { status: 'accessible', authRequired: false };
     } catch (error: any) {
       if (error.response?.status === 403 || error.response?.status === 401) {
@@ -323,13 +338,8 @@ class ApiService {
 
       // Try to get current user info to validate token
       const response = await this.api.get('/api/doctors/me/profile');
-      console.log('✅ Authentication valid, user:', response.data);
       return { status: 'valid', user: response.data };
     } catch (error: any) {
-      console.log('❌ Authentication test failed:', {
-        status: error.response?.status,
-        message: error.response?.data?.detail || error.message
-      });
 
       if (error.response?.status === 401) {
         return { status: 'expired' };
@@ -345,13 +355,8 @@ class ApiService {
     console.log('🏥 Testing backend health endpoint...');
     try {
       const response = await this.api.get('/health');
-      console.log('✅ Backend health check passed:', response.data);
       return { status: 'healthy' };
     } catch (error: any) {
-      console.log('❌ Backend health check failed:', {
-        status: error.response?.status,
-        message: error.response?.data?.detail || error.message
-      });
       return {
         status: 'unhealthy',
         error: error.response?.data?.detail || error.message
@@ -374,14 +379,8 @@ class ApiService {
 
       // Try to get current user info to validate token
       const response = await this.api.get('/api/doctors/me/profile');
-      console.log('✅ Token is valid, user:', response.data);
       return { status: 'valid', user: response.data };
     } catch (error: any) {
-      console.log('❌ Token validity test failed:', {
-        status: error.response?.status,
-        message: error.response?.data?.detail || error.message,
-        data: error.response?.data
-      });
 
       if (error.response?.status === 401) {
         return { status: 'expired_or_invalid' };
@@ -427,7 +426,6 @@ class ApiService {
       });
 
       const response = await this.api.post('/api/patients', minimalPatientData);
-      console.log('✅ Minimal patient creation successful:', response.data);
       return { status: 'success', error: undefined, details: response.data };
     } catch (error: any) {
       console.error('❌ Minimal patient creation failed - Full error details:', {
@@ -476,10 +474,6 @@ class ApiService {
     console.log('📋 Testing GET patients endpoint...');
     try {
       const response = await this.api.get('/api/patients');
-      console.log('✅ GET patients successful:', {
-        status: response.status,
-        count: Array.isArray(response.data) ? response.data.length : 'not array'
-      });
       return {
         status: 'success',
         count: Array.isArray(response.data) ? response.data.length : 0
@@ -500,7 +494,6 @@ class ApiService {
     console.log('🧪 Testing simple patient creation endpoint...');
     try {
       const response = await this.api.post('/api/test-patient-creation', {});
-      console.log('✅ Simple patient creation test successful:', response.data);
       return { status: 'success', response: response.data };
     } catch (error: any) {
       console.error('❌ Simple patient creation test failed:', {
@@ -550,7 +543,6 @@ class ApiService {
       });
 
       const response = await this.api.post('/api/patients', testPatientData);
-      console.log('✅ REAL patient creation successful:', response.data);
       return { status: 'success', response: response.data };
     } catch (error: any) {
       console.error('❌ REAL patient creation failed - Full analysis:', {
@@ -633,7 +625,6 @@ class ApiService {
     console.log('🆕 Testing POST patients with empty data...');
     try {
       const response = await this.api.post('/api/patients', {});
-      console.log('✅ POST empty successful:', response.data);
       return { status: 'success', details: response.data };
     } catch (error: any) {
       console.error('❌ POST empty failed - Detailed analysis:', {
@@ -664,16 +655,6 @@ class ApiService {
     const params = search ? { search } : {};
     const response = await this.api.get<Patient[]>(API_CONFIG.ENDPOINTS.PATIENTS, { params });
     
-    // Debug: Check emergency contact data in API response
-    if (Array.isArray(response.data)) {
-      response.data.forEach(patient => {
-        console.log(`🔍 API Patient ${patient.id} emergency data:`, {
-          emergency_contact_name: patient.emergency_contact_name,
-          emergency_contact_phone: patient.emergency_contact_phone,
-          emergency_contact_relationship: patient.emergency_contact_relationship
-        });
-      });
-    }
     
     return Array.isArray(response.data) ? response.data : [];
   }
@@ -685,24 +666,49 @@ class ApiService {
 
   async createPatient(patientData: PatientFormData): Promise<Patient> {
     
+    // Validate required fields
+    if (!patientData.birth_date && !patientData.date_of_birth) {
+      throw new Error('La fecha de nacimiento es requerida');
+    }
+    
+    if (!patientData.first_name || !patientData.paternal_surname) {
+      throw new Error('El nombre y apellido paterno son requeridos');
+    }
+    
+    // Validate CURP format if provided
+    if (patientData.curp && patientData.curp.length !== 18) {
+      throw new Error('El CURP debe tener exactamente 18 caracteres');
+    }
+    
+    // Validate RFC format if provided
+    if (patientData.rfc && patientData.rfc.length < 10) {
+      throw new Error('El RFC debe tener al menos 10 caracteres');
+    }
+    
+    // Validate email format if provided
+    if (patientData.email && patientData.email !== '' && !patientData.email.includes('@')) {
+      throw new Error('El email debe tener un formato válido');
+    }
+    
     // Clean the data before sending to ensure proper format
     const cleanedData = {
       // Required fields - don't convert to null
+      person_type: 'patient',
       first_name: patientData.first_name || '',
       paternal_surname: patientData.paternal_surname || '',
-      birth_date: patientData.birth_date || patientData.date_of_birth || null,
+      birth_date: patientData.birth_date || patientData.date_of_birth,
       gender: this.mapGenderToBackend(patientData.gender || ''),
       
       // Optional fields - can be null
-      maternal_surname: patientData.maternal_surname === '' ? null : patientData.maternal_surname,
-      email: patientData.email === '' ? null : patientData.email,
-      primary_phone: patientData.primary_phone === '' ? null : patientData.primary_phone,
-      curp: patientData.curp === '' ? null : patientData.curp,
-      rfc: patientData.rfc === '' ? null : patientData.rfc,
-      birth_city: patientData.birth_city === '' ? null : patientData.birth_city,
+      maternal_surname: patientData.maternal_surname || '',
+      email: patientData.email || '',
+      primary_phone: patientData.primary_phone || '',
+      curp: patientData.curp || '',
+      rfc: patientData.rfc || '',
+      birth_city: patientData.birth_city || '',
       birth_state_id: patientData.birth_state_id ? parseInt(patientData.birth_state_id) : null,
       birth_country_id: patientData.birth_country_id ? parseInt(patientData.birth_country_id) : null,
-      civil_status: patientData.civil_status === '' ? null : patientData.civil_status,
+      civil_status: patientData.civil_status || '',
       
       // Address fields
       home_address: patientData.home_address || '',
@@ -714,21 +720,20 @@ class ApiService {
       // Default values
       
       // Medical fields
-      chronic_conditions: patientData.chronic_conditions === '' ? null : patientData.chronic_conditions,
-      current_medications: patientData.current_medications === '' ? null : patientData.current_medications,
-      insurance_provider: patientData.insurance_provider === '' ? null : patientData.insurance_provider,
+      chronic_conditions: patientData.chronic_conditions || '',
+      current_medications: patientData.current_medications || '',
+      insurance_provider: patientData.insurance_provider || '',
+      insurance_number: patientData.insurance_number || '',
       
       // Emergency contact fields
-      emergency_contact_name: patientData.emergency_contact_name === '' ? null : patientData.emergency_contact_name,
-      emergency_contact_phone: patientData.emergency_contact_phone === '' ? null : patientData.emergency_contact_phone,
-      emergency_contact_relationship: patientData.emergency_contact_relationship === '' ? null : patientData.emergency_contact_relationship
+      emergency_contact_name: patientData.emergency_contact_name || '',
+      emergency_contact_phone: patientData.emergency_contact_phone || '',
+      emergency_contact_relationship: patientData.emergency_contact_relationship || ''
     };
     
-    console.log('🧹 Cleaned data for backend:', cleanedData);
     
     try {
       const response = await this.api.post<Patient>(API_CONFIG.ENDPOINTS.PATIENTS, cleanedData);
-      console.log('✅ Patient created successfully:', response.data);
     return response.data;
     } catch (error: any) {
       // Enhanced error handling for patient creation
@@ -740,6 +745,9 @@ class ApiService {
         // Validation errors
         const detail = error.response.data?.detail;
         console.log('🚨 422 Validation Error Details:', detail);
+        console.log('🚨 Full error response:', error.response.data);
+        console.log('🚨 Error response status:', error.response.status);
+        console.log('🚨 Error response headers:', error.response.headers);
         if (Array.isArray(detail)) {
           // Field validation errors
           const fieldErrors = detail.map((err: any) => {
@@ -760,19 +768,27 @@ class ApiService {
         // Network error
         throw new Error('Error de conexión. Verifique su conexión a internet e intente nuevamente');
       } else {
-        // Other errors
+        // Other errors - including 422
+        console.log('🚨 Other Error Details:', error.response.data);
+        console.log('🚨 Error response status:', error.response.status);
+        console.log('🚨 Full error response:', error.response.data);
+        if (error.response.status === 422) {
+          const detail = error.response.data?.detail;
+          console.log('🚨 422 Validation Error Details:', detail);
+          if (Array.isArray(detail)) {
+            const fieldErrors = detail.map((err: any) => {
+              const field = err.loc?.[1] || err.loc?.[0];
+              return `${field}: ${err.msg}`;
+            }).join(', ');
+            throw new Error(`Errores de validación: ${fieldErrors}`);
+          }
+        }
         throw new Error(error.response.data?.detail || 'Error inesperado al crear el paciente');
       }
     }
   }
 
   async updatePatient(id: string, patientData: Partial<PatientFormData>): Promise<Patient> {
-    // Debug: Check emergency contact data being sent
-    console.log('🔍 UPDATE: Emergency contact data from form:', {
-      emergency_contact_name: patientData.emergency_contact_name,
-      emergency_contact_phone: patientData.emergency_contact_phone,
-      emergency_contact_relationship: patientData.emergency_contact_relationship
-    });
     
     // Clean the data before sending to ensure proper format
     const cleanedData = {
@@ -783,15 +799,15 @@ class ApiService {
       gender: this.mapGenderToBackend(patientData.gender || ''),
       
       // Optional fields - can be null
-      maternal_surname: patientData.maternal_surname === '' ? null : patientData.maternal_surname,
-      email: patientData.email === '' ? null : patientData.email,
-      primary_phone: patientData.primary_phone === '' ? null : patientData.primary_phone,
-      curp: patientData.curp === '' ? null : patientData.curp,
-      rfc: patientData.rfc === '' ? null : patientData.rfc,
-      birth_city: patientData.birth_city === '' ? null : patientData.birth_city,
+      maternal_surname: patientData.maternal_surname || '',
+      email: patientData.email || '',
+      primary_phone: patientData.primary_phone || '',
+      curp: patientData.curp || '',
+      rfc: patientData.rfc || '',
+      birth_city: patientData.birth_city || '',
       birth_state_id: patientData.birth_state_id ? parseInt(patientData.birth_state_id) : null,
       birth_country_id: patientData.birth_country_id ? parseInt(patientData.birth_country_id) : null,
-      civil_status: patientData.civil_status === '' ? null : patientData.civil_status,
+      civil_status: patientData.civil_status || '',
       
       // Address fields
       home_address: patientData.home_address || '',
@@ -803,22 +819,17 @@ class ApiService {
       // Default values
       
       // Medical fields
-      chronic_conditions: patientData.chronic_conditions === '' ? null : patientData.chronic_conditions,
-      current_medications: patientData.current_medications === '' ? null : patientData.current_medications,
-      insurance_provider: patientData.insurance_provider === '' ? null : patientData.insurance_provider,
+      chronic_conditions: patientData.chronic_conditions || '',
+      current_medications: patientData.current_medications || '',
+      insurance_provider: patientData.insurance_provider || '',
+      insurance_number: patientData.insurance_number || '',
       
       // Emergency contact fields
-      emergency_contact_name: patientData.emergency_contact_name === '' ? null : patientData.emergency_contact_name,
-      emergency_contact_phone: patientData.emergency_contact_phone === '' ? null : patientData.emergency_contact_phone,
-      emergency_contact_relationship: patientData.emergency_contact_relationship === '' ? null : patientData.emergency_contact_relationship,
+      emergency_contact_name: patientData.emergency_contact_name || '',
+      emergency_contact_phone: patientData.emergency_contact_phone || '',
+      emergency_contact_relationship: patientData.emergency_contact_relationship || '',
     };
     
-    // Debug: Check final cleaned data being sent
-    console.log('🧹 UPDATE: Final cleaned data being sent to backend:', {
-      emergency_contact_name: cleanedData.emergency_contact_name,
-      emergency_contact_phone: cleanedData.emergency_contact_phone,
-      emergency_contact_relationship: cleanedData.emergency_contact_relationship
-    });
     
     const response = await this.api.put<Patient>(`${API_CONFIG.ENDPOINTS.PATIENTS}/${id}`, cleanedData);
     return response.data;
@@ -870,8 +881,6 @@ class ApiService {
       // Note: doctor fields and created_by are now assigned by the backend
     };
     
-    console.log('🔍 API Service - createConsultation payload:', payload);
-    console.log('🔍 API Service - prescribed_medications in payload:', payload.prescribed_medications);
     
     const response = await this.api.post<Consultation>(
       API_CONFIG.ENDPOINTS.CONSULTATIONS, 
@@ -1038,8 +1047,6 @@ class ApiService {
     );
     return response.data;
   }
-
-
 
   async updateAppointment(id: string, appointmentData: AppointmentUpdateData): Promise<Appointment> {
     const response = await this.api.put<Appointment>(`/api/appointments/${id}`, appointmentData);

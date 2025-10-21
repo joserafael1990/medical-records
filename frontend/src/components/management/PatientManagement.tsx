@@ -56,7 +56,6 @@ export function usePatientManagementComponent(
     );
     
     if (result) {
-      console.log('✅ Pacientes cargados exitosamente:', result.length);
       setPatients(result);
     }
   }, [executeApiCall]);
@@ -123,5 +122,3 @@ export function usePatientManagementComponent(
     loadPatients
   };
 }
-
-

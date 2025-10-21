@@ -98,7 +98,6 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
       // Add to local state
       setStudies(prev => [...prev, newStudy]);
       
-      console.log('✅ Clinical study created:', newStudy);
       return newStudy;
     } catch (err) {
       console.error('❌ Error creating clinical study:', err);
@@ -119,7 +118,6 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
         study.id === studyId ? updatedStudy : study
       ));
       
-      console.log('✅ Clinical study updated:', updatedStudy);
       return updatedStudy;
     } catch (err) {
       console.error('❌ Error updating clinical study:', err);
@@ -135,7 +133,6 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
       // Remove from local state
       setStudies(prev => prev.filter(study => study.id !== studyId));
       
-      console.log('✅ Clinical study deleted:', studyId);
     } catch (err) {
       console.error('❌ Error deleting clinical study:', err);
       throw err;
@@ -144,11 +141,6 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
 
   // Dialog management
   const openAddDialog = useCallback((consultationId: string, patientId: string, doctorName: string) => {
-    console.log('🔍 useClinicalStudies.openAddDialog called with:', {
-      consultationId,
-      patientId,
-      doctorName
-    });
     
     setClinicalStudyFormData({
       consultation_id: consultationId,
@@ -172,7 +164,6 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
     setSelectedClinicalStudy(null);
     setClinicalStudyDialogOpen(true);
     
-    console.log('🔍 Dialog state set to open');
   }, []);
 
   const openEditDialog = useCallback((study: ClinicalStudy) => {
@@ -223,6 +214,9 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
     // Use provided studyData or fall back to internal form data
     const dataToSubmit = studyData || clinicalStudyFormData;
     
+    console.log('🔬 submitForm called with data:', dataToSubmit);
+    console.log('🔬 consultation_id:', dataToSubmit.consultation_id);
+    console.log('🔬 isEditingClinicalStudy:', isEditingClinicalStudy);
     
     try {
       if (isEditingClinicalStudy && selectedClinicalStudy) {
@@ -230,6 +224,7 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
       } else {
         // For new consultations, add to temporary studies list
         if (dataToSubmit.consultation_id === 'temp_consultation') {
+          console.log('🔬 Adding temporary study to local state');
           
           // Generate unique ID with timestamp and random component
           const uniqueId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -261,22 +256,26 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
             updated_at: new Date().toISOString()
           };
           
-          setStudies(prev => [...prev, tempStudy]);
+          console.log('🔬 Adding temp study:', tempStudy);
+          setStudies(prev => {
+            const newStudies = [...prev, tempStudy];
+            console.log('🔬 Updated studies list:', newStudies);
+            return newStudies;
+          });
         } else {
+          console.log('🔬 Creating study in database');
           await createStudy(dataToSubmit);
         }
       }
       
-      // Close dialog after successful submission
-      // The modal will handle its own closing logic
-      // closeDialog();
+      console.log('🔬 Study submission successful');
     } catch (err) {
       console.error('❌ Error submitting clinical study form:', err);
       setError('Error al guardar el estudio clínico');
     } finally {
       setIsSubmitting(false);
     }
-  }, [isEditingClinicalStudy, selectedClinicalStudy, clinicalStudyFormData, createStudy, updateStudy, closeDialog]);
+  }, [isEditingClinicalStudy, selectedClinicalStudy, clinicalStudyFormData, createStudy, updateStudy]);
 
   // File operations
   const downloadFile = useCallback((fileUrl: string, fileName: string) => {

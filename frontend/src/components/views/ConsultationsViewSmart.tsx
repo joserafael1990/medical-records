@@ -58,6 +58,18 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
   // Debounce para la búsqueda
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
+  // Effect to detect URL parameters and apply patient filter
+  React.useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const patientIdFromUrl = urlParams.get('patientId');
+    const patientNameFromUrl = urlParams.get('patientName');
+    
+    if (patientIdFromUrl && patientNameFromUrl) {
+      setSelectedPatient(patientIdFromUrl);
+      setSearchTerm(decodeURIComponent(patientNameFromUrl));
+    }
+  }, []);
+
   const getConsultationTypeLabel = (type: string) => {
     switch (type) {
       case 'primera-vez':

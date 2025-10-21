@@ -377,7 +377,6 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                         console.log('🔄 Calling cancelAppointment function...');
                         cancelAppointment(appointment.id);
                       } else {
-                        console.log('❌ cancelAppointment function not available or appointment.id missing');
                       }
                     }}
                   >

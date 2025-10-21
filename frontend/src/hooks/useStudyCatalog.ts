@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { StudyCatalog, StudyCategory, StudyTemplate, StudySearchFilters, StudyRecommendation } from '../types';
 import { apiService } from '../services/api';
@@ -45,9 +46,7 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
       
       // Check authentication
       const token = localStorage.getItem('token');
-      console.log('🔍 useStudyCatalog - Token present:', token ? 'YES' : 'NO');
       if (token) {
-        console.log('🔍 useStudyCatalog - Token preview:', token.substring(0, 20) + '...');
       }
       
       const params = new URLSearchParams();
@@ -57,12 +56,8 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
       if (filters?.code) params.append('search', filters.code);
       if (filters?.duration_hours) params.append('duration_hours', filters.duration_hours.toString());
       
-      console.log('🔍 useStudyCatalog - fetchStudies called with filters:', filters);
-      console.log('🔍 useStudyCatalog - API URL:', `/api/study-catalog?${params.toString()}`);
       
       const response = await apiService.get(`/api/study-catalog?${params.toString()}`);
-      console.log('🔍 useStudyCatalog - API response:', response.data);
-      console.log('🔍 useStudyCatalog - Number of studies received:', response.data?.length || 0);
       
       setStudies(response.data);
     } catch (err: any) {
@@ -80,10 +75,7 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
       setIsLoading(true);
       setError(null);
       
-      console.log('🔍 useStudyCatalog - fetchCategories called');
       const response = await apiService.get('/api/study-categories');
-      console.log('🔍 useStudyCatalog - Categories response:', response.data);
-      console.log('🔍 useStudyCatalog - Number of categories received:', response.data?.length || 0);
       setCategories(response.data);
     } catch (err: any) {
       console.error('❌ Error fetching categories:', err);
@@ -193,8 +185,6 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
 
   // Debug: Log when studies or categories change
   useEffect(() => {
-    console.log('🔍 useStudyCatalog - Studies updated:', studies.length, 'studies');
-    console.log('🔍 useStudyCatalog - Categories updated:', categories.length, 'categories');
   }, [studies, categories]);
 
   return {

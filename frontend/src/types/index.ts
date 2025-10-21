@@ -19,6 +19,36 @@ export interface Patient {
   updated_at: string;
 }
 
+export interface PatientFormData {
+  first_name: string;
+  paternal_surname: string;
+  maternal_surname?: string;
+  email?: string;
+  birth_date: string;
+  primary_phone?: string;
+  gender?: string;
+  civil_status?: string;
+  home_address?: string;
+  curp?: string;
+  rfc?: string;
+  address_city?: string;
+  address_state_id?: string;
+  address_postal_code?: string;
+  address_country_id?: string;
+  birth_city?: string;
+  birth_state_id?: string;
+  birth_country_id?: string;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  emergency_contact_relationship?: string;
+  chronic_conditions?: string;
+  current_medications?: string;
+  insurance_provider?: string;
+  insurance_number?: string;
+  active?: boolean;
+  is_active?: boolean;
+}
+
 export interface ApiError {
   message: string;
   status?: number;

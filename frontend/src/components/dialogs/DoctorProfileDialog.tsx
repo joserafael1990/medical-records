@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -100,8 +101,6 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
       loadTimezones();
     }
   }, [open]);
-
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | any) => {
     const { name, value } = e.target;
     console.log('🔄 handleChange called:', { name, value });
@@ -118,8 +117,6 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
   const handleSubmit = () => {
     onSubmit();
   };
-
-
   return (
     <Dialog 
       open={open} 

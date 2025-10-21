@@ -109,7 +109,6 @@ export function useConsultationManagement(
     );
     
     if (result) {
-      console.log('✅ Consultas cargadas exitosamente:', result.length);
       setConsultations(result);
     }
   }, [executeApiCall, showSuccessMessage]);
@@ -156,7 +155,6 @@ export function useConsultationManagement(
       const response = await apiService.get(`/api/consultations/${consultation.id}`);
       const fullConsultationData = response.data;
       
-      console.log('🔍 Full consultation data from backend:', fullConsultationData);
       
       // Update the selectedConsultation with the fresh data so the dialog's useEffect will re-run
       setSelectedConsultation(fullConsultationData);
@@ -223,5 +221,3 @@ export function useConsultationManagement(
     fetchConsultations
   };
 }
-
-

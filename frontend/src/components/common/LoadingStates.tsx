@@ -326,4 +326,3 @@ export const CalendarSkeleton: React.FC = () => (
 );
 
 export default LoadingStateDisplay;
-

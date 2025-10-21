@@ -32,19 +32,16 @@ export const submitConsultation = async (params: {
     } = params;
 
     // Validate required fields
-    console.log('🔍 Validating form data:', formData);
     const validationResult = validateConsultation(formData);
     console.log('📋 Validation result:', validationResult);
     
     if (!validationResult.isValid) {
-      console.log('❌ Validation failed with errors:', validationResult.errors);
       setFieldErrors(validationResult.errors);
       setFormErrorMessage('Por favor corrige los errores en el formulario');
       setIsSubmitting(false);
       return;
     }
     
-    console.log('✅ Validation passed, proceeding with submission...');
 
     let result;
     
@@ -53,7 +50,6 @@ export const submitConsultation = async (params: {
       console.log('🔄 Updating existing consultation:', selectedConsultation.id);
       console.log('📊 Sending update data:', formData);
       result = await apiService.updateConsultation(selectedConsultation.id.toString(), formData);
-      console.log('✅ Consultation updated successfully:', result);
       showSuccessMessage('✅ Consulta actualizada exitosamente');
     } else {
       // Create new consultation
@@ -68,11 +64,9 @@ export const submitConsultation = async (params: {
     // Call success callback
     console.log('🔄 Calling onSuccess callback to refresh consultations list...');
     await onSuccess();
-    console.log('✅ onSuccess callback completed successfully');
     
     // Reset loading state
     setIsSubmitting(false);
-    console.log('✅ Consultation submission process completed');
     
     return result;
     
@@ -129,4 +123,3 @@ export default {
   submitConsultation,
   validateConsultation
 };
-

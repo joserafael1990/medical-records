@@ -1,3 +1,4 @@
+
 import { lazy } from 'react';
 
 // Lazy load views for code splitting

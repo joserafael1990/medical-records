@@ -395,4 +395,3 @@ export const detectMedicalContext = (
 };
 
 export default MedicalErrorMessageBuilder;
-

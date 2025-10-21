@@ -93,7 +93,6 @@ class PersonBase(BaseSchema):
     # Birth location
     birth_state_id: Optional[int] = None
     birth_country_id: Optional[int] = None
-    foreign_birth_place: Optional[str] = None
     
     # Contact
     email: Optional[str] = None
@@ -168,7 +167,6 @@ class DoctorUpdate(BaseSchema):
     rfc: Optional[str] = None
     birth_city: Optional[str] = None
     birth_state_id: Optional[int] = None
-    foreign_birth_place: Optional[str] = None
     
     # Personal address
     home_address: Optional[str] = None
@@ -227,7 +225,6 @@ class PersonUpdate(BaseSchema):
     # Birth location
     birth_state_id: Optional[int] = None
     birth_country_id: Optional[int] = None
-    foreign_birth_place: Optional[str] = None
     
     # Contact
     email: Optional[str] = None

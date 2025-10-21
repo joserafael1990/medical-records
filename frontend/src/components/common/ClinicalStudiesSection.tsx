@@ -57,8 +57,17 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
 
   useEffect(() => {
     const consultationStudies = studies.filter(study => {
-      // Convert both to numbers for comparison
-      return Number(study.consultation_id) === Number(consultationId) && Number(study.patient_id) === Number(patientId);
+      // Handle both string and number comparisons
+      const studyConsultationId = study.consultation_id;
+      const studyPatientId = study.patient_id;
+      
+      // For temp consultations, compare as strings
+      if (consultationId === 'temp_consultation' || studyConsultationId === 'temp_consultation') {
+        return studyConsultationId === consultationId && studyPatientId === patientId;
+      }
+      
+      // For real consultations, compare as numbers
+      return Number(studyConsultationId) === Number(consultationId) && Number(studyPatientId) === Number(patientId);
     });
     
     setFilteredStudies(consultationStudies);
@@ -108,8 +117,6 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
       </Box>
     );
   }
-
-
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>

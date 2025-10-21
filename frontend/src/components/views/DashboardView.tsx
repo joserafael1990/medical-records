@@ -42,7 +42,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   doctorProfile
 }) => {
   // Debug: Log props when component renders
-  // console.log('🔍 DashboardView: Component rendered with props:', {
   //   onNewAppointment: !!onNewAppointment,
   //   onNewConsultation: !!onNewConsultation,
   //   onNewPatient: !!onNewPatient,
@@ -63,27 +62,29 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   const doctorName = doctorProfile?.full_name || 'Doctor';
 
   const quickActions = [
+    
+    {
+      label: 'Nuevo Paciente',
+      icon: <PersonIcon />,
+      action: onNewPatient,
+      color: 'info',
+      description: 'Dar de alta a nuevo paciente'
+    },
     {
       label: 'Nueva Cita',
       icon: <CalendarIcon />,
       action: onNewAppointment,
       color: 'primary',
-      description: 'Programar nueva cita médica'
+      description: 'Agendar próxima visita del paciente'
     },
     {
       label: 'Nueva Consulta',
       icon: <HospitalIcon />,
       action: onNewConsultation,
       color: 'success',
-      description: 'Registrar consulta médica'
-    },
-    {
-      label: 'Nuevo Paciente',
-      icon: <PersonIcon />,
-      action: onNewPatient,
-      color: 'info',
-      description: 'Agregar nuevo paciente'
+      description: 'Registrar atención médica del día'
     }
+
   ];
 
   return (
@@ -206,11 +207,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 color={action.color as any}
                 startIcon={action.icon}
                 onClick={(e) => {
-                  // console.log('🔍 DashboardView: Button clicked!', action.label, action.action);
                   if (action.action) {
                     action.action();
                   } else {
-                    // console.log('❌ DashboardView: No action handler for', action.label);
                   }
                 }}
                 sx={{

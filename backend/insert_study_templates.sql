@@ -234,3 +234,5 @@ SELECT t.id, s.id, 3 FROM study_templates t, study_catalog s
 WHERE t.name = 'Evaluación de Convulsiones' AND s.code = 'IMG018'
 ON CONFLICT DO NOTHING;
 
+
+

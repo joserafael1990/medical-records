@@ -64,11 +64,9 @@ export interface ConsultationInfo {
 
 class PDFService {
   private formatDateToDDMMYYYY(dateString: string): string {
-    console.log('🔍 Formatting date:', dateString);
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) {
-        console.log('❌ Invalid date:', dateString);
         return dateString; // Return original if invalid
       }
       
@@ -77,7 +75,6 @@ class PDFService {
       const year = date.getFullYear();
       
       const formatted = `${day}-${month}-${year}`;
-      console.log('✅ Formatted date:', formatted);
       return formatted;
     } catch (error) {
       console.warn('Error formatting date:', error);
@@ -236,15 +233,6 @@ class PDFService {
   }
 
   private addPatientInfo(doc: jsPDF, patient: PatientInfo, startY: number): number {
-    console.log('🔍 PDF Service - Patient data received:', {
-      id: patient.id,
-      firstName: patient.firstName,
-      lastName: patient.lastName,
-      maternalSurname: patient.maternalSurname,
-      dateOfBirth: patient.dateOfBirth,
-      gender: patient.gender,
-      phone: patient.phone
-    });
     
     doc.setFontSize(10);
     doc.setTextColor(0, 0, 0);

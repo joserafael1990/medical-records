@@ -36,5 +36,3 @@ export const validateMinLength = (value: string, minLength: number): boolean => 
 export const validateMaxLength = (value: string, maxLength: number): boolean => {
   return value.length <= maxLength;
 };
-
-

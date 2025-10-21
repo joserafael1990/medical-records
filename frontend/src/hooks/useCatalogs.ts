@@ -7,8 +7,6 @@ interface Country {
   name: string;
   active: boolean;
 }
-
-
 interface State {
   id: number;
   name: string;

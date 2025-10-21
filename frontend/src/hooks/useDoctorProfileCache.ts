@@ -97,7 +97,6 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
     setFormErrorMessage('');
     
     if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 Fetching doctor profile...');
       console.log('📋 Token in localStorage:', localStorage.getItem('token') ? 'Present' : 'Missing');
     }
     
@@ -149,13 +148,8 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
   }, []);
 
   const handleEdit = useCallback((section?: string) => {
-    console.log('🔍 HOOK handleEdit called - Starting edit process');
-    console.log('🔍 Current dialogOpen state:', dialogOpen);
-    console.log('🔍 Current isEditing state:', isEditing);
-    console.log('🔍 Doctor profile exists:', !!doctorProfile);
     
     if (doctorProfile) {
-      console.log('🔍 HOOK: Mapping doctor profile data to form');
       // Map backend fields to form fields
       const mappedData = {
         title: doctorProfile.title || '',
@@ -184,13 +178,11 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
         appointment_duration: String(doctorProfile.appointment_duration || '')
       };
       
-      console.log('🔍 HOOK: Setting form data and opening dialog');
       setFormData(mappedData);
       setIsEditing(true);
       setDialogOpen(true);
       clearMessages();
       
-      console.log('🔍 HOOK: After setting states - dialogOpen should be true, isEditing should be true');
       
       // Store the section to navigate to (we'll add this functionality to the dialog)
       if (section) {
@@ -198,7 +190,6 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
         (window as any).doctorProfileActiveSection = section;
       }
     } else {
-      console.log('❌ HOOK: No doctor profile found, cannot edit');
     }
   }, [doctorProfile, clearMessages]);
 
@@ -268,8 +259,6 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
         cleanedData[key] = value;
       }
     });
-
-
     try {
       if (isEditing) {
         await apiService.updateDoctorProfile(cleanedData);
@@ -346,7 +335,6 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
       fetchCalledRef.current = true;
       fetchProfile();
     } else {
-      console.log('❌ Skipping fetchProfile:', {
         isAuthenticated,
         fetchCalled: fetchCalledRef.current,
         hasProfile: !!doctorProfile

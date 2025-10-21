@@ -60,10 +60,11 @@ import { DiagnosisCatalog } from '../../hooks/useDiagnosisCatalog';
 import { PrintButtons } from '../common/PrintButtons';
 import { PatientInfo, DoctorInfo, ConsultationInfo, MedicationInfo, StudyInfo } from '../../services/pdfService';
 import { useToast } from '../common/ToastNotification';
+import { disablePaymentDetection } from '../../utils/disablePaymentDetection';
 // import { useSnackbar } from '../../contexts/SnackbarContext';
 
 // Define ConsultationFormData interface based on the hook
-interface ConsultationFormData {
+export interface ConsultationFormData {
   patient_id: string;
   date: string;
   chief_complaint: string;
@@ -213,15 +214,59 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   // New consultation flow states
   const [hasAppointment, setHasAppointment] = useState<boolean | null>(null);
   const [isNewPatient, setIsNewPatient] = useState<boolean | null>(null);
+  const [showAdvancedPatientData, setShowAdvancedPatientData] = useState<boolean>(false);
+  const [patientHasPreviousConsultations, setPatientHasPreviousConsultations] = useState<boolean>(false);
+  
+  // Function to determine if only basic patient data should be shown
+  const shouldShowOnlyBasicPatientData = (): boolean => {
+    // Show only basic data if advanced data is not requested
+    return !showAdvancedPatientData;
+  };
 
-  // Debug: Monitor selectedAppointment changes
-  useEffect(() => {
-    console.log('🔍 selectedAppointment changed:', selectedAppointment);
-    if (selectedAppointment) {
-      console.log('🔍 selectedAppointment.consultation_type:', selectedAppointment.consultation_type);
-      console.log('🔍 selectedAppointment.appointment_type:', selectedAppointment.appointment_type);
+  // Function to determine if "Ver consultas previas" button should be shown
+  const shouldShowPreviousConsultationsButton = (): boolean => {
+    // Show button if:
+    // 1. Selected appointment is of type "Seguimiento" OR
+    // 2. Patient is not new AND has at least one previous consultation OR
+    // 3. Patient is selected (not new patient flow) AND has at least one previous consultation
+    const isFollowUpAppointment = selectedAppointment && (
+      selectedAppointment.consultation_type === 'Seguimiento' ||
+      selectedAppointment.appointment_type === 'Seguimiento' ||
+      selectedAppointment.appointment_type === 'seguimiento' ||
+      selectedAppointment.appointment_type === 'follow_up'
+    );
+    
+    // Check if patient is selected (not in new patient flow)
+    const isExistingPatientSelected = selectedPatient && isNewPatient !== true;
+    
+    console.log('🔍 shouldShowPreviousConsultationsButton - Debug:', {
+      selectedPatient: selectedPatient ? `${selectedPatient.first_name} ${selectedPatient.paternal_surname}` : 'null',
+      isNewPatient,
+      patientHasPreviousConsultations,
+      isFollowUpAppointment,
+      isExistingPatientSelected,
+      result: isFollowUpAppointment || (isExistingPatientSelected && patientHasPreviousConsultations)
+    });
+    
+    return isFollowUpAppointment || (isExistingPatientSelected && patientHasPreviousConsultations);
+  };
+
+  // Helper function to get patient data for display
+  const getPatientData = (field: string) => {
+    if (isNewPatient === true) {
+      return newPatientData[field as keyof typeof newPatientData] || '';
     }
-  }, [selectedAppointment]);
+    return patientEditData?.[field as keyof typeof patientEditData] || '';
+  };
+
+  // Helper function to handle patient data changes
+  const handlePatientDataChangeWrapper = (field: string, value: any) => {
+    if (isNewPatient === true) {
+      handleNewPatientFieldChange(field, value);
+    } else {
+      handlePatientDataChange(field, value);
+    }
+  };
 
   // Function to determine if first-time consultation fields should be shown
   const shouldShowFirstTimeFields = (): boolean => {
@@ -239,22 +284,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     );
     const shouldShow = isNewPatientFlow || isEditingFirstTimeConsultation || hasFirstTimeAppointment;
     
-    console.log('🔍 shouldShowFirstTimeFields:', { 
-      isNewPatient, 
-      isNewPatientFlow,
-      isEditingFirstTimeConsultation,
-      hasFirstTimeAppointment,
-      selectedAppointmentType: selectedAppointment?.consultation_type,
-      selectedAppointmentAppointmentType: selectedAppointment?.appointment_type,
-      selectedAppointmentId: selectedAppointment?.id,
-      consultationType: consultation?.consultation_type,
-      shouldShow,
-      reason: shouldShow ? 
-        (isNewPatientFlow ? 'new patient' : 
-         isEditingFirstTimeConsultation ? 'editing first time consultation' : 
-         hasFirstTimeAppointment ? 'first time appointment selected' : 'unknown') : 
-        'no conditions met'
-    });
     return shouldShow;
   };
 
@@ -277,7 +306,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
   // Handle new patient selection change
   const handleIsNewPatientChange = (value: boolean) => {
-    console.log('🔍 handleIsNewPatientChange called with:', value);
     setIsNewPatient(value);
     // Reset dependent states
     setSelectedPatient(null);
@@ -304,32 +332,54 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     maternal_surname: '',
     birth_date: '',
     gender: '',
-    primary_phone: ''
+    primary_phone: '',
+    email: '',
+    home_address: '',
+    address_city: '',
+    address_postal_code: '',
+    address_country_id: '',
+    address_state_id: '',
+    curp: '',
+    rfc: '',
+    civil_status: '',
+    birth_city: '',
+    birth_country_id: '',
+    birth_state_id: '',
+    emergency_contact_name: '',
+    emergency_contact_phone: '',
+    emergency_contact_relationship: '',
+    chronic_conditions: '',
+    current_medications: '',
+    insurance_provider: '',
+    insurance_number: ''
   });
 
   useEffect(() => {
     if (open) {
+      // Disable payment detection for insurance fields
+      setTimeout(() => {
+        disablePaymentDetection();
+      }, 100);
       setError(null);
       setErrors({});
-      // Reset consultation flow states for new consultations
-      if (!consultation) {
-        setFormData(initialFormData);
-        setHasAppointment(null);
-        setIsNewPatient(null);
-        setSelectedAppointment(null);
-        setSelectedPatient(null);
-        setNewPatientData({
-          first_name: '',
-          paternal_surname: '',
-          maternal_surname: '',
-          birth_date: '',
-          gender: '',
-          primary_phone: ''
-        });
-      }
+        // Reset consultation flow states for new consultations
+        if (!consultation) {
+          setFormData(initialFormData);
+          setHasAppointment(null);
+          setIsNewPatient(null);
+          setSelectedAppointment(null);
+          setSelectedPatient(null);
+          setShowAdvancedPatientData(false);
+          setNewPatientData({
+            first_name: '',
+            paternal_surname: '',
+            maternal_surname: '',
+            birth_date: '',
+            gender: '',
+            primary_phone: ''
+          });
+        }
       if (consultation) {
-        console.log('🔍 Loading existing consultation:', consultation);
-        console.log('🔍 Consultation type:', consultation.consultation_type);
         // Map consultation data to form data
         setFormData({
           ...initialFormData,
@@ -414,18 +464,15 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         // Load patients for appointments if appointments exist
         if (appointments && appointments.length > 0) {
           const patientIds = appointments.map((apt: any) => apt.patient_id).filter((id: any) => id);
-          console.log('🔍 ConsultationDialog - loading patients for appointment IDs:', patientIds);
           
           // Get all patients to find the ones referenced in appointments
           const allPatients = await apiService.getPatients();
           const appointmentPatients = allPatients.filter((patient: any) => 
             patientIds.includes(patient.id)
           );
-          console.log('🔍 ConsultationDialog - found appointment patients:', appointmentPatients.length);
           
           // Set the appointment patients for use in the dropdown
           setAppointmentPatients(appointmentPatients);
-          console.log('🔍 ConsultationDialog - set appointment patients:', appointmentPatients.length);
         }
       } catch (error) {
         console.error('Error loading initial data:', error);
@@ -568,12 +615,16 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       try {
         const fullPatientData = await apiService.getPatient(patient.id);
         setPatientEditData(fullPatientData);
+        
+        // Check if patient has previous consultations
+        await checkPatientPreviousConsultations(patient.id);
       } catch (error) {
         console.error('Error loading patient data:', error);
         setPatientEditData(null);
       }
     } else {
       setPatientEditData(null);
+      setPatientHasPreviousConsultations(false);
     }
     
     if (errors.patient_id) {
@@ -583,6 +634,41 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         return newErrors;
       });
     }
+  };
+
+  // Function to check if patient has previous consultations
+  const checkPatientPreviousConsultations = async (patientId: number) => {
+    console.log('🔍 Checking previous consultations for patient ID:', patientId);
+    try {
+      // Get all consultations and filter by patient ID
+      const response = await apiService.get('/api/consultations');
+      const allConsultations = response.data || [];
+      
+      // Filter consultations for this specific patient
+      const patientConsultations = allConsultations.filter((c: any) => c.patient_id === patientId);
+      const hasPrevious = patientConsultations.length > 0;
+      
+      console.log('🔍 Previous consultations found:', patientConsultations.length, 'Has previous:', hasPrevious);
+      setPatientHasPreviousConsultations(hasPrevious);
+    } catch (error) {
+      console.error('❌ Error checking patient consultations:', error);
+      setPatientHasPreviousConsultations(false);
+    }
+  };
+
+  // Function to open consultations view with patient filter
+  const handleViewPreviousConsultations = () => {
+    if (!selectedPatient) return;
+    
+    // Open in a new tab with patient filter
+    const patientId = selectedPatient.id;
+    const patientName = `${selectedPatient.first_name} ${selectedPatient.paternal_surname}`.trim();
+    
+    // Create a URL with patient filter as query parameter
+    const baseUrl = window.location.origin;
+    const consultationsUrl = `${baseUrl}/?view=consultations&patientId=${patientId}&patientName=${encodeURIComponent(patientName)}`;
+    
+    window.open(consultationsUrl, '_blank');
   };
 
   const handlePatientDataChange = (field: keyof any, value: any) => {
@@ -613,16 +699,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   };
 
   const handleAppointmentChange = async (appointment: any | null) => {
-    console.log('🔍 handleAppointmentChange called with:', appointment);
     setSelectedAppointment(appointment);
     
     if (appointment) {
-      console.log('🔍 Appointment details:', {
-        id: appointment.id,
-        consultation_type: appointment.consultation_type,
-        appointment_date: appointment.appointment_date,
-        patient: appointment.patient
-      });
       // Use patient from appointment object (comes from backend) or find in local patients list
       const patient = appointment.patient || patients.find((p: any) => p.id === appointment.patient_id);
       
@@ -632,18 +711,13 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         
         // Always load fresh patient data from API to ensure decryption
         try {
-          console.log('🔍 Loading decrypted patient data for ID:', patient.id);
           const fullPatientData = await apiService.getPatient(patient.id);
-          console.log('✅ Loaded decrypted patient data:', {
-            id: fullPatientData.id,
-            name: fullPatientData.first_name,
-            phone: fullPatientData.primary_phone,
-            birth_date: fullPatientData.birth_date,
-            gender: fullPatientData.gender
-          });
           setPatientEditData(fullPatientData);
           // Update selectedPatient with fresh data including birth_date and gender
           setSelectedPatient(fullPatientData);
+          
+          // Check if patient has previous consultations
+          await checkPatientPreviousConsultations(patient.id);
         } catch (error) {
           console.error('❌ Error loading decrypted patient data:', error);
           setPatientEditData(null);
@@ -652,10 +726,12 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         console.warn('No patient found for appointment:', appointment.id);
         setSelectedPatient(null);
         setPatientEditData(null);
+        setPatientHasPreviousConsultations(false);
       }
     } else {
       setSelectedPatient(null);
       setPatientEditData(null);
+      setPatientHasPreviousConsultations(false);
       setFormData((prev: ConsultationFormData) => ({ ...prev, patient_id: '', appointment_id: '' }));
     }
   };
@@ -666,6 +742,24 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       ...prev,
       [field]: value
     }));
+  };
+
+  // Handle country change for new patients
+  const handleNewPatientCountryChange = async (field: 'address_country_id' | 'birth_country_id', countryId: string) => {
+    handleNewPatientFieldChange(field, countryId);
+    
+    if (countryId) {
+      try {
+        const statesData = await apiService.getStates(parseInt(countryId));
+        if (field === 'address_country_id') {
+          setStates(statesData);
+        } else {
+          setBirthStates(statesData);
+        }
+      } catch (error) {
+        console.error('Error loading states:', error);
+      }
+    }
   };
 
   // Filter appointments to show only non-cancelled ones
@@ -714,59 +808,48 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     // Create new patient if no patient is selected
     let finalPatientId = selectedPatient?.id;
     
-    console.log('🔍 Patient creation check:', { 
-      selectedPatient: !!selectedPatient, 
-      hasNewPatientData: !!(newPatientData.first_name && newPatientData.paternal_surname),
-      isNewPatient,
-      hasAppointment
-    });
     
     if (!selectedPatient && newPatientData.first_name && newPatientData.paternal_surname) {
       try {
-        // Create new patient with basic data
+        
+        // Create new patient with all data from newPatientData
         const patientData: PatientFormData = {
           first_name: newPatientData.first_name,
           paternal_surname: newPatientData.paternal_surname,
           maternal_surname: newPatientData.maternal_surname || '',
-          email: '',
-          date_of_birth: '',
-          birth_date: '',
-          phone: newPatientData.primary_phone || '',
+          email: newPatientData.email || '',
+          birth_date: newPatientData.birth_date || '',
           primary_phone: newPatientData.primary_phone || '',
-          gender: '',
-          civil_status: '',
-          home_address: '',
-          curp: '',
-          rfc: '',
-          address_city: '',
-          city: '',
-          address_state_id: '',
-          state: '',
-          address_postal_code: '',
-          zip_code: '',
-          address_country_id: '',
-          country: '',
-          birth_city: '',
-          birth_state_id: '',
-          birth_country_id: '',
-          emergency_contact_name: '',
-          emergency_contact_phone: '',
-          emergency_contact_relationship: '',
-          chronic_conditions: '',
-          current_medications: '',
-          medical_history: '',
-          insurance_provider: '',
-          insurance_policy_number: '',
+          gender: newPatientData.gender || '',
+          civil_status: newPatientData.civil_status || '',
+          home_address: newPatientData.home_address || '',
+          curp: newPatientData.curp || '',
+          rfc: newPatientData.rfc || '',
+          address_city: newPatientData.address_city || '',
+          address_state_id: newPatientData.address_state_id || '',
+          address_postal_code: newPatientData.address_postal_code || '',
+          address_country_id: newPatientData.address_country_id || '',
+          birth_city: newPatientData.birth_city || '',
+          birth_state_id: newPatientData.birth_state_id || '',
+          birth_country_id: newPatientData.birth_country_id || '',
+          emergency_contact_name: newPatientData.emergency_contact_name || '',
+          emergency_contact_phone: newPatientData.emergency_contact_phone || '',
+          emergency_contact_relationship: newPatientData.emergency_contact_relationship || '',
+          chronic_conditions: newPatientData.chronic_conditions || '',
+          current_medications: newPatientData.current_medications || '',
+          insurance_provider: newPatientData.insurance_provider || '',
+          insurance_number: newPatientData.insurance_number || '',
           active: true,
           is_active: true
         };
 
         const newPatient = await apiService.createPatient(patientData);
         finalPatientId = newPatient.id;
-        console.log('✅ New patient created successfully:', newPatient);
       } catch (error) {
         console.error('Error creating patient:', error);
-        setError('Error al crear el nuevo paciente');
+        const errorMessage = error instanceof Error ? error.message : 'Error al crear el nuevo paciente';
+        setError(errorMessage);
+        showError(errorMessage);
         return;
       }
     }
@@ -775,7 +858,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     if (patientEditData && selectedPatient) {
       try {
         await apiService.updatePatient(selectedPatient.id, patientEditData);
-        console.log('✅ Patient data updated successfully');
       } catch (error) {
         console.error('Error updating patient data:', error);
         setError('Error al actualizar los datos del paciente');
@@ -845,7 +927,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           try {
             console.log('🔬 Study data to send:', studyData);
             await clinicalStudiesHook.createStudy(studyData);
-            console.log('✅ Clinical study saved:', study.study_name);
           } catch (error) {
             console.error('❌ Error saving clinical study:', error);
             console.error('❌ Study data that failed:', studyData);
@@ -861,6 +942,11 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         console.log('🔬 Consultation ID:', createdConsultation?.id);
       }
 
+      // Always refresh studies after creating consultation to show any studies that were created
+      if (createdConsultation?.id) {
+        await clinicalStudiesHook.fetchStudies(String(createdConsultation.id));
+      }
+
       // Save vital signs if any were added
       if (vitalSignsHook.temporaryVitalSigns.length > 0 && createdConsultation?.id) {
         console.log('🫀 Saving vital signs for consultation:', createdConsultation.id);
@@ -870,7 +956,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           try {
             console.log('🫀 Vital sign data to send:', vitalSign);
             await vitalSignsHook.createVitalSign(String(createdConsultation.id), vitalSign);
-            console.log('✅ Vital sign saved:', vitalSign);
           } catch (error) {
             console.error('❌ Error saving vital sign:', error);
             console.error('❌ Vital sign data that failed:', vitalSign);
@@ -924,11 +1009,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
   // Clinical studies handlers
   const handleAddStudy = () => {
-    console.log('🔍 handleAddStudy called');
-    console.log('🔍 selectedPatient:', selectedPatient);
-    console.log('🔍 isEditing:', isEditing);
-    console.log('🔍 consultation:', consultation);
-    console.log('🔍 doctorProfile:', doctorProfile);
     
     // Allow adding studies even without a selected patient
     // Use temp_patient ID when no patient is selected
@@ -936,22 +1016,13 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     const consultationId = isEditing ? String(consultation.id) : 'temp_consultation';
     const doctorName = doctorProfile?.full_name || 'Dr. Usuario Sistema';
     
-    console.log('🔍 Calling openAddDialog with:', {
-      consultationId,
-      patientId,
-      doctorName
-    });
-    
     clinicalStudiesHook.openAddDialog(
       consultationId,
       patientId,
       doctorName
     );
     
-    console.log('🔍 openAddDialog called, dialog should be open now');
   };
-
-
   const handleEditStudy = (study: ClinicalStudy) => {
     clinicalStudiesHook.openEditDialog(study);
   };
@@ -1278,7 +1349,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   />
                   <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
                     <DatePicker
-                      label="Fecha de Nacimiento"
+                      label="Fecha de Nacimiento *"
                       value={newPatientData.birth_date ? new Date(newPatientData.birth_date) : null}
                       onChange={(newValue: any) => {
                         const dateStr = newValue ? newValue.toISOString().split('T')[0] : '';
@@ -1288,6 +1359,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                         textField: {
                           size: 'small',
                           fullWidth: true,
+                          required: true,
                           placeholder: 'Fecha de Nacimiento - opcional'
                         }
                       }}
@@ -1307,11 +1379,312 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                     </Select>
                   </FormControl>
                 </Box>
+                
+                {/* Show Advanced Data Button and Previous Consultations Button - For new patients */}
+                {!showAdvancedPatientData && (
+                  <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center', gap: 2 }}>
+                    <Button
+                      variant="outlined"
+                      onClick={() => setShowAdvancedPatientData(true)}
+                      startIcon={<EditIcon />}
+                      sx={{ minWidth: 200 }}
+                    >
+                      Ver Datos Avanzados
+                    </Button>
+                    {shouldShowPreviousConsultationsButton() && (
+                      <Button
+                        variant="outlined"
+                        color="primary"
+                        onClick={handleViewPreviousConsultations}
+                        startIcon={<HospitalIcon />}
+                        sx={{ minWidth: 200 }}
+                      >
+                        Ver Consultas Previas
+                      </Button>
+                    )}
+                  </Box>
+                )}
+
+                {/* Advanced Patient Data - Show when requested for new patients */}
+                {showAdvancedPatientData && (
+                  <>
+                    <Divider sx={{ my: 3 }} />
+
+                    {/* Contact Information Section */}
+                    <Box>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <PhoneIcon sx={{ fontSize: 20 }} />
+                        Información de Contacto
+                      </Typography>
+                      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                        <TextField
+                          label="Teléfono"
+                          value={newPatientData.primary_phone || ''}
+                          onChange={(e: any) => handleNewPatientFieldChange('primary_phone', e.target.value)}
+                          size="small"
+                          required
+                        />
+                        <TextField
+                          label="Email"
+                          type="email"
+                          value={newPatientData.email || ''}
+                          onChange={(e: any) => handleNewPatientFieldChange('email', e.target.value)}
+                          size="small"
+                          helperText={newPatientData.email && newPatientData.email !== '' && !newPatientData.email.includes('@') ? 'El email debe tener un formato válido' : ''}
+                          error={newPatientData.email && newPatientData.email !== '' && !newPatientData.email.includes('@')}
+                        />
+                        <TextField
+                          label="Dirección"
+                          value={newPatientData.home_address || ''}
+                          onChange={(e: any) => handleNewPatientFieldChange('home_address', e.target.value)}
+                          size="small"
+                          fullWidth
+                          sx={{ gridColumn: '1 / -1' }}
+                        />
+                        <TextField
+                          label="Ciudad"
+                          value={newPatientData.address_city || ''}
+                          onChange={(e: any) => handleNewPatientFieldChange('address_city', e.target.value)}
+                          size="small"
+                        />
+                        <TextField
+                          label="Código Postal"
+                          value={newPatientData.address_postal_code || ''}
+                          onChange={(e: any) => handleNewPatientFieldChange('address_postal_code', e.target.value)}
+                          size="small"
+                          inputProps={{ maxLength: 5 }}
+                          helperText="Opcional"
+                        />
+                        <FormControl size="small">
+                          <InputLabel>País</InputLabel>
+                          <Select
+                            value={newPatientData.address_country_id || ''}
+                            onChange={(e: any) => handleNewPatientCountryChange('address_country_id', e.target.value as string)}
+                            label="País"
+                          >
+                            {(countries || []).map((country: any) => (
+                              <MenuItem key={country.id} value={country.id.toString()}>
+                                {country.name}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                        <FormControl size="small">
+                          <InputLabel>Estado</InputLabel>
+                          <Select
+                            value={newPatientData.address_state_id || ''}
+                            onChange={(e: any) => handleNewPatientFieldChange('address_state_id', e.target.value)}
+                            label="Estado"
+                            disabled={!newPatientData.address_country_id}
+                          >
+                            {(states || []).map((state: any) => (
+                              <MenuItem key={state.id} value={state.id.toString()}>
+                                {state.name}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Box>
+                    </Box>
+
+                    <Divider sx={{ my: 3 }} />
+
+                    {/* Additional Information Section */}
+                    <Box>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <BadgeIcon sx={{ fontSize: 20 }} />
+                        Información Adicional
+                      </Typography>
+                      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                        <TextField
+                          label="CURP"
+                          value={newPatientData.curp || ''}
+                          onChange={(e: any) => handleNewPatientFieldChange('curp', e.target.value)}
+                          size="small"
+                          inputProps={{ maxLength: 18 }}
+                          helperText={newPatientData.curp && newPatientData.curp.length !== 18 ? 'El CURP debe tener exactamente 18 caracteres' : ''}
+                          error={newPatientData.curp && newPatientData.curp.length !== 18}
+                        />
+                        <TextField
+                          label="RFC"
+                          value={newPatientData.rfc || ''}
+                          onChange={(e: any) => handleNewPatientFieldChange('rfc', e.target.value)}
+                          size="small"
+                          inputProps={{ maxLength: 13 }}
+                          helperText={newPatientData.rfc && newPatientData.rfc.length < 10 ? 'El RFC debe tener al menos 10 caracteres' : ''}
+                          error={newPatientData.rfc && newPatientData.rfc.length < 10}
+                        />
+                        <FormControl size="small" fullWidth>
+                          <InputLabel>Estado Civil</InputLabel>
+                          <Select
+                            value={newPatientData.civil_status || ''}
+                            onChange={(e: any) => handleNewPatientFieldChange('civil_status', e.target.value)}
+                            label="Estado Civil"
+                          >
+                            <MenuItem value=""><em>Seleccione</em></MenuItem>
+                            <MenuItem value="single">Soltero(a)</MenuItem>
+                            <MenuItem value="married">Casado(a)</MenuItem>
+                            <MenuItem value="divorced">Divorciado(a)</MenuItem>
+                            <MenuItem value="widowed">Viudo(a)</MenuItem>
+                            <MenuItem value="free_union">Unión libre</MenuItem>
+                          </Select>
+                        </FormControl>
+                      </Box>
+                    </Box>
+
+                    <Divider sx={{ my: 3 }} />
+
+                    {/* Birth Information Section */}
+                    <Box>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <PersonIcon sx={{ fontSize: 20 }} />
+                        Información de Nacimiento
+                      </Typography>
+                      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                        <TextField
+                          label="Ciudad de Nacimiento"
+                          value={newPatientData.birth_city || ''}
+                          onChange={(e: any) => handleNewPatientFieldChange('birth_city', e.target.value)}
+                          size="small"
+                        />
+                        <FormControl size="small">
+                          <InputLabel>País de Nacimiento</InputLabel>
+                          <Select
+                            value={newPatientData.birth_country_id || ''}
+                            onChange={(e: any) => handleNewPatientCountryChange('birth_country_id', e.target.value as string)}
+                            label="País de Nacimiento"
+                          >
+                            {(countries || []).map((country: any) => (
+                              <MenuItem key={country.id} value={country.id.toString()}>
+                                {country.name}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                        <FormControl size="small">
+                          <InputLabel>Estado de Nacimiento</InputLabel>
+                          <Select
+                            value={newPatientData.birth_state_id || ''}
+                            onChange={(e: any) => handleNewPatientFieldChange('birth_state_id', e.target.value)}
+                            label="Estado de Nacimiento"
+                            disabled={!newPatientData.birth_country_id}
+                          >
+                            {(birthStates || []).map((state: any) => (
+                              <MenuItem key={state.id} value={state.id.toString()}>
+                                {state.name}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Box>
+                    </Box>
+
+                    <Divider sx={{ my: 3 }} />
+
+                    {/* Emergency Contact Section */}
+                    <Box>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <PhoneIcon sx={{ fontSize: 20 }} />
+                        Contacto de Emergencia
+                      </Typography>
+                      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                        <TextField
+                          label="Nombre del Contacto"
+                          value={newPatientData.emergency_contact_name || ''}
+                          onChange={(e: any) => handleNewPatientFieldChange('emergency_contact_name', e.target.value)}
+                          size="small"
+                        />
+                        <TextField
+                          label="Teléfono del Contacto"
+                          value={newPatientData.emergency_contact_phone || ''}
+                          onChange={(e: any) => handleNewPatientFieldChange('emergency_contact_phone', e.target.value)}
+                          size="small"
+                        />
+                        <FormControl size="small" fullWidth>
+                          <InputLabel>Relación con el Paciente</InputLabel>
+                          <Select
+                            value={newPatientData.emergency_contact_relationship || ''}
+                            onChange={(e: any) => handleNewPatientFieldChange('emergency_contact_relationship', e.target.value)}
+                            label="Relación con el Paciente"
+                            sx={{ gridColumn: '1 / -1' }}
+                          >
+                            <MenuItem value=""><em>Seleccione</em></MenuItem>
+                            {(emergencyRelationships || []).map((relationship: any) => (
+                              <MenuItem key={relationship.code} value={relationship.code}>
+                                {relationship.name}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Box>
+                    </Box>
+
+                    <Divider sx={{ my: 3 }} />
+
+                    {/* Medical Information Section */}
+                    <Box>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <BadgeIcon sx={{ fontSize: 20 }} />
+                        Información Médica
+                      </Typography>
+                      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                        <TextField
+                          label="Condiciones Crónicas"
+                          value={newPatientData.chronic_conditions || ''}
+                          onChange={(e: any) => handleNewPatientFieldChange('chronic_conditions', e.target.value)}
+                          size="small"
+                          multiline
+                          rows={2}
+                          fullWidth
+                          sx={{ gridColumn: '1 / -1' }}
+                        />
+                        <TextField
+                          label="Medicamentos Actuales"
+                          value={newPatientData.current_medications || ''}
+                          onChange={(e: any) => handleNewPatientFieldChange('current_medications', e.target.value)}
+                          size="small"
+                          multiline
+                          rows={2}
+                          fullWidth
+                          sx={{ gridColumn: '1 / -1' }}
+                        />
+                        <TextField
+                          label="Proveedor de Seguro"
+                          value={newPatientData.insurance_provider || ''}
+                          onChange={(e: any) => handleNewPatientFieldChange('insurance_provider', e.target.value)}
+                          size="small"
+                        />
+                        <TextField
+                          label="Código de Seguro"
+                          value={newPatientData.insurance_number || ''}
+                          onChange={(e: any) => handleNewPatientFieldChange('insurance_number', e.target.value)}
+                          size="small"
+                          inputProps={{ 
+                            autoComplete: 'new-password',
+                            'data-form-type': 'other',
+                            'data-lpignore': 'true',
+                            'data-1p-ignore': 'true',
+                            'data-bwignore': 'true',
+                            'data-autofill': 'off',
+                            'autocapitalize': 'off',
+                            'autocorrect': 'off',
+                            'spellcheck': 'false',
+                            'name': 'medical_insurance_code',
+                            'id': 'medical_insurance_code',
+                            'type': 'text',
+                            'role': 'textbox',
+                            'aria-label': 'Código de seguro médico'
+                          }}
+                        />
+                      </Box>
+                    </Box>
+                  </>
+                )}
               </Box>
           </Box>
           )}
 
-          {/* Patient Data Section - Show when patient is selected */}
+          {/* Patient Data Section - Show only when patient is selected (existing patients) */}
           {selectedPatient && patientEditData && (
             <Box>
               <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1320,45 +1693,46 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               </Typography>
               
               <Paper sx={{ p: 3, bgcolor: 'grey.50', border: '1px solid', borderColor: 'grey.200' }}>
-                {/* Personal Information Section */}
+                {/* Basic Patient Information - Always shown */}
                 <Box>
                   <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
                     <PersonIcon sx={{ fontSize: 20 }} />
-                    Información Personal
+                    Información Básica
                   </Typography>
                   <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
                     <TextField
                       label="Nombre"
-                      value={patientEditData.first_name || ''}
-                      onChange={(e: any) => handlePatientDataChange('first_name', e.target.value)}
+                      value={getPatientData('first_name')}
+                      onChange={(e: any) => handlePatientDataChangeWrapper('first_name', e.target.value)}
                       size="small"
                       required
                     />
                     <TextField
                       label="Apellido Paterno"
-                      value={patientEditData.paternal_surname || ''}
-                      onChange={(e: any) => handlePatientDataChange('paternal_surname', e.target.value)}
+                      value={getPatientData('paternal_surname')}
+                      onChange={(e: any) => handlePatientDataChangeWrapper('paternal_surname', e.target.value)}
                       size="small"
                       required
                     />
                     <TextField
                       label="Apellido Materno"
-                      value={patientEditData.maternal_surname || ''}
-                      onChange={(e: any) => handlePatientDataChange('maternal_surname', e.target.value)}
+                      value={getPatientData('maternal_surname')}
+                      onChange={(e: any) => handlePatientDataChangeWrapper('maternal_surname', e.target.value)}
                       size="small"
                     />
                     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
                       <DatePicker
-                        label="Fecha de Nacimiento"
-                        value={patientEditData.birth_date ? new Date(patientEditData.birth_date) : null}
+                        label="Fecha de Nacimiento *"
+                        value={getPatientData('birth_date') ? new Date(getPatientData('birth_date')) : null}
                         onChange={(newValue: any) => {
                           const dateStr = newValue ? newValue.toISOString().split('T')[0] : '';
-                          handlePatientDataChange('birth_date', dateStr);
+                          handlePatientDataChangeWrapper('birth_date', dateStr);
                         }}
                         slotProps={{
                           textField: {
                             size: 'small',
-                            fullWidth: true
+                            fullWidth: true,
+                            required: true
                           }
                         }}
                       />
@@ -1366,8 +1740,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                     <FormControl size="small" fullWidth>
                       <InputLabel>Género</InputLabel>
                       <Select
-                        value={patientEditData.gender || ''}
-                        onChange={(e: any) => handlePatientDataChange('gender', e.target.value)}
+                        value={getPatientData('gender')}
+                        onChange={(e: any) => handlePatientDataChangeWrapper('gender', e.target.value)}
                         label="Género"
                       >
                         <MenuItem value=""><em>Seleccione</em></MenuItem>
@@ -1376,12 +1750,47 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                         <MenuItem value="Otro">Otro</MenuItem>
                       </Select>
                     </FormControl>
+                    <TextField
+                      label="Teléfono"
+                      value={getPatientData('primary_phone')}
+                      onChange={(e: any) => handlePatientDataChangeWrapper('primary_phone', e.target.value)}
+                      size="small"
+                      required
+                    />
                   </Box>
                 </Box>
 
-                <Divider sx={{ my: 3 }} />
+                {/* Show Advanced Data Button and Previous Consultations Button - For existing patients */}
+                {!showAdvancedPatientData && (
+                  <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center', gap: 2 }}>
+                    <Button
+                      variant="outlined"
+                      onClick={() => setShowAdvancedPatientData(true)}
+                      startIcon={<EditIcon />}
+                      sx={{ minWidth: 200 }}
+                    >
+                      Ver Datos Avanzados
+                    </Button>
+                    {shouldShowPreviousConsultationsButton() && (
+                      <Button
+                        variant="outlined"
+                        color="primary"
+                        onClick={handleViewPreviousConsultations}
+                        startIcon={<HospitalIcon />}
+                        sx={{ minWidth: 200 }}
+                      >
+                        Ver Consultas Previas
+                      </Button>
+                    )}
+                  </Box>
+                )}
 
-                {/* Contact Information Section */}
+                {/* Advanced Patient Data - Show when requested or for existing patients */}
+                {(!shouldShowOnlyBasicPatientData()) && (
+                  <>
+                    <Divider sx={{ my: 3 }} />
+
+                    {/* Contact Information Section */}
                 <Box>
                   <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
                     <PhoneIcon sx={{ fontSize: 20 }} />
@@ -1401,6 +1810,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                       value={patientEditData.email || ''}
                       onChange={(e: any) => handlePatientDataChange('email', e.target.value)}
                       size="small"
+                      helperText={patientEditData.email && patientEditData.email !== '' && !patientEditData.email.includes('@') ? 'El email debe tener un formato válido' : ''}
+                      error={patientEditData.email && patientEditData.email !== '' && !patientEditData.email.includes('@')}
                     />
                     <TextField
                       label="Dirección"
@@ -1471,6 +1882,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                       onChange={(e: any) => handlePatientDataChange('curp', e.target.value)}
                       size="small"
                       inputProps={{ maxLength: 18 }}
+                      helperText={patientEditData.curp && patientEditData.curp.length !== 18 ? 'El CURP debe tener exactamente 18 caracteres' : ''}
+                      error={patientEditData.curp && patientEditData.curp.length !== 18}
                     />
                     <TextField
                       label="RFC"
@@ -1478,6 +1891,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                       onChange={(e: any) => handlePatientDataChange('rfc', e.target.value)}
                       size="small"
                       inputProps={{ maxLength: 13 }}
+                      helperText={patientEditData.rfc && patientEditData.rfc.length < 10 ? 'El RFC debe tener al menos 10 caracteres' : ''}
+                      error={patientEditData.rfc && patientEditData.rfc.length < 10}
                     />
                     <FormControl size="small" fullWidth>
                       <InputLabel>Estado Civil</InputLabel>
@@ -1620,13 +2035,31 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                       size="small"
                     />
                     <TextField
-                      label="Número de Póliza"
+                      label="Código de Seguro"
                       value={patientEditData.insurance_number || ''}
                       onChange={(e: any) => handlePatientDataChange('insurance_number', e.target.value)}
                       size="small"
+                      inputProps={{ 
+                        autoComplete: 'new-password',
+                        'data-form-type': 'other',
+                        'data-lpignore': 'true',
+                        'data-1p-ignore': 'true',
+                        'data-bwignore': 'true',
+                        'data-autofill': 'off',
+                        'autocapitalize': 'off',
+                        'autocorrect': 'off',
+                        'spellcheck': 'false',
+                        'name': 'medical_insurance_code',
+                        'id': 'medical_insurance_code',
+                        'type': 'text',
+                        'role': 'textbox',
+                        'aria-label': 'Código de seguro médico'
+                      }}
                     />
                   </Box>
                 </Box>
+                  </>
+                )}
               </Paper>
             </Box>
           )}
@@ -1678,7 +2111,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           {/* First-time consultation fields - shown conditionally */}
           {(() => {
             const shouldShow = shouldShowFirstTimeFields();
-            console.log('🔍 Rendering first-time fields:', shouldShow);
             return shouldShow;
           })() && (
             <>
@@ -1874,8 +2306,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             </Box>
 
             {/* Legacy text fields for backward compatibility */}
-
-
               <TextField
                 name="secondary_diagnoses"
                 label="Diagnósticos secundarios (texto)"
@@ -2313,4 +2743,3 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 };
 
 export default ConsultationDialog;
-

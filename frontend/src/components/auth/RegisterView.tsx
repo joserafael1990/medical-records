@@ -483,7 +483,6 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
       
       // The registration endpoint already handles login, so we just need to update the auth context
       if (registrationResponse.success) {
-        console.log('✅ Registration successful:', registrationResponse);
         
         // Store authentication data from registration response
         localStorage.setItem('token', registrationResponse.access_token);

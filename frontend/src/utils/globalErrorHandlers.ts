@@ -1,3 +1,4 @@
+
 import { safeConsoleError } from './errorHandling';
 
 // Store original console.error

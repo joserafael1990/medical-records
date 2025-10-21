@@ -63,8 +63,6 @@ const MedicalOrderPrintFormat: React.FC<MedicalOrderPrintFormatProps> = ({
     }
   };
 
-
-
   const getPriorityLabel = (priority: string) => {
     switch (priority) {
       case 'urgente': return 'URGENTE';

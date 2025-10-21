@@ -1520,8 +1520,11 @@ async def login(
     """Login user"""
     try:
         return auth.login_user(db, login_data.email, login_data.password)
+    except HTTPException as e:
+        # Re-raise HTTP exceptions (like 401 from auth.login_user)
+        raise e
     except Exception as e:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/api/auth/me")
 async def get_current_user_info(
@@ -1586,7 +1589,6 @@ async def get_my_profile(
         "rfc": user_with_relations.rfc,
         "birth_city": user_with_relations.birth_city,
         "birth_state_id": user_with_relations.birth_state_id,
-        "foreign_birth_place": user_with_relations.foreign_birth_place,
         
         # Personal Address
         "home_address": user_with_relations.home_address,
@@ -1907,6 +1909,7 @@ async def get_patient(
             'paternal_surname': patient.paternal_surname,
             'maternal_surname': patient.maternal_surname,
             'curp': decrypted_curp,
+            'rfc': patient.rfc,
             'email': decrypted_email,
             'primary_phone': decrypted_phone,
             'home_address': patient.home_address,
@@ -2080,6 +2083,18 @@ async def update_patient(
         # Update patient fields with proper null handling for foreign keys
         update_data = patient_data.dict(exclude_unset=True)
         
+        # Map gender values to backend format
+        if 'gender' in update_data and update_data['gender']:
+            gender_map = {
+                'Masculino': 'Masculino',
+                'Femenino': 'Femenino',
+                'M': 'Masculino',
+                'F': 'Femenino',
+                'masculino': 'Masculino',
+                'femenino': 'Femenino'
+            }
+            update_data['gender'] = gender_map.get(update_data['gender'], update_data['gender'])
+        
         # Handle foreign key fields - convert empty strings to None
         foreign_key_fields = [
             'emergency_contact_relationship',
@@ -2089,6 +2104,10 @@ async def update_patient(
         
         for field, value in update_data.items():
             if hasattr(patient, field):
+                # Skip updating CURP if it's empty to avoid unique constraint violation
+                if field == 'curp' and (value == '' or value is None):
+                    continue
+                    
                 # Convert empty strings to None for foreign key fields
                 if field in foreign_key_fields and value == '':
                     setattr(patient, field, None)

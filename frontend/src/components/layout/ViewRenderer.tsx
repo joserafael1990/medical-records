@@ -135,4 +135,3 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
     </Box>
   );
 };
-

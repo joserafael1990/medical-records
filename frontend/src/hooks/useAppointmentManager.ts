@@ -81,7 +81,6 @@ export const useAppointmentManager = (
         console.log('🔄 Loading appointments (doctorProfile effect)...');
         setIsLoading(true);
         const appointmentsData = await apiService.getAppointments();
-        console.log('✅ Appointments loaded (doctorProfile effect):', appointmentsData?.length || 0);
         setAppointments(appointmentsData || []);
       } catch (error) {
         console.error('❌ Error loading appointments (doctorProfile effect):', error);
@@ -103,8 +102,6 @@ export const useAppointmentManager = (
         console.log('🔄 API Service available:', !!apiService);
         console.log('🔄 User context:', user);
         const appointmentsData = await apiService.getAppointments();
-        console.log('✅ Appointments loaded on mount:', appointmentsData?.length || 0);
-        console.log('✅ Appointments data:', appointmentsData);
         setAppointments(appointmentsData || []);
       } catch (error) {
         console.error('❌ Error loading appointments on mount:', error);
@@ -396,7 +393,6 @@ export const useAppointmentManager = (
         const endTime = new Date(appointmentDate.getTime() + doctorDuration * 60000);
 
         // Send CDMX datetime directly to backend
-        console.log('🔍 useAppointmentManager - appointment_type being sent:', formDataToUse.appointment_type);
         const updateData = {
           appointment_date: appointmentDate.toISOString(),
           end_time: endTime.toISOString(),
@@ -540,7 +536,6 @@ export const useAppointmentManager = (
           }
         };
 
-        console.log('🔍 useAppointmentManager - creating appointment with type:', formDataToUse.appointment_type);
         const appointmentData = {
           patient_id: formDataToUse.patient_id,
           doctor_id: user?.doctor?.id || doctorProfile?.id || 0, // Use current logged-in doctor
@@ -559,9 +554,7 @@ export const useAppointmentManager = (
           insurance_covered: formDataToUse.insurance_covered || false
         };
         
-        console.log('🔍 Creating appointment with CDMX native data');
         await apiService.createAgendaAppointment(appointmentData);
-        console.log('✅ Appointment created successfully, refreshing data...');
         showSuccessMessage('Cita creada exitosamente');
         
         // Navigate to appointments view after successful creation
@@ -612,10 +605,8 @@ export const useAppointmentManager = (
             } else {
               refreshData = await apiService.getAppointments();
             }
-            console.log('✅ Appointments refreshed successfully:', refreshData?.length || 0);
             console.log('📋 Sample refreshed appointment:', refreshData?.[0]);
             setAppointments(refreshData);
-            console.log('✅ setAppointments called with:', refreshData?.length || 0, 'appointments');
           } catch (error) {
             console.error('❌ Error refreshing appointments:', error);
           }
@@ -655,7 +646,6 @@ export const useAppointmentManager = (
     try {
       console.log('🔄 Calling apiService.cancelAppointment...');
       await apiService.cancelAppointment(appointmentId.toString());
-      console.log('✅ Appointment cancelled successfully');
       showSuccessMessage('Cita cancelada exitosamente');
       
       // Refresh appointments after cancellation

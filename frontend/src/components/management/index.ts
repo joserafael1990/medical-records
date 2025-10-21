@@ -3,4 +3,3 @@ export { usePatientManagementComponent } from './PatientManagement';
 export { useConsultationManagement } from './ConsultationManagement';
 
 export {};
-

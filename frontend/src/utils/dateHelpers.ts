@@ -1,3 +1,4 @@
+
 export const formatDate = (date: string | Date) => {
   if (!date) return '';
   const d = new Date(date);
@@ -32,8 +33,6 @@ export const formatDateTimeShort = (date: string | Date) => {
     timeZone: 'America/Mexico_City'
   });
 };
-
-
 export const calculateAge = (birthDate: string | Date) => {
   if (!birthDate) return 0;
   const birth = new Date(birthDate);
@@ -59,4 +58,3 @@ export default {
   calculateAge,
   isValidDate
 };
-
