@@ -21,6 +21,7 @@ import {
 } from '@mui/icons-material';
 import CortexLogo from '../common/CortexLogo';
 import { useAuth } from '../../contexts/AuthContext';
+import { useScrollToError } from '../../hooks/useScrollToError';
 
 const LoginView: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -29,6 +30,9 @@ const LoginView: React.FC = () => {
   const [error, setError] = useState('');
   const [errorType, setErrorType] = useState<string>('');
   const { login, isLoading, setShowRegister } = useAuth();
+  
+  // Auto-scroll to error when it appears
+  const errorRef = useScrollToError(error);
 
   const handleClickShowPassword = () => {
     setShowPassword(!showPassword);
@@ -103,6 +107,7 @@ const LoginView: React.FC = () => {
           {/* Error Display with Context */}
           <Collapse in={!!error}>
             <Alert 
+              ref={errorRef}
               severity={errorType === 'validation' ? 'warning' : 'error'}
               sx={{ width: '100%', mb: 2 }}
               icon={errorType === 'validation' ? <WarningIcon /> : undefined}

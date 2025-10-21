@@ -87,7 +87,7 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
           <Box>
             <Typography variant="subtitle1" fontWeight={600}>
               {doctorProfile
-                ? `Dr. ${doctorProfile.first_name} ${doctorProfile.paternal_surname}`
+                ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name} ${doctorProfile.paternal_surname}`
                 : user?.person
                   ? `${user.person.first_name} ${user.person.paternal_surname}`
                   : 'Usuario'}

@@ -465,7 +465,7 @@ class StudyTemplateItem(Base):
 
 # Import schedule models to ensure they are registered with Base
 try:
-    from models.schedule import ScheduleTemplate, ScheduleException, ScheduleSlot
+    from models.schedule import ScheduleTemplate, ScheduleException
     print("✅ Schedule models imported successfully")
 except ImportError as e:
     print(f"⚠️ Warning: Could not import schedule models: {e}")

@@ -44,6 +44,7 @@ import { Patient, AppointmentFormData, PatientFormData } from '../../types';
 import { apiService } from '../../services/api';
 import { ErrorRibbon } from '../common/ErrorRibbon';
 import { useToast } from '../common/ToastNotification';
+import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
 
 // Utility function to calculate age from birth date
 const calculateAge = (birthDate: string): number => {
@@ -118,6 +119,10 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
   const [localFormData, setLocalFormData] = useState<AppointmentFormData>(formData);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [validationError, setValidationError] = useState<string>('');
+  
+  // Auto-scroll to error when it appears
+  const { errorRef: validationErrorRef } = useScrollToErrorInDialog(validationError);
+  const { errorRef: formErrorRef } = useScrollToErrorInDialog(formErrorMessage);
   
   // State for inline patient creation (first visit)
   const [newPatientData, setNewPatientData] = useState({
@@ -590,7 +595,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
       <DialogContent sx={{ pt: 2 }}>
         {/* Error Messages */}
         <Collapse in={!!formErrorMessage}>
-          <Box sx={{ mb: 2 }}>
+          <Box ref={formErrorRef} sx={{ mb: 2 }}>
             <ErrorRibbon message={formErrorMessage} />
           </Box>
         </Collapse>
@@ -598,6 +603,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
         {/* Validation Error Messages */}
         {validationError && (
           <Box 
+            ref={validationErrorRef}
             data-testid="validation-error-message"
             sx={{ 
               mb: 2, 

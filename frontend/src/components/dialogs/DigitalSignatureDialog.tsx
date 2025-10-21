@@ -39,6 +39,7 @@ import {
 } from '@mui/icons-material';
 
 import { apiService } from '../../services/api';
+import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
 
 interface DigitalSignatureDialogProps {
   open: boolean;
@@ -68,6 +69,9 @@ const DigitalSignatureDialog: React.FC<DigitalSignatureDialogProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  
+  // Auto-scroll to error when it appears
+  const { errorRef } = useScrollToErrorInDialog(error);
   
   // Form states
   const [password, setPassword] = useState('');
@@ -697,7 +701,7 @@ const DigitalSignatureDialog: React.FC<DigitalSignatureDialogProps> = ({
         )}
 
         {error && (
-          <Box sx={{ mb: 2, p: 2, bgcolor: 'error.main', borderRadius: 1 }}>
+          <Box ref={errorRef} sx={{ mb: 2, p: 2, bgcolor: 'error.main', borderRadius: 1 }}>
             <Typography color="white">{error}</Typography>
           </Box>
         )}

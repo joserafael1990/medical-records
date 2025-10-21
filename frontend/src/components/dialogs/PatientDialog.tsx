@@ -34,6 +34,7 @@ import { apiService } from '../../services/api';
 import { useToast } from '../common/ToastNotification';
 import { disablePaymentDetection } from '../../utils/disablePaymentDetection';
 import { PrintCertificateButtonPatient } from '../common/PrintCertificateButtonPatient';
+import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
 
 interface EmergencyRelationship {
   code: string;
@@ -98,6 +99,9 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  
+  // Auto-scroll to error when it appears
+  const { errorRef } = useScrollToErrorInDialog(error);
   const [emergencyRelationships, setEmergencyRelationships] = useState<EmergencyRelationship[]>([]);
   const [countries, setCountries] = useState<Array<{id: number, name: string}>>([]);
   const [states, setStates] = useState<Array<{id: number, name: string}>>([]);
@@ -385,6 +389,7 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
       <DialogContent>
         {error && (
           <Box 
+            ref={errorRef}
             data-testid="error-message"
             sx={{ 
               mb: 2, 

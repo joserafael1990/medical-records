@@ -291,16 +291,6 @@ async def health():
     """Health endpoint"""
     return {"status": "healthy", "timestamp": now_cdmx().isoformat()}
 
-@app.get("/api/test-cors")
-async def test_cors():
-    """Test CORS configuration"""
-    return {
-        "status": "cors_ok",
-        "message": "CORS is working correctly",
-        "origin": "allowed",
-        "timestamp": now_cdmx().isoformat()
-    }
-
 # Removed custom OPTIONS handler - let CORS middleware handle preflight requests
 
 # ============================================================================
@@ -1667,26 +1657,6 @@ async def cancel_appointment_via_whatsapp(appointment_id: int, patient_phone: st
         db.rollback()
 
 # ============================================================================
-# TEST ENDPOINTS
-# ============================================================================
-
-@app.post("/api/test-patient-creation")
-async def test_patient_creation():
-    """Test patient creation endpoint - simplified for debugging"""
-    try:
-        # Just return success to test if the endpoint works
-        return {
-            "status": "patient_creation_works",
-            "message": "Patient creation endpoint is accessible",
-            "timestamp": now_cdmx().isoformat()
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Patient creation test failed: {str(e)}"
-        )
-
-# ============================================================================
 # CATALOGS (PUBLIC ENDPOINTS)
 # ============================================================================
 
@@ -2239,10 +2209,68 @@ async def register_doctor(
         # Create doctor
         doctor = crud.create_doctor_safe(db, doctor_data)
         
-        # Login the newly created doctor
-        login_response = auth.login_user(db, doctor_data.email, doctor_data.password)
-        
+        # Commit doctor creation first
         db.commit()
+        api_logger.info(f"Doctor {doctor.id} created successfully")
+        
+        # Save schedule data if provided (in a separate transaction)
+        schedule_data = getattr(doctor_data, 'schedule_data', None)
+        if schedule_data and isinstance(schedule_data, dict):
+            try:
+                api_logger.info(f"Saving schedule data for doctor {doctor.id}", schedule_data=schedule_data)
+                
+                # Map day names to day_of_week indices
+                day_mapping = {
+                    'monday': 0, 'tuesday': 1, 'wednesday': 2, 'thursday': 3,
+                    'friday': 4, 'saturday': 5, 'sunday': 6
+                }
+                
+                for day_name, day_schedule in schedule_data.items():
+                    if day_name in day_mapping and day_schedule and isinstance(day_schedule, dict):
+                        day_of_week = day_mapping[day_name]
+                        is_active = day_schedule.get('is_active', False)
+                        time_blocks = day_schedule.get('time_blocks', [])
+                        
+                        # Only save if active and has time blocks
+                        if is_active and time_blocks and len(time_blocks) > 0:
+                            first_block = time_blocks[0]
+                            start_time = first_block.get('start_time', '09:00')
+                            end_time = first_block.get('end_time', '17:00')
+                            
+                            # Insert into schedule_templates table
+                            insert_query = text("""
+                                INSERT INTO schedule_templates 
+                                (doctor_id, day_of_week, start_time, end_time, consultation_duration, is_active, created_at, updated_at)
+                                VALUES (:doctor_id, :day_of_week, :start_time, :end_time, :consultation_duration, :is_active, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                                ON CONFLICT (doctor_id, day_of_week) 
+                                DO UPDATE SET 
+                                    start_time = EXCLUDED.start_time,
+                                    end_time = EXCLUDED.end_time,
+                                    is_active = EXCLUDED.is_active,
+                                    updated_at = CURRENT_TIMESTAMP
+                            """)
+                            
+                            db.execute(insert_query, {
+                                'doctor_id': doctor.id,
+                                'day_of_week': day_of_week,
+                                'start_time': start_time,
+                                'end_time': end_time,
+                                'consultation_duration': doctor.appointment_duration or 30,
+                                'is_active': is_active
+                            })
+                
+                # Commit schedule data
+                db.commit()
+                api_logger.info(f"Successfully saved schedule data for doctor {doctor.id}")
+            except Exception as schedule_error:
+                # Log the error but don't fail the registration
+                api_logger.error(f"Error saving schedule data for doctor {doctor.id}: {str(schedule_error)}")
+                # Rollback only the schedule transaction
+                db.rollback()
+                # Doctor creation is already committed, so this is OK
+        
+        # Login the newly created doctor (doctor is already in the database)
+        login_response = auth.login_user(db, doctor_data.email, doctor_data.password)
         
         return {
             "success": True,
@@ -2281,6 +2309,8 @@ async def register_doctor(
                 detail=detail
             )
         else:
+            # Log the actual error for debugging
+            api_logger.error(f"Registration error: {str(e)}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Error interno del servidor. Por favor, intente nuevamente."
@@ -4123,113 +4153,15 @@ async def delete_medical_record(
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 # ============================================================================
-# DEBUG/TESTING ENDPOINTS
+# DEBUG ENDPOINTS REMOVED - For production security
 # ============================================================================
-
-@app.get("/api/debug/user-profile")
-async def debug_user_profile(email: str, db: Session = Depends(get_db)):
-    """Debug endpoint to check user profile by email"""
-    user = db.query(Person).filter(Person.email == email).first()
-    if not user:
-        return {"error": "User not found"}
-    
-    specialty_name = None
-    if user.specialty_id:
-        specialty = db.query(Specialty).filter(Specialty.id == user.specialty_id).first()
-        specialty_name = specialty.name if specialty else None
-    
-    return {
-        "user_found": True,
-        "id": user.id,
-        "email": user.email,
-        "name": f"{user.first_name} {user.paternal_surname}",
-        "specialty_id": user.specialty_id,
-        "specialty_name": specialty_name,
-        "title": user.title,
-        "professional_license": user.professional_license,
-        "university": user.university
-    }
-
-# ============================================================================
-# DEBUG ENDPOINTS
-# ============================================================================
-
-@app.get("/api/debug/appointments/{doctor_email}")
-async def debug_appointments(doctor_email: str, db: Session = Depends(get_db)):
-    """Debug endpoint to check appointments for a specific doctor"""
-    try:
-        # Find doctor by email
-        doctor = db.query(Person).filter(Person.email == doctor_email).first()
-        if not doctor:
-            return {"error": f"Doctor with email {doctor_email} not found"}
-        
-        # Get all appointments for this doctor
-        appointments = db.query(Appointment).filter(Appointment.doctor_id == doctor.id).all()
-        
-        result = {
-            "doctor_id": doctor.id,
-            "doctor_name": f"{doctor.first_name} {doctor.paternal_surname}",
-            "doctor_email": doctor.email,
-            "total_appointments": len(appointments),
-            "appointments": []
-        }
-        
-        for apt in appointments:
-            patient = db.query(Person).filter(Person.id == apt.patient_id).first()
-            result["appointments"].append({
-                "id": apt.id,
-                "appointment_date": apt.appointment_date.isoformat() if apt.appointment_date else None,
-                "end_time": apt.end_time.isoformat() if apt.end_time else None,
-                "status": apt.status,
-                "reason": apt.reason,
-                "patient_name": f"{patient.first_name} {patient.paternal_surname}" if patient else "Unknown"
-            })
-        
-        return result
-        
-    except Exception as e:
-        return {"error": str(e)}
-
-@app.get("/api/appointments-temp")
-async def get_appointments_temp(db: Session = Depends(get_db)):
-    """Temporary endpoint without authentication to get appointments with patient names"""
-    try:
-        # Get all appointments with patient information
-        appointments = db.query(Appointment).options(
-            joinedload(Appointment.patient),
-            joinedload(Appointment.doctor)
-        ).all()
-        
-        result = []
-        for apt in appointments:
-            patient_name = "Paciente desconocido"
-            if apt.patient:
-                patient_name = f"{apt.patient.first_name} {apt.patient.paternal_surname}"
-            
-            result.append({
-                "id": apt.id,
-                "appointment_date": apt.appointment_date.isoformat() if apt.appointment_date else None,
-                "end_time": apt.end_time.isoformat() if apt.end_time else None,
-                "status": apt.status,
-                "reason": apt.reason,
-                "patient_id": apt.patient_id,
-                "doctor_id": apt.doctor_id,
-                "patient_name": patient_name,
-                # For compatibility with frontend
-                "date": apt.appointment_date.isoformat() if apt.appointment_date else None,
-                "time": apt.appointment_date.strftime("%H:%M") if apt.appointment_date else None,
-                "patient": {
-                    "first_name": apt.patient.first_name if apt.patient else "",
-                    "paternal_surname": apt.patient.paternal_surname if apt.patient else "",
-                    "maternal_surname": apt.patient.maternal_surname if apt.patient else ""
-                } if apt.patient else None
-            })
-        
-        return result
-        
-    except Exception as e:
-        print(f"❌ Error in get_appointments_temp: {str(e)}")
-        return []
+# The following debug/test endpoints were removed:
+# - /api/debug/user-profile
+# - /api/debug/appointments/{doctor_email}
+# - /api/appointments-temp
+# - /api/test-patient-creation
+# - /api/test-cors
+# These have been removed to prevent unauthorized data access in production
 
 # ============================================================================
 # STUDY CATALOG ENDPOINTS

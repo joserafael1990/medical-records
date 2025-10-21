@@ -27,6 +27,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
 import { apiService } from '../../services/api';
+import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
 
 interface ScheduleConfigDialogProps {
   open: boolean;
@@ -78,6 +79,9 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
   const [success, setSuccess] = useState<string | null>(null);
   const [weeklySchedule, setWeeklySchedule] = useState<WeeklySchedule>({});
   const [hasExistingSchedule, setHasExistingSchedule] = useState(false);
+  
+  // Auto-scroll to error when it appears
+  const { errorRef } = useScrollToErrorInDialog(error);
 
   useEffect(() => {
     if (open) {
@@ -599,7 +603,7 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
 
       <DialogContent>
         {error && (
-          <Box sx={{ mb: 2, p: 2, bgcolor: 'error.main', borderRadius: 1 }}>
+          <Box ref={errorRef} sx={{ mb: 2, p: 2, bgcolor: 'error.main', borderRadius: 1 }}>
             <Typography color="white">{error}</Typography>
           </Box>
         )}

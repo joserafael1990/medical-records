@@ -46,6 +46,7 @@ import CortexLogo from '../common/CortexLogo';
 import { MEDICAL_SPECIALTIES, MEXICAN_STATES, API_CONFIG } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCatalogs } from '../../hooks/useCatalogs';
+import { useScrollToError } from '../../hooks/useScrollToError';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -137,6 +138,9 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
   const { login } = useAuth();
   const { countries, getStatesByCountry, loading: catalogsLoading } = useCatalogs();
   const [selectedOfficeCountry, setSelectedOfficeCountry] = useState<string>('México');
+  
+  // Auto-scroll to error when it appears
+  const errorRef = useScrollToError(error);
 
   // Load specialties on component mount
   useEffect(() => {
@@ -472,6 +476,8 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
         appointment_duration: parseInt(formData.appointment_duration) || null,
         // Optional fields
         office_phone: formData.office_phone || '',
+        // Schedule data
+        schedule_data: formData.scheduleData,
         // System fields
         created_by: `${formData.title} ${formData.first_name} ${formData.paternal_surname}`.trim()
       };
@@ -1273,7 +1279,10 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
             </Typography>
 
             {error && (
-              <Box sx={{ width: '100%', mb: 2, p: 2, bgcolor: 'error.main', borderRadius: 1 }}>
+              <Box 
+                ref={errorRef}
+                sx={{ width: '100%', mb: 2, p: 2, bgcolor: 'error.main', borderRadius: 1 }}
+              >
                 <Typography color="white">{error}</Typography>
               </Box>
             )}

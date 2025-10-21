@@ -69,6 +69,7 @@ import { PrintButtons } from '../common/PrintButtons';
 import { PatientInfo, DoctorInfo, ConsultationInfo, MedicationInfo, StudyInfo } from '../../services/pdfService';
 import { useToast } from '../common/ToastNotification';
 import { disablePaymentDetection } from '../../utils/disablePaymentDetection';
+import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
 // import { useSnackbar } from '../../contexts/SnackbarContext';
 
 // Define ConsultationFormData interface based on the hook
@@ -216,6 +217,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Auto-scroll to error when it appears
+  const { errorRef } = useScrollToErrorInDialog(error);
 
   // New consultation flow states
   const [hasAppointment, setHasAppointment] = useState<boolean | null>(null);
@@ -1221,6 +1225,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       <DialogContent>
         {error && (
           <Box 
+            ref={errorRef}
             data-testid="error-message"
             sx={{ 
               mb: 2, 

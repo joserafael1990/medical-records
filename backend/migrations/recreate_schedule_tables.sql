@@ -1,14 +1,14 @@
 -- ============================================================================
 -- RECREAR TABLAS DE HORARIOS DEL DOCTOR
 -- ============================================================================
--- Este script recrea las 3 tablas necesarias para la configuración de horarios:
+-- Este script recrea las 2 tablas necesarias para la configuración de horarios:
 -- 1. schedule_templates: Plantillas de horarios semanales
 -- 2. schedule_exceptions: Excepciones (vacaciones, días festivos, etc.)
--- 3. schedule_slots: Slots específicos de tiempo para citas
+--
+-- NOTA: schedule_slots fue removida - los slots se generan dinámicamente
 -- ============================================================================
 
 -- Eliminar tablas si existen (para recrear desde cero)
-DROP TABLE IF EXISTS schedule_slots CASCADE;
 DROP TABLE IF EXISTS schedule_exceptions CASCADE;
 DROP TABLE IF EXISTS schedule_templates CASCADE;
 
@@ -109,48 +109,6 @@ CREATE INDEX idx_schedule_exceptions_date ON schedule_exceptions(exception_date)
 CREATE INDEX idx_schedule_exceptions_type ON schedule_exceptions(exception_type);
 
 -- ============================================================================
--- 3. TABLA: schedule_slots
--- ============================================================================
--- Descripción: Slots de tiempo específicos generados a partir de las plantillas
--- Define espacios de tiempo concretos para citas
--- ============================================================================
-
-CREATE TABLE schedule_slots (
-    id SERIAL PRIMARY KEY,
-    doctor_id INTEGER NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
-    
-    -- Fecha y hora específica del slot
-    slot_date TIMESTAMP NOT NULL,
-    start_time TIME NOT NULL,
-    end_time TIME NOT NULL,
-    
-    -- Estado del slot
-    is_available BOOLEAN DEFAULT TRUE,
-    is_blocked BOOLEAN DEFAULT FALSE,
-    
-    -- Tipo de slot
-    slot_type VARCHAR(30) DEFAULT 'consultation' CHECK (
-        slot_type IN ('consultation', 'break', 'lunch', 'blocked')
-    ),
-    
-    -- Metadatos
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW(),
-    
-    -- Constraints
-    CHECK (end_time > start_time),
-    
-    -- Un doctor no puede tener múltiples slots para el mismo horario
-    UNIQUE (doctor_id, slot_date, start_time)
-);
-
--- Índices para mejorar rendimiento
-CREATE INDEX idx_schedule_slots_doctor ON schedule_slots(doctor_id);
-CREATE INDEX idx_schedule_slots_date ON schedule_slots(slot_date);
-CREATE INDEX idx_schedule_slots_available ON schedule_slots(is_available);
-CREATE INDEX idx_schedule_slots_type ON schedule_slots(slot_type);
-
--- ============================================================================
 -- COMENTARIOS EN LAS TABLAS Y COLUMNAS
 -- ============================================================================
 
@@ -162,11 +120,6 @@ COMMENT ON COLUMN schedule_templates.break_duration IS 'Tiempo de descanso entre
 COMMENT ON TABLE schedule_exceptions IS 'Excepciones al horario base: vacaciones, días festivos, etc.';
 COMMENT ON COLUMN schedule_exceptions.exception_type IS 'vacation, holiday, sick_leave, custom, special_hours';
 COMMENT ON COLUMN schedule_exceptions.is_day_off IS 'TRUE si es día libre completo (sin horarios)';
-
-COMMENT ON TABLE schedule_slots IS 'Slots de tiempo específicos para citas, generados desde las plantillas';
-COMMENT ON COLUMN schedule_slots.is_available IS 'TRUE si el slot está disponible para agendar';
-COMMENT ON COLUMN schedule_slots.is_blocked IS 'TRUE si el slot está bloqueado manualmente';
-COMMENT ON COLUMN schedule_slots.slot_type IS 'consultation, break, lunch, blocked';
 
 -- ============================================================================
 -- DATOS DE EJEMPLO (OPCIONAL)
@@ -222,7 +175,6 @@ ORDER BY tablename;
 -- Mostrar la estructura de las tablas
 \d schedule_templates
 \d schedule_exceptions
-\d schedule_slots
 
 -- ============================================================================
 -- FIN DEL SCRIPT

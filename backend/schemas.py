@@ -150,6 +150,9 @@ class DoctorCreate(PersonBase):
     subspecialty: Optional[str] = None
     digital_signature: Optional[str] = None
     professional_seal: Optional[str] = None
+    
+    # Schedule data (for registration)
+    schedule_data: Optional[dict] = None
 
 # Professional data for doctor updates (optional fields for partial updates)
 class DoctorUpdate(BaseSchema):

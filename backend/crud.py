@@ -146,8 +146,8 @@ def create_doctor_safe(db: Session, doctor_data: schemas.DoctorCreate) -> Person
     # Generate doctor code
     person_code = generate_person_code(db, 'doctor')
     
-    # Extract password and hash it
-    doctor_dict = doctor_data.dict(exclude={'person_type', 'password'})
+    # Extract password and hash it, excluding schedule_data which is not a Person field
+    doctor_dict = doctor_data.dict(exclude={'person_type', 'password', 'schedule_data'})
     hashed_password = hash_password(doctor_data.password) if doctor_data.password else None
     
     # Create doctor

@@ -80,34 +80,6 @@ class ScheduleException(Base):
     # doctor = relationship("DoctorProfile", back_populates="schedule_exceptions")
     template = relationship("ScheduleTemplate", back_populates="schedule_exceptions")
 
-class ScheduleSlot(Base):
-    """
-    Slots de tiempo específicos generados a partir de las plantillas
-    """
-    __tablename__ = "schedule_slots"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    doctor_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
-    
-    # Fecha y hora específica del slot
-    slot_date = Column(DateTime, nullable=False)
-    start_time = Column(Time, nullable=False)
-    end_time = Column(Time, nullable=False)
-    
-    # Estado del slot
-    is_available = Column(Boolean, default=True)
-    is_blocked = Column(Boolean, default=False)
-    
-    # Tipo de slot
-    slot_type = Column(String(30), default='consultation')  # 'consultation', 'break', 'lunch', 'blocked'
-    
-    # Metadatos
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    # Relaciones - temporarily commented out to fix initialization
-    # doctor = relationship("DoctorProfile", back_populates="schedule_slots")
-
 # ============================================================================
 # PYDANTIC MODELS
 # ============================================================================
