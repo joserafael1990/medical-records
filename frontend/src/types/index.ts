@@ -288,6 +288,50 @@ export interface ConsultationVitalSign {
   updated_at?: string;
 }
 
+// ============================================================================
+// MEDICATIONS AND PRESCRIPTIONS TYPES
+// ============================================================================
+
+export interface Medication {
+  id: number;
+  name: string;
+  created_at?: string;
+}
+
+export interface ConsultationPrescription {
+  id: number;
+  consultation_id: number;
+  medication_id: number;
+  medication_name: string;
+  dosage: string;
+  frequency: string;
+  duration: string;
+  instructions?: string;
+  quantity?: number;
+  via_administracion?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CreatePrescriptionData {
+  medication_id: number;
+  dosage: string;
+  frequency: string;
+  duration: string;
+  instructions?: string;
+  quantity?: number;
+  via_administracion?: string;
+}
+
+export interface UpdatePrescriptionData {
+  dosage?: string;
+  frequency?: string;
+  duration?: string;
+  instructions?: string;
+  quantity?: number;
+  via_administracion?: string;
+}
+
 export interface VitalSignFormData {
   vital_sign_id: number;
   value: string;

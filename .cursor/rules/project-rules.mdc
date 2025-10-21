@@ -1,0 +1,5 @@
+---
+alwaysApply: true
+---
+Do not generate any documentation unless I required it specifically
+All compilations are always done with the docker instances

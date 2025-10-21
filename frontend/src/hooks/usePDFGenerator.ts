@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { pdfService, PatientInfo, DoctorInfo, ConsultationInfo, MedicationInfo, StudyInfo } from '../services/pdfService';
+import { pdfService, PatientInfo, DoctorInfo, ConsultationInfo, MedicationInfo, StudyInfo, CertificateInfo } from '../services/pdfService';
 
 export const usePDFGenerator = () => {
   const generatePrescriptionPDF = useCallback(async (
@@ -32,8 +32,24 @@ export const usePDFGenerator = () => {
     }
   }, []);
 
+  const generateCertificatePDF = useCallback(async (
+    patient: PatientInfo,
+    doctor: DoctorInfo,
+    consultation: ConsultationInfo,
+    certificate: CertificateInfo
+  ) => {
+    try {
+      await pdfService.generateCertificate(patient, doctor, consultation, certificate);
+      return { success: true, message: 'Constancia generada exitosamente' };
+    } catch (error) {
+      console.error('Error generating certificate PDF:', error);
+      return { success: false, message: 'Error al generar la constancia' };
+    }
+  }, []);
+
   return {
     generatePrescriptionPDF,
-    generateMedicalOrderPDF
+    generateMedicalOrderPDF,
+    generateCertificatePDF
   };
 };

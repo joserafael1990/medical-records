@@ -21,7 +21,7 @@ import uuid
 import crud
 import schemas
 import auth
-from database import get_db, Person, Specialty, Country, State, EmergencyRelationship, Appointment, MedicalRecord, ClinicalStudy, VitalSign, ConsultationVitalSign
+from database import get_db, Person, Specialty, Country, State, EmergencyRelationship, Appointment, MedicalRecord, ClinicalStudy, VitalSign, ConsultationVitalSign, Medication, ConsultationPrescription
 from appointment_service import AppointmentService
 # from routes import schedule  # Temporarily disabled due to table conflicts
 # Temporarily disable schedule_clean import due to model conflicts
@@ -582,6 +582,330 @@ async def delete_consultation_vital_sign(
     except Exception as e:
         print(f"❌ Error deleting consultation vital sign: {e}")
         raise HTTPException(status_code=500, detail="Error deleting consultation vital sign")
+
+# ============================================================================
+# MEDICATIONS AND PRESCRIPTIONS ENDPOINTS
+# ============================================================================
+
+@app.get("/api/medications")
+async def get_medications(
+    search: str = None,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Get all medications or search by name"""
+    print(f"💊 Getting medications. Search term: {search}")
+    
+    try:
+        query = db.query(Medication).order_by(Medication.name)
+        
+        if search:
+            query = query.filter(Medication.name.ilike(f"%{search}%"))
+        
+        medications = query.all()
+        
+        medications_data = []
+        for medication in medications:
+            medication_data = {
+                "id": medication.id,
+                "name": medication.name,
+                "created_at": medication.created_at.isoformat() if medication.created_at else None
+            }
+            medications_data.append(medication_data)
+        
+        print(f"✅ Found {len(medications_data)} medications")
+        return medications_data
+        
+    except Exception as e:
+        print(f"❌ Error getting medications: {e}")
+        raise HTTPException(status_code=500, detail="Error retrieving medications")
+
+@app.post("/api/medications")
+async def create_medication(
+    medication_data: dict,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Create a new medication"""
+    print(f"💊 Creating new medication: {medication_data}")
+    
+    try:
+        # Check if medication already exists
+        existing_medication = db.query(Medication).filter(
+            Medication.name.ilike(medication_data.get('name'))
+        ).first()
+        
+        if existing_medication:
+            # Return existing medication instead of creating duplicate
+            return {
+                "id": existing_medication.id,
+                "name": existing_medication.name,
+                "created_at": existing_medication.created_at.isoformat() if existing_medication.created_at else None
+            }
+        
+        # Create new medication
+        new_medication = Medication(
+            name=medication_data.get('name')
+        )
+        
+        db.add(new_medication)
+        db.commit()
+        db.refresh(new_medication)
+        
+        response_data = {
+            "id": new_medication.id,
+            "name": new_medication.name,
+            "created_at": new_medication.created_at.isoformat() if new_medication.created_at else None
+        }
+        
+        print(f"✅ Created medication {new_medication.id}")
+        return response_data
+        
+    except Exception as e:
+        print(f"❌ Error creating medication: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error creating medication")
+
+@app.get("/api/consultations/{consultation_id}/prescriptions")
+async def get_consultation_prescriptions(
+    consultation_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Get prescriptions for a specific consultation"""
+    print(f"💊 Getting prescriptions for consultation: {consultation_id}")
+    
+    try:
+        # Verify consultation exists and user has access
+        consultation = db.query(MedicalRecord).filter(
+            MedicalRecord.id == consultation_id,
+            MedicalRecord.created_by == current_user.id
+        ).first()
+        
+        if not consultation:
+            print(f"💊 Consultation {consultation_id} not found or no access for user {current_user.id}")
+            return []
+
+        # Get prescriptions for this consultation
+        prescriptions = db.query(ConsultationPrescription).filter(
+            ConsultationPrescription.consultation_id == consultation_id
+        ).all()
+        
+        print(f"💊 Found {len(prescriptions)} prescriptions for consultation {consultation_id}")
+        
+        # Convert to response format
+        prescriptions_data = []
+        for prescription in prescriptions:
+            prescription_data = {
+                "id": prescription.id,
+                "consultation_id": prescription.consultation_id,
+                "medication_id": prescription.medication_id,
+                "medication_name": prescription.medication.name,
+                "dosage": prescription.dosage,
+                "frequency": prescription.frequency,
+                "duration": prescription.duration,
+                "instructions": prescription.instructions,
+                "quantity": prescription.quantity,
+                "via_administracion": prescription.via_administracion,
+                "created_at": prescription.created_at.isoformat() if prescription.created_at else None,
+                "updated_at": prescription.updated_at.isoformat() if prescription.updated_at else None
+            }
+            prescriptions_data.append(prescription_data)
+        
+        return prescriptions_data
+        
+    except Exception as e:
+        print(f"❌ Error getting consultation prescriptions: {e}")
+        raise HTTPException(status_code=500, detail="Error retrieving consultation prescriptions")
+
+@app.post("/api/consultations/{consultation_id}/prescriptions")
+async def create_consultation_prescription(
+    consultation_id: int,
+    prescription_data: dict,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Create a prescription for a consultation"""
+    print(f"💊 Creating prescription for consultation {consultation_id}: {prescription_data}")
+    
+    try:
+        # Verify consultation exists and user has access
+        consultation = db.query(MedicalRecord).filter(
+            MedicalRecord.id == consultation_id,
+            MedicalRecord.created_by == current_user.id
+        ).first()
+        
+        if not consultation:
+            raise HTTPException(status_code=404, detail="Consultation not found or no access")
+        
+        # Verify medication exists
+        medication = db.query(Medication).filter(
+            Medication.id == prescription_data.get('medication_id')
+        ).first()
+        
+        if not medication:
+            raise HTTPException(status_code=404, detail="Medication not found")
+        
+        # Create new prescription
+        new_prescription = ConsultationPrescription(
+            consultation_id=consultation_id,
+            medication_id=prescription_data.get('medication_id'),
+            dosage=prescription_data.get('dosage'),
+            frequency=prescription_data.get('frequency'),
+            duration=prescription_data.get('duration'),
+            instructions=prescription_data.get('instructions'),
+            quantity=prescription_data.get('quantity'),
+            via_administracion=prescription_data.get('via_administracion')
+        )
+        
+        db.add(new_prescription)
+        db.commit()
+        db.refresh(new_prescription)
+        
+        response_data = {
+            "id": new_prescription.id,
+            "consultation_id": new_prescription.consultation_id,
+            "medication_id": new_prescription.medication_id,
+            "medication_name": medication.name,
+            "dosage": new_prescription.dosage,
+            "frequency": new_prescription.frequency,
+            "duration": new_prescription.duration,
+            "instructions": new_prescription.instructions,
+            "quantity": new_prescription.quantity,
+            "via_administracion": new_prescription.via_administracion,
+            "created_at": new_prescription.created_at.isoformat() if new_prescription.created_at else None,
+            "updated_at": new_prescription.updated_at.isoformat() if new_prescription.updated_at else None
+        }
+        
+        print(f"✅ Created prescription {new_prescription.id}")
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error creating consultation prescription: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error creating consultation prescription")
+
+@app.put("/api/consultations/{consultation_id}/prescriptions/{prescription_id}")
+async def update_consultation_prescription(
+    consultation_id: int,
+    prescription_id: int,
+    prescription_data: dict,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Update a prescription"""
+    print(f"💊 Updating prescription {prescription_id} for consultation {consultation_id}")
+    
+    try:
+        # Verify consultation exists and user has access
+        consultation = db.query(MedicalRecord).filter(
+            MedicalRecord.id == consultation_id,
+            MedicalRecord.created_by == current_user.id
+        ).first()
+        
+        if not consultation:
+            raise HTTPException(status_code=404, detail="Consultation not found or no access")
+        
+        # Find the prescription to update
+        prescription = db.query(ConsultationPrescription).filter(
+            ConsultationPrescription.id == prescription_id,
+            ConsultationPrescription.consultation_id == consultation_id
+        ).first()
+        
+        if not prescription:
+            raise HTTPException(status_code=404, detail="Prescription not found")
+        
+        # Update fields
+        if 'dosage' in prescription_data:
+            prescription.dosage = prescription_data['dosage']
+        if 'frequency' in prescription_data:
+            prescription.frequency = prescription_data['frequency']
+        if 'duration' in prescription_data:
+            prescription.duration = prescription_data['duration']
+        if 'instructions' in prescription_data:
+            prescription.instructions = prescription_data['instructions']
+        if 'quantity' in prescription_data:
+            prescription.quantity = prescription_data['quantity']
+        if 'via_administracion' in prescription_data:
+            prescription.via_administracion = prescription_data['via_administracion']
+        
+        prescription.updated_at = datetime.utcnow()
+        
+        db.commit()
+        db.refresh(prescription)
+        
+        response_data = {
+            "id": prescription.id,
+            "consultation_id": prescription.consultation_id,
+            "medication_id": prescription.medication_id,
+            "medication_name": prescription.medication.name,
+            "dosage": prescription.dosage,
+            "frequency": prescription.frequency,
+            "duration": prescription.duration,
+            "instructions": prescription.instructions,
+            "quantity": prescription.quantity,
+            "via_administracion": prescription.via_administracion,
+            "created_at": prescription.created_at.isoformat() if prescription.created_at else None,
+            "updated_at": prescription.updated_at.isoformat() if prescription.updated_at else None
+        }
+        
+        print(f"✅ Updated prescription {prescription.id}")
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error updating consultation prescription: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error updating consultation prescription")
+
+@app.delete("/api/consultations/{consultation_id}/prescriptions/{prescription_id}")
+async def delete_consultation_prescription(
+    consultation_id: int,
+    prescription_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Delete a prescription from a consultation"""
+    print(f"💊 Deleting prescription {prescription_id} from consultation {consultation_id}")
+    
+    try:
+        # Verify consultation exists and user has access
+        consultation = db.query(MedicalRecord).filter(
+            MedicalRecord.id == consultation_id,
+            MedicalRecord.created_by == current_user.id
+        ).first()
+        
+        if not consultation:
+            raise HTTPException(status_code=404, detail="Consultation not found or no access")
+        
+        # Find the prescription to delete
+        prescription = db.query(ConsultationPrescription).filter(
+            ConsultationPrescription.id == prescription_id,
+            ConsultationPrescription.consultation_id == consultation_id
+        ).first()
+        
+        if not prescription:
+            raise HTTPException(status_code=404, detail="Prescription not found")
+        
+        db.delete(prescription)
+        db.commit()
+        
+        print(f"✅ Deleted prescription {prescription_id}")
+        return {"message": "Prescription deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error deleting consultation prescription: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error deleting consultation prescription")
+
+# ============================================================================
+# CLINICAL STUDIES ENDPOINTS
+# ============================================================================
 
 @app.get("/api/clinical-studies/consultation/{consultation_id}")
 async def get_clinical_studies_by_consultation(
@@ -2137,7 +2461,6 @@ async def update_my_profile(
             "rfc": updated_doctor.rfc,
             "birth_city": updated_doctor.birth_city,
             "birth_state_id": updated_doctor.birth_state_id,
-            "foreign_birth_place": updated_doctor.foreign_birth_place,
             
             # Personal Address
             "home_address": updated_doctor.home_address,

@@ -40,6 +40,7 @@ export interface MedicationInfo {
   duration: string;
   instructions?: string;
   quantity?: number;
+  via_administracion?: string;
 }
 
 export interface StudyInfo {
@@ -60,6 +61,11 @@ export interface ConsultationInfo {
   diagnosis?: string;
   prescribed_medications?: string;
   notes?: string;
+}
+
+export interface CertificateInfo {
+  content: string;
+  title?: string;
 }
 
 class PDFService {
@@ -228,8 +234,8 @@ class PDFService {
       tableLineColor: [200, 200, 200]
     });
     
-    // Calculate approximate height: 6 rows * 10px per row + margins
-    return currentY + (doctorData.length * 10) + 10;
+    // Calculate approximate height: 6 rows * 10px per row + reduced margin
+    return currentY + (doctorData.length * 10) + 5;
   }
 
   private addPatientInfo(doc: jsPDF, patient: PatientInfo, startY: number): number {
@@ -270,8 +276,8 @@ class PDFService {
       tableLineColor: [200, 200, 200]
     });
     
-    // Calculate approximate height: 3 rows * 10px per row + margins
-    return currentY + (patientData.length * 10) + 10;
+    // Calculate approximate height: 3 rows * 10px per row + reduced margin
+    return currentY + (patientData.length * 10) + 5;
   }
 
   private addConsultationInfo(doc: jsPDF, consultation: ConsultationInfo, patient: PatientInfo, startY: number): number {
@@ -311,8 +317,8 @@ class PDFService {
       tableLineColor: [200, 200, 200]
     });
     
-    // Calculate approximate height: 4 rows * 10px per row + margins
-    return currentY + (consultationData.length * 10) + 10;
+    // Calculate approximate height: 4 rows * 10px per row + reduced margin
+    return currentY + (consultationData.length * 10) + 5;
   }
 
   async generatePrescription(
@@ -349,16 +355,31 @@ class PDFService {
       doc.setTextColor(0, 0, 0);
       doc.setFont('helvetica', 'bold');
       doc.text('MEDICAMENTOS PRESCRITOS', 20, currentY);
-      currentY += 8;
+      currentY += 6; // Reduced from 8 to 6
       
-      const medicationData = medications.map((med, index) => [
-        index + 1,
-        med.name,
-        med.dosage,
-        med.frequency,
-        med.duration,
-        med.instructions || 'Según indicación médica'
-      ]);
+      const medicationData = medications.map((med, index) => {
+        // Build comprehensive instructions
+        let fullInstructions = med.instructions || 'Según indicación médica';
+        
+        // Add quantity if available
+        if (med.quantity) {
+          fullInstructions += `. Cantidad: ${med.quantity}`;
+        }
+        
+        // Add via de administración if available
+        if (med.via_administracion) {
+          fullInstructions += `. Vía: ${med.via_administracion}`;
+        }
+        
+        return [
+          index + 1,
+          med.name,
+          med.dosage,
+          med.frequency,
+          med.duration,
+          fullInstructions
+        ];
+      });
       
       autoTable(doc, {
         startY: currentY,
@@ -375,13 +396,14 @@ class PDFService {
           4: { cellWidth: 20 },
           5: { cellWidth: 42 }
         },
-        margin: { left: 20, right: 20 },
+        margin: { left: 20, right: 20, bottom: 35 }, // Add bottom margin to prevent footer overlap
         tableLineWidth: 0.1,
-        tableLineColor: [200, 200, 200]
+        tableLineColor: [200, 200, 200],
+        didDrawPage: (data: any) => {
+          // Add footer on each page
+          this.addCortexFooter(doc, doc.internal.getNumberOfPages());
+        }
       });
-      
-      // Add footer
-      this.addCortexFooter(doc, 1);
       
       // Save the PDF
       const fileName = `Receta_${patient.firstName}_${patient.lastName}_${consultation.date.replace(/\//g, '-')}.pdf`;
@@ -419,7 +441,7 @@ class PDFService {
     doc.setTextColor(0, 0, 0);
     doc.setFont('helvetica', 'bold');
     doc.text('ESTUDIOS SOLICITADOS', 20, currentY);
-    currentY += 8;
+    currentY += 6; // Reduced from 8 to 6
     
     const studyData = studies.map((study, index) => [
       index + 1,
@@ -447,9 +469,13 @@ class PDFService {
         5: { cellWidth: 30 },
         6: { cellWidth: 32 }
       },
-      margin: { left: 20, right: 20 },
+      margin: { left: 20, right: 20, bottom: 35 }, // Add bottom margin to prevent footer overlap
       tableLineWidth: 0.1,
-      tableLineColor: [200, 200, 200]
+      tableLineColor: [200, 200, 200],
+      didDrawPage: (data: any) => {
+        // Add footer on each page
+        this.addCortexFooter(doc, doc.internal.getNumberOfPages());
+      }
     });
     
     // Add notes section if available
@@ -466,12 +492,97 @@ class PDFService {
       doc.text(consultation.notes, 20, finalY + 10);
     }
     
-    // Add footer
-    this.addCortexFooter(doc, 1);
-    
     // Save the PDF
     const fileName = `OrdenEstudios_${patient.firstName}_${patient.lastName}_${consultation.date.replace(/\//g, '-')}.pdf`;
     doc.save(fileName);
+  }
+
+  async generateCertificate(
+    patient: PatientInfo,
+    doctor: DoctorInfo,
+    consultation: ConsultationInfo,
+    certificate: CertificateInfo
+  ): Promise<void> {
+    try {
+      const doc = new jsPDF();
+      let currentY = 60;
+      
+      // Add header with custom title or default
+      await this.addCortexHeader(doc, certificate.title || 'CONSTANCIA MÉDICA');
+      
+      // Add certificate content directly (no tables)
+      doc.setFontSize(11);
+      doc.setTextColor(0, 0, 0);
+      doc.setFont('helvetica', 'normal');
+      
+      // Split text into lines that fit the page width
+      const pageWidth = doc.internal.pageSize.width;
+      const maxWidth = pageWidth - 40; // 20px margin on each side
+      const lines = doc.splitTextToSize(certificate.content, maxWidth);
+      
+      // Calculate content height
+      const lineHeight = 7;
+      const contentHeight = lines.length * lineHeight;
+      const pageHeight = doc.internal.pageSize.height;
+      
+      // Check if content fits on page, if not, add new page
+      if (currentY + contentHeight > pageHeight - 80) {
+        doc.addPage();
+        currentY = 20;
+      }
+      
+      // Add the text (no border)
+      doc.text(lines, 20, currentY);
+      
+      currentY += contentHeight + 30;
+      
+      // Add signature line
+      if (currentY + 40 > pageHeight - 40) {
+        doc.addPage();
+        currentY = 20;
+      }
+      
+      // Signature section
+      doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
+      doc.setFont('helvetica', 'normal');
+      
+      const fullDoctorName = this.getFullName(doctor.firstName, doctor.lastName, doctor.maternalSurname);
+      
+      // Draw signature line
+      const centerX = pageWidth / 2;
+      doc.line(centerX - 40, currentY, centerX + 40, currentY);
+      
+      currentY += 6;
+      
+      // Doctor name
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${doctor.title || 'Dr.'} ${fullDoctorName}`, centerX, currentY, { align: 'center' });
+      
+      currentY += 5;
+      
+      // Specialty and license
+      doc.setFont('helvetica', 'normal');
+      if (doctor.specialty) {
+        doc.text(doctor.specialty, centerX, currentY, { align: 'center' });
+        currentY += 5;
+      }
+      
+      if (doctor.license) {
+        doc.text(`Cédula Profesional: ${doctor.license}`, centerX, currentY, { align: 'center' });
+      }
+      
+      // Add footer
+      this.addCortexFooter(doc, 1);
+      
+      // Save the PDF
+      const fileName = `Constancia_${patient.firstName}_${patient.lastName}_${new Date().toISOString().split('T')[0]}.pdf`;
+      doc.save(fileName);
+      console.log('Certificate PDF saved successfully:', fileName);
+    } catch (error) {
+      console.error('Error generating certificate PDF:', error);
+      throw error;
+    }
   }
 }
 

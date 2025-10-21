@@ -33,6 +33,7 @@ import type { Patient, PatientFormData } from '../../types';
 import { apiService } from '../../services/api';
 import { useToast } from '../common/ToastNotification';
 import { disablePaymentDetection } from '../../utils/disablePaymentDetection';
+import { PrintCertificateButtonPatient } from '../common/PrintCertificateButtonPatient';
 
 interface EmergencyRelationship {
   code: string;
@@ -44,13 +45,15 @@ interface PatientDialogProps {
   onClose: () => void;
   patient?: Patient | null;
   onSubmit: (data: PatientFormData) => Promise<void>;
+  doctorProfile?: any;
 }
 
 const PatientDialog: React.FC<PatientDialogProps> = ({
   open,
   onClose,
   patient,
-  onSubmit
+  onSubmit,
+  doctorProfile
 }) => {
   const isEditing = !!patient;
   const { showSuccess, showError } = useToast();
@@ -813,17 +816,61 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
 
       <Divider />
 
-      <DialogActions sx={{ p: 2 }}>
-        <Button onClick={handleClose} color="inherit" disabled={loading}>
-          Cancelar
-        </Button>
-        <Button
-          variant="contained"
-          onClick={handleSubmit}
-          disabled={loading}
-        >
-          {loading ? 'Guardando...' : (isEditing ? 'Actualizar' : 'Crear Paciente')}
-        </Button>
+      <DialogActions sx={{ p: 2, flexDirection: 'column', gap: 2 }}>
+        {/* Generate Certificate Button - only show when editing an existing patient */}
+        {isEditing && patient && doctorProfile && (
+          <Box sx={{ width: '100%', borderBottom: '1px solid #e0e0e0', pb: 2 }}>
+            <PrintCertificateButtonPatient
+              patient={{
+                id: patient.id,
+                firstName: patient.first_name || '',
+                lastName: patient.paternal_surname || '',
+                maternalSurname: patient.maternal_surname || '',
+                dateOfBirth: patient.birth_date || '',
+                gender: patient.gender || '',
+                phone: patient.primary_phone || '',
+                email: patient.email || '',
+                address: patient.home_address || '',
+                city: patient.address_city || '',
+                state: patient.state || '',
+                country: patient.country || ''
+              }}
+              doctor={{
+                id: doctorProfile?.id || 0,
+                firstName: doctorProfile?.first_name || 'Dr.',
+                lastName: doctorProfile?.paternal_surname || 'Usuario',
+                maternalSurname: doctorProfile?.maternal_surname || '',
+                title: doctorProfile?.title || 'Médico',
+                specialty: doctorProfile?.specialty_name || 'No especificada',
+                license: doctorProfile?.professional_license || 'No especificada',
+                university: doctorProfile?.university || 'No especificada',
+                phone: doctorProfile?.office_phone || doctorProfile?.phone || 'No especificado',
+                email: doctorProfile?.email || 'No especificado',
+                address: doctorProfile?.office_address || 'No especificado',
+                city: doctorProfile?.office_city || 'No especificado',
+                state: doctorProfile?.office_state_name || 'No especificado',
+                country: doctorProfile?.office_country_name || 'No especificado'
+              }}
+              variant="outlined"
+              size="medium"
+              fullWidth
+            />
+          </Box>
+        )}
+
+        {/* Action buttons */}
+        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', width: '100%' }}>
+          <Button onClick={handleClose} color="inherit" disabled={loading}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSubmit}
+            disabled={loading}
+          >
+            {loading ? 'Guardando...' : (isEditing ? 'Actualizar' : 'Crear Paciente')}
+          </Button>
+        </Box>
       </DialogActions>
     </Dialog>
   );

@@ -10,6 +10,7 @@
 ### ⚡ Instalación Automática
 - **macOS/Linux**: `./install.sh`
 - **Windows**: `install.bat`
+- **Guía Windows**: [README_WINDOWS.md](README_WINDOWS.md)
 
 ## 📖 Documentación Técnica
 
@@ -19,8 +20,31 @@
 - **[TEST_MEDICAL_RECORDS_GUIDE.md](TEST_MEDICAL_RECORDS_GUIDE.md)** - Guía de pruebas del sistema
 
 ### 🔧 Scripts de Utilidad
+
+#### Scripts para macOS/Linux (.sh)
+- **`install.sh`** - Instalación automática
 - **`migrate-existing-db.sh`** - Migración de base de datos existente
 - **`restart-dev.sh`** - Reinicio rápido para desarrollo
+- **`deploy-constancias.sh`** - Despliegue de funcionalidad de constancias médicas
+
+#### Scripts para Windows (.bat)
+- **`install.bat`** - Instalación automática
+- **`start.bat`** - Iniciar el sistema
+- **`stop.bat`** - Detener el sistema
+- **`restart-dev.bat`** - Reiniciar servicios
+- **`status.bat`** - Ver estado del sistema
+- **`logs.bat`** - Ver logs de servicios
+- **`rebuild.bat`** - Reconstruir proyecto
+- **`deploy-constancias.bat`** - Desplegar constancias
+- **`clean.bat`** - Limpiar proyecto
+- **[SCRIPTS_WINDOWS.md](SCRIPTS_WINDOWS.md)** - Referencia completa de scripts Windows
+
+### 📄 Guías de Funcionalidades
+- **[docs/PDF_GENERATION_GUIDE.md](docs/PDF_GENERATION_GUIDE.md)** - Generación de PDFs (recetas y órdenes)
+- **[docs/CONSTANCIA_MEDICA_GUIDE.md](docs/CONSTANCIA_MEDICA_GUIDE.md)** - Generación de constancias médicas
+- **[COMO_PROBAR_CONSTANCIAS.md](COMO_PROBAR_CONSTANCIAS.md)** - Guía de pruebas de constancias
+- **[CONSTANCIA_IMPLEMENTATION_SUMMARY.md](CONSTANCIA_IMPLEMENTATION_SUMMARY.md)** - Resumen de implementación
+- **[RESUMEN_CONSTANCIAS.md](RESUMEN_CONSTANCIAS.md)** - Resumen ejecutivo de constancias
 
 ## 🎯 Guías por Tipo de Usuario
 
@@ -107,5 +131,8 @@ Una vez completada la instalación, tendrás acceso a:
 - ✅ **Dashboard Analítico**
 - ✅ **Perfil del Doctor**
 - ✅ **Estudios Clínicos**
+- ✅ **Generación de Recetas Médicas (PDF)**
+- ✅ **Órdenes de Estudios Médicos (PDF)**
+- ✅ **Constancias Médicas Personalizadas (PDF)** ⭐ NUEVO
 
 ¡Disfruta usando el Sistema de Historias Clínicas! 🏥✨

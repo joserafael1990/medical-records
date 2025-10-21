@@ -516,6 +516,40 @@ class ConsultationVitalSign(Base):
     consultation = relationship("MedicalRecord")
     vital_sign = relationship("VitalSign", back_populates="consultation_vital_signs")
 
+# ============================================================================
+# MEDICATIONS AND PRESCRIPTIONS
+# ============================================================================
+
+class Medication(Base):
+    __tablename__ = "medications"
+    
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=False, unique=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    consultation_prescriptions = relationship("ConsultationPrescription", back_populates="medication")
+
+class ConsultationPrescription(Base):
+    __tablename__ = "consultation_prescriptions"
+    
+    id = Column(Integer, primary_key=True)
+    consultation_id = Column(Integer, ForeignKey("medical_records.id"), nullable=False)
+    medication_id = Column(Integer, ForeignKey("medications.id"), nullable=False)
+    dosage = Column(String(255), nullable=False)
+    frequency = Column(String(255), nullable=False)
+    duration = Column(String(255), nullable=False)
+    instructions = Column(Text)
+    quantity = Column(Integer)
+    via_administracion = Column(String(100))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    consultation = relationship("MedicalRecord")
+    medication = relationship("Medication", back_populates="consultation_prescriptions")
+
 def init_db():
     """Inicializar base de datos - solo crear tablas que no existen"""
     Base.metadata.create_all(bind=engine)

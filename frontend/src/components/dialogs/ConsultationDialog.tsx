@@ -60,6 +60,9 @@ import ClinicalStudyDialogWithCatalog from './ClinicalStudyDialogWithCatalog';
 import { useClinicalStudies } from '../../hooks/useClinicalStudies';
 import VitalSignsSection from '../common/VitalSignsSection';
 import { useVitalSigns } from '../../hooks/useVitalSigns';
+import PrescriptionsSection from '../common/PrescriptionsSection';
+import { usePrescriptions } from '../../hooks/usePrescriptions';
+import PrescriptionDialog from './PrescriptionDialog';
 import DiagnosisSelector from '../common/DiagnosisSelector';
 import { DiagnosisCatalog } from '../../hooks/useDiagnosisCatalog';
 import { PrintButtons } from '../common/PrintButtons';
@@ -80,7 +83,6 @@ export interface ConsultationFormData {
   physical_examination: string;
   primary_diagnosis: string;
   secondary_diagnoses: string;
-  prescribed_medications: string;
   treatment_plan: string;
   therapeutic_plan: string;
   follow_up_instructions: string;
@@ -180,7 +182,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     physical_examination: '',
     primary_diagnosis: '',
     secondary_diagnoses: '',
-    prescribed_medications: '',
     treatment_plan: '',
     therapeutic_plan: '',
     follow_up_instructions: '',
@@ -333,6 +334,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   // Vital signs management
   const vitalSignsHook = useVitalSigns();
 
+  // Prescriptions management
+  const prescriptionsHook = usePrescriptions();
+
   // State for inline patient creation
   const [newPatientData, setNewPatientData] = useState({
     first_name: '',
@@ -401,7 +405,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           physical_examination: consultation.physical_examination || '',
           primary_diagnosis: consultation.primary_diagnosis || '',
           secondary_diagnoses: consultation.secondary_diagnoses || '',
-          prescribed_medications: consultation.prescribed_medications || '',
           treatment_plan: consultation.treatment_plan || '',
           therapeutic_plan: consultation.therapeutic_plan || '',
           follow_up_instructions: consultation.follow_up_instructions || '',
@@ -425,16 +428,18 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           setSelectedPatient(patient || null);
         }
 
-        // Load clinical studies for existing consultation
+        // Load clinical studies, vital signs and prescriptions for existing consultation
         clinicalStudiesHook.fetchStudies(String(consultation.id));
         vitalSignsHook.fetchConsultationVitalSigns(String(consultation.id));
+        prescriptionsHook.fetchPrescriptions(String(consultation.id));
       } else {
         setFormData(initialFormData);
         setSelectedPatient(null);
         
-        // Clear clinical studies and vital signs for new consultation
+        // Clear clinical studies, vital signs and prescriptions for new consultation
         clinicalStudiesHook.clearTemporaryStudies();
         vitalSignsHook.clearTemporaryVitalSigns();
+        prescriptionsHook.clearTemporaryPrescriptions();
       }
     }
   }, [open, consultation, patients, doctorProfile]);
@@ -1026,7 +1031,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       
       console.log('🔬 Final form data being sent:', finalFormData);
       console.log('🔬 Laboratory results field:', finalFormData.laboratory_results);
-      console.log('🔬 Prescribed medications field:', finalFormData.prescribed_medications);
       console.log('🔬 Family history field:', finalFormData.family_history);
       console.log('🔬 Personal pathological history field:', finalFormData.personal_pathological_history);
       console.log('🔬 Personal non-pathological history field:', finalFormData.personal_non_pathological_history);
@@ -1092,6 +1096,43 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         console.log('🫀 No vital signs to save or consultation not created');
         console.log('🫀 Vital signs count:', vitalSignsHook.temporaryVitalSigns.length);
         console.log('🫀 Consultation ID:', createdConsultation?.id);
+      }
+
+      // Save prescriptions if any were added
+      if (prescriptionsHook.prescriptions.length > 0 && createdConsultation?.id) {
+        console.log('💊 Saving prescriptions for consultation:', createdConsultation.id);
+        console.log('💊 Prescriptions to save:', prescriptionsHook.prescriptions);
+        
+        for (const prescription of prescriptionsHook.prescriptions) {
+          const prescriptionData = {
+            medication_id: prescription.medication_id,
+            dosage: prescription.dosage,
+            frequency: prescription.frequency,
+            duration: prescription.duration,
+            instructions: prescription.instructions,
+            quantity: prescription.quantity,
+            via_administracion: prescription.via_administracion
+          };
+          
+          try {
+            console.log('💊 Prescription data to send:', prescriptionData);
+            await prescriptionsHook.createPrescription(prescriptionData, String(createdConsultation.id));
+          } catch (error) {
+            console.error('❌ Error saving prescription:', error);
+            console.error('❌ Prescription data that failed:', prescriptionData);
+            // Continue with other prescriptions even if one fails
+          }
+        }
+        
+        // Refresh prescriptions to show the newly created ones
+        await prescriptionsHook.fetchPrescriptions(String(createdConsultation.id));
+        
+        // Clear temporary prescriptions after saving
+        prescriptionsHook.clearTemporaryPrescriptions();
+      } else {
+        console.log('💊 No prescriptions to save or consultation not created');
+        console.log('💊 Prescriptions count:', prescriptionsHook.prescriptions.length);
+        console.log('💊 Consultation ID:', createdConsultation?.id);
       }
       
       // Mostrar notificación de éxito según el tipo de operación
@@ -2551,25 +2592,22 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             />
           </Box>
 
-          {/* Prescribed Medications */}
-          <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <NotesIcon sx={{ fontSize: 20 }} />
-              Medicamentos Prescritos
-            </Typography>
-            <TextField
-              name="prescribed_medications"
-              label="Medicamentos prescritos"
-              value={formData.prescribed_medications}
-              onChange={handleChange}
-              size="small"
-              fullWidth
-              multiline
-              rows={3}
-              placeholder="Denominación del medicamento, presentación, dosis, vía de administración, frecuencia, duración del tratamiento, cantidad a surtir"
-              sx={{ mb: 2 }}
-            />
-          </Box>
+          {/* Prescribed Medications Section - Replaced with structured prescriptions */}
+          <PrescriptionsSection
+            consultationId={isEditing && consultation?.id ? String(consultation.id) : "temp_consultation"}
+            prescriptions={prescriptionsHook.prescriptions}
+            isLoading={prescriptionsHook.isLoading}
+            onAddPrescription={prescriptionsHook.openAddDialog}
+            onEditPrescription={prescriptionsHook.openEditDialog}
+            onDeletePrescription={(prescriptionId) => {
+              if (isEditing && consultation?.id) {
+                prescriptionsHook.deletePrescription(prescriptionId, String(consultation.id));
+              } else {
+                // For temporary prescriptions, remove from temporary list
+                prescriptionsHook.deletePrescription(prescriptionId, "temp_consultation");
+              }
+            }}
+          />
 
           {/* Treatment Plan */}
           <Box>
@@ -2670,21 +2708,17 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 type: consultation.type || formData.type,
                 reason: consultation.reason || formData.reason,
                 diagnosis: consultation.primary_diagnosis || formData.primary_diagnosis,
-                prescribed_medications: consultation.prescribed_medications || formData.prescribed_medications,
                 notes: consultation.notes || formData.notes
               }}
-              medications={[
-                // You might want to add medications from the consultation
-                // For now, using sample data
-                {
-                  name: 'Paracetamol',
-                  dosage: '500mg',
-                  frequency: 'Cada 8 horas',
-                  duration: '7 días',
-                  instructions: 'Tomar con alimentos',
-                  quantity: 21
-                }
-              ]}
+              medications={(prescriptionsHook.prescriptions || []).map(prescription => ({
+                name: prescription.medication_name,
+                dosage: prescription.dosage,
+                frequency: prescription.frequency,
+                duration: prescription.duration,
+                instructions: prescription.instructions || '',
+                quantity: prescription.quantity || 0,
+                via_administracion: prescription.via_administracion || undefined
+              }))}
               studies={(clinicalStudiesHook.studies || []).map(study => ({
                 name: study.study_name,
                 type: study.study_type,
@@ -2971,6 +3005,22 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Prescription Dialog */}
+      <PrescriptionDialog
+        open={prescriptionsHook.prescriptionDialogOpen}
+        onClose={prescriptionsHook.closeDialog}
+        onSubmit={prescriptionsHook.submitForm}
+        formData={prescriptionsHook.prescriptionFormData}
+        onFormDataChange={prescriptionsHook.updateFormData}
+        medications={prescriptionsHook.medications}
+        onFetchMedications={prescriptionsHook.fetchMedications}
+        onCreateMedication={prescriptionsHook.createMedication}
+        isEditing={prescriptionsHook.isEditingPrescription}
+        isSubmitting={prescriptionsHook.isSubmitting}
+        error={prescriptionsHook.error}
+        consultationId={isEditing && consultation?.id ? String(consultation.id) : "temp_consultation"}
+      />
     </Dialog>
   );
 };
