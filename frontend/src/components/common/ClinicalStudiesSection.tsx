@@ -55,6 +55,43 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
 }) => {
   const [filteredStudies, setFilteredStudies] = useState<ClinicalStudy[]>([]);
 
+  // Handle view file with authentication
+  const handleViewFile = async (studyId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No authentication token found');
+        alert('No estás autenticado. Por favor, inicia sesión nuevamente.');
+        return;
+      }
+
+      // Fetch the file with authentication
+      const response = await fetch(`http://localhost:8000/api/clinical-studies/${studyId}/file`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al obtener el archivo');
+      }
+
+      // Get the blob
+      const blob = await response.blob();
+      
+      // Create object URL and open in new tab
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      
+      // Clean up after a delay
+      setTimeout(() => window.URL.revokeObjectURL(url), 100);
+    } catch (error) {
+      console.error('Error viewing study file:', error);
+      alert('Error al visualizar el archivo del estudio');
+    }
+  };
+
   useEffect(() => {
     const consultationStudies = studies.filter(study => {
       // Handle both string and number comparisons
@@ -287,21 +324,21 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
                           </Box>
                         </Box>
                         <Box sx={{ display: 'flex', gap: 0.5 }}>
-                          {onViewFile && study.file_path && (
+                          {study.file_path && (
                             <Tooltip title="Ver archivo">
                               <IconButton 
                                 size="small" 
-                                onClick={() => onViewFile(study.file_path!)}
+                                onClick={() => handleViewFile(study.id)}
                               >
                                 <ViewIcon sx={{ fontSize: 16 }} />
                               </IconButton>
                             </Tooltip>
                           )}
-                          {onDownloadFile && study.file_path && study.file_name && (
+                          {study.file_path && study.file_name && (
                             <Tooltip title="Descargar archivo">
                               <IconButton 
                                 size="small" 
-                                onClick={() => onDownloadFile(study.file_path!, study.file_name!)}
+                                onClick={() => handleViewFile(study.id)}
                               >
                                 <DownloadIcon sx={{ fontSize: 16 }} />
                               </IconButton>
@@ -324,11 +361,6 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
                     )}
                   </Box>
                   <Box sx={{ display: 'flex', gap: 0.5 }}>
-                    <Tooltip title="Editar estudio">
-                      <IconButton size="small" onClick={() => onEditStudy(study)}>
-                        <EditIcon sx={{ fontSize: 16 }} />
-                      </IconButton>
-                    </Tooltip>
                     <Tooltip title="Eliminar estudio">
                       <IconButton size="small" color="error" onClick={() => onDeleteStudy(study.id)}>
                         <DeleteIcon sx={{ fontSize: 16 }} />

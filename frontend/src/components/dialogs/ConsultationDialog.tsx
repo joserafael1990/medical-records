@@ -22,7 +22,8 @@ import {
   Paper,
   Grid,
   Card,
-  CardContent
+  CardContent,
+  Chip
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -42,7 +43,11 @@ import {
   Thermostat as ThermostatIcon,
   Scale as ScaleIcon,
   Height as HeightIcon,
-  LocalHospital as HospitalIcon2
+  LocalHospital as HospitalIcon2,
+  Science as ScienceIcon,
+  Upload as UploadIcon,
+  Visibility as ViewIcon,
+  WhatsApp as WhatsAppIcon
 } from '@mui/icons-material';
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -216,6 +221,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   const [isNewPatient, setIsNewPatient] = useState<boolean | null>(null);
   const [showAdvancedPatientData, setShowAdvancedPatientData] = useState<boolean>(false);
   const [patientHasPreviousConsultations, setPatientHasPreviousConsultations] = useState<boolean>(false);
+  const [patientPreviousStudies, setPatientPreviousStudies] = useState<ClinicalStudy[]>([]);
+  const [loadingPreviousStudies, setLoadingPreviousStudies] = useState<boolean>(false);
+  const [sendingWhatsAppStudy, setSendingWhatsAppStudy] = useState<string | null>(null);
   
   // Function to determine if only basic patient data should be shown
   const shouldShowOnlyBasicPatientData = (): boolean => {
@@ -616,8 +624,11 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         const fullPatientData = await apiService.getPatient(patient.id);
         setPatientEditData(fullPatientData);
         
-        // Check if patient has previous consultations
-        await checkPatientPreviousConsultations(patient.id);
+        // Check if patient has previous consultations and load previous studies
+        await Promise.all([
+          checkPatientPreviousConsultations(patient.id),
+          loadPatientPreviousStudies(patient.id)
+        ]);
       } catch (error) {
         console.error('Error loading patient data:', error);
         setPatientEditData(null);
@@ -625,6 +636,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     } else {
       setPatientEditData(null);
       setPatientHasPreviousConsultations(false);
+      setPatientPreviousStudies([]);
     }
     
     if (errors.patient_id) {
@@ -656,6 +668,22 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     }
   };
 
+  // Function to load previous clinical studies for patient
+  const loadPatientPreviousStudies = async (patientId: number) => {
+    console.log('🔬 Loading previous studies for patient ID:', patientId);
+    setLoadingPreviousStudies(true);
+    try {
+      const studies = await apiService.getClinicalStudiesByPatient(String(patientId));
+      console.log('🔬 Previous studies found:', studies.length);
+      setPatientPreviousStudies(studies || []);
+    } catch (error) {
+      console.error('❌ Error loading patient previous studies:', error);
+      setPatientPreviousStudies([]);
+    } finally {
+      setLoadingPreviousStudies(false);
+    }
+  };
+
   // Function to open consultations view with patient filter
   const handleViewPreviousConsultations = () => {
     if (!selectedPatient) return;
@@ -669,6 +697,96 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     const consultationsUrl = `${baseUrl}/?view=consultations&patientId=${patientId}&patientName=${encodeURIComponent(patientName)}`;
     
     window.open(consultationsUrl, '_blank');
+  };
+
+  // Handle update of previous study status
+  const handleUpdateStudyStatus = async (studyId: string, newStatus: string) => {
+    try {
+      await apiService.updateClinicalStudy(studyId, { status: newStatus });
+      showSuccess('Estado del estudio actualizado correctamente');
+      // Reload previous studies
+      if (selectedPatient) {
+        await loadPatientPreviousStudies(selectedPatient.id);
+      }
+    } catch (error) {
+      console.error('Error updating study status:', error);
+      showError('Error al actualizar el estado del estudio');
+    }
+  };
+
+  // Handle upload file for previous study
+  const handleUploadStudyFile = async (studyId: string, file: File) => {
+    try {
+      await apiService.uploadClinicalStudyFile(studyId, file);
+      showSuccess('Archivo cargado correctamente');
+      // Reload previous studies
+      if (selectedPatient) {
+        await loadPatientPreviousStudies(selectedPatient.id);
+      }
+    } catch (error) {
+      console.error('Error uploading study file:', error);
+      showError('Error al cargar el archivo del estudio');
+    }
+  };
+
+  // Handle send WhatsApp notification for study results
+  const handleSendWhatsAppStudyResults = async (studyId: string) => {
+    setSendingWhatsAppStudy(studyId);
+    try {
+      await apiService.sendWhatsAppStudyResults(Number(studyId));
+      showSuccess('Notificación de resultados enviada por WhatsApp');
+    } catch (error: any) {
+      console.error('Error sending WhatsApp notification:', error);
+      showError(error.response?.data?.detail || 'Error al enviar notificación por WhatsApp');
+    } finally {
+      setSendingWhatsAppStudy(null);
+    }
+  };
+
+  // Handle view file for previous study with authentication
+  const handleViewStudyFile = async (studyId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        showError('No estás autenticado. Por favor, inicia sesión nuevamente.');
+        return;
+      }
+
+      // Fetch the file with authentication
+      const response = await fetch(`http://localhost:8000/api/clinical-studies/${studyId}/file`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al obtener el archivo');
+      }
+
+      // Get the blob
+      const blob = await response.blob();
+      
+      // Get filename from Content-Disposition header or use default
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = 'archivo.pdf';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+
+      // Create object URL and open in new tab
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      
+      // Clean up after a delay
+      setTimeout(() => window.URL.revokeObjectURL(url), 100);
+    } catch (error) {
+      console.error('Error viewing study file:', error);
+      showError('Error al visualizar el archivo del estudio');
+    }
   };
 
   const handlePatientDataChange = (field: keyof any, value: any) => {
@@ -716,8 +834,11 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           // Update selectedPatient with fresh data including birth_date and gender
           setSelectedPatient(fullPatientData);
           
-          // Check if patient has previous consultations
-          await checkPatientPreviousConsultations(patient.id);
+          // Check if patient has previous consultations and load previous studies
+          await Promise.all([
+            checkPatientPreviousConsultations(patient.id),
+            loadPatientPreviousStudies(patient.id)
+          ]);
         } catch (error) {
           console.error('❌ Error loading decrypted patient data:', error);
           setPatientEditData(null);
@@ -727,11 +848,13 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         setSelectedPatient(null);
         setPatientEditData(null);
         setPatientHasPreviousConsultations(false);
+        setPatientPreviousStudies([]);
       }
     } else {
       setSelectedPatient(null);
       setPatientEditData(null);
       setPatientHasPreviousConsultations(false);
+      setPatientPreviousStudies([]);
       setFormData((prev: ConsultationFormData) => ({ ...prev, patient_id: '', appointment_id: '' }));
     }
   };
@@ -2107,6 +2230,116 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               helperText={error && !formData.chief_complaint.trim() ? 'Campo requerido' : ''}
             />
           </Box>
+
+          {/* Previous Clinical Studies Section - Show when patient is selected */}
+          {selectedPatient && patientPreviousStudies.length > 0 && (
+            <Box>
+              <Divider sx={{ my: 3 }}>
+                <Chip icon={<ScienceIcon />} label="Estudios Clínicos Previos del Paciente" color="info" />
+              </Divider>
+              
+              {loadingPreviousStudies ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                  <CircularProgress />
+                </Box>
+              ) : (
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
+                  {patientPreviousStudies.map((study) => (
+                    <Card key={study.id} variant="outlined" sx={{ '&:hover': { boxShadow: 2 } }}>
+                      <CardContent>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                          <Box sx={{ flex: 1 }}>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                              {study.study_name}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {study.study_type}
+                            </Typography>
+                          </Box>
+                          <Chip
+                            size="small"
+                            label={study.status === 'pending' ? 'Pendiente' : study.status === 'completed' ? 'Completado' : study.status}
+                            color={study.status === 'completed' ? 'success' : 'warning'}
+                          />
+                        </Box>
+                        
+                        {study.study_description && (
+                          <Typography variant="body2" sx={{ mb: 2 }}>
+                            {study.study_description}
+                          </Typography>
+                        )}
+                        
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          <Typography variant="caption" color="text.secondary">
+                            Solicitado: {new Date(study.ordered_date).toLocaleDateString('es-MX')}
+                          </Typography>
+                          
+                          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
+                            {study.status === 'pending' && (
+                              <>
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  component="label"
+                                  startIcon={<UploadIcon />}
+                                >
+                                  Cargar Archivo
+                                  <input
+                                    type="file"
+                                    hidden
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        handleUploadStudyFile(study.id, file);
+                                      }
+                                    }}
+                                  />
+                                </Button>
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  color="success"
+                                  onClick={() => handleUpdateStudyStatus(study.id, 'completed')}
+                                >
+                                  Marcar Completado
+                                </Button>
+                              </>
+                            )}
+                            
+                            {study.file_path && (
+                              <>
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  color="primary"
+                                  startIcon={<ViewIcon />}
+                                  onClick={() => handleViewStudyFile(study.id)}
+                                >
+                                  Ver Archivo
+                                </Button>
+                                {study.status === 'completed' && (
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    color="success"
+                                    startIcon={<WhatsAppIcon />}
+                                    onClick={() => handleSendWhatsAppStudyResults(study.id)}
+                                    disabled={sendingWhatsAppStudy === study.id}
+                                  >
+                                    {sendingWhatsAppStudy === study.id ? 'Enviando...' : 'Notificar'}
+                                  </Button>
+                                )}
+                              </>
+                            )}
+                          </Box>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Box>
+              )}
+            </Box>
+          )}
 
           {/* First-time consultation fields - shown conditionally */}
           {(() => {

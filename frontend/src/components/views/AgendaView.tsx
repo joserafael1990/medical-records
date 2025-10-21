@@ -28,11 +28,14 @@ import {
   CalendarMonth as CalendarIcon,
   AccessTime as TimeIcon,
   ChevronLeft as ChevronLeftIcon,
-  ChevronRight as ChevronRightIcon
+  ChevronRight as ChevronRightIcon,
+  WhatsApp as WhatsAppIcon
 } from '@mui/icons-material';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, addDays, addWeeks, addMonths, isSameDay, isSameMonth } from 'date-fns';
 import { formatTime } from '../../utils/formatters';
 import { es } from 'date-fns/locale';
+import { apiService } from '../../services/api';
+import { useToast } from '../common/ToastNotification';
 
 interface AgendaViewProps {
   appointments?: any[];
@@ -58,11 +61,32 @@ const AgendaView: React.FC<AgendaViewProps> = ({
   refreshAppointments
 }) => {
   const [localSelectedDate, setLocalSelectedDate] = useState(selectedDate);
+  const { showSuccess, showError } = useToast();
+  const [sendingWhatsApp, setSendingWhatsApp] = useState<number | null>(null);
 
   // Actualizar fecha local cuando cambie la prop
   React.useEffect(() => {
     setLocalSelectedDate(selectedDate);
   }, [selectedDate]);
+
+  // Función para enviar recordatorio por WhatsApp
+  const handleSendWhatsAppReminder = async (appointment: any) => {
+    if (!appointment.id) {
+      showError('No se puede enviar WhatsApp: Cita sin ID');
+      return;
+    }
+
+    setSendingWhatsApp(appointment.id);
+    try {
+      await apiService.sendWhatsAppAppointmentReminder(appointment.id);
+      showSuccess('Recordatorio enviado por WhatsApp exitosamente');
+    } catch (error: any) {
+      console.error('Error sending WhatsApp reminder:', error);
+      showError(error.response?.data?.detail || 'Error al enviar recordatorio por WhatsApp');
+    } finally {
+      setSendingWhatsApp(null);
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -359,6 +383,18 @@ const AgendaView: React.FC<AgendaViewProps> = ({
             />
             <ListItemSecondaryAction>
               <Box sx={{ display: 'flex', gap: 1 }}>
+                {appointment.status === 'confirmed' && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="success"
+                    startIcon={<WhatsAppIcon />}
+                    onClick={() => handleSendWhatsAppReminder(appointment)}
+                    disabled={sendingWhatsApp === appointment.id}
+                  >
+                    {sendingWhatsApp === appointment.id ? 'Enviando...' : 'WhatsApp'}
+                  </Button>
+                )}
                 <Button
                   size="small"
                   startIcon={<EditIcon />}

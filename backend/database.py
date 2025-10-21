@@ -23,6 +23,7 @@ class Country(Base):
     
     id = Column(Integer, primary_key=True)
     name = Column(String(100), nullable=False)
+    phone_code = Column(String(5))  # International dialing code (e.g., +52, +58)
     active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
@@ -99,7 +100,6 @@ class Person(Base):
     # BIRTH LOCATION (NOM-024)
     birth_state_id = Column(Integer, ForeignKey("states.id"))  # For Mexicans
     birth_country_id = Column(Integer, ForeignKey("countries.id"))  # Country of birth
-    foreign_birth_place = Column(String(200))  # For foreigners
     
     # CONTACT INFORMATION
     email = Column(String(100))

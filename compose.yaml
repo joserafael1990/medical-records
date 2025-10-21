@@ -11,6 +11,10 @@ services:
       - appnet
     environment:
       - MEDICAL_ENCRYPTION_KEY=17TAemFFyvzzOSCNdm9fISoQjiWzlWAgVJslIOYaGpU=
+      - META_WHATSAPP_PHONE_ID=883218048200840
+      - META_WHATSAPP_TOKEN=EAAWQZA7pGNZAIBPvT5QCZAkBTor69uZAcxZADbHJRlECBoCcptJHJpk1B8jvXJ2PT0YRlAhHRGYZCPlK7xx12A4Yd2G1CE8VxOOQ182tNXSa4KhzIBgecs2g2st0woFrIHJWe9oHziGZAg4Ud7gCCzlmtGvz9j6pvQskwDcSGY8nF3bSruFEnRgIoKzkjMpTRmRvDwTPPlGNZA9EFhqj7Ac26cydAOu7ZCVJYK9G0529ZBolEJWaUFNPol0KkZD
+      - META_WHATSAPP_BUSINESS_ID=1356461769229365
+      - META_WHATSAPP_API_VERSION=v24.0
     # env_file: ./backend/.env  # Uncomment if .env file exists
     volumes:
       # Mount backend source code for hot reload (exclude venv)

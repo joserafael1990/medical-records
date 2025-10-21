@@ -1191,8 +1191,34 @@ class ApiService {
     return response.data;
   }
 
+  async uploadClinicalStudyFile(studyId: string, file: File): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await this.api.put(`${API_CONFIG.ENDPOINTS.CLINICAL_STUDIES}/${studyId}/upload`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return response.data;
+  }
+
   async deleteClinicalStudy(studyId: string): Promise<void> {
     await this.api.delete(`${API_CONFIG.ENDPOINTS.CLINICAL_STUDIES}/${studyId}`);
+  }
+
+  // ============================================================================
+  // WHATSAPP API - Notificaciones WhatsApp
+  // ============================================================================
+
+  async sendWhatsAppAppointmentReminder(appointmentId: number): Promise<any> {
+    const response = await this.api.post(`/api/whatsapp/appointment-reminder/${appointmentId}`);
+    return response.data;
+  }
+
+  async sendWhatsAppStudyResults(studyId: number): Promise<any> {
+    const response = await this.api.post(`/api/whatsapp/study-results/${studyId}`);
+    return response.data;
   }
 
 }

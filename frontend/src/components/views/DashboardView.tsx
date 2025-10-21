@@ -246,7 +246,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           {todayAppointments.length === 0 ? (
             <Box sx={{ textAlign: 'center', py: 4 }}>
               <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-                No tienes citas programadas para hoy 📅
+                No tienes citas programadas para hoy 
               </Typography>
               <Button
                 variant="contained"

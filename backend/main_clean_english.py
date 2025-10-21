@@ -5,7 +5,7 @@ All endpoints standardized in English
 No legacy code - completely fresh implementation
 """
 
-from fastapi import FastAPI, Depends, HTTPException, status, Query
+from fastapi import FastAPI, Depends, HTTPException, status, Query, File, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session, joinedload
@@ -28,6 +28,7 @@ from appointment_service import AppointmentService
 # from routes.schedule_clean import router as schedule_router
 from encryption import get_encryption_service, MedicalDataEncryption
 from digital_signature import get_digital_signature_service, get_medical_document_signer
+from whatsapp_service import get_whatsapp_service
 from logger import get_logger, setup_logging
 from error_middleware import ErrorHandlingMiddleware
 
@@ -895,6 +896,455 @@ async def delete_clinical_study(
         print(f"❌ Error deleting clinical study {study_id}: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail="Error deleting clinical study")
+
+@app.put("/api/clinical-studies/{study_id}/upload")
+async def upload_clinical_study_file(
+    study_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Upload a file for a clinical study"""
+    print(f"📤 Uploading file for clinical study: {study_id}")
+    
+    try:
+        # Find the study and verify access
+        study = db.query(ClinicalStudy).filter(
+            ClinicalStudy.id == study_id,
+            ClinicalStudy.created_by == current_user.id
+        ).first()
+        
+        if not study:
+            raise HTTPException(status_code=404, detail="Clinical study not found or no access")
+        
+        # Create uploads directory if it doesn't exist
+        upload_dir = os.path.join(os.getcwd(), "uploads", "clinical_studies")
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # Generate unique filename
+        file_extension = os.path.splitext(file.filename)[1]
+        unique_filename = f"{study.study_code}_{uuid.uuid4()}{file_extension}"
+        file_path = os.path.join(upload_dir, unique_filename)
+        
+        # Save file
+        with open(file_path, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
+        
+        # Update study with file information
+        study.file_name = file.filename
+        study.file_path = file_path
+        study.file_type = file.content_type
+        study.file_size = len(content)
+        study.updated_at = datetime.utcnow()
+        
+        db.commit()
+        db.refresh(study)
+        
+        print(f"✅ File uploaded successfully for study {study_id}: {file.filename}")
+        
+        return {
+            "message": "File uploaded successfully",
+            "study_id": study_id,
+            "file_name": file.filename,
+            "file_size": len(content)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error uploading file for study {study_id}: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error uploading file")
+
+@app.get("/api/clinical-studies/{study_id}/file")
+async def get_clinical_study_file(
+    study_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Download/view a clinical study file"""
+    print(f"📥 Getting file for clinical study: {study_id}")
+    
+    try:
+        # Find the study and verify access
+        study = db.query(ClinicalStudy).filter(
+            ClinicalStudy.id == study_id,
+            ClinicalStudy.created_by == current_user.id
+        ).first()
+        
+        if not study:
+            raise HTTPException(status_code=404, detail="Clinical study not found or no access")
+        
+        if not study.file_path:
+            raise HTTPException(status_code=404, detail="No file associated with this study")
+        
+        # Check if file exists
+        if not os.path.exists(study.file_path):
+            raise HTTPException(status_code=404, detail="File not found on server")
+        
+        # Import FileResponse from fastapi.responses
+        from fastapi.responses import FileResponse
+        
+        print(f"✅ Serving file for study {study_id}: {study.file_name}")
+        
+        # Return file with appropriate headers
+        return FileResponse(
+            path=study.file_path,
+            filename=study.file_name,
+            media_type=study.file_type or 'application/octet-stream'
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error getting file for study {study_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error retrieving file")
+
+# ============================================================================
+# WHATSAPP NOTIFICATIONS
+# ============================================================================
+
+@app.post("/api/whatsapp/appointment-reminder/{appointment_id}")
+async def send_whatsapp_appointment_reminder(
+    appointment_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Enviar recordatorio de cita por WhatsApp"""
+    print(f"📱 Sending WhatsApp reminder for appointment: {appointment_id}")
+    
+    try:
+        # Get appointment
+        appointment = db.query(Appointment).filter(
+            Appointment.id == appointment_id,
+            Appointment.doctor_id == current_user.id
+        ).first()
+        
+        if not appointment:
+            raise HTTPException(status_code=404, detail="Appointment not found or no access")
+        
+        # Get patient
+        patient = db.query(Person).filter(Person.id == appointment.patient_id).first()
+        
+        if not patient or not patient.primary_phone:
+            raise HTTPException(status_code=400, detail="Patient phone number not found")
+        
+        # Get doctor title (Dr/Dra)
+        doctor_title = "Dra" if current_user.gender == "Femenino" else "Dr"
+        
+        # Get patient full name
+        patient_full_name = f"{patient.first_name} {patient.paternal_surname}"
+        if patient.maternal_surname:
+            patient_full_name += f" {patient.maternal_surname}"
+        
+        # Format appointment date and time separately
+        # Ejemplo fecha: "25 de Enero de 2024"
+        # Ejemplo hora: "10:30 AM"
+        import locale
+        from datetime import datetime
+        try:
+            locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
+        except:
+            try:
+                locale.setlocale(locale.LC_TIME, 'es_MX.UTF-8')
+            except:
+                pass  # Use default locale if Spanish not available
+        
+        appointment_date = appointment.date.strftime('%d de %B de %Y')
+        appointment_time = appointment.date.strftime('%I:%M %p')
+        
+        # Get office address and country code from doctor's profile
+        office_address = current_user.office_address if current_user.office_address else "Consultorio Médico"
+        
+        # Get country phone code from doctor's office country
+        country_code = '52'  # Default: México
+        if current_user.office_country_id:
+            office_country = db.query(Country).filter(Country.id == current_user.office_country_id).first()
+            if office_country and office_country.phone_code:
+                country_code = office_country.phone_code.replace('+', '')  # Remove + if present
+        
+        print(f"📞 Using country code: +{country_code} for WhatsApp")
+        
+        # Send WhatsApp
+        whatsapp = get_whatsapp_service()
+        result = whatsapp.send_appointment_reminder(
+            patient_phone=patient.primary_phone,
+            patient_full_name=patient_full_name,
+            appointment_date=appointment_date,
+            appointment_time=appointment_time,
+            doctor_title=doctor_title,
+            doctor_full_name=current_user.full_name,
+            office_address=office_address,
+            country_code=country_code
+        )
+        
+        if result['success']:
+            print(f"✅ WhatsApp sent successfully to {patient.primary_phone}")
+            return {
+                "message": "WhatsApp reminder sent successfully",
+                "message_id": result.get('message_id'),
+                "phone": patient.primary_phone
+            }
+        else:
+            print(f"❌ Failed to send WhatsApp: {result.get('error')}")
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Failed to send WhatsApp: {result.get('error')}"
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error sending WhatsApp reminder: {e}")
+        raise HTTPException(status_code=500, detail=f"Error sending WhatsApp: {str(e)}")
+
+@app.post("/api/whatsapp/study-results/{study_id}")
+async def send_whatsapp_study_results_notification(
+    study_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Notificar por WhatsApp que los resultados de un estudio están disponibles"""
+    print(f"📱 Sending WhatsApp notification for study results: {study_id}")
+    
+    try:
+        # Get study
+        study = db.query(ClinicalStudy).filter(
+            ClinicalStudy.id == study_id,
+            ClinicalStudy.created_by == current_user.id
+        ).first()
+        
+        if not study:
+            raise HTTPException(status_code=404, detail="Study not found or no access")
+        
+        # Get patient
+        patient = db.query(Person).filter(Person.id == study.patient_id).first()
+        
+        if not patient or not patient.primary_phone:
+            raise HTTPException(status_code=400, detail="Patient phone number not found")
+        
+        # Generate secure link (placeholder - implement token system later)
+        secure_link = f"http://localhost:3000/patient/studies/{study.id}"
+        
+        # Send WhatsApp
+        whatsapp = get_whatsapp_service()
+        result = whatsapp.send_lab_results_notification(
+            patient_phone=patient.primary_phone,
+            patient_name=patient.first_name,
+            study_name=study.study_name,
+            secure_link=secure_link
+        )
+        
+        if result['success']:
+            print(f"✅ WhatsApp sent successfully to {patient.primary_phone}")
+            return {
+                "message": "WhatsApp notification sent successfully",
+                "message_id": result.get('message_id'),
+                "phone": patient.primary_phone
+            }
+        else:
+            print(f"❌ Failed to send WhatsApp: {result.get('error')}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to send WhatsApp: {result.get('error')}"
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error sending WhatsApp notification: {e}")
+        raise HTTPException(status_code=500, detail=f"Error sending WhatsApp: {str(e)}")
+
+@app.post("/api/whatsapp/test")
+async def test_whatsapp_service(
+    phone: str,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """
+    Endpoint de prueba para WhatsApp
+    Envía un mensaje de prueba usando la plantilla 'hello_world' de Meta
+    """
+    print(f"📱 Testing WhatsApp service to {phone}")
+    
+    try:
+        whatsapp = get_whatsapp_service()
+        # Usar plantilla hello_world que viene pre-aprobada por Meta
+        result = whatsapp.send_template_message(
+            to_phone=phone,
+            template_name='hello_world',
+            template_params=[],
+            language_code='en_US'
+        )
+        
+        if result['success']:
+            return {
+                "message": "Test message sent successfully using 'hello_world' template",
+                "message_id": result.get('message_id'),
+                "phone": phone,
+                "note": "If you didn't receive the message, make sure your number is registered in Meta WhatsApp dashboard"
+            }
+        else:
+            return {
+                "message": "Failed to send test message",
+                "error": result.get('error'),
+                "details": result.get('details')
+            }
+            
+    except Exception as e:
+        print(f"❌ Error testing WhatsApp: {e}")
+        return {
+            "message": "Error testing WhatsApp",
+            "error": str(e)
+        }
+
+# ============================================================================
+# WHATSAPP WEBHOOK - Recibir respuestas de pacientes
+# ============================================================================
+
+@app.get("/api/whatsapp/webhook")
+async def verify_whatsapp_webhook(request: Request):
+    """
+    Verificación del webhook de WhatsApp (requerido por Meta)
+    Meta envía una petición GET para verificar el webhook
+    """
+    # Get query parameters
+    mode = request.query_params.get("hub.mode")
+    token = request.query_params.get("hub.verify_token")
+    challenge = request.query_params.get("hub.challenge")
+    
+    # Verify token (configurable en variables de entorno)
+    verify_token = os.getenv('META_WHATSAPP_VERIFY_TOKEN', 'mi_token_secreto_123')
+    
+    if mode == "subscribe" and token == verify_token:
+        print("✅ WhatsApp webhook verified successfully")
+        return int(challenge)
+    else:
+        print("❌ WhatsApp webhook verification failed")
+        raise HTTPException(status_code=403, detail="Verification failed")
+
+@app.post("/api/whatsapp/webhook")
+async def receive_whatsapp_message(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Recibir mensajes y respuestas de WhatsApp
+    Procesa respuestas a botones de plantillas (ej: cancelar cita)
+    """
+    try:
+        body = await request.json()
+        print(f"📱 Received WhatsApp webhook: {body}")
+        
+        # Verificar que es una notificación de WhatsApp
+        if body.get("object") != "whatsapp_business_account":
+            return {"status": "ignored"}
+        
+        # Procesar entries
+        for entry in body.get("entry", []):
+            for change in entry.get("changes", []):
+                value = change.get("value", {})
+                
+                # Verificar si hay mensajes
+                if "messages" in value:
+                    for message in value["messages"]:
+                        await process_whatsapp_message(message, db)
+                
+                # Verificar si hay respuestas a botones
+                if "statuses" in value:
+                    print(f"📊 Message status update: {value['statuses']}")
+        
+        return {"status": "success"}
+        
+    except Exception as e:
+        print(f"❌ Error processing WhatsApp webhook: {e}")
+        # Siempre devolver 200 para no causar reintentos de Meta
+        return {"status": "error", "message": str(e)}
+
+async def process_whatsapp_message(message: dict, db: Session):
+    """
+    Procesar un mensaje recibido de WhatsApp
+    Detecta respuestas a botones de cancelación
+    """
+    try:
+        message_type = message.get("type")
+        from_phone = message.get("from")
+        
+        print(f"📩 Processing message type: {message_type} from {from_phone}")
+        
+        # Procesar respuesta a botón
+        if message_type == "button":
+            button_payload = message.get("button", {}).get("payload")
+            button_text = message.get("button", {}).get("text")
+            
+            print(f"🔘 Button clicked: {button_text} (payload: {button_payload})")
+            
+            # Si es una cancelación de cita
+            if button_payload and button_payload.startswith("cancel_appointment_"):
+                appointment_id = int(button_payload.replace("cancel_appointment_", ""))
+                await cancel_appointment_via_whatsapp(appointment_id, from_phone, db)
+        
+        # Procesar mensaje de texto (opcional)
+        elif message_type == "text":
+            text = message.get("text", {}).get("body", "")
+            print(f"💬 Text message received: {text}")
+            # Aquí podrías implementar lógica adicional para mensajes de texto
+        
+    except Exception as e:
+        print(f"❌ Error processing WhatsApp message: {e}")
+
+async def cancel_appointment_via_whatsapp(appointment_id: int, patient_phone: str, db: Session):
+    """
+    Cancelar una cita cuando el paciente responde vía WhatsApp
+    """
+    try:
+        print(f"🔄 Canceling appointment {appointment_id} via WhatsApp from {patient_phone}")
+        
+        # Buscar la cita
+        appointment = db.query(Appointment).filter(
+            Appointment.id == appointment_id
+        ).first()
+        
+        if not appointment:
+            print(f"❌ Appointment {appointment_id} not found")
+            return
+        
+        # Verificar que el teléfono corresponde al paciente
+        patient = db.query(Person).filter(Person.id == appointment.patient_id).first()
+        
+        if not patient:
+            print(f"❌ Patient not found for appointment {appointment_id}")
+            return
+        
+        # Normalizar números para comparación
+        whatsapp = get_whatsapp_service()
+        normalized_patient_phone = whatsapp._format_phone_number(patient.primary_phone)
+        normalized_from_phone = whatsapp._format_phone_number(patient_phone)
+        
+        if normalized_patient_phone != normalized_from_phone:
+            print(f"❌ Phone mismatch: {normalized_patient_phone} != {normalized_from_phone}")
+            return
+        
+        # Cancelar la cita
+        appointment.status = 'cancelled'
+        appointment.cancellation_reason = 'Cancelada por el paciente vía WhatsApp'
+        appointment.updated_at = datetime.utcnow()
+        
+        db.commit()
+        
+        print(f"✅ Appointment {appointment_id} cancelled successfully via WhatsApp")
+        
+        # Opcional: Enviar mensaje de confirmación al paciente
+        # (Esto requeriría una plantilla adicional aprobada)
+        
+    except Exception as e:
+        print(f"❌ Error canceling appointment via WhatsApp: {e}")
+        db.rollback()
+
+# ============================================================================
+# TEST ENDPOINTS
+# ============================================================================
 
 @app.post("/api/test-patient-creation")
 async def test_patient_creation():
