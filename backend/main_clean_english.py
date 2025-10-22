@@ -23,9 +23,18 @@ import schemas
 import auth
 from database import get_db, Person, Specialty, Country, State, EmergencyRelationship, Appointment, MedicalRecord, ClinicalStudy, VitalSign, ConsultationVitalSign, Medication, ConsultationPrescription
 from appointment_service import AppointmentService
-# from routes import schedule  # Temporarily disabled due to table conflicts
-# Temporarily disable schedule_clean import due to model conflicts
-# from routes.schedule_clean import router as schedule_router
+# Schedule routes are implemented directly in this file (lines 1726-2100)
+# No separate router needed - endpoints use models/schedule.py models
+from consultation_service import (
+    decrypt_patient_data,
+    decrypt_consultation_data,
+    format_patient_name,
+    format_doctor_name,
+    get_consultation_vital_signs,
+    get_consultation_prescriptions,
+    get_consultation_clinical_studies,
+    build_consultation_response
+)
 from encryption import get_encryption_service, MedicalDataEncryption
 from digital_signature import get_digital_signature_service, get_medical_document_signer
 from whatsapp_service import get_whatsapp_service
@@ -235,10 +244,8 @@ security = HTTPBearer()
 # ROUTER REGISTRATION
 # ============================================================================
 
-# Include schedule router - temporarily disabled
-# app.include_router(schedule.router)
-# Temporarily disabled due to model conflicts
-# app.include_router(schedule_router, tags=["schedule-management"])
+# Schedule endpoints are implemented directly in this file (no separate router)
+# See lines 1726-2100 for schedule implementation
 
 # Include diagnosis catalog routes
 from routes.diagnosis import router as diagnosis_router
@@ -3313,7 +3320,7 @@ async def get_consultations(
     skip: int = 0,
     limit: int = 100
 ):
-    """Get list of consultations"""
+    """Get list of consultations (REFACTORED - uses consultation_service helpers)"""
     try:
         print(f"📋 Fetching consultations from database for doctor {current_user.id}")
         
@@ -3327,97 +3334,46 @@ async def get_consultations(
         
         print(f"📊 Found {len(consultations)} consultations in database")
         
-        # Transform to API format
+        # Transform to API format using helper functions
         result = []
         for consultation in consultations:
-            patient_name = "Paciente No Identificado"
-            if consultation.patient:
-                # Decrypt patient data before constructing name
-                try:
-                    decrypted_first_name = consultation.patient.first_name
-                    decrypted_paternal_surname = consultation.patient.paternal_surname
-                    decrypted_maternal_surname = consultation.patient.maternal_surname
-                    if decrypted_maternal_surname:
-                        decrypted_maternal_surname = decrypted_maternal_surname
-                    
-                    patient_name = f"{decrypted_first_name} {decrypted_paternal_surname} {decrypted_maternal_surname or ''}".strip()
-                except Exception as e:
-                    print(f"⚠️ Could not decrypt patient data for consultation {consultation.id}: {str(e)}")
-                    # Fallback to encrypted values if decryption fails
-                patient_name = f"{consultation.patient.first_name} {consultation.patient.paternal_surname} {consultation.patient.maternal_surname or ''}".strip()
+            # Decrypt patient data
+            decrypted_patient = decrypt_patient_data(consultation.patient, decrypt_sensitive_data) if consultation.patient else {}
+            patient_name = format_patient_name(decrypted_patient) if consultation.patient else "Paciente No Identificado"
             
-            doctor_name = "Doctor"
-            if consultation.doctor:
-                doctor_name = f"{consultation.doctor.first_name} {consultation.doctor.paternal_surname}".strip()
+            # Decrypt consultation data
+            decrypted_consultation = decrypt_consultation_data(consultation, decrypt_sensitive_data)
             
-            consultation_date_iso = consultation.consultation_date.isoformat()
-            # Calculate end_time assuming 30 minutes duration for consultations
-            consultation_end_time = consultation.consultation_date + timedelta(minutes=30)
-
-            # Decrypt consultation data with error handling
-            try:
-                decrypted_consultation_data = decrypt_sensitive_data({
-                "chief_complaint": consultation.chief_complaint,
-                "history_present_illness": consultation.history_present_illness,
-                "family_history": consultation.family_history,
-                "personal_pathological_history": consultation.personal_pathological_history,
-                "personal_non_pathological_history": consultation.personal_non_pathological_history,
-                "physical_examination": consultation.physical_examination,
-                "primary_diagnosis": consultation.primary_diagnosis,
-                "secondary_diagnoses": consultation.secondary_diagnoses,
-                "treatment_plan": consultation.treatment_plan,
-                "follow_up_instructions": consultation.follow_up_instructions,
-                "prognosis": consultation.prognosis,
-                "laboratory_results": consultation.laboratory_results,
-                    "notes": consultation.notes
-                }, "consultation")
-            except Exception as e:
-                print(f"⚠️ Could not decrypt consultation data for consultation {consultation.id}: {str(e)}")
-                # Use original encrypted data if decryption fails
-                decrypted_consultation_data = {
-                    "chief_complaint": consultation.chief_complaint,
-                    "history_present_illness": consultation.history_present_illness,
-                    "family_history": consultation.family_history,
-                    "personal_pathological_history": consultation.personal_pathological_history,
-                    "personal_non_pathological_history": consultation.personal_non_pathological_history,
-                    "physical_examination": consultation.physical_examination,
-                    "primary_diagnosis": consultation.primary_diagnosis,
-                    "secondary_diagnoses": consultation.secondary_diagnoses,
-                    "treatment_plan": consultation.treatment_plan,
-                    "follow_up_instructions": consultation.follow_up_instructions,
-                    "prognosis": consultation.prognosis,
-                    "laboratory_results": consultation.laboratory_results,
-                    "notes": consultation.notes
-                }
-
-            result.append({
-                "id": consultation.id,
-                "patient_id": consultation.patient_id,
-                "consultation_date": consultation_date_iso,
-                "end_time": consultation_end_time.isoformat(),
-                "chief_complaint": decrypted_consultation_data.get("chief_complaint", ""),
-                "history_present_illness": decrypted_consultation_data.get("history_present_illness", ""),
-                "family_history": decrypted_consultation_data.get("family_history", ""),
-                "personal_pathological_history": decrypted_consultation_data.get("personal_pathological_history", ""),
-                "personal_non_pathological_history": decrypted_consultation_data.get("personal_non_pathological_history", ""),
-                "physical_examination": decrypted_consultation_data.get("physical_examination", ""),
-                "primary_diagnosis": decrypted_consultation_data.get("primary_diagnosis", ""),
-                "secondary_diagnoses": decrypted_consultation_data.get("secondary_diagnoses", ""),
-                "treatment_plan": decrypted_consultation_data.get("treatment_plan", ""),
-                "therapeutic_plan": decrypted_consultation_data.get("treatment_plan", ""),  # Alias for compatibility
-                "follow_up_instructions": decrypted_consultation_data.get("follow_up_instructions", ""),
-                "prognosis": decrypted_consultation_data.get("prognosis", ""),
-                "laboratory_results": decrypted_consultation_data.get("laboratory_results", ""),
-                "imaging_studies": decrypted_consultation_data.get("laboratory_results", ""),  # Alias for compatibility
-                "notes": decrypted_consultation_data.get("notes", ""),
-                "interconsultations": decrypted_consultation_data.get("notes", ""),
+            # Get doctor name
+            doctor_name = format_doctor_name(consultation.doctor)
+            
+            # Get related data (vital signs, prescriptions, clinical studies)
+            vital_signs = get_consultation_vital_signs(db, consultation.id)
+            prescriptions = get_consultation_prescriptions(db, consultation.id)
+            clinical_studies = get_consultation_clinical_studies(db, consultation.id)
+            
+            # Build response using helper
+            consultation_response = build_consultation_response(
+                consultation,
+                decrypted_consultation,
+                patient_name,
+                doctor_name,
+                vital_signs,
+                prescriptions,
+                clinical_studies
+            )
+            
+            # Add compatibility fields
+            consultation_response.update({
+                "imaging_studies": decrypted_consultation.get("laboratory_results", ""),
+                "interconsultations": decrypted_consultation.get("notes", ""),
                 "consultation_type": getattr(consultation, 'consultation_type', 'Seguimiento'),
                 "created_by": consultation.created_by,
                 "created_at": consultation.created_at.isoformat(),
-                "patient_name": patient_name,
-                "doctor_name": doctor_name,
-                "date": consultation_date_iso
+                "date": consultation.consultation_date.isoformat()
             })
+            
+            result.append(consultation_response)
         
         print(f"✅ Returning {len(result)} consultations for doctor {current_user.id}")
         return result
