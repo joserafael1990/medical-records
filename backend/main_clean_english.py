@@ -31,9 +31,9 @@ from consultation_service import (
     decrypt_consultation_data,
     format_patient_name,
     format_doctor_name,
-    get_consultation_vital_signs,
-    get_consultation_prescriptions,
-    get_consultation_clinical_studies,
+    get_consultation_vital_signs as get_vital_signs_for_consultation,
+    get_consultation_prescriptions as get_prescriptions_for_consultation,
+    get_consultation_clinical_studies as get_clinical_studies_for_consultation,
     build_consultation_response,
     # Create consultation helpers
     encrypt_consultation_fields,
@@ -3388,9 +3388,9 @@ async def get_consultations(
             doctor_name = format_doctor_name(consultation.doctor)
             
             # Get related data (vital signs, prescriptions, clinical studies)
-            vital_signs = get_consultation_vital_signs(db, consultation.id)
-            prescriptions = get_consultation_prescriptions(db, consultation.id)
-            clinical_studies = get_consultation_clinical_studies(db, consultation.id)
+            vital_signs = get_vital_signs_for_consultation(db, consultation.id)
+            prescriptions = get_prescriptions_for_consultation(db, consultation.id)
+            clinical_studies = get_clinical_studies_for_consultation(db, consultation.id)
             
             # Build response using helper
             consultation_response = build_consultation_response(
