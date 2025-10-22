@@ -2881,22 +2881,12 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                         const height = parseFloat(heightSign.value);
                         
                         if (!isNaN(weight) && !isNaN(height) && height > 0) {
-                          // Auto-calculate BMI if value is empty
-                          const currentValue = vitalSignsHook.vitalSignFormData.value;
-                          if (!currentValue || currentValue === '') {
-                            setTimeout(() => {
-                              const heightInMeters = height / 100;
-                              const bmi = weight / (heightInMeters * heightInMeters);
-                              const bmiRounded = Math.round(bmi * 10) / 10;
-                              vitalSignsHook.updateFormData({ value: bmiRounded.toString() });
-                            }, 0);
-                          }
-                          return `Peso: ${weight} kg, Estatura: ${height} cm. IMC calculado automáticamente.`;
+                          return `Peso: ${weight} kg, Estatura: ${height} cm. Haz clic en "Calcular" para calcular el IMC.`;
                         } else {
-                          return 'Agrega primero el peso y la estatura para calcular automáticamente el IMC.';
+                          return 'Agrega primero el peso y la estatura para calcular el IMC.';
                         }
                       } else {
-                        return 'Agrega primero el peso y la estatura para calcular automáticamente el IMC.';
+                        return 'Agrega primero el peso y la estatura para calcular el IMC.';
                       }
                     }
                     return 'Ingresa el valor medido del signo vital';
@@ -2918,7 +2908,33 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                           vs.vital_sign_name.toLowerCase().includes('altura')
                         );
                         
-                        // Auto-calculate BMI - no button needed
+                        if (weightSign && heightSign) {
+                          const weight = parseFloat(weightSign.value);
+                          const height = parseFloat(heightSign.value);
+                          
+                          if (!isNaN(weight) && !isNaN(height) && height > 0) {
+                            const calculateBMI = () => {
+                              const heightInMeters = height / 100; // Convert cm to meters
+                              const bmi = weight / (heightInMeters * heightInMeters);
+                              const bmiRounded = Math.round(bmi * 10) / 10; // Round to 1 decimal
+                              vitalSignsHook.updateFormData({ value: bmiRounded.toString() });
+                            };
+                            
+                            return (
+                              <Button
+                                size="small"
+                                onClick={calculateBMI}
+                                sx={{ 
+                                  minWidth: 'auto',
+                                  px: 1,
+                                  fontSize: '0.75rem'
+                                }}
+                              >
+                                Calcular
+                              </Button>
+                            );
+                          }
+                        }
                       }
                       return null;
                     })()

@@ -62,6 +62,7 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
     isLoading,
     error,
     fetchStudies,
+    fetchCategories,
     fetchTemplates,
     searchStudies,
     getRecommendations,
@@ -72,6 +73,11 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<StudyCategory | null>(null);
   const [selectedSpecialty, setSelectedSpecialty] = useState(specialty || '');
   const [expandedSection, setExpandedSection] = useState<string | false>('search');
+
+  // Load categories on mount
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
 
   // Filter studies based on current filters
   const filteredStudies = useMemo(() => {
