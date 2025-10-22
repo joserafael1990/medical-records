@@ -24,7 +24,8 @@ import {
   Person as PersonIcon,
   Phone as PhoneIcon,
   Email as EmailIcon,
-  Badge as BadgeIcon
+  Badge as BadgeIcon,
+  Security as SecurityIcon
 } from '@mui/icons-material';
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -34,6 +35,7 @@ import { apiService } from '../../services/api';
 import { useToast } from '../common/ToastNotification';
 import { disablePaymentDetection } from '../../utils/disablePaymentDetection';
 import { PrintCertificateButtonPatient } from '../common/PrintCertificateButtonPatient';
+import { PrivacyConsentDialog } from './PrivacyConsentDialog';
 import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
 
 interface EmergencyRelationship {
@@ -99,6 +101,7 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [privacyConsentDialogOpen, setPrivacyConsentDialogOpen] = useState(false);
   
   // Auto-scroll to error when it appears
   const { errorRef } = useScrollToErrorInDialog(error);
@@ -822,44 +825,59 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
       <Divider />
 
       <DialogActions sx={{ p: 2, flexDirection: 'column', gap: 2 }}>
-        {/* Generate Certificate Button - only show when editing an existing patient */}
-        {isEditing && patient && doctorProfile && (
-          <Box sx={{ width: '100%', borderBottom: '1px solid #e0e0e0', pb: 2 }}>
-            <PrintCertificateButtonPatient
-              patient={{
-                id: patient.id,
-                firstName: patient.first_name || '',
-                lastName: patient.paternal_surname || '',
-                maternalSurname: patient.maternal_surname || '',
-                dateOfBirth: patient.birth_date || '',
-                gender: patient.gender || '',
-                phone: patient.primary_phone || '',
-                email: patient.email || '',
-                address: patient.home_address || '',
-                city: patient.address_city || '',
-                state: patient.state || '',
-                country: patient.country || ''
-              }}
-              doctor={{
-                id: doctorProfile?.id || 0,
-                firstName: doctorProfile?.first_name || 'Dr.',
-                lastName: doctorProfile?.paternal_surname || 'Usuario',
-                maternalSurname: doctorProfile?.maternal_surname || '',
-                title: doctorProfile?.title || 'Médico',
-                specialty: doctorProfile?.specialty_name || 'No especificada',
-                license: doctorProfile?.professional_license || 'No especificada',
-                university: doctorProfile?.university || 'No especificada',
-                phone: doctorProfile?.office_phone || doctorProfile?.phone || 'No especificado',
-                email: doctorProfile?.email || 'No especificado',
-                address: doctorProfile?.office_address || 'No especificado',
-                city: doctorProfile?.office_city || 'No especificado',
-                state: doctorProfile?.office_state_name || 'No especificado',
-                country: doctorProfile?.office_country_name || 'No especificado'
-              }}
+        {/* Additional Actions - only show when editing an existing patient */}
+        {isEditing && patient && (
+          <Box sx={{ width: '100%', borderBottom: '1px solid #e0e0e0', pb: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {/* Privacy Consent Button */}
+            <Button
               variant="outlined"
+              color="primary"
+              startIcon={<SecurityIcon />}
+              onClick={() => setPrivacyConsentDialogOpen(true)}
               size="medium"
               fullWidth
-            />
+            >
+              Consentimiento de Privacidad
+            </Button>
+            
+            {/* Generate Certificate Button */}
+            {doctorProfile && (
+              <PrintCertificateButtonPatient
+                patient={{
+                  id: patient.id,
+                  firstName: patient.first_name || '',
+                  lastName: patient.paternal_surname || '',
+                  maternalSurname: patient.maternal_surname || '',
+                  dateOfBirth: patient.birth_date || '',
+                  gender: patient.gender || '',
+                  phone: patient.primary_phone || '',
+                  email: patient.email || '',
+                  address: patient.home_address || '',
+                  city: patient.address_city || '',
+                  state: patient.state || '',
+                  country: patient.country || ''
+                }}
+                doctor={{
+                  id: doctorProfile?.id || 0,
+                  firstName: doctorProfile?.first_name || 'Dr.',
+                  lastName: doctorProfile?.paternal_surname || 'Usuario',
+                  maternalSurname: doctorProfile?.maternal_surname || '',
+                  title: doctorProfile?.title || 'Médico',
+                  specialty: doctorProfile?.specialty_name || 'No especificada',
+                  license: doctorProfile?.professional_license || 'No especificada',
+                  university: doctorProfile?.university || 'No especificada',
+                  phone: doctorProfile?.office_phone || doctorProfile?.phone || 'No especificado',
+                  email: doctorProfile?.email || 'No especificado',
+                  address: doctorProfile?.office_address || 'No especificado',
+                  city: doctorProfile?.office_city || 'No especificado',
+                  state: doctorProfile?.office_state_name || 'No especificado',
+                  country: doctorProfile?.office_country_name || 'No especificado'
+                }}
+                variant="outlined"
+                size="medium"
+                fullWidth
+              />
+            )}
           </Box>
         )}
 
@@ -877,6 +895,13 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
           </Button>
         </Box>
       </DialogActions>
+
+      {/* Privacy Consent Dialog */}
+      <PrivacyConsentDialog
+        open={privacyConsentDialogOpen}
+        onClose={() => setPrivacyConsentDialogOpen(false)}
+        patient={patient || null}
+      />
     </Dialog>
   );
 };

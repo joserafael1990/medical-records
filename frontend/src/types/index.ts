@@ -338,3 +338,66 @@ export interface VitalSignFormData {
   unit?: string;
   notes?: string;
 }
+
+// ============================================================================
+// PRIVACY AND CONSENT TYPES
+// ============================================================================
+
+export type ConsentMethod = 'whatsapp_button' | 'papel_firmado' | 'tablet_digital' | 'portal_web';
+export type ConsentStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'accepted' | 'rejected' | 'expired';
+
+export interface PrivacyNotice {
+  id: number;
+  version: string;
+  title: string;
+  content: string;
+  summary?: string;
+  effective_date: string;
+  expiration_date?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PrivacyConsent {
+  id: number;
+  patient_id: number;
+  privacy_notice_version: string;
+  consent_date?: string;
+  consent_method: ConsentMethod;
+  consent_status: ConsentStatus;
+  
+  // WhatsApp specific
+  whatsapp_message_id?: string;
+  whatsapp_sent_at?: string;
+  whatsapp_delivered_at?: string;
+  whatsapp_read_at?: string;
+  whatsapp_response_at?: string;
+  whatsapp_response_text?: string;
+  
+  // Consent types
+  data_collection_consent: boolean;
+  data_processing_consent: boolean;
+  data_sharing_consent: boolean;
+  marketing_consent: boolean;
+  
+  // Digital signature
+  digital_signature?: string;
+  signature_ip?: string;
+  
+  // Revocation
+  is_revoked: boolean;
+  revoked_date?: string;
+  revocation_reason?: string;
+  
+  // Metadata
+  metadata?: any;
+  
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SendPrivacyNoticeRequest {
+  patient_id: number;
+  method?: ConsentMethod;
+}
