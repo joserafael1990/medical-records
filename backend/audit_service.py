@@ -10,7 +10,10 @@ from sqlalchemy.orm import Session
 from database import AuditLog, Person
 from datetime import datetime
 from fastapi import Request
-from logger import api_logger, security_logger
+from logger import get_logger
+
+# Create logger for audit service
+audit_logger = get_logger("cortex.audit")
 
 # ============================================================================
 # AUDIT SERVICE
@@ -104,7 +107,7 @@ class AuditService:
             # Log crítico también en consola
             if security_level in ['WARNING', 'CRITICAL']:
                 emoji = '⚠️' if security_level == 'WARNING' else '🚨'
-                security_logger.warning(
+                audit_logger.warning(
                     f"{emoji} [{security_level}] {action} by {user.email if user else 'SYSTEM'}: {changes_summary}",
                     user_id=user.id if user else None,
                     operation=operation_type,
@@ -115,7 +118,7 @@ class AuditService:
             # Si falla la auditoría, no queremos romper la operación principal
             # Pero sí lo logueamos
             print(f"❌ Error al registrar auditoría: {str(e)}")
-            api_logger.error(f"Failed to create audit log: {str(e)}")
+            audit_logger.error(f"Failed to create audit log: {str(e)}")
     
     @staticmethod
     def _generate_changes_summary(old_values: Optional[Dict], new_values: Optional[Dict]) -> str:
