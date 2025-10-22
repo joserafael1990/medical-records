@@ -4880,17 +4880,372 @@ async def get_patient_consent_status(
             }
         
         return {
-            "has_consent": consent.consent_status == 'accepted',
+            "has_consent": consent.consent_status == 'accepted' and not consent.is_revoked,
             "status": consent.consent_status,
-            "consent_id": consent.id,
-            "consent_method": consent.consent_method,
-            "sent_at": consent.whatsapp_sent_at.isoformat() if consent.whatsapp_sent_at else None,
-            "accepted_at": consent.consent_date.isoformat() if consent.consent_date else None,
-            "message_id": consent.whatsapp_message_id
+            "consent": {
+                "id": consent.id,
+                "patient_id": consent.patient_id,
+                "privacy_notice_version": consent.privacy_notice_version,
+                "consent_date": consent.consent_date.isoformat() if consent.consent_date else None,
+                "consent_method": consent.consent_method,
+                "consent_status": consent.consent_status,
+                "whatsapp_message_id": consent.whatsapp_message_id,
+                "whatsapp_sent_at": consent.whatsapp_sent_at.isoformat() if consent.whatsapp_sent_at else None,
+                "whatsapp_delivered_at": consent.whatsapp_delivered_at.isoformat() if consent.whatsapp_delivered_at else None,
+                "whatsapp_read_at": consent.whatsapp_read_at.isoformat() if consent.whatsapp_read_at else None,
+                "whatsapp_response_at": consent.whatsapp_response_at.isoformat() if consent.whatsapp_response_at else None,
+                "data_collection_consent": consent.data_collection_consent,
+                "data_processing_consent": consent.data_processing_consent,
+                "data_sharing_consent": consent.data_sharing_consent,
+                "marketing_consent": consent.marketing_consent,
+                "is_revoked": consent.is_revoked,
+                "revoked_date": consent.revoked_date.isoformat() if consent.revoked_date else None,
+                "revocation_reason": consent.revocation_reason,
+                "created_at": consent.created_at.isoformat(),
+                "updated_at": consent.updated_at.isoformat()
+            }
         }
     except HTTPException:
         raise
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/privacy/revoke")
+async def revoke_consent(
+    request: Request,
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """
+    Revocar consentimiento de privacidad de un paciente
+    """
+    try:
+        patient_id = data.get('patient_id')
+        revocation_reason = data.get('revocation_reason', 'Revocado por el médico')
+        
+        # Verificar acceso
+        if current_user.person_type == 'doctor':
+            consultation = db.query(MedicalRecord).filter(
+                MedicalRecord.patient_id == patient_id,
+                MedicalRecord.doctor_id == current_user.id
+            ).first()
+            
+            if not consultation:
+                raise HTTPException(status_code=403, detail="No tiene acceso a este paciente")
+        
+        # Buscar consentimiento activo
+        consent = db.query(PrivacyConsent).filter(
+            PrivacyConsent.patient_id == patient_id,
+            PrivacyConsent.is_revoked == False
+        ).order_by(PrivacyConsent.created_at.desc()).first()
+        
+        if not consent:
+            raise HTTPException(status_code=404, detail="No se encontró consentimiento activo para este paciente")
+        
+        # Revocar
+        consent.is_revoked = True
+        consent.revoked_date = datetime.utcnow()
+        consent.revocation_reason = revocation_reason
+        consent.updated_at = datetime.utcnow()
+        
+        db.commit()
+        
+        # Registrar en audit log
+        audit_service.log_action(
+            db=db,
+            action='privacy_consent_revoked',
+            entity_type='privacy_consent',
+            entity_id=consent.id,
+            user_id=current_user.id,
+            user_type=current_user.person_type,
+            changes={'revocation_reason': revocation_reason},
+            ip_address=request.client.host,
+            summary=f"Consentimiento revocado para paciente {patient_id}",
+            security_level='WARNING'
+        )
+        
+        api_logger.info(
+            f"✅ Consent revoked for patient {patient_id}",
+            consent_id=consent.id,
+            doctor_id=current_user.id
+        )
+        
+        return {
+            "success": True,
+            "message": "Consentimiento revocado exitosamente",
+            "consent_id": consent.id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error(f"Error revoking consent: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/privacy/arco-request")
+async def create_arco_request(
+    request: Request,
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """
+    Crear solicitud ARCO (Acceso, Rectificación, Cancelación, Oposición)
+    """
+    try:
+        patient_id = data.get('patient_id')
+        request_type = data.get('request_type')  # 'access', 'rectification', 'cancellation', 'opposition'
+        description = data.get('description', '')
+        contact_email = data.get('contact_email')
+        contact_phone = data.get('contact_phone')
+        
+        if not patient_id or not request_type:
+            raise HTTPException(status_code=400, detail="patient_id y request_type son requeridos")
+        
+        if request_type not in ['access', 'rectification', 'cancellation', 'opposition']:
+            raise HTTPException(status_code=400, detail="request_type inválido")
+        
+        # Verificar acceso
+        if current_user.person_type == 'doctor':
+            consultation = db.query(MedicalRecord).filter(
+                MedicalRecord.patient_id == patient_id,
+                MedicalRecord.doctor_id == current_user.id
+            ).first()
+            
+            if not consultation:
+                raise HTTPException(status_code=403, detail="No tiene acceso a este paciente")
+        
+        # Crear solicitud ARCO
+        arco_request = ARCORequest(
+            patient_id=patient_id,
+            request_type=request_type,
+            description=description,
+            status='pending',
+            contact_email=contact_email,
+            contact_phone=contact_phone,
+            requested_by=current_user.id,
+            requested_at=datetime.utcnow(),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        
+        db.add(arco_request)
+        db.commit()
+        db.refresh(arco_request)
+        
+        # Registrar en audit log
+        audit_service.log_action(
+            db=db,
+            action='arco_request_created',
+            entity_type='arco_request',
+            entity_id=arco_request.id,
+            user_id=current_user.id,
+            user_type=current_user.person_type,
+            changes={'request_type': request_type, 'patient_id': patient_id},
+            ip_address=request.client.host,
+            summary=f"Solicitud ARCO ({request_type}) creada para paciente {patient_id}",
+            security_level='INFO'
+        )
+        
+        api_logger.info(
+            f"✅ ARCO request created: {request_type}",
+            request_id=arco_request.id,
+            patient_id=patient_id,
+            doctor_id=current_user.id
+        )
+        
+        return {
+            "success": True,
+            "message": f"Solicitud ARCO ({request_type}) creada exitosamente",
+            "arco_request": {
+                "id": arco_request.id,
+                "patient_id": arco_request.patient_id,
+                "request_type": arco_request.request_type,
+                "description": arco_request.description,
+                "status": arco_request.status,
+                "requested_at": arco_request.requested_at.isoformat(),
+                "created_at": arco_request.created_at.isoformat()
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error(f"Error creating ARCO request: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/privacy/arco-requests/{patient_id}")
+async def get_arco_requests(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """
+    Obtener todas las solicitudes ARCO de un paciente
+    """
+    try:
+        # Verificar acceso
+        if current_user.person_type == 'doctor':
+            consultation = db.query(MedicalRecord).filter(
+                MedicalRecord.patient_id == patient_id,
+                MedicalRecord.doctor_id == current_user.id
+            ).first()
+            
+            if not consultation:
+                raise HTTPException(status_code=403, detail="No tiene acceso a este paciente")
+        
+        # Obtener solicitudes ARCO
+        arco_requests = db.query(ARCORequest).filter(
+            ARCORequest.patient_id == patient_id
+        ).order_by(ARCORequest.created_at.desc()).all()
+        
+        return {
+            "arco_requests": [
+                {
+                    "id": req.id,
+                    "patient_id": req.patient_id,
+                    "request_type": req.request_type,
+                    "description": req.description,
+                    "status": req.status,
+                    "contact_email": req.contact_email,
+                    "contact_phone": req.contact_phone,
+                    "requested_at": req.requested_at.isoformat() if req.requested_at else None,
+                    "resolved_at": req.resolved_at.isoformat() if req.resolved_at else None,
+                    "resolution_notes": req.resolution_notes,
+                    "created_at": req.created_at.isoformat(),
+                    "updated_at": req.updated_at.isoformat()
+                }
+                for req in arco_requests
+            ]
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error(f"Error getting ARCO requests: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/privacy/arco-request/{request_id}")
+async def update_arco_request(
+    request_id: int,
+    request: Request,
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """
+    Actualizar estado de una solicitud ARCO
+    """
+    try:
+        status = data.get('status')  # 'in_progress', 'resolved', 'rejected'
+        resolution_notes = data.get('resolution_notes')
+        
+        if not status:
+            raise HTTPException(status_code=400, detail="status es requerido")
+        
+        if status not in ['pending', 'in_progress', 'resolved', 'rejected']:
+            raise HTTPException(status_code=400, detail="status inválido")
+        
+        # Obtener solicitud ARCO
+        arco_request = db.query(ARCORequest).filter(
+            ARCORequest.id == request_id
+        ).first()
+        
+        if not arco_request:
+            raise HTTPException(status_code=404, detail="Solicitud ARCO no encontrada")
+        
+        # Verificar acceso
+        if current_user.person_type == 'doctor':
+            consultation = db.query(MedicalRecord).filter(
+                MedicalRecord.patient_id == arco_request.patient_id,
+                MedicalRecord.doctor_id == current_user.id
+            ).first()
+            
+            if not consultation:
+                raise HTTPException(status_code=403, detail="No tiene acceso a este paciente")
+        
+        # Actualizar
+        old_status = arco_request.status
+        arco_request.status = status
+        if resolution_notes:
+            arco_request.resolution_notes = resolution_notes
+        if status == 'resolved':
+            arco_request.resolved_at = datetime.utcnow()
+        arco_request.updated_at = datetime.utcnow()
+        
+        db.commit()
+        
+        # Registrar en audit log
+        audit_service.log_action(
+            db=db,
+            action='arco_request_updated',
+            entity_type='arco_request',
+            entity_id=arco_request.id,
+            user_id=current_user.id,
+            user_type=current_user.person_type,
+            changes={'old_status': old_status, 'new_status': status},
+            ip_address=request.client.host,
+            summary=f"Solicitud ARCO {request_id} actualizada: {old_status} → {status}",
+            security_level='INFO'
+        )
+        
+        api_logger.info(
+            f"✅ ARCO request updated: {old_status} → {status}",
+            request_id=request_id,
+            doctor_id=current_user.id
+        )
+        
+        return {
+            "success": True,
+            "message": "Solicitud ARCO actualizada exitosamente",
+            "arco_request": {
+                "id": arco_request.id,
+                "status": arco_request.status,
+                "resolution_notes": arco_request.resolution_notes,
+                "resolved_at": arco_request.resolved_at.isoformat() if arco_request.resolved_at else None,
+                "updated_at": arco_request.updated_at.isoformat()
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error(f"Error updating ARCO request: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/privacy/public-notice")
+async def get_public_privacy_notice(db: Session = Depends(get_db)):
+    """
+    Obtener el aviso de privacidad público (sin autenticación)
+    Para mostrar en página pública
+    """
+    try:
+        # Obtener aviso activo
+        notice = db.query(PrivacyNotice).filter(
+            PrivacyNotice.is_active == True
+        ).order_by(PrivacyNotice.effective_date.desc()).first()
+        
+        if not notice:
+            raise HTTPException(status_code=404, detail="No hay aviso de privacidad activo")
+        
+        return {
+            "id": notice.id,
+            "version": notice.version,
+            "title": notice.title,
+            "content": notice.content,
+            "summary": notice.summary,
+            "effective_date": notice.effective_date.isoformat(),
+            "expiration_date": notice.expiration_date.isoformat() if notice.expiration_date else None,
+            "is_active": notice.is_active,
+            "created_at": notice.created_at.isoformat(),
+            "updated_at": notice.updated_at.isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error(f"Error getting public privacy notice: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================

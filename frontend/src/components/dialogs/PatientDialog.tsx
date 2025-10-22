@@ -25,7 +25,8 @@ import {
   Phone as PhoneIcon,
   Email as EmailIcon,
   Badge as BadgeIcon,
-  Security as SecurityIcon
+  Security as SecurityIcon,
+  Gavel as GavelIcon
 } from '@mui/icons-material';
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -36,6 +37,7 @@ import { useToast } from '../common/ToastNotification';
 import { disablePaymentDetection } from '../../utils/disablePaymentDetection';
 import { PrintCertificateButtonPatient } from '../common/PrintCertificateButtonPatient';
 import { PrivacyConsentDialog } from './PrivacyConsentDialog';
+import { ARCORequestDialog } from './ARCORequestDialog';
 import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
 
 interface EmergencyRelationship {
@@ -102,6 +104,7 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
   const [error, setError] = useState('');
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [privacyConsentDialogOpen, setPrivacyConsentDialogOpen] = useState(false);
+  const [arcoRequestDialogOpen, setArcoRequestDialogOpen] = useState(false);
   
   // Auto-scroll to error when it appears
   const { errorRef } = useScrollToErrorInDialog(error);
@@ -840,6 +843,18 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
               Consentimiento de Privacidad
             </Button>
             
+            {/* ARCO Rights Button */}
+            <Button
+              variant="outlined"
+              color="secondary"
+              startIcon={<GavelIcon />}
+              onClick={() => setArcoRequestDialogOpen(true)}
+              size="medium"
+              fullWidth
+            >
+              Derechos ARCO
+            </Button>
+            
             {/* Generate Certificate Button */}
             {doctorProfile && (
               <PrintCertificateButtonPatient
@@ -883,16 +898,16 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
 
         {/* Action buttons */}
         <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', width: '100%' }}>
-          <Button onClick={handleClose} color="inherit" disabled={loading}>
-            Cancelar
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleSubmit}
-            disabled={loading}
-          >
-            {loading ? 'Guardando...' : (isEditing ? 'Actualizar' : 'Crear Paciente')}
-          </Button>
+        <Button onClick={handleClose} color="inherit" disabled={loading}>
+          Cancelar
+        </Button>
+        <Button
+          variant="contained"
+          onClick={handleSubmit}
+          disabled={loading}
+        >
+          {loading ? 'Guardando...' : (isEditing ? 'Actualizar' : 'Crear Paciente')}
+        </Button>
         </Box>
       </DialogActions>
 
@@ -900,6 +915,13 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
       <PrivacyConsentDialog
         open={privacyConsentDialogOpen}
         onClose={() => setPrivacyConsentDialogOpen(false)}
+        patient={patient || null}
+      />
+
+      {/* ARCO Request Dialog */}
+      <ARCORequestDialog
+        open={arcoRequestDialogOpen}
+        onClose={() => setArcoRequestDialogOpen(false)}
         patient={patient || null}
       />
     </Dialog>

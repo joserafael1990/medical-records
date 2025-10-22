@@ -401,3 +401,39 @@ export interface SendPrivacyNoticeRequest {
   patient_id: number;
   method?: ConsentMethod;
 }
+
+export type ARCORequestType = 'access' | 'rectification' | 'cancellation' | 'opposition';
+export type ARCORequestStatus = 'pending' | 'in_progress' | 'resolved' | 'rejected';
+
+export interface ARCORequest {
+  id: number;
+  patient_id: number;
+  request_type: ARCORequestType;
+  description: string;
+  status: ARCORequestStatus;
+  contact_email?: string;
+  contact_phone?: string;
+  requested_at?: string;
+  resolved_at?: string;
+  resolution_notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateARCORequestData {
+  patient_id: number;
+  request_type: ARCORequestType;
+  description: string;
+  contact_email?: string;
+  contact_phone?: string;
+}
+
+export interface UpdateARCORequestData {
+  status: ARCORequestStatus;
+  resolution_notes?: string;
+}
+
+export interface RevokeConsentRequest {
+  patient_id: number;
+  revocation_reason: string;
+}

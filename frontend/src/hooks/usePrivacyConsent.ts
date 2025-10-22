@@ -15,6 +15,7 @@ interface UsePrivacyConsentReturn {
   // Actions
   fetchConsentStatus: (patientId: number) => Promise<void>;
   sendWhatsAppNotice: (patientId: number, patientPhone: string) => Promise<void>;
+  revokeConsent: (patientId: number, reason: string) => Promise<void>;
   clearError: () => void;
   
   // Status helpers
@@ -87,6 +88,44 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
       setIsLoading(false);
     }
   }, []);
+
+  /**
+   * Revoke consent
+   */
+  const revokeConsent = useCallback(async (patientId: number, reason: string) => {
+    console.log('🚫 Revoking consent for patient:', patientId);
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const payload = {
+        patient_id: patientId,
+        revocation_reason: reason
+      };
+
+      const response = await apiService.post('/api/privacy/revoke', payload);
+      console.log('✅ Consent revoked:', response);
+      
+      // Update consent state
+      if (consent) {
+        setConsent({
+          ...consent,
+          is_revoked: true,
+          revoked_date: new Date().toISOString(),
+          revocation_reason: reason
+        });
+      }
+
+      return response;
+    } catch (err: any) {
+      const errorMsg = err?.detail || err?.message || 'Error al revocar el consentimiento';
+      console.error('❌ Error revoking consent:', errorMsg);
+      setError(errorMsg);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [consent]);
 
   /**
    * Clear error state
@@ -164,6 +203,7 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
     error,
     fetchConsentStatus,
     sendWhatsAppNotice,
+    revokeConsent,
     clearError,
     hasAcceptedConsent,
     consentStatusText,

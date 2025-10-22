@@ -30,7 +30,8 @@ import {
   List,
   ListItem,
   ListItemIcon,
-  ListItemText
+  ListItemText,
+  TextField
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -45,6 +46,7 @@ import {
   Info as InfoIcon
 } from '@mui/icons-material';
 import { usePrivacyConsent } from '../../hooks/usePrivacyConsent';
+import { useConsentExpirationCheck } from '../../hooks/useConsentExpirationCheck';
 import { useToast } from '../common/ToastNotification';
 import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
 import type { Patient } from '../../types';
@@ -67,6 +69,7 @@ export const PrivacyConsentDialog: React.FC<PrivacyConsentDialogProps> = ({
     error,
     fetchConsentStatus,
     sendWhatsAppNotice,
+    revokeConsent,
     clearError,
     hasAcceptedConsent,
     consentStatusText,
@@ -74,6 +77,10 @@ export const PrivacyConsentDialog: React.FC<PrivacyConsentDialogProps> = ({
   } = usePrivacyConsent();
 
   const { errorRef } = useScrollToErrorInDialog(error);
+  const expirationStatus = useConsentExpirationCheck(consent);
+  
+  const [showRevokeDialog, setShowRevokeDialog] = React.useState(false);
+  const [revocationReason, setRevocationReason] = React.useState('');
 
   // Fetch consent status when dialog opens and patient changes
   useEffect(() => {
@@ -111,6 +118,34 @@ export const PrivacyConsentDialog: React.FC<PrivacyConsentDialogProps> = ({
       await fetchConsentStatus(patient.id);
     } catch (err: any) {
       showError(err?.detail || 'Error al enviar el aviso de privacidad');
+    }
+  };
+
+  /**
+   * Handle revoke consent
+   */
+  const handleRevokeConsent = async () => {
+    if (!patient?.id) {
+      showError('No se pudo identificar al paciente');
+      return;
+    }
+
+    if (!revocationReason.trim()) {
+      showError('Por favor, indique el motivo de la revocación');
+      return;
+    }
+
+    try {
+      await revokeConsent(patient.id, revocationReason.trim());
+      showSuccess('✅ Consentimiento revocado exitosamente');
+      
+      setShowRevokeDialog(false);
+      setRevocationReason('');
+      
+      // Refresh consent status
+      await fetchConsentStatus(patient.id);
+    } catch (err: any) {
+      showError(err?.detail || 'Error al revocar el consentimiento');
     }
   };
 
@@ -223,6 +258,7 @@ export const PrivacyConsentDialog: React.FC<PrivacyConsentDialogProps> = ({
   };
 
   return (
+    <>
     <Dialog
       open={open}
       onClose={onClose}
@@ -312,9 +348,18 @@ export const PrivacyConsentDialog: React.FC<PrivacyConsentDialogProps> = ({
                 </Box>
 
                 {hasAcceptedConsent && (
-                  <Alert severity="success" icon={<CheckCircleIcon />}>
-                    El paciente ha aceptado el aviso de privacidad
-                  </Alert>
+                  <>
+                    <Alert severity="success" icon={<CheckCircleIcon />}>
+                      El paciente ha aceptado el aviso de privacidad
+                    </Alert>
+                    
+                    {/* Expiration warning */}
+                    {(expirationStatus.isExpiring || expirationStatus.isExpired) && (
+                      <Alert severity={expirationStatus.severity} sx={{ mt: 1 }}>
+                        {expirationStatus.expirationMessage}
+                      </Alert>
+                    )}
+                  </>
                 )}
 
                 {consent && !hasAcceptedConsent && consent.consent_status !== 'accepted' && (
@@ -404,6 +449,19 @@ export const PrivacyConsentDialog: React.FC<PrivacyConsentDialogProps> = ({
           Cerrar
         </Button>
         
+        {/* Revoke button - only show if consent is accepted and not revoked */}
+        {hasAcceptedConsent && (
+          <Button
+            onClick={() => setShowRevokeDialog(true)}
+            variant="outlined"
+            color="error"
+            startIcon={<CancelIcon />}
+            disabled={isLoading}
+          >
+            Revocar Consentimiento
+          </Button>
+        )}
+        
         {patient?.primary_phone && (!consent || consent.consent_status !== 'accepted') && (
           <Button
             onClick={handleSendWhatsApp}
@@ -417,6 +475,62 @@ export const PrivacyConsentDialog: React.FC<PrivacyConsentDialogProps> = ({
         )}
       </DialogActions>
     </Dialog>
+
+    {/* Revocation Confirmation Dialog */}
+    <Dialog
+      open={showRevokeDialog}
+      onClose={() => setShowRevokeDialog(false)}
+      maxWidth="sm"
+      fullWidth
+    >
+      <DialogTitle>
+        <Box display="flex" alignItems="center" gap={1}>
+          <CancelIcon color="error" />
+          <Typography variant="h6">
+            Revocar Consentimiento
+          </Typography>
+        </Box>
+      </DialogTitle>
+      
+      <DialogContent>
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          <Typography variant="body2">
+            Al revocar el consentimiento, el paciente retira su autorización para el tratamiento
+            de sus datos personales. Esta acción quedará registrada en el sistema.
+          </Typography>
+        </Alert>
+
+        <TextField
+          label="Motivo de la Revocación"
+          multiline
+          rows={4}
+          fullWidth
+          value={revocationReason}
+          onChange={(e) => setRevocationReason(e.target.value)}
+          placeholder="Indique el motivo de la revocación del consentimiento..."
+          required
+        />
+
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+          Esta información será registrada en el historial del paciente.
+        </Typography>
+      </DialogContent>
+
+      <DialogActions sx={{ px: 3, py: 2 }}>
+        <Button onClick={() => setShowRevokeDialog(false)} color="inherit">
+          Cancelar
+        </Button>
+        <Button
+          onClick={handleRevokeConsent}
+          variant="contained"
+          color="error"
+          disabled={isLoading || !revocationReason.trim()}
+        >
+          Confirmar Revocación
+        </Button>
+      </DialogActions>
+    </Dialog>
+  </>
   );
 };
 
