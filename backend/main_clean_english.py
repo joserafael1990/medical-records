@@ -1388,10 +1388,10 @@ async def send_whatsapp_appointment_reminder(
         # Get office address and country code from doctor's profile
         office_address = current_user.office_address if current_user.office_address else "Consultorio Médico"
         
-        # Get country phone code from doctor's office country
+        # Get country phone code from doctor's address country
         country_code = '52'  # Default: México
-        if current_user.office_country_id:
-            office_country = db.query(Country).filter(Country.id == current_user.office_country_id).first()
+        if current_user.address_country_id:
+            office_country = db.query(Country).filter(Country.id == current_user.address_country_id).first()
             if office_country and office_country.phone_code:
                 country_code = office_country.phone_code.replace('+', '')  # Remove + if present
         
