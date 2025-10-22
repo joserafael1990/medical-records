@@ -266,3 +266,216 @@ def build_consultation_response(
         "clinical_studies": clinical_studies
     }
 
+
+# ============================================================================
+# CREATE CONSULTATION HELPERS
+# ============================================================================
+
+def encrypt_consultation_fields(consultation_data: Dict[str, Any], encrypt_fn: callable) -> Dict[str, Any]:
+    """
+    Encrypt consultation sensitive fields
+    
+    Args:
+        consultation_data: Raw consultation data
+        encrypt_fn: Encryption function
+        
+    Returns:
+        Dictionary with encrypted consultation data
+    """
+    return encrypt_fn(consultation_data, "consultation")
+
+
+def parse_consultation_date(date_str: Optional[str], now_fn: callable, cdmx_fn: callable):
+    """
+    Parse consultation date from string to datetime
+    
+    Args:
+        date_str: ISO datetime string
+        now_fn: Function to get current datetime
+        cdmx_fn: Function to parse datetime in CDMX timezone
+        
+    Returns:
+        Datetime object (naive, in CDMX time)
+    """
+    if date_str:
+        # Parse ISO datetime string as CDMX time
+        consultation_date_with_tz = cdmx_fn(date_str)
+        # Remove timezone info to store as naive datetime in CDMX time
+        return consultation_date_with_tz.replace(tzinfo=None)
+    else:
+        return now_fn().replace(tzinfo=None)
+
+
+def create_medical_record_object(
+    encrypted_data: Dict[str, Any],
+    consultation_date,
+    doctor_id: int
+) -> MedicalRecord:
+    """
+    Create MedicalRecord object from encrypted data
+    
+    Args:
+        encrypted_data: Encrypted consultation data
+        consultation_date: Parsed consultation date
+        doctor_id: ID of the doctor
+        
+    Returns:
+        MedicalRecord object (not saved to DB yet)
+    """
+    return MedicalRecord(
+        patient_id=encrypted_data.get("patient_id"),
+        doctor_id=doctor_id,
+        consultation_date=consultation_date,
+        chief_complaint=encrypted_data.get("chief_complaint", ""),
+        history_present_illness=encrypted_data.get("history_present_illness", ""),
+        family_history=encrypted_data.get("family_history", ""),
+        personal_pathological_history=encrypted_data.get("personal_pathological_history", ""),
+        personal_non_pathological_history=encrypted_data.get("personal_non_pathological_history", ""),
+        physical_examination=encrypted_data.get("physical_examination", ""),
+        laboratory_results=encrypted_data.get("laboratory_results", ""),
+        primary_diagnosis=encrypted_data.get("primary_diagnosis", ""),
+        prescribed_medications=encrypted_data.get("prescribed_medications", ""),
+        treatment_plan=encrypted_data.get("treatment_plan", ""),
+        follow_up_instructions=encrypted_data.get("follow_up_instructions", ""),
+        prognosis=encrypted_data.get("prognosis", ""),
+        secondary_diagnoses=encrypted_data.get("secondary_diagnoses", ""),
+        notes=encrypted_data.get("notes") or encrypted_data.get("interconsultations", ""),
+        consultation_type=encrypted_data.get("consultation_type", "Seguimiento"),
+        created_by=doctor_id
+    )
+
+
+def prepare_consultation_for_signing(medical_record: MedicalRecord) -> Dict[str, Any]:
+    """
+    Prepare consultation data for digital signing
+    
+    Args:
+        medical_record: MedicalRecord object
+        
+    Returns:
+        Dictionary with consultation data for signing
+    """
+    return {
+        "id": medical_record.id,
+        "patient_id": medical_record.patient_id,
+        "doctor_id": medical_record.doctor_id,
+        "consultation_date": medical_record.consultation_date.isoformat(),
+        "chief_complaint": medical_record.chief_complaint,
+        "primary_diagnosis": medical_record.primary_diagnosis,
+        "treatment_plan": medical_record.treatment_plan
+    }
+
+
+def mark_appointment_completed(db: Session, appointment_id: Optional[int], doctor_id: int) -> bool:
+    """
+    Mark appointment as completed
+    
+    Args:
+        db: Database session
+        appointment_id: Appointment ID
+        doctor_id: Doctor ID (for security check)
+        
+    Returns:
+        True if marked successfully, False otherwise
+    """
+    if not appointment_id:
+        return False
+    
+    try:
+        from database import Appointment
+        appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+        if appointment and appointment.doctor_id == doctor_id:
+            appointment.status = 'completed'
+            db.commit()
+            print(f"✅ Appointment {appointment_id} marked as completed")
+            return True
+        else:
+            print(f"⚠️ Appointment {appointment_id} not found or access denied")
+            return False
+    except Exception as e:
+        print(f"❌ Error updating appointment status: {str(e)}")
+        return False
+
+
+def get_patient_info(db: Session, patient_id: Optional[int]) -> tuple[str, Optional[Person]]:
+    """
+    Get patient information
+    
+    Args:
+        db: Database session
+        patient_id: Patient ID
+        
+    Returns:
+        Tuple of (patient_name, patient_object)
+    """
+    if not patient_id:
+        return "Paciente No Identificado", None
+    
+    patient = db.query(Person).filter(
+        Person.id == patient_id,
+        Person.person_type == "patient"
+    ).first()
+    
+    if patient:
+        patient_name = f"{patient.first_name} {patient.paternal_surname} {patient.maternal_surname or ''}".strip()
+        return patient_name, patient
+    
+    return "Paciente No Identificado", None
+
+
+def build_create_consultation_response(
+    medical_record: MedicalRecord,
+    patient_name: str,
+    doctor_name: str,
+    digital_signature: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Build response for create consultation
+    
+    Args:
+        medical_record: Created MedicalRecord object
+        patient_name: Formatted patient name
+        doctor_name: Formatted doctor name
+        digital_signature: Digital signature data
+        
+    Returns:
+        Complete response dictionary
+    """
+    consultation_end_time = medical_record.consultation_date + timedelta(minutes=30)
+    
+    return {
+        "id": medical_record.id,
+        "patient_id": medical_record.patient_id,
+        "consultation_date": medical_record.consultation_date.isoformat(),
+        "end_time": consultation_end_time.isoformat(),
+        "chief_complaint": medical_record.chief_complaint,
+        "history_present_illness": medical_record.history_present_illness,
+        "family_history": medical_record.family_history,
+        "personal_pathological_history": medical_record.personal_pathological_history,
+        "personal_non_pathological_history": medical_record.personal_non_pathological_history,
+        "physical_examination": medical_record.physical_examination,
+        "primary_diagnosis": medical_record.primary_diagnosis,
+        "secondary_diagnoses": medical_record.secondary_diagnoses,
+        "treatment_plan": medical_record.treatment_plan,
+        "therapeutic_plan": medical_record.treatment_plan,  # Alias for compatibility
+        "follow_up_instructions": medical_record.follow_up_instructions,
+        "prognosis": medical_record.prognosis,
+        "laboratory_results": medical_record.laboratory_results,
+        "imaging_studies": medical_record.laboratory_results,  # Alias for compatibility
+        "notes": medical_record.notes,
+        "interconsultations": medical_record.notes,  # Alias for compatibility
+        "consultation_type": medical_record.consultation_type,
+        "created_by": medical_record.created_by,
+        "created_at": medical_record.created_at.isoformat(),
+        "patient_name": patient_name,
+        "doctor_name": doctor_name,
+        "date": medical_record.consultation_date.isoformat(),
+        "digital_signature": digital_signature,
+        "security_features": {
+            "encrypted": True,
+            "digitally_signed": True,
+            "signature_id": digital_signature["signatures"][0]["signature_id"],
+            "signature_timestamp": digital_signature["last_signature_timestamp"]
+        }
+    }
+

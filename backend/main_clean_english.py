@@ -33,7 +33,15 @@ from consultation_service import (
     get_consultation_vital_signs,
     get_consultation_prescriptions,
     get_consultation_clinical_studies,
-    build_consultation_response
+    build_consultation_response,
+    # Create consultation helpers
+    encrypt_consultation_fields,
+    parse_consultation_date,
+    create_medical_record_object,
+    prepare_consultation_for_signing,
+    mark_appointment_completed,
+    get_patient_info,
+    build_create_consultation_response
 )
 from encryption import get_encryption_service, MedicalDataEncryption
 from digital_signature import get_digital_signature_service, get_medical_document_signer
@@ -3525,152 +3533,56 @@ async def create_consultation(
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
-    """Create new consultation with encrypted sensitive medical data"""
+    """Create new consultation with encrypted sensitive medical data (REFACTORED)"""
     try:
         print(f"🔍 DEBUG: Creating consultation with data: {consultation_data}")
-        print(f"🔍 DEBUG: prescribed_medications field: {consultation_data.get('prescribed_medications', 'NOT_FOUND')}")
-        print(f"🔍 DEBUG: prescribed_medications type: {type(consultation_data.get('prescribed_medications'))}")
-        print(f"🔍 DEBUG: prescribed_medications repr: {repr(consultation_data.get('prescribed_medications'))}")
-        security_logger.info("Creating consultation with encryption", operation="create_consultation", doctor_id=current_user.id, patient_id=consultation_data.get("patient_id"))
+        security_logger.info("Creating consultation with encryption", operation="create_consultation", 
+                           doctor_id=current_user.id, patient_id=consultation_data.get("patient_id"))
         
-        # Encrypt sensitive consultation fields
-        encrypted_consultation_data = encrypt_sensitive_data(consultation_data, "consultation")
+        # 1. Encrypt sensitive consultation fields
+        encrypted_consultation_data = encrypt_consultation_fields(consultation_data, encrypt_sensitive_data)
         print(f"🔍 DEBUG: After encryption - prescribed_medications: {encrypted_consultation_data.get('prescribed_medications', 'NOT_FOUND')}")
         
-        # Parse consultation date
+        # 2. Parse consultation date
         consultation_date_str = encrypted_consultation_data.get("date", encrypted_consultation_data.get("consultation_date"))
-        if consultation_date_str:
-            # Parse ISO datetime string as CDMX time
-            consultation_date_with_tz = cdmx_datetime(consultation_date_str)
-            # Remove timezone info to store as naive datetime in CDMX time
-            consultation_date = consultation_date_with_tz.replace(tzinfo=None)
-        else:
-            consultation_date = now_cdmx().replace(tzinfo=None)
+        consultation_date = parse_consultation_date(consultation_date_str, now_cdmx, cdmx_datetime)
         
-        # Create MedicalRecord in database with encrypted data
-        print(f"🔍 DEBUG: About to save prescribed_medications: {encrypted_consultation_data.get('prescribed_medications', 'NOT_FOUND')}")
-        new_medical_record = MedicalRecord(
-            patient_id=encrypted_consultation_data.get("patient_id"),
-            doctor_id=current_user.id,
-            consultation_date=consultation_date,
-            chief_complaint=encrypted_consultation_data.get("chief_complaint", ""),
-            history_present_illness=encrypted_consultation_data.get("history_present_illness", ""),
-            family_history=encrypted_consultation_data.get("family_history", ""),
-            personal_pathological_history=encrypted_consultation_data.get("personal_pathological_history", ""),
-            personal_non_pathological_history=encrypted_consultation_data.get("personal_non_pathological_history", ""),
-            physical_examination=encrypted_consultation_data.get("physical_examination", ""),
-            laboratory_results=encrypted_consultation_data.get("laboratory_results", ""),
-            primary_diagnosis=encrypted_consultation_data.get("primary_diagnosis", ""),
-            prescribed_medications=encrypted_consultation_data.get("prescribed_medications", ""),
-            treatment_plan=encrypted_consultation_data.get("treatment_plan", ""),
-            follow_up_instructions=encrypted_consultation_data.get("follow_up_instructions", ""),
-            prognosis=encrypted_consultation_data.get("prognosis", ""),
-            secondary_diagnoses=encrypted_consultation_data.get("secondary_diagnoses", ""),
-            notes=encrypted_consultation_data.get("notes") or encrypted_consultation_data.get("interconsultations", ""),
-            consultation_type=encrypted_consultation_data.get("consultation_type", "Seguimiento"),
-            created_by=current_user.id
+        # 3. Create MedicalRecord object
+        new_medical_record = create_medical_record_object(
+            encrypted_consultation_data,
+            consultation_date,
+            current_user.id
         )
         
-        # Save to database
+        # 4. Save to database
         db.add(new_medical_record)
         db.commit()
         db.refresh(new_medical_record)
         
-        security_logger.info("Consultation created successfully", consultation_id=new_medical_record.id, doctor_id=current_user.id, patient_id=new_medical_record.patient_id, encrypted=True)
+        security_logger.info("Consultation created successfully", consultation_id=new_medical_record.id, 
+                           doctor_id=current_user.id, patient_id=new_medical_record.patient_id, encrypted=True)
         
-        # Sign the consultation document
-        consultation_for_signing = {
-            "id": new_medical_record.id,
-            "patient_id": new_medical_record.patient_id,
-            "doctor_id": new_medical_record.doctor_id,
-            "consultation_date": new_medical_record.consultation_date.isoformat(),
-            "chief_complaint": new_medical_record.chief_complaint,
-            "primary_diagnosis": new_medical_record.primary_diagnosis,
-            "treatment_plan": new_medical_record.treatment_plan
-        }
-        
+        # 5. Sign the consultation document
+        consultation_for_signing = prepare_consultation_for_signing(new_medical_record)
         digital_signature = sign_medical_document(consultation_for_signing, current_user.id, "consultation")
-        security_logger.info("Consultation digitally signed", consultation_id=new_medical_record.id, signature_id=digital_signature["signatures"][0]["signature_id"])
+        security_logger.info("Consultation digitally signed", consultation_id=new_medical_record.id, 
+                           signature_id=digital_signature["signatures"][0]["signature_id"])
         
-        # Include signature info in response
-        consultation_response = {
-            "id": new_medical_record.id,
-            "patient_id": new_medical_record.patient_id,
-            "doctor_id": new_medical_record.doctor_id,
-            "consultation_date": new_medical_record.consultation_date.isoformat(),
-            "chief_complaint": new_medical_record.chief_complaint,
-            "primary_diagnosis": new_medical_record.primary_diagnosis,
-            "treatment_plan": new_medical_record.treatment_plan,
-            "digital_signature": digital_signature,
-            "message": "Consultation created, encrypted, and digitally signed successfully"
-        }
-        
-        # If consultation is associated with an appointment, mark appointment as completed
+        # 6. Mark appointment as completed if applicable
         appointment_id = consultation_data.get("appointment_id")
-        if appointment_id:
-            try:
-                appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
-                if appointment and appointment.doctor_id == current_user.id:
-                    appointment.status = 'completed'
-                    db.commit()
-                    print(f"✅ Appointment {appointment_id} marked as completed")
-                else:
-                    print(f"⚠️ Appointment {appointment_id} not found or access denied")
-            except Exception as e:
-                print(f"❌ Error updating appointment status: {str(e)}")
-                # Don't fail the consultation creation if appointment update fails
+        mark_appointment_completed(db, appointment_id, current_user.id)
         
-        # Get patient name for response
-        patient_name = "Paciente No Identificado"
-        if new_medical_record.patient_id:
-            patient = db.query(Person).filter(
-                Person.id == new_medical_record.patient_id,
-                Person.person_type == "patient"
-            ).first()
-            if patient:
-                patient_name = f"{patient.first_name} {patient.paternal_surname} {patient.maternal_surname or ''}".strip()
+        # 7. Get patient and doctor info
+        patient_name, _ = get_patient_info(db, new_medical_record.patient_id)
+        doctor_name = format_doctor_name(current_user)
         
-        doctor_name = f"{current_user.first_name} {current_user.paternal_surname}".strip()
-
-        # Calculate end_time assuming 30 minutes duration for consultations
-        consultation_end_time = new_medical_record.consultation_date + timedelta(minutes=30)
-
-        # Return in API format with digital signature
-        result = {
-            "id": new_medical_record.id,
-            "patient_id": new_medical_record.patient_id,
-            "consultation_date": new_medical_record.consultation_date.isoformat(),
-            "end_time": consultation_end_time.isoformat(),
-            "chief_complaint": new_medical_record.chief_complaint,
-            "history_present_illness": new_medical_record.history_present_illness,
-            "family_history": new_medical_record.family_history,
-            "personal_pathological_history": new_medical_record.personal_pathological_history,
-            "personal_non_pathological_history": new_medical_record.personal_non_pathological_history,
-            "physical_examination": new_medical_record.physical_examination,
-            "primary_diagnosis": new_medical_record.primary_diagnosis,
-            "secondary_diagnoses": new_medical_record.secondary_diagnoses,
-            "treatment_plan": new_medical_record.treatment_plan,
-            "therapeutic_plan": new_medical_record.treatment_plan,  # Alias for compatibility
-            "follow_up_instructions": new_medical_record.follow_up_instructions,
-            "prognosis": new_medical_record.prognosis,
-            "laboratory_results": new_medical_record.laboratory_results,
-            "imaging_studies": new_medical_record.laboratory_results,  # Alias for compatibility
-            "notes": new_medical_record.notes,
-            "interconsultations": new_medical_record.notes,  # Map notes to interconsultations for frontend compatibility
-            "consultation_type": new_medical_record.consultation_type,
-            "created_by": new_medical_record.created_by,
-            "created_at": new_medical_record.created_at.isoformat(),
-            "patient_name": patient_name,
-            "doctor_name": doctor_name,
-            "date": new_medical_record.consultation_date.isoformat(),
-            "digital_signature": digital_signature,
-            "security_features": {
-                "encrypted": True,
-                "digitally_signed": True,
-                "signature_id": digital_signature["signatures"][0]["signature_id"],
-                "signature_timestamp": digital_signature["last_signature_timestamp"]
-            }
-        }
+        # 8. Build response
+        result = build_create_consultation_response(
+            new_medical_record,
+            patient_name,
+            doctor_name,
+            digital_signature
+        )
         
         print(f"✅ Medical record created in database: ID={new_medical_record.id}")
         return result
