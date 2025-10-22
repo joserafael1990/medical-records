@@ -606,6 +606,122 @@ class AuditLog(Base):
     user = relationship("Person", foreign_keys=[user_id])
     affected_patient = relationship("Person", foreign_keys=[affected_patient_id])
 
+# ============================================================================
+# PRIVACY AND CONSENT SYSTEM - LFPDPPP Compliance
+# ============================================================================
+
+class PrivacyNotice(Base):
+    """
+    Versiones del aviso de privacidad
+    Compliance: LFPDPPP
+    """
+    __tablename__ = "privacy_notices"
+    
+    id = Column(Integer, primary_key=True)
+    version = Column(String(20), unique=True, nullable=False)
+    title = Column(String(200), nullable=False)
+    content = Column(Text, nullable=False)
+    short_summary = Column(Text)
+    effective_date = Column(Date, nullable=False)
+    expiry_date = Column(Date)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    consents = relationship("PrivacyConsent", back_populates="privacy_notice")
+
+class PrivacyConsent(Base):
+    """
+    Registro de consentimientos de privacidad de pacientes
+    Soporta múltiples métodos: WhatsApp, papel, tablet, portal web
+    """
+    __tablename__ = "privacy_consents"
+    
+    id = Column(Integer, primary_key=True)
+    patient_id = Column(Integer, ForeignKey("persons.id", ondelete="CASCADE"))
+    privacy_notice_id = Column(Integer, ForeignKey("privacy_notices.id"))
+    privacy_notice_version = Column(String(20))
+    
+    # Tipos de consentimiento
+    consent_data_collection = Column(Boolean, default=False)
+    consent_data_processing = Column(Boolean, default=False)
+    consent_data_sharing = Column(Boolean, default=False)
+    consent_marketing = Column(Boolean, default=False)
+    
+    # Método de consentimiento
+    consent_method = Column(String(50))  # 'whatsapp_button', 'papel_firmado', etc.
+    consent_status = Column(String(20), default='pending')  # 'pending', 'sent', 'accepted', etc.
+    consent_date = Column(DateTime)
+    
+    # Datos de WhatsApp
+    whatsapp_message_id = Column(String(100))
+    whatsapp_sent_at = Column(DateTime)
+    whatsapp_delivered_at = Column(DateTime)
+    whatsapp_read_at = Column(DateTime)
+    whatsapp_response_text = Column(Text)
+    whatsapp_response_at = Column(DateTime)
+    
+    # Metadatos del consentimiento
+    ip_address = Column(String(45))
+    user_agent = Column(Text)
+    digital_signature = Column(Text)  # Base64 o button_id
+    
+    # Revocación
+    is_revoked = Column(Boolean, default=False)
+    revoked_date = Column(DateTime)
+    revocation_reason = Column(Text)
+    
+    # Metadatos adicionales
+    metadata_json = Column("metadata", JSON)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    patient = relationship("Person", foreign_keys=[patient_id], backref="privacy_consents")
+    privacy_notice = relationship("PrivacyNotice", back_populates="consents")
+
+class ARCORequest(Base):
+    """
+    Solicitudes de derechos ARCO (Acceso, Rectificación, Cancelación, Oposición)
+    Compliance: LFPDPPP Art. 28-34
+    """
+    __tablename__ = "arco_requests"
+    
+    id = Column(Integer, primary_key=True)
+    patient_id = Column(Integer, ForeignKey("persons.id", ondelete="CASCADE"))
+    request_type = Column(String(20), nullable=False)  # 'access', 'rectification', 'cancellation', 'opposition'
+    request_date = Column(DateTime, default=datetime.utcnow)
+    
+    # Detalles de la solicitud
+    request_description = Column(Text, nullable=False)
+    requested_data = Column(Text)
+    
+    # Estado
+    status = Column(String(20), default='pending')  # 'pending', 'in_progress', 'completed', 'rejected'
+    assigned_to = Column(Integer, ForeignKey("persons.id"))
+    
+    # Respuesta
+    response_date = Column(DateTime)
+    response_description = Column(Text)
+    response_attachments = Column(JSON)  # Array de rutas
+    
+    # Plazos legales
+    legal_deadline = Column(Date)
+    days_to_respond = Column(Integer)
+    
+    # Seguimiento
+    notes = Column(Text)
+    priority = Column(String(20), default='normal')
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    patient = relationship("Person", foreign_keys=[patient_id])
+    assigned_officer = relationship("Person", foreign_keys=[assigned_to])
+
 def init_db():
     """Inicializar base de datos - solo crear tablas que no existen"""
     Base.metadata.create_all(bind=engine)

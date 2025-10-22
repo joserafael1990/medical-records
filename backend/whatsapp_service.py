@@ -278,6 +278,170 @@ class WhatsAppService:
                 'success': False,
                 'error': str(e)
             }
+    
+    def send_interactive_privacy_notice(
+        self,
+        patient_name: str,
+        patient_phone: str,
+        doctor_name: str,
+        privacy_notice_url: str,
+        consent_id: int,
+        country_code: str = '52'
+    ) -> Dict[str, Any]:
+        """
+        Envía aviso de privacidad con UN SOLO botón interactivo "Acepto"
+        Cumple con LFPDPPP - Consentimiento libre e informado
+        
+        Args:
+            patient_name: Nombre del paciente
+            patient_phone: Teléfono del paciente
+            doctor_name: Nombre completo del médico
+            privacy_notice_url: URL del aviso completo
+            consent_id: ID del registro de consentimiento
+            country_code: Código de país
+            
+        Returns:
+            Dict con resultado del envío (message_id, etc)
+        """
+        if not self.phone_id or not self.access_token:
+            return {
+                'success': False,
+                'error': 'WhatsApp not configured. Please set META_WHATSAPP_PHONE_ID and META_WHATSAPP_TOKEN'
+            }
+        
+        url = f'{self.base_url}/{self.phone_id}/messages'
+        formatted_phone = self._format_phone_number(patient_phone, country_code)
+        
+        # Mensaje con botón interactivo
+        payload = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": formatted_phone,
+            "type": "interactive",
+            "interactive": {
+                "type": "button",
+                "header": {
+                    "type": "text",
+                    "text": "📋 Aviso de Privacidad"
+                },
+                "body": {
+                    "text": f"Hola {patient_name},\n\n"
+                            f"Soy {doctor_name} y necesito tu consentimiento para brindarte "
+                            f"atención médica y manejar tus datos personales de forma segura.\n\n"
+                            f"📄 Lee nuestro Aviso de Privacidad completo aquí:\n"
+                            f"{privacy_notice_url}\n\n"
+                            f"IMPORTANTE:\n"
+                            f"✅ Si ACEPTAS, presiona el botón 'Acepto' abajo\n"
+                            f"❌ Si NO ACEPTAS, simplemente NO respondas este mensaje\n\n"
+                            f"Este consentimiento es voluntario y puedes revocarlo en cualquier momento.\n\n"
+                            f"Ley Federal de Protección de Datos Personales (LFPDPPP)"
+                },
+                "footer": {
+                    "text": "Puedes revocar tu consentimiento contactando al consultorio"
+                },
+                "action": {
+                    "buttons": [
+                        {
+                            "type": "reply",
+                            "reply": {
+                                "id": f"accept_privacy_{consent_id}",
+                                "title": "✅ Acepto"
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+        
+        try:
+            response = requests.post(
+                url,
+                headers=self._get_headers(),
+                json=payload,
+                timeout=10
+            )
+            
+            response.raise_for_status()
+            result = response.json()
+            
+            logger.info(f"✅ Interactive privacy notice sent to {formatted_phone}")
+            
+            return {
+                'success': True,
+                'message_id': result.get('messages', [{}])[0].get('id'),
+                'phone': formatted_phone,
+                'response': result
+            }
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"❌ Error sending interactive privacy notice: {str(e)}")
+            error_detail = str(e)
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_detail = e.response.json()
+                except:
+                    error_detail = e.response.text
+            
+            return {
+                'success': False,
+                'error': error_detail
+            }
+    
+    def send_text_message(
+        self,
+        to_phone: str,
+        message: str,
+        country_code: str = '52'
+    ) -> Dict[str, Any]:
+        """
+        Envía mensaje de texto simple (sin template)
+        Útil para confirmaciones y respuestas
+        
+        Args:
+            to_phone: Número de teléfono destino
+            message: Texto del mensaje
+            country_code: Código de país
+            
+        Returns:
+            Dict con resultado del envío
+        """
+        if not self.phone_id or not self.access_token:
+            return {'success': False, 'error': 'WhatsApp not configured'}
+        
+        url = f'{self.base_url}/{self.phone_id}/messages'
+        formatted_phone = self._format_phone_number(to_phone, country_code)
+        
+        payload = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": formatted_phone,
+            "type": "text",
+            "text": {
+                "preview_url": True,
+                "body": message
+            }
+        }
+        
+        try:
+            response = requests.post(
+                url,
+                headers=self._get_headers(),
+                json=payload,
+                timeout=10
+            )
+            response.raise_for_status()
+            result = response.json()
+            
+            logger.info(f"✅ Text message sent to {formatted_phone}")
+            
+            return {
+                'success': True,
+                'message_id': result.get('messages', [{}])[0].get('id'),
+                'response': result
+            }
+        except requests.exceptions.RequestException as e:
+            logger.error(f"❌ Error sending text message: {str(e)}")
+            return {'success': False, 'error': str(e)}
 
 # Instancia global del servicio
 whatsapp_service = WhatsAppService()

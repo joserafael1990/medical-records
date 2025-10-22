@@ -21,7 +21,7 @@ import uuid
 import crud
 import schemas
 import auth
-from database import get_db, Person, Specialty, Country, State, EmergencyRelationship, Appointment, MedicalRecord, ClinicalStudy, VitalSign, ConsultationVitalSign, Medication, ConsultationPrescription, AuditLog
+from database import get_db, Person, Specialty, Country, State, EmergencyRelationship, Appointment, MedicalRecord, ClinicalStudy, VitalSign, ConsultationVitalSign, Medication, ConsultationPrescription, AuditLog, PrivacyNotice, PrivacyConsent, ARCORequest
 from appointment_service import AppointmentService
 from audit_service import audit_service
 # Schedule routes are implemented directly in this file (lines 1726-2100)
@@ -4491,6 +4491,407 @@ async def get_audit_statistics(
     except Exception as e:
         print(f"❌ Error in get_audit_statistics: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching audit statistics: {str(e)}")
+
+# ============================================================================
+# PRIVACY AND CONSENT - LFPDPPP Compliance
+# ============================================================================
+
+@app.get("/api/privacy/active-notice")
+async def get_active_privacy_notice(
+    db: Session = Depends(get_db)
+):
+    """
+    Get current active privacy notice (public endpoint)
+    """
+    try:
+        notice = db.query(PrivacyNotice).filter(
+            PrivacyNotice.is_active == True
+        ).order_by(PrivacyNotice.effective_date.desc()).first()
+        
+        if not notice:
+            raise HTTPException(status_code=404, detail="No active privacy notice found")
+        
+        return {
+            "id": notice.id,
+            "version": notice.version,
+            "title": notice.title,
+            "content": notice.content,
+            "short_summary": notice.short_summary,
+            "effective_date": notice.effective_date.isoformat()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/privacy/send-whatsapp-notice")
+async def send_whatsapp_privacy_notice(
+    patient_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """
+    Envía aviso de privacidad al paciente vía WhatsApp con botón interactivo
+    """
+    try:
+        # Verificar que el paciente existe
+        patient = db.query(Person).filter(
+            Person.id == patient_id,
+            Person.person_type == 'patient'
+        ).first()
+        
+        if not patient:
+            raise HTTPException(status_code=404, detail="Paciente no encontrado")
+        
+        # Verificar que el doctor tiene relación con este paciente
+        consultation = db.query(MedicalRecord).filter(
+            MedicalRecord.patient_id == patient_id,
+            MedicalRecord.doctor_id == current_user.id
+        ).first()
+        
+        if not consultation and current_user.person_type != 'admin':
+            raise HTTPException(
+                status_code=403,
+                detail="No tienes permiso para enviar avisos a este paciente"
+            )
+        
+        # Verificar que el paciente tiene teléfono
+        if not patient.primary_phone:
+            raise HTTPException(
+                status_code=400,
+                detail="El paciente no tiene teléfono registrado"
+            )
+        
+        # Verificar si ya tiene un consentimiento pendiente o aceptado
+        existing_consent = db.query(PrivacyConsent).filter(
+            PrivacyConsent.patient_id == patient_id,
+            PrivacyConsent.consent_status.in_(['sent', 'accepted'])
+        ).first()
+        
+        if existing_consent:
+            if existing_consent.consent_status == 'accepted':
+                return {
+                    "success": False,
+                    "message": "El paciente ya aceptó el aviso de privacidad",
+                    "consent_id": existing_consent.id,
+                    "accepted_at": existing_consent.consent_date.isoformat() if existing_consent.consent_date else None
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": "Ya hay un aviso pendiente de respuesta para este paciente",
+                    "consent_id": existing_consent.id,
+                    "sent_at": existing_consent.whatsapp_sent_at.isoformat() if existing_consent.whatsapp_sent_at else None
+                }
+        
+        # Obtener aviso de privacidad activo
+        privacy_notice = db.query(PrivacyNotice).filter(
+            PrivacyNotice.is_active == True
+        ).order_by(PrivacyNotice.effective_date.desc()).first()
+        
+        if not privacy_notice:
+            raise HTTPException(status_code=500, detail="No hay aviso de privacidad activo")
+        
+        # Generar token único para la URL
+        privacy_token = str(uuid.uuid4())
+        # TODO: Reemplazar con tu dominio real
+        privacy_url = f"https://tudominio.com/privacy-notice/{privacy_token}"
+        
+        # Crear registro de consentimiento PRIMERO (para tener el ID)
+        consent = PrivacyConsent(
+            patient_id=patient_id,
+            privacy_notice_id=privacy_notice.id,
+            privacy_notice_version=privacy_notice.version,
+            consent_method="whatsapp_button",
+            consent_status="pending",
+            metadata_json={
+                "privacy_token": privacy_token,
+                "privacy_url": privacy_url,
+                "sent_by_doctor_id": current_user.id,
+                "sent_by_doctor_name": f"{current_user.first_name} {current_user.paternal_surname}",
+                "doctor_title": current_user.title or "Dr."
+            }
+        )
+        
+        db.add(consent)
+        db.commit()
+        db.refresh(consent)
+        
+        # Enviar por WhatsApp con botón interactivo
+        from whatsapp_service import get_whatsapp_service
+        whatsapp = get_whatsapp_service()
+        
+        doctor_name = f"{current_user.title or 'Dr.'} {current_user.first_name} {current_user.paternal_surname}"
+        
+        result = whatsapp.send_interactive_privacy_notice(
+            patient_name=patient.first_name,
+            patient_phone=patient.primary_phone,
+            doctor_name=doctor_name,
+            privacy_notice_url=privacy_url,
+            consent_id=consent.id
+        )
+        
+        if not result.get('success'):
+            # Si falla el envío, eliminar el consentimiento
+            db.delete(consent)
+            db.commit()
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error al enviar WhatsApp: {result.get('error')}"
+            )
+        
+        # Actualizar con message_id
+        consent.whatsapp_message_id = result.get('message_id')
+        consent.whatsapp_sent_at = datetime.utcnow()
+        consent.consent_status = "sent"
+        db.commit()
+        
+        # Registrar en auditoría
+        audit_service.log_action(
+            db=db,
+            action="PRIVACY_NOTICE_SENT",
+            user=current_user,
+            request=request,
+            operation_type="send_privacy_notice_whatsapp",
+            affected_patient_id=patient_id,
+            affected_patient_name=f"{patient.first_name} {patient.paternal_surname}",
+            new_values={
+                "method": "whatsapp_button",
+                "phone": patient.primary_phone,
+                "message_id": result.get('message_id'),
+                "consent_id": consent.id
+            },
+            security_level='INFO'
+        )
+        
+        return {
+            "success": True,
+            "message": "Aviso de privacidad enviado por WhatsApp con botón interactivo",
+            "message_id": result.get('message_id'),
+            "phone": patient.primary_phone,
+            "consent_id": consent.id,
+            "privacy_url": privacy_url
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error sending privacy notice: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al enviar aviso de privacidad: {str(e)}"
+        )
+
+@app.post("/api/webhooks/whatsapp")
+async def whatsapp_webhook(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Webhook para recibir respuestas de WhatsApp (botones interactivos)
+    Meta enviará aquí las respuestas cuando el paciente presione "Acepto"
+    """
+    try:
+        body = await request.json()
+        
+        if 'entry' not in body:
+            return {"status": "ignored"}
+        
+        for entry in body['entry']:
+            for change in entry.get('changes', []):
+                if change.get('field') != 'messages':
+                    continue
+                
+                value = change.get('value', {})
+                
+                # Procesar mensajes con botones interactivos
+                for message in value.get('messages', []):
+                    message_type = message.get('type')
+                    from_phone = message.get('from')
+                    timestamp = message.get('timestamp')
+                    
+                    # PROCESAR BOTÓN INTERACTIVO
+                    if message_type == 'interactive':
+                        interactive_data = message.get('interactive', {})
+                        button_reply = interactive_data.get('button_reply', {})
+                        
+                        button_id = button_reply.get('id', '')
+                        button_title = button_reply.get('title', '')
+                        
+                        print(f"📱 Button pressed: {button_id} ({button_title}) from {from_phone}")
+                        
+                        # Extraer consent_id del button_id
+                        # Formato: "accept_privacy_123"
+                        parts = button_id.split('_')
+                        if len(parts) >= 3 and parts[0] == 'accept' and parts[1] == 'privacy':
+                            consent_id = int(parts[2])
+                            
+                            # Buscar el consentimiento
+                            consent = db.query(PrivacyConsent).filter(
+                                PrivacyConsent.id == consent_id
+                            ).first()
+                            
+                            if not consent:
+                                print(f"⚠️ Consent {consent_id} not found")
+                                continue
+                            
+                            # Obtener paciente
+                            patient = db.query(Person).filter(
+                                Person.id == consent.patient_id
+                            ).first()
+                            
+                            if not patient:
+                                print(f"⚠️ Patient {consent.patient_id} not found")
+                                continue
+                            
+                            # ACEPTADO
+                            consent.consent_status = 'accepted'
+                            consent.consent_data_collection = True
+                            consent.consent_data_processing = True
+                            consent.consent_date = datetime.utcnow()
+                            consent.whatsapp_response_text = button_title
+                            consent.whatsapp_response_at = datetime.fromtimestamp(int(timestamp))
+                            consent.digital_signature = button_id
+                            
+                            if consent.metadata_json is None:
+                                consent.metadata_json = {}
+                            consent.metadata_json['button_id'] = button_id
+                            consent.metadata_json['button_title'] = button_title
+                            consent.metadata_json['response_timestamp'] = timestamp
+                            
+                            db.commit()
+                            
+                            # Enviar confirmación
+                            from whatsapp_service import get_whatsapp_service
+                            whatsapp = get_whatsapp_service()
+                            
+                            doctor_id = consent.metadata_json.get('sent_by_doctor_id')
+                            doctor = db.query(Person).filter(Person.id == doctor_id).first()
+                            
+                            if doctor:
+                                doctor_name = f"{doctor.title or 'Dr.'} {doctor.first_name} {doctor.paternal_surname}"
+                                whatsapp.send_text_message(
+                                    to_phone=from_phone,
+                                    message=f"✅ Gracias {patient.first_name}, tu consentimiento ha sido registrado correctamente.\n\n"
+                                            f"Ahora {doctor_name} puede brindarte atención médica cumpliendo con la Ley de Protección de Datos.\n\n"
+                                            f"Recuerda que puedes revocar tu consentimiento en cualquier momento contactando al consultorio.\n\n"
+                                            f"Tus derechos ARCO (Acceso, Rectificación, Cancelación, Oposición) están garantizados."
+                                )
+                            
+                            print(f"✅ Consent {consent_id} ACCEPTED by patient {patient.id} ({patient.first_name})")
+                            
+                            # Registrar en auditoría
+                            audit_service.log_action(
+                                db=db,
+                                action="PRIVACY_CONSENT_ACCEPTED",
+                                user=None,
+                                request=request,
+                                operation_type="whatsapp_button_consent",
+                                affected_patient_id=patient.id,
+                                affected_patient_name=f"{patient.first_name} {patient.paternal_surname}",
+                                new_values={
+                                    "button_id": button_id,
+                                    "button_title": button_title,
+                                    "consent_id": consent_id,
+                                    "method": "whatsapp_button"
+                                },
+                                security_level='INFO'
+                            )
+                
+                # Procesar status updates (entregado, leído)
+                for status in value.get('statuses', []):
+                    status_type = status.get('status')
+                    message_id = status.get('id')
+                    
+                    consent = db.query(PrivacyConsent).filter(
+                        PrivacyConsent.whatsapp_message_id == message_id
+                    ).first()
+                    
+                    if consent:
+                        if status_type == 'delivered':
+                            consent.consent_status = 'delivered'
+                            consent.whatsapp_delivered_at = datetime.utcnow()
+                        elif status_type == 'read':
+                            consent.consent_status = 'read'
+                            consent.whatsapp_read_at = datetime.utcnow()
+                        
+                        db.commit()
+                        print(f"📊 Consent {consent.id} status updated: {status_type}")
+        
+        return {"status": "ok"}
+        
+    except Exception as e:
+        print(f"❌ Error processing WhatsApp webhook: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "message": str(e)}
+
+@app.get("/api/webhooks/whatsapp")
+async def whatsapp_webhook_verification(
+    request: Request
+):
+    """
+    Verificación del webhook de WhatsApp (requerido por Meta)
+    """
+    mode = request.query_params.get('hub.mode')
+    token = request.query_params.get('hub.verify_token')
+    challenge = request.query_params.get('hub.challenge')
+    
+    verify_token = os.getenv('META_WHATSAPP_VERIFY_TOKEN', 'mi_token_secreto_123')
+    
+    if mode == 'subscribe' and token == verify_token:
+        print(f"✅ WhatsApp webhook verified successfully")
+        return int(challenge)
+    
+    print(f"❌ WhatsApp webhook verification failed")
+    return {"status": "error", "message": "Verification failed"}
+
+@app.get("/api/privacy/consent-status/{patient_id}")
+async def get_patient_consent_status(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """
+    Obtiene el estado del consentimiento de privacidad de un paciente
+    """
+    try:
+        # Verificar acceso
+        if current_user.person_type == 'doctor':
+            consultation = db.query(MedicalRecord).filter(
+                MedicalRecord.patient_id == patient_id,
+                MedicalRecord.doctor_id == current_user.id
+            ).first()
+            
+            if not consultation:
+                raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Buscar consentimiento más reciente
+        consent = db.query(PrivacyConsent).filter(
+            PrivacyConsent.patient_id == patient_id
+        ).order_by(PrivacyConsent.created_at.desc()).first()
+        
+        if not consent:
+            return {
+                "has_consent": False,
+                "status": "none",
+                "message": "No se ha enviado aviso de privacidad a este paciente"
+            }
+        
+        return {
+            "has_consent": consent.consent_status == 'accepted',
+            "status": consent.consent_status,
+            "consent_id": consent.id,
+            "consent_method": consent.consent_method,
+            "sent_at": consent.whatsapp_sent_at.isoformat() if consent.whatsapp_sent_at else None,
+            "accepted_at": consent.consent_date.isoformat() if consent.consent_date else None,
+            "message_id": consent.whatsapp_message_id
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================
 # SERVER
