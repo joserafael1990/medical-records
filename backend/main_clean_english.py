@@ -24,6 +24,7 @@ import auth
 from database import get_db, Person, Specialty, Country, State, EmergencyRelationship, Appointment, MedicalRecord, ClinicalStudy, VitalSign, ConsultationVitalSign, Medication, ConsultationPrescription, AuditLog, PrivacyNotice, PrivacyConsent, ARCORequest
 from appointment_service import AppointmentService
 from audit_service import audit_service
+import data_retention_service as retention
 # Schedule routes are implemented directly in this file (lines 1726-2100)
 # No separate router needed - endpoints use models/schedule.py models
 from consultation_service import (
@@ -5247,6 +5248,366 @@ async def get_public_privacy_notice(db: Session = Depends(get_db)):
     except Exception as e:
         api_logger.error(f"Error getting public privacy notice: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# DATA RETENTION ENDPOINTS (LFPDPPP + NOM-004 Compliance)
+# ============================================================================
+
+@app.get("/api/data-retention/stats")
+async def get_retention_stats(
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """
+    Get data retention statistics for the current doctor
+    """
+    try:
+        stats = retention.get_retention_stats(db, current_user.id)
+        
+        return {
+            "success": True,
+            "stats": stats,
+            "doctor_id": current_user.id
+        }
+    except Exception as e:
+        api_logger.error(f"Error getting retention stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/data-retention/expiring")
+async def get_expiring_records(
+    days: int = 90,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """
+    Get records expiring within specified days
+    
+    Args:
+        days: Days threshold for expiration (default: 90)
+        limit: Maximum records to return (default: 100)
+    """
+    try:
+        records = retention.get_expiring_records(
+            db, 
+            doctor_id=current_user.id,
+            days_threshold=days,
+            limit=limit
+        )
+        
+        return {
+            "success": True,
+            "records": records,
+            "count": len(records),
+            "days_threshold": days
+        }
+    except Exception as e:
+        api_logger.error(f"Error getting expiring records: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/data-retention/anonymize/{record_id}")
+async def anonymize_record(
+    record_id: int,
+    reason: str = "manual_request",
+    strategy: str = "full",
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """
+    Anonymize a specific medical record
+    
+    Args:
+        record_id: Medical record ID
+        reason: Reason for anonymization
+        strategy: Anonymization strategy (full, partial, pseudo)
+    """
+    try:
+        # Verify record belongs to current doctor
+        record = db.query(MedicalRecord).filter(
+            MedicalRecord.id == record_id,
+            MedicalRecord.doctor_id == current_user.id
+        ).first()
+        
+        if not record:
+            raise HTTPException(
+                status_code=404,
+                detail="Registro no encontrado o no autorizado"
+            )
+        
+        success = retention.anonymize_medical_record(
+            db,
+            record_id,
+            performed_by=current_user.id,
+            reason=reason,
+            strategy=strategy
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=400,
+                detail="No se pudo anonimizar el registro (puede estar en retención legal)"
+            )
+        
+        return {
+            "success": True,
+            "message": "Registro anonimizado exitosamente",
+            "record_id": record_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error(f"Error anonymizing record {record_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/data-retention/anonymize-expired")
+async def anonymize_expired_records_endpoint(
+    batch_size: int = 100,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """
+    Anonymize all expired records for current doctor
+    
+    Args:
+        batch_size: Maximum records to process (default: 100)
+    """
+    try:
+        # This endpoint processes ALL expired records for the doctor
+        # In production, this would be a scheduled job
+        
+        result = retention.anonymize_expired_records(
+            db,
+            performed_by=current_user.id,
+            batch_size=batch_size
+        )
+        
+        return {
+            "success": True,
+            "message": f"Procesados {result['total_processed']} registros",
+            **result
+        }
+        
+    except Exception as e:
+        api_logger.error(f"Error in batch anonymization: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/data-retention/archive/{record_id}")
+async def archive_record(
+    record_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """
+    Archive a medical record (move to cold storage)
+    """
+    try:
+        # Verify record belongs to current doctor
+        record = db.query(MedicalRecord).filter(
+            MedicalRecord.id == record_id,
+            MedicalRecord.doctor_id == current_user.id
+        ).first()
+        
+        if not record:
+            raise HTTPException(
+                status_code=404,
+                detail="Registro no encontrado o no autorizado"
+            )
+        
+        success = retention.archive_medical_record(
+            db,
+            record_id,
+            performed_by=current_user.id
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=400,
+                detail="No se pudo archivar el registro"
+            )
+        
+        return {
+            "success": True,
+            "message": "Registro archivado exitosamente",
+            "record_id": record_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error(f"Error archiving record {record_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/data-retention/legal-hold/{record_id}")
+async def set_legal_hold_endpoint(
+    record_id: int,
+    enable: bool = True,
+    reason: str = "",
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """
+    Set or remove legal hold on a medical record
+    
+    Args:
+        record_id: Medical record ID
+        enable: True to enable hold, False to remove
+        reason: Reason for legal hold
+    """
+    try:
+        # Verify record belongs to current doctor
+        record = db.query(MedicalRecord).filter(
+            MedicalRecord.id == record_id,
+            MedicalRecord.doctor_id == current_user.id
+        ).first()
+        
+        if not record:
+            raise HTTPException(
+                status_code=404,
+                detail="Registro no encontrado o no autorizado"
+            )
+        
+        if enable and not reason:
+            raise HTTPException(
+                status_code=400,
+                detail="Se requiere especificar la razón para la retención legal"
+            )
+        
+        success = retention.set_legal_hold(
+            db,
+            record_id,
+            performed_by=current_user.id,
+            reason=reason,
+            enable=enable
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=400,
+                detail="No se pudo establecer la retención legal"
+            )
+        
+        action = "activada" if enable else "removida"
+        return {
+            "success": True,
+            "message": f"Retención legal {action} exitosamente",
+            "record_id": record_id,
+            "legal_hold": enable
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error(f"Error setting legal hold on record {record_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/data-retention/extend/{record_id}")
+async def extend_retention_endpoint(
+    record_id: int,
+    additional_years: int,
+    reason: str,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """
+    Extend retention period for a medical record
+    
+    Args:
+        record_id: Medical record ID
+        additional_years: Years to add to retention period
+        reason: Reason for extension
+    """
+    try:
+        # Verify record belongs to current doctor
+        record = db.query(MedicalRecord).filter(
+            MedicalRecord.id == record_id,
+            MedicalRecord.doctor_id == current_user.id
+        ).first()
+        
+        if not record:
+            raise HTTPException(
+                status_code=404,
+                detail="Registro no encontrado o no autorizado"
+            )
+        
+        if additional_years < 1 or additional_years > 50:
+            raise HTTPException(
+                status_code=400,
+                detail="El número de años debe estar entre 1 y 50"
+            )
+        
+        success = retention.extend_retention(
+            db,
+            record_id,
+            performed_by=current_user.id,
+            additional_years=additional_years,
+            reason=reason
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=400,
+                detail="No se pudo extender el periodo de retención"
+            )
+        
+        return {
+            "success": True,
+            "message": f"Periodo de retención extendido por {additional_years} años",
+            "record_id": record_id,
+            "additional_years": additional_years
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error(f"Error extending retention for record {record_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/data-retention/logs")
+async def get_retention_logs_endpoint(
+    entity_type: Optional[str] = None,
+    entity_id: Optional[int] = None,
+    action_type: Optional[str] = None,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """
+    Get data retention action logs
+    
+    Args:
+        entity_type: Filter by entity type (optional)
+        entity_id: Filter by entity ID (optional)
+        action_type: Filter by action type (optional)
+        limit: Maximum logs to return
+    """
+    try:
+        logs = retention.get_retention_logs(
+            db,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            action_type=action_type,
+            limit=limit
+        )
+        
+        return {
+            "success": True,
+            "logs": logs,
+            "count": len(logs)
+        }
+        
+    except Exception as e:
+        api_logger.error(f"Error getting retention logs: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # ============================================================================
 # SERVER

@@ -21,6 +21,7 @@ alwaysApply: true
 - Comments in code can be in **Spanish**
 - Console logs and debug messages in **Spanish**
 - Git commit messages in **English**
+- Do not send anything to github unless requested
 
 ### Development Environment
 - **ALL compilations MUST be done with Docker**
