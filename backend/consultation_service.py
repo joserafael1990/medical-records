@@ -201,7 +201,7 @@ def get_consultation_clinical_studies(db: Session, consultation_id: int) -> List
             "id": study.id,
             "study_name": study.study_name,
             "study_type": study.study_type,
-            "description": study.description,
+            "description": study.study_description,  # Corregido: study_description en lugar de description
             "pdf_url": study.pdf_path,
             "created_at": study.created_at.isoformat() if study.created_at else None
         }
