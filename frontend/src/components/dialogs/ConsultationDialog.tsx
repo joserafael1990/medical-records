@@ -2866,7 +2866,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                       vs => vs.id === vitalSignsHook.vitalSignFormData.vital_sign_id
                     );
                     
-                    if (selectedVitalSign && selectedVitalSign.name.toLowerCase().includes('índice de masa corporal')) {
+                    if (selectedVitalSign && (selectedVitalSign.name.toLowerCase().includes('imc') || selectedVitalSign.name.toLowerCase().includes('índice de masa corporal') || selectedVitalSign.name.toLowerCase().includes('bmi'))) {
                       const allVitalSigns = vitalSignsHook.getAllVitalSigns();
                       const weightSign = allVitalSigns.find(vs => 
                         vs.vital_sign_name.toLowerCase().includes('peso')
@@ -2898,7 +2898,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                       );
                       
                       // Check if this is BMI and if we have weight and height
-                      if (selectedVitalSign && selectedVitalSign.name.toLowerCase().includes('índice de masa corporal')) {
+                      if (selectedVitalSign && (selectedVitalSign.name.toLowerCase().includes('imc') || selectedVitalSign.name.toLowerCase().includes('índice de masa corporal') || selectedVitalSign.name.toLowerCase().includes('bmi'))) {
                         const allVitalSigns = vitalSignsHook.getAllVitalSigns();
                         const weightSign = allVitalSigns.find(vs => 
                           vs.vital_sign_name.toLowerCase().includes('peso')
