@@ -74,16 +74,17 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
   isSubmitting,
   fieldErrors = {}
 }) => {
+  const [countries, setCountries] = useState<{ id: number; name: string }[]>([]);
   const [states, setStates] = useState<{ id: number; name: string }[]>([]);
   const [timezones, setTimezones] = useState<{ value: string; label: string }[]>([]);
 
   useEffect(() => {
-    const loadStates = async () => {
+    const loadCountries = async () => {
       try {
-        const statesData = await apiService.getStates();
-        setStates(statesData);
+        const countriesData = await apiService.getCountries();
+        setCountries(countriesData);
       } catch (error) {
-        console.error('Error loading states:', error);
+        console.error('Error loading countries:', error);
       }
     };
 
@@ -97,14 +98,51 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
     };
 
     if (open) {
-      loadStates();
+      loadCountries();
       loadTimezones();
     }
   }, [open]);
+
+  // Cargar estados cuando cambie el país seleccionado
+  useEffect(() => {
+    const loadStates = async () => {
+      if (!formData.office_country || !countries.length) {
+        setStates([]);
+        return;
+      }
+
+      try {
+        // Buscar el ID del país seleccionado
+        const selectedCountry = countries.find(c => c.name === formData.office_country);
+        if (selectedCountry) {
+          const statesData = await apiService.getStates(selectedCountry.id);
+          setStates(statesData);
+        } else {
+          setStates([]);
+        }
+      } catch (error) {
+        console.error('Error loading states:', error);
+        setStates([]);
+      }
+    };
+
+    loadStates();
+  }, [formData.office_country, countries]);
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | any) => {
     const { name, value } = e.target;
     console.log('🔄 handleChange called:', { name, value });
-    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Si cambia el país, limpiar el estado seleccionado
+    if (name === 'office_country') {
+      setFormData(prev => ({ 
+        ...prev, 
+        [name]: value,
+        office_state_id: '' // Limpiar estado cuando cambia el país
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+    
     if (fieldErrors[name]) {
       setFormErrorMessage('');
     }
@@ -379,6 +417,60 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
                 error={!!fieldErrors.office_city}
               helperText={fieldErrors.office_city}
             />
+              <TextField
+              name="office_country"
+              label="País *"
+              value={formData.office_country || ''}
+              onChange={handleChange}
+              size="small"
+              required
+              error={!!fieldErrors.office_country}
+              helperText={fieldErrors.office_country}
+              select
+              SelectProps={{
+                native: true,
+                style: { zIndex: 9999 }
+              }}
+              InputLabelProps={{
+                shrink: true
+              }}
+              sx={{
+                '& .MuiSelect-select': {
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  paddingRight: '32px !important',
+                  minHeight: 'auto !important'
+                },
+                '& .MuiInputLabel-root': {
+                  '&.Mui-focused': {
+                    color: 'primary.main'
+                  },
+                  transform: 'translate(14px, -9px) scale(0.75)',
+                  '&.MuiInputLabel-shrink': {
+                    transform: 'translate(14px, -9px) scale(0.75)'
+                  }
+                },
+                '& .MuiOutlinedInput-root': {
+                  '& fieldset': {
+                    borderColor: 'rgba(0, 0, 0, 0.23)'
+                  },
+                  '&:hover fieldset': {
+                    borderColor: 'rgba(0, 0, 0, 0.87)'
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: 'primary.main'
+                  }
+                }
+              }}
+            >
+              <option value="">Seleccione</option>
+              {countries.map(country => (
+                <option key={country.id} value={country.name}>
+                  {country.name}
+                </option>
+              ))}
+            </TextField>
                   <TextField
                     name="office_state_id"
                     label="Estado *"
@@ -442,78 +534,6 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
                       </option>
                     ))}
                   </TextField>
-              <TextField
-              name="office_country"
-              label="País *"
-              value={formData.office_country || 'México'}
-              onChange={handleChange}
-              size="small"
-              required
-              error={!!fieldErrors.office_country}
-              helperText={fieldErrors.office_country}
-              select
-              SelectProps={{
-                native: true,
-                style: { zIndex: 9999 }
-              }}
-              InputLabelProps={{
-                shrink: true
-              }}
-              sx={{
-                '& .MuiSelect-select': {
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  paddingRight: '32px !important',
-                  minHeight: 'auto !important'
-                },
-                '& .MuiInputLabel-root': {
-                  '&.Mui-focused': {
-                    color: 'primary.main'
-                  },
-                  transform: 'translate(14px, -9px) scale(0.75)',
-                  '&.MuiInputLabel-shrink': {
-                    transform: 'translate(14px, -9px) scale(0.75)'
-                  }
-                },
-                '& .MuiOutlinedInput-root': {
-                  '& fieldset': {
-                    borderColor: 'rgba(0, 0, 0, 0.23)'
-                  },
-                  '&:hover fieldset': {
-                    borderColor: 'rgba(0, 0, 0, 0.87)'
-                  },
-                  '&.Mui-focused fieldset': {
-                    borderColor: 'primary.main'
-                  }
-                }
-              }}
-            >
-              <option value="">Seleccione</option>
-              <option value="México">México</option>
-              <option value="Estados Unidos">Estados Unidos</option>
-              <option value="Canadá">Canadá</option>
-              <option value="España">España</option>
-              <option value="Argentina">Argentina</option>
-              <option value="Colombia">Colombia</option>
-              <option value="Chile">Chile</option>
-              <option value="Perú">Perú</option>
-              <option value="Brasil">Brasil</option>
-              <option value="Venezuela">Venezuela</option>
-              <option value="Ecuador">Ecuador</option>
-              <option value="Guatemala">Guatemala</option>
-              <option value="Cuba">Cuba</option>
-              <option value="Bolivia">Bolivia</option>
-              <option value="República Dominicana">República Dominicana</option>
-              <option value="Honduras">Honduras</option>
-              <option value="Paraguay">Paraguay</option>
-              <option value="El Salvador">El Salvador</option>
-              <option value="Nicaragua">Nicaragua</option>
-              <option value="Costa Rica">Costa Rica</option>
-              <option value="Panamá">Panamá</option>
-              <option value="Uruguay">Uruguay</option>
-              <option value="Otro">Otro</option>
-            </TextField>
               <TextField
               name="office_postal_code"
                 label="Código Postal"
