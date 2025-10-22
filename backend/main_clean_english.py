@@ -1382,8 +1382,8 @@ async def send_whatsapp_appointment_reminder(
             except:
                 pass  # Use default locale if Spanish not available
         
-        appointment_date = appointment.date.strftime('%d de %B de %Y')
-        appointment_time = appointment.date.strftime('%I:%M %p')
+        appointment_date = appointment.appointment_date.strftime('%d de %B de %Y')
+        appointment_time = appointment.appointment_date.strftime('%I:%M %p')
         
         # Get office address and country code from doctor's profile
         office_address = current_user.office_address if current_user.office_address else "Consultorio Médico"
