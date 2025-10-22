@@ -540,8 +540,8 @@ class StudyCategoryBase(BaseSchema):
 
 class StudyCategory(StudyCategoryBase):
     id: int
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 class StudyNormalValueBase(BaseSchema):
     age_min: Optional[int] = None

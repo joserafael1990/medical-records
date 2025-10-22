@@ -196,18 +196,19 @@ def create_patient_with_code(db: Session, patient_data: schemas.PatientCreate, p
     # Prepare patient data with proper null handling for foreign keys
     patient_dict = patient_data.dict(exclude={'person_type'})
     
-    # Handle foreign key fields - convert empty strings to None
-    foreign_key_fields = [
+    # Handle foreign key fields and date fields - convert empty strings to None
+    nullable_fields = [
         'emergency_contact_relationship',
         'birth_state_id',
         'birth_country_id',
         'address_state_id',
         'address_country_id',
-        'city_residence_id'
+        'city_residence_id',
+        'birth_date'  # Date field that should be None if empty
     ]
     
-    for field in foreign_key_fields:
-        if field in patient_dict and patient_dict[field] == '':
+    for field in nullable_fields:
+        if field in patient_dict and (patient_dict[field] == '' or patient_dict[field] is None):
             patient_dict[field] = None
     
     # Create patient with the provided code and assign the creating doctor

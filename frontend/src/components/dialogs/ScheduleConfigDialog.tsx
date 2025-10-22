@@ -205,53 +205,40 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
         };
         
         const updatedTimeBlocks = [...(existingSchedule.time_blocks || []), newTimeBlock];
-        const updatedSchedule = {
-          ...existingSchedule,
-          time_blocks: updatedTimeBlocks
-        };
-        
-        // Actualizar estado local inmediatamente para respuesta rápida de UI
-        setWeeklySchedule(prev => ({
-          ...prev,
-          [dayKey]: updatedSchedule
-        }));
 
-        // Guardar cambios en el servidor
+        // Guardar cambios en el servidor primero, NO actualizar estado local aún
+        // updateDaySchedule ya maneja la actualización del estado local con la respuesta del servidor
         await updateDaySchedule(dayIndex, {
           day_of_week: dayIndex,
           time_blocks: updatedTimeBlocks,
           is_active: existingSchedule.is_active
-        }, false); // No need to reload since we already have the correct local state
+        }, false);
       }
     } catch (error) {
       console.error('Error in addTimeBlock:', error);
+      setError('Error al agregar horario. Por favor, intente nuevamente.');
     }
   };
 
   const removeTimeBlock = async (dayIndex: number, blockIndex: number) => {
-    const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklySchedule;
-    const existingSchedule = weeklySchedule[dayKey];
-    
-    if (existingSchedule && existingSchedule.time_blocks) {
-      const updatedTimeBlocks = existingSchedule.time_blocks.filter((_, index) => index !== blockIndex);
+    try {
+      const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklySchedule;
+      const existingSchedule = weeklySchedule[dayKey];
       
-      const updatedSchedule = {
-        ...existingSchedule,
-        time_blocks: updatedTimeBlocks
-      };
-      
-      // Actualizar estado local inmediatamente para respuesta rápida de UI
-      setWeeklySchedule(prev => ({
-        ...prev,
-        [dayKey]: updatedSchedule
-      }));
+      if (existingSchedule && existingSchedule.time_blocks) {
+        const updatedTimeBlocks = existingSchedule.time_blocks.filter((_, index) => index !== blockIndex);
 
-      // Guardar cambios en el servidor
-      await updateDaySchedule(dayIndex, {
-        day_of_week: dayIndex,
-        time_blocks: updatedTimeBlocks,
-        is_active: existingSchedule.is_active
-      }, false); // No need to reload since we already have the correct local state
+        // Guardar cambios en el servidor primero, NO actualizar estado local aún
+        // updateDaySchedule ya maneja la actualización del estado local con la respuesta del servidor
+        await updateDaySchedule(dayIndex, {
+          day_of_week: dayIndex,
+          time_blocks: updatedTimeBlocks,
+          is_active: existingSchedule.is_active
+        }, false);
+      }
+    } catch (error) {
+      console.error('Error in removeTimeBlock:', error);
+      setError('Error al eliminar horario. Por favor, intente nuevamente.');
     }
   };
 

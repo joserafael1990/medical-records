@@ -92,7 +92,7 @@ class Person(Base):
     maternal_surname = Column(String(100))
     curp = Column(String(18), unique=True)
     rfc = Column(String(13))
-    birth_date = Column(Date, nullable=False)
+    birth_date = Column(Date, nullable=True)  # Optional field
     gender = Column(String(20), nullable=False)
     civil_status = Column(String(20))
     birth_city = Column(String(100))  # Ciudad de nacimiento (reemplaza birth_place)

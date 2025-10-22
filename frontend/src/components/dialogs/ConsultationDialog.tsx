@@ -1244,7 +1244,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         <Box component="form" sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
           
           {/* New Consultation Flow - Only show for new consultations */}
-          {!consultation && (
+          {/* Skip initial questions if no patients exist */}
+          {!consultation && patients.length > 0 && (
             <>
               {/* Question 1: ¿Consulta con previa cita? */}
               <Box>
@@ -1298,40 +1299,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             </>
           )}
 
-          {/* Legacy Appointment Question - Only show for editing existing consultations */}
-          {consultation && (
-          <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <CalendarIcon sx={{ fontSize: 20 }} />
-              ¿Consulta con previa cita?
-              <Typography component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Typography>
-            </Typography>
-            <FormControl size="small" fullWidth>
-              <InputLabel>Seleccione una opción</InputLabel>
-              <Select
-                value={formData.has_appointment === true ? 'yes' : formData.has_appointment === false ? 'no' : ''}
-                onChange={(e: any) => {
-                  const value = e.target.value;
-                  const hasAppointment = value === 'yes';
-                  setFormData((prev: ConsultationFormData) => ({ 
-                    ...prev, 
-                    has_appointment: hasAppointment,
-                    appointment_id: hasAppointment ? prev.appointment_id : ''
-                  }));
-                  if (!hasAppointment) {
-                    setSelectedAppointment(null);
-                    setSelectedPatient(null);
-                    setPatientEditData(null);
-                  }
-                }}
-                label="Seleccione una opción"
-              >
-                <MenuItem value="yes">Sí</MenuItem>
-                <MenuItem value="no">No</MenuItem>
-              </Select>
-            </FormControl>
-          </Box>
-          )}
+          {/* Legacy Appointment Question removed - Not needed when editing existing consultations */}
 
           {/* Appointment Selection - Show for new consultations with appointment OR legacy editing */}
           {((!consultation && hasAppointment === true) || (consultation && formData.has_appointment)) && (
@@ -1471,12 +1439,12 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               </Box>
             )}
 
-          {/* Inline New Patient Creation Form - Show for new consultations without appointment and new patient OR legacy editing */}
-          {((!consultation && hasAppointment === false && isNewPatient === true) || (consultation && !formData.has_appointment && !selectedPatient)) && (
+          {/* Inline New Patient Creation Form - Show when no patients exist OR for new consultations without appointment and new patient OR legacy editing */}
+          {((!consultation && patients.length === 0) || (!consultation && hasAppointment === false && isNewPatient === true) || (consultation && !formData.has_appointment && !selectedPatient)) && (
             <Box sx={{ mt: 2 }}>
               <Divider sx={{ my: 2 }}>
                 <Typography variant="body2" color="text.secondary">
-                  O complete los datos para crear un nuevo paciente:
+                  {patients.length === 0 ? 'Complete los datos básicos del nuevo paciente:' : 'O complete los datos para crear un nuevo paciente:'}
                 </Typography>
               </Divider>
               
@@ -1518,7 +1486,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   />
                   <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
                     <DatePicker
-                      label="Fecha de Nacimiento *"
+                      label="Fecha de Nacimiento - opcional"
                       value={newPatientData.birth_date ? new Date(newPatientData.birth_date) : null}
                       onChange={(newValue: any) => {
                         const dateStr = newValue ? newValue.toISOString().split('T')[0] : '';
@@ -1528,20 +1496,19 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                         textField: {
                           size: 'small',
                           fullWidth: true,
-                          required: true,
                           placeholder: 'Fecha de Nacimiento - opcional'
                         }
                       }}
                     />
                   </LocalizationProvider>
-                  <FormControl size="small" fullWidth>
-                    <InputLabel>Género</InputLabel>
+                  <FormControl size="small" fullWidth required>
+                    <InputLabel>Género *</InputLabel>
                     <Select
                       value={newPatientData.gender || ''}
                       onChange={(e: any) => handleNewPatientFieldChange('gender', e.target.value)}
-                      label="Género"
+                      label="Género *"
+                      required
                     >
-                      <MenuItem value=""><em>Seleccione</em></MenuItem>
                       <MenuItem value="Masculino">Masculino</MenuItem>
                       <MenuItem value="Femenino">Femenino</MenuItem>
                       <MenuItem value="Otro">Otro</MenuItem>
@@ -1891,7 +1858,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                     />
                     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
                       <DatePicker
-                        label="Fecha de Nacimiento *"
+                        label="Fecha de Nacimiento - opcional"
                         value={getPatientData('birth_date') ? new Date(getPatientData('birth_date')) : null}
                         onChange={(newValue: any) => {
                           const dateStr = newValue ? newValue.toISOString().split('T')[0] : '';
@@ -1900,20 +1867,19 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                         slotProps={{
                           textField: {
                             size: 'small',
-                            fullWidth: true,
-                            required: true
+                            fullWidth: true
                           }
                         }}
                       />
                     </LocalizationProvider>
-                    <FormControl size="small" fullWidth>
-                      <InputLabel>Género</InputLabel>
+                    <FormControl size="small" fullWidth required>
+                      <InputLabel>Género *</InputLabel>
                       <Select
                         value={getPatientData('gender')}
                         onChange={(e: any) => handlePatientDataChangeWrapper('gender', e.target.value)}
-                        label="Género"
+                        label="Género *"
+                        required
                       >
-                        <MenuItem value=""><em>Seleccione</em></MenuItem>
                         <MenuItem value="Masculino">Masculino</MenuItem>
                         <MenuItem value="Femenino">Femenino</MenuItem>
                         <MenuItem value="Otro">Otro</MenuItem>
@@ -2915,7 +2881,17 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                         const height = parseFloat(heightSign.value);
                         
                         if (!isNaN(weight) && !isNaN(height) && height > 0) {
-                          return `Peso: ${weight} kg, Estatura: ${height} cm. Haz clic en "Calcular" para calcular automáticamente el IMC.`;
+                          // Auto-calculate BMI if value is empty
+                          const currentValue = vitalSignsHook.vitalSignFormData.value;
+                          if (!currentValue || currentValue === '') {
+                            setTimeout(() => {
+                              const heightInMeters = height / 100;
+                              const bmi = weight / (heightInMeters * heightInMeters);
+                              const bmiRounded = Math.round(bmi * 10) / 10;
+                              vitalSignsHook.updateFormData({ value: bmiRounded.toString() });
+                            }, 0);
+                          }
+                          return `Peso: ${weight} kg, Estatura: ${height} cm. IMC calculado automáticamente.`;
                         } else {
                           return 'Agrega primero el peso y la estatura para calcular automáticamente el IMC.';
                         }
@@ -2942,33 +2918,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                           vs.vital_sign_name.toLowerCase().includes('altura')
                         );
                         
-                        if (weightSign && heightSign) {
-                          const weight = parseFloat(weightSign.value);
-                          const height = parseFloat(heightSign.value);
-                          
-                          if (!isNaN(weight) && !isNaN(height) && height > 0) {
-                            const calculateBMI = () => {
-                              const heightInMeters = height / 100; // Convert cm to meters
-                              const bmi = weight / (heightInMeters * heightInMeters);
-                              const bmiRounded = Math.round(bmi * 10) / 10; // Round to 1 decimal
-                              vitalSignsHook.updateFormData({ value: bmiRounded.toString() });
-                            };
-                            
-                            return (
-                              <Button
-                                size="small"
-                                onClick={calculateBMI}
-                                sx={{ 
-                                  minWidth: 'auto',
-                                  px: 1,
-                                  fontSize: '0.75rem'
-                                }}
-                              >
-                                Calcular
-                              </Button>
-                            );
-                          }
-                        }
+                        // Auto-calculate BMI - no button needed
                       }
                       return null;
                     })()

@@ -667,10 +667,6 @@ class ApiService {
   async createPatient(patientData: PatientFormData): Promise<Patient> {
     
     // Validate required fields
-    if (!patientData.birth_date && !patientData.date_of_birth) {
-      throw new Error('La fecha de nacimiento es requerida');
-    }
-    
     if (!patientData.first_name || !patientData.paternal_surname) {
       throw new Error('El nombre y apellido paterno son requeridos');
     }
@@ -691,12 +687,11 @@ class ApiService {
     }
     
     // Clean the data before sending to ensure proper format
-    const cleanedData = {
+    const cleanedData: any = {
       // Required fields - don't convert to null
       person_type: 'patient',
       first_name: patientData.first_name || '',
       paternal_surname: patientData.paternal_surname || '',
-      birth_date: patientData.birth_date || patientData.date_of_birth,
       gender: this.mapGenderToBackend(patientData.gender || ''),
       
       // Optional fields - can be null
@@ -731,6 +726,11 @@ class ApiService {
       emergency_contact_relationship: patientData.emergency_contact_relationship || ''
     };
     
+    // Only include birth_date if it has a valid value
+    const birthDate = patientData.birth_date || patientData.date_of_birth;
+    if (birthDate) {
+      cleanedData.birth_date = birthDate;
+    }
     
     try {
       const response = await this.api.post<Patient>(API_CONFIG.ENDPOINTS.PATIENTS, cleanedData);
@@ -791,11 +791,10 @@ class ApiService {
   async updatePatient(id: string, patientData: Partial<PatientFormData>): Promise<Patient> {
     
     // Clean the data before sending to ensure proper format
-    const cleanedData = {
+    const cleanedData: any = {
       // Required fields with proper mapping
       first_name: patientData.first_name || '',
       paternal_surname: patientData.paternal_surname || '',
-      birth_date: patientData.birth_date || patientData.date_of_birth || null,
       gender: this.mapGenderToBackend(patientData.gender || ''),
       
       // Optional fields - can be null
@@ -830,6 +829,11 @@ class ApiService {
       emergency_contact_relationship: patientData.emergency_contact_relationship || '',
     };
     
+    // Only include birth_date if it has a valid value
+    const birthDate = patientData.birth_date || patientData.date_of_birth;
+    if (birthDate) {
+      cleanedData.birth_date = birthDate;
+    }
     
     const response = await this.api.put<Patient>(`${API_CONFIG.ENDPOINTS.PATIENTS}/${id}`, cleanedData);
     return response.data;

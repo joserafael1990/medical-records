@@ -131,8 +131,34 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     maternal_surname: '',
     birth_date: '',
     gender: '',
-    primary_phone: ''
+    primary_phone: '',
+    email: '',
+    home_address: '',
+    address_city: '',
+    address_postal_code: '',
+    address_country_id: '',
+    address_state_id: '',
+    curp: '',
+    rfc: '',
+    civil_status: '',
+    birth_city: '',
+    birth_country_id: '',
+    birth_state_id: '',
+    emergency_contact_name: '',
+    emergency_contact_phone: '',
+    emergency_contact_relationship: '',
+    chronic_conditions: '',
+    current_medications: '',
+    insurance_provider: '',
+    insurance_number: ''
   });
+  
+  // State for advanced patient data
+  const [showAdvancedPatientData, setShowAdvancedPatientData] = useState<boolean>(false);
+  const [countries, setCountries] = useState<any[]>([]);
+  const [states, setStates] = useState<any[]>([]);
+  const [birthStates, setBirthStates] = useState<any[]>([]);
+  const [emergencyRelationships, setEmergencyRelationships] = useState<any[]>([]);
 
   // Function to load available times for a specific date
   const loadAvailableTimes = async (date: string) => {
@@ -188,6 +214,24 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     }));
   };
 
+  // Handle country change for new patients
+  const handleNewPatientCountryChange = async (field: 'address_country_id' | 'birth_country_id', countryId: string) => {
+    handleNewPatientFieldChange(field, countryId);
+    
+    if (countryId) {
+      try {
+        const statesData = await apiService.getStates(parseInt(countryId));
+        if (field === 'address_country_id') {
+          setStates(statesData);
+        } else {
+          setBirthStates(statesData);
+        }
+      } catch (error) {
+        console.error('Error loading states:', error);
+      }
+    }
+  };
+
   // Determine if appointment fields should be enabled
   const areAppointmentFieldsEnabled = () => {
     if (!localFormData.appointment_type) return false;
@@ -219,10 +263,11 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     // Check patient data based on appointment type
     if (localFormData.appointment_type === 'primera vez' || patients.length === 0) {
       // For "primera vez", check if patient is selected OR new patient data is provided
-      // Only name, surname and phone are required for appointment creation
+      // Required fields: name, surname, phone, and gender
       if (!localFormData.patient_id && (!newPatientData.first_name || 
           !newPatientData.paternal_surname || 
-          !newPatientData.primary_phone)) {
+          !newPatientData.primary_phone ||
+          !newPatientData.gender)) {
         return false;
       }
     } else {
@@ -262,8 +307,9 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
       // For "primera vez", check if patient is selected OR new patient data is provided
       if (!localFormData.patient_id && (!newPatientData.first_name || 
           !newPatientData.paternal_surname || 
-          !newPatientData.primary_phone)) {
-        errors.push('Selecciona un paciente existente o completa los datos básicos del nuevo paciente (nombre, apellido y teléfono son requeridos)');
+          !newPatientData.primary_phone ||
+          !newPatientData.gender)) {
+        errors.push('Selecciona un paciente existente o completa los datos básicos del nuevo paciente (nombre, apellido, teléfono y género son requeridos)');
       }
       
       // If creating new patient, validate required fields
@@ -271,7 +317,8 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
         if (!newPatientData.first_name) errors.push('El nombre es requerido');
         if (!newPatientData.paternal_surname) errors.push('El apellido paterno es requerido');
         if (!newPatientData.primary_phone) errors.push('El teléfono es requerido');
-        // birth_date and gender are optional for first visit appointments
+        if (!newPatientData.gender) errors.push('El género es requerido');
+        // birth_date is optional for first visit appointments
       }
     } else {
       if (!selectedPatient || !localFormData.patient_id) {
@@ -308,6 +355,26 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                      localFormData.status === 'cancelled';
 
   // Read-only logic for cancelled appointments
+
+  // Load initial data (countries, emergency relationships)
+  useEffect(() => {
+    const loadInitialData = async () => {
+      try {
+        const [countriesData, relationshipsData] = await Promise.all([
+          apiService.getCountries(),
+          apiService.getEmergencyRelationships()
+        ]);
+        setCountries(countriesData);
+        setEmergencyRelationships(relationshipsData);
+      } catch (error) {
+        console.error('Error loading initial data:', error);
+      }
+    };
+
+    if (open) {
+      loadInitialData();
+    }
+  }, [open]);
 
   // Update local form data when props change
   useEffect(() => {
@@ -660,28 +727,15 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
               </Typography>
               
               {/* Patient Selection Logic */}
-              {patients.length === 0 ? (
-                <Box>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    No hay pacientes registrados. Crear un nuevo paciente para continuar.
-                  </Typography>
-                  {onNewPatient && (
-                    <Button
-                      variant="contained"
-                      startIcon={<PersonAddIcon />}
-                      onClick={onNewPatient}
-                      sx={{ mt: 1 }}
-                    >
-                      Crear Nuevo Paciente
-                    </Button>
-                  )}
-                </Box>
-              ) : localFormData.appointment_type === 'primera vez' && !localFormData.patient_id ? (
-                // Show inline patient creation for "primera vez"
+              {patients.length === 0 || (localFormData.appointment_type === 'primera vez' && !localFormData.patient_id) ? (
+                // Show inline patient creation for "primera vez" or when no patients
                 <Box sx={{ mt: 2 }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2, textAlign: 'center' }}>
-                    Complete los datos para crear un nuevo paciente:
-                  </Typography>
+                  <Divider sx={{ my: 2 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      {patients.length === 0 ? 'Crear nuevo paciente:' : 'O complete los datos para crear un nuevo paciente:'}
+                    </Typography>
+                  </Divider>
+                  
                   <Box sx={{ bgcolor: 'primary.50', p: 3, borderRadius: 2, border: '1px solid', borderColor: 'primary.200' }}>
                     <Typography variant="body2" color="primary.main" sx={{ mb: 2, fontWeight: 500 }}>
                       📝 Complete los datos básicos del nuevo paciente
@@ -728,7 +782,327 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                         error={hasFieldError('newPatient.primary_phone')}
                         helperText={getFieldError('newPatient.primary_phone')}
                       />
+                      <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
+                        <DatePicker
+                          label="Fecha de Nacimiento - opcional"
+                          value={newPatientData.birth_date ? new Date(newPatientData.birth_date) : null}
+                          onChange={(newValue) => {
+                            const dateStr = newValue ? newValue.toISOString().split('T')[0] : '';
+                            handleNewPatientFieldChange('birth_date', dateStr);
+                          }}
+                          slotProps={{
+                            textField: {
+                              size: 'small',
+                              fullWidth: true,
+                              placeholder: 'Fecha de Nacimiento - opcional'
+                            }
+                          }}
+                        />
+                      </LocalizationProvider>
+                      <FormControl size="small" fullWidth required>
+                        <InputLabel>Género *</InputLabel>
+                        <Select
+                          value={newPatientData.gender || ''}
+                          onChange={(e) => handleNewPatientFieldChange('gender', e.target.value)}
+                          label="Género *"
+                          required
+                        >
+                          <MenuItem value="Masculino">Masculino</MenuItem>
+                          <MenuItem value="Femenino">Femenino</MenuItem>
+                          <MenuItem value="Otro">Otro</MenuItem>
+                        </Select>
+                      </FormControl>
                     </Box>
+                    
+                    {/* Show Advanced Data Button */}
+                    {!showAdvancedPatientData && (
+                      <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center', gap: 2 }}>
+                        <Button
+                          variant="outlined"
+                          onClick={() => setShowAdvancedPatientData(true)}
+                          startIcon={<EditIcon />}
+                          sx={{ minWidth: 200 }}
+                        >
+                          Ver Datos Avanzados
+                        </Button>
+                      </Box>
+                    )}
+
+                    {/* Advanced Patient Data - Show when requested */}
+                    {showAdvancedPatientData && (
+                      <>
+                        <Divider sx={{ my: 3 }} />
+
+                        {/* Contact Information Section */}
+                        <Box>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <PhoneIcon sx={{ fontSize: 20 }} />
+                            Información de Contacto
+                          </Typography>
+                          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                            <TextField
+                              label="Teléfono"
+                              value={newPatientData.primary_phone || ''}
+                              onChange={(e) => handleNewPatientFieldChange('primary_phone', e.target.value)}
+                              size="small"
+                              required
+                            />
+                            <TextField
+                              label="Email"
+                              type="email"
+                              value={newPatientData.email || ''}
+                              onChange={(e) => handleNewPatientFieldChange('email', e.target.value)}
+                              size="small"
+                              helperText={newPatientData.email && newPatientData.email !== '' && !newPatientData.email.includes('@') ? 'El email debe tener un formato válido' : ''}
+                              error={newPatientData.email && newPatientData.email !== '' && !newPatientData.email.includes('@')}
+                            />
+                            <TextField
+                              label="Dirección"
+                              value={newPatientData.home_address || ''}
+                              onChange={(e) => handleNewPatientFieldChange('home_address', e.target.value)}
+                              size="small"
+                              fullWidth
+                              sx={{ gridColumn: '1 / -1' }}
+                            />
+                            <TextField
+                              label="Ciudad"
+                              value={newPatientData.address_city || ''}
+                              onChange={(e) => handleNewPatientFieldChange('address_city', e.target.value)}
+                              size="small"
+                            />
+                            <TextField
+                              label="Código Postal"
+                              value={newPatientData.address_postal_code || ''}
+                              onChange={(e) => handleNewPatientFieldChange('address_postal_code', e.target.value)}
+                              size="small"
+                              inputProps={{ maxLength: 5 }}
+                              helperText="Opcional"
+                            />
+                            <FormControl size="small">
+                              <InputLabel>País</InputLabel>
+                              <Select
+                                value={newPatientData.address_country_id || ''}
+                                onChange={(e) => handleNewPatientCountryChange('address_country_id', e.target.value as string)}
+                                label="País"
+                              >
+                                {(countries || []).map((country) => (
+                                  <MenuItem key={country.id} value={country.id.toString()}>
+                                    {country.name}
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                            <FormControl size="small">
+                              <InputLabel>Estado</InputLabel>
+                              <Select
+                                value={newPatientData.address_state_id || ''}
+                                onChange={(e) => handleNewPatientFieldChange('address_state_id', e.target.value)}
+                                label="Estado"
+                                disabled={!newPatientData.address_country_id}
+                              >
+                                {(states || []).map((state) => (
+                                  <MenuItem key={state.id} value={state.id.toString()}>
+                                    {state.name}
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </Box>
+                        </Box>
+
+                        <Divider sx={{ my: 3 }} />
+
+                        {/* Additional Information Section */}
+                        <Box>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <BadgeIcon sx={{ fontSize: 20 }} />
+                            Información Adicional
+                          </Typography>
+                          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                            <TextField
+                              label="CURP"
+                              value={newPatientData.curp || ''}
+                              onChange={(e) => handleNewPatientFieldChange('curp', e.target.value)}
+                              size="small"
+                              inputProps={{ maxLength: 18 }}
+                              helperText={newPatientData.curp && newPatientData.curp.length !== 18 ? 'El CURP debe tener exactamente 18 caracteres' : ''}
+                              error={newPatientData.curp && newPatientData.curp.length !== 18}
+                            />
+                            <TextField
+                              label="RFC"
+                              value={newPatientData.rfc || ''}
+                              onChange={(e) => handleNewPatientFieldChange('rfc', e.target.value)}
+                              size="small"
+                              inputProps={{ maxLength: 13 }}
+                              helperText={newPatientData.rfc && newPatientData.rfc.length < 10 ? 'El RFC debe tener al menos 10 caracteres' : ''}
+                              error={newPatientData.rfc && newPatientData.rfc.length < 10}
+                            />
+                            <FormControl size="small" fullWidth>
+                              <InputLabel>Estado Civil</InputLabel>
+                              <Select
+                                value={newPatientData.civil_status || ''}
+                                onChange={(e) => handleNewPatientFieldChange('civil_status', e.target.value)}
+                                label="Estado Civil"
+                              >
+                                <MenuItem value=""><em>Seleccione</em></MenuItem>
+                                <MenuItem value="single">Soltero(a)</MenuItem>
+                                <MenuItem value="married">Casado(a)</MenuItem>
+                                <MenuItem value="divorced">Divorciado(a)</MenuItem>
+                                <MenuItem value="widowed">Viudo(a)</MenuItem>
+                                <MenuItem value="free_union">Unión libre</MenuItem>
+                              </Select>
+                            </FormControl>
+                          </Box>
+                        </Box>
+
+                        <Divider sx={{ my: 3 }} />
+
+                        {/* Birth Information Section */}
+                        <Box>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <PersonIcon sx={{ fontSize: 20 }} />
+                            Información de Nacimiento
+                          </Typography>
+                          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                            <TextField
+                              label="Ciudad de Nacimiento"
+                              value={newPatientData.birth_city || ''}
+                              onChange={(e) => handleNewPatientFieldChange('birth_city', e.target.value)}
+                              size="small"
+                            />
+                            <FormControl size="small">
+                              <InputLabel>País de Nacimiento</InputLabel>
+                              <Select
+                                value={newPatientData.birth_country_id || ''}
+                                onChange={(e) => handleNewPatientCountryChange('birth_country_id', e.target.value as string)}
+                                label="País de Nacimiento"
+                              >
+                                {(countries || []).map((country) => (
+                                  <MenuItem key={country.id} value={country.id.toString()}>
+                                    {country.name}
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                            <FormControl size="small">
+                              <InputLabel>Estado de Nacimiento</InputLabel>
+                              <Select
+                                value={newPatientData.birth_state_id || ''}
+                                onChange={(e) => handleNewPatientFieldChange('birth_state_id', e.target.value)}
+                                label="Estado de Nacimiento"
+                                disabled={!newPatientData.birth_country_id}
+                              >
+                                {(birthStates || []).map((state) => (
+                                  <MenuItem key={state.id} value={state.id.toString()}>
+                                    {state.name}
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </Box>
+                        </Box>
+
+                        <Divider sx={{ my: 3 }} />
+
+                        {/* Emergency Contact Section */}
+                        <Box>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <PhoneIcon sx={{ fontSize: 20 }} />
+                            Contacto de Emergencia
+                          </Typography>
+                          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                            <TextField
+                              label="Nombre del Contacto"
+                              value={newPatientData.emergency_contact_name || ''}
+                              onChange={(e) => handleNewPatientFieldChange('emergency_contact_name', e.target.value)}
+                              size="small"
+                            />
+                            <TextField
+                              label="Teléfono del Contacto"
+                              value={newPatientData.emergency_contact_phone || ''}
+                              onChange={(e) => handleNewPatientFieldChange('emergency_contact_phone', e.target.value)}
+                              size="small"
+                            />
+                            <FormControl size="small" fullWidth>
+                              <InputLabel>Relación con el Paciente</InputLabel>
+                              <Select
+                                value={newPatientData.emergency_contact_relationship || ''}
+                                onChange={(e) => handleNewPatientFieldChange('emergency_contact_relationship', e.target.value)}
+                                label="Relación con el Paciente"
+                                sx={{ gridColumn: '1 / -1' }}
+                              >
+                                <MenuItem value=""><em>Seleccione</em></MenuItem>
+                                {(emergencyRelationships || []).map((relationship) => (
+                                  <MenuItem key={relationship.code} value={relationship.code}>
+                                    {relationship.name}
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </Box>
+                        </Box>
+
+                        <Divider sx={{ my: 3 }} />
+
+                        {/* Medical Information Section */}
+                        <Box>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <BadgeIcon sx={{ fontSize: 20 }} />
+                            Información Médica
+                          </Typography>
+                          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                            <TextField
+                              label="Condiciones Crónicas"
+                              value={newPatientData.chronic_conditions || ''}
+                              onChange={(e) => handleNewPatientFieldChange('chronic_conditions', e.target.value)}
+                              size="small"
+                              multiline
+                              rows={2}
+                              fullWidth
+                              sx={{ gridColumn: '1 / -1' }}
+                            />
+                            <TextField
+                              label="Medicamentos Actuales"
+                              value={newPatientData.current_medications || ''}
+                              onChange={(e) => handleNewPatientFieldChange('current_medications', e.target.value)}
+                              size="small"
+                              multiline
+                              rows={2}
+                              fullWidth
+                              sx={{ gridColumn: '1 / -1' }}
+                            />
+                            <TextField
+                              label="Proveedor de Seguro"
+                              value={newPatientData.insurance_provider || ''}
+                              onChange={(e) => handleNewPatientFieldChange('insurance_provider', e.target.value)}
+                              size="small"
+                            />
+                            <TextField
+                              label="Código de Seguro"
+                              value={newPatientData.insurance_number || ''}
+                              onChange={(e) => handleNewPatientFieldChange('insurance_number', e.target.value)}
+                              size="small"
+                              inputProps={{ 
+                                autoComplete: 'new-password',
+                                'data-form-type': 'other',
+                                'data-lpignore': 'true',
+                                'data-1p-ignore': 'true',
+                                'data-bwignore': 'true',
+                                'data-autofill': 'off',
+                                'autocapitalize': 'off',
+                                'autocorrect': 'off',
+                                'spellcheck': 'false',
+                                'name': 'medical_insurance_code',
+                                'id': 'medical_insurance_code',
+                                'type': 'text',
+                                'role': 'textbox',
+                                'aria-label': 'Código de seguro médico'
+                              }}
+                            />
+                          </Box>
+                        </Box>
+                      </>
+                    )}
                   </Box>
                 </Box>
               ) : (

@@ -43,6 +43,10 @@ CREATE TABLE schedule_templates (
     -- Estado del día
     is_active BOOLEAN DEFAULT TRUE,
     
+    -- Múltiples bloques de tiempo en formato JSONB
+    -- Ejemplo: [{"start_time": "09:00", "end_time": "13:00"}, {"start_time": "15:00", "end_time": "19:00"}]
+    time_blocks JSONB DEFAULT '[]'::jsonb,
+    
     -- Metadatos
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
@@ -116,6 +120,7 @@ COMMENT ON TABLE schedule_templates IS 'Plantillas de horarios semanales del mé
 COMMENT ON COLUMN schedule_templates.day_of_week IS '0=Lunes, 1=Martes, 2=Miércoles, 3=Jueves, 4=Viernes, 5=Sábado, 6=Domingo';
 COMMENT ON COLUMN schedule_templates.consultation_duration IS 'Duración de cada consulta en minutos (15-120)';
 COMMENT ON COLUMN schedule_templates.break_duration IS 'Tiempo de descanso entre consultas en minutos (0-30)';
+COMMENT ON COLUMN schedule_templates.time_blocks IS 'Array JSONB de bloques horarios: [{"start_time": "09:00", "end_time": "13:00"}, {"start_time": "15:00", "end_time": "19:00"}]';
 
 COMMENT ON TABLE schedule_exceptions IS 'Excepciones al horario base: vacaciones, días festivos, etc.';
 COMMENT ON COLUMN schedule_exceptions.exception_type IS 'vacation, holiday, sick_leave, custom, special_hours';

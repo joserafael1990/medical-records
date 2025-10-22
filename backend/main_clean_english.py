@@ -1823,7 +1823,7 @@ async def get_weekly_schedule_templates(
         # Query templates from database using SQL
         result = db.execute(text("""
             SELECT id, day_of_week, start_time, end_time, consultation_duration,
-                   break_duration, lunch_start, lunch_end, is_active
+                   break_duration, lunch_start, lunch_end, is_active, time_blocks
             FROM schedule_templates 
             WHERE doctor_id = :doctor_id
             ORDER BY day_of_week
@@ -1847,6 +1847,19 @@ async def get_weekly_schedule_templates(
         for template in templates:
             day_name = day_names[template.day_of_week]
             if template.is_active:
+                # Parse time_blocks from JSONB or fallback to start_time/end_time
+                time_blocks = []
+                if hasattr(template, 'time_blocks') and template.time_blocks:
+                    # time_blocks is already parsed from JSONB
+                    time_blocks = template.time_blocks if isinstance(template.time_blocks, list) else []
+                
+                # Fallback: if no time_blocks, create from start_time/end_time
+                if not time_blocks and template.start_time and template.end_time:
+                    time_blocks = [{
+                        "start_time": template.start_time.strftime("%H:%M"),
+                        "end_time": template.end_time.strftime("%H:%M")
+                    }]
+                
                 weekly_schedule[day_name] = {
                     "id": template.id,
                     "day_of_week": template.day_of_week,
@@ -1857,12 +1870,7 @@ async def get_weekly_schedule_templates(
                     "lunch_start": template.lunch_start.strftime("%H:%M") if template.lunch_start else None,
                     "lunch_end": template.lunch_end.strftime("%H:%M") if template.lunch_end else None,
                     "is_active": template.is_active,
-                    "time_blocks": [
-                        {
-                            "start_time": template.start_time.strftime("%H:%M") if template.start_time else None,
-                            "end_time": template.end_time.strftime("%H:%M") if template.end_time else None
-                        }
-                    ]
+                    "time_blocks": time_blocks
                 }
         
         api_logger.info("Weekly schedule templates loaded", doctor_id=current_user.id, templates_count=len(templates))
@@ -1898,6 +1906,9 @@ async def create_schedule_template(
             start_time = '09:00'
             end_time = '17:00'
         
+        # Prepare time_blocks JSONB
+        time_blocks_json = json.dumps(time_blocks) if time_blocks else '[]'
+        
         # Create template in database
         result = db.execute(text("""
             INSERT INTO schedule_templates 
@@ -1916,7 +1927,7 @@ async def create_schedule_template(
             "lunch_start": "13:00" if is_active else None,
             "lunch_end": "14:00" if is_active else None,
             "is_active": is_active,
-            "time_blocks": json.dumps(time_blocks)
+            "time_blocks": time_blocks_json
         })
         
         template_id = result.fetchone()[0]
@@ -1933,12 +1944,7 @@ async def create_schedule_template(
             "lunch_start": "13:00" if is_active else None,
             "lunch_end": "14:00" if is_active else None,
             "is_active": is_active,
-            "time_blocks": [
-                {
-                    "start_time": start_time,
-                    "end_time": end_time
-                }
-            ]
+            "time_blocks": time_blocks if time_blocks else [{"start_time": start_time, "end_time": end_time}]
         }
         
         api_logger.info("Schedule template created", doctor_id=current_user.id, template_id=template_id)
@@ -1969,13 +1975,14 @@ async def update_schedule_template(
             params["is_active"] = template_data["is_active"]
         
         if "time_blocks" in template_data:
-            # Store all time blocks as JSON
+            # Update the time_blocks JSONB and the main start_time/end_time
+            time_blocks = template_data["time_blocks"]
             update_fields.append("time_blocks = :time_blocks")
-            params["time_blocks"] = json.dumps(template_data["time_blocks"])
+            params["time_blocks"] = json.dumps(time_blocks) if time_blocks else '[]'
             
-            # Update the main start_time and end_time from the first time block
-            if template_data["time_blocks"] and len(template_data["time_blocks"]) > 0:
-                first_block = template_data["time_blocks"][0]
+            # Also update start_time and end_time from the first time block for backwards compatibility
+            if time_blocks and len(time_blocks) > 0:
+                first_block = time_blocks[0]
                 if first_block.get("start_time"):
                     update_fields.append("start_time = :start_time")
                     params["start_time"] = first_block["start_time"]
@@ -1996,7 +2003,7 @@ async def update_schedule_template(
         # Return the updated template data
         result = db.execute(text("""
             SELECT id, day_of_week, start_time, end_time, consultation_duration,
-                   break_duration, lunch_start, lunch_end, is_active
+                   break_duration, lunch_start, lunch_end, is_active, time_blocks
             FROM schedule_templates 
             WHERE id = :template_id AND doctor_id = :doctor_id
         """), {"template_id": template_id, "doctor_id": current_user.id})
@@ -2008,6 +2015,24 @@ async def update_schedule_template(
             day_names = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
             day_name = day_names[template.day_of_week]
             
+            # Parse time_blocks from JSONB or fallback to start_time/end_time
+            time_blocks = []
+            if hasattr(template, 'time_blocks') and template.time_blocks:
+                # time_blocks is already parsed from JSONB by psycopg2
+                if isinstance(template.time_blocks, list):
+                    time_blocks = template.time_blocks
+                elif isinstance(template.time_blocks, str):
+                    # If it's a string, parse it
+                    import json
+                    time_blocks = json.loads(template.time_blocks)
+            
+            # Fallback: if no time_blocks, create from start_time/end_time
+            if not time_blocks and template.start_time and template.end_time:
+                time_blocks = [{
+                    "start_time": template.start_time.strftime("%H:%M"),
+                    "end_time": template.end_time.strftime("%H:%M")
+                }]
+            
             response_data = {
                 "id": template.id,
                 "day_of_week": template.day_of_week,
@@ -2018,12 +2043,7 @@ async def update_schedule_template(
                 "lunch_start": template.lunch_start.strftime("%H:%M") if template.lunch_start else None,
                 "lunch_end": template.lunch_end.strftime("%H:%M") if template.lunch_end else None,
                 "is_active": template.is_active,
-                "time_blocks": [
-                    {
-                        "start_time": template.start_time.strftime("%H:%M") if template.start_time else None,
-                        "end_time": template.end_time.strftime("%H:%M") if template.end_time else None
-                    }
-                ]
+                "time_blocks": time_blocks
             }
             
             api_logger.info("Schedule template updated", doctor_id=current_user.id, template_id=template_id)
@@ -2878,6 +2898,12 @@ async def create_patient(
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        print("=" * 80)
+        print("❌ ERROR CREATING PATIENT:")
+        print(traceback.format_exc())
+        print("=" * 80)
+        security_logger.error(f"Error creating patient: {str(e)}", doctor_id=current_user.id, error=str(e))
         raise HTTPException(
             status_code=500, 
             detail=f"Error interno al crear paciente: {str(e)}"
