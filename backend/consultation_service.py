@@ -131,15 +131,10 @@ def get_consultation_vital_signs(db: Session, consultation_id: int) -> List[Dict
     return [
         {
             "id": vs.id,
-            "systolic_pressure": vs.systolic_pressure,
-            "diastolic_pressure": vs.diastolic_pressure,
-            "heart_rate": vs.heart_rate,
-            "respiratory_rate": vs.respiratory_rate,
-            "temperature": vs.temperature,
-            "oxygen_saturation": vs.oxygen_saturation,
-            "weight": vs.weight,
-            "height": vs.height,
-            "bmi": vs.bmi,
+            "vital_sign_id": vs.vital_sign_id,
+            "value": vs.value,
+            "unit": vs.unit or "",
+            "notes": vs.notes or "",
             "created_at": vs.created_at.isoformat() if vs.created_at else None
         }
         for vs in vital_signs
