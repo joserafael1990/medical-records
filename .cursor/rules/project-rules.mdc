@@ -1,5 +1,472 @@
 ---
 alwaysApply: true
 ---
-Do not generate any documentation unless I required it specifically
-All compilations are always done with the docker instances
+
+# ============================================================================
+# MEDICAL RECORDS SYSTEM - CURSOR AI RULES
+# Sistema de Historias Clínicas Electrónicas
+# ============================================================================
+
+## 📋 GENERAL RULES
+
+### Documentation
+- **NEVER** create .md files unless explicitly requested
+- Do NOT create README files, documentation, or guides proactively
+- Code should be self-documenting with clear function/class names
+- Use docstrings in Python and JSDoc in TypeScript for functions
+
+### Communication
+- Communicate with user in **Spanish**
+- Code (variables, functions, classes) in **English**
+- Comments in code can be in **Spanish**
+- Console logs and debug messages in **Spanish**
+- Git commit messages in **English**
+
+### Development Environment
+- **ALL compilations MUST be done with Docker**
+- Use `docker-compose` for all operations
+- Never run `npm`, `pip`, or build commands outside containers
+- Respect Docker volume mounts for hot reload
+
+---
+
+## 🏗️ ARCHITECTURE & CODE ORGANIZATION
+
+### Service Layer Pattern
+- Extract complex logic to service files (e.g., `consultation_service.py`)
+- Keep endpoints thin - delegate to service layer
+- Create reusable helper functions
+- Each service should have clear, single responsibility
+
+### Code Quality Standards
+- **Maximum function length:** 100 lines
+- If endpoint exceeds 100 lines → refactor to service layer
+- Avoid code duplication - create helpers instead
+- Use descriptive function names that explain intent
+
+### File Structure
+```
+backend/
+  - services/        # Service layer (consultation_service.py, etc.)
+  - routes/          # API routers (diagnosis.py, etc.)
+  - models/          # SQLAlchemy models (schedule.py, diagnosis.py)
+  - migrations/      # Database migrations
+  - main_clean_english.py  # Main FastAPI app
+
+frontend/
+  - src/
+    - services/      # API and PDF services
+    - hooks/         # Custom React hooks
+    - components/
+      - common/      # Reusable components
+      - dialogs/     # Modal dialogs
+      - layout/      # Layout components
+```
+
+---
+
+## 🔧 BACKEND RULES (FastAPI + Python)
+
+### API Endpoints
+- Always use async def for endpoints
+- Always include type hints
+- Use Depends() for dependency injection
+- Authentication required for all medical data endpoints
+- Use `get_current_user` dependency for auth
+
+### Database
+- **ORM:** SQLAlchemy
+- **Database:** PostgreSQL
+- **Timezone:** America/Mexico_City (CDMX)
+- Use `now_cdmx()` for timestamps
+- Store dates as naive datetime in CDMX time
+- Connection: `postgresql://historias_user:historias_pass@postgres-db:5432/historias_clinicas`
+
+### Security & Encryption
+- Encrypt sensitive medical data using `encrypt_sensitive_data()`
+- Decrypt when reading using `decrypt_sensitive_data()`
+- DEVELOPMENT MODE: Encryption currently disabled for testing
+- All consultations must be digitally signed
+- Use `sign_medical_document()` for digital signatures
+
+### Error Handling
+- Always use try-except blocks in endpoints
+- Log errors with `api_logger.error()` or `security_logger.error()`
+- Return specific HTTP exceptions (404, 400, 500)
+- Never expose internal errors to client
+- Auto-scroll to errors in frontend
+
+### Logging
+- Use structured logging with context
+- Include operation, doctor_id, patient_id when relevant
+- Use emoji prefixes for visibility: 📋 🔍 ✅ ❌ ⚠️
+- Log at appropriate levels: info, warning, error
+
+### Data Validation
+- Use Pydantic schemas for request/response validation
+- Create specific schemas in `schemas.py`
+- Validate foreign keys exist before insert
+- Check permissions (doctor can only access own patients)
+
+---
+
+## ⚛️ FRONTEND RULES (React + TypeScript)
+
+### Component Structure
+- Use functional components with hooks
+- Keep components under 300 lines
+- Extract complex logic to custom hooks
+- One component per file
+
+### Custom Hooks Pattern
+- Create custom hooks for business logic
+- Prefix with `use` (e.g., `usePrescriptions`, `useScrollToError`)
+- Hooks should manage state and side effects
+- Keep components focused on rendering
+
+### State Management
+- Use React hooks (useState, useEffect)
+- Pass state down, callbacks up
+- Consider custom hooks for shared logic
+- Temporary data uses local state with 'temp_' prefix
+
+### Error Handling
+- Display errors at top of forms/dialogs
+- Use `useScrollToError` hook to auto-scroll to errors
+- Apply system-wide in ALL forms and dialogs
+- Red background (#d32f2f) with white text for errors
+- Clear errors on successful submission
+
+### Material-UI Guidelines
+- Use MUI components consistently
+- Apply theme colors and spacing
+- Responsive design (xs, sm, md, lg breakpoints)
+- Use `sx` prop for styling over makeStyles
+- Autocomplete for searchable dropdowns
+
+### PDF Generation
+- Use jspdf and jspdf-autotable
+- Services in `pdfService.ts`
+- Include header, footer on all pages
+- Dynamic doctor title (not hardcoded "Dr.")
+- Spacing: 5px after tables, 6px before titles
+- Margin bottom: 35px for content to avoid footer overlap
+
+---
+
+## 📊 DATABASE CONVENTIONS
+
+### Table Names
+- Use plural snake_case (e.g., `medical_records`, `consultation_prescriptions`)
+- Prefix junction tables with both entity names
+
+### Column Names
+- Use snake_case for all columns
+- English names only
+- Include timestamps: `created_at`, `updated_at`
+- Use `id` for primary keys (INTEGER, AUTO_INCREMENT)
+
+### Foreign Keys
+- Name pattern: `{table_singular}_id` (e.g., `doctor_id`, `patient_id`)
+- Always include ON DELETE behavior (CASCADE or RESTRICT)
+- Create indexes on foreign keys
+
+### Migrations
+- Create SQL migration files in `backend/migrations/`
+- Name pattern: `migration_description.sql`
+- Include rollback instructions in comments
+- Test migrations before committing
+
+---
+
+## 🎨 UI/UX PATTERNS
+
+### Form Validation
+- Show validation errors immediately
+- Auto-scroll to first error
+- Highlight invalid fields in red
+- Clear, specific error messages in Spanish
+
+### Button States
+- Disable during loading/submission
+- Show loading indicators
+- Success feedback after actions
+- Confirmation only for destructive actions (not for delete prescriptions)
+
+### Dialogs
+- Use Material-UI Dialog component
+- Full-screen on mobile (xs, sm)
+- Max-width on desktop (md, lg, xl)
+- Close on successful submission
+- Scroll to top on error within dialog
+
+### Tables & Lists
+- Card-based layout for mobile
+- Table layout for desktop
+- Include edit/delete actions
+- Empty state messages
+- Loading skeletons
+
+---
+
+## 📦 DEPENDENCIES & VERSIONS
+
+### Backend
+```python
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+pydantic
+python-jose[cryptography]
+passlib[bcrypt]
+```
+
+### Frontend
+```json
+{
+  "react": "^18.x",
+  "typescript": "^5.x",
+  "@mui/material": "^5.x",
+  "jspdf": "^2.x",
+  "jspdf-autotable": "^3.x"
+}
+```
+
+---
+
+## 🔄 WORKFLOW PATTERNS
+
+### Adding New Feature
+1. Create database migration if needed
+2. Update SQLAlchemy models
+3. Create/update Pydantic schemas
+4. Create service layer helpers
+5. Add API endpoint
+6. Create frontend types
+7. Create/update React components
+8. Test with Docker containers
+9. Commit with descriptive message
+
+### Refactoring Checklist
+- Extract to service layer if >100 lines
+- Create reusable helpers
+- Remove code duplication
+- Update tests if applicable
+- Verify with Docker restart
+
+### Git Commit Messages
+```
+Format: <type>: <description>
+
+Types:
+- feat: New feature
+- fix: Bug fix
+- refactor: Code refactoring
+- docs: Documentation (rare)
+- style: Formatting
+- perf: Performance
+- test: Tests
+
+Example:
+feat: Add prescription module with medication catalog
+fix: PostgreSQL healthcheck database name
+refactor: Extract consultation logic to service layer
+```
+
+---
+
+## 🚫 ANTI-PATTERNS (NEVER DO)
+
+### Code
+- ❌ Hard-code "Dr." instead of using database title
+- ❌ Create endpoints without authentication
+- ❌ Leave debug endpoints in production
+- ❌ Store sensitive data unencrypted
+- ❌ Use `any` type in TypeScript
+- ❌ Create functions longer than 100 lines
+- ❌ Duplicate logic instead of extracting to helper
+
+### Database
+- ❌ Store dates without timezone awareness
+- ❌ Create tables without timestamps
+- ❌ Use VARCHAR without length limit
+- ❌ Skip foreign key constraints
+- ❌ Forget ON DELETE behavior
+
+### UI
+- ❌ Hard-code strings (use constants)
+- ❌ Skip error handling
+- ❌ Forget loading states
+- ❌ Make forms without validation
+- ❌ Skip auto-scroll to errors
+
+### DevOps
+- ❌ Run builds outside Docker
+- ❌ Commit without testing
+- ❌ Push directly to main without review
+- ❌ Leave debug logs in production
+- ❌ Skip migration testing
+
+---
+
+## 🎯 SPECIFIC MODULES
+
+### Prescriptions Module
+- Use `medications` table (200+ common medications)
+- Junction table: `consultation_prescriptions`
+- Allow creating new medications inline
+- Include: dosage, frequency, duration, quantity, via_administracion
+- No confirmation prompt for delete
+- Handle temp_consultation for unsaved consultations
+
+### Schedule Module
+- Tables: `schedule_templates`, `schedule_exceptions`
+- Day of week: 0=Monday, 6=Sunday
+- Store times in HH:MM format
+- Support multiple time blocks per day
+- CDMX timezone
+
+### Clinical Studies
+- Store PDFs in `backend/uploads/clinical_studies/`
+- Link to consultation via `consultation_id`
+- Include study_name, study_type, description
+- Display thumbnails in UI
+
+### Vital Signs
+- Store per consultation in `consultation_vital_signs`
+- Fields: blood pressure, heart rate, temperature, weight, height, BMI
+- Calculate BMI automatically
+- Display in cards, editable within consultation
+
+---
+
+## 🔐 SECURITY RULES
+
+### Authentication
+- JWT tokens with Bearer scheme
+- Tokens include user_id and person_type
+- Validate on every protected endpoint
+- Never expose password hashes
+
+### Authorization
+- Doctors can only access own patients
+- Doctors can only see own consultations
+- Validate ownership before updates/deletes
+- No cross-doctor data access
+
+### Data Protection
+- Encrypt sensitive medical fields
+- Log security events
+- Never log sensitive data (passwords, medical info)
+- Use HTTPS in production
+
+---
+
+## 📱 RESPONSIVE DESIGN
+
+### Breakpoints
+- xs: 0-600px (mobile)
+- sm: 600-900px (tablet)
+- md: 900-1200px (small desktop)
+- lg: 1200-1536px (desktop)
+- xl: 1536px+ (large desktop)
+
+### Mobile-First
+- Design for mobile first
+- Progressive enhancement for larger screens
+- Touch-friendly buttons (min 44x44px)
+- Readable font sizes (min 16px)
+
+---
+
+## 🧪 TESTING APPROACH
+
+### Manual Testing
+- Test in Docker containers
+- Test all CRUD operations
+- Test error scenarios
+- Test different screen sizes
+- Test auto-scroll to errors
+
+### Docker Commands
+```bash
+# Start services
+docker-compose up -d
+
+# Rebuild after changes
+docker-compose up -d --build
+
+# Restart specific service
+docker-compose restart python-backend
+
+# View logs
+docker-compose logs -f python-backend
+
+# Stop all
+docker-compose down
+```
+
+---
+
+## 💡 BEST PRACTICES
+
+### Performance
+- Use indexes on foreign keys
+- Limit query results with pagination
+- Lazy load large datasets
+- Optimize images before upload
+- Minimize bundle size
+
+### Maintainability
+- Write self-documenting code
+- Keep functions small and focused
+- Use consistent naming conventions
+- Refactor when code smells appear
+- Document complex business logic
+
+### User Experience
+- Provide immediate feedback
+- Show loading states
+- Display clear error messages
+- Auto-save when possible
+- Keyboard shortcuts for power users
+
+---
+
+## 🎓 DOMAIN KNOWLEDGE
+
+### Medical Standards (Mexico)
+- Comply with NOM-004-SSA3-2012
+- Include required fields: CURP, RFC
+- Professional license validation
+- Digital signature for legal compliance
+- Proper data retention policies
+
+### Timezone Handling
+- All times in America/Mexico_City
+- Display in local format
+- Store as naive datetime in CDMX time
+- Use `now_cdmx()` and `cdmx_datetime()`
+
+---
+
+## 🚀 PRODUCTION READINESS
+
+Before deploying:
+- [ ] Enable real encryption (update keys)
+- [ ] Remove debug endpoints
+- [ ] Set proper CORS origins
+- [ ] Enable rate limiting
+- [ ] Set up backup strategy
+- [ ] Configure SSL/TLS
+- [ ] Set secure session cookies
+- [ ] Enable audit logging
+- [ ] Test with real data volume
+- [ ] Load testing
+
+---
+
+**Last Updated:** 2025-10-22
+**Version:** 1.0
+**Project:** Sistema de Historias Clínicas Electrónicas

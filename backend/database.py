@@ -550,6 +550,62 @@ class ConsultationPrescription(Base):
     consultation = relationship("MedicalRecord")
     medication = relationship("Medication", back_populates="consultation_prescriptions")
 
+# ============================================================================
+# AUDIT LOG - Complete Traceability System
+# ============================================================================
+
+class AuditLog(Base):
+    """
+    Audit log for complete system traceability
+    Compliance: NOM-241-SSA1-2021, LFPDPPP, ISO 27001
+    """
+    __tablename__ = "audit_log"
+    
+    id = Column(Integer, primary_key=True)
+    
+    # User information
+    user_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"))
+    user_email = Column(String(100))
+    user_name = Column(String(200))
+    user_type = Column(String(20))  # 'doctor', 'patient', 'admin', 'system'
+    
+    # Action performed
+    action = Column(String(50), nullable=False)  # 'CREATE', 'READ', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT', 'ACCESS_DENIED'
+    table_name = Column(String(50))  # Affected table
+    record_id = Column(Integer)  # Affected record ID
+    
+    # Change data
+    old_values = Column(JSON)  # Values before change
+    new_values = Column(JSON)  # Values after change
+    changes_summary = Column(Text)  # Human-readable summary
+    
+    # Operation context
+    operation_type = Column(String(50))  # 'consultation_create', 'patient_update', etc.
+    affected_patient_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"))
+    affected_patient_name = Column(String(200))
+    
+    # Session information
+    ip_address = Column(String(45))
+    user_agent = Column(Text)
+    session_id = Column(String(100))
+    request_path = Column(String(500))
+    request_method = Column(String(10))  # GET, POST, PUT, DELETE
+    
+    # Security
+    success = Column(Boolean, default=True)
+    error_message = Column(Text)
+    security_level = Column(String(20), default='INFO')  # 'INFO', 'WARNING', 'CRITICAL'
+    
+    # Timestamp
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    
+    # Additional metadata
+    metadata_json = Column("metadata", JSON)
+    
+    # Relationships
+    user = relationship("Person", foreign_keys=[user_id])
+    affected_patient = relationship("Person", foreign_keys=[affected_patient_id])
+
 def init_db():
     """Inicializar base de datos - solo crear tablas que no existen"""
     Base.metadata.create_all(bind=engine)
