@@ -1237,25 +1237,49 @@ async def upload_clinical_study_file(
     print(f"📤 Uploading file for clinical study: {study_id}")
     
     try:
-        # Validate file format
-        ALLOWED_EXTENSIONS = {'.pdf', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.doc', '.docx', '.xls', '.xlsx', '.txt'}
+        # Security: Ultra-restrictive file format validation (PDF + Images only)
+        ALLOWED_EXTENSIONS = {'.pdf', '.jpg', '.jpeg', '.png'}
         ALLOWED_MIME_TYPES = {
             'application/pdf',
-            'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/bmp', 'image/tiff',
-            'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'text/plain'
+            'image/jpeg', 'image/jpg', 'image/png'
         }
+        
+        # Security: File size limits (10MB max)
+        MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB in bytes
+        
+        # Security: Dangerous file patterns to block
+        DANGEROUS_PATTERNS = [
+            '.exe', '.bat', '.cmd', '.com', '.scr', '.pif', '.vbs', '.js', '.jar', '.php', '.asp', '.jsp',
+            '.sh', '.ps1', '.py', '.rb', '.pl', '.cgi', '.htaccess', '.htpasswd'
+        ]
         
         if not file.filename:
             raise HTTPException(status_code=400, detail="No file provided")
+        
+        # Security: Check for dangerous file patterns
+        filename_lower = file.filename.lower()
+        for pattern in DANGEROUS_PATTERNS:
+            if pattern in filename_lower:
+                print(f"🚨 Security: Blocked dangerous file pattern: {pattern}")
+                raise HTTPException(
+                    status_code=400, 
+                    detail="Tipo de archivo no permitido por seguridad"
+                )
+        
+        # Security: Check for double extensions (e.g., malware.exe.docx)
+        if filename_lower.count('.') > 1:
+            print(f"🚨 Security: Blocked file with multiple extensions: {file.filename}")
+            raise HTTPException(
+                status_code=400, 
+                detail="Archivo con múltiples extensiones no permitido"
+            )
         
         file_extension = os.path.splitext(file.filename)[1].lower()
         print(f"📁 File extension: {file_extension}")
         print(f"📁 Allowed extensions: {ALLOWED_EXTENSIONS}")
         if file_extension not in ALLOWED_EXTENSIONS:
             valid_formats = ', '.join(sorted(ALLOWED_EXTENSIONS))
-            error_message = f"Formato de archivo no válido. Formatos permitidos: {valid_formats}"
+            error_message = f"Formato de archivo no permitido. Solo se aceptan: {valid_formats}"
             print(f"❌ File format error: {error_message}")
             raise HTTPException(
                 status_code=400, 
@@ -1265,7 +1289,7 @@ async def upload_clinical_study_file(
         print(f"📁 File content type: {file.content_type}")
         print(f"📁 Allowed MIME types: {ALLOWED_MIME_TYPES}")
         if file.content_type and file.content_type not in ALLOWED_MIME_TYPES:
-            error_message = f"Tipo de archivo no válido. Tipos permitidos: PDF, imágenes (JPG, PNG, GIF, BMP, TIFF), documentos (DOC, DOCX, XLS, XLSX), texto (TXT)"
+            error_message = f"Tipo de archivo no permitido. Solo se aceptan: PDF, JPG, PNG"
             print(f"❌ MIME type error: {error_message}")
             raise HTTPException(
                 status_code=400, 
@@ -1290,9 +1314,21 @@ async def upload_clinical_study_file(
         unique_filename = f"{study.study_code}_{uuid.uuid4()}{file_extension}"
         file_path = os.path.join(upload_dir, unique_filename)
         
+        # Security: Check file size before processing
+        content = await file.read()
+        if len(content) > MAX_FILE_SIZE:
+            print(f"🚨 Security: File too large: {len(content)} bytes (max: {MAX_FILE_SIZE})")
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Archivo demasiado grande. Tamaño máximo permitido: {MAX_FILE_SIZE // (1024*1024)}MB"
+            )
+        
+        # Security: Additional content validation
+        if len(content) == 0:
+            raise HTTPException(status_code=400, detail="Archivo vacío no permitido")
+        
         # Save file
         with open(file_path, "wb") as buffer:
-            content = await file.read()
             buffer.write(content)
         
         # Update study with file information
