@@ -764,11 +764,13 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             const localStudy = prevStudies.find(prev => prev.id === apiStudy.id);
             // If we just updated this study locally, keep the completed status
             if (localStudy && localStudy.id === studyId && localStudy.status === 'completed') {
+              console.log('🔬 Preserving completed status for study:', studyId);
               return { ...apiStudy, status: 'completed' };
             }
             return apiStudy;
           });
           console.log('🔬 Final studies state:', newStudies);
+          console.log('🔬 Study statuses:', newStudies.map(s => ({ id: s.id, status: s.status })));
           return newStudies;
         });
         console.log('✅ Previous studies reloaded after file upload');
