@@ -105,6 +105,15 @@ export const useAppointmentDialog = ({
   // Auto-scroll to error when it appears
   const { errorRef: validationErrorRef } = useScrollToError(validationError);
   const { errorRef: formErrorRef } = useScrollToError('');
+  
+  // Reset available times when dialog opens for new appointment
+  useEffect(() => {
+    if (!isEditing) {
+      setAvailableTimes([]);
+      setSelectedDate('');
+      setSelectedTime('');
+    }
+  }, [isEditing]);
 
   // Utility functions
   const calculateAge = useCallback((birthDate: string): number => {
@@ -258,6 +267,7 @@ export const useAppointmentDialog = ({
     setSelectedDate('');
     setSelectedTime('');
     setSelectedPatient(null);
+    setAvailableTimes([]); // Reset available times
     setValidationError('');
     setNewPatientData({
       first_name: '',

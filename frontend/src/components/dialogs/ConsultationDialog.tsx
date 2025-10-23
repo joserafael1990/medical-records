@@ -683,6 +683,11 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     try {
       const studies = await apiService.getClinicalStudiesByPatient(String(patientId));
       console.log('🔬 Previous studies found:', studies.length);
+      console.log('🔬 Studies data:', studies);
+      // Log results_date for each study
+      studies.forEach((study, index) => {
+        console.log(`🔬 Study ${index} results_date:`, study.results_date);
+      });
       setPatientPreviousStudies(studies || []);
     } catch (error) {
       console.error('❌ Error loading patient previous studies:', error);
@@ -727,13 +732,25 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     try {
       await apiService.uploadClinicalStudyFile(studyId, file);
       showSuccess('Archivo cargado correctamente');
-      // Reload previous studies
+      
+      // Update study status to completed immediately
+      try {
+        await apiService.updateClinicalStudy(studyId, { status: 'completed' });
+        console.log('✅ Study status updated to completed');
+      } catch (statusError) {
+        console.error('Error updating study status:', statusError);
+        // Continue even if status update fails
+      }
+      
+      // Reload previous studies to get updated data
       if (selectedPatient) {
         await loadPatientPreviousStudies(selectedPatient.id);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error uploading study file:', error);
-      showError('Error al cargar el archivo del estudio');
+      // Show specific error message from backend
+      const errorMessage = error.response?.data?.detail || error.message || 'Error al cargar el archivo del estudio';
+      showError(errorMessage);
     }
   };
 
@@ -2287,6 +2304,18 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                           <Typography variant="caption" color="text.secondary">
                             Solicitado: {new Date(study.ordered_date).toLocaleDateString('es-MX')}
                           </Typography>
+                          {study.results_date && (
+                            <Typography variant="caption" color="success.main" sx={{ fontWeight: 500 }}>
+                              📅 Resultados cargados: {new Date(study.results_date).toLocaleString('es-MX', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                timeZone: 'America/Mexico_City'
+                              })}
+                            </Typography>
+                          )}
                           
                           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
                             {study.status === 'pending' && (
