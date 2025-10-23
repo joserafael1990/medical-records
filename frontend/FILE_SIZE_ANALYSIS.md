@@ -2,10 +2,10 @@
 
 ## 📈 Resumen
 
-- **Total de archivos analizados:** 140
+- **Total de archivos analizados:** 147
 - **Archivos con problemas:** undefined
-- **Líneas totales:** 41,211
-- **Promedio de líneas por archivo:** 294
+- **Líneas totales:** 42,233
+- **Promedio de líneas por archivo:** 287
 - **Archivo más grande:** 3033 líneas
 
 ## 🚨 Archivos que Exceden el Límite
