@@ -2,10 +2,10 @@
 
 ## 📈 Resumen
 
-- **Total de archivos analizados:** 133
+- **Total de archivos analizados:** 140
 - **Archivos con problemas:** undefined
-- **Líneas totales:** 39,449
-- **Promedio de líneas por archivo:** 297
+- **Líneas totales:** 41,211
+- **Promedio de líneas por archivo:** 294
 - **Archivo más grande:** 3033 líneas
 
 ## 🚨 Archivos que Exceden el Límite
@@ -256,6 +256,13 @@
 ### src/hooks/useRealTimeValidation.ts
 - **Líneas:** 478
 - **Tamaño:** 11.82 KB
+- **Recomendaciones:**
+  - Dividir en hooks más específicos
+  - Extraer lógica común a utilidades
+
+### src/hooks/useRegisterForm.ts
+- **Líneas:** 467
+- **Tamaño:** 14.08 KB
 - **Recomendaciones:**
   - Dividir en hooks más específicos
   - Extraer lógica común a utilidades

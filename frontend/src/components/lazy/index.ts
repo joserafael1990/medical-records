@@ -17,6 +17,10 @@ export const AgendaView = lazy(() => import('../views/AgendaView'));
 export const DoctorProfileView = lazy(() => import('../views/DoctorProfileView'));
 export const StyleGuideView = lazy(() => import('../views/StyleGuideView'));
 
+// Lazy load auth components
+export const RegisterView = lazy(() => import('../auth/RegisterView'));
+export const RegisterViewRefactored = lazy(() => import('../auth/RegisterViewRefactored'));
+
 // Lazy load heavy common components
 export const SmartTable = lazy(() => import('../common/SmartTable'));
 export const EnhancedErrorDisplay = lazy(() => import('../common/EnhancedErrorDisplay'));
