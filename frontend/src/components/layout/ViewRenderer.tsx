@@ -5,11 +5,12 @@ import {
   PatientsViewSmart,
   ConsultationsViewSmart,
   AgendaView,
-  DoctorProfileView
+  DoctorProfileView,
+  StyleGuideView
 } from '../lazy';
 import { ConsultationDetailView } from '../';
 import { LoadingFallback } from '../';
-import StyleGuideView from '../views/StyleGuideView';
+import { LazyWrapper } from '../common/LazyWrapper';
 
 interface ViewRendererProps {
   activeView: string;
@@ -126,9 +127,11 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
         </Suspense>
       )}
 
-      {activeView === 'styleguide' && (
-        <StyleGuideView />
-      )}
+             {activeView === 'styleguide' && (
+               <LazyWrapper>
+                 <StyleGuideView />
+               </LazyWrapper>
+             )}
 
       {/* WhatsApp and Analytics views not implemented yet */}
       {(activeView === 'whatsapp' || activeView === 'analytics') && (
