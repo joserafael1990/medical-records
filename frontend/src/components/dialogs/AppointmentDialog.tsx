@@ -398,6 +398,14 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     console.log('🔍 AppointmentDialog useEffect - patients.length:', patients.length);
     console.log('🔍 AppointmentDialog useEffect - isEditing:', isEditing);
     
+    // Reset available times for new appointments
+    if (!isEditing) {
+      console.log('🔄 Resetting available times for new appointment');
+      setAvailableTimes([]);
+      setSelectedDate('');
+      setSelectedTime('');
+    }
+    
     // Set default status for new appointments
     const updatedFormData = {
       ...formData,
@@ -661,6 +669,10 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
   };
 
   const handleClose = () => {
+    // Reset available times when closing dialog
+    setAvailableTimes([]);
+    setSelectedDate('');
+    setSelectedTime('');
     onClose();
   };
   return (

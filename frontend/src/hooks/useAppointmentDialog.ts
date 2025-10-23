@@ -108,7 +108,9 @@ export const useAppointmentDialog = ({
   
   // Reset available times when dialog opens for new appointment
   useEffect(() => {
+    console.log('🔄 useAppointmentDialog useEffect triggered, isEditing:', isEditing);
     if (!isEditing) {
+      console.log('🔄 Resetting available times for new appointment');
       setAvailableTimes([]);
       setSelectedDate('');
       setSelectedTime('');
