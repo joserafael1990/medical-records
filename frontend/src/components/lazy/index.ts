@@ -6,6 +6,7 @@ export const ConsultationDialogRefactored = lazy(() => import('../dialogs/Consul
 export const AppointmentDialog = lazy(() => import('../dialogs/AppointmentDialog'));
 export const AppointmentDialogRefactored = lazy(() => import('../dialogs/AppointmentDialogRefactored'));
 export const PatientDialog = lazy(() => import('../dialogs/PatientDialog'));
+export const PatientDialogRefactored = lazy(() => import('../dialogs/PatientDialogRefactored'));
 export const DigitalSignatureDialog = lazy(() => import('../dialogs/DigitalSignatureDialog'));
 export const ScheduleConfigDialog = lazy(() => import('../dialogs/ScheduleConfigDialog'));
 

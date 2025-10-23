@@ -2,10 +2,10 @@
 
 ## 📈 Resumen
 
-- **Total de archivos analizados:** 147
+- **Total de archivos analizados:** 154
 - **Archivos con problemas:** undefined
-- **Líneas totales:** 42,233
-- **Promedio de líneas por archivo:** 287
+- **Líneas totales:** 43,579
+- **Promedio de líneas por archivo:** 283
 - **Archivo más grande:** 3033 líneas
 
 ## 🚨 Archivos que Exceden el Límite
@@ -242,6 +242,13 @@
 ### src/hooks/useMedicalTableColumns.tsx
 - **Líneas:** 319
 - **Tamaño:** 9.67 KB
+- **Recomendaciones:**
+  - Dividir en hooks más específicos
+  - Extraer lógica común a utilidades
+
+### src/hooks/usePatientDialog.ts
+- **Líneas:** 429
+- **Tamaño:** 12.66 KB
 - **Recomendaciones:**
   - Dividir en hooks más específicos
   - Extraer lógica común a utilidades
