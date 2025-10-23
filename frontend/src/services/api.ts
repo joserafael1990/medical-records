@@ -213,6 +213,10 @@ class ApiService {
     // Default error messages by status code
     switch (error.response?.status) {
       case 400:
+        // For 400 errors, try to get the specific message from backend first
+        if (error.response?.data?.detail) {
+          return error.response.data.detail;
+        }
         return 'Solicitud inválida. Verifica los datos enviados.';
       case 401:
         return 'No autorizado. Por favor, inicia sesión nuevamente.';
