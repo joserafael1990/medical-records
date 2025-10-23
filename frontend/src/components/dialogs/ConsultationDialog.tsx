@@ -47,7 +47,6 @@ import {
   Science as ScienceIcon,
   Upload as UploadIcon,
   Visibility as ViewIcon,
-  WhatsApp as WhatsAppIcon
 } from '@mui/icons-material';
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -228,7 +227,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   const [patientHasPreviousConsultations, setPatientHasPreviousConsultations] = useState<boolean>(false);
   const [patientPreviousStudies, setPatientPreviousStudies] = useState<ClinicalStudy[]>([]);
   const [loadingPreviousStudies, setLoadingPreviousStudies] = useState<boolean>(false);
-  const [sendingWhatsAppStudy, setSendingWhatsAppStudy] = useState<string | null>(null);
   
   // Function to determine if only basic patient data should be shown
   const shouldShowOnlyBasicPatientData = (): boolean => {
@@ -688,6 +686,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       studies.forEach((study, index) => {
         console.log(`🔬 Study ${index} - ID: ${study.id}, Status: ${study.status}, Results Date: ${study.results_date}`);
       });
+      console.log('🔬 Setting patientPreviousStudies to:', studies);
       setPatientPreviousStudies(studies || []);
     } catch (error) {
       console.error('❌ Error loading patient previous studies:', error);
@@ -739,14 +738,16 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         console.log('✅ Study status updated to completed');
         
         // Update local state immediately to hide WhatsApp button
-        setPatientPreviousStudies(prevStudies => 
-          prevStudies.map(study => 
+        setPatientPreviousStudies(prevStudies => {
+          const updatedStudies = prevStudies.map(study => 
             study.id === studyId 
               ? { ...study, status: 'completed' }
               : study
-          )
-        );
-        console.log('✅ Local study status updated to completed');
+          );
+          console.log('✅ Local study status updated to completed');
+          console.log('✅ Updated studies:', updatedStudies);
+          return updatedStudies;
+        });
       } catch (statusError) {
         console.error('Error updating study status:', statusError);
         // Continue even if status update fails
@@ -771,6 +772,17 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           });
           console.log('🔬 Final studies state:', newStudies);
           console.log('🔬 Study statuses:', newStudies.map(s => ({ id: s.id, status: s.status })));
+          
+          // Check if the study we just updated is still completed
+          const updatedStudy = newStudies.find(s => s.id === studyId);
+          console.log('🔬 Updated study status:', updatedStudy ? updatedStudy.status : 'NOT FOUND');
+          
+          // Force a re-render by updating the state
+          setTimeout(() => {
+            console.log('🔬 Forcing re-render after timeout');
+            setPatientPreviousStudies(prev => [...prev]);
+          }, 100);
+          
           return newStudies;
         });
         console.log('✅ Previous studies reloaded after file upload');
@@ -798,19 +810,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     }
   };
 
-  // Handle send WhatsApp notification for study results
-  const handleSendWhatsAppStudyResults = async (studyId: string) => {
-    setSendingWhatsAppStudy(studyId);
-    try {
-      await apiService.sendWhatsAppStudyResults(Number(studyId));
-      showSuccess('Notificación de resultados enviada por WhatsApp');
-    } catch (error: any) {
-      console.error('Error sending WhatsApp notification:', error);
-      showError(error.response?.data?.detail || 'Error al enviar notificación por WhatsApp');
-    } finally {
-      setSendingWhatsAppStudy(null);
-    }
-  };
 
   // Handle view file for previous study with authentication
   const handleViewStudyFile = async (studyId: string) => {
@@ -2319,7 +2318,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 </Box>
               ) : (
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
-                  {patientPreviousStudies.map((study) => (
+                        {patientPreviousStudies.map((study) => {
+                          return (
                     <Card key={study.id} variant="outlined" sx={{ '&:hover': { boxShadow: 2 } }}>
                       <CardContent>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
@@ -2350,27 +2350,44 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                           </Typography>
                           {study.results_date && (
                             <Typography variant="caption" color="success.main" sx={{ fontWeight: 500 }}>
-                              📅 Resultados cargados: {(() => {
-                                // Treat the date as if it's already in Mexico City timezone
-                                const date = new Date(study.results_date + 'T00:00:00-06:00');
-                                console.log('🕐 Raw results_date:', study.results_date);
-                                console.log('🕐 Parsed date (as Mexico time):', date);
-                                console.log('🕐 Date in Mexico City:', date.toLocaleString('es-MX', {
-                                  year: 'numeric',
-                                  month: 'long',
-                                  day: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                  timeZone: 'America/Mexico_City'
-                                }));
-                                return date.toLocaleString('es-MX', {
-                                  year: 'numeric',
-                                  month: 'long',
-                                  day: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                  timeZone: 'America/Mexico_City'
-                                });
+                              Resultados cargados: {(() => {
+                                // Parse the date as UTC and convert to Mexico City time
+                                const rawDate = study.results_date;
+                                let date;
+                                try {
+                                  if (rawDate.includes('T')) {
+                                    // It's a datetime string like "2025-10-23T07:57:33.560675"
+                                    // Treat this as UTC time and convert to Mexico time
+                                    const [datePart, timePart] = rawDate.split('T');
+                                    const [time, microseconds] = timePart.split('.');
+                                    const [hours, minutes, seconds] = time.split(':');
+                                    
+                                    // Create date as UTC
+                                    const utcString = `${datePart}T${hours}:${minutes}:${seconds}Z`;
+                                    date = new Date(utcString);
+                                  } else {
+                                    // Fallback to original parsing
+                                    date = new Date(rawDate);
+                                  }
+                                  
+                                  if (isNaN(date.getTime())) {
+                                    return 'Fecha inválida';
+                                  }
+                                  
+                                  // Convert to Mexico City timezone
+                                  const formatted = date.toLocaleString('es-MX', {
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    timeZone: 'America/Mexico_City'
+                                  });
+                                  
+                                  return formatted;
+                                } catch (error) {
+                                  return 'Error al mostrar fecha';
+                                }
                               })()}
                             </Typography>
                           )}
@@ -2418,25 +2435,14 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                                 >
                                   Ver Archivo
                                 </Button>
-                                {study.status === 'completed' && (
-                                  <Button
-                                    size="small"
-                                    variant="outlined"
-                                    color="success"
-                                    startIcon={<WhatsAppIcon />}
-                                    onClick={() => handleSendWhatsAppStudyResults(study.id)}
-                                    disabled={sendingWhatsAppStudy === study.id}
-                                  >
-                                    {sendingWhatsAppStudy === study.id ? 'Enviando...' : 'Notificar'}
-                                  </Button>
-                                )}
                               </>
                             )}
                           </Box>
                         </Box>
                       </CardContent>
                     </Card>
-                  ))}
+                          );
+                        })}
                 </Box>
               )}
             </Box>

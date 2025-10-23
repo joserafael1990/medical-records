@@ -1267,12 +1267,21 @@ async def upload_clinical_study_file(
                 )
         
         # Security: Check for double extensions (e.g., malware.exe.docx)
+        # Only block if the file has multiple extensions AND one of them is dangerous
         if filename_lower.count('.') > 1:
-            print(f"🚨 Security: Blocked file with multiple extensions: {file.filename}")
-            raise HTTPException(
-                status_code=400, 
-                detail="Archivo con múltiples extensiones no permitido"
-            )
+            # Check if any of the extensions (except the last one) is dangerous
+            parts = filename_lower.split('.')
+            for i in range(len(parts) - 1):  # Check all parts except the last (real extension)
+                potential_extension = '.' + parts[i]
+                if potential_extension in DANGEROUS_PATTERNS:
+                    print(f"🚨 Security: Blocked file with dangerous hidden extension: {file.filename}")
+                    raise HTTPException(
+                        status_code=400, 
+                        detail="Archivo con extensión oculta peligrosa no permitido"
+                    )
+            
+            # If it has multiple dots but no dangerous extensions, just warn but allow
+            print(f"⚠️ File has multiple dots but no dangerous extensions: {file.filename}")
         
         file_extension = os.path.splitext(file.filename)[1].lower()
         print(f"📁 File extension: {file_extension}")
@@ -1336,10 +1345,12 @@ async def upload_clinical_study_file(
         study.file_path = file_path
         study.file_type = file.content_type
         study.file_size = len(content)
-        study.results_date = now_cdmx().replace(tzinfo=None)  # Set results date when file is uploaded (CDMX timezone, naive datetime)
+        # Get current time in Mexico City timezone and convert to UTC for storage
+        mexico_time = now_cdmx()
+        utc_time = mexico_time.astimezone(pytz.UTC).replace(tzinfo=None)
+        study.results_date = utc_time  # Store as UTC but represent Mexico time
         study.updated_at = datetime.utcnow()
         
-        print(f"📅 Setting results_date to: {study.results_date}")
         
         db.commit()
         db.refresh(study)

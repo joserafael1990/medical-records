@@ -294,9 +294,28 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
   ) => {
     const value = event.target.value;
     setFormData(prev => ({ ...prev, [field]: value }));
+    
     // Clear error for this field when user starts typing
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
+    }
+    
+    // Real-time validation for gender
+    if (field === 'gender') {
+      if (!value || value.trim() === '') {
+        setErrors(prev => ({ ...prev, gender: 'El género es obligatorio' }));
+      } else {
+        setErrors(prev => ({ ...prev, gender: '' }));
+      }
+    }
+    
+    // Real-time validation for phone
+    if (field === 'primary_phone') {
+      if (!value || value.trim() === '') {
+        setErrors(prev => ({ ...prev, primary_phone: 'El teléfono es obligatorio' }));
+      } else {
+        setErrors(prev => ({ ...prev, primary_phone: '' }));
+      }
     }
   };
 
@@ -337,8 +356,15 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
       setError('El apellido paterno es requerido');
       return;
     }
-    // Birth date and gender are optional - no validation needed
-    // Phone is optional for patient creation
+    if (!formData.gender || formData.gender.trim() === '') {
+      setError('El género es obligatorio');
+      return;
+    }
+    if (!formData.primary_phone || formData.primary_phone.trim() === '') {
+      setError('El teléfono es obligatorio');
+      return;
+    }
+    // Birth date is optional - no validation needed
     setLoading(true);
     try {
       await onSubmit(formData);
@@ -476,12 +502,13 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
                 />
               </LocalizationProvider>
               <FormControl size="small" error={!!errors.gender} fullWidth>
-                <InputLabel id="gender-label">Género - opcional</InputLabel>
+                <InputLabel id="gender-label">Género - obligatorio</InputLabel>
                 <Select
                   name="gender"
                   value={formData.gender}
                   labelId="gender-label"
-                  label="Género - opcional"
+                  label="Género - obligatorio"
+                  required
                   onChange={handleChange('gender')}
                   sx={{ minWidth: 120 }}
                 >

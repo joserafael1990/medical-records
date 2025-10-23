@@ -86,7 +86,7 @@ class PersonBase(BaseSchema):
     curp: Optional[str] = None
     rfc: Optional[str] = None
     birth_date: Optional[date] = None
-    gender: Optional[str] = None
+    gender: str
     civil_status: Optional[str] = None
     birth_city: Optional[str] = None
     
