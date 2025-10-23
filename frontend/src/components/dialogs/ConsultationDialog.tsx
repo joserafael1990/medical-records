@@ -748,8 +748,13 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       }
     } catch (error: any) {
       console.error('Error uploading study file:', error);
+      console.error('Error response:', error.response);
+      console.error('Error response data:', error.response?.data);
+      console.error('Error response detail:', error.response?.data?.detail);
+      
       // Show specific error message from backend
       const errorMessage = error.response?.data?.detail || error.message || 'Error al cargar el archivo del estudio';
+      console.log('Showing error message:', errorMessage);
       showError(errorMessage);
     }
   };
