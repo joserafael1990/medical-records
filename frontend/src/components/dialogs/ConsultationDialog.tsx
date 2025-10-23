@@ -737,6 +737,16 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       try {
         await apiService.updateClinicalStudy(studyId, { status: 'completed' });
         console.log('✅ Study status updated to completed');
+        
+        // Update local state immediately to hide WhatsApp button
+        setPatientPreviousStudies(prevStudies => 
+          prevStudies.map(study => 
+            study.id === studyId 
+              ? { ...study, status: 'completed' }
+              : study
+          )
+        );
+        console.log('✅ Local study status updated to completed');
       } catch (statusError) {
         console.error('Error updating study status:', statusError);
         // Continue even if status update fails

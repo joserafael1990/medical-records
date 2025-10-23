@@ -1336,7 +1336,7 @@ async def upload_clinical_study_file(
         study.file_path = file_path
         study.file_type = file.content_type
         study.file_size = len(content)
-        study.results_date = datetime.utcnow()  # Set results date when file is uploaded
+        study.results_date = now_cdmx()  # Set results date when file is uploaded (CDMX timezone)
         study.updated_at = datetime.utcnow()
         
         print(f"📅 Setting results_date to: {study.results_date}")
