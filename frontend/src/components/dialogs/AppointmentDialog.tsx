@@ -430,8 +430,8 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
       setSelectedPatient(null);
     }
     
-    // Initialize date and time from existing formData when dialog opens
-    if (open && formData.date_time) {
+    // Initialize date and time from existing formData when dialog opens (only for editing)
+    if (open && formData.date_time && isEditing) {
       const dateTime = formData.date_time;
       const [datePart, timePart] = dateTime.split('T');
       setSelectedDate(dateTime);
@@ -451,6 +451,8 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
         });
       }
     } else if (open) {
+      // Reset everything for new appointments
+      console.log('🔄 Resetting for new appointment');
       setSelectedDate('');
       setSelectedTime('');
       setAvailableTimes([]);
