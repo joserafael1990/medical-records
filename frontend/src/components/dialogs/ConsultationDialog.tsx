@@ -752,10 +752,25 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         // Continue even if status update fails
       }
       
-      // Reload previous studies to get updated data
+      // Reload previous studies to get updated data (but preserve local status update)
       if (selectedPatient) {
         console.log('🔄 Reloading previous studies after file upload...');
-        await loadPatientPreviousStudies(selectedPatient.id);
+        const updatedStudies = await apiService.getClinicalStudiesByPatient(String(selectedPatient.id));
+        console.log('🔬 Updated studies from API:', updatedStudies);
+        
+        // Update studies but preserve the completed status we just set
+        setPatientPreviousStudies(prevStudies => {
+          const newStudies = updatedStudies.map(apiStudy => {
+            const localStudy = prevStudies.find(prev => prev.id === apiStudy.id);
+            // If we just updated this study locally, keep the completed status
+            if (localStudy && localStudy.id === studyId && localStudy.status === 'completed') {
+              return { ...apiStudy, status: 'completed' };
+            }
+            return apiStudy;
+          });
+          console.log('🔬 Final studies state:', newStudies);
+          return newStudies;
+        });
         console.log('✅ Previous studies reloaded after file upload');
       }
     } catch (error: any) {
@@ -2333,14 +2348,27 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                           </Typography>
                           {study.results_date && (
                             <Typography variant="caption" color="success.main" sx={{ fontWeight: 500 }}>
-                              📅 Resultados cargados: {new Date(study.results_date).toLocaleString('es-MX', {
-                                year: 'numeric',
-                                month: 'long',
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                timeZone: 'America/Mexico_City'
-                              })}
+                              📅 Resultados cargados: {(() => {
+                                const date = new Date(study.results_date);
+                                console.log('🕐 Raw results_date:', study.results_date);
+                                console.log('🕐 Parsed date:', date);
+                                console.log('🕐 Date in Mexico City:', date.toLocaleString('es-MX', {
+                                  year: 'numeric',
+                                  month: 'long',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                  timeZone: 'America/Mexico_City'
+                                }));
+                                return date.toLocaleString('es-MX', {
+                                  year: 'numeric',
+                                  month: 'long',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                  timeZone: 'America/Mexico_City'
+                                });
+                              })()}
                             </Typography>
                           )}
                           
