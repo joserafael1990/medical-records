@@ -187,11 +187,19 @@ class ApiService {
   }
 
   private getErrorMessage(error: AxiosError): string {
+    console.log('🔍 getErrorMessage called with:', {
+      hasResponse: !!error.response,
+      hasData: !!error.response?.data,
+      data: error.response?.data,
+      detail: error.response?.data?.detail
+    });
+    
     // Check for specific error messages from backend
     if (error.response?.data && typeof error.response.data === 'object') {
       const data = error.response.data as any;
       if (data.detail) {
         if (typeof data.detail === 'string') {
+          console.log('🔍 Returning string detail:', data.detail);
           return data.detail;
         } else if (Array.isArray(data.detail)) {
           // Handle Pydantic validation errors
