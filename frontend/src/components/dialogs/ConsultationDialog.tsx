@@ -684,9 +684,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       const studies = await apiService.getClinicalStudiesByPatient(String(patientId));
       console.log('🔬 Previous studies found:', studies.length);
       console.log('🔬 Studies data:', studies);
-      // Log results_date for each study
+      // Log results_date and status for each study
       studies.forEach((study, index) => {
-        console.log(`🔬 Study ${index} results_date:`, study.results_date);
+        console.log(`🔬 Study ${index} - ID: ${study.id}, Status: ${study.status}, Results Date: ${study.results_date}`);
       });
       setPatientPreviousStudies(studies || []);
     } catch (error) {
@@ -744,7 +744,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       
       // Reload previous studies to get updated data
       if (selectedPatient) {
+        console.log('🔄 Reloading previous studies after file upload...');
         await loadPatientPreviousStudies(selectedPatient.id);
+        console.log('✅ Previous studies reloaded after file upload');
       }
     } catch (error: any) {
       console.error('Error uploading study file:', error);
