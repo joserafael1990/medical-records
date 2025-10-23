@@ -757,7 +757,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       console.error('Error message:', error.message);
       
       // Show specific error message from backend
-      const errorMessage = error.response?.data?.detail || error.message || 'Error al cargar el archivo del estudio';
+      // The error is already transformed by the API interceptor, so we need to check the detail property directly
+      const errorMessage = error.detail || error.message || 'Error al cargar el archivo del estudio';
       console.log('🔍 Final error message to show:', errorMessage);
       console.log('🔍 Error object structure:', {
         hasResponse: !!error.response,
