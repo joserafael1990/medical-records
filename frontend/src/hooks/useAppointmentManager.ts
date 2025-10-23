@@ -262,12 +262,17 @@ export const useAppointmentManager = (
 
   // Handle edit appointment
   const handleEditAppointment = useCallback((appointment: Appointment) => {
+    console.log('🔍 handleEditAppointment - appointment:', appointment);
     setIsEditingAppointment(true);
     setSelectedAppointment(appointment);
-    setAppointmentFormData({
+    console.log('🔍 Original appointment.date_time:', appointment.date_time);
+    const formattedDateTime = formatDateTimeForInput(appointment.date_time);
+    console.log('🔍 Formatted date_time:', formattedDateTime);
+    
+    const formData = {
       patient_id: appointment.patient_id,
       doctor_id: '',
-      date_time: formatDateTimeForInput(appointment.date_time), // Direct CDMX format
+      date_time: formattedDateTime, // Direct CDMX format
       appointment_type: appointment.appointment_type,
       reason: appointment.reason,
       notes: appointment.notes || '',
@@ -280,7 +285,9 @@ export const useAppointmentManager = (
       room_number: appointment.room_number || '',
       equipment_needed: appointment.equipment_needed || '',
       cancelled_reason: appointment.cancelled_reason || ''
-    });
+    };
+    console.log('🔍 handleEditAppointment - formData:', formData);
+    setAppointmentFormData(formData);
     setFieldErrors({});
     setFormErrorMessage('');
     setAppointmentDialogOpen(true);
@@ -692,8 +699,6 @@ export const useAppointmentManager = (
 
   // Removed duplicate useEffect - appointments are already fetched by the main useEffect above
 
-  // Debug: log when appointments state changes
-  // Track appointments state for debugging when needed
 
   // Refresh appointments function - can be called from child components
   const refreshAppointments = useCallback(async () => {

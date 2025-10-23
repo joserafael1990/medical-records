@@ -74,25 +74,36 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
   const [selectedSpecialty, setSelectedSpecialty] = useState(specialty || '');
   const [expandedSection, setExpandedSection] = useState<string | false>('search');
 
-  // Load categories on mount
+  // Load categories and studies on mount
   useEffect(() => {
     fetchCategories();
-  }, [fetchCategories]);
+    fetchStudies(); // Load all studies initially
+  }, [fetchCategories, fetchStudies]);
 
   // Filter studies based on current filters
   const filteredStudies = useMemo(() => {
     let filtered = studies;
-    // If a category is selected, the studies should already be filtered by the backend
-    // So we only need to apply additional filters (specialty and search term)
-    if (selectedSpecialty) {
-      filtered = filtered.filter(study => 
-        study.specialty && normalizeText(study.specialty).includes(normalizeText(selectedSpecialty))
-      );
+    
+    // Apply specialty filter first
+    if (selectedSpecialty && selectedSpecialty.trim()) {
+      const normalizedSelectedSpecialty = normalizeText(selectedSpecialty.trim());
+      filtered = filtered.filter(study => {
+        // If study has no specialty, don't show it when filtering by specialty
+        if (!study.specialty || !study.specialty.trim()) {
+          return false;
+        }
+        
+        const normalizedStudySpecialty = normalizeText(study.specialty);
+        
+        // Only show studies that exactly match or contain the selected specialty
+        return normalizedStudySpecialty === normalizedSelectedSpecialty ||
+               normalizedStudySpecialty.includes(normalizedSelectedSpecialty);
+      });
     }
 
-    if (searchTerm) {
-      const normalizedTerm = normalizeText(searchTerm);
-      const beforeFilter = filtered.length;
+    // Apply search term filter
+    if (searchTerm && searchTerm.trim()) {
+      const normalizedTerm = normalizeText(searchTerm.trim());
       filtered = filtered.filter(study =>
         normalizeText(study.name).includes(normalizedTerm) ||
         normalizeText(study.code).includes(normalizedTerm) ||
@@ -380,7 +391,6 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
                     No se encontraron estudios con los filtros aplicados
                   </Typography>
                   <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', p: 1, display: 'block' }}>
-                    Debug: Total studies: {studies.length}, Filtered: {filteredStudies.length}, Category: {selectedCategory?.name || 'None'}
                   </Typography>
                 </Box>
               ) : (

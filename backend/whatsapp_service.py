@@ -31,7 +31,7 @@ class WhatsAppService:
             'Content-Type': 'application/json'
         }
     
-    def _format_phone_number(self, phone: str, country_code: str = '52') -> str:
+    def _format_phone_number(self, phone: str, country_code: str = None) -> str:
         """
         Formatear número de teléfono para WhatsApp
         Input: 5512345678, 581234567890, +581234567890
@@ -39,8 +39,12 @@ class WhatsAppService:
         
         Args:
             phone: Número de teléfono a formatear
-            country_code: Código de país (sin +). Default: '52' (México)
+            country_code: Código de país (sin +). Si es None, usa '52' (México) como fallback
         """
+        # Usar código de país por defecto si no se proporciona
+        if country_code is None:
+            country_code = '52'  # México como fallback
+        
         # Remover espacios, guiones, paréntesis
         phone = phone.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
         
@@ -68,7 +72,7 @@ class WhatsAppService:
         template_name: str, 
         template_params: List[str],
         language_code: str = 'es',
-        country_code: str = '52'
+        country_code: str = None
     ) -> Dict[str, Any]:
         """
         Enviar mensaje usando plantilla aprobada
@@ -91,6 +95,7 @@ class WhatsAppService:
         
         url = f'{self.base_url}/{self.phone_id}/messages'
         formatted_phone = self._format_phone_number(to_phone, country_code)
+        logger.info(f"📞 Original phone: {to_phone}, Country code: {country_code}, Formatted phone: {formatted_phone}")
         
         # Construir componentes de la plantilla
         components = []
@@ -128,14 +133,90 @@ class WhatsAppService:
             
         except requests.exceptions.HTTPError as e:
             error_detail = e.response.json() if e.response else str(e)
-            logger.error(f"HTTP Error sending WhatsApp: {error_detail}")
+            status_code = e.response.status_code if e.response else None
+            
+            # Try to extract status code from error message if not available directly
+            if status_code is None and '401' in str(e):
+                status_code = 401
+            elif status_code is None and '403' in str(e):
+                status_code = 403
+                
+            logger.error(f"HTTP Error sending WhatsApp: {error_detail}, Status: {status_code}")
+            
+            # Check for specific error types
+            if status_code == 401 or '401' in str(e) or 'Unauthorized' in str(e):
+                return {
+                    'success': False,
+                    'error': 'WhatsApp credentials invalid or expired. Please contact administrator.',
+                    'details': error_detail
+                }
+            elif status_code == 403 or '403' in str(e) or 'Forbidden' in str(e):
+                return {
+                    'success': False,
+                    'error': 'WhatsApp access forbidden. Please check permissions.',
+                    'details': error_detail
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': f'HTTP Error {status_code}',
+                    'details': error_detail
+                }
+        except Exception as e:
+            logger.error(f"Error sending WhatsApp: {str(e)}")
             return {
                 'success': False,
-                'error': 'HTTP Error',
+                'error': str(e)
+            }
+    
+    def send_simple_message(self, to_phone: str, message: str, country_code: str = None) -> Dict[str, Any]:
+        """
+        Enviar mensaje simple de texto
+        """
+        if not self.phone_id or not self.access_token:
+            return {
+                'success': False,
+                'error': 'WhatsApp not configured. Please set META_WHATSAPP_PHONE_ID and META_WHATSAPP_TOKEN'
+            }
+        
+        url = f'{self.base_url}/{self.phone_id}/messages'
+        formatted_phone = self._format_phone_number(to_phone, country_code)
+        logger.info(f"📞 Sending simple message to {formatted_phone}")
+        
+        payload = {
+            'messaging_product': 'whatsapp',
+            'to': formatted_phone,
+            'type': 'text',
+            'text': {
+                'body': message
+            }
+        }
+        
+        try:
+            response = requests.post(url, headers=self._get_headers(), json=payload, timeout=10)
+            response.raise_for_status()
+            
+            result = response.json()
+            logger.info(f"Simple message sent successfully. Message ID: {result.get('messages', [{}])[0].get('id')}")
+            
+            return {
+                'success': True,
+                'message_id': result.get('messages', [{}])[0].get('id'),
+                'response': result
+            }
+            
+        except requests.exceptions.HTTPError as e:
+            error_detail = e.response.json() if e.response else str(e)
+            status_code = e.response.status_code if e.response else None
+            logger.error(f"HTTP Error sending simple message: {error_detail}, Status: {status_code}")
+            
+            return {
+                'success': False,
+                'error': f'HTTP Error {status_code}',
                 'details': error_detail
             }
         except Exception as e:
-            logger.error(f"Error sending WhatsApp: {str(e)}")
+            logger.error(f"Error sending simple message: {str(e)}")
             return {
                 'success': False,
                 'error': str(e)
@@ -150,38 +231,29 @@ class WhatsAppService:
         doctor_title: str,
         doctor_full_name: str,
         office_address: str,
-        country_code: str = '52'
+        country_code: str = None
     ) -> Dict[str, Any]:
         """
         Enviar recordatorio de cita médica
         
-        Requiere plantilla 'appointment_reminder' aprobada en Meta
-        
-        Parámetros de la plantilla:
-        1. Nombre y apellido del paciente
-        2. Fecha de la cita
-        3. Hora de la cita
-        4. Título del doctor (ej: "Dr", "Dra")
-        5. Nombre completo del doctor
-        6. Dirección del consultorio
+        En modo desarrollo, envía mensaje de texto simple
+        En producción, usar plantilla aprobada
         
         Args:
-            country_code: Código de país del consultorio (ej: '52' para México, '58' para Venezuela)
+            country_code: Código de país del consultorio. Si es None, usa '52' (México) como fallback
         """
-        template_params = [
-            patient_full_name,   # Parámetro 1: Nombre del paciente
-            appointment_date,    # Parámetro 2: Fecha (ej: "25 de Enero de 2024")
-            appointment_time,    # Parámetro 3: Hora (ej: "10:30 AM")
-            doctor_title,        # Parámetro 4: Título (Dr, Dra)
-            doctor_full_name,    # Parámetro 5: Nombre del doctor
-            office_address       # Parámetro 6: Dirección del consultorio
-        ]
+        # Crear mensaje de texto simple para desarrollo
+        message = f"""¡Hola {patient_full_name}! 🗓️
+
+Este es un recordatorio de tu cita hoy *{appointment_date} a las {appointment_time}* con {doctor_title} {doctor_full_name}
+📍 *Lugar:* {office_address}
+
+Te esperamos 10 minutos antes.
+Si no puedes asistir, por favor, usa el botón "Cancelar" para liberar tu espacio"""
         
-        return self.send_template_message(
+        return self.send_text_message(
             to_phone=patient_phone,
-            template_name='appointment_reminder',
-            template_params=template_params,
-            language_code='es',
+            message=message,
             country_code=country_code
         )
     
@@ -286,7 +358,7 @@ class WhatsAppService:
         doctor_name: str,
         privacy_notice_url: str,
         consent_id: int,
-        country_code: str = '52'
+        country_code: str = None
     ) -> Dict[str, Any]:
         """
         Envía aviso de privacidad con UN SOLO botón interactivo "Acepto"
@@ -391,7 +463,7 @@ class WhatsAppService:
         self,
         to_phone: str,
         message: str,
-        country_code: str = '52'
+        country_code: str = None
     ) -> Dict[str, Any]:
         """
         Envía mensaje de texto simple (sin template)

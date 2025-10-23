@@ -26,7 +26,7 @@ export interface FieldValidation {
 
 // Language support
 type Language = 'es' | 'en';
-const currentLanguage: Language = 'es'; // TODO: Get from context
+const currentLanguage: Language = 'es';
 
 // Validation patterns from centralized schema
 const PATTERNS = {

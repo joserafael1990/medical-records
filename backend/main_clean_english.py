@@ -130,9 +130,7 @@ security_logger = get_logger("medical_records.security")
 
 def encrypt_sensitive_data(data: dict, data_type: str = "patient") -> dict:
     """Encrypt sensitive fields in data based on type"""
-    print(f"🔐 DEBUG: encrypt_sensitive_data called with data_type={data_type}")
     if not data:
-        print(f"🔐 DEBUG: No data provided, returning empty")
         return data
     
     # DEVELOPMENT MODE: Skip encryption - return data as-is
@@ -1361,8 +1359,8 @@ async def send_whatsapp_appointment_reminder(
         if not patient or not patient.primary_phone:
             raise HTTPException(status_code=400, detail="Patient phone number not found")
         
-        # Get doctor title (Dr/Dra)
-        doctor_title = "Dra" if current_user.gender == "Femenino" else "Dr"
+        # Get doctor title from user profile
+        doctor_title = current_user.title if current_user.title else "Dr"
         
         # Get patient full name
         patient_full_name = f"{patient.first_name} {patient.paternal_surname}"
@@ -1396,6 +1394,7 @@ async def send_whatsapp_appointment_reminder(
                 country_code = office_country.phone_code.replace('+', '')  # Remove + if present
         
         print(f"📞 Using country code: +{country_code} for WhatsApp")
+        print(f"📞 Patient phone before formatting: {patient.primary_phone}")
         
         # Send WhatsApp
         whatsapp = get_whatsapp_service()
@@ -1418,17 +1417,147 @@ async def send_whatsapp_appointment_reminder(
                 "phone": patient.primary_phone
             }
         else:
-            print(f"❌ Failed to send WhatsApp: {result.get('error')}")
-            raise HTTPException(
-                status_code=500, 
-                detail=f"Failed to send WhatsApp: {result.get('error')}"
-            )
+            error_msg = result.get('error', 'Unknown error')
+            print(f"❌ Failed to send WhatsApp: {error_msg}")
+            
+            # Check if it's an authentication error
+            if ('401' in str(error_msg) or 'Unauthorized' in str(error_msg) or 
+                'credentials invalid' in str(error_msg).lower() or 
+                'credentials expired' in str(error_msg).lower()):
+                raise HTTPException(
+                    status_code=503,
+                    detail="WhatsApp service not configured. Please contact administrator to set up WhatsApp credentials."
+                )
+            elif 'not configured' in str(error_msg).lower():
+                raise HTTPException(
+                    status_code=503,
+                    detail="WhatsApp service not configured. Please contact administrator to set up WhatsApp credentials."
+                )
+            else:
+                raise HTTPException(
+                    status_code=500, 
+                    detail=f"Failed to send WhatsApp: {error_msg}"
+                )
             
     except HTTPException:
         raise
     except Exception as e:
         print(f"❌ Error sending WhatsApp reminder: {e}")
         raise HTTPException(status_code=500, detail=f"Error sending WhatsApp: {str(e)}")
+
+@app.get("/api/whatsapp/webhook")
+async def whatsapp_webhook_verify(request: Request):
+    """Verificación del webhook de WhatsApp"""
+    try:
+        # Obtener parámetros de verificación
+        mode = request.query_params.get('hub.mode')
+        token = request.query_params.get('hub.verify_token')
+        challenge = request.query_params.get('hub.challenge')
+        
+        print(f"🔍 WhatsApp webhook verification: mode={mode}, token={token}")
+        
+        # Verificar token (debe coincidir con el configurado en Meta)
+        verify_token = "whatsapp_verify_token"  # Debe coincidir con el configurado en Meta
+        
+        if mode == 'subscribe' and token == verify_token:
+            print("✅ WhatsApp webhook verified successfully")
+            return int(challenge)  # Meta espera el challenge como número
+        else:
+            print(f"❌ WhatsApp webhook verification failed: mode={mode}, token={token}")
+            raise HTTPException(status_code=403, detail="Verification failed")
+            
+    except Exception as e:
+        print(f"❌ Error in webhook verification: {e}")
+        raise HTTPException(status_code=500, detail="Verification error")
+
+@app.post("/api/whatsapp/webhook")
+async def whatsapp_webhook(request: Request, db: Session = Depends(get_db)):
+    """Webhook para recibir respuestas de WhatsApp"""
+    try:
+        body = await request.json()
+        print(f"📱 WhatsApp webhook received: {body}")
+        
+        # Verificar si es una respuesta de botón
+        if 'entry' in body and len(body['entry']) > 0:
+            entry = body['entry'][0]
+            if 'changes' in entry and len(entry['changes']) > 0:
+                change = entry['changes'][0]
+                if 'value' in change and 'messages' in change['value']:
+                    messages = change['value']['messages']
+                    
+                    for message in messages:
+                        # Verificar si es un mensaje de botón
+                        if 'interactive' in message and 'button_reply' in message['interactive']:
+                            button_reply = message['interactive']['button_reply']
+                            button_id = button_reply.get('id')
+                            from_number = message['from']
+                            
+                            print(f"🔘 Button pressed: {button_id} from {from_number}")
+                            
+                            # Si es el botón "Cancelar"
+                            if button_id == 'cancel_appointment':
+                                # Buscar la cita por número de teléfono
+                                # Formatear número para búsqueda (remover código de país)
+                                search_phone = from_number
+                                if from_number.startswith('52'):
+                                    search_phone = from_number[2:]  # Remover código de país
+                                
+                                # Buscar paciente por teléfono
+                                patient = db.query(Person).filter(
+                                    Person.primary_phone == search_phone,
+                                    Person.person_type == 'patient'
+                                ).first()
+                                
+                                if patient:
+                                    # Buscar cita activa del paciente
+                                    from datetime import datetime, timedelta
+                                    today = datetime.now().date()
+                                    
+                                    appointment = db.query(Appointment).filter(
+                                        Appointment.patient_id == patient.id,
+                                        Appointment.appointment_date >= today,
+                                        Appointment.status == 'scheduled'
+                                    ).order_by(Appointment.appointment_date.asc()).first()
+                                    
+                                    if appointment:
+                                        # Cancelar la cita
+                                        appointment.status = 'cancelled'
+                                        appointment.cancellation_reason = 'Cancelled by patient via WhatsApp'
+                                        appointment.cancelled_at = datetime.now()
+                                        db.commit()
+                                        
+                                        print(f"✅ Appointment {appointment.id} cancelled via WhatsApp")
+                                        
+                                        # Obtener country_code del doctor
+                                        doctor = db.query(Person).filter(Person.id == appointment.doctor_id).first()
+                                        country_code = '52'  # Default: México
+                                        if doctor and doctor.address_country_id:
+                                            office_country = db.query(Country).filter(Country.id == doctor.address_country_id).first()
+                                            if office_country and office_country.phone_code:
+                                                country_code = office_country.phone_code.replace('+', '')
+                                        
+                                        # Enviar confirmación
+                                        whatsapp = get_whatsapp_service()
+                                        confirmation_result = whatsapp.send_simple_message(
+                                            to_phone=from_number,
+                                            message="✅ Tu cita ha sido cancelada exitosamente. Gracias por notificarnos.",
+                                            country_code=country_code
+                                        )
+                                        
+                                        if confirmation_result['success']:
+                                            print(f"✅ Confirmation sent to {from_number}")
+                                        else:
+                                            print(f"❌ Failed to send confirmation: {confirmation_result.get('error')}")
+                                    else:
+                                        print(f"❌ No active appointment found for patient {patient.id}")
+                                else:
+                                    print(f"❌ Patient not found for phone {search_phone}")
+        
+        return {"status": "ok"}
+        
+    except Exception as e:
+        print(f"❌ Error processing WhatsApp webhook: {e}")
+        return {"status": "error", "message": str(e)}
 
 @app.post("/api/whatsapp/study-results/{study_id}")
 async def send_whatsapp_study_results_notification(
@@ -2183,7 +2312,7 @@ async def get_available_times(
                     })
                 
                 # Move to next slot (30 minutes)
-                current_time = slot_end
+                current_time = (datetime.combine(target_date, current_time) + timedelta(minutes=consultation_duration)).time()
         
         cursor.close()
         conn.close()
@@ -2615,13 +2744,11 @@ async def get_patients(
 ):
     """Get list of patients created by the current doctor with decrypted sensitive data"""
     try:
-        print(f"🔍 DEBUG: get_patients endpoint called for doctor {current_user.id}")
         # Simple query to get patients
         patients = db.query(Person).filter(
             Person.person_type == 'patient',
             Person.created_by == current_user.id
         ).offset(skip).limit(limit).all()
-        print(f"🔍 DEBUG: Found {len(patients)} patients")
         
         # Decrypt sensitive data for each patient
         decrypted_patients = []
@@ -3211,27 +3338,6 @@ async def get_calendar_appointments(
         print(f"Error in get_calendar_appointments: {str(e)}")
         return []
 
-@app.get("/api/appointments/debug")
-async def debug_appointments(
-    db: Session = Depends(get_db),
-    current_user: Person = Depends(get_current_user)
-):
-    """Debug endpoint to see all appointments for current doctor"""
-    try:
-        appointments = db.query(Appointment).options(
-            joinedload(Appointment.patient),
-            joinedload(Appointment.doctor)
-        ).filter(Appointment.doctor_id == current_user.id).all()
-        
-        print(f"🔍 DEBUG: Found {len(appointments)} total appointments for doctor {current_user.id}")
-        for apt in appointments:
-            cdmx_time = to_cdmx_timezone(apt.appointment_date)
-            print(f"  📅 ID: {apt.id}, Date: {apt.appointment_date} (UTC) = {cdmx_time} (CDMX), Duration: {apt.doctor.appointment_duration or 30}min")
-        
-        return appointments
-    except Exception as e:
-        print(f"❌ Error in debug_appointments: {str(e)}")
-        return []
 
 @app.get("/api/appointments/{appointment_id}")
 async def get_appointment(
@@ -3496,7 +3602,6 @@ async def get_consultation(
         consultation_end_time = consultation.consultation_date + timedelta(minutes=30)
 
         # Decrypt consultation data with error handling
-        print(f"🔍 DEBUG GET: Raw prescribed_medications from DB: {repr(consultation.prescribed_medications)}")
         try:
             decrypted_consultation_data = decrypt_sensitive_data({
             "chief_complaint": consultation.chief_complaint,
@@ -3517,7 +3622,6 @@ async def get_consultation(
             "personal_pathological_history": consultation.personal_pathological_history,
             "personal_non_pathological_history": consultation.personal_non_pathological_history
             }, "consultation")
-            print(f"🔍 DEBUG GET: After decryption prescribed_medications: {repr(decrypted_consultation_data.get('prescribed_medications'))}")
         except Exception as e:
             print(f"⚠️ Could not decrypt consultation data for consultation {consultation.id}: {str(e)}")
             # Use original encrypted data if decryption fails
@@ -3576,7 +3680,6 @@ async def get_consultation(
             "date": consultation.consultation_date.isoformat()
         }
         
-        print(f"🔍 DEBUG GET: Final response prescribed_medications: {repr(result.get('prescribed_medications'))}")
         print(f"✅ Returning consultation {consultation_id}")
         return result
         
@@ -3595,13 +3698,11 @@ async def create_consultation(
 ):
     """Create new consultation with encrypted sensitive medical data (REFACTORED)"""
     try:
-        print(f"🔍 DEBUG: Creating consultation with data: {consultation_data}")
         security_logger.info("Creating consultation with encryption", operation="create_consultation", 
                            doctor_id=current_user.id, patient_id=consultation_data.get("patient_id"))
         
         # 1. Encrypt sensitive consultation fields
         encrypted_consultation_data = encrypt_consultation_fields(consultation_data, encrypt_sensitive_data)
-        print(f"🔍 DEBUG: After encryption - prescribed_medications: {encrypted_consultation_data.get('prescribed_medications', 'NOT_FOUND')}")
         
         # 2. Parse consultation date
         consultation_date_str = encrypted_consultation_data.get("date", encrypted_consultation_data.get("consultation_date"))
@@ -3688,9 +3789,6 @@ async def update_consultation(
     try:
         print(f"📝 Updating consultation {consultation_id} for user {current_user.id}")
         print(f"📊 Update data received: {consultation_data}")
-        print(f"🔍 DEBUG UPDATE: Starting update process for consultation {consultation_id}")
-        print(f"🔍 DEBUG UPDATE: prescribed_medications type: {type(consultation_data.get('prescribed_medications'))}")
-        print(f"🔍 DEBUG UPDATE: prescribed_medications value: {repr(consultation_data.get('prescribed_medications'))}")
         
         # Find existing consultation
         consultation = db.query(MedicalRecord).filter(
@@ -3722,10 +3820,7 @@ async def update_consultation(
         consultation.laboratory_results = consultation_data.get("laboratory_results", consultation.laboratory_results)
         consultation.primary_diagnosis = consultation_data.get("primary_diagnosis", consultation.primary_diagnosis)
         consultation.secondary_diagnoses = consultation_data.get("secondary_diagnoses", consultation.secondary_diagnoses)
-        print(f"🔍 DEBUG UPDATE: prescribed_medications from data: {consultation_data.get('prescribed_medications')}")
-        print(f"🔍 DEBUG UPDATE: prescribed_medications current: {consultation.prescribed_medications}")
         consultation.prescribed_medications = consultation_data.get("prescribed_medications", consultation.prescribed_medications)
-        print(f"🔍 DEBUG UPDATE: prescribed_medications after assignment: {consultation.prescribed_medications}")
         consultation.treatment_plan = consultation_data.get("treatment_plan", consultation.treatment_plan)
         consultation.follow_up_instructions = consultation_data.get("follow_up_instructions", consultation.follow_up_instructions)
         consultation.prognosis = consultation_data.get("prognosis", consultation.prognosis)
@@ -3739,7 +3834,6 @@ async def update_consultation(
         # Save changes
         db.commit()
         db.refresh(consultation)
-        print(f"🔍 DEBUG UPDATE: prescribed_medications after commit: {consultation.prescribed_medications}")
         
         # Get patient and doctor names for response
         patient_name = "Paciente No Identificado"
@@ -4104,13 +4198,6 @@ async def delete_medical_record(
         print(f"❌ Error in delete_medical_record: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
-# ============================================================================
-# DEBUG ENDPOINTS REMOVED - For production security
-# ============================================================================
-# The following debug/test endpoints were removed:
-# - /api/debug/user-profile
-# - /api/debug/appointments/{doctor_email}
-# - /api/appointments-temp
 # - /api/test-patient-creation
 # - /api/test-cors
 # These have been removed to prevent unauthorized data access in production
@@ -4622,7 +4709,6 @@ async def send_whatsapp_privacy_notice(
         
         # Generar token único para la URL
         privacy_token = str(uuid.uuid4())
-        # TODO: Reemplazar con tu dominio real
         privacy_url = f"https://tudominio.com/privacy-notice/{privacy_token}"
         
         # Crear registro de consentimiento PRIMERO (para tener el ID)

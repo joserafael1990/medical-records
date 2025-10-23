@@ -98,20 +98,45 @@ class PDFService {
 
   private async loadCortexLogo(): Promise<string | null> {
     try {
-      // Try to load the logo from the public folder (using PNG favicon)
-      const response = await fetch('/favicon-32x32.png');
-      if (response.ok) {
-        const blob = await response.blob();
-        return new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(blob);
-        });
-      }
+      // Create SVG logo inline and convert to PNG
+      const svgString = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1e3a8a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"></path>
+          <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"></path>
+          <path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"></path>
+          <path d="M17.599 6.5a3 3 0 0 0 .399-1.375"></path>
+          <path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"></path>
+          <path d="M3.477 10.896a4 4 0 0 1 .585-.396"></path>
+          <path d="M19.938 10.5a4 4 0 0 1 .585.396"></path>
+          <path d="M6 18a4 4 0 0 1-1.967-.516"></path>
+          <path d="M19.967 17.484A4 4 0 0 1 18 18"></path>
+        </svg>
+      `;
+      
+      // Convert SVG to PNG using canvas
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      return new Promise((resolve) => {
+        img.onload = () => {
+          canvas.width = 64;
+          canvas.height = 64;
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, 64, 64);
+            const dataUrl = canvas.toDataURL('image/png');
+            resolve(dataUrl);
+          } else {
+            resolve(null);
+          }
+        };
+        img.onerror = () => resolve(null);
+        img.src = 'data:image/svg+xml;base64,' + btoa(svgString);
+      });
     } catch (error) {
       console.warn('Could not load CORTEX logo:', error);
+      return null;
     }
-    return null;
   }
 
   private async addCortexHeader(doc: jsPDF, title: string): Promise<void> {
@@ -125,7 +150,7 @@ class PDFService {
         
         // Add CORTEX text next to logo
         doc.setFontSize(20);
-        doc.setTextColor(0, 102, 204); // Blue color
+        doc.setTextColor(30, 58, 138); // Blue color matching the logo
         doc.setFont('helvetica', 'bold');
         doc.text('CORTEX', 40, 25);
       } else {

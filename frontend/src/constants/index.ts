@@ -43,8 +43,14 @@ export const API_CONFIG = {
 // Date and Time Utilities
 export const formatDateTimeForInput = (dateTimeString: string): string => {
   if (!dateTimeString) return '';
+  // Parse the date string and format it without timezone conversion
   const date = new Date(dateTimeString);
-  return date.toISOString().slice(0, 16); // YYYY-MM-DDTHH:mm format
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 };
 
 export const getCurrentCDMXDateTime = (): string => {

@@ -9,6 +9,7 @@ import {
 } from '../lazy';
 import { ConsultationDetailView } from '../';
 import { LoadingFallback } from '../';
+import StyleGuideView from '../views/StyleGuideView';
 
 interface ViewRendererProps {
   activeView: string;
@@ -123,6 +124,10 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
             fieldErrors={doctorProfileHook.fieldErrors}
           />
         </Suspense>
+      )}
+
+      {activeView === 'styleguide' && (
+        <StyleGuideView />
       )}
 
       {/* WhatsApp and Analytics views not implemented yet */}

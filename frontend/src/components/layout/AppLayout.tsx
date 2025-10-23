@@ -27,6 +27,7 @@ import { usePatientManagement } from '../../hooks/usePatientManagement';
 import { useConsultationManagement } from '../../hooks/useConsultationManagement';
 import { useAppointmentManager } from '../../hooks/useAppointmentManager';
 import { useAuth } from '../../contexts/AuthContext';
+import CortexBrainLogo from '../common/CortexBrainLogo';
 // Dialog imports
 import PatientDialog from '../dialogs/PatientDialog'; // ✅ Now implemented!
 import ConsultationDialog from '../dialogs/ConsultationDialog'; // ✅ Now implemented!  
@@ -78,9 +79,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       {/* Top App Bar */}
       <AppBar position="static" elevation={1}>
         <Toolbar>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1, fontWeight: 600 }}>
-            CORTEX Medical System
-          </Typography>
+          <CortexBrainLogo sx={{ flexGrow: 1 }} />
           
           {/* Status indicators */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mr: 2 }}>
@@ -147,8 +146,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           {/* Main Content Area */}
           <ViewRenderer
             activeView={activeView}
-            dashboardData={{}} // TODO: Implementar dashboard data
-            onRefreshDashboard={() => {}} // TODO: Implementar refresh dashboard
+            dashboardData={{}}
+            onRefreshDashboard={() => {}}
             patientManagement={patientManagement}
             consultationManagement={consultationManagement}
             appointmentManager={appointmentManager}

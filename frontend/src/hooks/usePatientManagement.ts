@@ -8,7 +8,6 @@ import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import type { Patient, PatientFormData } from '../types';
 
-// Debug helper - only logs in development
 const debugLog = (message: string, data?: any) => {
   if (process.env.NODE_ENV === 'development') {
     console.log(message, data || '');

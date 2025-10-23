@@ -21,8 +21,8 @@ interface UserProfileMenuProps {
   onClose: () => void;
   onViewProfile: () => void;
   onLogout: () => void;
-  doctorProfile: any; // TODO: Type this properly
-  user: any; // TODO: Type this properly
+  doctorProfile: any;
+  user: any;
 }
 
 export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({

@@ -41,12 +41,16 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
 
   const fetchStudies = useCallback(async (filters?: StudySearchFilters) => {
     try {
+      console.log('🔍 Fetching studies with filters:', filters);
       setIsLoading(true);
       setError(null);
       
       // Check authentication
       const token = localStorage.getItem('token');
-      if (token) {
+      if (!token) {
+        console.error('❌ No authentication token found');
+        setError('No hay sesión activa');
+        return;
       }
       
       const params = new URLSearchParams();
@@ -56,8 +60,14 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
       if (filters?.code) params.append('search', filters.code);
       if (filters?.duration_hours) params.append('duration_hours', filters.duration_hours.toString());
       
+      // Request all studies by setting a high limit
+      params.append('limit', '500');
       
-      const response = await apiService.get(`/api/study-catalog?${params.toString()}`);
+      const url = `/api/study-catalog?${params.toString()}`;
+      console.log('🌐 Making request to:', url);
+      
+      const response = await apiService.get(url);
+      console.log('✅ Studies response:', response.data);
       
       setStudies(response.data);
     } catch (err: any) {
@@ -183,7 +193,6 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
     fetchStudies();
   }, [fetchCategories, fetchStudies]);
 
-  // Debug: Log when studies or categories change
   useEffect(() => {
   }, [studies, categories]);
 

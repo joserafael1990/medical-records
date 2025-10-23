@@ -506,7 +506,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     const loadStructuredDiagnoses = async () => {
       if (consultation && consultation.id) {
         try {
-          // TODO: Load structured diagnoses from API when backend endpoint is available
           // For now, we'll parse from the text fields if they contain CIE-10 codes
           const parseDiagnosesFromText = (text: string): DiagnosisCatalog[] => {
             if (!text) return [];
@@ -1043,12 +1042,19 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       console.log('🔬 Consultation creation result:', createdConsultation);
       console.log('🔬 Created consultation ID:', createdConsultation?.id);
       
-      // Save clinical studies if any were added
+      // Save clinical studies if any were added (only temporary studies for new consultations)
       if (clinicalStudiesHook.studies.length > 0 && createdConsultation?.id) {
         console.log('🔬 Saving clinical studies for consultation:', createdConsultation.id);
         console.log('🔬 Studies to save:', clinicalStudiesHook.studies);
         
-        for (const study of clinicalStudiesHook.studies) {
+        // Filter only temporary studies (those with temp_ IDs)
+        const temporaryStudies = clinicalStudiesHook.studies.filter(study => 
+          study.id.toString().startsWith('temp_')
+        );
+        
+        console.log('🔬 Temporary studies to save:', temporaryStudies);
+        
+        for (const study of temporaryStudies) {
           const studyData = {
             ...study,
             consultation_id: createdConsultation.id,
@@ -1065,17 +1071,15 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           }
         }
         
+        // Clear temporary studies after saving
+        clinicalStudiesHook.clearTemporaryStudies();
+        
         // Refresh studies to show the newly created ones
         await clinicalStudiesHook.fetchStudies(String(createdConsultation.id));
       } else {
         console.log('🔬 No clinical studies to save or consultation not created');
         console.log('🔬 Studies count:', clinicalStudiesHook.studies.length);
         console.log('🔬 Consultation ID:', createdConsultation?.id);
-      }
-
-      // Always refresh studies after creating consultation to show any studies that were created
-      if (createdConsultation?.id) {
-        await clinicalStudiesHook.fetchStudies(String(createdConsultation.id));
       }
 
       // Save vital signs if any were added
@@ -1196,13 +1200,11 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   };
 
   const handleDeleteStudy = async (studyId: string) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar este estudio clínico?')) {
-      try {
-        await clinicalStudiesHook.deleteStudy(studyId);
-      } catch (error) {
-        console.error('Error deleting clinical study:', error);
-        setError('Error al eliminar el estudio clínico');
-      }
+    try {
+      await clinicalStudiesHook.deleteStudy(studyId);
+    } catch (error) {
+      console.error('Error deleting clinical study:', error);
+      setError('Error al eliminar el estudio clínico');
     }
   };
 
@@ -2743,8 +2745,37 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Selecciona el tipo de signo vital que deseas agregar:
           </Typography>
-          <Grid container spacing={1}>
-            {vitalSignsHook.availableVitalSigns.map((vitalSign) => {
+          {(() => {
+            const filteredVitalSigns = vitalSignsHook.availableVitalSigns.filter(vitalSign => {
+              // Filter out vital signs that are already registered in this consultation
+              const existingVitalSigns = vitalSignsHook.getAllVitalSigns();
+              return !existingVitalSigns.some(existing => 
+                existing.vital_sign_id === vitalSign.id
+              );
+            });
+
+            if (filteredVitalSigns.length === 0) {
+              return (
+                <Box sx={{ 
+                  textAlign: 'center', 
+                  py: 4,
+                  backgroundColor: '#f5f5f5',
+                  borderRadius: 2,
+                  border: '1px dashed #ccc'
+                }}>
+                  <Typography variant="h6" color="text.secondary" sx={{ mb: 1 }}>
+                    ✅ Todos los signos vitales registrados
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Ya has agregado todos los signos vitales disponibles para esta consulta.
+                  </Typography>
+                </Box>
+              );
+            }
+
+            return (
+              <Grid container spacing={1}>
+                {filteredVitalSigns.map((vitalSign) => {
               const getVitalSignIcon = (name: string) => {
                 const lowerName = name.toLowerCase();
                 if (lowerName.includes('cardíaca') || lowerName.includes('cardiac')) return <HeartIcon sx={{ color: '#f44336' }} />;
@@ -2799,8 +2830,10 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   </Card>
                 </Grid>
               );
-            })}
-          </Grid>
+                })}
+              </Grid>
+            );
+          })()}
         </DialogContent>
         <DialogActions>
           <Button onClick={vitalSignsHook.closeDialog}>Cancelar</Button>

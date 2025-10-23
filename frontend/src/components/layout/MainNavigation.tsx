@@ -14,7 +14,8 @@ import {
   Assignment as AssignmentIcon,
   CalendarToday as CalendarIcon,
   WhatsApp as WhatsAppIcon,
-  Analytics as AnalyticsIcon
+  Analytics as AnalyticsIcon,
+  Palette as StyleGuideIcon
 } from '@mui/icons-material';
 
 interface MainNavigationProps {

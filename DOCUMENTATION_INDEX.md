@@ -23,7 +23,6 @@
 
 #### Scripts para macOS/Linux (.sh)
 - **`install.sh`** - Instalación automática
-- **`migrate-existing-db.sh`** - Migración de base de datos existente
 - **`restart-dev.sh`** - Reinicio rápido para desarrollo
 - **`deploy-constancias.sh`** - Despliegue de funcionalidad de constancias médicas
 
@@ -35,16 +34,11 @@
 - **`status.bat`** - Ver estado del sistema
 - **`logs.bat`** - Ver logs de servicios
 - **`rebuild.bat`** - Reconstruir proyecto
-- **`deploy-constancias.bat`** - Desplegar constancias
-- **`clean.bat`** - Limpiar proyecto
 - **[SCRIPTS_WINDOWS.md](SCRIPTS_WINDOWS.md)** - Referencia completa de scripts Windows
 
 ### 📄 Guías de Funcionalidades
 - **[docs/PDF_GENERATION_GUIDE.md](docs/PDF_GENERATION_GUIDE.md)** - Generación de PDFs (recetas y órdenes)
 - **[docs/CONSTANCIA_MEDICA_GUIDE.md](docs/CONSTANCIA_MEDICA_GUIDE.md)** - Generación de constancias médicas
-- **[COMO_PROBAR_CONSTANCIAS.md](COMO_PROBAR_CONSTANCIAS.md)** - Guía de pruebas de constancias
-- **[CONSTANCIA_IMPLEMENTATION_SUMMARY.md](CONSTANCIA_IMPLEMENTATION_SUMMARY.md)** - Resumen de implementación
-- **[RESUMEN_CONSTANCIAS.md](RESUMEN_CONSTANCIAS.md)** - Resumen ejecutivo de constancias
 
 ## 🎯 Guías por Tipo de Usuario
 

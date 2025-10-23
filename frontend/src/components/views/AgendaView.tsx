@@ -82,7 +82,30 @@ const AgendaView: React.FC<AgendaViewProps> = ({
       showSuccess('Recordatorio enviado por WhatsApp exitosamente');
     } catch (error: any) {
       console.error('Error sending WhatsApp reminder:', error);
-      showError(error.response?.data?.detail || 'Error al enviar recordatorio por WhatsApp');
+      console.log('Full error object:', error);
+      console.log('Error status:', error.status);
+      console.log('Error response status:', error.response?.status);
+      console.log('Error detail:', error.detail);
+      console.log('Error response detail:', error.response?.data?.detail);
+      
+      // Handle specific error cases
+      const errorDetail = error.detail || error.response?.data?.detail || 'Error al enviar recordatorio por WhatsApp';
+      const statusCode = error.status || error.response?.status;
+      
+      if (statusCode === 503) {
+        console.log('Detected 503 error, showing WhatsApp not configured message');
+        // Use setTimeout to ensure the message is shown
+        setTimeout(() => {
+          showError('WhatsApp no está configurado. Contacta al administrador para configurar el servicio de WhatsApp.');
+        }, 100);
+      } else if (statusCode === 400) {
+        showError('No se encontró el número de teléfono del paciente.');
+      } else if (statusCode === 404) {
+        showError('Cita no encontrada o sin acceso.');
+      } else {
+        console.log('Using generic error message:', errorDetail);
+        showError(errorDetail);
+      }
     } finally {
       setSendingWhatsApp(null);
     }
@@ -348,11 +371,14 @@ const AgendaView: React.FC<AgendaViewProps> = ({
               borderRadius: 2,
               mb: 1,
               boxShadow: 1,
+              cursor: 'pointer',
               '&:hover': {
                 borderColor: 'primary.main',
-                boxShadow: 2
+                boxShadow: 2,
+                backgroundColor: 'action.hover'
               }
             }}
+            onClick={() => handleEditAppointment?.(appointment)}
           >
             <ListItemText
               primary={
@@ -389,25 +415,22 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                     variant="outlined"
                     color="success"
                     startIcon={<WhatsAppIcon />}
-                    onClick={() => handleSendWhatsAppReminder(appointment)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSendWhatsAppReminder(appointment);
+                    }}
                     disabled={sendingWhatsApp === appointment.id}
                   >
                     {sendingWhatsApp === appointment.id ? 'Enviando...' : 'WhatsApp'}
                   </Button>
                 )}
-                <Button
-                  size="small"
-                  startIcon={<EditIcon />}
-                  onClick={() => handleEditAppointment?.(appointment)}
-                >
-                  Editar
-                </Button>
                 {appointment.status === 'confirmed' && (
                   <Button
                     size="small"
                     color="error"
                     startIcon={<CancelIcon />}
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       console.log('🔄 Cancel button clicked for appointment:', appointment.id);
                       if (cancelAppointment && appointment.id) {
                         console.log('🔄 Calling cancelAppointment function...');

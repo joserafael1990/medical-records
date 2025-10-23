@@ -18,7 +18,6 @@ export * from './formatters';
 export * from './consultationHelpers';
 
 // Legacy exports for backward compatibility
-// (These will eventually be deprecated in favor of the organized modules)
 
 const getFieldLabel = (field: string): string => {
   const labels: { [key: string]: string } = {

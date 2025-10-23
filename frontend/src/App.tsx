@@ -1,5 +1,5 @@
 import React from 'react';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -11,53 +11,10 @@ import ErrorBoundary from './components/common/ErrorBoundary';
 import './styles/disable-payment-detection.css';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { ToastProvider } from './components/common/ToastNotification';
+import { twitterTheme } from './themes/twitterTheme';
 
-// Tema personalizado de Material-UI
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#1976d2',
-      light: '#42a5f5',
-      dark: '#1565c0',
-    },
-    secondary: {
-      main: '#dc004e',
-    },
-    background: {
-      default: '#f5f7fa',
-      paper: '#ffffff',
-    },
-  },
-  typography: {
-    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-    h4: {
-      fontWeight: 600,
-    },
-    h5: {
-      fontWeight: 500,
-    },
-  },
-  shape: {
-    borderRadius: 8,
-  },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          textTransform: 'none',
-          borderRadius: 8,
-        },
-      },
-    },
-    MuiCard: {
-      styleOverrides: {
-        root: {
-          boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-        },
-      },
-    },
-  },
-});
+// Use Twitter-inspired theme consistently
+const theme = twitterTheme;
 
 const AppWithAuth: React.FC = () => {
   const { logout } = useAuth();

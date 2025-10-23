@@ -29,7 +29,7 @@ from config_secure import (
 )
 
 # Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt"])
 
 # ============================================================================
 # FUNCIONES DE HASHING Y VERIFICACIÓN

@@ -45,7 +45,7 @@ import ClinicalStudyDialog from '../dialogs/ClinicalStudyDialog';
 import { useClinicalStudies } from '../../hooks/useClinicalStudies';
 
 interface ConsultationDetailViewProps {
-  consultation: any; // TODO: Define proper ConsultationResponse type
+  consultation: any;
   onBack: () => void;
   onEdit: (consultation: any) => void;
   onPrint?: (consultation: any) => void;

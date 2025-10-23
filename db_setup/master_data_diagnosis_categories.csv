@@ -1,0 +1,44 @@
+id,code,name,description,parent_id,level,is_active,created_at,updated_at
+1,A00-B99,Ciertas enfermedades infecciosas y parasitarias,Enfermedades causadas por agentes infecciosos y parasitarios,,1,t,2025-10-22 08:11:19.934045,2025-10-22 08:11:19.934045
+2,C00-D49,Neoplasias,Tumores benignos y malignos,,1,t,2025-10-22 08:11:19.934045,2025-10-22 08:11:19.934045
+3,D50-D89,Enfermedades de la sangre y de los órganos hematopoyéticos,Trastornos de la sangre y sistema inmunitario,,1,t,2025-10-22 08:11:19.934045,2025-10-22 08:11:19.934045
+4,E00-E89,"Endocrinas, nutricionales y metabólicas","Trastornos endocrinos, nutricionales y metabólicos",,1,t,2025-10-22 08:11:19.934045,2025-10-22 08:11:19.934045
+5,F01-F99,Trastornos mentales y del comportamiento,Enfermedades mentales y del comportamiento,,1,t,2025-10-22 08:11:19.934045,2025-10-22 08:11:19.934045
+6,G00-G99,Enfermedades del sistema nervioso,Trastornos del sistema nervioso central y periférico,,1,t,2025-10-22 08:11:19.934045,2025-10-22 08:11:19.934045
+7,H00-H59,Enfermedades del ojo y sus anexos,Trastornos oculares y de estructuras relacionadas,,1,t,2025-10-22 08:11:19.934045,2025-10-22 08:11:19.934045
+8,H60-H95,Enfermedades del oído y de la apófisis mastoides,Trastornos del oído y estructuras relacionadas,,1,t,2025-10-22 08:11:19.934045,2025-10-22 08:11:19.934045
+9,I00-I99,Enfermedades del sistema circulatorio,Trastornos cardiovasculares,,1,t,2025-10-22 08:11:19.934045,2025-10-22 08:11:19.934045
+10,J00-J99,Enfermedades del sistema respiratorio,Trastornos del sistema respiratorio,,1,t,2025-10-22 08:11:19.934045,2025-10-22 08:11:19.934045
+11,K00-K95,Enfermedades del sistema digestivo,Trastornos del sistema digestivo,,1,t,2025-10-22 08:11:19.934045,2025-10-22 08:11:19.934045
+12,L00-L99,Enfermedades de la piel y del tejido subcutáneo,Trastornos dermatológicos,,1,t,2025-10-22 08:11:19.934045,2025-10-22 08:11:19.934045
+13,M00-M99,Enfermedades del sistema osteomuscular,Trastornos musculoesqueléticos,,1,t,2025-10-22 08:11:19.934045,2025-10-22 08:11:19.934045
+14,N00-N99,Enfermedades del sistema genitourinario,Trastornos del sistema genitourinario,,1,t,2025-10-22 08:11:19.934045,2025-10-22 08:11:19.934045
+15,O00-O9A,"Embarazo, parto y puerperio","Complicaciones del embarazo, parto y puerperio",,1,t,2025-10-22 08:11:19.934045,2025-10-22 08:11:19.934045
+16,P00-P96,Ciertas afecciones originadas en el período perinatal,Trastornos del período perinatal,,1,t,2025-10-22 08:11:19.934045,2025-10-22 08:11:19.934045
+17,Q00-Q99,Malformaciones congénitas,Anomalías congénitas y cromosómicas,,1,t,2025-10-22 08:11:19.934045,2025-10-22 08:11:19.934045
+18,R00-R94,"Síntomas, signos y hallazgos anormales",Síntomas y signos clínicos,,1,t,2025-10-22 08:11:19.934045,2025-10-22 08:11:19.934045
+19,S00-T88,"Traumatismos, envenenamientos y otras consecuencias",Lesiones y envenenamientos,,1,t,2025-10-22 08:11:19.934045,2025-10-22 08:11:19.934045
+20,U00-U85,Causas externas de morbimortalidad,Factores externos de morbilidad y mortalidad,,1,t,2025-10-22 08:11:19.934045,2025-10-22 08:11:19.934045
+21,V01-Y99,Causas externas de morbilidad y mortalidad,Causas externas de lesiones,,1,t,2025-10-22 08:11:19.934045,2025-10-22 08:11:19.934045
+22,Z00-Z99,Factores que influyen en el estado de salud,Factores que influyen en el estado de salud,,1,t,2025-10-22 08:11:19.934045,2025-10-22 08:11:19.934045
+23,A00-A09,Enfermedades infecciosas intestinales,Infecciones del tracto gastrointestinal,1,2,t,2025-10-22 08:11:19.938081,2025-10-22 08:11:19.938081
+24,A15-A19,Tuberculosis,Tuberculosis en todas sus formas,1,2,t,2025-10-22 08:11:19.938081,2025-10-22 08:11:19.938081
+25,A30-A49,Otras enfermedades bacterianas,Otras infecciones bacterianas,1,2,t,2025-10-22 08:11:19.938081,2025-10-22 08:11:19.938081
+26,B00-B09,Infecciones virales,Infecciones por virus,1,2,t,2025-10-22 08:11:19.938081,2025-10-22 08:11:19.938081
+27,I10-I16,Enfermedades hipertensivas,Hipertensión arterial,9,2,t,2025-10-22 08:11:19.938081,2025-10-22 08:11:19.938081
+28,I20-I25,Enfermedades isquémicas del corazón,Cardiopatía isquémica,9,2,t,2025-10-22 08:11:19.938081,2025-10-22 08:11:19.938081
+29,I30-I52,Otras formas de enfermedad del corazón,Otras cardiopatías,9,2,t,2025-10-22 08:11:19.938081,2025-10-22 08:11:19.938081
+30,I60-I69,Enfermedades cerebrovasculares,Accidentes cerebrovasculares,9,2,t,2025-10-22 08:11:19.938081,2025-10-22 08:11:19.938081
+31,J00-J06,Infecciones agudas de las vías respiratorias superiores,Infecciones respiratorias altas,10,2,t,2025-10-22 08:11:19.938081,2025-10-22 08:11:19.938081
+32,J10-J18,Influenza y neumonía,Influenza y neumonía,10,2,t,2025-10-22 08:11:19.938081,2025-10-22 08:11:19.938081
+33,J40-J47,Enfermedades crónicas de las vías respiratorias inferiores,Enfermedades respiratorias crónicas,10,2,t,2025-10-22 08:11:19.938081,2025-10-22 08:11:19.938081
+34,E10-E14,Diabetes mellitus,Diabetes mellitus,4,2,t,2025-10-22 08:11:19.938081,2025-10-22 08:11:19.938081
+35,E00-E07,Trastornos de la glándula tiroides,Trastornos tiroideos,4,2,t,2025-10-22 08:11:19.938081,2025-10-22 08:11:19.938081
+36,E65-E68,Obesidad y otros trastornos nutricionales,Obesidad y trastornos nutricionales,4,2,t,2025-10-22 08:11:19.938081,2025-10-22 08:11:19.938081
+37,K20-K31,"Enfermedades del esófago, estómago y duodeno",Trastornos digestivos altos,11,2,t,2025-10-22 08:11:19.938081,2025-10-22 08:11:19.938081
+38,K35-K38,Enfermedades del apéndice,Apendicitis,11,2,t,2025-10-22 08:11:19.938081,2025-10-22 08:11:19.938081
+39,K70-K77,Enfermedades del hígado,Trastornos hepáticos,11,2,t,2025-10-22 08:11:19.938081,2025-10-22 08:11:19.938081
+40,N00-N08,Enfermedades glomerulares,Trastornos glomerulares,14,2,t,2025-10-22 08:11:19.938081,2025-10-22 08:11:19.938081
+41,N10-N16,Enfermedades tubulointersticiales del riñón,Trastornos tubulointersticiales,14,2,t,2025-10-22 08:11:19.938081,2025-10-22 08:11:19.938081
+42,N30-N39,Otras enfermedades del sistema urinario,Otras enfermedades urológicas,14,2,t,2025-10-22 08:11:19.938081,2025-10-22 08:11:19.938081
+53,K00-K93,Enfermedades del sistema digestivo,,,1,t,2025-10-22 08:24:01.960466,2025-10-22 08:24:01.960466

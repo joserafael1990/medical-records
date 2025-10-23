@@ -119,6 +119,16 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
   const [localFormData, setLocalFormData] = useState<AppointmentFormData>(formData);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [validationError, setValidationError] = useState<string>('');
+
+  // Function to format time from HH:MM to AM/PM format
+  const formatTimeToAMPM = (timeString: string): string => {
+    if (!timeString) return '';
+    const [hours, minutes] = timeString.split(':');
+    const hour = parseInt(hours, 10);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour % 12 || 12;
+    return `${displayHour}:${minutes} ${ampm}`;
+  };
   
   // Auto-scroll to error when it appears
   const { errorRef: validationErrorRef } = useScrollToErrorInDialog(validationError);
@@ -162,15 +172,21 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
 
   // Function to load available times for a specific date
   const loadAvailableTimes = async (date: string) => {
-    if (!date) return;
+    if (!date) return [];
     
     try {
       setLoadingTimes(true);
+      console.log('🔍 Loading available times for date:', date);
       const response = await apiService.getAvailableTimesForBooking(date);
-      setAvailableTimes(response.available_times || []);
+      console.log('🔍 Available times response:', response);
+      const times = response.available_times || [];
+      setAvailableTimes(times);
+      console.log('🔍 Set available times:', times);
+      return times;
     } catch (error) {
       console.error('Error loading available times:', error);
       setAvailableTimes([]);
+      return [];
     } finally {
       setLoadingTimes(false);
     }
@@ -378,20 +394,31 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
 
   // Update local form data when props change
   useEffect(() => {
+    console.log('🔍 AppointmentDialog useEffect - formData:', formData);
+    console.log('🔍 AppointmentDialog useEffect - patients.length:', patients.length);
+    console.log('🔍 AppointmentDialog useEffect - isEditing:', isEditing);
+    
     // Set default status for new appointments
     const updatedFormData = {
       ...formData,
       // Always set status to 'confirmed' for new appointments, preserve existing status for edits
       status: formData.status || 'confirmed',
       // If no patients exist, automatically set appointment type to primera vez
-      appointment_type: patients.length === 0 ? 'primera vez' : formData.appointment_type
+      // Normalize appointment_type to lowercase to match select options
+      appointment_type: patients.length === 0 ? 'primera vez' : (formData.appointment_type ? formData.appointment_type.toLowerCase() : '')
     };
+    console.log('🔍 AppointmentDialog useEffect - updatedFormData:', updatedFormData);
     setLocalFormData(updatedFormData);
     
     if (formData.patient_id && patients.length > 0) {
-      const patient = patients.find(p => p.id === formData.patient_id);
+      console.log('🔍 Looking for patient with ID:', formData.patient_id, 'type:', typeof formData.patient_id);
+      console.log('🔍 Available patients:', patients.map(p => ({ id: p.id, name: p.first_name + ' ' + p.last_name, type: typeof p.id })));
+      // Try both string and number comparison
+      const patient = patients.find(p => p.id === formData.patient_id || p.id === String(formData.patient_id) || p.id === Number(formData.patient_id));
+      console.log('🔍 Found patient:', patient);
       setSelectedPatient(patient || null);
     } else {
+      console.log('🔍 No patient_id or no patients available');
       setSelectedPatient(null);
     }
     
@@ -400,11 +427,20 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
       const dateTime = formData.date_time;
       const [datePart, timePart] = dateTime.split('T');
       setSelectedDate(dateTime);
-      setSelectedTime(timePart || '');
       
-      // Load available times for the date
+      // Load available times for the date first, then set the time
       if (datePart) {
-        loadAvailableTimes(datePart);
+        console.log('🔍 Loading available times for date:', datePart);
+        loadAvailableTimes(datePart).then((times) => {
+          // Set the time after available times are loaded
+          if (timePart) {
+            console.log('🔍 Setting selected time to:', timePart);
+            console.log('🔍 Available times when setting:', times);
+            // Always set the original appointment time, regardless of available slots
+            console.log('🔍 Setting original appointment time:', timePart);
+            setSelectedTime(timePart);
+          }
+        });
       }
     } else if (open) {
       setSelectedDate('');
@@ -1202,13 +1238,14 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                   value={selectedTime}
                   onChange={(e) => handleTimeChange(e.target.value)}
                   label="Seleccionar horario - obligatorio"
-                  disabled={!selectedDate || loadingTimes || isReadOnly || availableTimes.length === 0}
+                  disabled={!selectedDate || loadingTimes || isReadOnly}
                 >
+                  {/* Show available times */}
                   {availableTimes.map((timeSlot) => (
                     <MenuItem key={timeSlot.time} value={timeSlot.time}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <ScheduleIcon sx={{ fontSize: 16, color: 'primary.main' }} />
-                        <Typography>{timeSlot.display}</Typography>
+                        <Typography>{formatTimeToAMPM(timeSlot.time)}</Typography>
                         <Chip 
                           label={`${timeSlot.duration_minutes} min`} 
                           size="small" 
@@ -1218,6 +1255,22 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                       </Box>
                     </MenuItem>
                   ))}
+                  
+                  {/* Show original appointment time if it's not in available times */}
+                  {selectedTime && !availableTimes.find(slot => slot.time === selectedTime) && (
+                    <MenuItem key={selectedTime} value={selectedTime}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <ScheduleIcon sx={{ fontSize: 16, color: 'warning.main' }} />
+                        <Typography>{formatTimeToAMPM(selectedTime)}</Typography>
+                        <Chip 
+                          label="Cita existente" 
+                          size="small" 
+                          variant="outlined" 
+                          color="warning"
+                        />
+                      </Box>
+                    </MenuItem>
+                  )}
                 </Select>
                 {!loadingTimes && selectedDate && availableTimes.length === 0 && (
                   <Alert severity="info" sx={{ mt: 1 }}>
