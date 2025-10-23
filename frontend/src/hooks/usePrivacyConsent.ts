@@ -18,6 +18,10 @@ interface UsePrivacyConsentReturn {
   revokeConsent: (patientId: number, reason: string) => Promise<void>;
   clearError: () => void;
   
+  // Polling
+  startPolling: (patientId: number, intervalMs?: number) => () => void;
+  stopPolling: (cleanup: () => void) => void;
+  
   // Status helpers
   hasAcceptedConsent: boolean;
   consentStatusText: string;
@@ -33,13 +37,11 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
    * Fetch consent status for a patient
    */
   const fetchConsentStatus = useCallback(async (patientId: number) => {
-    console.log('🔒 Fetching consent status for patient:', patientId);
     setIsLoading(true);
     setError(null);
 
     try {
       const response = await apiService.get(`/api/privacy/consent-status/${patientId}`);
-      console.log('✅ Consent status:', response);
       
       if (response.has_consent) {
         setConsent(response.consent);
@@ -48,7 +50,6 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
       }
     } catch (err: any) {
       const errorMsg = err?.detail || err?.message || 'Error al obtener el estado del consentimiento';
-      console.error('❌ Error fetching consent:', errorMsg);
       setError(errorMsg);
       setConsent(null);
     } finally {
@@ -81,7 +82,6 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
       return response;
     } catch (err: any) {
       const errorMsg = err?.detail || err?.message || 'Error al enviar el aviso de privacidad por WhatsApp';
-      console.error('❌ Error sending WhatsApp notice:', errorMsg);
       setError(errorMsg);
       throw err;
     } finally {
@@ -119,7 +119,6 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
       return response;
     } catch (err: any) {
       const errorMsg = err?.detail || err?.message || 'Error al revocar el consentimiento';
-      console.error('❌ Error revoking consent:', errorMsg);
       setError(errorMsg);
       throw err;
     } finally {
@@ -132,6 +131,24 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
    */
   const clearError = useCallback(() => {
     setError(null);
+  }, []);
+
+  /**
+   * Start polling for consent status updates
+   */
+  const startPolling = useCallback((patientId: number, intervalMs: number = 5000) => {
+    const interval = setInterval(() => {
+      fetchConsentStatus(patientId);
+    }, intervalMs);
+    
+    return () => clearInterval(interval);
+  }, [fetchConsentStatus]);
+
+  /**
+   * Stop polling
+   */
+  const stopPolling = useCallback((cleanup: () => void) => {
+    cleanup();
   }, []);
 
   /**
@@ -205,6 +222,8 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
     sendWhatsAppNotice,
     revokeConsent,
     clearError,
+    startPolling,
+    stopPolling,
     hasAcceptedConsent,
     consentStatusText,
     consentStatusColor

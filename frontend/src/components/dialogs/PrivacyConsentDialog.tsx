@@ -71,6 +71,8 @@ export const PrivacyConsentDialog: React.FC<PrivacyConsentDialogProps> = ({
     sendWhatsAppNotice,
     revokeConsent,
     clearError,
+    startPolling,
+    stopPolling,
     hasAcceptedConsent,
     consentStatusText,
     consentStatusColor
@@ -96,6 +98,30 @@ export const PrivacyConsentDialog: React.FC<PrivacyConsentDialogProps> = ({
     }
   }, [open, clearError]);
 
+  // Stop polling when consent is accepted
+  useEffect(() => {
+    if (hasAcceptedConsent && (window as any).consentPollingCleanup) {
+      (window as any).consentPollingCleanup();
+      if ((window as any).consentPollingTimeout) {
+        clearTimeout((window as any).consentPollingTimeout);
+      }
+      (window as any).consentPollingCleanup = null;
+      (window as any).consentPollingTimeout = null;
+    }
+  }, [hasAcceptedConsent]);
+
+  // Cleanup polling when dialog closes
+  useEffect(() => {
+    return () => {
+      if ((window as any).consentPollingCleanup) {
+        (window as any).consentPollingCleanup();
+      }
+      if ((window as any).consentPollingTimeout) {
+        clearTimeout((window as any).consentPollingTimeout);
+      }
+    };
+  }, []);
+
   /**
    * Handle sending WhatsApp privacy notice
    */
@@ -114,8 +140,18 @@ export const PrivacyConsentDialog: React.FC<PrivacyConsentDialogProps> = ({
       await sendWhatsAppNotice(patient.id, patient.primary_phone);
       showSuccess('✅ Aviso de privacidad enviado por WhatsApp');
       
-      // Refresh consent status
-      await fetchConsentStatus(patient.id);
+      // Start polling to check for consent updates
+      const cleanup = startPolling(patient.id, 3000); // Check every 3 seconds
+      
+      // Stop polling after 5 minutes or when consent is accepted
+      const timeout = setTimeout(() => {
+        cleanup();
+      }, 5 * 60 * 1000); // 5 minutes
+      
+      // Store cleanup function for later use
+      (window as any).consentPollingCleanup = cleanup;
+      (window as any).consentPollingTimeout = timeout;
+      
     } catch (err: any) {
       showError(err?.detail || 'Error al enviar el aviso de privacidad');
     }

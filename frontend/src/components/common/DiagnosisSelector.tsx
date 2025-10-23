@@ -252,7 +252,7 @@ const DiagnosisSelector: React.FC<DiagnosisSelectorProps> = ({
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6} md={3} lg={2.5}>
                   <Autocomplete
-                    options={categories.map((cat: any) => cat.code)}
+                    options={(categories || []).map((cat: any) => cat.code)}
                     getOptionLabel={(option: string) => {
                       const category = categories.find((cat: any) => cat.code === option);
                       return category ? `${option} - ${category.name}` : option;
@@ -416,7 +416,7 @@ const DiagnosisSelector: React.FC<DiagnosisSelectorProps> = ({
             )}
             
             <Grid container spacing={1}>
-              {searchResults.map((result: DiagnosisSearchResult) => (
+              {(searchResults || []).map((result: DiagnosisSearchResult) => (
                 <Grid item xs={12} sm={6} md={4} key={result.id}>
                   <Card 
                     variant="outlined" 
@@ -476,16 +476,16 @@ const DiagnosisSelector: React.FC<DiagnosisSelectorProps> = ({
       )}
 
       {/* Selected Diagnoses */}
-      {selectedDiagnoses.length > 0 && (
+      {(selectedDiagnoses || []).length > 0 && (
         <Card>
           <CardContent>
             <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
               <MedicalServicesIcon />
-              Diagnósticos Seleccionados ({selectedDiagnoses.length}/{maxSelections})
+              Diagnósticos Seleccionados ({(selectedDiagnoses || []).length}/{maxSelections})
             </Typography>
             
             <Grid container spacing={1}>
-              {selectedDiagnoses.map((diagnosis: DiagnosisCatalog) => (
+              {(selectedDiagnoses || []).map((diagnosis: DiagnosisCatalog) => (
                 <Grid item xs={12} sm={6} md={4} key={diagnosis.id}>
                   <Card variant="outlined">
                     <CardContent sx={{ p: 2 }}>

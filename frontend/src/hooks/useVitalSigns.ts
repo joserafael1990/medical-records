@@ -174,7 +174,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     setSelectedVitalSign(null);
     setVitalSignDialogOpen(true);
     setError(null);
-  }, [availableVitalSigns.length, vitalSignFormData]);
+  }, [availableVitalSigns?.length || 0, vitalSignFormData]);
 
   const openEditDialog = useCallback((vitalSign: ConsultationVitalSign) => {
     
@@ -256,15 +256,15 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
 
   // Get all vital signs (both consultation and temporary)
   const getAllVitalSigns = useCallback(() => {
-    if (consultationVitalSigns.length > 0) {
+    if (consultationVitalSigns?.length > 0) {
       return consultationVitalSigns;
     }
     // Convert temporary vital signs to display format
-    return temporaryVitalSigns.map((vs, index) => ({
+    return (temporaryVitalSigns || []).map((vs, index) => ({
       id: index + 1000, // Temporary ID
       consultation_id: 0,
       vital_sign_id: vs.vital_sign_id,
-      vital_sign_name: availableVitalSigns.find(v => v.id === vs.vital_sign_id)?.name || 'Signo Vital',
+      vital_sign_name: ((availableVitalSigns || []).find(v => v.id === vs.vital_sign_id) || {}).name || 'Signo Vital',
       value: vs.value,
       unit: vs.unit,
       notes: vs.notes,

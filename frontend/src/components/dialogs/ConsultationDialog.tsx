@@ -426,7 +426,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
         // Find and set selected patient
         if (consultation.patient_id && patients.length > 0) {
-          const patient = patients.find((p: any) => p.id === consultation.patient_id);
+          const patient = (patients || []).find((p: any) => p.id === consultation.patient_id);
           setSelectedPatient(patient || null);
         }
 
@@ -478,11 +478,11 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
         // Load patients for appointments if appointments exist
         if (appointments && appointments.length > 0) {
-          const patientIds = appointments.map((apt: any) => apt.patient_id).filter((id: any) => id);
+          const patientIds = (appointments || []).map((apt: any) => apt.patient_id).filter((id: any) => id);
           
           // Get all patients to find the ones referenced in appointments
           const allPatients = await apiService.getPatients();
-          const appointmentPatients = allPatients.filter((patient: any) => 
+          const appointmentPatients = (allPatients || []).filter((patient: any) => 
             patientIds.includes(patient.id)
           );
           
@@ -663,7 +663,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       const allConsultations = response.data || [];
       
       // Filter consultations for this specific patient
-      const patientConsultations = allConsultations.filter((c: any) => c.patient_id === patientId);
+      const patientConsultations = (allConsultations || []).filter((c: any) => c.patient_id === patientId);
       const hasPrevious = patientConsultations.length > 0;
       
       console.log('🔍 Previous consultations found:', patientConsultations.length, 'Has previous:', hasPrevious);
@@ -762,7 +762,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         // Update studies but preserve the completed status we just set
         setPatientPreviousStudies(prevStudies => {
           const newStudies = updatedStudies.map(apiStudy => {
-            const localStudy = prevStudies.find(prev => prev.id === apiStudy.id);
+            const localStudy = (prevStudies || []).find(prev => prev.id === apiStudy.id);
             // If we just updated this study locally, keep the completed status
             if (localStudy && localStudy.id === studyId && localStudy.status === 'completed') {
               console.log('🔬 Preserving completed status for study:', studyId);
@@ -774,7 +774,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           console.log('🔬 Study statuses:', newStudies.map(s => ({ id: s.id, status: s.status })));
           
           // Check if the study we just updated is still completed
-          const updatedStudy = newStudies.find(s => s.id === studyId);
+          const updatedStudy = (newStudies || []).find(s => s.id === studyId);
           console.log('🔬 Updated study status:', updatedStudy ? updatedStudy.status : 'NOT FOUND');
           
           // Force a re-render by updating the state
@@ -889,7 +889,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     
     if (appointment) {
       // Use patient from appointment object (comes from backend) or find in local patients list
-      const patient = appointment.patient || patients.find((p: any) => p.id === appointment.patient_id);
+      const patient = appointment.patient || (patients || []).find((p: any) => p.id === appointment.patient_id);
       
       if (patient) {
         setSelectedPatient(patient);
@@ -954,7 +954,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   };
 
   // Filter appointments to show only non-cancelled ones
-  const availableAppointments = appointments.filter((appointment: any) => 
+  const availableAppointments = (appointments || []).filter((appointment: any) => 
     appointment.status !== 'cancelled' && appointment.status !== 'canceled'
   );
 
@@ -1103,12 +1103,12 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       console.log('🔬 Created consultation ID:', createdConsultation?.id);
       
       // Save clinical studies if any were added (only temporary studies for new consultations)
-      if (clinicalStudiesHook.studies.length > 0 && createdConsultation?.id) {
+      if ((clinicalStudiesHook.studies || []).length > 0 && createdConsultation?.id) {
         console.log('🔬 Saving clinical studies for consultation:', createdConsultation.id);
         console.log('🔬 Studies to save:', clinicalStudiesHook.studies);
         
         // Filter only temporary studies (those with temp_ IDs)
-        const temporaryStudies = clinicalStudiesHook.studies.filter(study => 
+        const temporaryStudies = (clinicalStudiesHook.studies || []).filter(study => 
           study.id.toString().startsWith('temp_')
         );
         
@@ -1377,7 +1377,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   value={formData.appointment_id || ''}
                   onChange={(e: any) => {
                     const appointmentId = e.target.value;
-                    const appointment = availableAppointments.find((apt: any) => apt.id.toString() === appointmentId);
+                    const appointment = (availableAppointments || []).find((apt: any) => apt.id.toString() === appointmentId);
                     handleAppointmentChange(appointment);
                   }}
                   label="Citas Programadas"
@@ -2534,7 +2534,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           <VitalSignsSection
             consultationId={isEditing && consultation?.id ? String(consultation.id) : "temp_consultation"}
             patientId={selectedPatient?.id || 0}
-            vitalSigns={vitalSignsHook.getAllVitalSigns()}
+            vitalSigns={vitalSignsHook.getAllVitalSigns() || []}
             isLoading={vitalSignsHook.isLoading}
             onAddVitalSign={vitalSignsHook.openAddDialog}
             onEditVitalSign={vitalSignsHook.openEditDialog}
@@ -2839,9 +2839,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             Selecciona el tipo de signo vital que deseas agregar:
           </Typography>
           {(() => {
-            const filteredVitalSigns = vitalSignsHook.availableVitalSigns.filter(vitalSign => {
+            const filteredVitalSigns = (vitalSignsHook.availableVitalSigns || []).filter(vitalSign => {
               // Filter out vital signs that are already registered in this consultation
-              const existingVitalSigns = vitalSignsHook.getAllVitalSigns();
+              const existingVitalSigns = vitalSignsHook.getAllVitalSigns() || [];
               return !existingVitalSigns.some(existing => 
                 existing.vital_sign_id === vitalSign.id
               );
@@ -2943,7 +2943,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             {(() => {
-              const selectedVitalSign = vitalSignsHook.availableVitalSigns.find(
+              const selectedVitalSign = (vitalSignsHook.availableVitalSigns || []).find(
                 vs => vs.id === vitalSignsHook.vitalSignFormData.vital_sign_id
               );
               if (!selectedVitalSign) return <MonitorHeartIcon />;
@@ -2963,7 +2963,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           <Box sx={{ mt: 2 }}>
             {/* Show selected vital sign name */}
             {(() => {
-              const selectedVitalSign = vitalSignsHook.availableVitalSigns.find(
+              const selectedVitalSign = (vitalSignsHook.availableVitalSigns || []).find(
                 vs => vs.id === vitalSignsHook.vitalSignFormData.vital_sign_id
               );
               if (selectedVitalSign) {
@@ -2988,16 +2988,16 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   required
                   placeholder="Ingresa el valor medido"
                   helperText={(() => {
-                    const selectedVitalSign = vitalSignsHook.availableVitalSigns.find(
+                    const selectedVitalSign = (vitalSignsHook.availableVitalSigns || []).find(
                       vs => vs.id === vitalSignsHook.vitalSignFormData.vital_sign_id
                     );
                     
                     if (selectedVitalSign && (selectedVitalSign.name.toLowerCase().includes('imc') || selectedVitalSign.name.toLowerCase().includes('índice de masa corporal') || selectedVitalSign.name.toLowerCase().includes('bmi'))) {
-                      const allVitalSigns = vitalSignsHook.getAllVitalSigns();
-                      const weightSign = allVitalSigns.find(vs => 
+                      const allVitalSigns = vitalSignsHook.getAllVitalSigns() || [];
+                      const weightSign = (allVitalSigns || []).find(vs => 
                         vs.vital_sign_name.toLowerCase().includes('peso')
                       );
-                      const heightSign = allVitalSigns.find(vs => 
+                      const heightSign = (allVitalSigns || []).find(vs => 
                         vs.vital_sign_name.toLowerCase().includes('estatura') || 
                         vs.vital_sign_name.toLowerCase().includes('altura')
                       );
@@ -3019,17 +3019,17 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   })()}
                   InputProps={{
                     endAdornment: (() => {
-                      const selectedVitalSign = vitalSignsHook.availableVitalSigns.find(
+                      const selectedVitalSign = (vitalSignsHook.availableVitalSigns || []).find(
                         vs => vs.id === vitalSignsHook.vitalSignFormData.vital_sign_id
                       );
                       
                       // Check if this is BMI and if we have weight and height
                       if (selectedVitalSign && (selectedVitalSign.name.toLowerCase().includes('imc') || selectedVitalSign.name.toLowerCase().includes('índice de masa corporal') || selectedVitalSign.name.toLowerCase().includes('bmi'))) {
-                        const allVitalSigns = vitalSignsHook.getAllVitalSigns();
-                        const weightSign = allVitalSigns.find(vs => 
+                        const allVitalSigns = vitalSignsHook.getAllVitalSigns() || [];
+                        const weightSign = (allVitalSigns || []).find(vs => 
                           vs.vital_sign_name.toLowerCase().includes('peso')
                         );
-                        const heightSign = allVitalSigns.find(vs => 
+                        const heightSign = (allVitalSigns || []).find(vs => 
                           vs.vital_sign_name.toLowerCase().includes('estatura') || 
                           vs.vital_sign_name.toLowerCase().includes('altura')
                         );

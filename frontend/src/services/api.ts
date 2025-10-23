@@ -90,43 +90,6 @@ class ApiService {
         return response;
       },
       (error: AxiosError) => {
-        // Enhanced error logging for debugging connection issues
-        console.group('🚨 API Error Details');
-        console.log('URL:', error.config?.url);
-        console.log('Method:', error.config?.method?.toUpperCase());
-        console.log('Status:', error.response?.status);
-        console.log('Status Text:', error.response?.statusText);
-        console.log('Response Data:', error.response?.data);
-        console.log('Request Headers:', error.config?.headers);
-        console.log('Error Message:', error.message);
-        console.log('Network Error (no response):', !error.response);
-        
-        // Detailed error logging for 422 validation errors
-        if (error.response?.status === 422) {
-          console.log('🚨 422 Validation Error Details:', error.response.data?.detail);
-          console.log('🚨 Full error response:', error.response.data);
-          if (Array.isArray(error.response.data?.detail)) {
-            const fieldErrors = error.response.data.detail.map((err: any) => {
-              const field = err.loc?.[1] || err.loc?.[0];
-              return `${field}: ${err.msg}`;
-            }).join(', ');
-            console.log('🚨 Field validation errors:', fieldErrors);
-            
-            // Show user-friendly error message
-            const firstError = error.response.data.detail[0];
-            const fieldName = firstError.loc?.[1] || firstError.loc?.[0] || 'campo';
-            const errorMessage = firstError.msg || 'Error de validación';
-            console.log('🚨 User-friendly error:', `${fieldName}: ${errorMessage}`);
-          }
-        }
-        if (!error.response) {
-          console.log('- Backend server is down');
-          console.log('- CORS configuration issue');
-          console.log('- Network connectivity problem');
-          console.log('- Firewall blocking the request');
-          console.log('- Incorrect API URL configuration');
-        }
-        console.groupEnd();
         
         if (FEATURE_FLAGS.ENABLE_DEBUG_LOGS) {
           logger.api.error(error.config?.url || 'unknown', {
@@ -271,9 +234,9 @@ class ApiService {
   // GENERIC HTTP METHODS
   // ============================================================================
 
-  async get<T = any>(url: string, params?: any): Promise<{ data: T }> {
+  async get<T = any>(url: string, params?: any): Promise<T> {
     const response = await this.api.get<T>(url, { params });
-    return response;
+    return response.data;
   }
 
   async post<T = any>(url: string, data?: any): Promise<{ data: T }> {

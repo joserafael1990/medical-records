@@ -8,6 +8,7 @@ No legacy code - completely fresh implementation
 from fastapi import FastAPI, Depends, HTTPException, status, Query, File, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import text
 from sqlalchemy import func
@@ -1556,94 +1557,6 @@ async def whatsapp_webhook_verify(request: Request):
         print(f"❌ Error in webhook verification: {e}")
         raise HTTPException(status_code=500, detail="Verification error")
 
-@app.post("/api/whatsapp/webhook")
-async def whatsapp_webhook(request: Request, db: Session = Depends(get_db)):
-    """Webhook para recibir respuestas de WhatsApp"""
-    try:
-        body = await request.json()
-        print(f"📱 WhatsApp webhook received: {body}")
-        
-        # Verificar si es una respuesta de botón
-        if 'entry' in body and len(body['entry']) > 0:
-            entry = body['entry'][0]
-            if 'changes' in entry and len(entry['changes']) > 0:
-                change = entry['changes'][0]
-                if 'value' in change and 'messages' in change['value']:
-                    messages = change['value']['messages']
-                    
-                    for message in messages:
-                        # Verificar si es un mensaje de botón
-                        if 'interactive' in message and 'button_reply' in message['interactive']:
-                            button_reply = message['interactive']['button_reply']
-                            button_id = button_reply.get('id')
-                            from_number = message['from']
-                            
-                            print(f"🔘 Button pressed: {button_id} from {from_number}")
-                            
-                            # Si es el botón "Cancelar"
-                            if button_id == 'cancel_appointment':
-                                # Buscar la cita por número de teléfono
-                                # Formatear número para búsqueda (remover código de país)
-                                search_phone = from_number
-                                if from_number.startswith('52'):
-                                    search_phone = from_number[2:]  # Remover código de país
-                                
-                                # Buscar paciente por teléfono
-                                patient = db.query(Person).filter(
-                                    Person.primary_phone == search_phone,
-                                    Person.person_type == 'patient'
-                                ).first()
-                                
-                                if patient:
-                                    # Buscar cita activa del paciente
-                                    from datetime import datetime, timedelta
-                                    today = datetime.now().date()
-                                    
-                                    appointment = db.query(Appointment).filter(
-                                        Appointment.patient_id == patient.id,
-                                        Appointment.appointment_date >= today,
-                                        Appointment.status == 'scheduled'
-                                    ).order_by(Appointment.appointment_date.asc()).first()
-                                    
-                                    if appointment:
-                                        # Cancelar la cita
-                                        appointment.status = 'cancelled'
-                                        appointment.cancellation_reason = 'Cancelled by patient via WhatsApp'
-                                        appointment.cancelled_at = datetime.now()
-                                        db.commit()
-                                        
-                                        print(f"✅ Appointment {appointment.id} cancelled via WhatsApp")
-                                        
-                                        # Obtener country_code del doctor
-                                        doctor = db.query(Person).filter(Person.id == appointment.doctor_id).first()
-                                        country_code = '52'  # Default: México
-                                        if doctor and doctor.address_country_id:
-                                            office_country = db.query(Country).filter(Country.id == doctor.address_country_id).first()
-                                            if office_country and office_country.phone_code:
-                                                country_code = office_country.phone_code.replace('+', '')
-                                        
-                                        # Enviar confirmación
-                                        whatsapp = get_whatsapp_service()
-                                        confirmation_result = whatsapp.send_simple_message(
-                                            to_phone=from_number,
-                                            message="✅ Tu cita ha sido cancelada exitosamente. Gracias por notificarnos.",
-                                            country_code=country_code
-                                        )
-                                        
-                                        if confirmation_result['success']:
-                                            print(f"✅ Confirmation sent to {from_number}")
-                                        else:
-                                            print(f"❌ Failed to send confirmation: {confirmation_result.get('error')}")
-                                    else:
-                                        print(f"❌ No active appointment found for patient {patient.id}")
-                                else:
-                                    print(f"❌ Patient not found for phone {search_phone}")
-        
-        return {"status": "ok"}
-        
-    except Exception as e:
-        print(f"❌ Error processing WhatsApp webhook: {e}")
-        return {"status": "error", "message": str(e)}
 
 @app.post("/api/whatsapp/study-results/{study_id}")
 async def send_whatsapp_study_results_notification(
@@ -1792,9 +1705,14 @@ async def receive_whatsapp_message(
             for change in entry.get("changes", []):
                 value = change.get("value", {})
                 
+                print(f"🔍 Processing change: {change}")
+                print(f"🔍 Processing value: {value}")
+                
                 # Verificar si hay mensajes
                 if "messages" in value:
+                    print(f"📩 Found {len(value['messages'])} messages")
                     for message in value["messages"]:
+                        print(f"📩 Processing message: {message}")
                         await process_whatsapp_message(message, db)
                 
                 # Verificar si hay respuestas a botones
@@ -1811,7 +1729,7 @@ async def receive_whatsapp_message(
 async def process_whatsapp_message(message: dict, db: Session):
     """
     Procesar un mensaje recibido de WhatsApp
-    Detecta respuestas a botones de cancelación
+    Detecta respuestas a botones de cancelación y consentimiento de privacidad
     """
     try:
         message_type = message.get("type")
@@ -1819,8 +1737,28 @@ async def process_whatsapp_message(message: dict, db: Session):
         
         print(f"📩 Processing message type: {message_type} from {from_phone}")
         
-        # Procesar respuesta a botón
-        if message_type == "button":
+        # Procesar respuesta a botón interactivo (nuevo formato de WhatsApp)
+        if message_type == "interactive":
+            interactive = message.get("interactive", {})
+            if interactive.get("type") == "button_reply":
+                button_reply = interactive.get("button_reply", {})
+                button_id = button_reply.get("id")
+                button_title = button_reply.get("title")
+                
+                print(f"🔘 Interactive button clicked: {button_title} (id: {button_id})")
+                
+                # Procesar botones de consentimiento de privacidad
+                if button_id and button_id.startswith("accept_privacy_"):
+                    print(f"✅ Privacy consent accepted: {button_id}")
+                    await process_privacy_consent(button_id, from_phone, db)
+                
+                # Procesar botones de cancelación de cita
+                elif button_id and button_id.startswith("cancel_appointment_"):
+                    appointment_id = int(button_id.replace("cancel_appointment_", ""))
+                    await cancel_appointment_via_whatsapp(appointment_id, from_phone, db)
+        
+        # Procesar respuesta a botón (formato anterior)
+        elif message_type == "button":
             button_payload = message.get("button", {}).get("payload")
             button_text = message.get("button", {}).get("text")
             
@@ -1839,6 +1777,75 @@ async def process_whatsapp_message(message: dict, db: Session):
         
     except Exception as e:
         print(f"❌ Error processing WhatsApp message: {e}")
+
+async def process_privacy_consent(button_id: str, from_phone: str, db: Session):
+    """
+    Procesar consentimiento de privacidad recibido vía WhatsApp
+    """
+    try:
+        print(f"🔐 Processing privacy consent: {button_id} from {from_phone}")
+        
+        # Extraer el ID del consentimiento del button_id (ej: accept_privacy_8)
+        consent_id = int(button_id.replace("accept_privacy_", ""))
+        
+        # Buscar el registro de consentimiento
+        consent = db.query(PrivacyConsent).filter(
+            PrivacyConsent.id == consent_id
+        ).first()
+        
+        if not consent:
+            print(f"❌ Privacy consent record {consent_id} not found")
+            return
+        
+        # Buscar el paciente
+        patient = db.query(Person).filter(
+            Person.id == consent.patient_id,
+            Person.person_type == 'patient'
+        ).first()
+        
+        if not patient:
+            print(f"❌ Patient {consent.patient_id} not found for consent {consent_id}")
+            return
+        
+        # Verificar que el teléfono corresponde al paciente
+        # Normalizar números para comparación
+        whatsapp = get_whatsapp_service()
+        normalized_patient_phone = whatsapp._format_phone_number(patient.primary_phone)
+        normalized_from_phone = whatsapp._format_phone_number(from_phone)
+        
+        # También probar con formato internacional (521...)
+        patient_phone_international = f"521{patient.primary_phone}"
+        
+        print(f"🔍 Comparing phones:")
+        print(f"  - Patient phone (formatted): {normalized_patient_phone}")
+        print(f"  - Patient phone (international): {patient_phone_international}")
+        print(f"  - WhatsApp phone: {normalized_from_phone}")
+        
+        if normalized_patient_phone != normalized_from_phone and patient_phone_international != normalized_from_phone:
+            print(f"❌ Phone mismatch: {normalized_patient_phone} != {normalized_from_phone} and {patient_phone_international} != {normalized_from_phone}")
+            return
+        
+        # Actualizar el consentimiento
+        consent.consent_data_collection = True
+        consent.consent_data_processing = True
+        consent.consent_data_sharing = True
+        consent.consent_marketing = True
+        consent.consent_method = 'whatsapp'
+        consent.consent_status = 'accepted'
+        consent.consent_date = datetime.utcnow()
+        consent.whatsapp_response_at = datetime.utcnow()
+        consent.updated_at = datetime.utcnow()
+        
+        db.commit()
+        
+        print(f"✅ Privacy consent updated for patient {consent.patient_id} (consent {consent_id})")
+        
+        # Opcional: Enviar mensaje de confirmación
+        # (Esto requeriría una plantilla adicional aprobada)
+        
+    except Exception as e:
+        print(f"❌ Error processing privacy consent: {e}")
+        db.rollback()
 
 async def cancel_appointment_via_whatsapp(appointment_id: int, patient_phone: str, db: Session):
     """
@@ -2511,8 +2518,6 @@ async def register_doctor(
                                 'is_active': is_active
                             })
                 
-                # Commit schedule data
-                db.commit()
                 api_logger.info(f"Successfully saved schedule data for doctor {doctor.id}")
             except Exception as schedule_error:
                 # Log the error but don't fail the registration
@@ -2520,6 +2525,10 @@ async def register_doctor(
                 # Rollback only the schedule transaction
                 db.rollback()
                 # Doctor creation is already committed, so this is OK
+        
+        # Commit schedule data if it was saved successfully
+        if schedule_data and isinstance(schedule_data, dict):
+            db.commit()
         
         # Login the newly created doctor (doctor is already in the database)
         login_response = auth.login_user(db, doctor_data.email, doctor_data.password)
@@ -4724,9 +4733,13 @@ async def get_active_privacy_notice(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+class SendPrivacyNoticeRequest(BaseModel):
+    patient_id: int
+    method: str = "whatsapp_button"
+
 @app.post("/api/privacy/send-whatsapp-notice")
 async def send_whatsapp_privacy_notice(
-    patient_id: int,
+    request_data: SendPrivacyNoticeRequest,
     request: Request,
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
@@ -4737,7 +4750,7 @@ async def send_whatsapp_privacy_notice(
     try:
         # Verificar que el paciente existe
         patient = db.query(Person).filter(
-            Person.id == patient_id,
+            Person.id == request_data.patient_id,
             Person.person_type == 'patient'
         ).first()
         
@@ -4746,7 +4759,7 @@ async def send_whatsapp_privacy_notice(
         
         # Verificar que el doctor tiene relación con este paciente
         consultation = db.query(MedicalRecord).filter(
-            MedicalRecord.patient_id == patient_id,
+            MedicalRecord.patient_id == request_data.patient_id,
             MedicalRecord.doctor_id == current_user.id
         ).first()
         
@@ -4765,7 +4778,7 @@ async def send_whatsapp_privacy_notice(
         
         # Verificar si ya tiene un consentimiento pendiente o aceptado
         existing_consent = db.query(PrivacyConsent).filter(
-            PrivacyConsent.patient_id == patient_id,
+            PrivacyConsent.patient_id == request_data.patient_id,
             PrivacyConsent.consent_status.in_(['sent', 'accepted'])
         ).first()
         
@@ -4799,7 +4812,7 @@ async def send_whatsapp_privacy_notice(
         
         # Crear registro de consentimiento PRIMERO (para tener el ID)
         consent = PrivacyConsent(
-            patient_id=patient_id,
+            patient_id=request_data.patient_id,
             privacy_notice_id=privacy_notice.id,
             privacy_notice_version=privacy_notice.version,
             consent_method="whatsapp_button",
@@ -4853,7 +4866,7 @@ async def send_whatsapp_privacy_notice(
             user=current_user,
             request=request,
             operation_type="send_privacy_notice_whatsapp",
-            affected_patient_id=patient_id,
+            affected_patient_id=request_data.patient_id,
             affected_patient_name=f"{patient.first_name} {patient.paternal_surname}",
             new_values={
                 "method": "whatsapp_button",
@@ -4923,8 +4936,10 @@ async def whatsapp_webhook(
                         # Extraer consent_id del button_id
                         # Formato: "accept_privacy_123"
                         parts = button_id.split('_')
+                        print(f"🔍 Parsing button_id: {button_id}, parts: {parts}")
                         if len(parts) >= 3 and parts[0] == 'accept' and parts[1] == 'privacy':
                             consent_id = int(parts[2])
+                            print(f"🔍 Extracted consent_id: {consent_id}")
                             
                             # Buscar el consentimiento
                             consent = db.query(PrivacyConsent).filter(
@@ -4933,6 +4948,9 @@ async def whatsapp_webhook(
                             
                             if not consent:
                                 print(f"⚠️ Consent {consent_id} not found")
+                                # Listar todos los consentimientos para debug
+                                all_consents = db.query(PrivacyConsent).all()
+                                print(f"🔍 All consents in DB: {[c.id for c in all_consents]}")
                                 continue
                             
                             # Obtener paciente
@@ -5078,8 +5096,10 @@ async def get_patient_consent_status(
                 "message": "No se ha enviado aviso de privacidad a este paciente"
             }
         
+        has_consent = consent.consent_status == 'accepted' and not consent.is_revoked
+        
         return {
-            "has_consent": consent.consent_status == 'accepted' and not consent.is_revoked,
+            "has_consent": has_consent,
             "status": consent.consent_status,
             "consent": {
                 "id": consent.id,
@@ -5093,10 +5113,10 @@ async def get_patient_consent_status(
                 "whatsapp_delivered_at": consent.whatsapp_delivered_at.isoformat() if consent.whatsapp_delivered_at else None,
                 "whatsapp_read_at": consent.whatsapp_read_at.isoformat() if consent.whatsapp_read_at else None,
                 "whatsapp_response_at": consent.whatsapp_response_at.isoformat() if consent.whatsapp_response_at else None,
-                "data_collection_consent": consent.data_collection_consent,
-                "data_processing_consent": consent.data_processing_consent,
-                "data_sharing_consent": consent.data_sharing_consent,
-                "marketing_consent": consent.marketing_consent,
+                "data_collection_consent": consent.consent_data_collection,
+                "data_processing_consent": consent.consent_data_processing,
+                "data_sharing_consent": consent.consent_data_sharing,
+                "marketing_consent": consent.consent_marketing,
                 "is_revoked": consent.is_revoked,
                 "revoked_date": consent.revoked_date.isoformat() if consent.revoked_date else None,
                 "revocation_reason": consent.revocation_reason,
