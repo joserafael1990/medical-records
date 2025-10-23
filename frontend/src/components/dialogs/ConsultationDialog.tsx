@@ -2351,9 +2351,10 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                           {study.results_date && (
                             <Typography variant="caption" color="success.main" sx={{ fontWeight: 500 }}>
                               📅 Resultados cargados: {(() => {
-                                const date = new Date(study.results_date);
+                                // Treat the date as if it's already in Mexico City timezone
+                                const date = new Date(study.results_date + 'T00:00:00-06:00');
                                 console.log('🕐 Raw results_date:', study.results_date);
-                                console.log('🕐 Parsed date:', date);
+                                console.log('🕐 Parsed date (as Mexico time):', date);
                                 console.log('🕐 Date in Mexico City:', date.toLocaleString('es-MX', {
                                   year: 'numeric',
                                   month: 'long',
