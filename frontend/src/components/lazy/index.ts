@@ -4,6 +4,7 @@ import { lazy } from 'react';
 export const ConsultationDialog = lazy(() => import('../dialogs/ConsultationDialog'));
 export const ConsultationDialogRefactored = lazy(() => import('../dialogs/ConsultationDialogRefactored'));
 export const AppointmentDialog = lazy(() => import('../dialogs/AppointmentDialog'));
+export const AppointmentDialogRefactored = lazy(() => import('../dialogs/AppointmentDialogRefactored'));
 export const PatientDialog = lazy(() => import('../dialogs/PatientDialog'));
 export const DigitalSignatureDialog = lazy(() => import('../dialogs/DigitalSignatureDialog'));
 export const ScheduleConfigDialog = lazy(() => import('../dialogs/ScheduleConfigDialog'));

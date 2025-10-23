@@ -2,10 +2,10 @@
 
 ## 📈 Resumen
 
-- **Total de archivos analizados:** 128
+- **Total de archivos analizados:** 133
 - **Archivos con problemas:** undefined
-- **Líneas totales:** 38,552
-- **Promedio de líneas por archivo:** 301
+- **Líneas totales:** 39,449
+- **Promedio de líneas por archivo:** 297
 - **Archivo más grande:** 3033 líneas
 
 ## 🚨 Archivos que Exceden el Límite
@@ -161,6 +161,13 @@
   - Usar lazy loading si es un componente pesado
   - URGENTE: Refactorizar inmediatamente
   - Considerar dividir en múltiples archivos
+
+### src/hooks/useAppointmentDialog.ts
+- **Líneas:** 342
+- **Tamaño:** 9.74 KB
+- **Recomendaciones:**
+  - Dividir en hooks más específicos
+  - Extraer lógica común a utilidades
 
 ### src/hooks/useAppointmentManager.ts
 - **Líneas:** 786
