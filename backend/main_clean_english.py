@@ -1237,6 +1237,41 @@ async def upload_clinical_study_file(
     print(f"📤 Uploading file for clinical study: {study_id}")
     
     try:
+        # Validate file format
+        ALLOWED_EXTENSIONS = {'.pdf', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.doc', '.docx', '.xls', '.xlsx', '.txt'}
+        ALLOWED_MIME_TYPES = {
+            'application/pdf',
+            'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/bmp', 'image/tiff',
+            'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'text/plain'
+        }
+        
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No file provided")
+        
+        file_extension = os.path.splitext(file.filename)[1].lower()
+        print(f"📁 File extension: {file_extension}")
+        print(f"📁 Allowed extensions: {ALLOWED_EXTENSIONS}")
+        if file_extension not in ALLOWED_EXTENSIONS:
+            valid_formats = ', '.join(sorted(ALLOWED_EXTENSIONS))
+            error_message = f"Formato de archivo no válido. Formatos permitidos: {valid_formats}"
+            print(f"❌ File format error: {error_message}")
+            raise HTTPException(
+                status_code=400, 
+                detail=error_message
+            )
+        
+        print(f"📁 File content type: {file.content_type}")
+        print(f"📁 Allowed MIME types: {ALLOWED_MIME_TYPES}")
+        if file.content_type and file.content_type not in ALLOWED_MIME_TYPES:
+            error_message = f"Tipo de archivo no válido. Tipos permitidos: PDF, imágenes (JPG, PNG, GIF, BMP, TIFF), documentos (DOC, DOCX, XLS, XLSX), texto (TXT)"
+            print(f"❌ MIME type error: {error_message}")
+            raise HTTPException(
+                status_code=400, 
+                detail=error_message
+            )
+        
         # Find the study and verify access
         study = db.query(ClinicalStudy).filter(
             ClinicalStudy.id == study_id,
@@ -1265,12 +1300,16 @@ async def upload_clinical_study_file(
         study.file_path = file_path
         study.file_type = file.content_type
         study.file_size = len(content)
+        study.results_date = datetime.utcnow()  # Set results date when file is uploaded
         study.updated_at = datetime.utcnow()
+        
+        print(f"📅 Setting results_date to: {study.results_date}")
         
         db.commit()
         db.refresh(study)
         
         print(f"✅ File uploaded successfully for study {study_id}: {file.filename}")
+        print(f"📅 Study results_date after commit: {study.results_date}")
         
         return {
             "message": "File uploaded successfully",

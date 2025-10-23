@@ -357,7 +357,7 @@ class ClinicalStudy(Base):
     # FILE ATTACHMENTS
     file_name = Column(String(255))
     file_path = Column(String(500))
-    file_type = Column(String(50))
+    file_type = Column(String(100))
     file_size = Column(Integer)  # in bytes
     
     # SYSTEM
