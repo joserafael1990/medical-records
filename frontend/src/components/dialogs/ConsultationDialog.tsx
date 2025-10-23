@@ -753,10 +753,19 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       console.error('Error response:', error.response);
       console.error('Error response data:', error.response?.data);
       console.error('Error response detail:', error.response?.data?.detail);
+      console.error('Error response status:', error.response?.status);
+      console.error('Error message:', error.message);
       
       // Show specific error message from backend
       const errorMessage = error.response?.data?.detail || error.message || 'Error al cargar el archivo del estudio';
-      console.log('Showing error message:', errorMessage);
+      console.log('🔍 Final error message to show:', errorMessage);
+      console.log('🔍 Error object structure:', {
+        hasResponse: !!error.response,
+        hasData: !!error.response?.data,
+        hasDetail: !!error.response?.data?.detail,
+        detailValue: error.response?.data?.detail,
+        status: error.response?.status
+      });
       showError(errorMessage);
     }
   };
