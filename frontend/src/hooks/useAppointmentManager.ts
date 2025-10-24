@@ -244,7 +244,7 @@ export const useAppointmentManager = (
       appointment_date: currentDateTime, // Current CDMX time
       appointment_type_id: 1, // Default to "Presencial"
       office_id: undefined,
-      consultation_type: 'Seguimiento', // Default to "Seguimiento"
+      consultation_type: '', // No default value
       reason: '',
       notes: '',
       status: 'confirmed',
@@ -277,7 +277,7 @@ export const useAppointmentManager = (
       appointment_date: formattedDateTime, // Direct CDMX format
       appointment_type_id: appointment.appointment_type_id || 1, // Default to "Presencial" if not set
       office_id: appointment.office_id,
-      consultation_type: appointment.consultation_type || 'Seguimiento', // Default to "Seguimiento" if not set
+      consultation_type: appointment.consultation_type || '', // No default value
       reason: appointment.reason,
       notes: appointment.notes || '',
       status: appointment.status,
@@ -410,7 +410,7 @@ export const useAppointmentManager = (
           end_time: endTime.toISOString(),
           appointment_type_id: formDataToUse.appointment_type_id || 1,
           office_id: formDataToUse.office_id || null,
-          consultation_type: formDataToUse.consultation_type || 'Seguimiento',
+          consultation_type: formDataToUse.consultation_type || '',
           status: formDataToUse.status || 'confirmed',
           priority: formDataToUse.priority || 'normal',
           reason: formDataToUse.reason || '',
@@ -528,7 +528,7 @@ export const useAppointmentManager = (
           end_time: endTime.toISOString(),
           appointment_type_id: formDataToUse.appointment_type_id || 1, // Use appointment_type_id instead of appointment_type
           office_id: formDataToUse.office_id || null, // Include office_id
-          consultation_type: formDataToUse.consultation_type || 'Seguimiento',
+          consultation_type: formDataToUse.consultation_type || '',
           status: formDataToUse.status || 'confirmed',
           priority: formDataToUse.priority || 'normal',
           reason: formDataToUse.reason || '',
