@@ -61,7 +61,7 @@ const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
           address: office.address || '',
           city: office.city || '',
           state_id: office.state_id || null,
-          country_id: office.country_id || null,
+          country_id: office.country_id || 1, // Default to Mexico if null
           phone: office.phone || '',
           maps_url: office.maps_url || '',
           timezone: office.timezone || 'America/Mexico_City'
@@ -73,7 +73,7 @@ const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
           address: '',
           city: '',
           state_id: null,
-          country_id: null,
+          country_id: 1, // Default to Mexico
           phone: '',
           maps_url: '',
           timezone: 'America/Mexico_City'
@@ -81,6 +81,14 @@ const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
       }
     }
   }, [open, isEditing, office, loadCatalogs]);
+
+  // Load states when country is set (including default)
+  useEffect(() => {
+    if (formData.country_id && countries.length > 0) {
+      console.log('🏢 Loading states for country:', formData.country_id);
+      fetchStates(formData.country_id);
+    }
+  }, [formData.country_id, countries.length, fetchStates]);
 
   const handleInputChange = (field: keyof OfficeFormData) => (event: any) => {
     const value = event.target.value;
