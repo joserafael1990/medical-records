@@ -24,11 +24,16 @@ export const useLocationCatalogs = () => {
       console.log('🌍 Fetching countries...');
       const response = await apiService.getCountries();
       console.log('🌍 Countries response:', response);
+      console.log('🌍 Countries response type:', typeof response);
+      console.log('🌍 Countries response keys:', response ? Object.keys(response) : 'null');
       const countriesData = response.data || response;
       console.log('🌍 Countries data:', countriesData);
+      console.log('🌍 Countries data length:', countriesData ? countriesData.length : 'null');
       setCountries(countriesData || []);
     } catch (err: any) {
       console.error('❌ Error fetching countries:', err);
+      console.error('❌ Error details:', err.response?.data);
+      console.error('❌ Error status:', err.response?.status);
       setError('Error al cargar países');
     }
   }, []);
@@ -48,12 +53,16 @@ export const useLocationCatalogs = () => {
   }, []);
 
   const loadCatalogs = useCallback(async () => {
+    console.log('🌍🏛️ loadCatalogs called');
     setIsLoading(true);
     setError(null);
     try {
+      console.log('🌍🏛️ Starting to load catalogs...');
       await fetchCountries();
+      console.log('🌍🏛️ Countries loaded, now loading states for Mexico...');
       // Load states for Mexico by default (country_id = 1)
       await fetchStates(1);
+      console.log('🌍🏛️ Catalogs loading completed');
     } catch (err: any) {
       console.error('❌ Error loading catalogs:', err);
       setError('Error al cargar catálogos');

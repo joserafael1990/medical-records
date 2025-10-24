@@ -34,7 +34,7 @@ const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
   isEditing = false
 }) => {
   const { createOffice, updateOffice, isLoading } = useOfficeManagement();
-  const { countries, states, isLoading: catalogsLoading, fetchStates } = useLocationCatalogs();
+  const { countries, states, isLoading: catalogsLoading, fetchStates, loadCatalogs } = useLocationCatalogs();
   const [formData, setFormData] = useState<OfficeFormData>({
     name: '',
     address: '',
@@ -51,6 +51,8 @@ const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
   useEffect(() => {
     console.log('🏢 OfficeManagementDialog useEffect:', { open, isEditing, office });
     if (open) {
+      console.log('🏢 Dialog opened, loading catalogs...');
+      loadCatalogs();
       setError(null);
       if (isEditing && office) {
         console.log('🏢 Setting form data for editing office:', office);
@@ -78,7 +80,7 @@ const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
         });
       }
     }
-  }, [open, isEditing, office]);
+  }, [open, isEditing, office, loadCatalogs]);
 
   const handleInputChange = (field: keyof OfficeFormData) => (event: any) => {
     const value = event.target.value;
