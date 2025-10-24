@@ -491,7 +491,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                       {office.is_virtual ? (
                         // Virtual office - show URL and timezone only
                         <>
-                          {office.maps_url && (
+                          {office.virtual_url && (
                             <ListItem sx={{ px: 0 }}>
                               <ListItemIcon>
                                 <BrowserIcon color="action" />
@@ -504,11 +504,11 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                                     variant="text"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      window.open(office.maps_url, '_blank');
+                                      window.open(office.virtual_url, '_blank');
                                     }}
                                     sx={{ p: 0, textTransform: 'none' }}
                                   >
-                                    {office.maps_url}
+                                    {office.virtual_url}
                                   </Button>
                                 }
                               />
