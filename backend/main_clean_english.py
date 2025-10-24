@@ -22,7 +22,7 @@ import uuid
 import crud
 import schemas
 import auth
-from database import get_db, Person, Specialty, Country, State, EmergencyRelationship, Appointment, MedicalRecord, ClinicalStudy, VitalSign, ConsultationVitalSign, Medication, ConsultationPrescription, AuditLog, PrivacyNotice, PrivacyConsent, ARCORequest
+from database import get_db, Person, Specialty, Country, State, EmergencyRelationship, Appointment, MedicalRecord, ClinicalStudy, VitalSign, ConsultationVitalSign, Medication, ConsultationPrescription, AuditLog, PrivacyNotice, PrivacyConsent, ARCORequest, Office, AppointmentType
 from appointment_service import AppointmentService
 from audit_service import audit_service
 import data_retention_service as retention
@@ -270,6 +270,27 @@ async def get_current_user(
 ):
     """Get current authenticated user"""
     try:
+        # DEVELOPMENT MODE: Check if authentication is disabled
+        import os
+        if os.getenv('DISABLE_AUTH', 'false').lower() == 'true':
+            print("⚠️ DEVELOPMENT MODE: Authentication disabled")
+            # Return a mock doctor user for development
+            mock_user = db.query(Person).filter(Person.person_type == 'doctor').first()
+            if mock_user:
+                return mock_user
+            else:
+                # Create a mock user if none exists
+                from database import Person
+                mock_user = Person(
+                    id=1,
+                    person_type='doctor',
+                    first_name='Dr. Desarrollo',
+                    paternal_surname='Sistema',
+                    maternal_surname='Test',
+                    email='dev@test.com'
+                )
+                return mock_user
+        
         token = credentials.credentials
         user = auth.get_user_from_token(db, token)
         
@@ -671,6 +692,176 @@ async def create_medication(
         print(f"❌ Error creating medication: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail="Error creating medication")
+
+# ============================================================================
+# OFFICE MANAGEMENT ENDPOINTS
+# ============================================================================
+
+
+@app.post("/api/offices", response_model=schemas.Office)
+async def create_office(
+    office: schemas.OfficeCreate,
+    current_user: Person = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new office for the current doctor"""
+    try:
+        # Debug logging
+        print(f"🔍 [CREATE OFFICE] Request received at {datetime.now()}")
+        print(f"🔍 [CREATE OFFICE] Office data: {office.dict()}")
+        print(f"🔍 [CREATE OFFICE] Doctor ID: {current_user.id}")
+        print(f"🔍 [CREATE OFFICE] Office name: '{office.name}' (type: {type(office.name)})")
+        
+        # Validate that the user is a doctor
+        if current_user.person_type != 'doctor':
+            raise HTTPException(status_code=403, detail="Only doctors can create offices")
+        
+        # Create the office
+        new_office = Office(
+            doctor_id=current_user.id,
+            name=office.name,
+            address=office.address,
+            city=office.city,
+            state_id=office.state_id,
+            country_id=office.country_id,
+            postal_code=office.postal_code,
+            phone=office.phone,
+            timezone=office.timezone,
+            maps_url=office.maps_url,
+            is_active=True  # New offices are active by default
+        )
+        
+        db.add(new_office)
+        db.commit()
+        db.refresh(new_office)
+        
+        print(f"✅ [CREATE OFFICE] Office created successfully with ID: {new_office.id}")
+        print(f"✅ [CREATE OFFICE] Office name: '{new_office.name}'")
+        return new_office
+        
+    except Exception as e:
+        print(f"❌ Error creating office: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error creating office")
+
+@app.get("/api/offices", response_model=List[schemas.Office])
+async def get_doctor_offices(
+    current_user: Person = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all offices for the current doctor"""
+    try:
+        # Validate that the user is a doctor
+        if current_user.person_type != 'doctor':
+            raise HTTPException(status_code=403, detail="Only doctors can access offices")
+        
+        offices = db.query(Office).filter(
+            Office.doctor_id == current_user.id,
+            Office.is_active == True
+        ).all()
+        
+        return offices
+        
+    except Exception as e:
+        print(f"❌ Error getting offices: {e}")
+        raise HTTPException(status_code=500, detail="Error getting offices")
+
+@app.put("/api/offices/{office_id}", response_model=schemas.Office)
+async def update_office(
+    office_id: int,
+    office: schemas.OfficeUpdate,
+    current_user: Person = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update an office (validate ownership)"""
+    try:
+        # Validate that the user is a doctor
+        if current_user.person_type != 'doctor':
+            raise HTTPException(status_code=403, detail="Only doctors can update offices")
+        
+        # Find the office and validate ownership
+        existing_office = db.query(Office).filter(
+            Office.id == office_id,
+            Office.doctor_id == current_user.id,
+            Office.is_active == True
+        ).first()
+        
+        if not existing_office:
+            raise HTTPException(status_code=404, detail="Office not found")
+        
+        # Update fields
+        for field, value in office.dict(exclude_unset=True).items():
+            setattr(existing_office, field, value)
+        
+        db.commit()
+        db.refresh(existing_office)
+        
+        return existing_office
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error updating office: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error updating office")
+
+@app.delete("/api/offices/{office_id}")
+async def delete_office(
+    office_id: int,
+    current_user: Person = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Soft delete an office (validate ownership and no future appointments)"""
+    try:
+        # Validate that the user is a doctor
+        if current_user.person_type != 'doctor':
+            raise HTTPException(status_code=403, detail="Only doctors can delete offices")
+        
+        # Find the office and validate ownership
+        existing_office = db.query(Office).filter(
+            Office.id == office_id,
+            Office.doctor_id == current_user.id,
+            Office.is_active == True
+        ).first()
+        
+        if not existing_office:
+            raise HTTPException(status_code=404, detail="Office not found")
+        
+        # Check for future appointments
+        future_appointments = db.query(Appointment).filter(
+            Appointment.office_id == office_id,
+            Appointment.appointment_date > datetime.utcnow()
+        ).count()
+        
+        if future_appointments > 0:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Cannot delete office with {future_appointments} future appointments"
+            )
+        
+        # Soft delete
+        existing_office.is_active = False
+        db.commit()
+        
+        return {"message": "Office deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error deleting office: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error deleting office")
+
+@app.get("/api/appointment-types", response_model=List[dict])
+async def get_appointment_types(db: Session = Depends(get_db)):
+    """Get all active appointment types"""
+    try:
+        from database import AppointmentType
+        types = db.query(AppointmentType).filter(AppointmentType.active == True).all()
+        return [{"id": t.id, "name": t.name} for t in types]
+    except Exception as e:
+        print(f"❌ Error getting appointment types: {e}")
+        raise HTTPException(status_code=500, detail="Error getting appointment types")
 
 @app.get("/api/consultations/{consultation_id}/prescriptions")
 async def get_consultation_prescriptions(
@@ -1470,15 +1661,27 @@ async def send_whatsapp_appointment_reminder(
         appointment_date = appointment.appointment_date.strftime('%d de %B de %Y')
         appointment_time = appointment.appointment_date.strftime('%I:%M %p')
         
-        # Get office address and country code from doctor's profile
-        office_address = current_user.office_address if current_user.office_address else "Consultorio Médico"
-        
-        # Get country phone code from doctor's address country
+        # Get office information and appointment type
+        office_address = "Consultorio Médico"  # Default
         country_code = '52'  # Default: México
-        if current_user.address_country_id:
-            office_country = db.query(Country).filter(Country.id == current_user.address_country_id).first()
+        appointment_type = "presencial"  # Default
+        online_consultation_url = current_user.online_consultation_url
+        
+        # Get office information from appointment
+        if appointment.office_id:
+            from database import Office
+            office = db.query(Office).filter(Office.id == appointment.office_id).first()
+            if office:
+                office_address = f"{office.name} - {office.address or 'No especificado'}, {office.city or 'No especificado'}"
+                # Get country code from office
+                if office.country_id:
+                    office_country = db.query(Country).filter(Country.id == office.country_id).first()
             if office_country and office_country.phone_code:
                 country_code = office_country.phone_code.replace('+', '')  # Remove + if present
+        
+        # Get appointment type
+        if appointment.appointment_type_rel:
+            appointment_type = "online" if appointment.appointment_type_rel.name == "En línea" else "presencial"
         
         print(f"📞 Using country code: +{country_code} for WhatsApp")
         print(f"📞 Patient phone before formatting: {patient.primary_phone}")
@@ -1493,7 +1696,9 @@ async def send_whatsapp_appointment_reminder(
             doctor_title=doctor_title,
             doctor_full_name=current_user.full_name,
             office_address=office_address,
-            country_code=country_code
+            country_code=country_code,
+            appointment_type=appointment_type,
+            online_consultation_url=online_consultation_url
         )
         
         if result['success']:
@@ -1951,6 +2156,305 @@ async def get_emergency_relationships(db: Session = Depends(get_db)):
     """Get list of emergency relationships"""
     return crud.get_emergency_relationships(db, active=True)
 
+# ============================================================================
+# DEBUGGING ENDPOINTS
+# ============================================================================
+
+@app.get("/api/debug/office-system")
+async def debug_office_system(
+    current_user: Person = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Debug office system status"""
+    try:
+        # Check offices
+        offices = db.query(Office).all()
+        office_data = []
+        
+        for office in offices:
+            office_info = {
+                'id': office.id,
+                'name': office.name,
+                'doctor_id': office.doctor_id,
+                'address': office.address,
+                'city': office.city,
+                'state_id': office.state_id,
+                'country_id': office.country_id,
+                'phone': office.phone,
+                'timezone': office.timezone,
+                'is_active': office.is_active,
+                'created_at': office.created_at.isoformat() if office.created_at else None
+            }
+            office_data.append(office_info)
+        
+        # Check doctors without offices
+        doctors_without_offices = db.query(Person).filter(
+            Person.person_type == 'doctor',
+            Person.is_active == True
+        ).all()
+        
+        doctors_without_offices_data = []
+        for doctor in doctors_without_offices:
+            has_office = db.query(Office).filter(
+                Office.doctor_id == doctor.id,
+                Office.is_active == True
+            ).first() is not None
+            
+            if not has_office:
+                doctors_without_offices_data.append({
+                    'id': doctor.id,
+                    'name': f"{doctor.first_name} {doctor.paternal_surname}",
+                    'email': doctor.email
+                })
+        
+        return {
+            'status': 'success',
+            'total_offices': len(offices),
+            'offices': office_data,
+            'doctors_without_offices': len(doctors_without_offices_data),
+            'doctors_without_offices_data': doctors_without_offices_data,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return {
+            'status': 'error',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }
+
+@app.get("/api/debug/appointment-system")
+async def debug_appointment_system(
+    current_user: Person = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Debug appointment system status"""
+    try:
+        # Check appointments
+        appointments = db.query(Appointment).all()
+        appointment_data = []
+        
+        for appointment in appointments:
+            appointment_info = {
+                'id': appointment.id,
+                'patient_id': appointment.patient_id,
+                'doctor_id': appointment.doctor_id,
+                'appointment_date': appointment.appointment_date.isoformat() if appointment.appointment_date else None,
+                'appointment_type_id': appointment.appointment_type_id,
+                'office_id': appointment.office_id,
+                'status': appointment.status,
+                'reason': appointment.reason
+            }
+            appointment_data.append(appointment_info)
+        
+        # Check appointment types
+        appointment_types = db.query(AppointmentType).all()
+        appointment_types_data = []
+        
+        for apt_type in appointment_types:
+            apt_type_info = {
+                'id': apt_type.id,
+                'name': apt_type.name,
+                'active': apt_type.active
+            }
+            appointment_types_data.append(apt_type_info)
+        
+        # Check appointments without office_id
+        appointments_without_office = db.query(Appointment).filter(
+            Appointment.office_id.is_(None)
+        ).count()
+        
+        # Check appointments without appointment_type_id
+        appointments_without_type = db.query(Appointment).filter(
+            Appointment.appointment_type_id.is_(None)
+        ).count()
+        
+        return {
+            'status': 'success',
+            'total_appointments': len(appointments),
+            'appointments': appointment_data,
+            'appointment_types': appointment_types_data,
+            'appointments_without_office': appointments_without_office,
+            'appointments_without_type': appointments_without_type,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return {
+            'status': 'error',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }
+
+@app.get("/api/debug/consultation-system")
+async def debug_consultation_system(
+    current_user: Person = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Debug consultation system status"""
+    try:
+        # Check medical records
+        medical_records = db.query(MedicalRecord).all()
+        medical_records_data = []
+        
+        for record in medical_records:
+            record_info = {
+                'id': record.id,
+                'patient_id': record.patient_id,
+                'doctor_id': record.doctor_id,
+                'consultation_date': record.consultation_date.isoformat() if record.consultation_date else None,
+                'appointment_type_id': record.appointment_type_id,
+                'office_id': record.office_id,
+                'chief_complaint': record.chief_complaint[:100] + '...' if record.chief_complaint and len(record.chief_complaint) > 100 else record.chief_complaint
+            }
+            medical_records_data.append(record_info)
+        
+        # Check medical records without office_id
+        records_without_office = db.query(MedicalRecord).filter(
+            MedicalRecord.office_id.is_(None)
+        ).count()
+        
+        # Check medical records without appointment_type_id
+        records_without_type = db.query(MedicalRecord).filter(
+            MedicalRecord.appointment_type_id.is_(None)
+        ).count()
+        
+        return {
+            'status': 'success',
+            'total_medical_records': len(medical_records),
+            'medical_records': medical_records_data,
+            'records_without_office': records_without_office,
+            'records_without_type': records_without_type,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return {
+            'status': 'error',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }
+
+@app.get("/api/debug/whatsapp-system")
+async def debug_whatsapp_system(
+    current_user: Person = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Debug WhatsApp system status"""
+    try:
+        # Check WhatsApp configuration
+        whatsapp_config = {
+            'phone_id': os.getenv('META_WHATSAPP_PHONE_ID'),
+            'access_token': '***' + os.getenv('META_WHATSAPP_TOKEN', '')[-4:] if os.getenv('META_WHATSAPP_TOKEN') else None,
+            'api_version': os.getenv('META_WHATSAPP_API_VERSION', 'v18.0')
+        }
+        
+        # Check appointments with WhatsApp data
+        appointments_with_whatsapp = db.query(Appointment).filter(
+            Appointment.patient_id.isnot(None)
+        ).all()
+        
+        whatsapp_data = []
+        for appointment in appointments_with_whatsapp:
+            patient = db.query(Person).filter(Person.id == appointment.patient_id).first()
+            if patient and patient.primary_phone:
+                whatsapp_info = {
+                    'appointment_id': appointment.id,
+                    'patient_phone': patient.primary_phone,
+                    'appointment_date': appointment.appointment_date.isoformat() if appointment.appointment_date else None,
+                    'office_id': appointment.office_id,
+                    'appointment_type_id': appointment.appointment_type_id
+                }
+                whatsapp_data.append(whatsapp_info)
+        
+        return {
+            'status': 'success',
+            'whatsapp_config': whatsapp_config,
+            'appointments_with_whatsapp': len(whatsapp_data),
+            'whatsapp_data': whatsapp_data,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return {
+            'status': 'error',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }
+
+@app.get("/api/debug/pdf-system")
+async def debug_pdf_system(
+    current_user: Person = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Debug PDF system status"""
+    try:
+        # Check PDF generation requirements
+        doctors_with_offices = db.query(Person).filter(
+            Person.person_type == 'doctor',
+            Person.is_active == True
+        ).all()
+        
+        pdf_data = []
+        for doctor in doctors_with_offices:
+            offices = db.query(Office).filter(
+                Office.doctor_id == doctor.id,
+                Office.is_active == True
+            ).all()
+            
+            doctor_info = {
+                'id': doctor.id,
+                'name': f"{doctor.first_name} {doctor.paternal_surname}",
+                'offices_count': len(offices),
+                'offices': [{'id': o.id, 'name': o.name, 'address': o.address} for o in offices]
+            }
+            pdf_data.append(doctor_info)
+        
+        return {
+            'status': 'success',
+            'doctors_with_offices': len(pdf_data),
+            'pdf_data': pdf_data,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return {
+            'status': 'error',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }
+
+@app.get("/api/debug/full-system")
+async def debug_full_system(
+    current_user: Person = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Debug complete multi-office system"""
+    try:
+        # Get all debug information
+        office_debug = await debug_office_system(current_user, db)
+        appointment_debug = await debug_appointment_system(current_user, db)
+        consultation_debug = await debug_consultation_system(current_user, db)
+        whatsapp_debug = await debug_whatsapp_system(current_user, db)
+        pdf_debug = await debug_pdf_system(current_user, db)
+        
+        return {
+            'status': 'success',
+            'timestamp': datetime.now().isoformat(),
+            'office_system': office_debug,
+            'appointment_system': appointment_debug,
+            'consultation_system': consultation_debug,
+            'whatsapp_system': whatsapp_debug,
+            'pdf_system': pdf_debug
+        }
+        
+    except Exception as e:
+        return {
+            'status': 'error',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }
+
 @app.get("/api/catalogs/timezones")
 async def get_timezones():
     """Get list of available timezones for doctor offices"""
@@ -1962,52 +2466,16 @@ async def get_timezones():
 # SCHEDULE MANAGEMENT ENDPOINTS
 # ============================================================================
 
-@app.post("/api/schedule/generate-weekly-template")
-async def generate_weekly_template(
-    current_user: Person = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Generate default weekly schedule template for doctor"""
-    try:
-        api_logger.info("Generating weekly template", doctor_id=current_user.id)
-        
-        # Delete existing templates for this doctor
-        db.execute(text("DELETE FROM schedule_templates WHERE doctor_id = :doctor_id"), 
-                  {"doctor_id": current_user.id})
-        db.commit()
-        
-        # Create a simple template for Monday only
-        db.execute(text("""
-            INSERT INTO schedule_templates 
-            (doctor_id, day_of_week, start_time, end_time, consultation_duration, 
-             break_duration, lunch_start, lunch_end, is_active, created_at, updated_at)
-            VALUES (:doctor_id, :day_of_week, :start_time, :end_time, :consultation_duration,
-                    :break_duration, :lunch_start, :lunch_end, :is_active, NOW(), NOW())
-        """), {
-            "doctor_id": current_user.id,
-            "day_of_week": 0,
-            "start_time": "09:00",
-            "end_time": "17:00",
-            "consultation_duration": 30,
-            "break_duration": 10,
-            "lunch_start": "13:00",
-            "lunch_end": "14:00",
-            "is_active": True
-        })
-        
-        db.commit()
-        
-        api_logger.info("Weekly template generated and saved", doctor_id=current_user.id)
-        return {
-            "message": "Horario por defecto generado exitosamente",
-            "doctor_id": current_user.id,
-            "templates_created": 1
-        }
-        
-    except Exception as e:
-        db.rollback()
-        api_logger.error("Error generating weekly template", doctor_id=current_user.id, error=str(e))
-        raise HTTPException(status_code=500, detail=f"Error generating template: {str(e)}")
+# TODO: Update this endpoint to work with offices
+# @app.post("/api/schedule/generate-weekly-template")
+# async def generate_weekly_template(
+#     current_user: Person = Depends(get_current_user),
+#     db: Session = Depends(get_db)
+# ):
+#     """Generate default weekly schedule template for doctor"""
+#     # This endpoint needs to be updated to work with the new office-based schedule system
+#     # For now, it's commented out to prevent errors
+#     pass
 
 @app.get("/api/schedule/templates")
 async def get_schedule_templates(current_user: Person = Depends(get_current_user)):
@@ -2245,7 +2713,6 @@ async def update_schedule_template(
                     time_blocks = template.time_blocks
                 elif isinstance(template.time_blocks, str):
                     # If it's a string, parse it
-                    import json
                     time_blocks = json.loads(template.time_blocks)
             
             # Fallback: if no time_blocks, create from start_time/end_time
@@ -2303,7 +2770,7 @@ async def get_available_times(
         
         # Get schedule template for this day
         cursor.execute("""
-            SELECT start_time, end_time
+            SELECT start_time, end_time, time_blocks
             FROM schedule_templates 
             WHERE doctor_id = %s AND day_of_week = %s AND is_active = true
         """, (current_user.id, day_of_week))
@@ -2313,10 +2780,29 @@ async def get_available_times(
             api_logger.info("No schedule found for this day", doctor_id=current_user.id, day_of_week=day_of_week)
             return {"available_times": []}
         
-        # Create time blocks from start_time and end_time
-        start_time = schedule_result[0]
-        end_time = schedule_result[1]
-        time_blocks = [{"start_time": start_time.strftime("%H:%M") if start_time else None, "end_time": end_time.strftime("%H:%M") if end_time else None}] if start_time and end_time else []
+        # Parse time_blocks from JSONB or fallback to start_time/end_time
+        time_blocks = []
+        print(f"📅 Schedule result: {schedule_result}")
+        print(f"📅 time_blocks raw: {schedule_result[2]}")
+        print(f"📅 time_blocks type: {type(schedule_result[2])}")
+        
+        if schedule_result[2]:  # time_blocks column
+            if isinstance(schedule_result[2], list):
+                time_blocks = schedule_result[2]
+                print(f"📅 Using time_blocks from list: {time_blocks}")
+            elif isinstance(schedule_result[2], str):
+                time_blocks = json.loads(schedule_result[2])
+                print(f"📅 Using time_blocks from JSON string: {time_blocks}")
+        
+        # Fallback: if no time_blocks, create from start_time/end_time
+        if not time_blocks and schedule_result[0] and schedule_result[1]:
+            time_blocks = [{
+                "start_time": schedule_result[0].strftime("%H:%M"),
+                "end_time": schedule_result[1].strftime("%H:%M")
+            }]
+            print(f"📅 Using fallback time_blocks: {time_blocks}")
+        
+        print(f"📅 Final time_blocks: {time_blocks}")
         
         # Get doctor's appointment duration (from persons table)
         cursor.execute("""
@@ -2332,11 +2818,12 @@ async def get_available_times(
             api_logger.info("No time blocks configured for this day", doctor_id=current_user.id, day_of_week=day_of_week)
             return {"available_times": []}
         
-        # Get doctor's timezone
+        # Get doctor's timezone from offices table
         cursor.execute("""
-            SELECT office_timezone 
-            FROM persons 
-            WHERE id = %s
+            SELECT timezone 
+            FROM offices 
+            WHERE doctor_id = %s AND is_active = TRUE
+            LIMIT 1
         """, (current_user.id,))
         
         timezone_result = cursor.fetchone()
@@ -2409,6 +2896,10 @@ async def get_available_times(
         
         cursor.close()
         conn.close()
+        
+        print(f"📅 Generated {len(available_times)} available times:")
+        for time_slot in available_times:
+            print(f"📅   - {time_slot['time']} ({time_slot['duration_minutes']} min)")
         
         api_logger.info("Generated available times", 
                        doctor_id=current_user.id, 
@@ -2577,6 +3068,8 @@ async def register_doctor(
                 detail="Error interno del servidor. Por favor, intente nuevamente."
             )
 
+# Test endpoints removed - system is working
+
 @app.post("/api/auth/login")
 async def login(
     login_data: schemas.UserLogin,
@@ -2652,8 +3145,9 @@ async def get_my_profile(
     
     # Load the user with relationships to get state and country names
     user_with_relations = db.query(Person).options(
-        joinedload(Person.office_state).joinedload(State.country),
-        joinedload(Person.specialty)
+        joinedload(Person.specialty),
+        joinedload(Person.offices).joinedload(Office.state),
+        joinedload(Person.offices).joinedload(Office.country)
     ).filter(Person.id == current_user.id).first()
     
     if not user_with_relations:
@@ -2694,15 +3188,25 @@ async def get_my_profile(
         "address_country_name": user_with_relations.address_state.country.name if user_with_relations.address_state and user_with_relations.address_state.country else None,
         "address_postal_code": user_with_relations.address_postal_code,
         
-        # Professional Address (Office)
-        "office_address": user_with_relations.office_address,
-        "office_city": user_with_relations.office_city,
-        "office_state_id": user_with_relations.office_state_id,
-        "office_state_name": user_with_relations.office_state.name if user_with_relations.office_state else None,
-        "office_country_name": user_with_relations.office_state.country.name if user_with_relations.office_state and user_with_relations.office_state.country else None,
-        "office_postal_code": user_with_relations.office_postal_code,
-        "office_phone": user_with_relations.office_phone,
-        "office_timezone": user_with_relations.office_timezone,
+        # Professional Address (Office) - Now using offices table
+        "offices": [
+            {
+                "id": office.id,
+                "name": office.name,
+                "address": office.address,
+                "city": office.city,
+                "state_id": office.state_id,
+                "state_name": office.state.name if office.state else None,
+                "country_name": office.country.name if office.country else None,
+                "postal_code": office.postal_code,
+                "phone": office.phone,
+                "timezone": office.timezone,
+                "maps_url": office.maps_url,
+                "is_active": office.is_active
+            } for office in user_with_relations.offices
+        ],
+        "office_phone": None,  # Moved to offices table
+        "office_timezone": None,  # Moved to offices table
         "appointment_duration": user_with_relations.appointment_duration,
         
         # Professional Data
@@ -2792,14 +3296,14 @@ async def update_my_profile(
             "address_country_name": updated_doctor.address_state.country.name if updated_doctor.address_state and updated_doctor.address_state.country else None,
             "address_postal_code": updated_doctor.address_postal_code,
             
-            # Professional Address (Office)
-            "office_address": updated_doctor.office_address,
-            "office_city": updated_doctor.office_city,
-            "office_state_id": updated_doctor.office_state_id,
-            "office_state_name": updated_doctor.office_state.name if updated_doctor.office_state else None,
-            "office_country_name": updated_doctor.office_state.country.name if updated_doctor.office_state and updated_doctor.office_state.country else None,
-            "office_postal_code": updated_doctor.office_postal_code,
-            "office_phone": updated_doctor.office_phone,
+            # Professional Address (Office) - Moved to offices table
+            "office_address": None,
+            "office_city": None,
+            "office_state_id": None,
+            "office_state_name": None,
+            "office_country_name": None,
+            "office_postal_code": None,
+            "office_phone": None,
             "appointment_duration": updated_doctor.appointment_duration,
             
             # Professional Data
@@ -3314,7 +3818,11 @@ async def get_appointments(
                 "appointment_date": appointment.appointment_date.isoformat(),  # CDMX native format
                 "date_time": appointment.appointment_date.isoformat(),  # CDMX native format  
                 "end_time": appointment.end_time.isoformat() if appointment.end_time else None,
-                "appointment_type": appointment.appointment_type,
+                "appointment_type_id": appointment.appointment_type_id,
+                "appointment_type_name": appointment.appointment_type_rel.name if appointment.appointment_type_rel else None,
+                "office_id": appointment.office_id,
+                "office_name": appointment.office.name if appointment.office else None,
+                "consultation_type": appointment.consultation_type,  # ✅ Agregado
                 "reason": appointment.reason,
                 "notes": appointment.notes,
                 "status": appointment.status,
@@ -3356,7 +3864,9 @@ async def get_calendar_appointments(
         # Build the base query
         query = db.query(Appointment).options(
             joinedload(Appointment.patient),
-            joinedload(Appointment.doctor)
+            joinedload(Appointment.doctor),
+            joinedload(Appointment.office),
+            joinedload(Appointment.appointment_type_rel)
         ).filter(Appointment.doctor_id == current_user.id)
         
         
@@ -3412,7 +3922,8 @@ async def get_calendar_appointments(
         appointments = query.order_by(Appointment.appointment_date).all()
         
         # Convert appointment dates from UTC to doctor's timezone for display
-        doctor_timezone = current_user.office_timezone or 'America/Mexico_City'
+        # Use default timezone since office_timezone was moved to Office table
+        doctor_timezone = 'America/Mexico_City'
         tz = pytz.timezone(doctor_timezone)
         
         for appointment in appointments:
@@ -3463,7 +3974,10 @@ async def get_appointment(
             "doctor_id": appointment.doctor_id,
             "appointment_date": appointment.appointment_date.isoformat(),
             "end_time": appointment.end_time.isoformat() if appointment.end_time else None,
-            "appointment_type": appointment.appointment_type,
+            "appointment_type_id": appointment.appointment_type_id,
+            "appointment_type_name": appointment.appointment_type_rel.name if appointment.appointment_type_rel else None,
+            "office_id": appointment.office_id,
+            "office_name": appointment.office.name if appointment.office else None,
             "reason": appointment.reason,
             "notes": appointment.notes,
             "status": appointment.status,
@@ -3658,6 +4172,7 @@ async def get_consultation(
     """Get specific consultation by ID"""
     try:
         print(f"📋 Fetching consultation {consultation_id} for doctor {current_user.id}")
+        print(f"🔍 Current user ID: {current_user.id}, User type: {current_user.person_type}")
         
         # Query specific medical record
         consultation = db.query(MedicalRecord).options(
@@ -3776,6 +4291,7 @@ async def get_consultation(
         }
         
         print(f"✅ Returning consultation {consultation_id}")
+        print(f"🔍 Consultation data: {result}")
         return result
         
     except HTTPException:

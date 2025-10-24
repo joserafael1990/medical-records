@@ -17,7 +17,11 @@ import type {
   MedicalOrder,
   MedicalOrderFormData,
   OrderStatus,
-  ApiError
+  ApiError,
+  Office,
+  OfficeCreate,
+  OfficeUpdate,
+  AppointmentType
 } from '../types';
 import type { ConsultationFormData } from '../components/dialogs/ConsultationDialog';
 
@@ -1197,6 +1201,53 @@ class ApiService {
 
   async sendWhatsAppStudyResults(studyId: number): Promise<any> {
     const response = await this.api.post(`/api/whatsapp/study-results/${studyId}`);
+    return response.data;
+  }
+
+  // ============================================================================
+  // OFFICE MANAGEMENT METHODS
+  // ============================================================================
+
+  /**
+   * Get all offices for the current doctor
+   */
+  async getOffices(): Promise<Office[]> {
+    const response = await this.api.get('/api/offices');
+    return response.data;
+  }
+
+  /**
+   * Create a new office
+   */
+  async createOffice(office: OfficeCreate): Promise<Office> {
+    const response = await this.api.post('/api/offices', office);
+    return response.data;
+  }
+
+  /**
+   * Update an office
+   */
+  async updateOffice(id: number, office: OfficeUpdate): Promise<Office> {
+    const response = await this.api.put(`/api/offices/${id}`, office);
+    return response.data;
+  }
+
+  /**
+   * Delete an office
+   */
+  async deleteOffice(id: number): Promise<void> {
+    await this.api.delete(`/api/offices/${id}`);
+  }
+
+  // ============================================================================
+  // APPOINTMENT TYPES METHODS
+  // ============================================================================
+
+  /**
+   * Get all appointment types
+   */
+  async getAppointmentTypes(): Promise<AppointmentType[]> {
+    const response = await this.api.get('/api/appointment-types');
     return response.data;
   }
 

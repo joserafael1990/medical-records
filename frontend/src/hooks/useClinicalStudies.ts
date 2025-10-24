@@ -72,12 +72,16 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
 
   // Fetch studies for a consultation
   const fetchStudies = useCallback(async (consultationId: string) => {
+    console.log('🔬 fetchStudies called with consultationId:', consultationId);
     setIsLoading(true);
     setError(null);
     
     try {
       const response = await apiService.get(`/api/clinical-studies/consultation/${consultationId}`);
-      setStudies(response.data || []);
+      console.log('🔬 fetchStudies response:', response);
+      const studiesData = response.data || response;
+      console.log('🔬 fetchStudies data:', studiesData);
+      setStudies(studiesData || []);
     } catch (err) {
       console.error('❌ Error fetching clinical studies:', err);
       console.error('❌ Error details:', err.response?.data);
@@ -128,6 +132,15 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
   // Delete a study
   const deleteStudy = useCallback(async (studyId: string) => {
     try {
+      // Check if it's a temporary study (starts with 'temp_')
+      if (studyId.startsWith('temp_')) {
+        console.log('🗑️ Deleting temporary clinical study:', studyId);
+        // For temporary studies, just remove from local state
+        setStudies(prev => prev.filter(study => study.id !== studyId));
+        return;
+      }
+      
+      // For persistent studies, call the API
       await apiService.delete(`/api/clinical-studies/${studyId}`);
       
       // Remove from local state

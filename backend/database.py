@@ -11,6 +11,15 @@ from sqlalchemy import create_engine
 from datetime import datetime
 import os
 
+# Import schedule models early to avoid circular import issues
+try:
+    from models.schedule import ScheduleTemplate, ScheduleException
+    print("✅ Schedule models imported successfully")
+except ImportError as e:
+    print(f"⚠️ Warning: Could not import schedule models: {e}")
+    ScheduleTemplate = None
+    ScheduleException = None
+
 # Base para modelos
 Base = declarative_base()
 
@@ -43,7 +52,48 @@ class State(Base):
     country = relationship("Country", back_populates="states")
     persons_birth = relationship("Person", foreign_keys="Person.birth_state_id")
     persons_address = relationship("Person", foreign_keys="Person.address_state_id")
-    persons_office = relationship("Person", foreign_keys="Person.office_state_id")
+    # Removed office_state relationship as office fields were moved to Office table
+
+
+# ============================================================================
+# OFFICE MANAGEMENT
+# ============================================================================
+
+class Office(Base):
+    __tablename__ = "offices"
+    
+    id = Column(Integer, primary_key=True)
+    doctor_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
+    name = Column(String(200), nullable=False)
+    
+    # Dirección
+    address = Column(Text)
+    city = Column(String(100))
+    state_id = Column(Integer, ForeignKey("states.id"))
+    country_id = Column(Integer, ForeignKey("countries.id"))
+    postal_code = Column(String(10))
+    
+    # Contacto
+    phone = Column(String(20))
+    
+    # Configuración
+    timezone = Column(String(50), default='America/Mexico_City')
+    maps_url = Column(Text)  # URL de Google Maps
+    
+    # Sistema
+    is_active = Column(Boolean, default=True)
+    is_virtual = Column(Boolean, default=False)  # Indica si es consultorio virtual
+    virtual_url = Column(String(500))  # URL para consultas virtuales (Zoom, Teams, etc.)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relaciones
+    doctor = relationship("Person", back_populates="offices")
+    state = relationship("State")
+    country = relationship("Country")
+    appointments = relationship("Appointment", back_populates="office")
+    medical_records = relationship("MedicalRecord", back_populates="office")
+    # schedule_templates = relationship("ScheduleTemplate", back_populates="office", lazy="select")
 
 
 # ============================================================================
@@ -72,6 +122,14 @@ class EmergencyRelationship(Base):
     
     # Relationships
     persons = relationship("Person", back_populates="emergency_relationship")
+
+class AppointmentType(Base):
+    __tablename__ = "appointment_types"
+    
+    id = Column(Integer, primary_key=True)
+    name = Column(String(50), nullable=False, unique=True)  # "Presencial", "En línea"
+    active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 # ============================================================================
 # MAIN TABLE: PERSONS (UNIFIED)
@@ -112,13 +170,8 @@ class Person(Base):
     address_country_id = Column(Integer, ForeignKey("countries.id"))  # FK to countries table
     address_postal_code = Column(String(5))
     
-    # PROFESSIONAL ADDRESS (doctors only)
-    office_address = Column(Text)
-    office_city = Column(String(100))  # Free text field for office city
-    office_state_id = Column(Integer, ForeignKey("states.id"))  # FK to states table
-    office_postal_code = Column(String(5))
-    office_phone = Column(String(20))  # Professional/office phone number
-    office_timezone = Column(String(50), default='America/Mexico_City')  # Doctor office timezone
+    # ONLINE CONSULTATION (doctors only)
+    online_consultation_url = Column(Text)  # URL for online consultations
     appointment_duration = Column(Integer)  # Duration of appointments in minutes (optional)
     
     # PROFESSIONAL DATA (doctors only)
@@ -159,8 +212,10 @@ class Person(Base):
     birth_country = relationship("Country", foreign_keys=[birth_country_id])
     address_state = relationship("State", foreign_keys=[address_state_id], overlaps="persons_address")
     address_country = relationship("Country", foreign_keys=[address_country_id])
-    office_state = relationship("State", foreign_keys=[office_state_id], overlaps="persons_office")
     emergency_relationship = relationship("EmergencyRelationship", back_populates="persons")
+    
+    # Office relationships
+    offices = relationship("Office", back_populates="doctor")
     
     # Medical relationships
     medical_records_as_patient = relationship("MedicalRecord", foreign_keys="MedicalRecord.patient_id", back_populates="patient")
@@ -240,6 +295,8 @@ class MedicalRecord(Base):
     
     # CONSULTATION TYPE
     consultation_type = Column(String(50), default='Seguimiento')
+    appointment_type_id = Column(Integer, ForeignKey("appointment_types.id"), nullable=False)
+    office_id = Column(Integer, ForeignKey("offices.id"), nullable=True)
     
     # FIRST-TIME CONSULTATION FIELDS (removed duplicate _story fields)
     # These fields are now handled by the existing _history fields:
@@ -263,6 +320,8 @@ class MedicalRecord(Base):
     # RELATIONSHIPS
     patient = relationship("Person", foreign_keys=[patient_id], back_populates="medical_records_as_patient")
     doctor = relationship("Person", foreign_keys=[doctor_id], back_populates="medical_records_as_doctor")
+    office = relationship("Office", back_populates="medical_records")
+    appointment_type_rel = relationship("AppointmentType")
 
 class Appointment(Base):
     __tablename__ = "appointments"
@@ -277,7 +336,9 @@ class Appointment(Base):
     end_time = Column(DateTime, nullable=False)
     
     # DETAILS
-    appointment_type = Column(String(50), nullable=False, default='consulta')
+    appointment_type_id = Column(Integer, ForeignKey("appointment_types.id"), nullable=False)
+    office_id = Column(Integer, ForeignKey("offices.id"), nullable=True)
+    consultation_type = Column(String(50), default='Seguimiento')  # 'Primera vez' or 'Seguimiento'
     status = Column(String(20), default='confirmed')
     priority = Column(String(20), default='normal')
     
@@ -314,6 +375,8 @@ class Appointment(Base):
     # RELATIONSHIPS
     patient = relationship("Person", foreign_keys=[patient_id], back_populates="appointments_as_patient")
     doctor = relationship("Person", foreign_keys=[doctor_id], back_populates="appointments_as_doctor")
+    office = relationship("Office", back_populates="appointments")
+    appointment_type_rel = relationship("AppointmentType")
 
 class ClinicalStudy(Base):
     __tablename__ = "clinical_studies"
@@ -464,11 +527,7 @@ class StudyTemplateItem(Base):
 # ============================================================================
 
 # Import schedule models to ensure they are registered with Base
-try:
-    from models.schedule import ScheduleTemplate, ScheduleException
-    print("✅ Schedule models imported successfully")
-except ImportError as e:
-    print(f"⚠️ Warning: Could not import schedule models: {e}")
+# This import is moved to the top to avoid circular import issues
 
 # Database URL from environment variable or default
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://historias_user:historias_pass@postgres-db:5432/historias_clinicas")

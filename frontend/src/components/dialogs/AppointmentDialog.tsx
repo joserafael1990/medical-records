@@ -40,7 +40,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
-import { Patient, AppointmentFormData, PatientFormData } from '../../types';
+import { Patient, AppointmentFormData, PatientFormData, Office, AppointmentType } from '../../types';
 import { apiService } from '../../services/api';
 import { ErrorRibbon } from '../common/ErrorRibbon';
 import { useToast } from '../common/ToastNotification';
@@ -119,6 +119,9 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
   const [localFormData, setLocalFormData] = useState<AppointmentFormData>(formData);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [validationError, setValidationError] = useState<string>('');
+  const [appointmentTypes, setAppointmentTypes] = useState<AppointmentType[]>([]);
+  const [offices, setOffices] = useState<Office[]>([]);
+  const [isOnlineAppointment, setIsOnlineAppointment] = useState(false);
 
   // Function to format time from HH:MM to AM/PM format
   const formatTimeToAMPM = (timeString: string): string => {
@@ -177,14 +180,19 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     try {
       setLoadingTimes(true);
       console.log('🔍 Loading available times for date:', date);
+      console.log('🔍 Making API call to getAvailableTimesForBooking...');
       const response = await apiService.getAvailableTimesForBooking(date);
       console.log('🔍 Available times response:', response);
+      console.log('🔍 Response type:', typeof response);
+      console.log('🔍 Response keys:', response ? Object.keys(response) : 'null');
       const times = response.available_times || [];
+      console.log('🔍 Extracted times:', times);
+      console.log('🔍 Times count:', times.length);
       setAvailableTimes(times);
-      console.log('🔍 Set available times:', times);
+      console.log('🔍 Set available times in state:', times);
       return times;
     } catch (error) {
-      console.error('Error loading available times:', error);
+      console.error('❌ Error loading available times:', error);
       setAvailableTimes([]);
       return [];
     } finally {
@@ -1160,7 +1168,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                 <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
                   <Box sx={{ flex: 1 }}>
                     <Autocomplete
-                      options={patients}
+                      options={patients || []}
                       getOptionLabel={(option) => formatPatientNameWithAge(option)}
                       value={selectedPatient}
                       onChange={(_, newValue) => handlePatientChange(newValue)}

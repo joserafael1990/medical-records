@@ -31,7 +31,7 @@ import CortexBrainLogo from '../common/CortexBrainLogo';
 // Dialog imports
 import PatientDialog from '../dialogs/PatientDialog'; // ✅ Now implemented!
 import ConsultationDialog from '../dialogs/ConsultationDialog'; // ✅ Now implemented!  
-import AppointmentDialog from '../dialogs/AppointmentDialog'; // ✅ This one works!
+import AppointmentDialogMultiOffice from '../dialogs/AppointmentDialogMultiOffice'; // ✅ Multi-office support!
 
 // Use Twitter-inspired theme
 const theme = twitterTheme;
@@ -210,7 +210,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       )}
 
       {appointmentManager.appointmentDialogOpen && (
-        <AppointmentDialog
+        <AppointmentDialogMultiOffice
           open={appointmentManager.appointmentDialogOpen}
           onClose={appointmentManager.handleCancelAppointment}
           onSubmit={appointmentManager.handleAppointmentSubmit}

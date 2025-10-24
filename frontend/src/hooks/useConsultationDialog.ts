@@ -235,7 +235,7 @@ export const useConsultationDialog = (
   const handleRemoveStudy = useCallback((studyId: string) => {
     setFormData(prev => ({
       ...prev,
-      clinical_studies: prev.clinical_studies.filter(study => study.id !== studyId)
+      clinical_studies: (prev.clinical_studies || []).filter(study => study.id !== studyId)
     }));
   }, []);
 
@@ -367,7 +367,7 @@ export const useConsultationDialog = (
     calculateBMI,
     patients,
     appointments,
-    studies,
+    studies: studies || [],
     medications: [], // TODO: Implement medications hook
   };
 };

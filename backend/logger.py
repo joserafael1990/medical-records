@@ -85,3 +85,12 @@ api_logger = get_logger("cortex.api")
 db_logger = get_logger("cortex.database")
 auth_logger = get_logger("cortex.auth")
 validation_logger = get_logger("cortex.validation")
+security_logger = get_logger("cortex.security")
+
+# Debug-specific loggers for multi-office system
+office_logger = get_logger("cortex.office")
+appointment_logger = get_logger("cortex.appointment")
+consultation_logger = get_logger("cortex.consultation")
+whatsapp_logger = get_logger("cortex.whatsapp")
+pdf_logger = get_logger("cortex.pdf")
+migration_logger = get_logger("cortex.migration")

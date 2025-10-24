@@ -100,7 +100,7 @@ export const ProfessionalInfoStep: React.FC<ProfessionalInfoStepProps> = ({
         {/* Specialty */}
         <Grid item xs={12} sm={6}>
           <Autocomplete
-            options={specialties}
+            options={specialties || []}
             getOptionLabel={(option) => option.name || option}
             value={specialties.find(s => s.name === formData.specialty) || null}
             onChange={(event, newValue) => {

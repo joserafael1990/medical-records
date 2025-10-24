@@ -162,12 +162,13 @@ class InteroperabilityService:
                 use="work"
             ))
         
-        if doctor_profile.office_phone:
-            telecom.append(FHIRContactPoint(
-                system="phone",
-                value=doctor_profile.office_phone,
-                use="work"
-            ))
+        # Office phone moved to offices table - skip for now
+        # if doctor_profile.office_phone:
+        #     telecom.append(FHIRContactPoint(
+        #         system="phone",
+        #         value=doctor_profile.office_phone,
+        #         use="work"
+        #     ))
         
         # Dirección
         addresses = [FHIRAddress(

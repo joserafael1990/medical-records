@@ -231,7 +231,9 @@ class WhatsAppService:
         doctor_title: str,
         doctor_full_name: str,
         office_address: str,
-        country_code: str = None
+        country_code: str = None,
+        appointment_type: str = "presencial",
+        online_consultation_url: str = None
     ) -> Dict[str, Any]:
         """
         Enviar recordatorio de cita médica
@@ -241,9 +243,20 @@ class WhatsAppService:
         
         Args:
             country_code: Código de país del consultorio. Si es None, usa '52' (México) como fallback
+            appointment_type: "presencial" o "online"
+            online_consultation_url: URL para citas online (parámetro 7)
         """
         # Crear mensaje de texto simple para desarrollo
-        message = f"""¡Hola {patient_full_name}! 🗓️
+        if appointment_type == "online":
+            message = f"""¡Hola {patient_full_name}! 🗓️
+
+Este es un recordatorio de tu cita ONLINE hoy *{appointment_date} a las {appointment_time}* con {doctor_title} {doctor_full_name}
+💻 *Consulta Online:* {online_consultation_url}
+
+Te esperamos 10 minutos antes.
+Si no puedes asistir, por favor, usa el botón "Cancelar" para liberar tu espacio"""
+        else:
+            message = f"""¡Hola {patient_full_name}! 🗓️
 
 Este es un recordatorio de tu cita hoy *{appointment_date} a las {appointment_time}* con {doctor_title} {doctor_full_name}
 📍 *Lugar:* {office_address}

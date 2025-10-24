@@ -65,8 +65,24 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     setError(null);
     
     try {
+      console.log('🔍 Fetching available vital signs...');
       const response = await apiService.get('/api/vital-signs');
-      setAvailableVitalSigns(response.data);
+      console.log('🔍 Vital signs response:', response);
+      console.log('🔍 Vital signs response.data:', response.data);
+      console.log('🔍 Vital signs response type:', typeof response.data);
+      
+      // Handle different response structures
+      let vitalSignsData = [];
+      if (Array.isArray(response.data)) {
+        vitalSignsData = response.data;
+      } else if (Array.isArray(response)) {
+        vitalSignsData = response;
+      } else if (response && Array.isArray(response)) {
+        vitalSignsData = response;
+      }
+      
+      console.log('🔍 Processed vital signs data:', vitalSignsData);
+      setAvailableVitalSigns(vitalSignsData);
     } catch (err: any) {
       console.error('❌ Error fetching available vital signs:', err);
       setError(err.message || 'Error fetching available vital signs');
@@ -75,8 +91,17 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     }
   }, []);
 
+  // Load available vital signs when dialog opens (only once)
+  useEffect(() => {
+    if (vitalSignDialogOpen && availableVitalSigns.length === 0) {
+      console.log('🔍 Loading available vital signs...');
+      fetchAvailableVitalSigns();
+    }
+  }, [vitalSignDialogOpen]); // Removed availableVitalSigns and fetchAvailableVitalSigns from dependencies
+
   // Fetch consultation vital signs
   const fetchConsultationVitalSigns = useCallback(async (consultationId: string) => {
+    console.log('🫀 fetchConsultationVitalSigns called with consultationId:', consultationId);
     if (consultationId === 'temp_consultation') {
       return;
     }
@@ -86,7 +111,10 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     
     try {
       const response = await apiService.get(`/api/consultations/${consultationId}/vital-signs`);
-      setConsultationVitalSigns(response.data);
+      console.log('🫀 fetchConsultationVitalSigns response:', response);
+      const vitalSignsData = response.data || response;
+      console.log('🫀 fetchConsultationVitalSigns data:', vitalSignsData);
+      setConsultationVitalSigns(vitalSignsData);
     } catch (err: any) {
       console.error('❌ Error fetching consultation vital signs:', err);
       setError(err.message || 'Error fetching consultation vital signs');
@@ -139,12 +167,26 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
   // Delete a vital sign
   const deleteVitalSign = useCallback(async (consultationId: string, vitalSignId: number): Promise<void> => {
     try {
-      
-      await apiService.delete(`/api/consultations/${consultationId}/vital-signs/${vitalSignId}`);
-      
-      // Remove from local state
-      setConsultationVitalSigns(prev => prev.filter(vs => vs.id !== vitalSignId));
-      
+      if (consultationId === "temp_consultation") {
+        // For temporary vital signs, remove by id
+        console.log('🗑️ Deleting temporary vital sign with ID:', vitalSignId);
+        setTemporaryVitalSigns(prev => {
+          console.log('🗑️ Current temporary vital signs:', prev);
+          console.log('🗑️ Current vital signs IDs:', prev.map(vs => vs.id));
+          console.log('🗑️ Looking for ID:', vitalSignId);
+          const filtered = prev.filter(vs => {
+            console.log('🗑️ Comparing:', vs.id, '!==', vitalSignId, '=', vs.id !== vitalSignId);
+            return vs.id !== vitalSignId;
+          });
+          console.log('🗑️ Filtered temporary vital signs:', filtered);
+          return filtered;
+        });
+      } else {
+        await apiService.delete(`/api/consultations/${consultationId}/vital-signs/${vitalSignId}`);
+        
+        // Remove from local state
+        setConsultationVitalSigns(prev => prev.filter(vs => vs.id !== vitalSignId));
+      }
     } catch (err: any) {
       console.error('❌ Error deleting vital sign:', err);
       throw err;
@@ -153,6 +195,8 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
 
   // Dialog management
   const openAddDialog = useCallback((vitalSign?: VitalSign) => {
+    console.log('🔍 openAddDialog called with:', vitalSign);
+    console.log('🔍 availableVitalSigns:', availableVitalSigns);
     
     if (vitalSign) {
       setVitalSignFormData({
@@ -174,7 +218,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     setSelectedVitalSign(null);
     setVitalSignDialogOpen(true);
     setError(null);
-  }, [availableVitalSigns?.length || 0, vitalSignFormData]);
+  }, [availableVitalSigns]);
 
   const openEditDialog = useCallback((vitalSign: ConsultationVitalSign) => {
     
@@ -221,15 +265,19 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
       if (consultationId === "temp_consultation") {
         // For new consultations, store temporarily
         if (isEditingVitalSign && selectedVitalSign) {
-          // Update temporary vital sign
+          // Update temporary vital sign - find by vital_sign_id instead of index
           setTemporaryVitalSigns(prev => 
-            prev.map((vs, index) => 
-              index === selectedVitalSign.id ? vitalSignFormData : vs
+            prev.map((vs) => 
+              vs.vital_sign_id === selectedVitalSign.vital_sign_id ? vitalSignFormData : vs
             )
           );
         } else {
-          // Add new temporary vital sign
-          setTemporaryVitalSigns(prev => [...prev, vitalSignFormData]);
+          // Add new temporary vital sign with unique ID
+          const newVitalSign = {
+            ...vitalSignFormData,
+            id: Date.now() + Math.random() // Generate unique ID
+          };
+          setTemporaryVitalSigns(prev => [...prev, newVitalSign]);
         }
         closeDialog();
       } else {
@@ -256,21 +304,26 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
 
   // Get all vital signs (both consultation and temporary)
   const getAllVitalSigns = useCallback(() => {
-    if (consultationVitalSigns?.length > 0) {
-      return consultationVitalSigns;
+    // Always return both consultation and temporary vital signs
+    const allVitalSigns = [...(consultationVitalSigns || [])];
+    
+    // Add temporary vital signs if any
+    if (temporaryVitalSigns && temporaryVitalSigns.length > 0) {
+      const tempVitalSigns = (temporaryVitalSigns || []).map((vs) => ({
+        id: vs.id, // Use the actual ID from temporary vital sign
+        consultation_id: 0,
+        vital_sign_id: vs.vital_sign_id,
+        vital_sign_name: ((availableVitalSigns || []).find(v => v.id === vs.vital_sign_id) || {}).name || 'Signo Vital',
+        value: vs.value,
+        unit: vs.unit,
+        notes: vs.notes,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }));
+      allVitalSigns.push(...tempVitalSigns);
     }
-    // Convert temporary vital signs to display format
-    return (temporaryVitalSigns || []).map((vs, index) => ({
-      id: index + 1000, // Temporary ID
-      consultation_id: 0,
-      vital_sign_id: vs.vital_sign_id,
-      vital_sign_name: ((availableVitalSigns || []).find(v => v.id === vs.vital_sign_id) || {}).name || 'Signo Vital',
-      value: vs.value,
-      unit: vs.unit,
-      notes: vs.notes,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    }));
+    
+    return allVitalSigns;
   }, [consultationVitalSigns, temporaryVitalSigns, availableVitalSigns]);
 
   return {

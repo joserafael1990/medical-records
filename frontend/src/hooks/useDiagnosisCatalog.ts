@@ -151,10 +151,29 @@ export const useDiagnosisCatalog = () => {
       if (parentId !== undefined) params.append('parent_id', parentId.toString());
       if (level !== undefined) params.append('level', level.toString());
       
+      console.log('🔍 Fetching diagnosis categories...');
       const response = await apiService.get(`/api/diagnosis/categories?${params.toString()}`);
-      setCategories(response.data);
-      return response.data;
+      console.log('🔍 Categories response:', response);
+      
+      let categoriesData = [];
+      if (Array.isArray(response.data)) {
+        categoriesData = response.data;
+      } else if (Array.isArray(response)) {
+        categoriesData = response;
+      } else if (response && typeof response === 'object') {
+        for (const key in response) {
+          if (Array.isArray(response[key])) {
+            categoriesData = response[key];
+            break;
+          }
+        }
+      }
+      
+      console.log('🔍 Processed categories:', categoriesData);
+      setCategories(categoriesData);
+      return categoriesData;
     } catch (err: any) {
+      console.error('❌ Error fetching diagnosis categories:', err);
       console.warn('API not available, using mock data for diagnosis categories');
       
       // Provide mock data when API fails
@@ -238,9 +257,38 @@ export const useDiagnosisCatalog = () => {
       setLoading(true);
       setError(null);
       
+      console.log('🔍 Searching diagnoses with request:', searchRequest);
       const response = await apiService.post('/api/diagnosis/search', searchRequest);
-      return response.data;
+      console.log('🔍 Diagnosis search response:', response);
+      console.log('🔍 Diagnosis search data:', response.data);
+      
+      // Handle different response structures
+      let searchResults = [];
+      if (Array.isArray(response.data)) {
+        console.log('🔍 Using response.data (array)');
+        searchResults = response.data;
+      } else if (Array.isArray(response)) {
+        console.log('🔍 Using response directly (array)');
+        searchResults = response;
+      } else if (response && typeof response === 'object') {
+        console.log('🔍 Response is object, checking for array properties');
+        console.log('🔍 Response keys:', Object.keys(response));
+        // Try to find the array in the response
+        for (const key in response) {
+          if (Array.isArray(response[key])) {
+            console.log(`🔍 Found array in key: ${key}`);
+            searchResults = response[key];
+            break;
+          }
+        }
+      }
+      
+      console.log('🔍 Final search results:', searchResults);
+      console.log('🔍 Final search results length:', searchResults.length);
+      return searchResults;
     } catch (err: any) {
+      console.error('❌ Error searching diagnoses:', err);
+      console.error('❌ Error response:', err.response);
       const errorMessage = err.response?.data?.detail || 'Error searching diagnoses';
       setError(errorMessage);
       throw new Error(errorMessage);
@@ -307,10 +355,29 @@ export const useDiagnosisCatalog = () => {
       setLoading(true);
       setError(null);
       
+      console.log('🔍 Fetching diagnosis specialties...');
       const response = await apiService.get('/api/diagnosis/specialties');
-      setSpecialties(response.data);
-      return response.data;
+      console.log('🔍 Specialties response:', response);
+      
+      let specialtiesData = [];
+      if (Array.isArray(response.data)) {
+        specialtiesData = response.data;
+      } else if (Array.isArray(response)) {
+        specialtiesData = response;
+      } else if (response && typeof response === 'object') {
+        for (const key in response) {
+          if (Array.isArray(response[key])) {
+            specialtiesData = response[key];
+            break;
+          }
+        }
+      }
+      
+      console.log('🔍 Processed specialties:', specialtiesData);
+      setSpecialties(specialtiesData);
+      return specialtiesData;
     } catch (err: any) {
+      console.error('❌ Error fetching diagnosis specialties:', err);
       console.warn('API not available, using mock data for specialties');
       
       // Provide mock data when API fails

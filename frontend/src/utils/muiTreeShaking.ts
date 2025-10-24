@@ -215,10 +215,5 @@ export {
   createSpacing,
   createPalette,
   createTypography,
-  createShadows,
-  createTransitions,
-  createZIndex,
-  createMixins,
-  createOverrides,
-  createComponents
+  createShadows
 } from '@mui/system';

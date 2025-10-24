@@ -51,7 +51,7 @@ export const PatientSelector: React.FC<PatientSelectorProps> = ({
       
       <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
         <Autocomplete
-          options={patients}
+          options={patients || []}
           getOptionLabel={formatPatientNameWithAge}
           value={selectedPatient}
           onChange={(event, newValue) => onPatientChange(newValue)}

@@ -27,10 +27,19 @@ export interface DoctorInfo {
   university?: string;
   phone?: string;
   email?: string;
+  onlineConsultationUrl?: string;
+  offices?: OfficeInfo[];
+}
+
+export interface OfficeInfo {
+  id: number;
+  name: string;
   address?: string;
   city?: string;
   state?: string;
   country?: string;
+  phone?: string;
+  mapsUrl?: string;
 }
 
 export interface MedicationInfo {
@@ -240,7 +249,9 @@ class PDFService {
       ['Cédula:', doctor.license || 'No especificada'],
       ['Universidad:', doctor.university || 'No especificada'],
       ['Teléfono:', doctor.phone || 'No especificado'],
-      ['Consultorio:', `${doctor.address || 'No especificado'}, ${doctor.city || 'No especificado'}, ${doctor.state || 'No especificado'}, ${doctor.country || 'No especificado'}`]
+      ['Consultorio:', doctor.offices && doctor.offices.length > 0 
+        ? `${doctor.offices[0].name} - ${doctor.offices[0].address || 'No especificado'}, ${doctor.offices[0].city || 'No especificado'}, ${doctor.offices[0].state || 'No especificado'}, ${doctor.offices[0].country || 'No especificado'}`
+        : 'No especificado']
     ];
     
     autoTable(doc, {

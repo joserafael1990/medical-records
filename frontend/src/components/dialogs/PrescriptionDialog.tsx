@@ -59,7 +59,9 @@ const PrescriptionDialog: React.FC<PrescriptionDialogProps> = ({
 
   // Load medications on mount
   useEffect(() => {
+    console.log('🔍 PrescriptionDialog useEffect triggered:', { open, onFetchMedications: !!onFetchMedications });
     if (open) {
+      console.log('🔍 Calling onFetchMedications...');
       onFetchMedications();
     }
   }, [open, onFetchMedications]);
@@ -168,7 +170,7 @@ const PrescriptionDialog: React.FC<PrescriptionDialogProps> = ({
             <Box sx={{ display: 'flex', gap: 1 }}>
               <Autocomplete
                 fullWidth
-                options={medications}
+                options={medications || []}
                 getOptionLabel={(option) => typeof option === 'string' ? option : option.name}
                 value={selectedMedication}
                 onChange={handleMedicationChange}

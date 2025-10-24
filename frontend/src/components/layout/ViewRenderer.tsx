@@ -8,9 +8,12 @@ import {
   DoctorProfileView,
   StyleGuideView
 } from '../lazy';
+import PatientsView from '../views/PatientsView';
 import { ConsultationDetailView } from '../';
 import { LoadingFallback } from '../';
 import { LazyWrapper } from '../common/LazyWrapper';
+import DebugPanel from '../debug/DebugPanel';
+import OfficesView from '../views/OfficesView';
 
 interface ViewRendererProps {
   activeView: string;
@@ -53,9 +56,11 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
 
       {activeView === 'patients' && (
         <Suspense fallback={<LoadingFallback message="Cargando pacientes..." />}>
-          <PatientsViewSmart
+          <PatientsView
             patients={patientManagement.patients}
             consultations={consultationManagement.consultations}
+            patientSearchTerm={patientManagement.searchTerm}
+            setPatientSearchTerm={patientManagement.setSearchTerm}
             successMessage=""
             setSuccessMessage={() => {}}
             handleNewPatient={() => patientManagement.openPatientDialog()}
@@ -132,6 +137,14 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
                  <StyleGuideView />
                </LazyWrapper>
              )}
+
+      {activeView === 'debug' && (
+        <DebugPanel />
+      )}
+
+      {activeView === 'offices' && (
+        <OfficesView />
+      )}
 
       {/* WhatsApp and Analytics views not implemented yet */}
       {(activeView === 'whatsapp' || activeView === 'analytics') && (

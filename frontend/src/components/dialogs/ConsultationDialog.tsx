@@ -64,6 +64,9 @@ import { usePrescriptions } from '../../hooks/usePrescriptions';
 import PrescriptionDialog from './PrescriptionDialog';
 import DiagnosisSelector from '../common/DiagnosisSelector';
 import { DiagnosisCatalog } from '../../hooks/useDiagnosisCatalog';
+import DiagnosisDialog from './DiagnosisDialog';
+import DiagnosisSection from '../common/DiagnosisSection';
+import { useDiagnosisManagement } from '../../hooks/useDiagnosisManagement';
 import { PrintButtons } from '../common/PrintButtons';
 import { PatientInfo, DoctorInfo, ConsultationInfo, MedicationInfo, StudyInfo } from '../../services/pdfService';
 import { useToast } from '../common/ToastNotification';
@@ -160,6 +163,27 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 }: ConsultationDialogProps) => {
   const isEditing = !!consultation;
   const { showSuccess, showError } = useToast();
+
+  console.log('🔄 ConsultationDialog render:', {
+    open,
+    isEditing,
+    consultationId: consultation?.id,
+    consultationDate: consultation?.date,
+    patientsCount: patients.length,
+    consultationType: typeof consultation,
+    consultationIsNull: consultation === null,
+    consultationIsUndefined: consultation === undefined
+  });
+
+  // Track consultation prop changes
+  useEffect(() => {
+    console.log('🔄 Consultation prop changed:', {
+      consultation,
+      consultationId: consultation?.id,
+      consultationType: typeof consultation,
+      isEditing: !!consultation
+    });
+  }, [consultation]);
 
   // Helper function to get current date in CDMX timezone
   const getCDMXDateTime = () => {
@@ -339,6 +363,10 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   // Prescriptions management
   const prescriptionsHook = usePrescriptions();
 
+  // Diagnosis management
+  const primaryDiagnosesHook = useDiagnosisManagement();
+  const secondaryDiagnosesHook = useDiagnosisManagement();
+
   // State for inline patient creation
   const [newPatientData, setNewPatientData] = useState({
     first_name: '',
@@ -376,24 +404,14 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       }, 100);
       setError(null);
       setErrors({});
-        // Reset consultation flow states for new consultations
-        if (!consultation) {
-          setFormData(initialFormData);
-          setHasAppointment(null);
-          setIsNewPatient(null);
-          setSelectedAppointment(null);
-          setSelectedPatient(null);
-          setShowAdvancedPatientData(false);
-          setNewPatientData({
-            first_name: '',
-            paternal_surname: '',
-            maternal_surname: '',
-            birth_date: '',
-            gender: '',
-            primary_phone: ''
-          });
-        }
-      if (consultation) {
+    }
+  }, [open]);
+
+  // Separate useEffect for consultation data loading
+  useEffect(() => {
+    console.log('🔄 useEffect for consultation data loading:', { open, consultation: !!consultation });
+    if (open && consultation) {
+      console.log('🔄 Loading consultation data for editing:', consultation.id);
         // Map consultation data to form data
         setFormData({
           ...initialFormData,
@@ -434,17 +452,35 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         clinicalStudiesHook.fetchStudies(String(consultation.id));
         vitalSignsHook.fetchConsultationVitalSigns(String(consultation.id));
         prescriptionsHook.fetchPrescriptions(String(consultation.id));
-      } else {
-        setFormData(initialFormData);
-        setSelectedPatient(null);
-        
-        // Clear clinical studies, vital signs and prescriptions for new consultation
-        clinicalStudiesHook.clearTemporaryStudies();
-        vitalSignsHook.clearTemporaryVitalSigns();
-        prescriptionsHook.clearTemporaryPrescriptions();
-      }
     }
   }, [open, consultation, patients, doctorProfile]);
+
+  // Separate useEffect for new consultation setup
+  useEffect(() => {
+    console.log('🔄 useEffect for new consultation setup:', { open, consultation: !!consultation });
+    if (open && !consultation) {
+      console.log('🔄 Setting up new consultation');
+      setFormData(initialFormData);
+      setHasAppointment(null);
+      setIsNewPatient(null);
+      setSelectedAppointment(null);
+      setSelectedPatient(null);
+      setShowAdvancedPatientData(false);
+      setNewPatientData({
+        first_name: '',
+        paternal_surname: '',
+        maternal_surname: '',
+        birth_date: '',
+        gender: '',
+        primary_phone: ''
+      });
+      
+      // Clear clinical studies, vital signs and prescriptions for new consultation
+      clinicalStudiesHook.clearTemporaryStudies();
+      vitalSignsHook.clearTemporaryVitalSigns();
+      prescriptionsHook.clearTemporaryPrescriptions();
+    }
+  }, [open, consultation]);
 
   // Refresh clinical studies when clinical study dialog closes (for existing consultations)
   useEffect(() => {
@@ -564,6 +600,16 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       loadStructuredDiagnoses();
     }
   }, [open, consultation]);
+
+  // Clear diagnosis hooks when dialog opens for new consultation (not editing)
+  useEffect(() => {
+    console.log('🔄 useEffect for diagnosis hooks clearing:', { open, isEditing, consultation: !!consultation });
+    if (open && !isEditing && !consultation) {
+      console.log('🔄 Clearing diagnosis hooks for new consultation');
+      primaryDiagnosesHook.clearDiagnoses();
+      secondaryDiagnosesHook.clearDiagnoses();
+    }
+  }, [open, isEditing, consultation]); // Added consultation to dependencies
 
   // Load states when patient data changes
   useEffect(() => {
@@ -1261,11 +1307,76 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
   const handleDeleteStudy = async (studyId: string) => {
     try {
-      await clinicalStudiesHook.deleteStudy(studyId);
+      // Check if it's a temporary study (starts with 'temp_')
+      if (studyId.startsWith('temp_')) {
+        // For temporary studies, remove from both formData and hook
+        setFormData(prev => ({
+          ...prev,
+          clinical_studies: (prev.clinical_studies || []).filter(study => study.id !== studyId)
+        }));
+        // Also remove from hook's studies
+        clinicalStudiesHook.deleteStudy(studyId);
+      } else {
+        // For saved studies, delete from backend
+        await clinicalStudiesHook.deleteStudy(studyId);
+      }
     } catch (error) {
       console.error('Error deleting clinical study:', error);
       setError('Error al eliminar el estudio clínico');
     }
+  };
+
+  // Diagnosis handlers
+  const handleAddPrimaryDiagnosis = () => {
+    primaryDiagnosesHook.openAddDialog();
+  };
+
+  const handleAddSecondaryDiagnosis = () => {
+    secondaryDiagnosesHook.openAddDialog();
+  };
+
+  const handleRemovePrimaryDiagnosis = (diagnosisId: string) => {
+    console.log('🗑️ Removing primary diagnosis:', diagnosisId);
+    primaryDiagnosesHook.removeDiagnosis(diagnosisId);
+    
+    // Update formData immediately by filtering out the removed diagnosis
+    setFormData(prev => ({
+      ...prev,
+      primary_diagnoses: prev.primary_diagnoses.filter(d => d.id !== diagnosisId)
+    }));
+  };
+
+  const handleRemoveSecondaryDiagnosis = (diagnosisId: string) => {
+    console.log('🗑️ Removing secondary diagnosis:', diagnosisId);
+    secondaryDiagnosesHook.removeDiagnosis(diagnosisId);
+    
+    // Update formData immediately by filtering out the removed diagnosis
+    setFormData(prev => ({
+      ...prev,
+      secondary_diagnoses_list: prev.secondary_diagnoses_list.filter(d => d.id !== diagnosisId)
+    }));
+  };
+
+  const handleAddPrimaryDiagnosisFromDialog = (diagnosis: DiagnosisCatalog) => {
+    console.log('🔍 Adding primary diagnosis:', diagnosis);
+    primaryDiagnosesHook.addDiagnosis(diagnosis);
+    
+    // Update formData immediately
+    setFormData(prev => ({
+      ...prev,
+      primary_diagnoses: [...prev.primary_diagnoses, diagnosis]
+    }));
+  };
+
+  const handleAddSecondaryDiagnosisFromDialog = (diagnosis: DiagnosisCatalog) => {
+    console.log('🔍 Adding secondary diagnosis:', diagnosis);
+    secondaryDiagnosesHook.addDiagnosis(diagnosis);
+    
+    // Update formData immediately
+    setFormData(prev => ({
+      ...prev,
+      secondary_diagnoses_list: [...prev.secondary_diagnoses_list, diagnosis]
+    }));
   };
 
   return (
@@ -1407,7 +1518,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                       }
                     };
                     
-                    const consultationType = getConsultationTypeDisplay(appointment.appointment_type);
+                    const consultationType = getConsultationTypeDisplay(appointment.consultation_type);
                     
                     // Use patient_name from backend or fallback to patient object
                     const patientName = appointment.patient_name || 
@@ -1464,7 +1575,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
                 <Box sx={{ flex: 1 }}>
                   <Autocomplete
-                    options={patients}
+                    options={patients || []}
                     getOptionLabel={(option: any) => formatPatientNameWithAge(option)}
                     value={selectedPatient}
                     onChange={(_: any, newValue: any) => handlePatientChange(newValue)}
@@ -2542,8 +2653,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               if (isEditing && consultation?.id) {
                 vitalSignsHook.deleteVitalSign(String(consultation.id), vitalSignId);
               } else {
-                // For temporary vital signs, remove from temporary list
-                vitalSignsHook.clearTemporaryVitalSigns();
+                // For temporary vital signs, delete specific vital sign
+                vitalSignsHook.deleteVitalSign("temp_consultation", vitalSignId);
               }
             }}
           />
@@ -2594,24 +2705,18 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             </Typography>
             
             {/* Primary Diagnoses */}
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: 'primary.main' }}>
-                Diagnósticos Principales
-              </Typography>
-              <DiagnosisSelector
-                selectedDiagnoses={formData.primary_diagnoses}
-                onDiagnosesChange={(diagnoses: any) => {
-                  setFormData((prev: ConsultationFormData) => ({ ...prev, primary_diagnoses: diagnoses }));
-                  // Update text field for backward compatibility
-                  const diagnosisText = (diagnoses || []).map((d: any) => `${d.code} - ${d.name}`).join('; ');
-                  setFormData((prev: ConsultationFormData) => ({ ...prev, primary_diagnosis: diagnosisText }));
-                }}
-                specialty={formData.doctor_specialty}
-                maxSelections={3}
-                showRecommendations={true}
-                disabled={loading}
-              />
-            </Box>
+        <Box sx={{ mb: 3 }}>
+          <DiagnosisSection
+            diagnoses={primaryDiagnosesHook.diagnoses}
+            onAddDiagnosis={handleAddPrimaryDiagnosis}
+            onRemoveDiagnosis={handleRemovePrimaryDiagnosis}
+            title="Diagnósticos Principales"
+            maxSelections={1}
+            showAddButton={true}
+            isLoading={loading}
+            error={primaryDiagnosesHook.error}
+          />
+        </Box>
             <TextField
               name="primary_diagnosis"
                 label="Diagnóstico principal (texto)"
@@ -2626,24 +2731,18 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             <Divider sx={{ my: 2 }} />
 
             {/* Secondary Diagnoses */}
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: 'secondary.main' }}>
-                Diagnósticos Secundarios
-              </Typography>
-              <DiagnosisSelector
-                selectedDiagnoses={formData.secondary_diagnoses_list}
-                onDiagnosesChange={(diagnoses: any) => {
-                  setFormData((prev: ConsultationFormData) => ({ ...prev, secondary_diagnoses_list: diagnoses }));
-                  // Update text field for backward compatibility
-                  const diagnosisText = (diagnoses || []).map((d: any) => `${d.code} - ${d.name}`).join('; ');
-                  setFormData((prev: ConsultationFormData) => ({ ...prev, secondary_diagnoses: diagnosisText }));
-                }}
-                specialty={formData.doctor_specialty}
-                maxSelections={5}
-                showRecommendations={false}
-                disabled={loading}
-              />
-            </Box>
+        <Box sx={{ mb: 2 }}>
+          <DiagnosisSection
+            diagnoses={secondaryDiagnosesHook.diagnoses}
+            onAddDiagnosis={handleAddSecondaryDiagnosis}
+            onRemoveDiagnosis={handleRemoveSecondaryDiagnosis}
+            title="Diagnósticos Secundarios"
+            maxSelections={1}
+            showAddButton={true}
+            isLoading={loading}
+            error={secondaryDiagnosesHook.error}
+          />
+        </Box>
 
             {/* Legacy text fields for backward compatibility */}
               <TextField
@@ -2723,7 +2822,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             isLoading={clinicalStudiesHook.isLoading}
             onAddStudy={handleAddStudy}
             onEditStudy={handleEditStudy}
-            onDeleteStudy={handleDeleteStudy}
+            onRemoveStudy={handleDeleteStudy}
             onViewFile={clinicalStudiesHook.viewFile}
             onDownloadFile={clinicalStudiesHook.downloadFile}
           />
@@ -2839,12 +2938,25 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             Selecciona el tipo de signo vital que deseas agregar:
           </Typography>
           {(() => {
-            const filteredVitalSigns = (vitalSignsHook.availableVitalSigns || []).filter(vitalSign => {
-              // Filter out vital signs that are already registered in this consultation
-              const existingVitalSigns = vitalSignsHook.getAllVitalSigns() || [];
+            // Get all available vital signs with defensive check
+            const allAvailableVitalSigns = (vitalSignsHook.availableVitalSigns || []);
+            
+            // Get existing vital signs for this consultation with defensive check
+            const existingVitalSigns = (vitalSignsHook.getAllVitalSigns() || []);
+            
+            // Filter out vital signs that are already registered
+            const filteredVitalSigns = allAvailableVitalSigns.filter(vitalSign => {
               return !existingVitalSigns.some(existing => 
                 existing.vital_sign_id === vitalSign.id
               );
+            });
+
+            console.log('🔍 Vital Signs Debug:', {
+              allAvailable: allAvailableVitalSigns.length,
+              existing: existingVitalSigns.length,
+              filtered: filteredVitalSigns.length,
+              availableVitalSigns: allAvailableVitalSigns,
+              existingVitalSigns: existingVitalSigns
             });
 
             if (filteredVitalSigns.length === 0) {
@@ -3117,6 +3229,26 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         isSubmitting={prescriptionsHook.isSubmitting}
         error={prescriptionsHook.error}
         consultationId={isEditing && consultation?.id ? String(consultation.id) : "temp_consultation"}
+      />
+
+      {/* Primary Diagnosis Dialog */}
+      <DiagnosisDialog
+        open={primaryDiagnosesHook.diagnosisDialogOpen}
+        onClose={primaryDiagnosesHook.closeDialog}
+        onAddDiagnosis={handleAddPrimaryDiagnosisFromDialog}
+        existingDiagnoses={primaryDiagnosesHook.diagnoses}
+        title="Agregar Diagnóstico Principal"
+        maxSelections={1}
+      />
+
+      {/* Secondary Diagnosis Dialog */}
+      <DiagnosisDialog
+        open={secondaryDiagnosesHook.diagnosisDialogOpen}
+        onClose={secondaryDiagnosesHook.closeDialog}
+        onAddDiagnosis={handleAddSecondaryDiagnosisFromDialog}
+        existingDiagnoses={secondaryDiagnosesHook.diagnoses}
+        title="Agregar Diagnóstico Secundario"
+        maxSelections={1}
       />
     </Dialog>
   );

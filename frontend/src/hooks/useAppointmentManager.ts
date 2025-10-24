@@ -239,10 +239,12 @@ export const useAppointmentManager = (
     setIsEditingAppointment(false);
     const currentDateTime = getCurrentCDMXDateTime();
     setAppointmentFormData({
-      patient_id: '',
-      doctor_id: '',
-      date_time: currentDateTime, // Current CDMX time
-      appointment_type: '', // Empty by default - user must select
+      patient_id: 0,
+      doctor_id: 0,
+      appointment_date: currentDateTime, // Current CDMX time
+      appointment_type_id: 1, // Default to "Presencial"
+      office_id: undefined,
+      consultation_type: 'Seguimiento', // Default to "Seguimiento"
       reason: '',
       notes: '',
       status: 'confirmed',
@@ -265,15 +267,17 @@ export const useAppointmentManager = (
     console.log('🔍 handleEditAppointment - appointment:', appointment);
     setIsEditingAppointment(true);
     setSelectedAppointment(appointment);
-    console.log('🔍 Original appointment.date_time:', appointment.date_time);
-    const formattedDateTime = formatDateTimeForInput(appointment.date_time);
-    console.log('🔍 Formatted date_time:', formattedDateTime);
+    console.log('🔍 Original appointment.appointment_date:', appointment.appointment_date);
+    const formattedDateTime = formatDateTimeForInput(appointment.appointment_date || appointment.date_time);
+    console.log('🔍 Formatted appointment_date:', formattedDateTime);
     
     const formData = {
       patient_id: appointment.patient_id,
-      doctor_id: '',
-      date_time: formattedDateTime, // Direct CDMX format
-      appointment_type: appointment.appointment_type,
+      doctor_id: appointment.doctor_id,
+      appointment_date: formattedDateTime, // Direct CDMX format
+      appointment_type_id: appointment.appointment_type_id || 1, // Default to "Presencial" if not set
+      office_id: appointment.office_id,
+      consultation_type: appointment.consultation_type || 'Seguimiento', // Default to "Seguimiento" if not set
       reason: appointment.reason,
       notes: appointment.notes || '',
       status: appointment.status,
@@ -393,17 +397,20 @@ export const useAppointmentManager = (
     try {
       if (isEditingAppointment && selectedAppointment) {
         // Update existing appointment - now using CDMX native
-        // Parse datetime-local input manually to avoid timezone issues
-        const appointmentDate = new Date(formDataToUse.date_time);
+        // Parse appointment_date in new format
+        const appointmentDate = new Date(formDataToUse.appointment_date);
         // Get doctor's appointment duration
         const doctorDuration = user?.doctor?.appointment_duration || doctorProfile?.appointment_duration || 30;
         const endTime = new Date(appointmentDate.getTime() + doctorDuration * 60000);
 
-        // Send CDMX datetime directly to backend
+        // Send data in new format to backend
         const updateData = {
+          patient_id: formDataToUse.patient_id,
           appointment_date: appointmentDate.toISOString(),
           end_time: endTime.toISOString(),
-          appointment_type: formDataToUse.appointment_type || 'consultation',
+          appointment_type_id: formDataToUse.appointment_type_id || 1,
+          office_id: formDataToUse.office_id || null,
+          consultation_type: formDataToUse.consultation_type || 'Seguimiento',
           status: formDataToUse.status || 'confirmed',
           priority: formDataToUse.priority || 'normal',
           reason: formDataToUse.reason || '',
@@ -416,7 +423,8 @@ export const useAppointmentManager = (
           insurance_covered: formDataToUse.insurance_covered || false
         };
         
-        // console.log('🔄 Updating appointment:', selectedAppointment.id, 'with CDMX native data');
+        console.log('🔄 Updating appointment:', selectedAppointment.id, 'with data:', updateData);
+        console.log('🔄 Form data being used:', formDataToUse);
         const updatedAppointment = await apiService.updateAppointment(selectedAppointment.id, updateData);
         
         // Transform the updated appointment response to match frontend format
@@ -495,60 +503,32 @@ export const useAppointmentManager = (
         
         showSuccessMessage('Cita actualizada exitosamente');
       } else {
-        // Transform form data to backend format - now using CDMX native
-        // console.log('🔄 useAppointmentManager - Current formDataToUse:', formDataToUse);
-        // console.log('🔄 useAppointmentManager - formDataToUse.date_time:', formDataToUse.date_time);
-        // console.log('🔄 useAppointmentManager - typeof date_time:', typeof formDataToUse.date_time);
+        // Transform form data to backend format - using new format
+        console.log('🔄 useAppointmentManager - Current formDataToUse:', formDataToUse);
+        console.log('🔄 useAppointmentManager - formDataToUse.appointment_date:', formDataToUse.appointment_date);
         
-        const dateTimeStr = formDataToUse.date_time.includes(':') && !formDataToUse.date_time.includes(':00') 
-          ? `${formDataToUse.date_time}:00` 
-          : formDataToUse.date_time;
-        // console.log('🔄 useAppointmentManager - Final dateTimeStr:', dateTimeStr);
-        
-        const appointmentDate = new Date(dateTimeStr);
+        const appointmentDate = new Date(formDataToUse.appointment_date);
         
         if (isNaN(appointmentDate.getTime())) {
           console.error('🔄 useAppointmentManager - Failed to parse date:', { 
-            original: formDataToUse.date_time, 
-            processed: dateTimeStr,
+            original: formDataToUse.appointment_date,
             formData: formDataToUse 
           });
-          throw new Error(`Invalid date format: ${formDataToUse.date_time}`);
+          throw new Error(`Invalid date format: ${formDataToUse.appointment_date}`);
         }
         
         // Get doctor's appointment duration
         const doctorDuration = user?.doctor?.appointment_duration || doctorProfile?.appointment_duration || 30;
         const endTime = new Date(appointmentDate.getTime() + doctorDuration * 60000);
 
-        // Get doctor's timezone for proper date handling
-        const doctorTimezone = user?.doctor?.office_timezone || doctorProfile?.office_timezone || 'America/Mexico_City';
-        
-        // Create dates in doctor's timezone
-        const appointmentDateInTimezone = new Date(appointmentDate.toLocaleString("en-US", {timeZone: doctorTimezone}));
-        const endTimeInTimezone = new Date(endTime.toLocaleString("en-US", {timeZone: doctorTimezone}));
-        
-        // Map appointment types to standardized values
-        const mapAppointmentType = (type: string) => {
-          switch (type) {
-            case 'primera vez':
-              return 'Primera vez';
-            case 'seguimiento':
-              return 'Seguimiento';
-            case 'first_visit':
-              return 'Primera vez';
-            case 'follow_up':
-              return 'Seguimiento';
-            default:
-              return type || 'Consulta';
-          }
-        };
-
         const appointmentData = {
           patient_id: formDataToUse.patient_id,
           doctor_id: user?.doctor?.id || doctorProfile?.id || 0, // Use current logged-in doctor
-          appointment_date: appointmentDateInTimezone.toISOString(),
-          end_time: endTimeInTimezone.toISOString(),
-          appointment_type: mapAppointmentType(formDataToUse.appointment_type),
+          appointment_date: appointmentDate.toISOString(),
+          end_time: endTime.toISOString(),
+          appointment_type_id: formDataToUse.appointment_type_id || 1, // Use appointment_type_id instead of appointment_type
+          office_id: formDataToUse.office_id || null, // Include office_id
+          consultation_type: formDataToUse.consultation_type || 'Seguimiento',
           status: formDataToUse.status || 'confirmed',
           priority: formDataToUse.priority || 'normal',
           reason: formDataToUse.reason || '',
@@ -613,7 +593,9 @@ export const useAppointmentManager = (
               refreshData = await apiService.getAppointments();
             }
             console.log('📋 Sample refreshed appointment:', refreshData?.[0]);
+            console.log('📋 Total refreshed appointments:', refreshData?.length);
             setAppointments(refreshData);
+            console.log('📋 setAppointments called with:', refreshData?.length, 'appointments');
           } catch (error) {
             console.error('❌ Error refreshing appointments:', error);
           }

@@ -80,9 +80,15 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
     fetchStudies(); // Load all studies initially
   }, [fetchCategories, fetchStudies]);
 
+  // State for search results
+  const [searchResults, setSearchResults] = useState<StudyCatalog[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
   // Filter studies based on current filters
   const filteredStudies = useMemo(() => {
-    let filtered = studies;
+    // Always use the studies from the hook (which gets updated by searchStudies)
+    const baseStudies = studies || [];
+    let filtered = baseStudies;
     
     // Apply specialty filter first
     if (selectedSpecialty && selectedSpecialty.trim()) {
@@ -101,19 +107,35 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
       });
     }
 
-    // Apply search term filter
-    if (searchTerm && searchTerm.trim()) {
-      const normalizedTerm = normalizeText(searchTerm.trim());
-      filtered = filtered.filter(study =>
-        normalizeText(study.name).includes(normalizedTerm) ||
-        normalizeText(study.code).includes(normalizedTerm) ||
-        (study.description && normalizeText(study.description).includes(normalizedTerm)) ||
-        (study.subcategory && normalizeText(study.subcategory).includes(normalizedTerm))
-      );
-    }
-
     return filtered;
   }, [studies, selectedCategory, selectedSpecialty, searchTerm]);
+
+  // Handle search when search term changes
+  useEffect(() => {
+    const timeoutId = setTimeout(async () => {
+      if (searchTerm && searchTerm.trim()) {
+        try {
+          setIsSearching(true);
+          console.log('🔍 Searching studies with term:', searchTerm);
+          await searchStudies(searchTerm.trim(), {
+            specialty: selectedSpecialty || undefined,
+            category_id: selectedCategory?.id
+          });
+          // The searchStudies function should update the studies state
+          // We'll use the studies state directly in filteredStudies
+        } catch (error) {
+          console.error('❌ Error searching studies:', error);
+          setSearchResults([]);
+        } finally {
+          setIsSearching(false);
+        }
+      } else {
+        setSearchResults([]);
+      }
+    }, 300); // Debounce search
+
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm, selectedSpecialty, selectedCategory, searchStudies]);
 
   // Load recommendations when diagnosis or specialty changes
   useEffect(() => {
@@ -139,17 +161,17 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
   }, [specialty, showTemplates, fetchTemplates]);
 
   const handleStudySelect = (study: StudyCatalog) => {
-    if (maxSelections && selectedStudies.length >= maxSelections) {
+    if (maxSelections && (selectedStudies?.length || 0) >= maxSelections) {
       return;
     }
 
-    if (!selectedStudies.find(s => s.id === study.id)) {
-      onSelectStudies([...selectedStudies, study]);
+    if (!selectedStudies?.find(s => s.id === study.id)) {
+      onSelectStudies([...(selectedStudies || []), study]);
     }
   };
 
   const handleStudyRemove = (studyId: number) => {
-    onSelectStudies(selectedStudies.filter(s => s.id !== studyId));
+    onSelectStudies((selectedStudies || []).filter(s => s.id !== studyId));
   };
 
   const handleTemplateApply = (template: StudyTemplate) => {
@@ -331,7 +353,7 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
             </Grid>
             <Grid item xs={12} sm={6} md={3} lg={4}>
               <Autocomplete
-                options={categories}
+                options={categories || []}
                 getOptionLabel={(option) => option.name}
                 value={selectedCategory}
                 onChange={(_, newValue) => setSelectedCategory(newValue)}

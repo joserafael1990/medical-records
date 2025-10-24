@@ -23,7 +23,9 @@ import {
   Check as CheckIcon,
   Close as CloseIcon,
   Phone as PhoneIcon,
-  Email as EmailIcon
+  Email as EmailIcon,
+  CalendarMonth as CalendarIcon,
+  People as PeopleIcon
 } from '@mui/icons-material';
 import { Patient, Consultation } from '../../types';
 import { calculateAge } from '../../utils';
@@ -55,6 +57,8 @@ const PatientsView: React.FC<PatientsViewProps> = ({
 }) => {
   // Helper function to get the latest consultation reason for a patient
   const getLatestConsultationReason = (patientId: string): string => {
+    if (!consultations || !Array.isArray(consultations)) return 'Sin consultas';
+    
     const patientConsultations = consultations.filter(c => c.patient_id === patientId);
     if (patientConsultations.length === 0) return 'Sin consultas';
     
@@ -67,15 +71,25 @@ const PatientsView: React.FC<PatientsViewProps> = ({
   };
 
   // Memoized search for better performance
-  const filteredPatients = useMemoizedSearch(patients, patientSearchTerm, {
+  const filteredPatients = useMemoizedSearch(patients || [], patientSearchTerm || '', {
     searchFields: ['full_name', 'phone', 'email', 'curp'],
     caseSensitive: false
   });
+
   return (
-    <Box>
-      {/* Patient Management Header */}
+    <Box sx={{ p: 3 }}>
+      {/* Header - EXACTAMENTE como AgendaView.tsx */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 600 }}>
+        <Typography 
+          variant="h4" 
+          sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1,
+            fontSize: { xs: '1.5rem', sm: '2rem' }
+          }}
+        >
+          <PeopleIcon sx={{ color: 'text.primary' }} />
           Gestión de Pacientes
         </Typography>
         <Button

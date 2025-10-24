@@ -380,7 +380,7 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
                 isLoading={clinicalStudiesHook.isLoading}
                 onAddStudy={handleAddStudy}
                 onEditStudy={handleEditStudy}
-                onDeleteStudy={handleDeleteStudy}
+                onRemoveStudy={handleDeleteStudy}
                 onViewFile={clinicalStudiesHook.viewFile}
                 onDownloadFile={clinicalStudiesHook.downloadFile}
               />

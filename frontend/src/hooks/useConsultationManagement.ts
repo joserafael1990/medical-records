@@ -263,6 +263,7 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
 
   // Reset form state and close dialog
   const resetConsultationForm = useCallback(() => {
+    console.log('🔄 resetConsultationForm called - setting selectedConsultation to null');
     setSelectedConsultation(null);
     setIsEditingConsultation(false);
     setConsultationDialogOpen(false);
@@ -274,6 +275,7 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
   // Open consultation dialog for create/edit
   const openConsultationDialog = useCallback((consultation?: Consultation) => {
     if (consultation) {
+      console.log('🔄 openConsultationDialog called with consultation:', consultation.id);
       setSelectedConsultation(consultation);
       setIsEditingConsultation(true);
       // Populate form with consultation data
@@ -312,15 +314,21 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
 
   // Close consultation dialog
   const closeConsultationDialog = useCallback(() => {
+    console.log('🔄 closeConsultationDialog called - this is causing the consultation prop to become null');
     setConsultationDialogOpen(false);
     setConsultationDetailView(false);
     setSelectedConsultation(null);
     setIsEditingConsultation(false);
   }, []);
 
+  // Add logging for selectedConsultation changes
+  useEffect(() => {
+    console.log('🔄 selectedConsultation changed:', selectedConsultation?.id || 'null');
+  }, [selectedConsultation]);
+
   // Handler functions
   const handleNewConsultation = useCallback(() => {
-    console.log('🆕 handleNewConsultation called - opening dialog');
+    console.log('🆕 handleNewConsultation called - setting selectedConsultation to null');
     setSelectedConsultation(null);
     setIsEditingConsultation(false);
     resetConsultationFormData();
@@ -333,15 +341,20 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
 
   const handleEditConsultation = useCallback(async (consultation: Consultation) => {
     try {
+      console.log('🔄 handleEditConsultation called with consultation:', consultation.id);
       // First set the basic consultation data
       setSelectedConsultation(consultation);
       setIsEditingConsultation(true);
       setConsultationDialogOpen(true);
       
       // Fetch complete consultation data from backend
+      console.log('🔄 Fetching complete consultation data for ID:', consultation.id);
+      console.log('🔄 Making API call to:', `/api/consultations/${consultation.id}`);
       const response = await apiService.get(`/api/consultations/${consultation.id}`);
-      const fullConsultationData = response.data;
+      console.log('🔄 API response received:', response);
+      const fullConsultationData = response.data || response;
       
+      console.log('🔄 Full consultation data received:', fullConsultationData?.id || 'null/undefined');
       // Update the selectedConsultation with the fresh data so the dialog's useEffect will re-run
       setSelectedConsultation(fullConsultationData);
     } catch (error) {
@@ -356,6 +369,7 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
   }, []);
 
   const handleBackFromConsultationDetail = useCallback(() => {
+    console.log('🔄 handleBackFromConsultationDetail called - setting selectedConsultation to null');
     setConsultationDetailView(false);
     setSelectedConsultation(null);
   }, []);

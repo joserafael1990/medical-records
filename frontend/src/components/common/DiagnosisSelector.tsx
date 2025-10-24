@@ -101,8 +101,9 @@ const DiagnosisSelector: React.FC<DiagnosisSelectorProps> = ({
       // Call the search API
       const results = await searchDiagnoses(searchRequest);
       
-      console.log('API search results:', results);
-      setSearchResults(results);
+      console.log('🔍 API search results:', results);
+      console.log('🔍 Results count:', results?.length || 0);
+      setSearchResults(results || []);
     } catch (error) {
       console.error('Error searching diagnoses:', error);
       setSearchResults([]);
@@ -281,7 +282,7 @@ const DiagnosisSelector: React.FC<DiagnosisSelectorProps> = ({
                 
                 <Grid item xs={12} sm={6} md={3} lg={2.5}>
                   <Autocomplete
-                    options={specialties}
+                    options={specialties || []}
                     value={selectedSpecialty}
                     onChange={(_: any, newValue: string | null) => {
                       setSelectedSpecialty(newValue);
@@ -402,7 +403,7 @@ const DiagnosisSelector: React.FC<DiagnosisSelectorProps> = ({
       )}
 
       {/* Search Results */}
-      {searchResults.length > 0 && (
+      {searchResults && searchResults.length > 0 && (
         <Card sx={{ mb: 2 }}>
           <CardContent>
             <Typography variant="h6" sx={{ mb: 2 }}>
@@ -554,7 +555,7 @@ const DiagnosisSelector: React.FC<DiagnosisSelectorProps> = ({
       )}
 
       {/* No Results Message */}
-      {searchTerm && searchResults.length === 0 && !isSearching && (
+      {searchTerm && searchResults && searchResults.length === 0 && !isSearching && (
         <Card>
           <CardContent>
             <Typography variant="body1" color="text.secondary" textAlign="center">

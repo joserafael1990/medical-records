@@ -437,3 +437,176 @@ export interface RevokeConsentRequest {
   patient_id: number;
   revocation_reason: string;
 }
+
+// ============================================================================
+// OFFICE MANAGEMENT TYPES
+// ============================================================================
+
+export interface Office {
+  id: number;
+  doctor_id: number;
+  name: string;
+  address?: string;
+  city?: string;
+  state_id?: number;
+  country_id?: number;
+  postal_code?: string;
+  phone?: string;
+  timezone: string;
+  maps_url?: string;
+  is_virtual: boolean;
+  virtual_url?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OfficeCreate {
+  name: string;
+  address?: string;
+  city?: string;
+  state_id?: number;
+  country_id?: number;
+  postal_code?: string;
+  phone?: string;
+  timezone?: string;
+  maps_url?: string;
+  is_virtual?: boolean;
+  virtual_url?: string;
+}
+
+export interface OfficeUpdate {
+  name?: string;
+  address?: string;
+  city?: string;
+  state_id?: number;
+  country_id?: number;
+  postal_code?: string;
+  phone?: string;
+  timezone?: string;
+  maps_url?: string;
+  is_virtual?: boolean;
+  virtual_url?: string;
+}
+
+export interface AppointmentType {
+  id: number;
+  name: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Appointment {
+  id: number;
+  appointment_code?: string;
+  patient_id: number;
+  doctor_id: number;
+  appointment_date: string;
+  end_time?: string;
+  appointment_type_id: number;
+  office_id?: number;
+  consultation_type?: string;
+  status: string;
+  priority: string;
+  reason: string;
+  notes?: string;
+  preparation_instructions?: string;
+  follow_up_required: boolean;
+  follow_up_date?: string;
+  room_number?: string;
+  estimated_cost?: number;
+  insurance_covered: boolean;
+  confirmation_required: boolean;
+  confirmed_at?: string;
+  reminder_sent: boolean;
+  reminder_sent_at?: string;
+  cancelled_reason?: string;
+  cancelled_at?: string;
+  cancelled_by?: number;
+  created_by?: number;
+  created_at: string;
+  updated_at: string;
+  
+  // Relationships
+  patient?: Person;
+  doctor?: Person;
+  office?: Office;
+  appointment_type_rel?: AppointmentType;
+}
+
+// ============================================================================
+// UPDATED EXISTING TYPES
+// ============================================================================
+
+export interface AppointmentFormData {
+  patient_id: number;
+  doctor_id: number;
+  appointment_date: string;
+  end_time?: string;
+  appointment_type_id: number;
+  office_id?: number;
+  consultation_type?: string;
+  status?: string;
+  priority?: string;
+  reason: string;
+  notes?: string;
+  preparation_instructions?: string;
+  follow_up_required?: boolean;
+  follow_up_date?: string;
+  room_number?: string;
+  estimated_cost?: number;
+  insurance_covered?: boolean;
+  confirmation_required?: boolean;
+  confirmed_at?: string;
+  reminder_sent?: boolean;
+  reminder_sent_at?: string;
+  cancelled_reason?: string;
+  cancelled_at?: string;
+  cancelled_by?: number;
+  created_by?: number;
+}
+
+export interface DoctorProfile {
+  id: number;
+  person_code: string;
+  person_type: string;
+  title?: string;
+  first_name: string;
+  paternal_surname: string;
+  maternal_surname?: string;
+  curp?: string;
+  rfc?: string;
+  birth_date?: string;
+  gender: string;
+  civil_status?: string;
+  birth_city?: string;
+  birth_state_id?: number;
+  birth_country_id?: number;
+  email?: string;
+  primary_phone?: string;
+  home_address?: string;
+  address_city?: string;
+  address_state_id?: number;
+  address_country_id?: number;
+  address_postal_code?: string;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  emergency_contact_relationship?: string;
+  online_consultation_url?: string;
+  appointment_duration?: number;
+  professional_license?: string;
+  specialty_id?: number;
+  specialty_license?: string;
+  university?: string;
+  graduation_year?: number;
+  subspecialty?: string;
+  digital_signature?: string;
+  professional_seal?: string;
+  is_active: boolean;
+  last_login?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: number;
+  offices?: Office[];
+}

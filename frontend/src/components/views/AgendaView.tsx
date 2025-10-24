@@ -27,6 +27,7 @@ import {
   Today as TodayIcon,
   CalendarMonth as CalendarIcon,
   AccessTime as TimeIcon,
+  LocationOn as LocationOnIcon,
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
   WhatsApp as WhatsAppIcon
@@ -60,7 +61,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
   cancelAppointment,
   refreshAppointments
 }) => {
-  const [localSelectedDate, setLocalSelectedDate] = useState(selectedDate);
+  const [localSelectedDate, setLocalSelectedDate] = useState(selectedDate || new Date());
   const { showSuccess, showError } = useToast();
   const [sendingWhatsApp, setSendingWhatsApp] = useState<number | null>(null);
 
@@ -164,23 +165,24 @@ const AgendaView: React.FC<AgendaViewProps> = ({
     }
   };
 
-  const filteredAppointments = getFilteredAppointments(localSelectedDate, agendaView);
+  const currentDate = localSelectedDate && !isNaN(localSelectedDate.getTime()) ? localSelectedDate : new Date();
+  const filteredAppointments = getFilteredAppointments(currentDate, agendaView);
 
   // Navegación de fechas
   const handleDateNavigation = (direction: 'prev' | 'next') => {
     let newDate: Date;
     switch (agendaView) {
       case 'daily':
-        newDate = addDays(localSelectedDate, direction === 'next' ? 1 : -1);
+        newDate = addDays(currentDate, direction === 'next' ? 1 : -1);
         break;
       case 'weekly':
-        newDate = addWeeks(localSelectedDate, direction === 'next' ? 1 : -1);
+        newDate = addWeeks(currentDate, direction === 'next' ? 1 : -1);
         break;
       case 'monthly':
-        newDate = addMonths(localSelectedDate, direction === 'next' ? 1 : -1);
+        newDate = addMonths(currentDate, direction === 'next' ? 1 : -1);
         break;
       default:
-        newDate = localSelectedDate;
+        newDate = currentDate;
     }
     setLocalSelectedDate(newDate);
     setSelectedDate?.(newDate);
@@ -194,23 +196,27 @@ const AgendaView: React.FC<AgendaViewProps> = ({
 
   // Obtener rango de fechas para el título
   const getDateRangeTitle = () => {
+    // Validar que localSelectedDate sea una fecha válida
+    const currentDate = localSelectedDate && !isNaN(localSelectedDate.getTime()) ? localSelectedDate : new Date();
+    
     switch (agendaView) {
       case 'daily':
-        return format(localSelectedDate, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es });
+        return format(currentDate, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es });
       case 'weekly':
-        const weekStart = startOfWeek(localSelectedDate, { weekStartsOn: 1 });
-        const weekEnd = endOfWeek(localSelectedDate, { weekStartsOn: 1 });
+        const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
+        const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 });
         return `${format(weekStart, 'd MMM', { locale: es })} - ${format(weekEnd, 'd MMM yyyy', { locale: es })}`;
       case 'monthly':
-        return format(localSelectedDate, 'MMMM yyyy', { locale: es });
+        return format(currentDate, 'MMMM yyyy', { locale: es });
       default:
-        return format(localSelectedDate, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es });
+        return format(currentDate, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es });
     }
   };
 
   // Renderizar vista semanal
   const renderWeeklyView = () => {
-    const weekStart = startOfWeek(localSelectedDate, { weekStartsOn: 1 });
+    const currentDate = localSelectedDate && !isNaN(localSelectedDate.getTime()) ? localSelectedDate : new Date();
+    const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
     const weekDays = eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) });
     
     return (
@@ -250,6 +256,12 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                           <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
                             {appointment.patient?.first_name} {appointment.patient?.paternal_surname}
                           </Typography>
+                          {appointment.office && (
+                            <Typography variant="caption" sx={{ fontSize: '0.65rem', display: 'block', mt: 0.5 }}>
+                              📍 {appointment.office.name}
+                              {appointment.office.is_virtual && ' (Virtual)'}
+                            </Typography>
+                          )}
                           <Chip
                             label={getStatusLabel(appointment.status)}
                             size="small"
@@ -275,8 +287,9 @@ const AgendaView: React.FC<AgendaViewProps> = ({
 
   // Renderizar vista mensual
   const renderMonthlyView = () => {
-    const monthStart = startOfMonth(localSelectedDate);
-    const monthEnd = endOfMonth(localSelectedDate);
+    const currentDate = localSelectedDate && !isNaN(localSelectedDate.getTime()) ? localSelectedDate : new Date();
+    const monthStart = startOfMonth(currentDate);
+    const monthEnd = endOfMonth(currentDate);
     const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
     const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
     const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
@@ -305,7 +318,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                   const dayAppointments = appointments.filter(apt => 
                     isSameDay(new Date(apt.date_time), day)
                   );
-                  const isCurrentMonth = isSameMonth(day, localSelectedDate);
+                  const isCurrentMonth = isSameMonth(day, currentDate);
                   const isToday = isSameDay(day, new Date());
                   
                   return (
@@ -399,6 +412,18 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                     <TimeIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: 'middle' }} />
                     {formatTime(appointment.date_time)}
                   </Typography>
+                  {appointment.office && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                      <LocationOnIcon sx={{ fontSize: 14, mr: 0.5, verticalAlign: 'middle' }} />
+                      {appointment.office.name}
+                      {appointment.office.address && ` - ${appointment.office.address}`}
+                      {appointment.office.is_virtual && appointment.office.virtual_url && (
+                        <span style={{ color: '#1976d2' }}>
+                          {' '}(Virtual: {appointment.office.virtual_url})
+                        </span>
+                      )}
+                    </Typography>
+                  )}
                   {appointment.reason && (
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                       Motivo: {appointment.reason}
@@ -454,8 +479,16 @@ const AgendaView: React.FC<AgendaViewProps> = ({
     <Box sx={{ p: 3 }}>
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <CalendarIcon />
+        <Typography 
+          variant="h4" 
+          sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1,
+            fontSize: { xs: '1.5rem', sm: '2rem' }
+          }}
+        >
+          <CalendarIcon sx={{ color: 'text.primary' }} />
           Agenda Médica
         </Typography>
         <Button

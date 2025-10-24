@@ -63,12 +63,16 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
 
   // Fetch prescriptions for a consultation
   const fetchPrescriptions = useCallback(async (consultationId: string) => {
+    console.log('💊 fetchPrescriptions called with consultationId:', consultationId);
     setIsLoading(true);
     setError(null);
     
     try {
       const response = await apiService.get(`/api/consultations/${consultationId}/prescriptions`);
-      setPrescriptions(response.data || []);
+      console.log('💊 fetchPrescriptions response:', response);
+      const prescriptionsData = response.data || response;
+      console.log('💊 fetchPrescriptions data:', prescriptionsData);
+      setPrescriptions(prescriptionsData || []);
     } catch (err) {
       console.error('❌ Error fetching prescriptions:', err);
       setError('Error al cargar las prescripciones');
@@ -81,11 +85,54 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
   // Fetch medications (for autocomplete)
   const fetchMedications = useCallback(async (search?: string) => {
     try {
+      console.log('💊 fetchMedications called with search:', search);
+      console.log('💊 fetchMedications function exists:', !!fetchMedications);
       const params = search ? `?search=${encodeURIComponent(search)}` : '';
-      const response = await apiService.get(`/api/medications${params}`);
-      setMedications(response.data || []);
+      const url = `/api/medications${params}`;
+      console.log('🌐 Making request to:', url);
+      
+      // Debug: Check token
+      const token = localStorage.getItem('token');
+      console.log('🔐 Token check:', {
+        exists: !!token,
+        length: token?.length || 0,
+        isValidFormat: token ? token.split('.').length === 3 : false
+      });
+      
+      const response = await apiService.get(url);
+      console.log('✅ Medications response:', response);
+      console.log('✅ Medications response.data:', response.data);
+      console.log('✅ Medications response.data type:', typeof response.data);
+      console.log('✅ Medications response.data length:', response.data?.length || 0);
+      
+      // Handle different response structures (same as diagnoses)
+      let medicationsArray = [];
+      if (Array.isArray(response.data)) {
+        console.log('✅ Using response.data (array)');
+        medicationsArray = response.data;
+      } else if (Array.isArray(response)) {
+        console.log('✅ Using response directly (array)');
+        medicationsArray = response;
+      } else if (response && typeof response === 'object') {
+        console.log('✅ Response is object, checking for array properties');
+        console.log('✅ Response keys:', Object.keys(response));
+        // Try to find the array in the response
+        for (const key in response) {
+          if (Array.isArray(response[key])) {
+            console.log(`✅ Found array in key: ${key}`);
+            medicationsArray = response[key];
+            break;
+          }
+        }
+      }
+      
+      console.log('✅ Final medications array:', medicationsArray);
+      console.log('✅ Final medications array length:', medicationsArray.length);
+      
+      setMedications(medicationsArray);
     } catch (err) {
       console.error('❌ Error fetching medications:', err);
+      console.error('❌ Error response:', err.response?.data);
       setMedications([]);
     }
   }, []);

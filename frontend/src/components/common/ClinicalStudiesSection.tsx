@@ -37,7 +37,7 @@ interface ClinicalStudiesSectionProps {
   isLoading?: boolean;
   onAddStudy: () => void;
   onEditStudy: (study: ClinicalStudy) => void;
-  onDeleteStudy: (studyId: string) => void;
+  onRemoveStudy: (studyId: string) => void;
   onViewFile?: (fileUrl: string) => void;
   onDownloadFile?: (fileUrl: string, fileName: string) => void;
 }
@@ -49,7 +49,7 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
   isLoading = false,
   onAddStudy,
   onEditStudy,
-  onDeleteStudy,
+  onRemoveStudy,
   onViewFile,
   onDownloadFile
 }) => {
@@ -93,7 +93,7 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
   };
 
   useEffect(() => {
-    const consultationStudies = studies.filter(study => {
+    const consultationStudies = (studies || []).filter(study => {
       // Handle both string and number comparisons
       const studyConsultationId = study.consultation_id;
       const studyPatientId = study.patient_id;
@@ -362,7 +362,7 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
                   </Box>
                   <Box sx={{ display: 'flex', gap: 0.5 }}>
                     <Tooltip title="Eliminar estudio">
-                      <IconButton size="small" color="error" onClick={() => onDeleteStudy(study.id)}>
+                      <IconButton size="small" color="error" onClick={() => onRemoveStudy(study.id)}>
                         <DeleteIcon sx={{ fontSize: 16 }} />
                       </IconButton>
                     </Tooltip>

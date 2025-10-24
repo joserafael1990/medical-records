@@ -22,9 +22,8 @@ def now_cdmx() -> datetime:
 
 def get_doctor_timezone(db: Session, doctor_id: int) -> str:
     """Get doctor's office timezone from database"""
-    doctor = db.query(Person).filter(Person.id == doctor_id).first()
-    if doctor and doctor.office_timezone:
-        return doctor.office_timezone
+    # Use default timezone since office_timezone was moved to Office table
+    # In a full implementation, this would query the offices table
     return 'America/Mexico_City'  # Default fallback
 
 def now_in_timezone(timezone_str: str = 'America/Mexico_City') -> datetime:
@@ -67,8 +66,17 @@ class AppointmentService:
         if doctor_id:
             doctor = db.query(Person).filter(Person.id == doctor_id).first()
             if doctor:
-                doctor_timezone = doctor.office_timezone if doctor.office_timezone else 'America/Mexico_City'
+                # Use default timezone since office_timezone was moved to Office table
+                doctor_timezone = 'America/Mexico_City'  # Default timezone
                 duration_minutes = doctor.appointment_duration if doctor.appointment_duration else 30
+                
+                # If appointment has office_id, get timezone from office
+                office_id = appointment_data.get('office_id')
+                if office_id:
+                    from database import Office
+                    office = db.query(Office).filter(Office.id == office_id).first()
+                    if office:
+                        doctor_timezone = office.timezone
         
         # Calculate end_time based on appointment_date and doctor's appointment_duration
         start_time = appointment_data['appointment_date']

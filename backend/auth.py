@@ -211,7 +211,7 @@ def login_user(db: Session, email: str, password: str) -> Dict[str, Any]:
             "university": user.university,
             "graduation_year": user.graduation_year,
             "subspecialty": user.subspecialty,
-            "office_address": user.office_address,                            # ENGLISH: consultorio_direccion → office_address
+            "office_address": None,  # Moved to offices table
             "curp": user.curp,
             "rfc": user.rfc,
         })

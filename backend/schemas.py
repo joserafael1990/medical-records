@@ -53,6 +53,58 @@ class City(CityBase):
     state: Optional[State] = None
 
 # ============================================================================
+# OFFICE MANAGEMENT
+# ============================================================================
+
+class OfficeBase(BaseSchema):
+    name: str
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state_id: Optional[int] = None
+    country_id: Optional[int] = None
+    postal_code: Optional[str] = None
+    phone: Optional[str] = None
+    timezone: str = 'America/Mexico_City'
+    maps_url: Optional[str] = None
+    is_virtual: bool = False
+    virtual_url: Optional[str] = None
+    
+    @validator('name')
+    def validate_name(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Office name is required and cannot be empty')
+        return v.strip()
+    
+    @validator('virtual_url')
+    def validate_virtual_url(cls, v, values):
+        # Si es consultorio virtual, la URL es obligatoria
+        if values.get('is_virtual', False) and (not v or not v.strip()):
+            raise ValueError('Virtual URL is required for virtual offices')
+        return v.strip() if v else None
+
+class OfficeCreate(OfficeBase):
+    pass
+
+class OfficeUpdate(OfficeBase):
+    name: Optional[str] = None
+    timezone: Optional[str] = None
+
+class Office(OfficeBase):
+    id: int
+    doctor_id: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+class AppointmentTypeBase(BaseSchema):
+    name: str
+    active: bool = True
+
+class AppointmentType(AppointmentTypeBase):
+    id: int
+    created_at: datetime
+
+# ============================================================================
 # AUXILIARY CATALOGS
 # ============================================================================
 
@@ -134,11 +186,8 @@ class DoctorCreate(PersonBase):
     username: Optional[str] = None
     password: str
     
-    # Professional address
-    office_address: Optional[str] = None
-    office_postal_code: Optional[str] = None
-    office_phone: Optional[str] = None
-    office_timezone: Optional[str] = 'America/Mexico_City'  # Doctor office timezone
+    # Online consultation
+    online_consultation_url: Optional[str] = None
     appointment_duration: Optional[int] = None  # Duration in minutes
     
     # Professional data
@@ -178,14 +227,12 @@ class DoctorUpdate(BaseSchema):
     address_country_id: Optional[int] = None
     address_postal_code: Optional[str] = None
     
-    # Professional address
-    office_address: Optional[str] = None
-    office_city: Optional[str] = None  # Free text field for office city
-    office_state_id: Optional[int] = None  # FK to states table
-    office_postal_code: Optional[str] = None
-    office_phone: Optional[str] = None
-    office_timezone: Optional[str] = 'America/Mexico_City'  # Doctor office timezone
+    # Online consultation
+    online_consultation_url: Optional[str] = None
     appointment_duration: Optional[int] = None  # Duration in minutes
+    
+    # Offices
+    offices: List[OfficeCreate] = []
     
     # Professional data
     professional_license: Optional[str] = None
@@ -240,11 +287,8 @@ class PersonUpdate(BaseSchema):
     address_country_id: Optional[int] = None
     address_postal_code: Optional[str] = None
     
-    # Professional address (doctors)
-    office_address: Optional[str] = None
-    office_postal_code: Optional[str] = None
-    office_phone: Optional[str] = None
-    office_timezone: Optional[str] = 'America/Mexico_City'  # Doctor office timezone
+    # Online consultation (doctors)
+    online_consultation_url: Optional[str] = None
     appointment_duration: Optional[int] = None  # Duration in minutes
     
     # Professional data (doctors)
@@ -280,7 +324,7 @@ class Person(PersonBase):
     specialty: Optional[Specialty] = None
     birth_state: Optional[State] = None
     address_state: Optional[State] = None
-    office_state: Optional[State] = None
+    offices: Optional[List[Office]] = None
 
 # ============================================================================
 # MEDICAL RECORDS
@@ -303,6 +347,10 @@ class MedicalRecordBase(BaseSchema):
     treatment_plan: str
     follow_up_instructions: str
     prognosis: str
+    
+    # Appointment type and office
+    appointment_type_id: int
+    office_id: Optional[int] = None
     
     # First-time consultation fields (removed duplicate _story fields)
     # These fields are now handled by the existing _history fields:
@@ -367,7 +415,9 @@ class AppointmentBase(BaseSchema):
     doctor_id: int
     appointment_date: datetime
     end_time: Optional[datetime] = None  # Now optional - calculated automatically by backend
-    appointment_type: str = 'consulta'
+    appointment_type_id: int
+    office_id: Optional[int] = None
+    consultation_type: str = 'Seguimiento'  # 'Primera vez' or 'Seguimiento'
     status: str = 'confirmed'
     priority: str = 'normal'
     reason: str
@@ -383,9 +433,12 @@ class AppointmentCreate(AppointmentBase):
     pass
 
 class AppointmentUpdate(BaseSchema):
+    patient_id: Optional[int] = None
     appointment_date: Optional[datetime] = None
     end_time: Optional[datetime] = None
-    appointment_type: Optional[str] = None
+    appointment_type_id: Optional[int] = None
+    office_id: Optional[int] = None
+    consultation_type: Optional[str] = None
     status: Optional[str] = None
     priority: Optional[str] = None
     reason: Optional[str] = None

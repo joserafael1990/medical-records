@@ -139,7 +139,7 @@ export const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
           <DialogContent>
             <Box sx={{ pt: 1 }}>
               <Autocomplete
-                options={availableStudies}
+                options={availableStudies || []}
                 getOptionLabel={(option) => option.name || option.study_name}
                 value={selectedStudy}
                 onChange={(event, newValue) => setSelectedStudy(newValue)}

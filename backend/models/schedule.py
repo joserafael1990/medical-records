@@ -16,7 +16,8 @@ class ScheduleTemplate(Base):
     __tablename__ = "schedule_templates"
     
     id = Column(Integer, primary_key=True, index=True)
-    doctor_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
+    doctor_id = Column(Integer, ForeignKey("persons.id"), nullable=True)  # Keep for compatibility
+    office_id = Column(Integer, ForeignKey("offices.id"), nullable=False)
     
     # Día de la semana (0=Lunes, 1=Martes, ..., 6=Domingo)
     day_of_week = Column(Integer, nullable=False)  # 0-6
@@ -42,8 +43,8 @@ class ScheduleTemplate(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relaciones - temporarily commented out to fix initialization
-    # doctor = relationship("DoctorProfile", back_populates="schedule_templates")
+    # Relaciones
+    # office = relationship("Office", back_populates="schedule_templates")
     schedule_exceptions = relationship("ScheduleException", back_populates="template")
 
 class ScheduleException(Base):

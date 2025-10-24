@@ -15,7 +15,9 @@ import {
   CalendarToday as CalendarIcon,
   WhatsApp as WhatsAppIcon,
   Analytics as AnalyticsIcon,
-  Palette as StyleGuideIcon
+  Palette as StyleGuideIcon,
+  BugReport as DebugIcon,
+  Business as BusinessIcon
 } from '@mui/icons-material';
 
 interface MainNavigationProps {
@@ -49,6 +51,11 @@ export const MainNavigation: React.FC<MainNavigationProps> = ({
       icon: <CalendarIcon />
     },
     {
+      id: 'offices',
+      label: 'Consultorios',
+      icon: <BusinessIcon />
+    },
+    {
       id: 'whatsapp',
       label: 'WhatsApp',
       icon: <WhatsAppIcon />
@@ -57,6 +64,11 @@ export const MainNavigation: React.FC<MainNavigationProps> = ({
       id: 'analytics',
       label: 'Analíticas',
       icon: <AnalyticsIcon />
+    },
+    {
+      id: 'debug',
+      label: 'Debug',
+      icon: <DebugIcon />
     }
   ];
 
