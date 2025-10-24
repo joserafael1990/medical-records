@@ -321,17 +321,47 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
           </Card>
         </Box>
 
-        {/* Office Information */}
+        {/* Enhanced Office Information */}
         <Card sx={{ mt: 3 }}>
           <CardContent>
-            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <LocationIcon color="primary" />
-              Información del Consultorio
-                  </Typography>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <LocationIcon color="primary" />
+                Consultorios
+              </Typography>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<EditIcon />}
+                onClick={onEdit}
+              >
+                Gestionar Consultorios
+              </Button>
+            </Box>
+            
+            {/* Office Cards */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
+              {/* Main Office Card */}
+              <Card variant="outlined" sx={{ p: 2, bgcolor: 'primary.50' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                  <Avatar sx={{ bgcolor: 'primary.main' }}>
+                    <LocationIcon />
+                  </Avatar>
                   <Box>
+                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                      {doctorProfile.office_name || 'Consultorio Principal'}
+                    </Typography>
+                    <Chip 
+                      label="Presencial" 
+                      color="success" 
+                      size="small" 
+                      icon={<LocationIcon sx={{ fontSize: 16 }} />}
+                    />
+                  </Box>
+                </Box>
+                
                 <List dense>
-                  <ListItem>
+                  <ListItem sx={{ px: 0 }}>
                     <ListItemIcon>
                       <LocationIcon color="action" />
                     </ListItemIcon>
@@ -340,7 +370,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                       secondary={doctorProfile.office_address || 'No especificada'} 
                     />
                   </ListItem>
-                  <ListItem>
+                  <ListItem sx={{ px: 0 }}>
                     <ListItemIcon>
                       <LocationIcon color="action" />
                     </ListItemIcon>
@@ -349,7 +379,63 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                       secondary={doctorProfile.office_city || 'No especificada'} 
                     />
                   </ListItem>
-                  <ListItem>
+                  <ListItem sx={{ px: 0 }}>
+                    <ListItemIcon>
+                      <PhoneIcon color="action" />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="Teléfono" 
+                      secondary={doctorProfile.office_phone || 'No especificado'} 
+                    />
+                  </ListItem>
+                  {doctorProfile.office_maps_url && (
+                    <ListItem sx={{ px: 0 }}>
+                      <ListItemIcon>
+                        <LocationIcon color="action" />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary="Google Maps" 
+                        secondary={
+                          <Button
+                            size="small"
+                            variant="text"
+                            onClick={() => window.open(doctorProfile.office_maps_url, '_blank')}
+                            sx={{ p: 0, textTransform: 'none' }}
+                          >
+                            Ver en Maps
+                          </Button>
+                        }
+                      />
+                    </ListItem>
+                  )}
+                </List>
+              </Card>
+              
+              {/* Additional Office Info */}
+              <Card variant="outlined" sx={{ p: 2, bgcolor: 'grey.50' }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+                  Información Adicional
+                </Typography>
+                <List dense>
+                  <ListItem sx={{ px: 0 }}>
+                    <ListItemIcon>
+                      <ScheduleIcon color="action" />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="Duración de Citas" 
+                      secondary={doctorProfile.appointment_duration ? `${doctorProfile.appointment_duration} minutos` : 'No especificada'} 
+                    />
+                  </ListItem>
+                  <ListItem sx={{ px: 0 }}>
+                    <ListItemIcon>
+                      <AccessTimeIcon color="action" />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="Zona Horaria" 
+                      secondary={doctorProfile.office_timezone || 'America/Mexico_City'} 
+                    />
+                  </ListItem>
+                  <ListItem sx={{ px: 0 }}>
                     <ListItemIcon>
                       <LocationIcon color="action" />
                     </ListItemIcon>
@@ -358,7 +444,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                       secondary={doctorProfile.office_state_name || 'No especificado'} 
                     />
                   </ListItem>
-                  <ListItem>
+                  <ListItem sx={{ px: 0 }}>
                     <ListItemIcon>
                       <LocationIcon color="action" />
                     </ListItemIcon>
@@ -368,39 +454,10 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                     />
                   </ListItem>
                 </List>
-                  </Box>
-                  <Box>
-                <List dense>
-                  <ListItem>
-                    <ListItemIcon>
-                      <PhoneIcon color="action" />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Teléfono del Consultorio" 
-                      secondary={doctorProfile.office_phone || 'No especificado'} 
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemIcon>
-                      <ScheduleIcon color="action" />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Duración de Citas" 
-                      secondary={doctorProfile.appointment_duration ? `${doctorProfile.appointment_duration} minutos` : 'No especificada'} 
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemIcon>
-                      <AccessTimeIcon color="action" />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Zona Horaria" 
-                      secondary={doctorProfile.office_timezone || 'America/Mexico_City'} 
-                    />
-                  </ListItem>
-                </List>
-                  </Box>
-                </Box>
+              </Card>
+            </Box>
+          </CardContent>
+        </Card>
               </CardContent>
             </Card>
 

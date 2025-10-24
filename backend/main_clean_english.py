@@ -3032,7 +3032,8 @@ async def register_doctor(
             'office_address': getattr(doctor_data, 'office_address', None),
             'office_city': getattr(doctor_data, 'office_city', None),
             'office_state_id': getattr(doctor_data, 'office_state_id', None),
-            'office_phone': getattr(doctor_data, 'office_phone', None)
+            'office_phone': getattr(doctor_data, 'office_phone', None),
+            'office_maps_url': getattr(doctor_data, 'office_maps_url', None)
         }
         
         # Check if any office data is provided
@@ -3051,6 +3052,7 @@ async def register_doctor(
                     city=office_data['office_city'],
                     state_id=office_data['office_state_id'],
                     phone=office_data['office_phone'],
+                    maps_url=office_data['office_maps_url'],
                     is_active=True,
                     timezone='America/Mexico_City'
                 )

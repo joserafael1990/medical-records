@@ -209,6 +209,7 @@ class DoctorCreate(PersonBase):
     office_city: Optional[str] = None
     office_state_id: Optional[int] = None
     office_phone: Optional[str] = None
+    office_maps_url: Optional[str] = None
 
 # Professional data for doctor updates (optional fields for partial updates)
 class DoctorUpdate(BaseSchema):

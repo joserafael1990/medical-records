@@ -60,6 +60,13 @@ const OfficeDialog: React.FC<OfficeDialogProps> = ({
 
   useEffect(() => {
     if (open) {
+      setError(null);
+      loadCatalogs();
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (open && countries.length > 0) {
       if (isEditing && office) {
         console.log('🔍 Editing office:', office);
         setFormData({
@@ -90,10 +97,8 @@ const OfficeDialog: React.FC<OfficeDialogProps> = ({
           virtual_url: ''
         });
       }
-      setError(null);
-      loadCatalogs();
     }
-  }, [open, isEditing, office]);
+  }, [open, isEditing, office, countries]);
 
   const loadCatalogs = async () => {
     try {

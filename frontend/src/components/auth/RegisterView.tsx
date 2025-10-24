@@ -113,6 +113,7 @@ interface RegistrationData {
   office_state_id: string;
   office_city: string;
   office_phone: string;
+  office_maps_url: string;
   appointment_duration: string;
   
   // Step 5: Schedule Data
@@ -186,6 +187,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
     office_state_id: '',
     office_city: '',
     office_phone: '',
+    office_maps_url: '',
     appointment_duration: '',
     
     // Step 5: Schedule Data
@@ -479,6 +481,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
         appointment_duration: parseInt(formData.appointment_duration) || null,
         // Optional fields
         office_phone: formData.office_phone || '',
+        office_maps_url: formData.office_maps_url || '',
         // Schedule data
         schedule_data: formData.scheduleData,
         // System fields
@@ -1005,6 +1008,17 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
               placeholder="5551234567"
               helperText="Solo números (opcional)"
               inputProps={{ maxLength: 15 }}
+            />
+
+            {/* 5. URL de Google Maps */}
+            <TextField
+              fullWidth
+              margin="normal"
+              label="URL de Google Maps"
+              value={formData.office_maps_url}
+              onChange={handleInputChange('office_maps_url')}
+              placeholder="https://maps.google.com/..."
+              helperText="Enlace de Google Maps para ubicar el consultorio (opcional)"
             />
           </Box>
         );

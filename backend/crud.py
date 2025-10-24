@@ -149,7 +149,7 @@ def create_doctor_safe(db: Session, doctor_data: schemas.DoctorCreate) -> Person
     # Extract password and hash it, excluding fields that are not Person fields
     doctor_dict = doctor_data.dict(exclude={
         'person_type', 'password', 'schedule_data', 
-        'office_name', 'office_address', 'office_city', 'office_state_id', 'office_phone'
+        'office_name', 'office_address', 'office_city', 'office_state_id', 'office_phone', 'office_maps_url'
     })
     hashed_password = hash_password(doctor_data.password) if doctor_data.password else None
     
