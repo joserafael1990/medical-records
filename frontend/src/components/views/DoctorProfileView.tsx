@@ -458,8 +458,6 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
             </Box>
           </CardContent>
         </Card>
-              </CardContent>
-            </Card>
 
         {/* Quick Actions */}
         <Card sx={{ mt: 3 }}>
