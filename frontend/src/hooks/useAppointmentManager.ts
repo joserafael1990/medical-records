@@ -679,14 +679,18 @@ export const useAppointmentManager = (
     }
   }, [selectedDate, agendaView, showSuccessMessage, setAppointments]);
 
-  // Removed duplicate useEffect - appointments are already fetched by the main useEffect above
-
+  // Load appointments when component mounts or when agenda view changes
+  useEffect(() => {
+    console.log('🔄 useAppointmentManager - useEffect for agenda view change');
+    refreshAppointments();
+  }, [refreshAppointments]);
 
   // Refresh appointments function - can be called from child components
   const refreshAppointments = useCallback(async () => {
-    if (!user?.doctor?.id) {
-      return;
-    }
+    console.log('🔄 refreshAppointments called');
+    console.log('🔄 user?.doctor?.id:', user?.doctor?.id);
+    console.log('🔄 agendaView:', agendaView);
+    console.log('🔄 selectedDate:', selectedDate);
 
     try {
       const dateToRefresh = new Date(selectedDate);
@@ -698,6 +702,7 @@ export const useAppointmentManager = (
         const month = String(dateToRefresh.getMonth() + 1).padStart(2, '0');
         const day = String(dateToRefresh.getDate()).padStart(2, '0');
         const dateStr = `${year}-${month}-${day}`;
+        console.log('🔄 Loading daily agenda for date:', dateStr);
         data = await apiService.getDailyAgenda(dateStr);
       } else if (agendaView === 'weekly') {
         const start = new Date(dateToRefresh);
@@ -711,6 +716,7 @@ export const useAppointmentManager = (
         // Fix timezone issue for weekly view
         const startStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
         const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
+        console.log('🔄 Loading weekly agenda from:', startStr, 'to:', endStr);
         data = await apiService.getWeeklyAgenda(startStr, endStr);
       } else if (agendaView === 'monthly') {
         const start = new Date(dateToRefresh.getFullYear(), dateToRefresh.getMonth(), 1);
@@ -719,15 +725,18 @@ export const useAppointmentManager = (
         // Fix timezone issue for monthly view
         const startStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
         const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
+        console.log('🔄 Loading monthly agenda from:', startStr, 'to:', endStr);
         data = await apiService.getMonthlyAgenda(startStr, endStr);
       }
 
-      setAppointments(data);
+      console.log('🔄 Appointments loaded:', data?.length || 0, 'appointments');
+      console.log('🔄 Sample appointment:', data?.[0]);
+      setAppointments(data || []);
     } catch (error) {
-      console.error('Error refreshing appointments:', error);
+      console.error('❌ Error refreshing appointments:', error);
       setAppointments([]);
     }
-  }, [user?.doctor?.id, selectedDate, agendaView]);
+  }, [selectedDate, agendaView]);
 
   return {
     // State
