@@ -14,6 +14,7 @@ export interface Office {
   phone?: string;
   maps_url?: string;
   is_active: boolean;
+  is_virtual: boolean;
   timezone: string;
   created_at: string;
   updated_at: string;

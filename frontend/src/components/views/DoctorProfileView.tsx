@@ -36,7 +36,8 @@ import {
   AccessTime as AccessTimeIcon,
   Add as AddIcon,
   Delete as DeleteIcon,
-  Close as CloseIcon
+  Close as CloseIcon,
+  Language as LanguageIcon
 } from '@mui/icons-material';
 import DoctorProfileDialog from '../dialogs/DoctorProfileDialog';
 import ScheduleConfigDialog from '../dialogs/ScheduleConfigDialog';
@@ -466,10 +467,10 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                             {office.name}
                           </Typography>
                           <Chip 
-                            label="Presencial" 
-                            color="success" 
+                            label={office.is_virtual ? "Virtual" : "Presencial"} 
+                            color={office.is_virtual ? "primary" : "success"} 
                             size="small" 
-                            icon={<LocationIcon sx={{ fontSize: 16 }} />}
+                            icon={office.is_virtual ? <LanguageIcon sx={{ fontSize: 16 }} /> : <LocationIcon sx={{ fontSize: 16 }} />}
                           />
                         </Box>
                       </Box>
