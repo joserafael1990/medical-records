@@ -266,6 +266,10 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
   ) => {
     const value = event.target.value;
     
+    console.log('🔄 handleChange called:', { field, value });
+    console.log('🔄 Current formData before change:', currentFormData);
+    console.log('🔄 Current isExistingPatient:', isExistingPatient);
+    
     let newFormData = {
       ...currentFormData,
       [field]: value
@@ -274,14 +278,18 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
     // Si se selecciona un consultorio, determinar automáticamente el tipo de cita
     if (field === 'office_id' && value && value !== 0) {
       const selectedOffice = offices.find(office => office.id === parseInt(value));
+      console.log('🏢 Selected office:', selectedOffice);
       if (selectedOffice) {
         const appointmentTypeId = selectedOffice.is_virtual ? 2 : 1;
+        console.log('🏢 Setting appointment_type_id to:', appointmentTypeId, '(is_virtual:', selectedOffice.is_virtual, ')');
         newFormData = {
           ...newFormData,
           appointment_type_id: appointmentTypeId
         };
       }
     }
+    
+    console.log('🔄 New formData after change:', newFormData);
     
     setFormData(newFormData);
     if (onFormDataChange) {
