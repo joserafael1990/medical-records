@@ -25,13 +25,15 @@ interface OfficeManagementDialogProps {
   onClose: () => void;
   office?: any; // For editing existing office
   isEditing?: boolean;
+  onOfficeUpdated?: () => void; // Callback to refresh parent data
 }
 
 const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
   open,
   onClose,
   office,
-  isEditing = false
+  isEditing = false,
+  onOfficeUpdated
 }) => {
   const { createOffice, updateOffice, isLoading } = useOfficeManagement();
   const { countries, states, isLoading: catalogsLoading, fetchStates, loadCatalogs } = useLocationCatalogs();
@@ -114,9 +116,19 @@ const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
       setError(null);
 
       if (isEditing && office) {
+        console.log('🏢 Updating office:', office.id, formData);
         await updateOffice(office.id, formData);
+        console.log('🏢 Office updated successfully');
       } else {
+        console.log('🏢 Creating new office:', formData);
         await createOffice(formData);
+        console.log('🏢 Office created successfully');
+      }
+
+      // Call the callback to refresh parent data
+      if (onOfficeUpdated) {
+        console.log('🏢 Calling onOfficeUpdated callback');
+        onOfficeUpdated();
       }
 
       onClose();

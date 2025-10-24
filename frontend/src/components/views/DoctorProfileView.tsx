@@ -89,7 +89,8 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
     offices, 
     isLoading: officesLoading, 
     error: officesError, 
-    deleteOffice 
+    deleteOffice,
+    fetchOffices
   } = useOfficeManagement();
 
   // Office management functions
@@ -120,6 +121,11 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
         console.error('Error deleting office:', error);
       }
     }
+  };
+
+  const handleOfficeUpdated = () => {
+    console.log('🏢 Office updated, refreshing data...');
+    fetchOffices();
   };
   
 
@@ -565,6 +571,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
         onClose={() => setOfficeDialogOpen(false)}
         office={editingOffice}
         isEditing={!!editingOffice}
+        onOfficeUpdated={handleOfficeUpdated}
       />
 
       {/* Delete Confirmation Dialog */}
