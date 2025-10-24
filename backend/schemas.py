@@ -202,6 +202,12 @@ class DoctorCreate(PersonBase):
     
     # Schedule data (for registration)
     schedule_data: Optional[dict] = None
+    
+    # Office data (for registration)
+    office_address: Optional[str] = None
+    office_city: Optional[str] = None
+    office_state_id: Optional[int] = None
+    office_phone: Optional[str] = None
 
 # Professional data for doctor updates (optional fields for partial updates)
 class DoctorUpdate(BaseSchema):

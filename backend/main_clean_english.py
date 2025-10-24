@@ -2923,11 +2923,14 @@ async def register_doctor(
 ):
     """Register new doctor with automatic login"""
     try:
+        print(f"📝 Registration attempt for email: {doctor_data.email}")
         db.begin()
         
         # Check if email already exists
         existing_email = db.query(Person).filter(Person.email == doctor_data.email).first()
+        print(f"📝 Email check result: {existing_email is not None}")
         if existing_email:
+            print(f"❌ Email already exists: {doctor_data.email}")
             db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -3020,6 +3023,45 @@ async def register_doctor(
         # Commit schedule data if it was saved successfully
         if schedule_data and isinstance(schedule_data, dict):
             db.commit()
+        
+        # Create office if office data is provided
+        office_data = {
+            'office_address': getattr(doctor_data, 'office_address', None),
+            'office_city': getattr(doctor_data, 'office_city', None),
+            'office_state_id': getattr(doctor_data, 'office_state_id', None),
+            'office_phone': getattr(doctor_data, 'office_phone', None)
+        }
+        
+        # Check if any office data is provided
+        has_office_data = any(value is not None and value != '' for value in office_data.values())
+        
+        if has_office_data:
+            try:
+                api_logger.info(f"Creating office for doctor {doctor.id}", office_data=office_data)
+                
+                # Create office record
+                office = Office(
+                    doctor_id=doctor.id,
+                    name=f"Consultorio de {doctor.title} {doctor.first_name} {doctor.paternal_surname}",
+                    address=office_data['office_address'],
+                    city=office_data['office_city'],
+                    state_id=office_data['office_state_id'],
+                    phone=office_data['office_phone'],
+                    is_active=True,
+                    timezone='America/Mexico_City'
+                )
+                
+                db.add(office)
+                db.commit()
+                db.refresh(office)
+                
+                api_logger.info(f"Successfully created office {office.id} for doctor {doctor.id}")
+                
+            except Exception as office_error:
+                # Log the error but don't fail the registration
+                api_logger.error(f"Error creating office for doctor {doctor.id}: {str(office_error)}")
+                db.rollback()
+                # Doctor creation is already committed, so this is OK
         
         # Login the newly created doctor (doctor is already in the database)
         login_response = auth.login_user(db, doctor_data.email, doctor_data.password)

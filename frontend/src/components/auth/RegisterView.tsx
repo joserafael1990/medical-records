@@ -501,7 +501,11 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
       }
 
     } catch (error: any) {
-      console.error('Registration error:', error);
+      console.error('❌ Registration error:', error);
+      console.error('❌ Error type:', typeof error);
+      console.error('❌ Error detail:', error.detail);
+      console.error('❌ Error response:', error.response);
+      console.error('❌ Error status:', error.status);
       
       // Extract specific error message from API response
       let errorMessage = 'Error durante el registro. Intenta nuevamente.';
@@ -509,19 +513,27 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
       // The API service transforms errors into ApiError format with { detail: string, status: number }
       if (error.detail) {
         // Use the specific error message from the API service
+        console.log('✅ Using error.detail:', error.detail);
         errorMessage = error.detail;
       } else if (error.response?.data?.detail) {
         // Fallback: Use the raw response if available
+        console.log('✅ Using error.response.data.detail:', error.response.data.detail);
         errorMessage = error.response.data.detail;
       } else if (error.status === 400 || error.response?.status === 400) {
+        console.log('✅ Using 400 error message');
         errorMessage = 'Los datos proporcionados no son válidos. Por favor, revise la información.';
       } else if (error.status === 500 || error.response?.status === 500) {
+        console.log('✅ Using 500 error message');
         errorMessage = 'Error interno del servidor. Por favor, intente nuevamente más tarde.';
       } else if (error.message) {
+        console.log('✅ Using error.message:', error.message);
         errorMessage = error.message;
       }
       
+      console.log('✅ Final error message:', errorMessage);
+      console.log('✅ Setting error state with:', errorMessage);
       setError(errorMessage);
+      console.log('✅ Error state set, current error:', error);
     } finally {
       setIsLoading(false);
     }
@@ -1286,6 +1298,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
                 <Typography color="white">{error}</Typography>
               </Box>
             )}
+            {console.log('🔍 Render - error state:', error)}
 
             <Box sx={{ width: '100%', mt: 3 }}>
               <Box sx={{ mb: 3 }}>
