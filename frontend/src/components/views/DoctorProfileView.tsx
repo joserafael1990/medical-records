@@ -40,7 +40,7 @@ import {
 } from '@mui/icons-material';
 import DoctorProfileDialog from '../dialogs/DoctorProfileDialog';
 import ScheduleConfigDialog from '../dialogs/ScheduleConfigDialog';
-import OfficeManagementDialog from '../dialogs/OfficeManagementDialog';
+import OfficeDialog from '../dialogs/OfficeDialog';
 import { useOfficeManagement } from '../../hooks/useOfficeManagement';
 
 interface DoctorProfileViewProps {
@@ -90,7 +90,9 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
     isLoading: officesLoading, 
     error: officesError, 
     deleteOffice,
-    fetchOffices
+    fetchOffices,
+    createOffice,
+    updateOffice
   } = useOfficeManagement();
 
   // Office management functions
@@ -123,9 +125,23 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
     }
   };
 
-  const handleOfficeUpdated = () => {
-    console.log('🏢 Office updated, refreshing data...');
-    fetchOffices();
+  const handleSaveOffice = async (office: any) => {
+    try {
+      console.log('🏢 Saving office:', office);
+      if (editingOffice) {
+        console.log('🏢 Updating existing office:', editingOffice.id);
+        await updateOffice(editingOffice.id, office);
+      } else {
+        console.log('🏢 Creating new office');
+        await createOffice(office);
+      }
+      setOfficeDialogOpen(false);
+      setEditingOffice(null);
+      // Refresh the offices list
+      fetchOffices();
+    } catch (err) {
+      console.error('Error saving office:', err);
+    }
   };
   
 
@@ -565,13 +581,16 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
         onSave={() => setScheduleConfigDialogOpen(false)}
       />
 
-      {/* Office Management Dialog */}
-      <OfficeManagementDialog
+      {/* Office Dialog */}
+      <OfficeDialog
         open={officeDialogOpen}
-        onClose={() => setOfficeDialogOpen(false)}
+        onClose={() => {
+          setOfficeDialogOpen(false);
+          setEditingOffice(null);
+        }}
+        onSave={handleSaveOffice}
         office={editingOffice}
         isEditing={!!editingOffice}
-        onOfficeUpdated={handleOfficeUpdated}
       />
 
       {/* Delete Confirmation Dialog */}
