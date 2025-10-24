@@ -13,6 +13,7 @@ export interface Office {
   country_name?: string;
   phone?: string;
   maps_url?: string;
+  virtual_url?: string;
   is_active: boolean;
   is_virtual: boolean;
   timezone: string;
@@ -28,6 +29,8 @@ export interface OfficeFormData {
   country_id: number | null;
   phone: string;
   maps_url: string;
+  virtual_url: string;
+  is_virtual: boolean;
   timezone: string;
 }
 
@@ -75,8 +78,12 @@ export const useOfficeManagement = () => {
   const updateOffice = useCallback(async (officeId: number, officeData: Partial<OfficeFormData>) => {
     try {
       console.log('🏢 Updating office:', officeId, officeData);
+      console.log('🏢 Office data keys:', Object.keys(officeData));
+      console.log('🏢 Office data values:', Object.values(officeData));
+      console.log('🏢 maps_url value:', officeData.maps_url);
       const response = await apiService.put(`/api/offices/${officeId}`, officeData);
       console.log('🏢 Update office response:', response);
+      console.log('🏢 Response data:', response.data);
       const updatedOffice = response.data || response;
       setOffices(prev => prev.map(office => 
         office.id === officeId ? updatedOffice : office
@@ -84,6 +91,7 @@ export const useOfficeManagement = () => {
       return updatedOffice;
     } catch (err: any) {
       console.error('❌ Error updating office:', err);
+      console.error('❌ Error details:', err.response?.data);
       throw err;
     }
   }, []);
