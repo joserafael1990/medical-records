@@ -679,12 +679,6 @@ export const useAppointmentManager = (
     }
   }, [selectedDate, agendaView, showSuccessMessage, setAppointments]);
 
-  // Load appointments when component mounts or when agenda view changes
-  useEffect(() => {
-    console.log('🔄 useAppointmentManager - useEffect for agenda view change');
-    refreshAppointments();
-  }, [refreshAppointments]);
-
   // Refresh appointments function - can be called from child components
   const refreshAppointments = useCallback(async () => {
     console.log('🔄 refreshAppointments called');
@@ -737,6 +731,12 @@ export const useAppointmentManager = (
       setAppointments([]);
     }
   }, [selectedDate, agendaView]);
+
+  // Load appointments when component mounts or when agenda view changes
+  useEffect(() => {
+    console.log('🔄 useAppointmentManager - useEffect for agenda view change');
+    refreshAppointments();
+  }, [refreshAppointments]);
 
   return {
     // State
