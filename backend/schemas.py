@@ -204,6 +204,7 @@ class DoctorCreate(PersonBase):
     schedule_data: Optional[dict] = None
     
     # Office data (for registration)
+    office_name: Optional[str] = None
     office_address: Optional[str] = None
     office_city: Optional[str] = None
     office_state_id: Optional[int] = None

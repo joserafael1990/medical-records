@@ -2990,16 +2990,17 @@ async def register_doctor(
                             start_time = first_block.get('start_time', '09:00')
                             end_time = first_block.get('end_time', '17:00')
                             
-                            # Insert into schedule_templates table
+                            # Insert into schedule_templates table with time_blocks
                             insert_query = text("""
                                 INSERT INTO schedule_templates 
-                                (doctor_id, day_of_week, start_time, end_time, consultation_duration, is_active, created_at, updated_at)
-                                VALUES (:doctor_id, :day_of_week, :start_time, :end_time, :consultation_duration, :is_active, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                                (doctor_id, day_of_week, start_time, end_time, consultation_duration, is_active, time_blocks, created_at, updated_at)
+                                VALUES (:doctor_id, :day_of_week, :start_time, :end_time, :consultation_duration, :is_active, :time_blocks, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                                 ON CONFLICT (doctor_id, day_of_week) 
                                 DO UPDATE SET 
                                     start_time = EXCLUDED.start_time,
                                     end_time = EXCLUDED.end_time,
                                     is_active = EXCLUDED.is_active,
+                                    time_blocks = EXCLUDED.time_blocks,
                                     updated_at = CURRENT_TIMESTAMP
                             """)
                             
@@ -3009,7 +3010,8 @@ async def register_doctor(
                                 'start_time': start_time,
                                 'end_time': end_time,
                                 'consultation_duration': doctor.appointment_duration or 30,
-                                'is_active': is_active
+                                'is_active': is_active,
+                                'time_blocks': json.dumps(time_blocks)  # Convert to JSON string
                             })
                 
                 api_logger.info(f"Successfully saved schedule data for doctor {doctor.id}")
@@ -3026,6 +3028,7 @@ async def register_doctor(
         
         # Create office if office data is provided
         office_data = {
+            'office_name': getattr(doctor_data, 'office_name', None),
             'office_address': getattr(doctor_data, 'office_address', None),
             'office_city': getattr(doctor_data, 'office_city', None),
             'office_state_id': getattr(doctor_data, 'office_state_id', None),
@@ -3040,9 +3043,10 @@ async def register_doctor(
                 api_logger.info(f"Creating office for doctor {doctor.id}", office_data=office_data)
                 
                 # Create office record
+                office_name = office_data['office_name'] or f"Consultorio de {doctor.title} {doctor.first_name} {doctor.paternal_surname}"
                 office = Office(
                     doctor_id=doctor.id,
-                    name=f"Consultorio de {doctor.title} {doctor.first_name} {doctor.paternal_surname}",
+                    name=office_name,
                     address=office_data['office_address'],
                     city=office_data['office_city'],
                     state_id=office_data['office_state_id'],

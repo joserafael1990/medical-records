@@ -107,6 +107,7 @@ interface RegistrationData {
   professional_license: string;
   
   // Step 4: Office Data
+  office_name: string;
   office_address: string;
   office_country: string;
   office_state_id: string;
@@ -179,6 +180,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
     professional_license: '',
     
     // Step 4
+    office_name: '',
     office_address: '',
     office_country: 'México',
     office_state_id: '',
@@ -385,7 +387,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
         return true;
       
       case 3:
-        const requiredStep3Fields = ['office_address', 'office_city', 'office_state_id', 'appointment_duration'];
+        const requiredStep3Fields = ['office_name', 'office_address', 'office_city', 'office_state_id', 'appointment_duration'];
         const missingStep3Fields = requiredStep3Fields.filter(field => !formData[field as keyof RegistrationData]);
         if (missingStep3Fields.length > 0) {
           setError('Por favor, completa todos los campos obligatorios');
@@ -470,6 +472,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
         specialty_id: parseInt(formData.specialty) || null,
         university: formData.university,
         graduation_year: formData.graduation_year,
+        office_name: formData.office_name,
         office_address: formData.office_address,
         office_city: formData.office_city,
         office_state_id: parseInt(formData.office_state_id) || null,
@@ -883,6 +886,17 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
             </Typography>
             
             {/* 1. Dirección */}
+            <TextField
+              fullWidth
+              margin="normal"
+              label="Nombre del Consultorio"
+              value={formData.office_name}
+              onChange={handleInputChange('office_name')}
+              placeholder="Consultorio Médico Dr. García"
+              helperText="Nombre que aparecerá en las citas"
+              required
+            />
+
             <TextField
               fullWidth
               margin="normal"
