@@ -80,7 +80,7 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
     appointment_date: '',
     appointment_type_id: 1, // Default to "Presencial"
     office_id: 0, // Changed from undefined to 0
-    consultation_type: 'Seguimiento', // Default to "Seguimiento"
+    consultation_type: '', // No default value
     reason: '',
     notes: ''
   });
@@ -466,11 +466,12 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
             <FormControl fullWidth required>
               <InputLabel>Tipo de Consulta</InputLabel>
               <Select
-                value={currentFormData.consultation_type || 'Seguimiento'}
+                value={currentFormData.consultation_type || ''}
                 onChange={handleChange('consultation_type')}
                 label="Tipo de Consulta"
                 MenuProps={getMediumSelectMenuProps()}
               >
+                <MenuItem value=""><em>Seleccione un tipo</em></MenuItem>
                 <MenuItem value="Primera vez">Primera vez</MenuItem>
                 <MenuItem value="Seguimiento">Seguimiento</MenuItem>
               </Select>
