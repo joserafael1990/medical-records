@@ -18,6 +18,7 @@ import {
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import { useOfficeManagement, OfficeFormData } from '../../hooks/useOfficeManagement';
+import { useLocationCatalogs } from '../../hooks/useLocationCatalogs';
 
 interface OfficeManagementDialogProps {
   open: boolean;
@@ -33,6 +34,7 @@ const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
   isEditing = false
 }) => {
   const { createOffice, updateOffice, isLoading } = useOfficeManagement();
+  const { countries, states, isLoading: catalogsLoading, fetchStates } = useLocationCatalogs();
   const [formData, setFormData] = useState<OfficeFormData>({
     name: '',
     address: '',
@@ -46,14 +48,12 @@ const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Load countries and states (you might want to create a hook for this)
-  const [countries, setCountries] = useState<any[]>([]);
-  const [states, setStates] = useState<any[]>([]);
-
   useEffect(() => {
+    console.log('🏢 OfficeManagementDialog useEffect:', { open, isEditing, office });
     if (open) {
       setError(null);
       if (isEditing && office) {
+        console.log('🏢 Setting form data for editing office:', office);
         setFormData({
           name: office.name || '',
           address: office.address || '',
@@ -65,6 +65,7 @@ const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
           timezone: office.timezone || 'America/Mexico_City'
         });
       } else {
+        console.log('🏢 Setting form data for new office');
         setFormData({
           name: '',
           address: '',
@@ -80,10 +81,21 @@ const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
   }, [open, isEditing, office]);
 
   const handleInputChange = (field: keyof OfficeFormData) => (event: any) => {
+    const value = event.target.value;
     setFormData(prev => ({
       ...prev,
-      [field]: event.target.value
+      [field]: value
     }));
+
+    // If country changes, load states for that country
+    if (field === 'country_id') {
+      fetchStates(value);
+      // Reset state when country changes
+      setFormData(prev => ({
+        ...prev,
+        state_id: null
+      }));
+    }
   };
 
   const handleSubmit = async () => {
@@ -134,6 +146,15 @@ const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
           </Alert>
         )}
 
+        {catalogsLoading && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+            <CircularProgress size={24} />
+            <Typography variant="body2" sx={{ ml: 1 }}>
+              Cargando catálogos...
+            </Typography>
+          </Box>
+        )}
+
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
           <TextField
             fullWidth
@@ -167,9 +188,13 @@ const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
                 value={formData.country_id || ''}
                 onChange={handleInputChange('country_id')}
                 label="País"
+                disabled={catalogsLoading}
               >
-                <MenuItem value={1}>México</MenuItem>
-                {/* Add more countries as needed */}
+                {countries.map((country) => (
+                  <MenuItem key={country.id} value={country.id}>
+                    {country.name}
+                  </MenuItem>
+                ))}
               </Select>
             </FormControl>
 
@@ -179,10 +204,13 @@ const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
                 value={formData.state_id || ''}
                 onChange={handleInputChange('state_id')}
                 label="Estado"
+                disabled={catalogsLoading || !formData.country_id}
               >
-                <MenuItem value={1}>Ciudad de México</MenuItem>
-                <MenuItem value={2}>Estado de México</MenuItem>
-                {/* Add more states as needed */}
+                {states.map((state) => (
+                  <MenuItem key={state.id} value={state.id}>
+                    {state.name}
+                  </MenuItem>
+                ))}
               </Select>
             </FormControl>
           </Box>

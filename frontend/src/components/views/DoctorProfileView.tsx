@@ -94,11 +94,13 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
 
   // Office management functions
   const handleNewOffice = () => {
+    console.log('🏢 Opening new office dialog');
     setEditingOffice(null);
     setOfficeDialogOpen(true);
   };
 
   const handleEditOffice = (office: any) => {
+    console.log('🏢 Opening edit office dialog for:', office);
     setEditingOffice(office);
     setOfficeDialogOpen(true);
   };
