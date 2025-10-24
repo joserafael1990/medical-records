@@ -14,7 +14,12 @@ import {
   ListItemText,
   Alert,
   LinearProgress,
-  IconButton
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  CircularProgress
 } from '@mui/material';
 import {
   Person as PersonIcon,
@@ -28,10 +33,15 @@ import {
   Work as WorkIcon,
   LocalHospital as HospitalIcon,
   Settings as SettingsIcon,
-  AccessTime as AccessTimeIcon
+  AccessTime as AccessTimeIcon,
+  Add as AddIcon,
+  Delete as DeleteIcon,
+  Close as CloseIcon
 } from '@mui/icons-material';
 import DoctorProfileDialog from '../dialogs/DoctorProfileDialog';
 import ScheduleConfigDialog from '../dialogs/ScheduleConfigDialog';
+import OfficeManagementDialog from '../dialogs/OfficeManagementDialog';
+import { useOfficeManagement } from '../../hooks/useOfficeManagement';
 
 interface DoctorProfileViewProps {
   doctorProfile: any;
@@ -69,6 +79,46 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
   fieldErrors
 }) => {
   const [scheduleConfigDialogOpen, setScheduleConfigDialogOpen] = useState(false);
+  const [officeDialogOpen, setOfficeDialogOpen] = useState(false);
+  const [editingOffice, setEditingOffice] = useState<any>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [officeToDelete, setOfficeToDelete] = useState<any>(null);
+
+  // Office management hook
+  const { 
+    offices, 
+    isLoading: officesLoading, 
+    error: officesError, 
+    deleteOffice 
+  } = useOfficeManagement();
+
+  // Office management functions
+  const handleNewOffice = () => {
+    setEditingOffice(null);
+    setOfficeDialogOpen(true);
+  };
+
+  const handleEditOffice = (office: any) => {
+    setEditingOffice(office);
+    setOfficeDialogOpen(true);
+  };
+
+  const handleDeleteOffice = (office: any) => {
+    setOfficeToDelete(office);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDeleteOffice = async () => {
+    if (officeToDelete) {
+      try {
+        await deleteOffice(officeToDelete.id);
+        setDeleteConfirmOpen(false);
+        setOfficeToDelete(null);
+      } catch (error) {
+        console.error('Error deleting office:', error);
+      }
+    }
+  };
   
 
   if (isLoading) {
@@ -321,7 +371,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
           </Card>
         </Box>
 
-        {/* Enhanced Office Information */}
+        {/* Office Management */}
         <Card sx={{ mt: 3 }}>
           <CardContent>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -330,132 +380,152 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                 Consultorios
               </Typography>
               <Button
-                variant="outlined"
+                variant="contained"
                 size="small"
-                startIcon={<EditIcon />}
-                onClick={onEdit}
+                startIcon={<AddIcon />}
+                onClick={handleNewOffice}
               >
-                Gestionar Consultorios
+                Nuevo Consultorio
               </Button>
             </Box>
             
-            {/* Office Cards */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
-              {/* Main Office Card */}
-              <Card variant="outlined" sx={{ p: 2, bgcolor: 'primary.50' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                  <Avatar sx={{ bgcolor: 'primary.main' }}>
-                    <LocationIcon />
-                  </Avatar>
-                  <Box>
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                      {doctorProfile.office_name || 'Consultorio Principal'}
-                    </Typography>
-                    <Chip 
-                      label="Presencial" 
-                      color="success" 
-                      size="small" 
-                      icon={<LocationIcon sx={{ fontSize: 16 }} />}
-                    />
-                  </Box>
-                </Box>
-                
-                <List dense>
-                  <ListItem sx={{ px: 0 }}>
-                    <ListItemIcon>
-                      <LocationIcon color="action" />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Dirección" 
-                      secondary={doctorProfile.office_address || 'No especificada'} 
-                    />
-                  </ListItem>
-                  <ListItem sx={{ px: 0 }}>
-                    <ListItemIcon>
-                      <LocationIcon color="action" />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Ciudad" 
-                      secondary={doctorProfile.office_city || 'No especificada'} 
-                    />
-                  </ListItem>
-                  <ListItem sx={{ px: 0 }}>
-                    <ListItemIcon>
-                      <PhoneIcon color="action" />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Teléfono" 
-                      secondary={doctorProfile.office_phone || 'No especificado'} 
-                    />
-                  </ListItem>
-                  {doctorProfile.office_maps_url && (
-                    <ListItem sx={{ px: 0 }}>
-                      <ListItemIcon>
-                        <LocationIcon color="action" />
-                      </ListItemIcon>
-                      <ListItemText 
-                        primary="Google Maps" 
-                        secondary={
-                          <Button
-                            size="small"
-                            variant="text"
-                            onClick={() => window.open(doctorProfile.office_maps_url, '_blank')}
-                            sx={{ p: 0, textTransform: 'none' }}
-                          >
-                            Ver en Maps
-                          </Button>
-                        }
-                      />
-                    </ListItem>
-                  )}
-                </List>
-              </Card>
-              
-              {/* Additional Office Info */}
-              <Card variant="outlined" sx={{ p: 2, bgcolor: 'grey.50' }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
-                  Información Adicional
+            {officesError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {officesError}
+              </Alert>
+            )}
+
+            {officesLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                <CircularProgress />
+              </Box>
+            ) : offices.length === 0 ? (
+              <Box sx={{ textAlign: 'center', p: 3 }}>
+                <Typography variant="body1" color="text.secondary" gutterBottom>
+                  No tienes consultorios registrados
                 </Typography>
-                <List dense>
-                  <ListItem sx={{ px: 0 }}>
-                    <ListItemIcon>
-                      <ScheduleIcon color="action" />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Duración de Citas" 
-                      secondary={doctorProfile.appointment_duration ? `${doctorProfile.appointment_duration} minutos` : 'No especificada'} 
-                    />
-                  </ListItem>
-                  <ListItem sx={{ px: 0 }}>
-                    <ListItemIcon>
-                      <AccessTimeIcon color="action" />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Zona Horaria" 
-                      secondary={doctorProfile.office_timezone || 'America/Mexico_City'} 
-                    />
-                  </ListItem>
-                  <ListItem sx={{ px: 0 }}>
-                    <ListItemIcon>
-                      <LocationIcon color="action" />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Estado" 
-                      secondary={doctorProfile.office_state_name || 'No especificado'} 
-                    />
-                  </ListItem>
-                  <ListItem sx={{ px: 0 }}>
-                    <ListItemIcon>
-                      <LocationIcon color="action" />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="País" 
-                      secondary={doctorProfile.office_country_name || 'México'} 
-                    />
-                  </ListItem>
-                </List>
-              </Card>
-            </Box>
+                <Button
+                  variant="outlined"
+                  startIcon={<AddIcon />}
+                  onClick={handleNewOffice}
+                  sx={{ mt: 1 }}
+                >
+                  Agregar Primer Consultorio
+                </Button>
+              </Box>
+            ) : (
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(auto-fit, minmax(300px, 1fr))' }, gap: 2 }}>
+                {offices.map((office) => (
+                  <Card 
+                    key={office.id} 
+                    variant="outlined" 
+                    sx={{ 
+                      p: 2, 
+                      bgcolor: 'primary.50',
+                      cursor: 'pointer',
+                      '&:hover': {
+                        bgcolor: 'primary.100',
+                        transform: 'translateY(-2px)',
+                        boxShadow: 2
+                      },
+                      transition: 'all 0.2s ease-in-out'
+                    }}
+                    onClick={() => handleEditOffice(office)}
+                  >
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Avatar sx={{ bgcolor: 'primary.main' }}>
+                          <LocationIcon />
+                        </Avatar>
+                        <Box>
+                          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                            {office.name}
+                          </Typography>
+                          <Chip 
+                            label="Presencial" 
+                            color="success" 
+                            size="small" 
+                            icon={<LocationIcon sx={{ fontSize: 16 }} />}
+                          />
+                        </Box>
+                      </Box>
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteOffice(office);
+                        }}
+                        sx={{ color: 'error.main' }}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Box>
+                    
+                    <List dense>
+                      <ListItem sx={{ px: 0 }}>
+                        <ListItemIcon>
+                          <LocationIcon color="action" />
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary="Dirección" 
+                          secondary={office.address || 'No especificada'} 
+                        />
+                      </ListItem>
+                      <ListItem sx={{ px: 0 }}>
+                        <ListItemIcon>
+                          <LocationIcon color="action" />
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary="Ciudad" 
+                          secondary={office.city || 'No especificada'} 
+                        />
+                      </ListItem>
+                      <ListItem sx={{ px: 0 }}>
+                        <ListItemIcon>
+                          <PhoneIcon color="action" />
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary="Teléfono" 
+                          secondary={office.phone || 'No especificado'} 
+                        />
+                      </ListItem>
+                      {office.maps_url && (
+                        <ListItem sx={{ px: 0 }}>
+                          <ListItemIcon>
+                            <LocationIcon color="action" />
+                          </ListItemIcon>
+                          <ListItemText 
+                            primary="Google Maps" 
+                            secondary={
+                              <Button
+                                size="small"
+                                variant="text"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.open(office.maps_url, '_blank');
+                                }}
+                                sx={{ p: 0, textTransform: 'none' }}
+                              >
+                                Ver en Maps
+                              </Button>
+                            }
+                          />
+                        </ListItem>
+                      )}
+                      <ListItem sx={{ px: 0 }}>
+                        <ListItemIcon>
+                          <AccessTimeIcon color="action" />
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary="Zona Horaria" 
+                          secondary={office.timezone || 'America/Mexico_City'} 
+                        />
+                      </ListItem>
+                    </List>
+                  </Card>
+                ))}
+              </Box>
+            )}
           </CardContent>
         </Card>
 
@@ -486,6 +556,31 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
         onClose={() => setScheduleConfigDialogOpen(false)}
         onSave={() => setScheduleConfigDialogOpen(false)}
       />
+
+      {/* Office Management Dialog */}
+      <OfficeManagementDialog
+        open={officeDialogOpen}
+        onClose={() => setOfficeDialogOpen(false)}
+        office={editingOffice}
+        isEditing={!!editingOffice}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
+        <DialogTitle>Confirmar Eliminación</DialogTitle>
+        <DialogContent>
+          <Typography>
+            ¿Estás seguro de que deseas eliminar el consultorio "{officeToDelete?.name}"?
+            Esta acción no se puede deshacer.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirmOpen(false)}>Cancelar</Button>
+          <Button onClick={confirmDeleteOffice} color="error" variant="contained">
+            Eliminar
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Doctor Profile Dialog */}
       <DoctorProfileDialog
