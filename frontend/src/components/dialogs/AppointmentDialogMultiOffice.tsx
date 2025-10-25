@@ -798,6 +798,13 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
                 </Select>
               </FormControl>
             </Box>
+            
+            {/* Show informative message when no times are available */}
+            {availableTimes.length === 0 && !loadingTimes && selectedDate && (
+              <Alert severity="info" sx={{ mt: 1 }}>
+                No hay horarios disponibles para esta fecha. El doctor no tiene horarios configurados para este día.
+              </Alert>
+            )}
 
             {/* 7. MOTIVO */}
             <TextField
