@@ -79,10 +79,8 @@ const AgendaView: React.FC<AgendaViewProps> = ({
     const isSelectedDateToday = isSameDay(localSelectedDate, today);
     
     if (isSelectedDateToday && agendaView === 'daily') {
-      console.log('📅 Selected date is today, ensuring today\'s appointments are shown');
       // Forzar actualización si es necesario
       if (forceRefresh) {
-        console.log('📅 Forcing refresh to show today\'s appointments');
         setTimeout(() => {
           forceRefresh();
         }, 100);
@@ -103,11 +101,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
       showSuccess('Recordatorio enviado por WhatsApp exitosamente');
     } catch (error: any) {
       console.error('Error sending WhatsApp reminder:', error);
-      console.log('Full error object:', error);
-      console.log('Error status:', error.status);
-      console.log('Error response status:', error.response?.status);
-      console.log('Error detail:', error.detail);
-      console.log('Error response detail:', error.response?.data?.detail);
+      // Error logging removed to prevent console spam
       
       // Handle specific error cases
       const errorDetail = error.detail || error.response?.data?.detail || 'Error al enviar recordatorio por WhatsApp';
@@ -117,7 +111,6 @@ const AgendaView: React.FC<AgendaViewProps> = ({
       if (errorDetail.includes('more than 24 hours') || errorDetail.includes('24 hours have passed')) {
         showError('No se puede enviar el mensaje porque han pasado más de 24 horas desde la última interacción del paciente con WhatsApp. El paciente debe enviar un mensaje primero para reanudar la conversación.');
       } else if (statusCode === 503) {
-        console.log('Detected 503 error, showing WhatsApp not configured message');
         // Use setTimeout to ensure the message is shown
         setTimeout(() => {
           showError('WhatsApp no está configurado. Contacta al administrador para configurar el servicio de WhatsApp.');
@@ -127,7 +120,6 @@ const AgendaView: React.FC<AgendaViewProps> = ({
       } else if (statusCode === 404) {
         showError('Cita no encontrada o sin acceso.');
       } else {
-        console.log('Using generic error message:', errorDetail);
         showError(errorDetail);
       }
     } finally {
@@ -163,26 +155,13 @@ const AgendaView: React.FC<AgendaViewProps> = ({
 
   // Función para obtener citas filtradas por vista
   const getFilteredAppointments = (date: Date, view: 'daily' | 'weekly' | 'monthly') => {
-    console.log('🔍 getFilteredAppointments called with:', {
-      date: date.toDateString(),
-      view,
-      totalAppointments: appointments.length
-    });
-    
     switch (view) {
       case 'daily':
         const dailyAppointments = appointments.filter(apt => {
           const aptDate = new Date(apt.date_time);
           const isSameDayResult = isSameDay(aptDate, date);
-          console.log('🔍 Daily filter:', {
-            appointmentDate: aptDate.toDateString(),
-            selectedDate: date.toDateString(),
-            isSameDay: isSameDayResult,
-            appointment: apt.patient_name || 'Unknown'
-          });
           return isSameDayResult;
         });
-        console.log('🔍 Daily appointments found:', dailyAppointments.length);
         return dailyAppointments;
       case 'weekly':
         const weekStart = startOfWeek(date, { weekStartsOn: 1 }); // Lunes
@@ -211,19 +190,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
   // Obtener citas filtradas
   const filteredAppointments = getFilteredAppointments(currentDate, agendaView);
   
-  // Debug: Log para verificar la lógica
-  console.log('📅 AgendaView Debug:', {
-    currentDate: currentDate.toDateString(),
-    today: new Date().toDateString(),
-    isToday,
-    agendaView,
-    totalAppointments: appointments.length,
-    filteredAppointments: filteredAppointments.length,
-    sampleAppointment: appointments[0] ? {
-      date: appointments[0].date_time,
-      parsedDate: new Date(appointments[0].date_time).toDateString()
-    } : null
-  });
+  // Debug logs removed to prevent infinite logging
 
   // Navegación de fechas
   const handleDateNavigation = (direction: 'prev' | 'next') => {
@@ -548,11 +515,8 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                     startIcon={<CancelIcon />}
                     onClick={(e) => {
                       e.stopPropagation();
-                      console.log('🔄 Cancel button clicked for appointment:', appointment.id);
                       if (cancelAppointment && appointment.id) {
-                        console.log('🔄 Calling cancelAppointment function...');
                         cancelAppointment(appointment.id);
-                      } else {
                       }
                     }}
                   >

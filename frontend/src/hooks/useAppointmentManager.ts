@@ -65,7 +65,6 @@ export const useAppointmentManager = (
 
   // Load appointments initially and when doctor profile changes
   useEffect(() => {
-    console.log('🔄 useAppointmentManager useEffect - doctorProfile:', doctorProfile);
     setCurrentDoctorProfile(doctorProfile);
     // Update appointment form data when doctor profile changes
     if (doctorProfile) {
@@ -94,25 +93,7 @@ export const useAppointmentManager = (
   }, [doctorProfile]);
 
 
-  // Load appointments on component mount (independent of doctorProfile)
-  useEffect(() => {
-    console.log('🚀 useAppointmentManager mounted - loading appointments immediately');
-    const loadAppointmentsOnMount = async () => {
-      try {
-        console.log('🔄 Loading appointments on mount...');
-        console.log('🔄 API Service available:', !!apiService);
-        console.log('🔄 User context:', user);
-        const appointmentsData = await apiService.getAppointments();
-        setAppointments(appointmentsData || []);
-      } catch (error) {
-        console.error('❌ Error loading appointments on mount:', error);
-        console.error('❌ Error details:', error);
-      }
-    };
-    
-    // Load immediately on mount
-    loadAppointmentsOnMount();
-  }, []); // Empty dependency array = run on mount
+  // This useEffect is removed to prevent duplication with the doctorProfile effect above
   
   // Dialog state
   const [appointmentDialogOpen, setAppointmentDialogOpen] = useState(false);
@@ -725,21 +706,10 @@ export const useAppointmentManager = (
     }
   }, [selectedDate, agendaView]);
 
-  // Load appointments when component mounts or when agenda view changes
-  useEffect(() => {
-    console.log('🔄 useAppointmentManager - useEffect for agenda view change');
-    refreshAppointments();
-  }, [refreshAppointments]);
+  // This useEffect is removed to prevent duplication with the one above
 
-  // Auto-refresh appointments every 30 seconds to detect WhatsApp cancellations
-  useEffect(() => {
-    const interval = setInterval(() => {
-      console.log('🔄 Auto-refreshing appointments (polling)...');
-      refreshAppointments();
-    }, 30000); // 30 seconds
-
-    return () => clearInterval(interval);
-  }, [refreshAppointments]);
+  // Auto-refresh disabled to prevent infinite loops
+  // TODO: Re-enable auto-refresh with proper dependency management
 
   return {
     // State

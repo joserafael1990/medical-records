@@ -58,8 +58,8 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
           <PatientsView
             patients={patientManagement.patients}
             consultations={consultationManagement.consultations}
-            patientSearchTerm={patientManagement.searchTerm}
-            setPatientSearchTerm={patientManagement.setSearchTerm}
+            patientSearchTerm={patientManagement.patientSearchTerm}
+            setPatientSearchTerm={patientManagement.setPatientSearchTerm}
             successMessage=""
             setSuccessMessage={() => {}}
             handleNewPatient={() => patientManagement.openPatientDialog()}

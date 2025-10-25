@@ -262,26 +262,8 @@ async def get_current_user(
 ):
     """Get current authenticated user"""
     try:
-        # DEVELOPMENT MODE: Check if authentication is disabled
-        import os
-        if os.getenv('DISABLE_AUTH', 'false').lower() == 'true':
-            print("⚠️ DEVELOPMENT MODE: Authentication disabled")
-            # Return a mock doctor user for development
-            mock_user = db.query(Person).filter(Person.person_type == 'doctor').first()
-            if mock_user:
-                return mock_user
-            else:
-                # Create a mock user if none exists
-                from database import Person
-                mock_user = Person(
-                    id=1,
-                    person_type='doctor',
-                    first_name='Dr. Desarrollo',
-                    paternal_surname='Sistema',
-                    maternal_surname='Test',
-                    email='dev@test.com'
-                )
-                return mock_user
+        # DEVELOPMENT MODE DISABLED - Always require authentication
+        # This ensures that the correct user is always used
         
         token = credentials.credentials
         user = auth.get_user_from_token(db, token)
@@ -1743,12 +1725,12 @@ async def send_whatsapp_appointment_reminder(
                 # Get country code from office
                 if office.country_id:
                     office_country = db.query(Country).filter(Country.id == office.country_id).first()
-                    if office_country and office_country.phone_code:
-                        country_code = office_country.phone_code.replace('+', '')  # Remove + if present
-                    else:
-                        print(f"🌍 No phone code found for country, using default: {country_code}")
-                else:
-                    print(f"🌍 No country_id in office, using default: {country_code}")
+            if office_country and office_country.phone_code:
+                country_code = office_country.phone_code.replace('+', '')  # Remove + if present
+            else:
+                print(f"🌍 No phone code found for country, using default: {country_code}")
+        else:
+            print(f"🌍 No country_id in office, using default: {country_code}")
         
         # Get appointment type
         if appointment.appointment_type_rel:
@@ -2961,12 +2943,12 @@ async def update_schedule_template(
 @app.get("/api/schedule/available-times")
 async def get_available_times(
     date: str,
-    # current_user: Person = Depends(get_current_user)  # Temporarily disabled for testing
+    current_user: Person = Depends(get_current_user)
 ):
     """Get available appointment times for a specific date based on doctor's schedule and existing appointments"""
     try:
-        # Use default doctor_id for testing
-        doctor_id = 1  # Default doctor for testing
+        # Use current user's doctor_id
+        doctor_id = current_user.id
         api_logger.info("Getting available times", doctor_id=doctor_id, date=date)
         
         # Parse the date and get day of week (0=Monday, 6=Sunday)
@@ -4062,15 +4044,15 @@ async def get_appointments(
             )
         else:
             appointments = AppointmentService.get_appointments(
-                db=db,
-                skip=skip,
-                limit=limit,
-                start_date=start_date_obj,
-                end_date=end_date_obj,
-                status=status,
+            db=db,
+            skip=skip,
+            limit=limit,
+            start_date=start_date_obj,
+            end_date=end_date_obj,
+            status=status,
                 # doctor_id=current_user.id,  # Disabled for development
-                available_for_consultation=available_for_consultation
-            )
+            available_for_consultation=available_for_consultation
+        )
         
         # Transform to include patient information
         result = []

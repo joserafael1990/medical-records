@@ -180,16 +180,10 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     try {
       setLoadingTimes(true);
       console.log('🔍 Loading available times for date:', date);
-      console.log('🔍 Making API call to getAvailableTimesForBooking...');
       const response = await apiService.getAvailableTimesForBooking(date);
-      console.log('🔍 Available times response:', response);
-      console.log('🔍 Response type:', typeof response);
-      console.log('🔍 Response keys:', response ? Object.keys(response) : 'null');
       const times = response.available_times || [];
-      console.log('🔍 Extracted times:', times);
-      console.log('🔍 Times count:', times.length);
+      console.log('🔍 Found', times.length, 'available times');
       setAvailableTimes(times);
-      console.log('🔍 Set available times in state:', times);
       return times;
     } catch (error) {
       console.error('❌ Error loading available times:', error);
@@ -400,45 +394,35 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     }
   }, [open]);
 
-  // Update local form data when props change
+  // Initialize form data when dialog opens
   useEffect(() => {
-    console.log('🔍 AppointmentDialog useEffect - formData:', formData);
-    console.log('🔍 AppointmentDialog useEffect - patients.length:', patients.length);
-    console.log('🔍 AppointmentDialog useEffect - isEditing:', isEditing);
-    
-    // Reset available times for new appointments
-    if (!isEditing) {
-      console.log('🔄 Resetting available times for new appointment');
-      setAvailableTimes([]);
-      setSelectedDate('');
-      setSelectedTime('');
+    if (open) {
+      // Set default status for new appointments
+      const updatedFormData = {
+        ...formData,
+        // Always set status to 'confirmed' for new appointments, preserve existing status for edits
+        status: formData.status || 'confirmed',
+        // If no patients exist, automatically set appointment type to primera vez
+        // Normalize appointment_type to lowercase to match select options
+        appointment_type: patients.length === 0 ? 'primera vez' : (formData.appointment_type ? formData.appointment_type.toLowerCase() : '')
+      };
+      setLocalFormData(updatedFormData);
     }
-    
-    // Set default status for new appointments
-    const updatedFormData = {
-      ...formData,
-      // Always set status to 'confirmed' for new appointments, preserve existing status for edits
-      status: formData.status || 'confirmed',
-      // If no patients exist, automatically set appointment type to primera vez
-      // Normalize appointment_type to lowercase to match select options
-      appointment_type: patients.length === 0 ? 'primera vez' : (formData.appointment_type ? formData.appointment_type.toLowerCase() : '')
-    };
-    console.log('🔍 AppointmentDialog useEffect - updatedFormData:', updatedFormData);
-    setLocalFormData(updatedFormData);
-    
+  }, [open, formData, patients]);
+
+  // Handle patient selection when formData.patient_id changes
+  useEffect(() => {
     if (formData.patient_id && patients.length > 0) {
-      console.log('🔍 Looking for patient with ID:', formData.patient_id, 'type:', typeof formData.patient_id);
-      console.log('🔍 Available patients:', patients.map(p => ({ id: p.id, name: p.first_name + ' ' + p.last_name, type: typeof p.id })));
       // Try both string and number comparison
       const patient = patients.find(p => p.id === formData.patient_id || p.id === String(formData.patient_id) || p.id === Number(formData.patient_id));
-      console.log('🔍 Found patient:', patient);
       setSelectedPatient(patient || null);
     } else {
-      console.log('🔍 No patient_id or no patients available');
       setSelectedPatient(null);
     }
-    
-    // Initialize date and time from existing formData when dialog opens (only for editing)
+  }, [formData.patient_id, patients]);
+
+  // Handle date/time initialization for editing
+  useEffect(() => {
     if (open && formData.date_time && isEditing) {
       const dateTime = formData.date_time;
       const [datePart, timePart] = dateTime.split('T');
@@ -446,26 +430,21 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
       
       // Load available times for the date first, then set the time
       if (datePart) {
-        console.log('🔍 Loading available times for date:', datePart);
         loadAvailableTimes(datePart).then((times) => {
           // Set the time after available times are loaded
           if (timePart) {
-            console.log('🔍 Setting selected time to:', timePart);
-            console.log('🔍 Available times when setting:', times);
             // Always set the original appointment time, regardless of available slots
-            console.log('🔍 Setting original appointment time:', timePart);
             setSelectedTime(timePart);
           }
         });
       }
-    } else if (open) {
+    } else if (open && !isEditing) {
       // Reset everything for new appointments
-      console.log('🔄 Resetting for new appointment');
       setSelectedDate('');
       setSelectedTime('');
       setAvailableTimes([]);
     }
-  }, [formData, patients, open]);
+  }, [open, isEditing, formData.date_time]);
 
   const handleFieldChange = (field: keyof AppointmentFormData) => (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | any
@@ -515,12 +494,6 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
   const handleSubmit = async () => {
     // Clear previous validation errors
     setValidationError('');
-    
-    // Debug logging
-    console.log('Selected Date:', selectedDate);
-    console.log('Selected Time:', selectedTime);
-    console.log('Available Times:', availableTimes.length);
-    console.log('Form Complete:', isFormComplete());
     
     // Validate that all required fields are complete before proceeding
     if (!isFormComplete()) {
