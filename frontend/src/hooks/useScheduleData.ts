@@ -44,7 +44,7 @@ export const useScheduleData = () => {
         throw new Error('No authentication token found');
       }
 
-      const response = await fetch('/api/schedule/templates/weekly', {
+      const response = await fetch('http://localhost:8000/api/schedule/templates/weekly', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
