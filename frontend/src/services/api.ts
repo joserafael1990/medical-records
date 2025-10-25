@@ -1216,8 +1216,9 @@ class ApiService {
   /**
    * Get all offices for the current doctor
    */
-  async getOffices(): Promise<Office[]> {
-    const response = await this.api.get('/api/offices');
+  async getOffices(doctorId?: number): Promise<Office[]> {
+    const url = doctorId ? `/api/offices?doctor_id=${doctorId}` : '/api/offices';
+    const response = await this.api.get(url);
     return response.data;
   }
 

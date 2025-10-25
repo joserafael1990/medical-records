@@ -121,10 +121,8 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
   const toast = useSimpleToast();
 
   useEffect(() => {
-    console.log('🔄 useEffect triggered:', { open, isEditing, hasExternalFormData: !!externalFormData });
     if (open) {
       if (isEditing && externalFormData) {
-        console.log('🔍 AppointmentDialogMultiOffice - Setting form data for editing:', externalFormData);
         setFormData(externalFormData);
         // Para edición, determinar si es paciente existente basado en si hay patient_id
         setIsExistingPatient(externalFormData.patient_id && externalFormData.patient_id > 0 ? true : null);
@@ -133,18 +131,14 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
         if (externalFormData.appointment_date) {
           const appointmentDate = new Date(externalFormData.appointment_date);
           const timeString = appointmentDate.toTimeString().slice(0, 5); // HH:MM format
-          console.log('🔍 Extracted time from appointment_date:', timeString);
           setSelectedTime(timeString);
           setSelectedDate(externalFormData.appointment_date);
           
           // Load available times for the appointment date
           const dateOnly = externalFormData.appointment_date.split('T')[0];
-          console.log('🔍 Loading available times for editing appointment date:', dateOnly);
           loadAvailableTimes(dateOnly);
         }
       } else {
-        console.log('🔄 Resetting form for new appointment');
-        console.log('🔄 Current isExistingPatient before reset:', isExistingPatient);
         const defaultData = {
           patient_id: 0,
           doctor_id: 0,
@@ -157,7 +151,6 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
         };
         setFormData(defaultData);
         // Para nueva cita, resetear isExistingPatient
-        console.log('⚠️ Resetting isExistingPatient to null');
         setIsExistingPatient(null);
         
         // Reset time selection for new appointment
@@ -166,7 +159,6 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
         
         // Don't load times automatically - let the DatePicker handle the date selection
         // The DatePicker will show today's date by default and trigger onChange when user interacts
-        console.log('🔄 New appointment - DatePicker will show today by default');
         
         // Don't call onFormDataChange here to prevent infinite loop
         // It will be called when user actually changes form data
@@ -217,7 +209,7 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
       if (!externalPatients) {
         const [appointmentTypesData, officesData, patientsData] = await Promise.all([
           apiService.get<AppointmentType[]>('/api/appointment-types'),
-          apiService.get<Office[]>('/api/offices'),
+          apiService.getOffices(doctorProfile?.id),
           apiService.get<Patient[]>('/api/patients')
         ]);
         
@@ -228,7 +220,7 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
         // Load only appointment types and offices if patients are provided externally
         const [appointmentTypesData, officesData] = await Promise.all([
           apiService.get<AppointmentType[]>('/api/appointment-types'),
-          apiService.get<Office[]>('/api/offices')
+          apiService.getOffices(doctorProfile?.id)
         ]);
         
         setAppointmentTypes(appointmentTypesData);
@@ -246,17 +238,9 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
     
     try {
       setLoadingTimes(true);
-      console.log('🔍 Loading available times for date:', date);
-      console.log('🔍 Making API call to getAvailableTimesForBooking...');
       const response = await apiService.getAvailableTimesForBooking(date);
-      console.log('🔍 Available times response:', response);
-      console.log('🔍 Response type:', typeof response);
-      console.log('🔍 Response keys:', response ? Object.keys(response) : 'null');
       const times = response.available_times || [];
-      console.log('🔍 Extracted times:', times);
-      console.log('🔍 Times count:', times.length);
       setAvailableTimes(times);
-      console.log('🔍 Set available times in state:', times);
       return times;
     } catch (error) {
       console.error('❌ Error loading available times:', error);
@@ -302,9 +286,6 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
   ) => {
     const value = event.target.value;
     
-    console.log('🔄 handleChange called:', { field, value });
-    console.log('🔄 Current formData before change:', currentFormData);
-    console.log('🔄 Current isExistingPatient:', isExistingPatient);
     
     let newFormData = {
       ...currentFormData,
@@ -314,11 +295,8 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
     // Si se selecciona un consultorio, determinar automáticamente el tipo de cita
     if (field === 'office_id' && value && value !== 0) {
       const selectedOffice = offices.find(office => office.id === parseInt(value));
-      console.log('🏢 Selected office:', selectedOffice);
       if (selectedOffice) {
         const appointmentTypeId = selectedOffice.is_virtual ? 2 : 1;
-        console.log('🏢 Setting appointment_type_id to:', appointmentTypeId, '(is_virtual:', selectedOffice.is_virtual, ')');
-        console.log('🏢 Preserving isExistingPatient state:', isExistingPatient);
         newFormData = {
           ...newFormData,
           appointment_type_id: appointmentTypeId
@@ -327,8 +305,6 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
       }
     }
     
-    console.log('🔄 New formData after change:', newFormData);
-    console.log('🔄 isExistingPatient will remain:', isExistingPatient);
     
     setFormData(newFormData);
     if (onFormDataChange) {
@@ -409,13 +385,11 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
             person_type: 'patient'
           };
           
-          console.log('🆕 Creando nuevo paciente:', patientData);
           
           // Crear el paciente usando la API
           const newPatient = await apiService.post('/api/patients', patientData);
-          finalPatientId = newPatient.id;
+          finalPatientId = (newPatient as any).data?.id || (newPatient as any).id;
           
-          console.log('✅ Paciente creado exitosamente:', newPatient);
           toast.success('Paciente creado exitosamente');
         } catch (err) {
           setError('Error al crear el nuevo paciente: ' + (err instanceof Error ? err.message : 'Error desconocido'));
@@ -463,7 +437,7 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
       onClose={onClose} 
       maxWidth="sm" 
       fullWidth
-      fullScreen={{ xs: true, sm: false }}
+      fullScreen={window.innerWidth < 600}
       sx={{
         '& .MuiDialog-paper': {
           margin: { xs: 0, sm: 2 },

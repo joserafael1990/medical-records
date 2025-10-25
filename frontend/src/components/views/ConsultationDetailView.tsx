@@ -57,7 +57,7 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
   onBack,
   onEdit,
   onPrint,
-  doctorName = 'Dr. Usuario Sistema'
+  doctorName = 'Usuario Sistema'
 }) => {
   // Clinical studies management
   const clinicalStudiesHook = useClinicalStudies();

@@ -95,7 +95,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
     fetchOffices,
     createOffice,
     updateOffice
-  } = useOfficeManagement();
+  } = useOfficeManagement(doctorProfile?.id);
 
   // Schedule data hook
   const { 

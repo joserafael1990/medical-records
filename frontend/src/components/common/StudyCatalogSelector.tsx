@@ -184,10 +184,10 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
     );
 
     if (maxSelections) {
-      const remainingSlots = maxSelections - selectedStudies.length;
-      onSelectStudies([...selectedStudies, ...newStudies.slice(0, remainingSlots)]);
+      const remainingSlots = maxSelections - (selectedStudies?.length || 0);
+      onSelectStudies([...(selectedStudies || []), ...newStudies.slice(0, remainingSlots)]);
     } else {
-      onSelectStudies([...selectedStudies, ...newStudies]);
+      onSelectStudies([...(selectedStudies || []), ...newStudies]);
     }
   };
 
@@ -276,7 +276,7 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
                 size="small"
                 color="primary"
                 onClick={() => handleStudySelect(study)}
-                disabled={maxSelections ? selectedStudies.length >= maxSelections : false}
+                disabled={maxSelections ? (selectedStudies?.length || 0) >= maxSelections : false}
               >
                 <AddIcon />
               </IconButton>
@@ -297,16 +297,16 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
       )}
 
       {/* Selected Studies */}
-      {selectedStudies.length > 0 && (
+      {(selectedStudies?.length || 0) > 0 && (
         <Card sx={{ mb: 2, bgcolor: 'primary.50' }}>
           <CardContent>
             <Typography variant="h6" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
               <ScienceIcon color="primary" />
-              Estudios Seleccionados ({selectedStudies.length})
+              Estudios Seleccionados ({selectedStudies?.length || 0})
               {maxSelections && ` / ${maxSelections}`}
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              {selectedStudies.filter(study => study).map(study => (
+              {(selectedStudies || []).filter(study => study).map(study => (
                 <Chip
                   key={study.id}
                   label={`${study.name || 'Estudio'} (${study.code || 'N/A'})`}
@@ -428,7 +428,7 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
       </Accordion>
 
       {/* Recommendations Section */}
-      {showRecommendations && recommendations.length > 0 && (
+      {showRecommendations && (recommendations?.length || 0) > 0 && (
         <Accordion 
           expanded={expandedSection === 'recommendations'} 
           onChange={() => setExpandedSection(expandedSection === 'recommendations' ? false : 'recommendations')}
@@ -436,7 +436,7 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <HospitalIcon />
-              Recomendaciones ({recommendations.length})
+              Recomendaciones ({recommendations?.length || 0})
             </Typography>
           </AccordionSummary>
           <AccordionDetails sx={{ p: 3 }}>
@@ -452,7 +452,7 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
       )}
 
       {/* Templates Section */}
-      {showTemplates && templates.length > 0 && (
+      {showTemplates && (templates?.length || 0) > 0 && (
         <Accordion 
           expanded={expandedSection === 'templates'} 
           onChange={() => setExpandedSection(expandedSection === 'templates' ? false : 'templates')}
@@ -460,12 +460,12 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <ScienceIcon />
-              Plantillas ({templates.length})
+              Plantillas ({templates?.length || 0})
             </Typography>
           </AccordionSummary>
           <AccordionDetails sx={{ p: 3 }}>
             <Grid container spacing={3}>
-              {templates.filter(template => template).map(template => (
+              {(templates || []).filter(template => template).map(template => (
                 <Grid item xs={12} sm={6} md={6} key={template.id}>
                   <Card sx={{ border: '1px solid #e0e0e0', height: '100%' }}>
                     <CardContent sx={{ p: 2 }}>
@@ -493,7 +493,7 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
                         size="small"
                         variant="outlined"
                         onClick={() => handleTemplateApply(template)}
-                        disabled={maxSelections ? selectedStudies.length >= maxSelections : false}
+                        disabled={maxSelections ? (selectedStudies?.length || 0) >= maxSelections : false}
                         fullWidth
                       >
                         Aplicar Plantilla

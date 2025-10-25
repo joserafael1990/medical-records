@@ -214,7 +214,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     imaging_studies: '',
     interconsultations: '',
     doctor_name: doctorProfile?.first_name && doctorProfile?.last_name 
-      ? `Dr. ${doctorProfile.first_name} ${doctorProfile.last_name}`.trim()
+      ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name} ${doctorProfile.last_name}`.trim()
       : '',
     doctor_professional_license: doctorProfile?.professional_license || '',
     doctor_specialty: doctorProfile?.specialty || '',
@@ -275,14 +275,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     // Check if patient is selected (not in new patient flow)
     const isExistingPatientSelected = selectedPatient && isNewPatient !== true;
     
-    console.log('🔍 shouldShowPreviousConsultationsButton - Debug:', {
-      selectedPatient: selectedPatient ? `${selectedPatient.first_name} ${selectedPatient.paternal_surname}` : 'null',
-      isNewPatient,
-      patientHasPreviousConsultations,
-      isFollowUpAppointment,
-      isExistingPatientSelected,
-      result: isFollowUpAppointment || (isExistingPatientSelected && patientHasPreviousConsultations)
-    });
     
     return isFollowUpAppointment || (isExistingPatientSelected && patientHasPreviousConsultations);
   };
@@ -708,7 +700,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
   // Function to check if patient has previous consultations
   const checkPatientPreviousConsultations = async (patientId: number) => {
-    console.log('🔍 Checking previous consultations for patient ID:', patientId);
     try {
       // Get all consultations and filter by patient ID
       const response = await apiService.get('/api/consultations');
@@ -718,7 +709,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       const patientConsultations = (allConsultations || []).filter((c: any) => c.patient_id === patientId);
       const hasPrevious = patientConsultations.length > 0;
       
-      console.log('🔍 Previous consultations found:', patientConsultations.length, 'Has previous:', hasPrevious);
       setPatientHasPreviousConsultations(hasPrevious);
     } catch (error) {
       console.error('❌ Error checking patient consultations:', error);
@@ -850,14 +840,14 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       // Show specific error message from backend
       // The error is already transformed by the API interceptor, so we need to check the detail property directly
       const errorMessage = error.detail || error.message || 'Error al cargar el archivo del estudio';
-      console.log('🔍 Final error message to show:', errorMessage);
-      console.log('🔍 Error object structure:', {
-        hasResponse: !!error.response,
-        hasData: !!error.response?.data,
-        hasDetail: !!error.response?.data?.detail,
-        detailValue: error.response?.data?.detail,
-        status: error.response?.status
-      });
+      // console.log('🔍 Final error message to show:', errorMessage);
+      // console.log('🔍 Error object structure:', {
+      //   hasResponse: !!error.response,
+      //   hasData: !!error.response?.data,
+      //   hasDetail: !!error.response?.data?.detail,
+      //   detailValue: error.response?.data?.detail,
+      //   status: error.response?.status
+      // });
       showError(errorMessage);
     }
   };
@@ -997,17 +987,17 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   // Load office information for existing consultation
   const loadOfficeForConsultation = async (appointmentId: string) => {
     try {
-      console.log('🔍 Loading office for consultation, appointmentId:', appointmentId);
+      // console.log('🔍 Loading office for consultation, appointmentId:', appointmentId);
       // First get the appointment to get the office_id
       const appointment = await apiService.getAppointment(parseInt(appointmentId));
-      console.log('🔍 Appointment data:', appointment);
+      // console.log('🔍 Appointment data:', appointment);
       
       if (appointment && appointment.office_id) {
         const officeData = await apiService.getOffice(appointment.office_id);
-        console.log('🔍 Office data loaded:', officeData);
+        // console.log('🔍 Office data loaded:', officeData);
         setAppointmentOffice(officeData);
       } else {
-        console.log('🔍 No office_id found in appointment');
+        // console.log('🔍 No office_id found in appointment');
         setAppointmentOffice(null);
       }
     } catch (error) {
@@ -1019,18 +1009,26 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   // Load default office information when no appointment_id
   const loadDefaultOffice = async () => {
     try {
-      console.log('🔍 Loading default office');
-      // Get all offices for the doctor
-      const offices = await apiService.getOffices();
-      console.log('🔍 All offices:', offices);
+      // console.log('🔍 Loading default office');
+      // Get all offices for the doctor using doctorProfile.id
+      const doctorId = doctorProfile?.id;
+      if (!doctorId) {
+        // console.log('🔍 No doctor ID found in doctorProfile');
+        setAppointmentOffice(null);
+        return;
+      }
+      
+      // console.log('🔍 Loading offices for doctor_id:', doctorId);
+      const offices = await apiService.getOffices(doctorId);
+      // console.log('🔍 All offices for doctor:', offices);
       
       if (offices && offices.length > 0) {
         // Use the first active office
         const defaultOffice = offices.find(office => office.is_active) || offices[0];
-        console.log('🔍 Default office selected:', defaultOffice);
+        // console.log('🔍 Default office selected:', defaultOffice);
         setAppointmentOffice(defaultOffice);
       } else {
-        console.log('🔍 No offices found');
+        // console.log('🔍 No offices found');
         setAppointmentOffice(null);
       }
     } catch (error) {
@@ -1076,24 +1074,35 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     // Validation for new consultation flow
     if (!consultation) {
       // For new consultations, validate the flow
-      if (hasAppointment === null) {
+      // Only show appointment question if there are patients available
+      if (patients.length > 0 && hasAppointment === null) {
         setError('Por favor, selecciona si la consulta tiene previa cita');
         return;
       }
       
-      if (hasAppointment === false && isNewPatient === null) {
-        setError('Por favor, selecciona si el paciente es nuevo');
-        return;
-      }
-      
-      if (hasAppointment === false && isNewPatient === false && !selectedPatient) {
-        setError('Por favor, selecciona un paciente existente');
-        return;
-      }
-      
-      if (hasAppointment === false && isNewPatient === true && (!newPatientData.first_name || !newPatientData.paternal_surname)) {
-        setError('Por favor, completa los datos básicos del nuevo paciente (nombre y apellido paterno son requeridos)');
-        return;
+      // If no patients exist, skip appointment question and go directly to new patient creation
+      if (patients.length === 0) {
+        // Skip validation and go directly to new patient creation
+        if (!newPatientData.first_name || !newPatientData.paternal_surname) {
+          setError('Por favor, completa los datos básicos del nuevo paciente (nombre y apellido paterno son requeridos)');
+          return;
+        }
+      } else {
+        // Normal flow when patients exist
+        if (hasAppointment === false && isNewPatient === null) {
+          setError('Por favor, selecciona si el paciente es nuevo');
+          return;
+        }
+        
+        if (hasAppointment === false && isNewPatient === false && !selectedPatient) {
+          setError('Por favor, selecciona un paciente existente');
+          return;
+        }
+        
+        if (hasAppointment === false && isNewPatient === true && (!newPatientData.first_name || !newPatientData.paternal_surname)) {
+          setError('Por favor, completa los datos básicos del nuevo paciente (nombre y apellido paterno son requeridos)');
+          return;
+        }
       }
     } else {
       // For editing existing consultations, use old validation
@@ -1175,7 +1184,10 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       
       if (!consultation) {
         // For new consultations
-        if (hasAppointment === true) {
+        if (patients.length === 0) {
+          // If no patients exist, it's always a first-time consultation
+          consultationType = 'Primera vez';
+        } else if (hasAppointment === true) {
           // If has appointment, use appointment type
           consultationType = selectedAppointment?.consultation_type || 'Seguimiento';
         } else if (hasAppointment === false && isNewPatient === true) {
@@ -1358,7 +1370,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     // Use temp_patient ID when no patient is selected
     const patientId = selectedPatient?.id || 'temp_patient';
     const consultationId = isEditing ? String(consultation.id) : 'temp_consultation';
-    const doctorName = doctorProfile?.full_name || 'Dr. Usuario Sistema';
+    const doctorName = doctorProfile?.full_name || `${doctorProfile?.title || 'Dr.'} Usuario Sistema`;
     
     clinicalStudiesHook.openAddDialog(
       consultationId,
@@ -1402,46 +1414,54 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   };
 
   const handleRemovePrimaryDiagnosis = (diagnosisId: string) => {
-    console.log('🗑️ Removing primary diagnosis:', diagnosisId);
+    // console.log('🗑️ Removing primary diagnosis:', diagnosisId);
     primaryDiagnosesHook.removeDiagnosis(diagnosisId);
     
     // Update formData immediately by filtering out the removed diagnosis
     setFormData(prev => ({
       ...prev,
-      primary_diagnoses: prev.primary_diagnoses.filter(d => d.id !== diagnosisId)
+      primary_diagnoses: prev.primary_diagnoses.filter(d => d.id !== diagnosisId),
+      // Clear the text field when diagnosis is removed
+      primary_diagnosis: ''
     }));
   };
 
   const handleRemoveSecondaryDiagnosis = (diagnosisId: string) => {
-    console.log('🗑️ Removing secondary diagnosis:', diagnosisId);
+    // console.log('🗑️ Removing secondary diagnosis:', diagnosisId);
     secondaryDiagnosesHook.removeDiagnosis(diagnosisId);
     
     // Update formData immediately by filtering out the removed diagnosis
     setFormData(prev => ({
       ...prev,
-      secondary_diagnoses_list: prev.secondary_diagnoses_list.filter(d => d.id !== diagnosisId)
+      secondary_diagnoses_list: prev.secondary_diagnoses_list.filter(d => d.id !== diagnosisId),
+      // Clear the text field when diagnosis is removed
+      secondary_diagnoses: ''
     }));
   };
 
   const handleAddPrimaryDiagnosisFromDialog = (diagnosis: DiagnosisCatalog) => {
-    console.log('🔍 Adding primary diagnosis:', diagnosis);
+    // // console.log('🔍 Adding primary diagnosis:', diagnosis);
     primaryDiagnosesHook.addDiagnosis(diagnosis);
     
     // Update formData immediately
     setFormData(prev => ({
       ...prev,
-      primary_diagnoses: [...prev.primary_diagnoses, diagnosis]
+      primary_diagnoses: [...prev.primary_diagnoses, diagnosis],
+      // Auto-fill the text field with the diagnosis name
+      primary_diagnosis: diagnosis.name
     }));
   };
 
   const handleAddSecondaryDiagnosisFromDialog = (diagnosis: DiagnosisCatalog) => {
-    console.log('🔍 Adding secondary diagnosis:', diagnosis);
+    // // console.log('🔍 Adding secondary diagnosis:', diagnosis);
     secondaryDiagnosesHook.addDiagnosis(diagnosis);
     
     // Update formData immediately
     setFormData(prev => ({
       ...prev,
-      secondary_diagnoses_list: [...prev.secondary_diagnoses_list, diagnosis]
+      secondary_diagnoses_list: [...prev.secondary_diagnoses_list, diagnosis],
+      // Auto-fill the text field with the diagnosis name
+      secondary_diagnoses: diagnosis.name
     }));
   };
 
@@ -2901,17 +2921,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         {/* Print buttons - show when we have consultation data or are editing */}
         {((isEditing && consultation) || consultation) && (
           <Box sx={{ width: '100%' }}>
-            {console.log('🔍 PDF Debug - consultation data:', {
-              primary_diagnosis: consultation.primary_diagnosis,
-              formData_primary_diagnosis: formData.primary_diagnosis,
-              appointmentOffice: appointmentOffice,
-              state_name: appointmentOffice?.state_name,
-              country_name: appointmentOffice?.country_name,
-              consultation_id: consultation.id,
-              appointment_id: consultation.appointment_id,
-              full_appointmentOffice: appointmentOffice,
-              doctorProfile_offices: doctorProfile?.offices
-            })}
             <PrintButtons
               patient={{
                 id: selectedPatient?.id || 0,
@@ -2929,7 +2938,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               }}
               doctor={{
                 id: doctorProfile?.id || 0,
-                firstName: doctorProfile?.first_name || 'Dr.',
+                firstName: doctorProfile?.first_name || `${doctorProfile?.title || 'Dr.'}`,
                 lastName: doctorProfile?.paternal_surname || 'Usuario',
                 maternalSurname: doctorProfile?.maternal_surname || '',
                 title: doctorProfile?.title || 'Médico',
@@ -3042,13 +3051,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               );
             });
 
-            console.log('🔍 Vital Signs Debug:', {
-              allAvailable: allAvailableVitalSigns.length,
-              existing: existingVitalSigns.length,
-              filtered: filteredVitalSigns.length,
-              availableVitalSigns: allAvailableVitalSigns,
-              existingVitalSigns: existingVitalSigns
-            });
 
             if (filteredVitalSigns.length === 0) {
               return (

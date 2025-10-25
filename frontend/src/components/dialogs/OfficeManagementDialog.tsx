@@ -25,6 +25,7 @@ interface OfficeManagementDialogProps {
   onClose: () => void;
   office?: any; // For editing existing office
   isEditing?: boolean;
+  doctorId?: number; // Doctor ID for filtering offices
   onOfficeUpdated?: () => void; // Callback to refresh parent data
 }
 
@@ -33,9 +34,10 @@ const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
   onClose,
   office,
   isEditing = false,
+  doctorId,
   onOfficeUpdated
 }) => {
-  const { createOffice, updateOffice, isLoading } = useOfficeManagement();
+  const { createOffice, updateOffice, isLoading } = useOfficeManagement(doctorId);
   const { countries, states, isLoading: catalogsLoading, fetchStates, loadCatalogs } = useLocationCatalogs();
   const [formData, setFormData] = useState<OfficeFormData>({
     name: '',

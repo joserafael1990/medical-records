@@ -901,7 +901,7 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
                 }}
                 doctor={{
                   id: doctorProfile?.id || 0,
-                  firstName: doctorProfile?.first_name || 'Dr.',
+                  firstName: doctorProfile?.first_name || `${doctorProfile?.title || 'Dr.'}`,
                   lastName: doctorProfile?.paternal_surname || 'Usuario',
                   maternalSurname: doctorProfile?.maternal_surname || '',
                   title: doctorProfile?.title || 'Médico',

@@ -113,7 +113,10 @@ const AgendaView: React.FC<AgendaViewProps> = ({
       const errorDetail = error.detail || error.response?.data?.detail || 'Error al enviar recordatorio por WhatsApp';
       const statusCode = error.status || error.response?.status;
       
-      if (statusCode === 503) {
+      // Check for WhatsApp 24-hour window error
+      if (errorDetail.includes('more than 24 hours') || errorDetail.includes('24 hours have passed')) {
+        showError('No se puede enviar el mensaje porque han pasado más de 24 horas desde la última interacción del paciente con WhatsApp. El paciente debe enviar un mensaje primero para reanudar la conversación.');
+      } else if (statusCode === 503) {
         console.log('Detected 503 error, showing WhatsApp not configured message');
         // Use setTimeout to ensure the message is shown
         setTimeout(() => {
@@ -316,11 +319,30 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                               {appointment.office.is_virtual && ' (Virtual)'}
                             </Typography>
                           )}
-                          <Chip
-                            label={getStatusLabel(appointment.status)}
-                            size="small"
-                            sx={{ mt: 0.5, fontSize: '0.65rem', height: 16 }}
-                          />
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                            <Chip
+                              label={getStatusLabel(appointment.status)}
+                              size="small"
+                              sx={{ fontSize: '0.65rem', height: 16 }}
+                            />
+                            {appointment.status === 'confirmed' && (
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSendWhatsAppReminder(appointment);
+                                }}
+                                disabled={sendingWhatsApp === appointment.id}
+                                sx={{ 
+                                  color: 'primary.contrastText',
+                                  p: 0.5,
+                                  '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' }
+                                }}
+                              >
+                                <WhatsAppIcon sx={{ fontSize: 14 }} />
+                              </IconButton>
+                            )}
+                          </Box>
                         </Card>
                       ))}
                       {dayAppointments.length === 0 && (
@@ -396,17 +418,33 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                       </Typography>
                       <Box sx={{ mt: 0.5 }}>
                         {dayAppointments.slice(0, 2).map((appointment, index) => (
-                          <Chip
-                            key={index}
-                            label={`${formatTime(appointment.date_time)} ${appointment.patient?.first_name}`}
-                            size="small"
-                            sx={{ 
-                              mb: 0.5, 
-                              fontSize: '0.65rem', 
-                              height: 16,
-                              display: 'block'
-                            }}
-                          />
+                          <Box key={index} sx={{ mb: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Chip
+                              label={`${formatTime(appointment.date_time)} ${appointment.patient?.first_name}`}
+                              size="small"
+                              sx={{ 
+                                fontSize: '0.65rem', 
+                                height: 16,
+                                flex: 1
+                              }}
+                            />
+                            {appointment.status === 'confirmed' && (
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSendWhatsAppReminder(appointment);
+                                }}
+                                disabled={sendingWhatsApp === appointment.id}
+                                sx={{ 
+                                  p: 0.25,
+                                  '&:hover': { bgcolor: 'action.hover' }
+                                }}
+                              >
+                                <WhatsAppIcon sx={{ fontSize: 12 }} />
+                              </IconButton>
+                            )}
+                          </Box>
                         ))}
                         {dayAppointments.length > 2 && (
                           <Typography variant="caption" color="text.secondary">

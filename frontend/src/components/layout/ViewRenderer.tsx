@@ -88,7 +88,7 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
             consultation={consultationManagement.selectedConsultation}
             onBack={consultationManagement.handleBackFromConsultationDetail}
             onEdit={() => {}}
-            doctorName={doctorProfile?.full_name || 'Dr. Usuario Sistema'}
+            doctorName={doctorProfile?.full_name || `${doctorProfile?.title || 'Dr.'} Usuario Sistema`}
           />
         </Suspense>
       )}

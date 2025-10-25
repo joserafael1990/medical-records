@@ -34,7 +34,7 @@ export interface OfficeFormData {
   timezone: string;
 }
 
-export const useOfficeManagement = () => {
+export const useOfficeManagement = (doctorId?: number) => {
   const [offices, setOffices] = useState<Office[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,10 +44,8 @@ export const useOfficeManagement = () => {
     setIsLoading(true);
     setError(null);
     try {
-      console.log('🏢 Fetching offices...');
-      const response = await apiService.get('/api/offices');
-      console.log('🏢 Offices response:', response);
-      const officesData = response.data || response;
+      console.log('🏢 Fetching offices for doctor_id:', doctorId);
+      const officesData = await apiService.getOffices(doctorId);
       console.log('🏢 Offices data:', officesData);
       setOffices(officesData || []);
     } catch (err: any) {
@@ -57,7 +55,7 @@ export const useOfficeManagement = () => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [doctorId]);
 
   // Create new office
   const createOffice = useCallback(async (officeData: OfficeFormData) => {

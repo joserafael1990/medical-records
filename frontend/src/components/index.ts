@@ -24,8 +24,6 @@ export { StudyCatalogSelector } from './common/StudyCatalogSelector';
 export { PrintPrescriptionButton } from './common/PrintPrescriptionButton';
 export { PrintMedicalOrderButton } from './common/PrintMedicalOrderButton';
 export { PrintButtons } from './common/PrintButtons';
-export { PDFTestComponent } from './common/PDFTestComponent';
-export { SimplePDFTest } from './common/SimplePDFTest';
 
 // UX Improvements
 export { SmartLoadingState, useSmartLoading } from './common/SmartLoadingState';

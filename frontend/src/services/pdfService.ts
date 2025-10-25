@@ -242,15 +242,10 @@ class PDFService {
     // Get full doctor name
     const fullDoctorName = this.getFullName(doctor.firstName, doctor.lastName, doctor.maternalSurname);
     
-    // Debug log for doctor office info
-    console.log('🔍 PDF Debug - doctor office info:', {
-      offices: doctor.offices,
-      firstOffice: doctor.offices && doctor.offices.length > 0 ? doctor.offices[0] : null
-    });
     
     // Doctor details table - more compact
     const doctorData = [
-      ['Médico:', `Dr. ${fullDoctorName}`],
+      ['Médico:', `${doctor.title || 'Dr.'} ${fullDoctorName}`],
       ['Especialidad:', doctor.specialty || 'No especificada'],
       ['Cédula:', doctor.license || 'No especificada'],
       ['Universidad:', doctor.university || 'No especificada'],
@@ -322,7 +317,7 @@ class PDFService {
     return currentY + (patientData.length * 10) + 5;
   }
 
-  private addConsultationInfo(doc: jsPDF, consultation: ConsultationInfo, patient: PatientInfo, startY: number): number {
+  private addConsultationInfo(doc: jsPDF, consultation: ConsultationInfo, patient: PatientInfo, startY: number, includeDiagnosis: boolean = true): number {
     doc.setFontSize(10);
     doc.setTextColor(0, 0, 0);
     doc.setFont('helvetica', 'bold');
@@ -336,17 +331,16 @@ class PDFService {
     // Get full patient name
     const fullPatientName = this.getFullName(patient.firstName, patient.lastName, patient.maternalSurname);
     
-    // Debug log for diagnosis
-    console.log('🔍 PDF Debug - consultation diagnosis:', {
-      diagnosis: consultation.diagnosis,
-      consultation: consultation
-    });
-    
+    // Build consultation data based on whether to include diagnosis
     const consultationData = [
       ['Fecha:', formattedDate],
-      ['Paciente:', fullPatientName],
-      ['Diagnóstico:', consultation.diagnosis || 'No especificado']
+      ['Paciente:', fullPatientName]
     ];
+    
+    // Only include diagnosis if requested (for medical orders, not prescriptions)
+    if (includeDiagnosis) {
+      consultationData.push(['Diagnóstico:', consultation.diagnosis || 'No especificado']);
+    }
     
     autoTable(doc, {
       startY: currentY,
@@ -394,8 +388,8 @@ class PDFService {
       // Add patient info (includes birth date and gender)
       currentY = this.addPatientInfo(doc, patient, currentY);
       
-      // Add consultation info (includes patient name)
-      currentY = this.addConsultationInfo(doc, consultation, patient, currentY);
+      // Add consultation info (without diagnosis for prescriptions)
+      currentY = this.addConsultationInfo(doc, consultation, patient, currentY, false);
       
       // Add medications
       doc.setFontSize(10);

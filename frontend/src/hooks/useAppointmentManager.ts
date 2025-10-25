@@ -93,6 +93,7 @@ export const useAppointmentManager = (
     loadAppointments();
   }, [doctorProfile]);
 
+
   // Load appointments on component mount (independent of doctorProfile)
   useEffect(() => {
     console.log('🚀 useAppointmentManager mounted - loading appointments immediately');
@@ -728,6 +729,16 @@ export const useAppointmentManager = (
   useEffect(() => {
     console.log('🔄 useAppointmentManager - useEffect for agenda view change');
     refreshAppointments();
+  }, [refreshAppointments]);
+
+  // Auto-refresh appointments every 30 seconds to detect WhatsApp cancellations
+  useEffect(() => {
+    const interval = setInterval(() => {
+      console.log('🔄 Auto-refreshing appointments (polling)...');
+      refreshAppointments();
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
   }, [refreshAppointments]);
 
   return {

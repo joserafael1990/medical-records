@@ -117,6 +117,8 @@ class WhatsAppService:
             }
         }
         
+        # Log detallado para debugging
+        
         try:
             logger.info(f"Sending WhatsApp to {formatted_phone} using template {template_name}")
             response = requests.post(url, headers=self._get_headers(), json=payload, timeout=10)
@@ -236,37 +238,34 @@ class WhatsAppService:
         online_consultation_url: str = None
     ) -> Dict[str, Any]:
         """
-        Enviar recordatorio de cita médica
+        Enviar recordatorio de cita médica usando plantilla aprobada
         
-        En modo desarrollo, envía mensaje de texto simple
-        En producción, usar plantilla aprobada
+        Usa la plantilla 'appointment_reminder' aprobada en Meta Business Manager
         
         Args:
             country_code: Código de país del consultorio. Si es None, usa '52' (México) como fallback
             appointment_type: "presencial" o "online"
             online_consultation_url: URL para citas online (parámetro 7)
         """
-        # Crear mensaje de texto simple para desarrollo
-        if appointment_type == "online":
-            message = f"""¡Hola {patient_full_name}! 🗓️
-
-Este es un recordatorio de tu cita ONLINE hoy *{appointment_date} a las {appointment_time}* con {doctor_title} {doctor_full_name}
-💻 *Consulta Online:* {online_consultation_url}
-
-Te esperamos 10 minutos antes.
-Si no puedes asistir, por favor, usa el botón "Cancelar" para liberar tu espacio"""
-        else:
-            message = f"""¡Hola {patient_full_name}! 🗓️
-
-Este es un recordatorio de tu cita hoy *{appointment_date} a las {appointment_time}* con {doctor_title} {doctor_full_name}
-📍 *Lugar:* {office_address}
-
-Te esperamos 10 minutos antes.
-Si no puedes asistir, por favor, usa el botón "Cancelar" para liberar tu espacio"""
+        # Preparar parámetros para la plantilla según el formato exacto:
+        # ¡Hola *{{1}}*, 🗓️
+        # Este es un recordatorio de tu cita hoy *{{2}} a las {{3}}* con {{4}} {{5}}
+        # 📍 *Lugar:* {{6}}
+        template_params = [
+            str(patient_full_name or "Paciente"),           # {{1}} - Nombre del paciente
+            str(appointment_date or "Fecha no especificada"),            # {{2}} - Fecha de la cita
+            str(appointment_time or "Hora no especificada"),            # {{3}} - Hora de la cita
+            str(doctor_title or "Dr"),                      # {{4}} - Título del doctor (Dr, Dra, etc.)
+            str(doctor_full_name.replace(doctor_title, "").strip() if doctor_title and doctor_title in doctor_full_name else doctor_full_name or "Médico"),  # {{5}} - Nombre del doctor (sin título)
+            str(office_address or "Consultorio médico")    # {{6}} - Dirección del consultorio
+        ]
         
-        return self.send_text_message(
+        
+        return self.send_template_message(
             to_phone=patient_phone,
-            message=message,
+            template_name='appointment_reminder',
+            template_params=template_params,
+            language_code='es',
             country_code=country_code
         )
     

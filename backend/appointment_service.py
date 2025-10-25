@@ -146,6 +146,9 @@ class AppointmentService:
         # Status filter for available appointments (for consultation dropdown)
         if available_for_consultation:
             query = query.filter(Appointment.status.in_(['confirmed']))
+        elif status == 'active':
+            # Exclude cancelled appointments
+            query = query.filter(Appointment.status != 'cancelled')
         elif status:
             query = query.filter(Appointment.status == status)
         
