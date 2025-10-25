@@ -121,6 +121,7 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
   const toast = useSimpleToast();
 
   useEffect(() => {
+    console.log('🔄 useEffect triggered:', { open, isEditing, hasExternalFormData: !!externalFormData });
     if (open) {
       if (isEditing && externalFormData) {
         console.log('🔍 AppointmentDialogMultiOffice - Setting form data for editing:', externalFormData);
@@ -142,6 +143,8 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
           loadAvailableTimes(dateOnly);
         }
       } else {
+        console.log('🔄 Resetting form for new appointment');
+        console.log('🔄 Current isExistingPatient before reset:', isExistingPatient);
         const defaultData = {
           patient_id: 0,
           doctor_id: 0,
@@ -154,6 +157,7 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
         };
         setFormData(defaultData);
         // Para nueva cita, resetear isExistingPatient
+        console.log('⚠️ Resetting isExistingPatient to null');
         setIsExistingPatient(null);
         
         // Reset time selection for new appointment
@@ -282,14 +286,17 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
       if (selectedOffice) {
         const appointmentTypeId = selectedOffice.is_virtual ? 2 : 1;
         console.log('🏢 Setting appointment_type_id to:', appointmentTypeId, '(is_virtual:', selectedOffice.is_virtual, ')');
+        console.log('🏢 Preserving isExistingPatient state:', isExistingPatient);
         newFormData = {
           ...newFormData,
           appointment_type_id: appointmentTypeId
         };
+        // NOTE: isExistingPatient state is preserved - it should NOT be reset when changing office
       }
     }
     
     console.log('🔄 New formData after change:', newFormData);
+    console.log('🔄 isExistingPatient will remain:', isExistingPatient);
     
     setFormData(newFormData);
     if (onFormDataChange) {
