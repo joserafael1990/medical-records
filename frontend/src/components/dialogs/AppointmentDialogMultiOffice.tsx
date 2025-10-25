@@ -187,7 +187,20 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
       console.log('🔄 Loading times for default date:', todayString);
       console.log('🔄 Mexico time string:', mexicoTimeString);
       console.log('🔄 Mexico date object:', mexicoDate);
+      
+      // Set both selectedDate and formData.appointment_date to keep them in sync
       setSelectedDate(todayString);
+      
+      // Update formData with the correct date
+      const newFormData = {
+        ...currentFormData,
+        appointment_date: mexicoDate.toISOString()
+      };
+      setFormData(newFormData);
+      if (onFormDataChange) {
+        onFormDataChange(newFormData);
+      }
+      
       loadAvailableTimes(todayString);
     }
   }, [open, isEditing]);
