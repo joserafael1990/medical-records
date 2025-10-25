@@ -832,12 +832,6 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
               </Alert>
             )}
             
-            {/* Debug info */}
-            {process.env.NODE_ENV === 'development' && (
-              <Box sx={{ mt: 1, p: 1, bgcolor: 'grey.100', fontSize: '0.8rem' }}>
-                Debug: selectedDate={selectedDate}, availableTimes.length={availableTimes.length}, loadingTimes={loadingTimes.toString()}
-              </Box>
-            )}
 
             {/* 7. MOTIVO */}
             <TextField
