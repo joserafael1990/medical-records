@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { apiService } from './api';
 
 export interface PatientInfo {
   id: number;
@@ -231,7 +232,7 @@ class PDFService {
     doc.text(`Generado el ${dateStr} a las ${timeStr}`, 20, pageHeight - 15);
   }
 
-  private addDoctorInfo(doc: jsPDF, doctor: DoctorInfo, startY: number): number {
+  private addDoctorInfo(doc: jsPDF, doctor: DoctorInfo, startY: number, officeInfo?: any): number {
     doc.setFontSize(10);
     doc.setTextColor(0, 0, 0);
     doc.setFont('helvetica', 'bold');
@@ -250,8 +251,8 @@ class PDFService {
       ['Cédula:', doctor.license || 'No especificada'],
       ['Universidad:', doctor.university || 'No especificada'],
       ['Teléfono:', doctor.phone || 'No especificado'],
-      ['Consultorio:', doctor.offices && doctor.offices.length > 0 
-        ? `${doctor.offices[0].name} - ${doctor.offices[0].address || 'No especificado'}, ${doctor.offices[0].city || 'No especificado'}, ${doctor.offices[0].state || 'No especificado'}, ${doctor.offices[0].country || 'No especificado'}`
+      ['Consultorio:', officeInfo 
+        ? `${officeInfo.name} - ${officeInfo.address || 'No especificado'}, ${officeInfo.city || 'No especificado'}, ${officeInfo.state || officeInfo.state_name || 'No especificado'}, ${officeInfo.country || officeInfo.country_name || 'México'}`
         : 'No especificado']
     ];
     
@@ -375,6 +376,26 @@ class PDFService {
       medicationsCount: medications?.length
     });
     
+    // Get office information if not available
+    let officeInfo = null;
+    if (!doctor.offices || doctor.offices.length === 0) {
+      try {
+        const offices = await apiService.getOffices();
+        if (offices && offices.length > 0) {
+          officeInfo = offices[0];
+        }
+      } catch (error) {
+        console.warn('Could not fetch office information:', error);
+      }
+    } else {
+      officeInfo = doctor.offices[0];
+    }
+    
+    console.log('🔍 PDF Office Info (Prescription):', officeInfo);
+    console.log('🔍 Available fields:', Object.keys(officeInfo || {}));
+    console.log('🔍 State field:', officeInfo?.state, officeInfo?.state_name);
+    console.log('🔍 Country field:', officeInfo?.country, officeInfo?.country_name);
+    
     try {
       const doc = new jsPDF();
       let currentY = 60;
@@ -383,7 +404,7 @@ class PDFService {
       await this.addCortexHeader(doc, 'RECETA MÉDICA');
       
       // Add doctor info first
-      currentY = this.addDoctorInfo(doc, doctor, currentY);
+      currentY = this.addDoctorInfo(doc, doctor, currentY, officeInfo);
       
       // Add patient info (includes birth date and gender)
       currentY = this.addPatientInfo(doc, patient, currentY);
@@ -462,6 +483,26 @@ class PDFService {
     consultation: ConsultationInfo,
     studies: StudyInfo[]
   ): Promise<void> {
+    // Get office information if not available
+    let officeInfo = null;
+    if (!doctor.offices || doctor.offices.length === 0) {
+      try {
+        const offices = await apiService.getOffices();
+        if (offices && offices.length > 0) {
+          officeInfo = offices[0];
+        }
+      } catch (error) {
+        console.warn('Could not fetch office information:', error);
+      }
+    } else {
+      officeInfo = doctor.offices[0];
+    }
+    
+    console.log('🔍 PDF Office Info (Medical Order):', officeInfo);
+    console.log('🔍 Available fields:', Object.keys(officeInfo || {}));
+    console.log('🔍 State field:', officeInfo?.state, officeInfo?.state_name);
+    console.log('🔍 Country field:', officeInfo?.country, officeInfo?.country_name);
+
     const doc = new jsPDF();
     let currentY = 60;
     
@@ -469,7 +510,7 @@ class PDFService {
     await this.addCortexHeader(doc, 'ORDEN DE ESTUDIOS MÉDICOS');
     
     // Add doctor info first
-    currentY = this.addDoctorInfo(doc, doctor, currentY);
+    currentY = this.addDoctorInfo(doc, doctor, currentY, officeInfo);
     
     // Add patient info (includes birth date and gender)
     currentY = this.addPatientInfo(doc, patient, currentY);

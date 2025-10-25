@@ -709,9 +709,15 @@ async def create_office(
         db.commit()
         db.refresh(new_office)
         
+        # Load the office with relationships to get state and country names
+        office_with_relations = db.query(Office).options(
+            joinedload(Office.state),
+            joinedload(Office.country)
+        ).filter(Office.id == new_office.id).first()
+        
         print(f"✅ [CREATE OFFICE] Office created successfully with ID: {new_office.id}")
         print(f"✅ [CREATE OFFICE] Office name: '{new_office.name}'")
-        return new_office
+        return office_with_relations
         
     except Exception as e:
         print(f"❌ Error creating office: {e}")
@@ -720,15 +726,13 @@ async def create_office(
 
 @app.get("/api/offices", response_model=List[schemas.Office])
 async def get_doctor_offices(
-    doctor_id: int = None,  # Optional parameter for testing
-    # current_user: Person = Depends(get_current_user),  # Temporarily disabled for testing
+    current_user: Person = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get all offices for the current doctor"""
     try:
-        # Use provided doctor_id or default to 1 for testing
-        if doctor_id is None:
-            doctor_id = 1
+        # Use current user's doctor_id
+        doctor_id = current_user.id
         
         # Get offices for the current doctor with JOINs for state and country names
         results = db.query(Office, State.name.label('state_name'), Country.name.label('country_name')).join(
@@ -3389,11 +3393,20 @@ async def get_my_profile(
         )
     
     # Load the user with relationships to get state and country names
+    print(f"🔍 [AUTH/ME] Loading user with ID: {current_user.id}")
     user_with_relations = db.query(Person).options(
         joinedload(Person.specialty),
-        joinedload(Person.offices).joinedload(Office.state),
-        joinedload(Person.offices).joinedload(Office.country)
+        joinedload(Person.offices)
     ).filter(Person.id == current_user.id).first()
+    
+    if user_with_relations:
+        print(f"🔍 [AUTH/ME] User found: {user_with_relations.full_name}")
+        print(f"🔍 [AUTH/ME] Offices count: {len(user_with_relations.offices) if user_with_relations.offices else 0}")
+        if user_with_relations.offices:
+            for office in user_with_relations.offices:
+                print(f"🔍 [AUTH/ME] Office: {office.name}, State ID: {office.state_id}, Country ID: {office.country_id}")
+    else:
+        print(f"🔍 [AUTH/ME] User not found for ID: {current_user.id}")
     
     if not user_with_relations:
         raise HTTPException(
@@ -3441,8 +3454,8 @@ async def get_my_profile(
                 "address": office.address,
                 "city": office.city,
                 "state_id": office.state_id,
-                "state_name": office.state.name if office.state else None,
-                "country_name": office.country.name if office.country else None,
+                "state_name": None,  # Will be loaded separately
+                "country_name": None,  # Will be loaded separately
                 "postal_code": office.postal_code,
                 "phone": office.phone,
                 "timezone": office.timezone,
