@@ -751,10 +751,22 @@ async def get_doctor_offices(
 ):
     """Get all offices for the current doctor"""
     try:
-        # Disabled for development - get all active offices
-        offices = db.query(Office).filter(
+        # Disabled for development - get all active offices with JOINs for state and country names
+        results = db.query(Office, State.name.label('state_name'), Country.name.label('country_name')).join(
+            State, Office.state_id == State.id, isouter=True
+        ).join(
+            Country, Office.country_id == Country.id, isouter=True
+        ).filter(
             Office.is_active == True
         ).all()
+        
+        # Add state_name and country_name to each office object
+        offices = []
+        for result in results:
+            office, state_name, country_name = result
+            office.state_name = state_name
+            office.country_name = country_name
+            offices.append(office)
         
         return offices
         
