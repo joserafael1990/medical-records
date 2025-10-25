@@ -2906,7 +2906,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               formData_primary_diagnosis: formData.primary_diagnosis,
               appointmentOffice: appointmentOffice,
               state_name: appointmentOffice?.state_name,
-              country_name: appointmentOffice?.country_name
+              country_name: appointmentOffice?.country_name,
+              consultation_id: consultation.id,
+              appointment_id: consultation.appointment_id
             })}
             <PrintButtons
               patient={{
@@ -2947,7 +2949,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   is_active: appointmentOffice.is_active,
                   is_virtual: appointmentOffice.is_virtual,
                   timezone: appointmentOffice.timezone
-                }] : []
+                }] : (doctorProfile?.offices && doctorProfile.offices.length > 0 ? doctorProfile.offices : [])
               }}
               consultation={{
                 id: consultation.id,
