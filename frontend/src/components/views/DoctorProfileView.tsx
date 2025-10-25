@@ -581,7 +581,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
               <Alert severity="error" sx={{ mb: 2 }}>
                 Error al cargar horarios: {scheduleError}
               </Alert>
-            ) : scheduleData ? (
+            ) : scheduleData && Object.values(scheduleData).some(day => day && day.is_active) ? (
               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(auto-fit, minmax(200px, 1fr))' }, gap: 2 }}>
                 {Object.entries(scheduleData).map(([day, schedule]) => {
                   if (!schedule || !schedule.is_active) return null;
@@ -643,6 +643,20 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                     </Card>
                   );
                 })}
+              </Box>
+            ) : scheduleData ? (
+              <Box sx={{ textAlign: 'center', p: 3 }}>
+                <Typography variant="body1" color="text.secondary" gutterBottom>
+                  No hay horarios configurados
+                </Typography>
+                <Button
+                  variant="outlined"
+                  startIcon={<ScheduleIcon />}
+                  onClick={() => setScheduleConfigDialogOpen(true)}
+                  sx={{ mt: 1 }}
+                >
+                  Configurar Horarios
+                </Button>
               </Box>
             ) : (
               <Box sx={{ textAlign: 'center', p: 3 }}>
