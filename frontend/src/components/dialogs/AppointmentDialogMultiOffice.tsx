@@ -169,6 +169,7 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
         const today = new Date();
         const todayString = today.toISOString().split('T')[0];
         console.log('🔄 Loading available times for today:', todayString);
+        setSelectedDate(todayString);
         loadAvailableTimes(todayString);
         
         // Don't call onFormDataChange here to prevent infinite loop
