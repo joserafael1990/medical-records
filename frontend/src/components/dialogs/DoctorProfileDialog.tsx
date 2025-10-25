@@ -319,6 +319,20 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
               <option value="F">Femenino</option>
               <option value="O">Otro</option>
             </TextField>
+            <TextField
+              name="curp"
+              label="CURP *"
+              value={formData.curp || ''}
+              onChange={handleChange}
+              size="small"
+              required
+              error={!!fieldErrors.curp}
+              helperText={fieldErrors.curp}
+              inputProps={{
+                maxLength: 18,
+                style: { textTransform: 'uppercase' }
+              }}
+            />
             </Box>
 
           {/* Información Profesional */}
@@ -389,228 +403,24 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
                   error={!!fieldErrors.specialty}
               helperText={fieldErrors.specialty}
             />
-          </Box>
-
-          {/* Información del Consultorio */}
-          <Typography variant="h6" sx={{ mt: 3, mb: 1, color: 'primary.main' }}>
-            Información del Consultorio
-            </Typography>
-
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
             <TextField
-              name="office_address"
-              label="Dirección del Consultorio *"
-              value={formData.office_address || ''}
+              name="appointment_duration"
+              label="Duración de Consulta (minutos) *"
+              value={formData.appointment_duration || ''}
               onChange={handleChange}
               size="small"
+              type="number"
               required
-              error={!!fieldErrors.office_address}
-              helperText={fieldErrors.office_address}
-            />
-                  <TextField
-              name="office_city"
-              label="Ciudad *"
-              value={formData.office_city || ''}
-              onChange={handleChange}
-              size="small"
-                required
-                error={!!fieldErrors.office_city}
-              helperText={fieldErrors.office_city}
-            />
-              <TextField
-              name="office_country"
-              label="País *"
-              value={formData.office_country || ''}
-              onChange={handleChange}
-              size="small"
-              required
-              error={!!fieldErrors.office_country}
-              helperText={fieldErrors.office_country}
-              select
-              SelectProps={{
-                native: true,
-                style: { zIndex: 9999 }
+              error={!!fieldErrors.appointment_duration}
+              helperText={fieldErrors.appointment_duration}
+              inputProps={{
+                min: 15,
+                max: 120,
+                step: 15
               }}
-              InputLabelProps={{
-                shrink: true
-              }}
-              sx={{
-                '& .MuiSelect-select': {
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  paddingRight: '32px !important',
-                  minHeight: 'auto !important'
-                },
-                '& .MuiInputLabel-root': {
-                  '&.Mui-focused': {
-                    color: 'primary.main'
-                  },
-                  transform: 'translate(14px, -9px) scale(0.75)',
-                  '&.MuiInputLabel-shrink': {
-                    transform: 'translate(14px, -9px) scale(0.75)'
-                  }
-                },
-                '& .MuiOutlinedInput-root': {
-                  '& fieldset': {
-                    borderColor: 'rgba(0, 0, 0, 0.23)'
-                  },
-                  '&:hover fieldset': {
-                    borderColor: 'rgba(0, 0, 0, 0.87)'
-                  },
-                  '&.Mui-focused fieldset': {
-                    borderColor: 'primary.main'
-                  }
-                }
-              }}
-            >
-              <option value="">Seleccione</option>
-              {countries.map(country => (
-                <option key={country.id} value={country.name}>
-                  {country.name}
-                </option>
-              ))}
-            </TextField>
-                  <TextField
-                    name="office_state_id"
-                    label="Estado *"
-                    value={states.find(s => s.id.toString() === formData.office_state_id)?.name || ''}
-                    onChange={(e) => {
-                      const stateName = e.target.value;
-                      const state = states.find(s => s.name === stateName);
-                      handleChange({
-                        target: {
-                          name: 'office_state_id',
-                          value: state ? state.id.toString() : ''
-                        }
-                      });
-                    }}
-                    size="small"
-                    required
-                    error={!!fieldErrors.office_state_id}
-                    helperText={fieldErrors.office_state_id}
-                    select
-                    SelectProps={{
-                      native: true,
-                      style: { zIndex: 9999 }
-                    }}
-                    InputLabelProps={{
-                      shrink: true
-                    }}
-                    sx={{
-                      '& .MuiSelect-select': {
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        paddingRight: '32px !important',
-                        minHeight: 'auto !important'
-                      },
-                      '& .MuiInputLabel-root': {
-                        '&.Mui-focused': {
-                          color: 'primary.main'
-                        },
-                        transform: 'translate(14px, -9px) scale(0.75)',
-                        '&.MuiInputLabel-shrink': {
-                          transform: 'translate(14px, -9px) scale(0.75)'
-                        }
-                      },
-                      '& .MuiOutlinedInput-root': {
-                        '& fieldset': {
-                          borderColor: 'rgba(0, 0, 0, 0.23)'
-                        },
-                        '&:hover fieldset': {
-                          borderColor: 'rgba(0, 0, 0, 0.87)'
-                        },
-                        '&.Mui-focused fieldset': {
-                          borderColor: 'primary.main'
-                        }
-                      }
-                    }}
-                  >
-                    <option value="">Seleccione</option>
-                    {states.map(state => (
-                      <option key={state.id} value={state.name}>
-                        {state.name}
-                      </option>
-                    ))}
-                  </TextField>
-              <TextField
-              name="office_postal_code"
-                label="Código Postal"
-                value={formData.office_postal_code || ''}
-              onChange={handleChange}
-              size="small"
             />
-              <TextField
-                name="office_timezone"
-                label="Zona Horaria *"
-                value={formData.office_timezone || 'America/Mexico_City'}
-                onChange={handleChange}
-                size="small"
-                required
-                error={!!fieldErrors.office_timezone}
-                helperText={fieldErrors.office_timezone}
-                select
-                SelectProps={{
-                  native: true,
-                  style: { zIndex: 9999 }
-                }}
-                InputLabelProps={{
-                  shrink: true
-                }}
-                sx={{
-                  '& .MuiSelect-select': {
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    paddingRight: '32px !important',
-                    minHeight: 'auto !important'
-                  },
-                  '& .MuiInputLabel-root': {
-                    '&.Mui-focused': {
-                      color: 'primary.main'
-                    },
-                    transform: 'translate(14px, -9px) scale(0.75)',
-                    '&.MuiInputLabel-shrink': {
-                      transform: 'translate(14px, -9px) scale(0.75)'
-                    }
-                  },
-                  '& .MuiOutlinedInput-root': {
-                    '& fieldset': {
-                      borderColor: 'rgba(0, 0, 0, 0.23)'
-                    },
-                    '&:hover fieldset': {
-                      borderColor: 'rgba(0, 0, 0, 0.87)'
-                    },
-                    '&.Mui-focused fieldset': {
-                      borderColor: 'primary.main'
-                    }
-                  }
-                }}
-              >
-                {timezones.map(timezone => (
-                  <option key={timezone.value} value={timezone.value}>
-                    {timezone.label}
-                  </option>
-                ))}
-              </TextField>
-              <TextField
-                name="appointment_duration"
-                label="Duración de Consulta (minutos) *"
-                value={formData.appointment_duration || ''}
-                onChange={handleChange}
-                size="small"
-                type="number"
-                required
-                error={!!fieldErrors.appointment_duration}
-                helperText={fieldErrors.appointment_duration}
-                inputProps={{
-                  min: 15,
-                  max: 120,
-                  step: 15
-                }}
-              />
           </Box>
+
         </Box>
       </DialogContent>
 
