@@ -95,6 +95,8 @@ class Office(OfficeBase):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    state_name: Optional[str] = None
+    country_name: Optional[str] = None
 
 class AppointmentTypeBase(BaseSchema):
     name: str

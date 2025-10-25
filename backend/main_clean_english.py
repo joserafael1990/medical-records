@@ -771,17 +771,23 @@ async def get_office(
     """Get a specific office by ID"""
     try:
         # Disabled for development - get office by ID only with JOINs for state and country names
-        office = db.query(Office).join(State, Office.state_id == State.id, isouter=True).join(Country, Office.country_id == Country.id, isouter=True).filter(
+        result = db.query(Office, State.name.label('state_name'), Country.name.label('country_name')).join(
+            State, Office.state_id == State.id, isouter=True
+        ).join(
+            Country, Office.country_id == Country.id, isouter=True
+        ).filter(
             Office.id == office_id,
             Office.is_active == True
         ).first()
         
-        if not office:
+        if not result:
             raise HTTPException(status_code=404, detail="Office not found")
         
+        office, state_name, country_name = result
+        
         # Add state_name and country_name to the office object
-        office.state_name = office.state.name if office.state else None
-        office.country_name = office.country.name if office.country else None
+        office.state_name = state_name
+        office.country_name = country_name
         
         return office
         
