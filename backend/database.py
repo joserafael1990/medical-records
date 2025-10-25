@@ -345,7 +345,6 @@ class Appointment(Base):
     # CLINICAL INFORMATION
     reason = Column(Text, nullable=False)
     notes = Column(Text)
-    preparation_instructions = Column(Text)
     
     # FOLLOW-UP
     follow_up_required = Column(Boolean, default=False)
@@ -353,11 +352,6 @@ class Appointment(Base):
     
     # ADMINISTRATIVE
     room_number = Column(String(20))
-    estimated_cost = Column(DECIMAL(10, 2))
-    insurance_covered = Column(Boolean, default=False)
-    
-    # CONFIRMATION
-    confirmation_required = Column(Boolean, default=False)
     confirmed_at = Column(DateTime)
     reminder_sent = Column(Boolean, default=False)
     reminder_sent_at = Column(DateTime)

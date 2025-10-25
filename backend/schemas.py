@@ -430,12 +430,9 @@ class AppointmentBase(BaseSchema):
     priority: str = 'normal'
     reason: str
     notes: Optional[str] = None
-    preparation_instructions: Optional[str] = None
     follow_up_required: bool = False
     follow_up_date: Optional[date] = None
     room_number: Optional[str] = None
-    estimated_cost: Optional[Decimal] = None
-    insurance_covered: bool = False
 
 class AppointmentCreate(AppointmentBase):
     pass
