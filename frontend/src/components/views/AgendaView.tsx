@@ -100,7 +100,6 @@ const AgendaView: React.FC<AgendaViewProps> = ({
       await apiService.sendWhatsAppAppointmentReminder(appointment.id);
       showSuccess('Recordatorio enviado por WhatsApp exitosamente');
     } catch (error: any) {
-      console.error('Error sending WhatsApp reminder:', error);
       // Error logging removed to prevent console spam
       
       // Handle specific error cases

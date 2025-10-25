@@ -77,7 +77,6 @@ export const useAppointmentManager = (
     // Load appointments regardless of doctor profile (they are global)
     const loadAppointments = async () => {
       try {
-        console.log('🔄 Loading appointments (doctorProfile effect)...');
         setIsLoading(true);
         const appointmentsData = await apiService.getAppointments();
         setAppointments(appointmentsData || []);
@@ -246,12 +245,9 @@ export const useAppointmentManager = (
 
   // Handle edit appointment
   const handleEditAppointment = useCallback((appointment: Appointment) => {
-    console.log('🔍 handleEditAppointment - appointment:', appointment);
     setIsEditingAppointment(true);
     setSelectedAppointment(appointment);
-    console.log('🔍 Original appointment.appointment_date:', appointment.appointment_date);
     const formattedDateTime = formatDateTimeForInput(appointment.appointment_date || appointment.date_time);
-    console.log('🔍 Formatted appointment_date:', formattedDateTime);
     
     const formData = {
       patient_id: appointment.patient_id,
@@ -272,7 +268,6 @@ export const useAppointmentManager = (
       equipment_needed: appointment.equipment_needed || '',
       cancelled_reason: appointment.cancelled_reason || ''
     };
-    console.log('🔍 handleEditAppointment - formData:', formData);
     setAppointmentFormData(formData);
     setFieldErrors({});
     setFormErrorMessage('');
@@ -405,8 +400,6 @@ export const useAppointmentManager = (
           insurance_covered: formDataToUse.insurance_covered || false
         };
         
-        console.log('🔄 Updating appointment:', selectedAppointment.id, 'with data:', updateData);
-        console.log('🔄 Form data being used:', formDataToUse);
         const updatedAppointment = await apiService.updateAppointment(selectedAppointment.id, updateData);
         
         // Transform the updated appointment response to match frontend format
@@ -486,8 +479,6 @@ export const useAppointmentManager = (
         showSuccessMessage('Cita actualizada exitosamente');
       } else {
         // Transform form data to backend format - using new format
-        console.log('🔄 useAppointmentManager - Current formDataToUse:', formDataToUse);
-        console.log('🔄 useAppointmentManager - formDataToUse.appointment_date:', formDataToUse.appointment_date);
         
         const appointmentDate = new Date(formDataToUse.appointment_date);
         
@@ -541,27 +532,20 @@ export const useAppointmentManager = (
         // console.log('🔄 New appointment created, refreshing data...');
         
         // Refresh appointments after successful creation
-        console.log('🔄 Appointment created successfully, refreshing data...');
         
         // Call the refresh function immediately and also with a delay for stability
         try {
           await refreshAppointments();
-          console.log('✅ Appointments refreshed immediately after creation');
         } catch (error) {
-          console.error('❌ Error in immediate refresh:', error);
+          // Silent error handling
         }
         
         // Also refresh with a delay to ensure backend has processed the new appointment
         setTimeout(async () => {
           try {
-            console.log('🔄 Starting delayed appointment refresh after creation...');
-            console.log('🔄 Current agendaView:', agendaView);
-            console.log('🔄 Current selectedDate:', selectedDate.toDateString());
-            
             await refreshAppointments();
-            console.log('✅ Delayed refresh completed successfully');
           } catch (error) {
-            console.error('❌ Error in delayed refresh:', error);
+            // Silent error handling
           }
         }, 1000); // Increased delay for better stability
         
@@ -595,9 +579,7 @@ export const useAppointmentManager = (
 
   // Cancel appointment
   const cancelAppointment = useCallback(async (appointmentId: number) => {
-    console.log('🔄 cancelAppointment called with ID:', appointmentId);
     try {
-      console.log('🔄 Calling apiService.cancelAppointment...');
       await apiService.cancelAppointment(appointmentId.toString());
       showSuccessMessage('Cita cancelada exitosamente');
       
@@ -645,10 +627,6 @@ export const useAppointmentManager = (
 
   // Refresh appointments function - can be called from child components
   const refreshAppointments = useCallback(async () => {
-    console.log('🔄 refreshAppointments called');
-    console.log('🔄 user?.doctor?.id:', user?.doctor?.id);
-    console.log('🔄 agendaView:', agendaView);
-    console.log('🔄 selectedDate:', selectedDate);
 
     try {
       const dateToRefresh = new Date(selectedDate);
@@ -660,7 +638,6 @@ export const useAppointmentManager = (
         const month = String(dateToRefresh.getMonth() + 1).padStart(2, '0');
         const day = String(dateToRefresh.getDate()).padStart(2, '0');
         const dateStr = `${year}-${month}-${day}`;
-        console.log('🔄 Loading daily agenda for date:', dateStr);
         data = await apiService.getDailyAgenda(dateStr);
       } else if (agendaView === 'weekly') {
         const start = new Date(dateToRefresh);
@@ -674,7 +651,6 @@ export const useAppointmentManager = (
         // Fix timezone issue for weekly view
         const startStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
         const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
-        console.log('🔄 Loading weekly agenda from:', startStr, 'to:', endStr);
         data = await apiService.getWeeklyAgenda(startStr, endStr);
       } else if (agendaView === 'monthly') {
         const start = new Date(dateToRefresh.getFullYear(), dateToRefresh.getMonth(), 1);
@@ -683,12 +659,9 @@ export const useAppointmentManager = (
         // Fix timezone issue for monthly view
         const startStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
         const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
-        console.log('🔄 Loading monthly agenda from:', startStr, 'to:', endStr);
         data = await apiService.getMonthlyAgenda(startStr, endStr);
       }
 
-      console.log('🔄 Appointments loaded:', data?.length || 0, 'appointments');
-      console.log('🔄 Sample appointment:', data?.[0]);
       
       // Force state update to ensure UI refreshes
       setAppointments(data || []);
@@ -696,7 +669,6 @@ export const useAppointmentManager = (
       // Additional state update to ensure the change is reflected
       setTimeout(() => {
         setAppointments(prev => {
-          console.log('🔄 Force updating appointments state:', data?.length || 0, 'appointments');
           return data || [];
         });
       }, 100);
@@ -749,7 +721,6 @@ export const useAppointmentManager = (
     
     // Additional utility function for forcing view refresh
     forceRefresh: () => {
-      console.log('🔄 Force refreshing appointments...');
       refreshAppointments();
     }
   };
