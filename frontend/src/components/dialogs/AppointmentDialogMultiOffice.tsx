@@ -186,6 +186,8 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
       const todayString = mexicoDate.toISOString().split('T')[0];
       
       console.log('🔄 Loading times for default date:', todayString);
+      console.log('🔄 Mexico time string:', mexicoTimeString);
+      console.log('🔄 Mexico date object:', mexicoDate);
       setSelectedDate(todayString);
       loadAvailableTimes(todayString);
     }
