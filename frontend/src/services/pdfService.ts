@@ -459,7 +459,7 @@ class PDFService {
         tableLineColor: [200, 200, 200],
         didDrawPage: (data: any) => {
           // Add footer on each page
-          this.addCortexFooter(doc, doc.internal.getNumberOfPages());
+          this.addCortexFooter(doc, data.pageNumber);
         }
       });
       
@@ -548,7 +548,7 @@ class PDFService {
       tableLineColor: [200, 200, 200],
       didDrawPage: (data: any) => {
         // Add footer on each page
-        this.addCortexFooter(doc, doc.internal.getNumberOfPages());
+        this.addCortexFooter(doc, data.pageNumber);
       }
     });
     

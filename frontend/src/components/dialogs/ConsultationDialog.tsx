@@ -277,15 +277,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     
     const shouldShow = isFollowUpAppointment || (isExistingPatientSelected && patientHasPreviousConsultations);
     
-    console.log('🔍 shouldShowPreviousConsultationsButton debug:', {
-      selectedAppointment: !!selectedAppointment,
-      isFollowUpAppointment,
-      selectedPatient: !!selectedPatient,
-      isNewPatient,
-      isExistingPatientSelected,
-      patientHasPreviousConsultations,
-      shouldShow
-    });
     
     return shouldShow;
   };
@@ -712,25 +703,17 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   // Function to check if patient has previous consultations
   const checkPatientPreviousConsultations = async (patientId: number) => {
     try {
-      console.log('🔍 Checking previous consultations for patient ID:', patientId);
       // Get all consultations and filter by patient ID
       const response = await apiService.get('/api/consultations');
       const allConsultations = response.data || [];
-      
-      console.log('🔍 All consultations:', allConsultations.length);
-      console.log('🔍 All consultations data:', allConsultations);
       
       // Filter consultations for this specific patient
       const patientConsultations = (allConsultations || []).filter((c: any) => c.patient_id === patientId);
       const hasPrevious = patientConsultations.length > 0;
       
-      console.log('🔍 Patient consultations found:', patientConsultations.length, 'Has previous:', hasPrevious);
-      console.log('🔍 Patient consultations data:', patientConsultations);
-      
       setPatientHasPreviousConsultations(hasPrevious);
     } catch (error) {
       console.error('❌ Error checking patient consultations:', error);
-      console.error('❌ Error details:', error.response?.data || error.message);
       setPatientHasPreviousConsultations(false);
     }
   };
@@ -796,8 +779,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       // Update study status to completed immediately
       try {
         await apiService.updateClinicalStudy(studyId, { status: 'completed' });
-        console.log('✅ Study status updated to completed');
-        
         // Update local state immediately to hide WhatsApp button
         setPatientPreviousStudies(prevStudies => {
           const updatedStudies = prevStudies.map(study => 
@@ -805,8 +786,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               ? { ...study, status: 'completed' }
               : study
           );
-          console.log('✅ Local study status updated to completed');
-          console.log('✅ Updated studies:', updatedStudies);
           return updatedStudies;
         });
       } catch (statusError) {
@@ -1082,9 +1061,11 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     }
   };
 
-  // Filter appointments to show only non-cancelled ones
+  // Filter appointments to show only non-cancelled ones for the current doctor
   const availableAppointments = (appointments || []).filter((appointment: any) => 
-    appointment.status !== 'cancelled' && appointment.status !== 'canceled'
+    appointment.status !== 'cancelled' && 
+    appointment.status !== 'canceled' &&
+    appointment.doctor_id === doctorProfile?.id
   );
 
   const handleSubmit = async () => {

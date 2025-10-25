@@ -761,13 +761,12 @@ async def get_doctor_offices(
 @app.get("/api/offices/{office_id}", response_model=schemas.Office)
 async def get_office(
     office_id: int,
-    # current_user: Person = Depends(get_current_user),  # Temporarily disabled for testing
+    current_user: Person = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get a specific office by ID"""
     try:
-        # Temporarily use doctor_id = 1 for testing - this should be replaced with current_user.id
-        doctor_id = 1
+        doctor_id = current_user.id
         # Get office by ID for the current doctor with JOINs for state and country names
         result = db.query(Office, State.name.label('state_name'), Country.name.label('country_name')).join(
             State, Office.state_id == State.id, isouter=True
@@ -1646,7 +1645,7 @@ async def get_clinical_study_file(
 async def send_whatsapp_appointment_reminder(
     appointment_id: int,
     db: Session = Depends(get_db),
-    # current_user: Person = Depends(get_current_user)  # Temporarily disabled for testing
+    current_user: Person = Depends(get_current_user)
 ):
     """Enviar recordatorio de cita por WhatsApp"""
     print(f"📱 Sending WhatsApp reminder for appointment: {appointment_id}")
@@ -4019,7 +4018,7 @@ async def get_dashboard_stats():
 
 @app.get("/api/appointments")
 async def get_appointments(
-    # current_user: Person = Depends(get_current_user),  # Disabled for development
+    current_user: Person = Depends(get_current_user),
     db: Session = Depends(get_db),
     skip: int = 0,
     limit: int = 100,
@@ -4052,7 +4051,7 @@ async def get_appointments(
                 start_date=start_date_obj,
                 end_date=end_date_obj,
                 status='active',  # This will filter out cancelled appointments
-                # doctor_id=current_user.id,  # Disabled for development
+                doctor_id=current_user.id,
                 available_for_consultation=available_for_consultation
             )
         else:
@@ -4063,7 +4062,7 @@ async def get_appointments(
             start_date=start_date_obj,
             end_date=end_date_obj,
             status=status,
-                # doctor_id=current_user.id,  # Disabled for development
+            doctor_id=current_user.id,
             available_for_consultation=available_for_consultation
         )
         
@@ -4087,6 +4086,7 @@ async def get_appointments(
             apt_dict = {
                 "id": str(appointment.id),
                 "patient_id": str(appointment.patient_id),
+                "doctor_id": appointment.doctor_id,  # ✅ Agregado doctor_id
                 "appointment_date": appointment.appointment_date.isoformat(),  # CDMX native format
                 "date_time": appointment.appointment_date.isoformat(),  # CDMX native format  
                 "end_time": appointment.end_time.isoformat() if appointment.end_time else None,
@@ -4111,11 +4111,9 @@ async def get_appointments(
             }
             result.append(apt_dict)
         
-        print(f"✅ Returned {len(result)} appointments")
         return result
         
     except Exception as e:
-        print(f"❌ Error in get_appointments: {str(e)}")
         # Return empty list instead of error to prevent frontend crashes
         return []
 
