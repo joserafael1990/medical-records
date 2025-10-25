@@ -165,24 +165,29 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
         setSelectedDate('');
         setAvailableTimes([]);
         
-        // Load available times for today's date automatically since DatePicker shows today by default
-        // Use Mexico timezone to get the correct date
-        const today = new Date();
-        // Get current time in Mexico timezone
-        const mexicoTimeString = today.toLocaleString("sv-SE", {timeZone: "America/Mexico_City"});
-        const mexicoDate = new Date(mexicoTimeString);
-        const todayString = mexicoDate.toISOString().split('T')[0];
-        console.log('🔄 Loading available times for today (default date):', todayString);
-        console.log('🔄 Original date:', today.toISOString().split('T')[0]);
-        console.log('🔄 Mexico time string:', mexicoTimeString);
-        console.log('🔄 Mexico date:', todayString);
-        setSelectedDate(todayString);
-        loadAvailableTimes(todayString);
+        // Don't load times automatically - let the DatePicker handle the date selection
+        // The DatePicker will show today's date by default and trigger onChange when user interacts
+        console.log('🔄 New appointment - DatePicker will show today by default');
         
         // Don't call onFormDataChange here to prevent infinite loop
         // It will be called when user actually changes form data
       }
       setError(null);
+    }
+  }, [open, isEditing]);
+
+  // Load available times for default date when dialog opens
+  useEffect(() => {
+    if (open && !isEditing) {
+      // Get today's date in Mexico timezone
+      const today = new Date();
+      const mexicoTimeString = today.toLocaleString("sv-SE", {timeZone: "America/Mexico_City"});
+      const mexicoDate = new Date(mexicoTimeString);
+      const todayString = mexicoDate.toISOString().split('T')[0];
+      
+      console.log('🔄 Loading times for default date:', todayString);
+      setSelectedDate(todayString);
+      loadAvailableTimes(todayString);
     }
   }, [open, isEditing]);
 
@@ -741,7 +746,7 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
             <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
               <DatePicker
                 label="Fecha de la cita"
-                value={currentFormData.appointment_date ? new Date(currentFormData.appointment_date) : null}
+                value={currentFormData.appointment_date ? new Date(currentFormData.appointment_date) : new Date()}
                 onChange={(date) => {
                   const dateString = date ? date.toISOString() : '';
                   const newFormData = {
