@@ -997,13 +997,17 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   // Load office information for existing consultation
   const loadOfficeForConsultation = async (appointmentId: string) => {
     try {
+      console.log('🔍 Loading office for consultation, appointmentId:', appointmentId);
       // First get the appointment to get the office_id
       const appointment = await apiService.getAppointment(parseInt(appointmentId));
+      console.log('🔍 Appointment data:', appointment);
       
       if (appointment && appointment.office_id) {
         const officeData = await apiService.getOffice(appointment.office_id);
+        console.log('🔍 Office data loaded:', officeData);
         setAppointmentOffice(officeData);
       } else {
+        console.log('🔍 No office_id found in appointment');
         setAppointmentOffice(null);
       }
     } catch (error) {
@@ -1015,14 +1019,18 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   // Load default office information when no appointment_id
   const loadDefaultOffice = async () => {
     try {
+      console.log('🔍 Loading default office');
       // Get all offices for the doctor
       const offices = await apiService.getOffices();
+      console.log('🔍 All offices:', offices);
       
       if (offices && offices.length > 0) {
         // Use the first active office
         const defaultOffice = offices.find(office => office.is_active) || offices[0];
+        console.log('🔍 Default office selected:', defaultOffice);
         setAppointmentOffice(defaultOffice);
       } else {
+        console.log('🔍 No offices found');
         setAppointmentOffice(null);
       }
     } catch (error) {
@@ -2893,6 +2901,13 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         {/* Print buttons - show when we have consultation data or are editing */}
         {((isEditing && consultation) || consultation) && (
           <Box sx={{ width: '100%' }}>
+            {console.log('🔍 PDF Debug - consultation data:', {
+              primary_diagnosis: consultation.primary_diagnosis,
+              formData_primary_diagnosis: formData.primary_diagnosis,
+              appointmentOffice: appointmentOffice,
+              state_name: appointmentOffice?.state_name,
+              country_name: appointmentOffice?.country_name
+            })}
             <PrintButtons
               patient={{
                 id: selectedPatient?.id || 0,

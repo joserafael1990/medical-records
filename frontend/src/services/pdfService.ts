@@ -242,6 +242,12 @@ class PDFService {
     // Get full doctor name
     const fullDoctorName = this.getFullName(doctor.firstName, doctor.lastName, doctor.maternalSurname);
     
+    // Debug log for doctor office info
+    console.log('🔍 PDF Debug - doctor office info:', {
+      offices: doctor.offices,
+      firstOffice: doctor.offices && doctor.offices.length > 0 ? doctor.offices[0] : null
+    });
+    
     // Doctor details table - more compact
     const doctorData = [
       ['Médico:', `Dr. ${fullDoctorName}`],
@@ -329,6 +335,12 @@ class PDFService {
     
     // Get full patient name
     const fullPatientName = this.getFullName(patient.firstName, patient.lastName, patient.maternalSurname);
+    
+    // Debug log for diagnosis
+    console.log('🔍 PDF Debug - consultation diagnosis:', {
+      diagnosis: consultation.diagnosis,
+      consultation: consultation
+    });
     
     const consultationData = [
       ['Fecha:', formattedDate],
