@@ -181,17 +181,16 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
       // Get today's date in Mexico timezone
       const today = new Date();
       const mexicoTimeString = today.toLocaleString("sv-SE", {timeZone: "America/Mexico_City"});
-      const mexicoDate = new Date(mexicoTimeString);
-      const todayString = mexicoDate.toISOString().split('T')[0];
+      const todayString = mexicoTimeString.split(' ')[0]; // Extract just the date part (YYYY-MM-DD)
       
       console.log('🔄 Loading times for default date:', todayString);
       console.log('🔄 Mexico time string:', mexicoTimeString);
-      console.log('🔄 Mexico date object:', mexicoDate);
       
       // Set both selectedDate and formData.appointment_date to keep them in sync
       setSelectedDate(todayString);
       
-      // Update formData with the correct date
+      // Update formData with the correct date (create a proper ISO string for the Mexico date)
+      const mexicoDate = new Date(mexicoTimeString);
       const newFormData = {
         ...currentFormData,
         appointment_date: mexicoDate.toISOString()
