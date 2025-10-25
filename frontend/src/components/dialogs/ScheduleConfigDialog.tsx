@@ -33,6 +33,7 @@ interface ScheduleConfigDialogProps {
   open: boolean;
   onClose: () => void;
   onSave?: () => void;
+  onScheduleUpdated?: () => void; // Callback para refrescar datos en el componente padre
 }
 
 interface TimeBlock {
@@ -71,7 +72,8 @@ const DAYS_OF_WEEK = [
 const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
   open,
   onClose,
-  onSave
+  onSave,
+  onScheduleUpdated
 }) => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -232,6 +234,11 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
       }
       
       setSuccess('Horario actualizado exitosamente');
+      
+      // Notificar al componente padre que los horarios se actualizaron
+      if (onScheduleUpdated) {
+        onScheduleUpdated();
+      }
       
     } catch (err: any) {
       setError(err.response?.data?.detail || err.response?.data?.error || 'Error actualizando horario');
@@ -644,6 +651,11 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
       }
       
       setSuccess('Horarios guardados exitosamente');
+      
+      // Notificar al componente padre que los horarios se actualizaron
+      if (onScheduleUpdated) {
+        onScheduleUpdated();
+      }
       
       if (onSave) {
         onSave();
