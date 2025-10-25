@@ -2908,7 +2908,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               state_name: appointmentOffice?.state_name,
               country_name: appointmentOffice?.country_name,
               consultation_id: consultation.id,
-              appointment_id: consultation.appointment_id
+              appointment_id: consultation.appointment_id,
+              full_appointmentOffice: appointmentOffice
             })}
             <PrintButtons
               patient={{
