@@ -162,7 +162,6 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
         
         // Reset time selection for new appointment
         setSelectedTime('');
-        setSelectedDate('');
         setAvailableTimes([]);
         
         // Don't load times automatically - let the DatePicker handle the date selection
