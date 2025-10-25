@@ -170,7 +170,7 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
       }
       setError(null);
     }
-  }, [open, isEditing, externalFormData]);
+  }, [open, isEditing]);
 
   // Separate useEffect for loading data to prevent infinite loop
   useEffect(() => {
