@@ -391,10 +391,6 @@ class PDFService {
       officeInfo = doctor.offices[0];
     }
     
-    console.log('🔍 PDF Office Info (Prescription):', officeInfo);
-    console.log('🔍 Available fields:', Object.keys(officeInfo || {}));
-    console.log('🔍 State field:', officeInfo?.state, officeInfo?.state_name);
-    console.log('🔍 Country field:', officeInfo?.country, officeInfo?.country_name);
     
     try {
       const doc = new jsPDF();
@@ -498,10 +494,6 @@ class PDFService {
       officeInfo = doctor.offices[0];
     }
     
-    console.log('🔍 PDF Office Info (Medical Order):', officeInfo);
-    console.log('🔍 Available fields:', Object.keys(officeInfo || {}));
-    console.log('🔍 State field:', officeInfo?.state, officeInfo?.state_name);
-    console.log('🔍 Country field:', officeInfo?.country, officeInfo?.country_name);
 
     const doc = new jsPDF();
     let currentY = 60;
