@@ -746,13 +746,18 @@ async def create_office(
 
 @app.get("/api/offices", response_model=List[schemas.Office])
 async def get_doctor_offices(
+    doctor_id: int = None,  # Optional parameter for testing
     # current_user: Person = Depends(get_current_user),  # Temporarily disabled for testing
     db: Session = Depends(get_db)
 ):
     """Get all offices for the current doctor"""
     try:
-        # Temporarily use doctor_id = 1 for testing - this should be replaced with current_user.id
-        doctor_id = 1
+        # Use provided doctor_id or default to 1 for testing
+        if doctor_id is None:
+            doctor_id = 1
+        
+        print(f"🔍 Getting offices for doctor_id: {doctor_id}")
+        
         # Get offices for the current doctor with JOINs for state and country names
         results = db.query(Office, State.name.label('state_name'), Country.name.label('country_name')).join(
             State, Office.state_id == State.id, isouter=True
@@ -762,6 +767,8 @@ async def get_doctor_offices(
             Office.doctor_id == doctor_id,
             Office.is_active == True
         ).all()
+        
+        print(f"🔍 Found {len(results)} offices for doctor_id: {doctor_id}")
         
         # Add state_name and country_name to each office object
         offices = []
