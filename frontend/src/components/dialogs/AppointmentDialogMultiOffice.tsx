@@ -166,9 +166,13 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
         setAvailableTimes([]);
         
         // Load available times for today's date automatically since DatePicker shows today by default
+        // Use Mexico timezone to get the correct date
         const today = new Date();
-        const todayString = today.toISOString().split('T')[0];
+        const mexicoTime = new Date(today.toLocaleString("en-US", {timeZone: "America/Mexico_City"}));
+        const todayString = mexicoTime.toISOString().split('T')[0];
         console.log('🔄 Loading available times for today (default date):', todayString);
+        console.log('🔄 Original date:', today.toISOString().split('T')[0]);
+        console.log('🔄 Mexico date:', todayString);
         setSelectedDate(todayString);
         loadAvailableTimes(todayString);
         
