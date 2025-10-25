@@ -37,8 +37,7 @@ import {
   Add as AddIcon,
   Delete as DeleteIcon,
   Close as CloseIcon,
-  Language as LanguageIcon,
-  OpenInBrowser as BrowserIcon
+  Language as LanguageIcon
 } from '@mui/icons-material';
 import DoctorProfileDialog from '../dialogs/DoctorProfileDialog';
 import ScheduleConfigDialog from '../dialogs/ScheduleConfigDialog';
@@ -488,106 +487,65 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                     </Box>
                     
                     <List dense>
-                      {office.is_virtual ? (
-                        // Virtual office - show URL and timezone only
-                        <>
-                          {office.virtual_url && (
-                            <ListItem sx={{ px: 0 }}>
-                              <ListItemIcon>
-                                <BrowserIcon color="action" />
-                              </ListItemIcon>
-                              <ListItemText 
-                                primary="URL Virtual" 
-                                secondary={
-                                  <Button
-                                    size="small"
-                                    variant="text"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      window.open(office.virtual_url, '_blank');
-                                    }}
-                                    sx={{ p: 0, textTransform: 'none' }}
-                                  >
-                                    {office.virtual_url}
-                                  </Button>
-                                }
-                              />
-                            </ListItem>
-                          )}
-                          <ListItem sx={{ px: 0 }}>
-                            <ListItemIcon>
-                              <AccessTimeIcon color="action" />
-                            </ListItemIcon>
-                            <ListItemText 
-                              primary="Zona Horaria" 
-                              secondary={office.timezone || 'America/Mexico_City'} 
-                            />
-                          </ListItem>
-                        </>
-                      ) : (
-                        // Physical office - show address, city, phone, maps
-                        <>
-                          <ListItem sx={{ px: 0 }}>
-                            <ListItemIcon>
-                              <LocationIcon color="action" />
-                            </ListItemIcon>
-                            <ListItemText 
-                              primary="Dirección" 
-                              secondary={office.address || 'No especificada'} 
-                            />
-                          </ListItem>
-                          <ListItem sx={{ px: 0 }}>
-                            <ListItemIcon>
-                              <LocationIcon color="action" />
-                            </ListItemIcon>
-                            <ListItemText 
-                              primary="Ciudad" 
-                              secondary={office.city || 'No especificada'} 
-                            />
-                          </ListItem>
-                          <ListItem sx={{ px: 0 }}>
-                            <ListItemIcon>
-                              <PhoneIcon color="action" />
-                            </ListItemIcon>
-                            <ListItemText 
-                              primary="Teléfono" 
-                              secondary={office.phone || 'No especificado'} 
-                            />
-                          </ListItem>
-                          {office.maps_url && (
-                            <ListItem sx={{ px: 0 }}>
-                              <ListItemIcon>
-                                <LocationIcon color="action" />
-                              </ListItemIcon>
-                              <ListItemText 
-                                primary="Google Maps" 
-                                secondary={
-                                  <Button
-                                    size="small"
-                                    variant="text"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      window.open(office.maps_url, '_blank');
-                                    }}
-                                    sx={{ p: 0, textTransform: 'none' }}
-                                  >
-                                    Ver en Maps
-                                  </Button>
-                                }
-                              />
-                            </ListItem>
-                          )}
-                          <ListItem sx={{ px: 0 }}>
-                            <ListItemIcon>
-                              <AccessTimeIcon color="action" />
-                            </ListItemIcon>
-                            <ListItemText 
-                              primary="Zona Horaria" 
-                              secondary={office.timezone || 'America/Mexico_City'} 
-                            />
-                          </ListItem>
-                        </>
+                      <ListItem sx={{ px: 0 }}>
+                        <ListItemIcon>
+                          <LocationIcon color="action" />
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary="Dirección" 
+                          secondary={office.address || 'No especificada'} 
+                        />
+                      </ListItem>
+                      <ListItem sx={{ px: 0 }}>
+                        <ListItemIcon>
+                          <LocationIcon color="action" />
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary="Ciudad" 
+                          secondary={office.city || 'No especificada'} 
+                        />
+                      </ListItem>
+                      <ListItem sx={{ px: 0 }}>
+                        <ListItemIcon>
+                          <PhoneIcon color="action" />
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary="Teléfono" 
+                          secondary={office.phone || 'No especificado'} 
+                        />
+                      </ListItem>
+                      {office.maps_url && (
+                        <ListItem sx={{ px: 0 }}>
+                          <ListItemIcon>
+                            <LocationIcon color="action" />
+                          </ListItemIcon>
+                          <ListItemText 
+                            primary="Google Maps" 
+                            secondary={
+                              <Button
+                                size="small"
+                                variant="text"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.open(office.maps_url, '_blank');
+                                }}
+                                sx={{ p: 0, textTransform: 'none' }}
+                              >
+                                Ver en Maps
+                              </Button>
+                            }
+                          />
+                        </ListItem>
                       )}
+                      <ListItem sx={{ px: 0 }}>
+                        <ListItemIcon>
+                          <AccessTimeIcon color="action" />
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary="Zona Horaria" 
+                          secondary={office.timezone || 'America/Mexico_City'} 
+                        />
+                      </ListItem>
                     </List>
                   </Card>
                 ))}

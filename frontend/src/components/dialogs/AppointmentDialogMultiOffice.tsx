@@ -715,7 +715,7 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
             )}
 
             {/* 4. CONSULTORIO */}
-            <FormControl fullWidth required>
+            <FormControl size="small" fullWidth required>
               <InputLabel>Consultorio</InputLabel>
               <Select
                 value={currentFormData.office_id || 0}
