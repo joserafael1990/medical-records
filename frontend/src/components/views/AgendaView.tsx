@@ -270,7 +270,23 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                 );
                 
                 return (
-                  <TableCell key={day.toISOString()} sx={{ verticalAlign: 'top', minHeight: 200 }}>
+                  <TableCell 
+                    key={day.toISOString()} 
+                    sx={{ 
+                      verticalAlign: 'top', 
+                      minHeight: 200,
+                      cursor: dayAppointments.length > 0 ? 'pointer' : 'default',
+                      '&:hover': dayAppointments.length > 0 ? {
+                        bgcolor: 'action.hover'
+                      } : {}
+                    }}
+                    onClick={() => {
+                      if (dayAppointments.length > 0 && setSelectedDate && setAgendaView) {
+                        setSelectedDate(day);
+                        setAgendaView('daily');
+                      }
+                    }}
+                  >
                     <Box sx={{ minHeight: 150 }}>
                       {dayAppointments.map((appointment, index) => (
                         <Card key={index} sx={{ mb: 1, p: 1, bgcolor: 'primary.light', color: 'primary.contrastText' }}>
@@ -315,6 +331,17 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                       {dayAppointments.length === 0 && (
                         <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 2 }}>
                           Sin citas
+                        </Typography>
+                      )}
+                      {dayAppointments.length > 0 && (
+                        <Typography variant="caption" color="primary" sx={{ 
+                          display: 'block', 
+                          textAlign: 'center', 
+                          mt: 1, 
+                          fontStyle: 'italic',
+                          opacity: 0.7
+                        }}>
+                          Click para ver detalles
                         </Typography>
                       )}
                     </Box>
@@ -371,7 +398,17 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                         verticalAlign: 'top', 
                         minHeight: 100,
                         opacity: isCurrentMonth ? 1 : 0.3,
-                        bgcolor: isToday ? 'primary.light' : 'transparent'
+                        bgcolor: isToday ? 'primary.light' : 'transparent',
+                        cursor: dayAppointments.length > 0 ? 'pointer' : 'default',
+                        '&:hover': dayAppointments.length > 0 ? {
+                          bgcolor: isToday ? 'primary.main' : 'action.hover'
+                        } : {}
+                      }}
+                      onClick={() => {
+                        if (dayAppointments.length > 0 && setSelectedDate && setAgendaView) {
+                          setSelectedDate(day);
+                          setAgendaView('daily');
+                        }
                       }}
                     >
                       <Typography 
@@ -416,6 +453,17 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                         {dayAppointments.length > 2 && (
                           <Typography variant="caption" color="text.secondary">
                             +{dayAppointments.length - 2} más
+                          </Typography>
+                        )}
+                        {dayAppointments.length > 0 && (
+                          <Typography variant="caption" color="primary" sx={{ 
+                            display: 'block', 
+                            textAlign: 'center', 
+                            mt: 0.5, 
+                            fontSize: '0.6rem',
+                            opacity: 0.6
+                          }}>
+                            Click para ver
                           </Typography>
                         )}
                       </Box>
