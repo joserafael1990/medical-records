@@ -10,3 +10,4 @@ ALTER TABLE appointments DROP COLUMN IF EXISTS insurance_covered;
 
 -- Add comment to document the changes
 COMMENT ON TABLE appointments IS 'Appointments table - cleaned up unused fields on 2025-10-25';
+

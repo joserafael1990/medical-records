@@ -63,3 +63,4 @@ with open('frontend/src/components/views/DoctorProfileView.tsx', 'w', encoding='
     f.write(content)
 
 print("✅ Schedule display logic fixed!")
+

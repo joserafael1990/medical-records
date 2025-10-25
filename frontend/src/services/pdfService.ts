@@ -333,8 +333,7 @@ class PDFService {
     const consultationData = [
       ['Fecha:', formattedDate],
       ['Paciente:', fullPatientName],
-      ['Diagnóstico:', consultation.diagnosis || 'No especificado'],
-      ['Medicamentos Prescritos:', consultation.prescribed_medications || 'No especificados']
+      ['Diagnóstico:', consultation.diagnosis || 'No especificado']
     ];
     
     autoTable(doc, {

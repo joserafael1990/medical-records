@@ -105,6 +105,7 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
             handleEditAppointment={appointmentManager.handleEditAppointment}
             cancelAppointment={appointmentManager.cancelAppointment}
             refreshAppointments={appointmentManager.refreshAppointments}
+            forceRefresh={appointmentManager.forceRefresh}
           />
         </Suspense>
       )}

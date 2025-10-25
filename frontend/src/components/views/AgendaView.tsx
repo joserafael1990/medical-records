@@ -30,7 +30,8 @@ import {
   LocationOn as LocationOnIcon,
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
-  WhatsApp as WhatsAppIcon
+  WhatsApp as WhatsAppIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, addDays, addWeeks, addMonths, isSameDay, isSameMonth } from 'date-fns';
 import { formatTime } from '../../utils/formatters';
@@ -48,6 +49,7 @@ interface AgendaViewProps {
   handleEditAppointment?: (appointment: any) => void;
   cancelAppointment?: (appointmentId: number) => Promise<void>;
   refreshAppointments?: () => void;
+  forceRefresh?: () => void;
 }
 
 const AgendaView: React.FC<AgendaViewProps> = ({
@@ -59,7 +61,8 @@ const AgendaView: React.FC<AgendaViewProps> = ({
   handleNewAppointment,
   handleEditAppointment,
   cancelAppointment,
-  refreshAppointments
+  refreshAppointments,
+  forceRefresh
 }) => {
   const [localSelectedDate, setLocalSelectedDate] = useState(selectedDate || new Date());
   const { showSuccess, showError } = useToast();
@@ -69,6 +72,23 @@ const AgendaView: React.FC<AgendaViewProps> = ({
   React.useEffect(() => {
     setLocalSelectedDate(selectedDate);
   }, [selectedDate]);
+
+  // Asegurar que si la fecha seleccionada es hoy, se muestren las citas de hoy
+  React.useEffect(() => {
+    const today = new Date();
+    const isSelectedDateToday = isSameDay(localSelectedDate, today);
+    
+    if (isSelectedDateToday && agendaView === 'daily') {
+      console.log('📅 Selected date is today, ensuring today\'s appointments are shown');
+      // Forzar actualización si es necesario
+      if (forceRefresh) {
+        console.log('📅 Forcing refresh to show today\'s appointments');
+        setTimeout(() => {
+          forceRefresh();
+        }, 100);
+      }
+    }
+  }, [localSelectedDate, agendaView, forceRefresh]);
 
   // Función para enviar recordatorio por WhatsApp
   const handleSendWhatsAppReminder = async (appointment: any) => {
@@ -140,12 +160,27 @@ const AgendaView: React.FC<AgendaViewProps> = ({
 
   // Función para obtener citas filtradas por vista
   const getFilteredAppointments = (date: Date, view: 'daily' | 'weekly' | 'monthly') => {
+    console.log('🔍 getFilteredAppointments called with:', {
+      date: date.toDateString(),
+      view,
+      totalAppointments: appointments.length
+    });
+    
     switch (view) {
       case 'daily':
-        return appointments.filter(apt => {
+        const dailyAppointments = appointments.filter(apt => {
           const aptDate = new Date(apt.date_time);
-          return isSameDay(aptDate, date);
+          const isSameDayResult = isSameDay(aptDate, date);
+          console.log('🔍 Daily filter:', {
+            appointmentDate: aptDate.toDateString(),
+            selectedDate: date.toDateString(),
+            isSameDay: isSameDayResult,
+            appointment: apt.patient_name || 'Unknown'
+          });
+          return isSameDayResult;
         });
+        console.log('🔍 Daily appointments found:', dailyAppointments.length);
+        return dailyAppointments;
       case 'weekly':
         const weekStart = startOfWeek(date, { weekStartsOn: 1 }); // Lunes
         const weekEnd = endOfWeek(date, { weekStartsOn: 1 }); // Domingo
@@ -166,7 +201,26 @@ const AgendaView: React.FC<AgendaViewProps> = ({
   };
 
   const currentDate = localSelectedDate && !isNaN(localSelectedDate.getTime()) ? localSelectedDate : new Date();
+  
+  // Detectar si la fecha seleccionada es hoy
+  const isToday = isSameDay(currentDate, new Date());
+  
+  // Obtener citas filtradas
   const filteredAppointments = getFilteredAppointments(currentDate, agendaView);
+  
+  // Debug: Log para verificar la lógica
+  console.log('📅 AgendaView Debug:', {
+    currentDate: currentDate.toDateString(),
+    today: new Date().toDateString(),
+    isToday,
+    agendaView,
+    totalAppointments: appointments.length,
+    filteredAppointments: filteredAppointments.length,
+    sampleAppointment: appointments[0] ? {
+      date: appointments[0].date_time,
+      parsedDate: new Date(appointments[0].date_time).toDateString()
+    } : null
+  });
 
   // Navegación de fechas
   const handleDateNavigation = (direction: 'prev' | 'next') => {
@@ -549,6 +603,17 @@ const AgendaView: React.FC<AgendaViewProps> = ({
               >
                 Mes
               </Button>
+              {forceRefresh && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<RefreshIcon />}
+                  onClick={forceRefresh}
+                  sx={{ ml: 1 }}
+                >
+                  Actualizar
+                </Button>
+              )}
             </Box>
           </Box>
         </CardContent>

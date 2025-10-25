@@ -924,6 +924,11 @@ class ApiService {
     return response.data;
   }
 
+  async getAppointment(appointmentId: number): Promise<Appointment> {
+    const response = await this.api.get<Appointment>(`${API_CONFIG.ENDPOINTS.APPOINTMENTS}/${appointmentId}`);
+    return response.data;
+  }
+
   async getPatientAppointments(patientId: string, status?: string): Promise<Appointment[]> {
     const params = status ? { status } : {};
     const response = await this.api.get<Appointment[]>(
@@ -1213,6 +1218,14 @@ class ApiService {
    */
   async getOffices(): Promise<Office[]> {
     const response = await this.api.get('/api/offices');
+    return response.data;
+  }
+
+  /**
+   * Get a specific office by ID
+   */
+  async getOffice(officeId: number): Promise<Office> {
+    const response = await this.api.get(`/api/offices/${officeId}`);
     return response.data;
   }
 

@@ -559,47 +559,29 @@ export const useAppointmentManager = (
         // console.log('🔄 New appointment created, refreshing data...');
         
         // Refresh appointments after successful creation
+        console.log('🔄 Appointment created successfully, refreshing data...');
+        
+        // Call the refresh function immediately and also with a delay for stability
+        try {
+          await refreshAppointments();
+          console.log('✅ Appointments refreshed immediately after creation');
+        } catch (error) {
+          console.error('❌ Error in immediate refresh:', error);
+        }
+        
+        // Also refresh with a delay to ensure backend has processed the new appointment
         setTimeout(async () => {
           try {
-            console.log('🔄 Starting appointment refresh after creation...');
+            console.log('🔄 Starting delayed appointment refresh after creation...');
             console.log('🔄 Current agendaView:', agendaView);
             console.log('🔄 Current selectedDate:', selectedDate.toDateString());
             
-            let refreshData: any[] = [];
-            const dateToRefresh = new Date(selectedDate);
-            
-            if (agendaView === 'daily') {
-              const dateStr = dateToRefresh.toISOString().split('T')[0];
-              refreshData = await apiService.getDailyAgenda(dateStr);
-            } else if (agendaView === 'weekly') {
-              const start = new Date(dateToRefresh);
-              const day = start.getDay();
-              const diff = start.getDate() - day;
-              start.setDate(diff);
-
-              const end = new Date(start);
-              end.setDate(start.getDate() + 6);
-
-              const startStr = start.toISOString().split('T')[0];
-              const endStr = end.toISOString().split('T')[0];
-              refreshData = await apiService.getWeeklyAgenda(startStr, endStr);
-            } else if (agendaView === 'monthly') {
-              const start = new Date(dateToRefresh.getFullYear(), dateToRefresh.getMonth(), 1);
-              const end = new Date(dateToRefresh.getFullYear(), dateToRefresh.getMonth() + 1, 0);
-              const startStr = start.toISOString().split('T')[0];
-              const endStr = end.toISOString().split('T')[0];
-              refreshData = await apiService.getMonthlyAgenda(startStr, endStr);
-            } else {
-              refreshData = await apiService.getAppointments();
-            }
-            console.log('📋 Sample refreshed appointment:', refreshData?.[0]);
-            console.log('📋 Total refreshed appointments:', refreshData?.length);
-            setAppointments(refreshData);
-            console.log('📋 setAppointments called with:', refreshData?.length, 'appointments');
+            await refreshAppointments();
+            console.log('✅ Delayed refresh completed successfully');
           } catch (error) {
-            console.error('❌ Error refreshing appointments:', error);
+            console.error('❌ Error in delayed refresh:', error);
           }
-        }, 300); // Delay for stability
+        }, 1000); // Increased delay for better stability
         
         // If the appointment was created for a different date, navigate to that date
         const appointmentDate = new Date(appointmentFormData.date_time);
@@ -725,7 +707,17 @@ export const useAppointmentManager = (
 
       console.log('🔄 Appointments loaded:', data?.length || 0, 'appointments');
       console.log('🔄 Sample appointment:', data?.[0]);
+      
+      // Force state update to ensure UI refreshes
       setAppointments(data || []);
+      
+      // Additional state update to ensure the change is reflected
+      setTimeout(() => {
+        setAppointments(prev => {
+          console.log('🔄 Force updating appointments state:', data?.length || 0, 'appointments');
+          return data || [];
+        });
+      }, 100);
     } catch (error) {
       console.error('❌ Error refreshing appointments:', error);
       setAppointments([]);
@@ -772,6 +764,12 @@ export const useAppointmentManager = (
     fieldErrors,
     formErrorMessage,
     isSubmitting,
-    successMessage
+    successMessage,
+    
+    // Additional utility function for forcing view refresh
+    forceRefresh: () => {
+      console.log('🔄 Force refreshing appointments...');
+      refreshAppointments();
+    }
   };
 };

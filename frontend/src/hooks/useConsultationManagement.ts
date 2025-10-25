@@ -134,15 +134,23 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
   // Load all available appointments for consultation dialog
   const loadAllAppointments = useCallback(async () => {
     try {
-      console.log('🔄 Loading available appointments for consultation...');
-      const appointments = await apiService.getAppointments({ 
+      console.log('🔄 Loading appointments for consultation dialog...');
+      
+      // Try without filter first to see if there are any appointments
+      const allAppointments = await apiService.getAppointments();
+      console.log('📋 All appointments (no filter):', allAppointments?.length || 0);
+      
+      // Then try with the consultation filter
+      const consultationAppointments = await apiService.getAppointments({ 
         available_for_consultation: true 
       });
-      console.log('📋 Sample appointment:', appointments[0]);
+      console.log('📋 Consultation appointments (with filter):', consultationAppointments?.length || 0);
       
-      setAllAvailableAppointments(appointments);
+      // Use the filtered results
+      setAllAvailableAppointments(consultationAppointments || []);
     } catch (error: any) {
       console.error('❌ Error loading available appointments:', error?.message || 'Unknown error');
+      console.error('❌ Error details:', error);
       setAllAvailableAppointments([]);
     }
   }, []);

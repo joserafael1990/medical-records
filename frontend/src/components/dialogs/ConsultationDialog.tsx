@@ -231,6 +231,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   const [formData, setFormData] = useState<ConsultationFormData>(initialFormData);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<any | null>(null);
+  const [appointmentOffice, setAppointmentOffice] = useState<any | null>(null);
   const [patientEditData, setPatientEditData] = useState<PatientFormData | null>(null);
   const [countries, setCountries] = useState<any[]>([]);
   const [states, setStates] = useState<any[]>([]);
@@ -409,9 +410,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
   // Separate useEffect for consultation data loading
   useEffect(() => {
-    console.log('🔄 useEffect for consultation data loading:', { open, consultation: !!consultation });
     if (open && consultation) {
-      console.log('🔄 Loading consultation data for editing:', consultation.id);
         // Map consultation data to form data
         setFormData({
           ...initialFormData,
@@ -452,6 +451,13 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         clinicalStudiesHook.fetchStudies(String(consultation.id));
         vitalSignsHook.fetchConsultationVitalSigns(String(consultation.id));
         prescriptionsHook.fetchPrescriptions(String(consultation.id));
+        
+        // Load office information if consultation has appointment_id
+        if (consultation.appointment_id) {
+          loadOfficeForConsultation(consultation.appointment_id);
+        } else {
+          loadDefaultOffice();
+        }
     }
   }, [open, consultation, patients, doctorProfile]);
 
@@ -941,6 +947,19 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         setSelectedPatient(patient);
         setFormData((prev: ConsultationFormData) => ({ ...prev, patient_id: patient.id.toString(), appointment_id: appointment.id.toString() }));
         
+        // Get office information from appointment
+        if (appointment.office_id) {
+          try {
+            const officeData = await apiService.getOffice(appointment.office_id);
+            setAppointmentOffice(officeData);
+          } catch (error) {
+            console.error('Error loading office data:', error);
+            setAppointmentOffice(null);
+          }
+        } else {
+          setAppointmentOffice(null);
+        }
+        
         // Always load fresh patient data from API to ensure decryption
         try {
           const fullPatientData = await apiService.getPatient(patient.id);
@@ -963,13 +982,52 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         setPatientEditData(null);
         setPatientHasPreviousConsultations(false);
         setPatientPreviousStudies([]);
+        setAppointmentOffice(null);
       }
     } else {
       setSelectedPatient(null);
       setPatientEditData(null);
       setPatientHasPreviousConsultations(false);
       setPatientPreviousStudies([]);
+      setAppointmentOffice(null);
       setFormData((prev: ConsultationFormData) => ({ ...prev, patient_id: '', appointment_id: '' }));
+    }
+  };
+
+  // Load office information for existing consultation
+  const loadOfficeForConsultation = async (appointmentId: string) => {
+    try {
+      // First get the appointment to get the office_id
+      const appointment = await apiService.getAppointment(parseInt(appointmentId));
+      
+      if (appointment && appointment.office_id) {
+        const officeData = await apiService.getOffice(appointment.office_id);
+        setAppointmentOffice(officeData);
+      } else {
+        setAppointmentOffice(null);
+      }
+    } catch (error) {
+      console.error('Error loading office for consultation:', error);
+      setAppointmentOffice(null);
+    }
+  };
+
+  // Load default office information when no appointment_id
+  const loadDefaultOffice = async () => {
+    try {
+      // Get all offices for the doctor
+      const offices = await apiService.getOffices();
+      
+      if (offices && offices.length > 0) {
+        // Use the first active office
+        const defaultOffice = offices.find(office => office.is_active) || offices[0];
+        setAppointmentOffice(defaultOffice);
+      } else {
+        setAppointmentOffice(null);
+      }
+    } catch (error) {
+      console.error('Error loading default office:', error);
+      setAppointmentOffice(null);
     }
   };
 
@@ -2859,12 +2917,22 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 specialty: doctorProfile?.specialty_name || 'No especificada',
                 license: doctorProfile?.professional_license || 'No especificada',
                 university: doctorProfile?.university || 'No especificada',
-                phone: doctorProfile?.office_phone || doctorProfile?.phone || 'No especificado',
+                phone: appointmentOffice?.phone || doctorProfile?.phone || 'No especificado',
                 email: doctorProfile?.email || 'No especificado',
-                address: doctorProfile?.office_address || 'No especificado',
-                city: doctorProfile?.office_city || 'No especificado',
-                state: doctorProfile?.office_state_name || 'No especificado',
-                country: doctorProfile?.office_country_name || 'No especificado'
+                offices: appointmentOffice ? [{
+                  id: appointmentOffice.id,
+                  name: appointmentOffice.name,
+                  address: appointmentOffice.address,
+                  city: appointmentOffice.city,
+                  state: appointmentOffice.state_name,
+                  country: appointmentOffice.country_name,
+                  phone: appointmentOffice.phone,
+                  maps_url: appointmentOffice.maps_url,
+                  virtual_url: appointmentOffice.virtual_url,
+                  is_active: appointmentOffice.is_active,
+                  is_virtual: appointmentOffice.is_virtual,
+                  timezone: appointmentOffice.timezone
+                }] : []
               }}
               consultation={{
                 id: consultation.id,

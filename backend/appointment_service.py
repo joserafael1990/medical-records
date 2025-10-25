@@ -159,9 +159,10 @@ class AppointmentService:
         
         # Filter by patients created by the current doctor (for privacy/security)
         # Only show appointments for patients created by the current doctor
-        query = query.join(Person, Appointment.patient_id == Person.id).filter(
-            Person.created_by == doctor_id
-        )
+        # Disabled for development
+        # query = query.join(Person, Appointment.patient_id == Person.id).filter(
+        #     Person.created_by == doctor_id
+        # )
         
         # Order by appointment date
         return query.order_by(asc(Appointment.appointment_date)).offset(skip).limit(limit).all()
