@@ -2957,7 +2957,11 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 time: consultation.time || '10:00',
                 type: consultation.type || formData.type,
                 reason: consultation.reason || formData.reason,
-                diagnosis: consultation.primary_diagnosis || formData.primary_diagnosis,
+                diagnosis: (consultation.primary_diagnosis && consultation.primary_diagnosis.trim() !== '') 
+                  ? consultation.primary_diagnosis 
+                  : (formData.primary_diagnosis && formData.primary_diagnosis.trim() !== '') 
+                    ? formData.primary_diagnosis 
+                    : 'No especificado',
                 notes: consultation.notes || formData.notes
               }}
               medications={(prescriptionsHook.prescriptions || []).map(prescription => ({
