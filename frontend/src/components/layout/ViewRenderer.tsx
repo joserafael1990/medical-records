@@ -13,7 +13,6 @@ import { ConsultationDetailView } from '../';
 import { LoadingFallback } from '../';
 import { LazyWrapper } from '../common/LazyWrapper';
 import DebugPanel from '../debug/DebugPanel';
-import OfficesView from '../views/OfficesView';
 
 interface ViewRendererProps {
   activeView: string;
@@ -143,7 +142,10 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
       )}
 
       {activeView === 'offices' && (
-        <OfficesView />
+        <Box sx={{ p: 3, textAlign: 'center' }}>
+          <h2>Gestión de Consultorios</h2>
+          <p>La gestión de consultorios ahora está disponible en el perfil del médico.</p>
+        </Box>
       )}
 
       {/* WhatsApp and Analytics views not implemented yet */}
