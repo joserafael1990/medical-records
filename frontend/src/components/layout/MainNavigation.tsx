@@ -17,7 +17,6 @@ import {
   Analytics as AnalyticsIcon,
   Palette as StyleGuideIcon,
   BugReport as DebugIcon,
-  Business as BusinessIcon
 } from '@mui/icons-material';
 
 interface MainNavigationProps {
@@ -49,11 +48,6 @@ export const MainNavigation: React.FC<MainNavigationProps> = ({
       id: 'agenda',
       label: 'Agenda',
       icon: <CalendarIcon />
-    },
-    {
-      id: 'offices',
-      label: 'Consultorios',
-      icon: <BusinessIcon />
     },
     {
       id: 'whatsapp',
