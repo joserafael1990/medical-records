@@ -193,16 +193,6 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
     }
   };
 
-  const getEmptyFieldsCount = () => {
-    const fields = [
-      'university', 'graduation_year', 'specialty_license', 'office_address',
-      'office_city', 'office_state_id', 'office_country', 'office_phone', 'appointment_duration', 'office_timezone', 'gender'
-    ];
-    return fields.filter(field => !doctorProfile[field]).length;
-  };
-
-  const emptyFieldsCount = getEmptyFieldsCount();
-  const completionPercentage = Math.round(((11 - emptyFieldsCount) / 11) * 100);
 
   return (
     <React.Fragment>
@@ -236,8 +226,6 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
           </Typography>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                 <Chip 
-                  label={`${completionPercentage}% Completo`}
-                  color={completionPercentage >= 80 ? 'success' : completionPercentage >= 60 ? 'warning' : 'error'}
                   size="small"
                 />
                 {doctorProfile.professional_license && (
@@ -297,53 +285,106 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                 <PersonIcon color="primary" />
                 Información Personal
                 </Typography>
-              <List dense>
-                <ListItem>
-                  <ListItemIcon>
-                    <BadgeIcon color="action" />
-                  </ListItemIcon>
-                  <ListItemText 
-                    primary="CURP" 
-                    secondary={doctorProfile.curp || 'No especificada'} 
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon>
-                    <EmailIcon color="action" />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Email" 
-                    secondary={doctorProfile.email || 'No especificado'} 
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon>
-                    <PhoneIcon color="action" />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Teléfono"
-                    secondary={doctorProfile.primary_phone || 'No especificado'} 
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon>
-                    <PersonIcon color="action" />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Fecha de Nacimiento"
-                    secondary={formatDate(doctorProfile.birth_date)} 
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon>
-                    <PersonIcon color="action" />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Género"
-                    secondary={doctorProfile.gender === 'M' ? 'Masculino' : doctorProfile.gender === 'F' ? 'Femenino' : doctorProfile.gender === 'O' ? 'Otro' : 'No especificado'} 
-                  />
-                </ListItem>
-              </List>
+                    <List dense>
+                      {office.is_virtual ? (
+                        <>
+                          {office.consultation_url && (
+                            <ListItem sx={{ px: 0 }}>
+                              <ListItemIcon>
+                                <LanguageIcon color="action" />
+                              </ListItemIcon>
+                              <ListItemText 
+                                primary="URL de Consultorio" 
+                                secondary={
+                                  <Button
+                                    size="small"
+                                    variant="text"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      window.open(office.consultation_url, "_blank");
+                                    }}
+                                    sx={{ p: 0, textTransform: "none" }}
+                                  >
+                                    {office.consultation_url}
+                                  </Button>
+                                }
+                              />
+                            </ListItem>
+                          )}
+                          <ListItem sx={{ px: 0 }}>
+                            <ListItemIcon>
+                              <PhoneIcon color="action" />
+                            </ListItemIcon>
+                            <ListItemText 
+                              primary="Teléfono" 
+                              secondary={office.phone || "No especificado"} 
+                            />
+                          </ListItem>
+                        </>
+                      ) : (
+                        <>
+                          <ListItem sx={{ px: 0 }}>
+                            <ListItemIcon>
+                              <LocationIcon color="action" />
+                            </ListItemIcon>
+                            <ListItemText 
+                              primary="Dirección" 
+                              secondary={office.address || "No especificada"} 
+                            />
+                          </ListItem>
+                          <ListItem sx={{ px: 0 }}>
+                            <ListItemIcon>
+                              <LocationIcon color="action" />
+                            </ListItemIcon>
+                            <ListItemText 
+                              primary="Ciudad" 
+                              secondary={office.city || "No especificada"} 
+                            />
+                          </ListItem>
+                          <ListItem sx={{ px: 0 }}>
+                            <ListItemIcon>
+                              <PhoneIcon color="action" />
+                            </ListItemIcon>
+                            <ListItemText 
+                              primary="Teléfono" 
+                              secondary={office.phone || "No especificado"} 
+                            />
+                          </ListItem>
+                          {office.maps_url && (
+                            <ListItem sx={{ px: 0 }}>
+                              <ListItemIcon>
+                                <LocationIcon color="action" />
+                              </ListItemIcon>
+                              <ListItemText 
+                                primary="Google Maps" 
+                                secondary={
+                                  <Button
+                                    size="small"
+                                    variant="text"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      window.open(office.maps_url, "_blank");
+                                    }}
+                                    sx={{ p: 0, textTransform: "none" }}
+                                  >
+                                    Ver en Maps
+                                  </Button>
+                                }
+                              />
+                            </ListItem>
+                          )}
+                        </>
+                      )}
+                      <ListItem sx={{ px: 0 }}>
+                        <ListItemIcon>
+                          <AccessTimeIcon color="action" />
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary="Zona Horaria" 
+                          secondary={office.timezone || "America/Mexico_City"} 
+                        />
+                      </ListItem>
+                    </List>
             </CardContent>
           </Card>
 
@@ -354,53 +395,106 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                 <WorkIcon color="primary" />
                 Información Profesional
               </Typography>
-              <List dense>
-                <ListItem>
-                  <ListItemIcon>
-                    <BadgeIcon color="action" />
-                  </ListItemIcon>
-                  <ListItemText 
-                    primary="Título" 
-                    secondary={doctorProfile.title || 'No especificado'} 
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon>
-                    <BadgeIcon color="action" />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Cédula Profesional" 
-                    secondary={doctorProfile.professional_license || 'No especificada'} 
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon>
-                    <SchoolIcon color="action" />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Universidad" 
-                    secondary={doctorProfile.university || 'No especificada'} 
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon>
-                    <SchoolIcon color="action" />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Año de Graduación" 
-                    secondary={doctorProfile.graduation_year || 'No especificado'} 
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon>
-                    <HospitalIcon color="action" />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Especialidad" 
-                    secondary={doctorProfile.specialty_name || 'No especificada'} 
-                  />
-                </ListItem>
-              </List>
+                    <List dense>
+                      {office.is_virtual ? (
+                        <>
+                          {office.consultation_url && (
+                            <ListItem sx={{ px: 0 }}>
+                              <ListItemIcon>
+                                <LanguageIcon color="action" />
+                              </ListItemIcon>
+                              <ListItemText 
+                                primary="URL de Consultorio" 
+                                secondary={
+                                  <Button
+                                    size="small"
+                                    variant="text"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      window.open(office.consultation_url, "_blank");
+                                    }}
+                                    sx={{ p: 0, textTransform: "none" }}
+                                  >
+                                    {office.consultation_url}
+                                  </Button>
+                                }
+                              />
+                            </ListItem>
+                          )}
+                          <ListItem sx={{ px: 0 }}>
+                            <ListItemIcon>
+                              <PhoneIcon color="action" />
+                            </ListItemIcon>
+                            <ListItemText 
+                              primary="Teléfono" 
+                              secondary={office.phone || "No especificado"} 
+                            />
+                          </ListItem>
+                        </>
+                      ) : (
+                        <>
+                          <ListItem sx={{ px: 0 }}>
+                            <ListItemIcon>
+                              <LocationIcon color="action" />
+                            </ListItemIcon>
+                            <ListItemText 
+                              primary="Dirección" 
+                              secondary={office.address || "No especificada"} 
+                            />
+                          </ListItem>
+                          <ListItem sx={{ px: 0 }}>
+                            <ListItemIcon>
+                              <LocationIcon color="action" />
+                            </ListItemIcon>
+                            <ListItemText 
+                              primary="Ciudad" 
+                              secondary={office.city || "No especificada"} 
+                            />
+                          </ListItem>
+                          <ListItem sx={{ px: 0 }}>
+                            <ListItemIcon>
+                              <PhoneIcon color="action" />
+                            </ListItemIcon>
+                            <ListItemText 
+                              primary="Teléfono" 
+                              secondary={office.phone || "No especificado"} 
+                            />
+                          </ListItem>
+                          {office.maps_url && (
+                            <ListItem sx={{ px: 0 }}>
+                              <ListItemIcon>
+                                <LocationIcon color="action" />
+                              </ListItemIcon>
+                              <ListItemText 
+                                primary="Google Maps" 
+                                secondary={
+                                  <Button
+                                    size="small"
+                                    variant="text"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      window.open(office.maps_url, "_blank");
+                                    }}
+                                    sx={{ p: 0, textTransform: "none" }}
+                                  >
+                                    Ver en Maps
+                                  </Button>
+                                }
+                              />
+                            </ListItem>
+                          )}
+                        </>
+                      )}
+                      <ListItem sx={{ px: 0 }}>
+                        <ListItemIcon>
+                          <AccessTimeIcon color="action" />
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary="Zona Horaria" 
+                          secondary={office.timezone || "America/Mexico_City"} 
+                        />
+                      </ListItem>
+                    </List>
             </CardContent>
           </Card>
         </Box>
@@ -496,55 +590,94 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                     </Box>
                     
                     <List dense>
-                      <ListItem sx={{ px: 0 }}>
-                        <ListItemIcon>
-                          <LocationIcon color="action" />
-                        </ListItemIcon>
-                        <ListItemText 
-                          primary="Dirección" 
-                          secondary={office.address || 'No especificada'} 
-                        />
-                      </ListItem>
-                      <ListItem sx={{ px: 0 }}>
-                        <ListItemIcon>
-                          <LocationIcon color="action" />
-                        </ListItemIcon>
-                        <ListItemText 
-                          primary="Ciudad" 
-                          secondary={office.city || 'No especificada'} 
-                        />
-                      </ListItem>
-                      <ListItem sx={{ px: 0 }}>
-                        <ListItemIcon>
-                          <PhoneIcon color="action" />
-                        </ListItemIcon>
-                        <ListItemText 
-                          primary="Teléfono" 
-                          secondary={office.phone || 'No especificado'} 
-                        />
-                      </ListItem>
-                      {office.maps_url && (
-                        <ListItem sx={{ px: 0 }}>
-                          <ListItemIcon>
-                            <LocationIcon color="action" />
-                          </ListItemIcon>
-                          <ListItemText 
-                            primary="Google Maps" 
-                            secondary={
-                              <Button
-                                size="small"
-                                variant="text"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  window.open(office.maps_url, '_blank');
-                                }}
-                                sx={{ p: 0, textTransform: 'none' }}
-                              >
-                                Ver en Maps
-                              </Button>
-                            }
-                          />
-                        </ListItem>
+                      {office.is_virtual ? (
+                        <>
+                          {office.consultation_url && (
+                            <ListItem sx={{ px: 0 }}>
+                              <ListItemIcon>
+                                <LanguageIcon color="action" />
+                              </ListItemIcon>
+                              <ListItemText 
+                                primary="URL de Consultorio" 
+                                secondary={
+                                  <Button
+                                    size="small"
+                                    variant="text"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      window.open(office.consultation_url, "_blank");
+                                    }}
+                                    sx={{ p: 0, textTransform: "none" }}
+                                  >
+                                    {office.consultation_url}
+                                  </Button>
+                                }
+                              />
+                            </ListItem>
+                          )}
+                          <ListItem sx={{ px: 0 }}>
+                            <ListItemIcon>
+                              <PhoneIcon color="action" />
+                            </ListItemIcon>
+                            <ListItemText 
+                              primary="Teléfono" 
+                              secondary={office.phone || "No especificado"} 
+                            />
+                          </ListItem>
+                        </>
+                      ) : (
+                        <>
+                          <ListItem sx={{ px: 0 }}>
+                            <ListItemIcon>
+                              <LocationIcon color="action" />
+                            </ListItemIcon>
+                            <ListItemText 
+                              primary="Dirección" 
+                              secondary={office.address || "No especificada"} 
+                            />
+                          </ListItem>
+                          <ListItem sx={{ px: 0 }}>
+                            <ListItemIcon>
+                              <LocationIcon color="action" />
+                            </ListItemIcon>
+                            <ListItemText 
+                              primary="Ciudad" 
+                              secondary={office.city || "No especificada"} 
+                            />
+                          </ListItem>
+                          <ListItem sx={{ px: 0 }}>
+                            <ListItemIcon>
+                              <PhoneIcon color="action" />
+                            </ListItemIcon>
+                            <ListItemText 
+                              primary="Teléfono" 
+                              secondary={office.phone || "No especificado"} 
+                            />
+                          </ListItem>
+                          {office.maps_url && (
+                            <ListItem sx={{ px: 0 }}>
+                              <ListItemIcon>
+                                <LocationIcon color="action" />
+                              </ListItemIcon>
+                              <ListItemText 
+                                primary="Google Maps" 
+                                secondary={
+                                  <Button
+                                    size="small"
+                                    variant="text"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      window.open(office.maps_url, "_blank");
+                                    }}
+                                    sx={{ p: 0, textTransform: "none" }}
+                                  >
+                                    Ver en Maps
+                                  </Button>
+                                }
+                              />
+                            </ListItem>
+                          )}
+                        </>
                       )}
                       <ListItem sx={{ px: 0 }}>
                         <ListItemIcon>
@@ -552,7 +685,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                         </ListItemIcon>
                         <ListItemText 
                           primary="Zona Horaria" 
-                          secondary={office.timezone || 'America/Mexico_City'} 
+                          secondary={office.timezone || "America/Mexico_City"} 
                         />
                       </ListItem>
                     </List>
@@ -693,6 +826,10 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
         open={scheduleConfigDialogOpen}
         onClose={() => setScheduleConfigDialogOpen(false)}
         onSave={() => setScheduleConfigDialogOpen(false)}
+        onScheduleUpdated={() => {
+          console.log("📅 Schedule updated, refetching data...");
+          refetchSchedule();
+        }}
       />
 
       {/* Office Dialog */}
