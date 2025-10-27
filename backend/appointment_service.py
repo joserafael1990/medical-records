@@ -81,20 +81,13 @@ class AppointmentService:
         # Calculate end_time based on appointment_date and doctor's appointment_duration
         start_time = appointment_data['appointment_date']
         if isinstance(start_time, str):
-            # Parse the datetime string
+            # Parse the datetime string - frontend sends dates in doctor's timezone
             if start_time.endswith('Z'):
-                # If it ends with Z, treat it as UTC and convert to doctor's timezone first
+                # If it ends with Z, treat it as UTC
                 start_time = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
-                # Convert from UTC to doctor's timezone, then back to UTC for storage
-                tz = pytz.timezone(doctor_timezone)
-                start_time_utc = start_time.astimezone(pytz.utc)
-                # Get the local time in doctor's timezone
-                local_time = start_time_utc.astimezone(tz)
-                # Create a new datetime with just the date/time components in doctor's timezone
-                start_time = datetime.combine(local_time.date(), local_time.time())
-                start_time = tz.localize(start_time)
             else:
-                # If no timezone info, assume it's in doctor's timezone
+                # Frontend sends dates in doctor's timezone format (sv-SE format)
+                # Parse as naive datetime and localize to doctor's timezone
                 start_time = datetime.fromisoformat(start_time)
                 tz = pytz.timezone(doctor_timezone)
                 start_time = tz.localize(start_time)

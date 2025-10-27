@@ -2144,7 +2144,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             onAddDiagnosis={handleAddSecondaryDiagnosis}
             onRemoveDiagnosis={handleRemoveSecondaryDiagnosis}
             title="Diagnósticos Secundarios"
-            maxSelections={1}
             showAddButton={true}
             isLoading={loading}
             error={secondaryDiagnosesHook.error}

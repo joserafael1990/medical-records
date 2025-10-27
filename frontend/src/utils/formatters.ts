@@ -34,7 +34,7 @@ export const formatDoctorName = (doctorProfile: any): string => {
 
 /**
  * Parse backend date string that comes in CDMX timezone format
- * The backend sends dates in CDMX timezone, but JavaScript interprets them as UTC
+ * The backend now sends dates in CDMX timezone without timezone info
  * This function correctly parses them as CDMX timezone
  */
 export const parseBackendDate = (dateString: string): Date => {
@@ -45,20 +45,14 @@ export const parseBackendDate = (dateString: string): Date => {
     return new Date(dateString);
   }
   
-  // If it's a naive datetime string (from backend CDMX conversion), 
-  // we need to treat it as CDMX timezone
-  // The backend sends dates like "2025-01-27T15:00:00" which are in CDMX timezone
-  // but JavaScript interprets them as UTC
-  
-  // Create a date object and adjust for CDMX timezone offset
+  // Backend now sends dates like "2025-01-27T15:00:00" which are in CDMX timezone
+  // Parse as naive datetime and treat as CDMX timezone
   const date = new Date(dateString);
   
-  // Get the CDMX timezone offset
-  const cdmxOffset = -6 * 60; // CDMX is UTC-6 (in minutes)
-  const utcOffset = date.getTimezoneOffset(); // Current timezone offset
-  
-  // Adjust the date to account for the timezone difference
-  const adjustedDate = new Date(date.getTime() + (utcOffset - cdmxOffset) * 60000);
+  // Since the backend sends dates in CDMX timezone but without timezone info,
+  // we need to adjust for the timezone difference
+  // CDMX is UTC-6, so we need to add 6 hours to get the correct UTC time
+  const adjustedDate = new Date(date.getTime() + (6 * 60 * 60 * 1000));
   
   return adjustedDate;
 };

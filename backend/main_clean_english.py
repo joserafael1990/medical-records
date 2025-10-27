@@ -4086,9 +4086,9 @@ async def get_appointments(
                 "id": str(appointment.id),
                 "patient_id": str(appointment.patient_id),
                 "doctor_id": appointment.doctor_id,  # ✅ Agregado doctor_id
-                "appointment_date": appointment_date_cdmx.isoformat(),  # CDMX timezone format
-                "date_time": appointment_date_cdmx.isoformat(),  # CDMX timezone format  
-                "end_time": end_time_cdmx.isoformat() if end_time_cdmx else None,
+                "appointment_date": appointment_date_cdmx.strftime('%Y-%m-%dT%H:%M:%S'),  # CDMX timezone format without timezone info
+                "date_time": appointment_date_cdmx.strftime('%Y-%m-%dT%H:%M:%S'),  # CDMX timezone format without timezone info
+                "end_time": end_time_cdmx.strftime('%Y-%m-%dT%H:%M:%S') if end_time_cdmx else None,
                 "appointment_type_id": appointment.appointment_type_id,
                 "appointment_type_name": appointment.appointment_type_rel.name if appointment.appointment_type_rel else None,
                 "office_id": appointment.office_id,
@@ -4204,9 +4204,9 @@ async def get_calendar_appointments(
                 "id": appointment.id,
                 "patient_id": appointment.patient_id,
                 "doctor_id": appointment.doctor_id,
-                "appointment_date": appointment_date_cdmx.isoformat() if appointment_date_cdmx else None,
-                "date_time": appointment_date_cdmx.isoformat() if appointment_date_cdmx else None,
-                "end_time": end_time_cdmx.isoformat() if end_time_cdmx else None,
+                "appointment_date": appointment_date_cdmx.strftime('%Y-%m-%dT%H:%M:%S') if appointment_date_cdmx else None,
+                "date_time": appointment_date_cdmx.strftime('%Y-%m-%dT%H:%M:%S') if appointment_date_cdmx else None,
+                "end_time": end_time_cdmx.strftime('%Y-%m-%dT%H:%M:%S') if end_time_cdmx else None,
                 "appointment_type_id": appointment.appointment_type_id,
                 "appointment_type_name": appointment.appointment_type_rel.name if appointment.appointment_type_rel else None,
                 "office_id": appointment.office_id,
@@ -4260,8 +4260,8 @@ async def get_appointment(
             "appointment_code": appointment.appointment_code,
             "patient_id": appointment.patient_id,
             "doctor_id": appointment.doctor_id,
-            "appointment_date": appointment_date_cdmx.isoformat(),
-            "end_time": end_time_cdmx.isoformat() if end_time_cdmx else None,
+            "appointment_date": appointment_date_cdmx.strftime('%Y-%m-%dT%H:%M:%S'),
+            "end_time": end_time_cdmx.strftime('%Y-%m-%dT%H:%M:%S') if end_time_cdmx else None,
             "appointment_type_id": appointment.appointment_type_id,
             "appointment_type_name": appointment.appointment_type_rel.name if appointment.appointment_type_rel else None,
             "office_id": appointment.office_id,
