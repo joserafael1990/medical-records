@@ -1743,26 +1743,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   </Typography>
                   <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
                     <TextField
-                      label="Condiciones Crónicas"
-                      value={patientEditData.chronic_conditions || ''}
-                      onChange={(e: any) => handlePatientDataChange('chronic_conditions', e.target.value)}
-                      size="small"
-                      multiline
-                      rows={2}
-                      fullWidth
-                      sx={{ gridColumn: '1 / -1' }}
-                    />
-                    <TextField
-                      label="Medicamentos Actuales"
-                      value={patientEditData.current_medications || ''}
-                      onChange={(e: any) => handlePatientDataChange('current_medications', e.target.value)}
-                      size="small"
-                      multiline
-                      rows={2}
-                      fullWidth
-                      sx={{ gridColumn: '1 / -1' }}
-                    />
-                    <TextField
                       label="Proveedor de Seguro"
                       value={patientEditData.insurance_provider || ''}
                       onChange={(e: any) => handlePatientDataChange('insurance_provider', e.target.value)}

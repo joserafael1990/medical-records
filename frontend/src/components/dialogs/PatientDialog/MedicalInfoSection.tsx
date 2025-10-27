@@ -11,8 +11,6 @@ import {
 
 interface MedicalInfoSectionProps {
   formData: {
-    chronic_conditions: string;
-    current_medications: string;
     medical_history: string;
     insurance_provider: string;
     insurance_number: string;
@@ -36,34 +34,6 @@ export const MedicalInfoSection: React.FC<MedicalInfoSectionProps> = ({
       </Box>
       
       <Grid container spacing={2}>
-        {/* Chronic Conditions */}
-        <Grid item xs={12}>
-          <TextField
-            label="Condiciones Crónicas"
-            value={formData.chronic_conditions}
-            onChange={(e) => onInputChange('chronic_conditions', e.target.value)}
-            error={!!errors.chronic_conditions}
-            helperText={errors.chronic_conditions || 'Diabetes, hipertensión, etc.'}
-            fullWidth
-            multiline
-            rows={2}
-          />
-        </Grid>
-        
-        {/* Current Medications */}
-        <Grid item xs={12}>
-          <TextField
-            label="Medicamentos Actuales"
-            value={formData.current_medications}
-            onChange={(e) => onInputChange('current_medications', e.target.value)}
-            error={!!errors.current_medications}
-            helperText={errors.current_medications || 'Medicamentos que toma actualmente'}
-            fullWidth
-            multiline
-            rows={2}
-          />
-        </Grid>
-        
         {/* Medical History */}
         <Grid item xs={12}>
           <TextField

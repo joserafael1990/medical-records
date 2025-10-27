@@ -179,8 +179,6 @@ const PatientDialogRefactored: React.FC<PatientDialogRefactoredProps> = ({
             {/* Medical Information */}
             <MedicalInfoSection
               formData={{
-                chronic_conditions: formData.chronic_conditions,
-                current_medications: formData.current_medications,
                 medical_history: formData.medical_history,
                 insurance_provider: formData.insurance_provider,
                 insurance_number: formData.insurance_number

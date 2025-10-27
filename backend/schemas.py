@@ -264,8 +264,6 @@ class PatientCreate(PersonBase):
     person_type: Literal['patient'] = 'patient'
     
     # Medical data
-    chronic_conditions: Optional[str] = None
-    current_medications: Optional[str] = None
     insurance_provider: Optional[str] = None
     insurance_number: Optional[str] = None
 
@@ -297,8 +295,7 @@ class PersonUpdate(BaseSchema):
     address_country_id: Optional[int] = None
     address_postal_code: Optional[str] = None
     
-    # Online consultation (doctors)
-    online_consultation_url: Optional[str] = None
+    # Professional data (doctors)
     appointment_duration: Optional[int] = None  # Duration in minutes
     
     # Professional data (doctors)
@@ -310,8 +307,6 @@ class PersonUpdate(BaseSchema):
     subspecialty: Optional[str] = None
     
     # Medical data (patients)
-    chronic_conditions: Optional[str] = None
-    current_medications: Optional[str] = None
     insurance_provider: Optional[str] = None
     insurance_number: Optional[str] = None
     
@@ -323,7 +318,6 @@ class PersonUpdate(BaseSchema):
 class Person(PersonBase):
     id: int
     person_code: str
-    username: Optional[str] = None
     is_active: bool = True
     last_login: Optional[datetime] = None
     created_at: datetime

@@ -91,8 +91,6 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
     emergency_contact_name: '',
     emergency_contact_phone: '',
     emergency_contact_relationship: '',
-    chronic_conditions: '',
-    current_medications: '',
     medical_history: '',
     insurance_provider: '',
     insurance_number: '',
@@ -196,8 +194,6 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
             emergency_contact_name: decryptedPatient.emergency_contact_name || '',
             emergency_contact_phone: decryptedPatient.emergency_contact_phone || '',
             emergency_contact_relationship: decryptedPatient.emergency_contact_relationship || '',
-            chronic_conditions: decryptedPatient.chronic_conditions || '',
-            current_medications: decryptedPatient.current_medications || '',
             medical_history: '',
             insurance_provider: decryptedPatient.insurance_provider || '',
             insurance_number: decryptedPatient.insurance_number || '',
@@ -235,8 +231,6 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
             emergency_contact_name: patient.emergency_contact_name || '',
             emergency_contact_phone: patient.emergency_contact_phone || '',
             emergency_contact_relationship: patient.emergency_contact_relationship || '',
-            chronic_conditions: patient.chronic_conditions || '',
-            current_medications: patient.current_medications || '',
             medical_history: '',
             insurance_provider: patient.insurance_provider || '',
             insurance_number: patient.insurance_number || '',
@@ -274,8 +268,6 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
           emergency_contact_name: '',
           emergency_contact_phone: '',
           emergency_contact_relationship: '',
-          chronic_conditions: '',
-          current_medications: '',
           medical_history: '',
           insurance_provider: '',
           insurance_number: '',
@@ -783,34 +775,6 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
               Información Médica
             </Typography>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-              <TextField
-                label="Condiciones Crónicas - opcional"
-                name="chronic_conditions"
-                value={formData.chronic_conditions}
-                onChange={handleChange('chronic_conditions')}
-                size="small"
-                multiline
-                rows={2}
-                fullWidth
-                sx={{ gridColumn: '1 / -1' }}
-                placeholder="Condiciones Crónicas - opcional"
-                error={!!errors.chronic_conditions}
-                helperText={errors.chronic_conditions}
-              />
-              <TextField
-                label="Medicamentos Actuales - opcional"
-                name="current_medications"
-                value={formData.current_medications}
-                onChange={handleChange('current_medications')}
-                size="small"
-                multiline
-                rows={2}
-                fullWidth
-                sx={{ gridColumn: '1 / -1' }}
-                placeholder="Medicamentos Actuales - opcional"
-                error={!!errors.current_medications}
-                helperText={errors.current_medications}
-              />
               <TextField
                 label="Proveedor de Seguro - opcional"
                 name="insurance_provider"

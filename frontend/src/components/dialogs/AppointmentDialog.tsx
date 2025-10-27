@@ -160,8 +160,6 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     emergency_contact_name: '',
     emergency_contact_phone: '',
     emergency_contact_relationship: '',
-    chronic_conditions: '',
-    current_medications: '',
     insurance_provider: '',
     insurance_number: ''
   });
@@ -559,9 +557,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
           emergency_contact_relationship: '',
           
           // Medical information (optional)
-          current_medications: '',
           medical_history: '',
-          chronic_conditions: '',
           insurance_provider: '',
           insurance_number: '',
           
@@ -1082,26 +1078,6 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                             Información Médica
                           </Typography>
                           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-                            <TextField
-                              label="Condiciones Crónicas"
-                              value={newPatientData.chronic_conditions || ''}
-                              onChange={(e) => handleNewPatientFieldChange('chronic_conditions', e.target.value)}
-                              size="small"
-                              multiline
-                              rows={2}
-                              fullWidth
-                              sx={{ gridColumn: '1 / -1' }}
-                            />
-                            <TextField
-                              label="Medicamentos Actuales"
-                              value={newPatientData.current_medications || ''}
-                              onChange={(e) => handleNewPatientFieldChange('current_medications', e.target.value)}
-                              size="small"
-                              multiline
-                              rows={2}
-                              fullWidth
-                              sx={{ gridColumn: '1 / -1' }}
-                            />
                             <TextField
                               label="Proveedor de Seguro"
                               value={newPatientData.insurance_provider || ''}

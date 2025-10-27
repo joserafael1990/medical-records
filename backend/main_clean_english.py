@@ -1712,7 +1712,6 @@ async def send_whatsapp_appointment_reminder(
         office_address = "Consultorio Médico"  # Default
         country_code = '52'  # Default: México
         appointment_type = "presencial"  # Default
-        online_consultation_url = None  # Default for testing
         
         # Get office information from appointment
         if appointment.office_id:
@@ -1753,8 +1752,7 @@ async def send_whatsapp_appointment_reminder(
             doctor_full_name=f"{doctor_title}. Test",  # Default for testing
             office_address=office_address,
             country_code=country_code,
-            appointment_type=appointment_type,
-            online_consultation_url=online_consultation_url
+            appointment_type=appointment_type
         )
         
         if result['success']:
@@ -3299,8 +3297,8 @@ async def register_doctor(
                 detail = "El CURP ya está registrado en el sistema"
             elif "professional_license" in error_str:
                 detail = "La cédula profesional ya está registrada en el sistema"
-            elif "username" in error_str:
-                detail = "El nombre de usuario ya está registrado en el sistema"
+            elif "email" in error_str:
+                detail = "El correo electrónico ya está registrado en el sistema"
             else:
                 detail = "Ya existe un registro con esos datos en el sistema"
             
@@ -3630,8 +3628,6 @@ async def get_patients(
                 'birth_country_id': getattr(patient, 'birth_country_id', None),
                 'emergency_contact_name': getattr(patient, 'emergency_contact_name', None),
                 'emergency_contact_relationship': getattr(patient, 'emergency_contact_relationship', None),
-                'chronic_conditions': getattr(patient, 'chronic_conditions', None),
-                'current_medications': getattr(patient, 'current_medications', None),
                 'insurance_provider': getattr(patient, 'insurance_provider', None),
                 'insurance_policy_number': getattr(patient, 'insurance_policy_number', None),
                 'active': getattr(patient, 'active', True),
@@ -3782,8 +3778,6 @@ async def get_patient(
             'birth_country_id': patient.birth_country_id,
             'gender': patient.gender,
             'civil_status': patient.civil_status,
-            'chronic_conditions': patient.chronic_conditions,
-            'current_medications': patient.current_medications,
             'created_at': patient.created_at.isoformat(),
             'updated_at': patient.updated_at.isoformat() if patient.updated_at else None,
             'created_by': patient.created_by,
@@ -4056,15 +4050,15 @@ async def get_appointments(
             )
         else:
             appointments = AppointmentService.get_appointments(
-            db=db,
-            skip=skip,
-            limit=limit,
-            start_date=start_date_obj,
-            end_date=end_date_obj,
-            status=status,
+                db=db,
+                skip=skip,
+                limit=limit,
+                start_date=start_date_obj,
+                end_date=end_date_obj,
+                status=status,
                 doctor_id=current_user.id,
-            available_for_consultation=available_for_consultation
-        )
+                available_for_consultation=available_for_consultation
+            )
         
         # Transform to include patient information
         result = []

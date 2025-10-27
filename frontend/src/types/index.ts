@@ -41,8 +41,6 @@ export interface PatientFormData {
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
   emergency_contact_relationship?: string;
-  chronic_conditions?: string;
-  current_medications?: string;
   insurance_provider?: string;
   insurance_number?: string;
   active?: boolean;

@@ -170,11 +170,8 @@ class Person(Base):
     address_country_id = Column(Integer, ForeignKey("countries.id"))  # FK to countries table
     address_postal_code = Column(String(5))
     
-    # ONLINE CONSULTATION (doctors only)
-    online_consultation_url = Column(Text)  # URL for online consultations
-    appointment_duration = Column(Integer)  # Duration of appointments in minutes (optional)
-    
     # PROFESSIONAL DATA (doctors only)
+    appointment_duration = Column(Integer)  # Duration of appointments in minutes (optional)
     professional_license = Column(String(20), unique=True)
     specialty_id = Column(Integer, ForeignKey("specialties.id"))
     specialty_license = Column(String(20))
@@ -185,8 +182,6 @@ class Person(Base):
     professional_seal = Column(String(500))
     
     # MEDICAL DATA (patients only)
-    chronic_conditions = Column(Text)
-    current_medications = Column(Text)
     insurance_provider = Column(String(100))
     insurance_number = Column(String(50))
     
@@ -196,7 +191,6 @@ class Person(Base):
     emergency_contact_relationship = Column(String(20), ForeignKey("emergency_relationships.code"))
     
     # AUTHENTICATION
-    username = Column(String(50), unique=True)
     hashed_password = Column(String(255))
     
     # SYSTEM

@@ -129,7 +129,7 @@ export interface DiagnosisStats {
   total_categories: number;
   diagnoses_by_specialty: Record<string, number>;
   diagnoses_by_severity: Record<string, number>;
-  chronic_conditions: number;
+  medical_conditions: number;
   contagious_conditions: number;
 }
 

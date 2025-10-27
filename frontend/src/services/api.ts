@@ -694,8 +694,6 @@ class ApiService {
       // Default values
       
       // Medical fields
-      chronic_conditions: patientData.chronic_conditions || '',
-      current_medications: patientData.current_medications || '',
       insurance_provider: patientData.insurance_provider || '',
       insurance_number: patientData.insurance_number || '',
       
@@ -797,8 +795,6 @@ class ApiService {
       // Default values
       
       // Medical fields
-      chronic_conditions: patientData.chronic_conditions || '',
-      current_medications: patientData.current_medications || '',
       insurance_provider: patientData.insurance_provider || '',
       insurance_number: patientData.insurance_number || '',
       
