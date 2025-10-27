@@ -34,7 +34,7 @@ import {
   Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, addDays, addWeeks, addMonths, isSameDay, isSameMonth } from 'date-fns';
-import { formatTime } from '../../utils/formatters';
+import { formatTime, parseBackendDate } from '../../utils/formatters';
 import { es } from 'date-fns/locale';
 import { apiService } from '../../services/api';
 import { useToast } from '../common/ToastNotification';
@@ -157,7 +157,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
     switch (view) {
       case 'daily':
         const dailyAppointments = appointments.filter(apt => {
-          const aptDate = new Date(apt.date_time);
+          const aptDate = parseBackendDate(apt.date_time);
           const isSameDayResult = isSameDay(aptDate, date);
           return isSameDayResult;
         });
@@ -166,14 +166,14 @@ const AgendaView: React.FC<AgendaViewProps> = ({
         const weekStart = startOfWeek(date, { weekStartsOn: 1 }); // Lunes
         const weekEnd = endOfWeek(date, { weekStartsOn: 1 }); // Domingo
         return appointments.filter(apt => {
-          const aptDate = new Date(apt.date_time);
+          const aptDate = parseBackendDate(apt.date_time);
           return aptDate >= weekStart && aptDate <= weekEnd;
         });
       case 'monthly':
         const monthStart = startOfMonth(date);
         const monthEnd = endOfMonth(date);
         return appointments.filter(apt => {
-          const aptDate = new Date(apt.date_time);
+          const aptDate = parseBackendDate(apt.date_time);
           return aptDate >= monthStart && aptDate <= monthEnd;
         });
       default:
@@ -265,7 +265,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
             <TableRow>
               {weekDays.map(day => {
                 const dayAppointments = appointments.filter(apt => 
-                  isSameDay(new Date(apt.date_time), day)
+                  isSameDay(parseBackendDate(apt.date_time), day)
                 );
                 
                 return (
@@ -385,7 +385,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
               <TableRow key={weekIndex}>
                 {week.map(day => {
                   const dayAppointments = appointments.filter(apt => 
-                    isSameDay(new Date(apt.date_time), day)
+                    isSameDay(parseBackendDate(apt.date_time), day)
                   );
                   const isCurrentMonth = isSameMonth(day, currentDate);
                   const isToday = isSameDay(day, new Date());

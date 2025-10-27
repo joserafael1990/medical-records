@@ -72,6 +72,7 @@ import { PatientInfo, DoctorInfo, ConsultationInfo, MedicationInfo, StudyInfo } 
 import { useToast } from '../common/ToastNotification';
 import { disablePaymentDetection } from '../../utils/disablePaymentDetection';
 import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
+import { parseBackendDate } from '../../utils/formatters';
 // import { useSnackbar } from '../../contexts/SnackbarContext';
 
 // Define ConsultationFormData interface based on the hook
@@ -1376,10 +1377,10 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                     // Use patient information from the appointment object (comes from backend)
                     const patient = appointment.patient;
                     
-                    const appointmentDate = new Date(appointment.appointment_date).toLocaleDateString('es-ES', {
+                    const appointmentDate = parseBackendDate(appointment.appointment_date).toLocaleDateString('es-ES', {
                       timeZone: 'America/Mexico_City'
                     });
-                    const appointmentTime = new Date(appointment.appointment_date).toLocaleTimeString('es-ES', { 
+                    const appointmentTime = parseBackendDate(appointment.appointment_date).toLocaleTimeString('es-ES', { 
                       hour: '2-digit', 
                       minute: '2-digit',
                       timeZone: 'America/Mexico_City'

@@ -33,12 +33,43 @@ export const formatDoctorName = (doctorProfile: any): string => {
 // formatDate and formatDateTime now imported from dateHelpers.ts to avoid conflicts
 
 /**
- * Format time for display (HH:MM)
+ * Parse backend date string that comes in CDMX timezone format
+ * The backend sends dates in CDMX timezone, but JavaScript interprets them as UTC
+ * This function correctly parses them as CDMX timezone
+ */
+export const parseBackendDate = (dateString: string): Date => {
+  if (!dateString) return new Date();
+  
+  // If the date string already has timezone info, parse it directly
+  if (dateString.includes('+') || dateString.includes('Z') || dateString.includes('-', 10)) {
+    return new Date(dateString);
+  }
+  
+  // If it's a naive datetime string (from backend CDMX conversion), 
+  // we need to treat it as CDMX timezone
+  // The backend sends dates like "2025-01-27T15:00:00" which are in CDMX timezone
+  // but JavaScript interprets them as UTC
+  
+  // Create a date object and adjust for CDMX timezone offset
+  const date = new Date(dateString);
+  
+  // Get the CDMX timezone offset
+  const cdmxOffset = -6 * 60; // CDMX is UTC-6 (in minutes)
+  const utcOffset = date.getTimezoneOffset(); // Current timezone offset
+  
+  // Adjust the date to account for the timezone difference
+  const adjustedDate = new Date(date.getTime() + (utcOffset - cdmxOffset) * 60000);
+  
+  return adjustedDate;
+};
+
+/**
+ * Format time for display (HH:MM) - handles backend dates correctly
  */
 export const formatTime = (dateString: string): string => {
   if (!dateString) return '';
   
-  const date = new Date(dateString);
+  const date = parseBackendDate(dateString);
   return date.toLocaleTimeString('es-MX', {
     hour: '2-digit',
     minute: '2-digit',
