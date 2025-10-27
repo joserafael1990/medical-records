@@ -292,6 +292,11 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
       [field]: value
     };
     
+    // Si se selecciona "Primera vez", automáticamente establecer como paciente nuevo
+    if (field === 'consultation_type' && value === 'Primera vez') {
+      setIsExistingPatient(false);
+    }
+    
     // Si se selecciona un consultorio, determinar automáticamente el tipo de cita
     if (field === 'office_id' && value && value !== 0) {
       const selectedOffice = offices.find(office => office.id === parseInt(value));
@@ -501,25 +506,13 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
             {/* 2. SELECCIÓN DE PACIENTE - Solo si es "Primera vez" */}
             {!isEditing && currentFormData.consultation_type === 'Primera vez' && (
               <>
+                {/* Automatically show new patient form for "Primera vez" */}
                 <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>
-                  ¿Es un paciente existente?
+                  Datos del Nuevo Paciente
                 </Typography>
-                <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-                  <Button
-                    variant={isExistingPatient === true ? 'contained' : 'outlined'}
-                    onClick={() => setIsExistingPatient(true)}
-                    fullWidth
-                  >
-                    Sí, paciente existente
-                  </Button>
-                  <Button
-                    variant={isExistingPatient === false ? 'contained' : 'outlined'}
-                    onClick={() => setIsExistingPatient(false)}
-                    fullWidth
-                  >
-                    No, nuevo paciente
-                  </Button>
-                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Como es una consulta de primera vez, complete los datos básicos del nuevo paciente:
+                </Typography>
               </>
             )}
 

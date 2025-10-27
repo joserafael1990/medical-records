@@ -185,9 +185,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           consultation={consultationManagement.selectedConsultation}
           doctorProfile={doctorProfile}
           appointments={consultationManagement.allAvailableAppointments}
-          onNewPatient={() => {
+          onNewAppointment={() => {
             consultationManagement.closeConsultationDialog();
-            patientManagement.openPatientDialog();
+            appointmentManager.handleNewAppointment();
           }}
           onSubmit={async (data) => {
             if (consultationManagement.selectedConsultation) {

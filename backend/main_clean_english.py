@@ -4062,7 +4062,7 @@ async def get_appointments(
             start_date=start_date_obj,
             end_date=end_date_obj,
             status=status,
-            doctor_id=current_user.id,
+                doctor_id=current_user.id,
             available_for_consultation=available_for_consultation
         )
         
@@ -4083,13 +4083,18 @@ async def get_appointments(
                 
                 patient_name = " ".join(filter(None, name_parts)) or "Paciente sin nombre"
             
+            # Convert UTC times to CDMX timezone for frontend display
+            cdmx_tz = pytz.timezone('America/Mexico_City')
+            appointment_date_cdmx = appointment.appointment_date.astimezone(cdmx_tz)
+            end_time_cdmx = appointment.end_time.astimezone(cdmx_tz) if appointment.end_time else None
+            
             apt_dict = {
                 "id": str(appointment.id),
                 "patient_id": str(appointment.patient_id),
                 "doctor_id": appointment.doctor_id,  # ✅ Agregado doctor_id
-                "appointment_date": appointment.appointment_date.isoformat(),  # CDMX native format
-                "date_time": appointment.appointment_date.isoformat(),  # CDMX native format  
-                "end_time": appointment.end_time.isoformat() if appointment.end_time else None,
+                "appointment_date": appointment_date_cdmx.isoformat(),  # CDMX timezone format
+                "date_time": appointment_date_cdmx.isoformat(),  # CDMX timezone format  
+                "end_time": end_time_cdmx.isoformat() if end_time_cdmx else None,
                 "appointment_type_id": appointment.appointment_type_id,
                 "appointment_type_name": appointment.appointment_type_rel.name if appointment.appointment_type_rel else None,
                 "office_id": appointment.office_id,
@@ -4191,25 +4196,39 @@ async def get_calendar_appointments(
         # Execute query and return results
         appointments = query.order_by(Appointment.appointment_date).all()
         
-        # Convert appointment dates from UTC to doctor's timezone for display
-        # Use default timezone since office_timezone was moved to Office table
-        doctor_timezone = 'America/Mexico_City'
-        tz = pytz.timezone(doctor_timezone)
+        # Convert appointment dates from UTC to CDMX timezone for display
+        cdmx_tz = pytz.timezone('America/Mexico_City')
         
+        # Create a list of appointment dictionaries with converted dates
+        result = []
         for appointment in appointments:
-            if appointment.appointment_date:
-                # Convert UTC to doctor's timezone
-                utc_date = pytz.utc.localize(appointment.appointment_date) if appointment.appointment_date.tzinfo is None else appointment.appointment_date
-                local_date = utc_date.astimezone(tz)
-                appointment.appointment_date = local_date
-                
-            if appointment.end_time:
-                # Convert UTC to doctor's timezone
-                utc_end = pytz.utc.localize(appointment.end_time) if appointment.end_time.tzinfo is None else appointment.end_time
-                local_end = utc_end.astimezone(tz)
-                appointment.end_time = local_end
+            appointment_date_cdmx = appointment.appointment_date.astimezone(cdmx_tz) if appointment.appointment_date else None
+            end_time_cdmx = appointment.end_time.astimezone(cdmx_tz) if appointment.end_time else None
+            
+            # Create appointment dict with converted dates
+            apt_dict = {
+                "id": appointment.id,
+                "patient_id": appointment.patient_id,
+                "doctor_id": appointment.doctor_id,
+                "appointment_date": appointment_date_cdmx.isoformat() if appointment_date_cdmx else None,
+                "date_time": appointment_date_cdmx.isoformat() if appointment_date_cdmx else None,
+                "end_time": end_time_cdmx.isoformat() if end_time_cdmx else None,
+                "appointment_type_id": appointment.appointment_type_id,
+                "appointment_type_name": appointment.appointment_type_rel.name if appointment.appointment_type_rel else None,
+                "office_id": appointment.office_id,
+                "office_name": appointment.office.name if appointment.office else None,
+                "consultation_type": appointment.consultation_type,
+                "reason": appointment.reason,
+                "notes": appointment.notes,
+                "status": appointment.status,
+                "priority": appointment.priority,
+                "room_number": appointment.room_number,
+                "patient": appointment.patient,
+                "office": appointment.office
+            }
+            result.append(apt_dict)
         
-        return appointments
+        return result
     except Exception as e:
         print(f"Error in get_calendar_appointments: {str(e)}")
         return []
@@ -4236,14 +4255,19 @@ async def get_appointment(
         if not appointment:
             raise HTTPException(status_code=404, detail="Appointment not found or access denied")
         
+        # Convert UTC times to CDMX timezone for frontend display
+        cdmx_tz = pytz.timezone('America/Mexico_City')
+        appointment_date_cdmx = appointment.appointment_date.astimezone(cdmx_tz)
+        end_time_cdmx = appointment.end_time.astimezone(cdmx_tz) if appointment.end_time else None
+        
         # Return appointment data
         return {
             "id": appointment.id,
             "appointment_code": appointment.appointment_code,
             "patient_id": appointment.patient_id,
             "doctor_id": appointment.doctor_id,
-            "appointment_date": appointment.appointment_date.isoformat(),
-            "end_time": appointment.end_time.isoformat() if appointment.end_time else None,
+            "appointment_date": appointment_date_cdmx.isoformat(),
+            "end_time": end_time_cdmx.isoformat() if end_time_cdmx else None,
             "appointment_type_id": appointment.appointment_type_id,
             "appointment_type_name": appointment.appointment_type_rel.name if appointment.appointment_type_rel else None,
             "office_id": appointment.office_id,

@@ -115,7 +115,7 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
             const daySchedule = getDaySchedule(key);
             
             return (
-              <Grid item xs={12} key={key}>
+              <Grid xs={12} key={key}>
                 <Card variant="outlined">
                   <CardContent>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>

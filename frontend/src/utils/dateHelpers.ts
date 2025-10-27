@@ -2,7 +2,9 @@
 export const formatDate = (date: string | Date) => {
   if (!date) return '';
   const d = new Date(date);
-  return d.toLocaleDateString('es-MX');
+  return d.toLocaleDateString('es-MX', {
+    timeZone: 'America/Mexico_City'
+  });
 };
 
 export const formatDateTime = (date: string | Date) => {

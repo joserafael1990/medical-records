@@ -41,7 +41,8 @@ export const formatTime = (dateString: string): string => {
   const date = new Date(dateString);
   return date.toLocaleTimeString('es-MX', {
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
+    timeZone: 'America/Mexico_City'
   });
 };
 

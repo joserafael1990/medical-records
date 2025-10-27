@@ -293,11 +293,15 @@ export const useAppointmentManager = (
       const doctorDuration = user?.doctor?.appointment_duration || doctorProfile?.appointment_duration || 30;
       const endTime = new Date(appointmentDate.getTime() + doctorDuration * 60000);
 
+      // Convert to Mexico City timezone before sending to backend
+      const mexicoTimeString = appointmentDate.toLocaleString("sv-SE", {timeZone: "America/Mexico_City"});
+      const mexicoEndTimeString = endTime.toLocaleString("sv-SE", {timeZone: "America/Mexico_City"});
+      
       const backendData = {
         patient_id: appointmentData.patient_id,
         doctor_id: user?.doctor?.id || doctorProfile?.id || 0,
-        appointment_date: appointmentDate.toISOString(),
-        end_time: endTime.toISOString(),
+        appointment_date: mexicoTimeString,
+        end_time: mexicoEndTimeString,
         reason: appointmentData.reason,
         appointment_type: appointmentData.appointment_type, // Keep the original value without fallback
         status: appointmentData.status || 'confirmed',

@@ -149,9 +149,9 @@ export class PatientService extends ApiBase {
 
   async validatePatientData(patientData: PatientFormData): Promise<{ valid: boolean; errors: string[] }> {
     try {
-      logger.api.info('Validating patient data');
+      console.log('Validating patient data');
       const response = await this.api.post('/api/patients/validate', patientData);
-      logger.api.success('Patient data validation completed');
+      console.log('Patient data validation completed');
       return response.data;
     } catch (error: any) {
       logger.api.error('Failed to validate patient data:', error);

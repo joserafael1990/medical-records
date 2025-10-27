@@ -529,8 +529,8 @@ export interface Appointment {
   updated_at: string;
   
   // Relationships
-  patient?: Person;
-  doctor?: Person;
+  patient?: any; // Person type will be defined later
+  doctor?: any; // Person type will be defined later
   office?: Office;
   appointment_type_rel?: AppointmentType;
 }
