@@ -4077,10 +4077,11 @@ async def get_appointments(
                 
                 patient_name = " ".join(filter(None, name_parts)) or "Paciente sin nombre"
             
-            # Convert UTC times to CDMX timezone for frontend display
+            # Since appointments are stored in CDMX timezone (without tzinfo), 
+            # we need to localize them to CDMX timezone for proper display
             cdmx_tz = pytz.timezone('America/Mexico_City')
-            appointment_date_cdmx = appointment.appointment_date.astimezone(cdmx_tz)
-            end_time_cdmx = appointment.end_time.astimezone(cdmx_tz) if appointment.end_time else None
+            appointment_date_cdmx = cdmx_tz.localize(appointment.appointment_date)
+            end_time_cdmx = cdmx_tz.localize(appointment.end_time) if appointment.end_time else None
             
             apt_dict = {
                 "id": str(appointment.id),
@@ -4190,14 +4191,15 @@ async def get_calendar_appointments(
         # Execute query and return results
         appointments = query.order_by(Appointment.appointment_date).all()
         
-        # Convert appointment dates from UTC to CDMX timezone for display
+        # Since appointments are stored in CDMX timezone (without tzinfo), 
+        # we need to localize them to CDMX timezone for proper display
         cdmx_tz = pytz.timezone('America/Mexico_City')
         
         # Create a list of appointment dictionaries with converted dates
         result = []
         for appointment in appointments:
-            appointment_date_cdmx = appointment.appointment_date.astimezone(cdmx_tz) if appointment.appointment_date else None
-            end_time_cdmx = appointment.end_time.astimezone(cdmx_tz) if appointment.end_time else None
+            appointment_date_cdmx = cdmx_tz.localize(appointment.appointment_date) if appointment.appointment_date else None
+            end_time_cdmx = cdmx_tz.localize(appointment.end_time) if appointment.end_time else None
             
             # Create appointment dict with converted dates
             apt_dict = {
@@ -4249,10 +4251,11 @@ async def get_appointment(
         if not appointment:
             raise HTTPException(status_code=404, detail="Appointment not found or access denied")
         
-        # Convert UTC times to CDMX timezone for frontend display
+        # Since appointments are stored in CDMX timezone (without tzinfo), 
+        # we need to localize them to CDMX timezone for proper display
         cdmx_tz = pytz.timezone('America/Mexico_City')
-        appointment_date_cdmx = appointment.appointment_date.astimezone(cdmx_tz)
-        end_time_cdmx = appointment.end_time.astimezone(cdmx_tz) if appointment.end_time else None
+        appointment_date_cdmx = cdmx_tz.localize(appointment.appointment_date)
+        end_time_cdmx = cdmx_tz.localize(appointment.end_time) if appointment.end_time else None
         
         # Return appointment data
         return {

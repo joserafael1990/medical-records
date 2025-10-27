@@ -294,14 +294,26 @@ export const useAppointmentManager = (
       const endTime = new Date(appointmentDate.getTime() + doctorDuration * 60000);
 
       // Convert to Mexico City timezone before sending to backend
+      // Create a proper ISO string with timezone information
       const mexicoTimeString = appointmentDate.toLocaleString("sv-SE", {timeZone: "America/Mexico_City"});
       const mexicoEndTimeString = endTime.toLocaleString("sv-SE", {timeZone: "America/Mexico_City"});
+      
+      // Convert the sv-SE format (YYYY-MM-DD HH:mm:ss) to proper ISO string with CDMX timezone
+      const cdmxDate = new Date(mexicoTimeString.replace(' ', 'T') + '-06:00'); // Add CDMX timezone offset
+      const cdmxEndDate = new Date(mexicoEndTimeString.replace(' ', 'T') + '-06:00');
+      
+      console.log('🔍 Frontend Debug - Appointment Creation:');
+      console.log('📅 Original appointmentData.date_time:', appointmentData.date_time);
+      console.log('📅 Parsed appointmentDate:', appointmentDate);
+      console.log('📅 Mexico time string (sv-SE):', mexicoTimeString);
+      console.log('📅 CDMX Date object:', cdmxDate);
+      console.log('📅 CDMX Date ISO:', cdmxDate.toISOString());
       
       const backendData = {
         patient_id: appointmentData.patient_id,
         doctor_id: user?.doctor?.id || doctorProfile?.id || 0,
-        appointment_date: mexicoTimeString,
-        end_time: mexicoEndTimeString,
+        appointment_date: cdmxDate.toISOString(),
+        end_time: cdmxEndDate.toISOString(),
         reason: appointmentData.reason,
         appointment_type: appointmentData.appointment_type, // Keep the original value without fallback
         status: appointmentData.status || 'confirmed',
@@ -309,6 +321,8 @@ export const useAppointmentManager = (
         preparation_instructions: appointmentData.preparation_instructions || '',
         notes: appointmentData.notes || ''
       };
+      
+      console.log('📤 Backend data being sent:', backendData);
 
       const response = await apiService.createAgendaAppointment(backendData);
       

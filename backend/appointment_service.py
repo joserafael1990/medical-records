@@ -80,24 +80,47 @@ class AppointmentService:
         
         # Calculate end_time based on appointment_date and doctor's appointment_duration
         start_time = appointment_data['appointment_date']
+        
+        print(f"🔍 Backend Debug - Appointment Creation:")
+        print(f"📅 Received appointment_date: {start_time}")
+        print(f"📅 Type: {type(start_time)}")
+        print(f"🌍 Doctor timezone: {doctor_timezone}")
+        
         if isinstance(start_time, str):
-            # Parse the datetime string - frontend sends dates in doctor's timezone
+            # Parse the datetime string - frontend now sends ISO strings with timezone
             if start_time.endswith('Z'):
                 # If it ends with Z, treat it as UTC
                 start_time = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
-            else:
-                # Frontend sends dates in doctor's timezone format (sv-SE format)
-                # Parse as naive datetime and localize to doctor's timezone
+                print(f"📅 Parsed as UTC: {start_time}")
+            elif '+' in start_time or start_time.count('-') > 2:
+                # If it has timezone info, parse it directly
                 start_time = datetime.fromisoformat(start_time)
+                print(f"📅 Parsed with timezone info: {start_time}")
+            else:
+                # Fallback: parse as naive datetime and localize to doctor's timezone
+                start_time = datetime.fromisoformat(start_time)
+                print(f"📅 Parsed as naive datetime: {start_time}")
                 tz = pytz.timezone(doctor_timezone)
                 start_time = tz.localize(start_time)
+                print(f"📅 Localized to {doctor_timezone}: {start_time}")
 
         # Convert to UTC for storage
-        start_time = start_time.astimezone(pytz.utc)
-        appointment_data['appointment_date'] = start_time
+        start_time_utc = start_time.astimezone(pytz.utc)
+        print(f"📅 Converted to UTC for storage: {start_time_utc}")
+        
+        # Since the database uses 'timestamp without time zone', we need to store
+        # the datetime in the doctor's timezone, not UTC
+        # Convert back to doctor's timezone for storage
+        tz = pytz.timezone(doctor_timezone)
+        start_time_for_storage = start_time_utc.astimezone(tz).replace(tzinfo=None)
+        print(f"📅 Final datetime for storage (CDMX without tzinfo): {start_time_for_storage}")
+        
+        appointment_data['appointment_date'] = start_time_for_storage
 
-        end_time = start_time + timedelta(minutes=duration_minutes)
-        appointment_data['end_time'] = end_time
+        end_time = start_time_utc + timedelta(minutes=duration_minutes)
+        end_time_for_storage = end_time.astimezone(tz).replace(tzinfo=None)
+        appointment_data['end_time'] = end_time_for_storage
+        print(f"📅 Calculated end_time for storage: {end_time_for_storage}")
         
         # Set created_at in UTC
         appointment_data['created_at'] = now_in_timezone(doctor_timezone).astimezone(pytz.utc)
