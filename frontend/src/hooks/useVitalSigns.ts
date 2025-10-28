@@ -37,6 +37,9 @@ export interface UseVitalSignsReturn {
   updateFormData: (data: Partial<VitalSignFormData>) => void;
   submitForm: (consultationId: string) => Promise<void>;
   resetForm: () => void;
+  
+  // BMI calculation
+  calculateBMI: (weight: number, height: number) => number;
 }
 
 export const useVitalSigns = (): UseVitalSignsReturn => {
@@ -297,6 +300,86 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     }
   }, [isEditingVitalSign, selectedVitalSign, vitalSignFormData, createVitalSign, updateVitalSign, closeDialog]);
 
+  // Auto-calculate BMI when weight or height is added/updated
+  const calculateBMI = useCallback((weight: number, height: number): number => {
+    if (weight > 0 && height > 0) {
+      const heightInMeters = height / 100;
+      return Math.round((weight / (heightInMeters * heightInMeters)) * 10) / 10;
+    }
+    return 0;
+  }, []);
+
+  const autoCalculateBMI = useCallback(() => {
+    console.log('🫀 autoCalculateBMI called');
+    const allVitalSigns = [...consultationVitalSigns, ...temporaryVitalSigns];
+    console.log('🫀 All vital signs:', allVitalSigns);
+    
+    // Find weight and height signs
+    const weightSign = allVitalSigns.find(vs => {
+      const vitalSign = availableVitalSigns.find(avs => avs.id === vs.vital_sign_id);
+      return vitalSign && vitalSign.name.toLowerCase().includes('peso');
+    });
+    
+    const heightSign = allVitalSigns.find(vs => {
+      const vitalSign = availableVitalSigns.find(avs => avs.id === vs.vital_sign_id);
+      return vitalSign && (vitalSign.name.toLowerCase().includes('estatura') || vitalSign.name.toLowerCase().includes('altura'));
+    });
+    
+    console.log('🫀 Weight sign:', weightSign);
+    console.log('🫀 Height sign:', heightSign);
+    
+    // Find BMI sign
+    const bmiSign = allVitalSigns.find(vs => {
+      const vitalSign = availableVitalSigns.find(avs => avs.id === vs.vital_sign_id);
+      return vitalSign && (vitalSign.name.toLowerCase().includes('imc') || vitalSign.name.toLowerCase().includes('índice de masa corporal') || vitalSign.name.toLowerCase().includes('bmi'));
+    });
+    
+    console.log('🫀 BMI sign:', bmiSign);
+    
+    if (weightSign && heightSign && bmiSign) {
+      const weight = parseFloat(weightSign.value);
+      const height = parseFloat(heightSign.value);
+      
+      console.log('🫀 Weight:', weight, 'Height:', height);
+      
+      if (!isNaN(weight) && !isNaN(height) && height > 0) {
+        const bmi = calculateBMI(weight, height);
+        console.log('🫀 Calculated BMI:', bmi);
+        
+        // Only auto-update BMI if it's empty or very close to the calculated value (allowing for small manual adjustments)
+        const currentBMI = parseFloat(bmiSign.value);
+        const isBMICloseToCalculated = Math.abs(currentBMI - bmi) < 0.1; // Allow 0.1 difference
+        
+        console.log('🫀 Current BMI:', currentBMI, 'Is close to calculated:', isBMICloseToCalculated);
+        
+        if (!bmiSign.value || bmiSign.value.trim() === '' || isBMICloseToCalculated) {
+          console.log('🫀 Updating BMI to:', bmi);
+          if (bmiSign.id && typeof bmiSign.id === 'number') {
+            // Update existing BMI sign
+            updateVitalSign('temp_consultation', bmiSign.id, {
+              ...bmiSign,
+              value: bmi.toString()
+            });
+          } else {
+            // Update temporary BMI sign
+            setTemporaryVitalSigns(prev => 
+              prev.map(vs => 
+                vs.vital_sign_id === bmiSign.vital_sign_id 
+                  ? { ...vs, value: bmi.toString() }
+                  : vs
+              )
+            );
+          }
+        }
+      }
+    }
+  }, [consultationVitalSigns, temporaryVitalSigns, availableVitalSigns, calculateBMI, updateVitalSign]);
+
+  // Auto-calculate BMI when vital signs change
+  useEffect(() => {
+    autoCalculateBMI();
+  }, [consultationVitalSigns, temporaryVitalSigns, autoCalculateBMI]);
+
   // Clear temporary vital signs (for new consultations)
   const clearTemporaryVitalSigns = useCallback(() => {
     setTemporaryVitalSigns([]);
@@ -356,6 +439,9 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     // Form management
     updateFormData,
     submitForm,
-    resetForm
+    resetForm,
+    
+    // BMI calculation
+    calculateBMI
   };
 };

@@ -43,7 +43,6 @@ import {
   Thermostat as ThermostatIcon,
   Scale as ScaleIcon,
   Height as HeightIcon,
-  LocalHospital as HospitalIcon2,
   Science as ScienceIcon,
   Upload as UploadIcon,
   Visibility as ViewIcon,
@@ -53,6 +52,13 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
 import { Patient, PatientFormData, ClinicalStudy } from '../../types';
 import { MEDICAL_VALIDATION_RULES, validateForm } from '../../utils/validation';
+import {
+  getVitalSignIcon,
+  getVitalSignColor,
+  getVitalSignUnit,
+  isVitalSignUnitReadOnly,
+  TEMP_IDS
+} from '../../utils/vitalSignUtils';
 import { apiService } from '../../services/api';
 import ClinicalStudiesSection from '../common/ClinicalStudiesSection';
 import ClinicalStudyDialogWithCatalog from './ClinicalStudyDialogWithCatalog';
@@ -719,17 +725,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
   // Function to load previous clinical studies for patient
   const loadPatientPreviousStudies = async (patientId: number) => {
-    console.log('🔬 Loading previous studies for patient ID:', patientId);
     setLoadingPreviousStudies(true);
     try {
       const studies = await apiService.getClinicalStudiesByPatient(String(patientId));
-      console.log('🔬 Previous studies found:', studies.length);
-      console.log('🔬 Studies data:', studies);
-      // Log results_date and status for each study
-      studies.forEach((study, index) => {
-        console.log(`🔬 Study ${index} - ID: ${study.id}, Status: ${study.status}, Results Date: ${study.results_date}`);
-      });
-      console.log('🔬 Setting patientPreviousStudies to:', studies);
       setPatientPreviousStudies(studies || []);
     } catch (error) {
       console.error('❌ Error loading patient previous studies:', error);
@@ -1264,8 +1262,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     
     // Allow adding studies even without a selected patient
     // Use temp_patient ID when no patient is selected
-    const patientId = selectedPatient?.id || 'temp_patient';
-    const consultationId = isEditing ? String(consultation.id) : 'temp_consultation';
+    const patientId = selectedPatient?.id || TEMP_IDS.PATIENT;
+    const consultationId = isEditing ? String(consultation.id) : TEMP_IDS.CONSULTATION;
     const doctorName = doctorProfile?.full_name || `${doctorProfile?.title || 'Dr.'} Usuario Sistema`;
     
     clinicalStudiesHook.openAddDialog(
@@ -1333,7 +1331,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       const remainingDiagnosesText = updatedList.map(d => d.name).join('; ');
       
       return {
-        ...prev,
+      ...prev,
         secondary_diagnoses_list: updatedList,
         // Update the text field with remaining diagnosis names
         secondary_diagnoses: remainingDiagnosesText
@@ -1365,7 +1363,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       const allDiagnosesText = updatedList.map(d => d.name).join('; ');
       
       return {
-        ...prev,
+      ...prev,
         secondary_diagnoses_list: updatedList,
         // Auto-fill the text field with all diagnosis names
         secondary_diagnoses: allDiagnosesText
@@ -1956,11 +1954,11 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                           <Typography variant="caption" color="text.secondary">
                             Solicitado: {new Date(study.ordered_date).toLocaleDateString('es-MX')}
                           </Typography>
-                          {study.results_date && (
+                          {study.results_text && (
                             <Typography variant="caption" color="success.main" sx={{ fontWeight: 500 }}>
                               Resultados cargados: {(() => {
                                 // Parse the date as UTC and convert to Mexico City time
-                                const rawDate = study.results_date;
+                                const rawDate = study.results_text;
                                 let date;
                                 try {
                                   if (rawDate.includes('T')) {
@@ -2101,7 +2099,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               {/* Personal Pathological History */}
               <Box>
                 <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <HospitalIcon2 sx={{ fontSize: 20 }} />
+                  <HospitalIcon sx={{ fontSize: 20 }} />
                   Antecedentes Patológicos
                 </Typography>
                 <TextField
@@ -2140,7 +2138,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
           {/* Vital Signs Section - Always show */}
           <VitalSignsSection
-            consultationId={isEditing && consultation?.id ? String(consultation.id) : "temp_consultation"}
+            consultationId={isEditing && consultation?.id ? String(consultation.id) : TEMP_IDS.CONSULTATION}
             patientId={selectedPatient?.id || 0}
             vitalSigns={vitalSignsHook.getAllVitalSigns() || []}
             isLoading={vitalSignsHook.isLoading}
@@ -2255,7 +2253,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
           {/* Prescribed Medications Section - Replaced with structured prescriptions */}
           <PrescriptionsSection
-            consultationId={isEditing && consultation?.id ? String(consultation.id) : "temp_consultation"}
+            consultationId={isEditing && consultation?.id ? String(consultation.id) : TEMP_IDS.CONSULTATION}
             prescriptions={prescriptionsHook.prescriptions}
             isLoading={prescriptionsHook.isLoading}
             onAddPrescription={prescriptionsHook.openAddDialog}
@@ -2313,7 +2311,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           
           <ClinicalStudiesSection
             consultationId={isEditing ? String(consultation.id) : "temp_consultation"}
-            patientId={selectedPatient?.id || "temp_patient"}
+            patientId={selectedPatient?.id?.toString() || TEMP_IDS.PATIENT}
             studies={clinicalStudiesHook.studies}
             isLoading={clinicalStudiesHook.isLoading}
             onAddStudy={handleAddStudy}
@@ -2341,10 +2339,10 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 gender: selectedPatient?.gender || undefined,
                 phone: selectedPatient?.primary_phone || undefined,
                 email: selectedPatient?.email || undefined,
-                address: selectedPatient?.home_address || undefined,
-                city: selectedPatient?.address_city || undefined,
-                state: selectedPatient?.address_state || undefined,
-                country: selectedPatient?.address_country || undefined
+                address: selectedPatient?.address || undefined,
+                city: selectedPatient?.city || undefined,
+                state: selectedPatient?.state || undefined,
+                country: selectedPatient?.country || undefined
               }}
               doctor={{
                 id: doctorProfile?.id || 0,
@@ -2482,30 +2480,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             }
 
             return (
-              <Grid container spacing={1}>
-                {filteredVitalSigns.map((vitalSign) => {
-              const getVitalSignIcon = (name: string) => {
-                const lowerName = name.toLowerCase();
-                if (lowerName.includes('cardíaca') || lowerName.includes('cardiac')) return <HeartIcon sx={{ color: '#f44336' }} />;
-                if (lowerName.includes('temperatura')) return <ThermostatIcon sx={{ color: '#ff9800' }} />;
-                if (lowerName.includes('peso')) return <ScaleIcon sx={{ color: '#4caf50' }} />;
-                if (lowerName.includes('estatura') || lowerName.includes('altura')) return <HeightIcon sx={{ color: '#2196f3' }} />;
-                if (lowerName.includes('presión') || lowerName.includes('presion')) return <MonitorHeartIcon sx={{ color: '#9c27b0' }} />;
-                return <HospitalIcon2 sx={{ color: '#607d8b' }} />;
-              };
-
-              const getVitalSignColor = (name: string) => {
-                const lowerName = name.toLowerCase();
-                if (lowerName.includes('cardíaca') || lowerName.includes('cardiac')) return '#f44336';
-                if (lowerName.includes('temperatura')) return '#ff9800';
-                if (lowerName.includes('peso')) return '#4caf50';
-                if (lowerName.includes('estatura') || lowerName.includes('altura')) return '#2196f3';
-                if (lowerName.includes('presión') || lowerName.includes('presion')) return '#9c27b0';
-                return '#607d8b';
-              };
-
-              return (
-                <Grid xs={12} sm={6} key={vitalSign.id}>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {filteredVitalSigns.map((vitalSign) => (
+                  <Box key={vitalSign.id} sx={{ flex: '1 1 calc(50% - 8px)', minWidth: '200px' }}>
                   <Card 
                     sx={{ 
                       cursor: 'pointer', 
@@ -2519,27 +2496,56 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                       transition: 'all 0.2s ease-in-out'
                     }}
                     onClick={() => {
+                      const autoUnit = getVitalSignUnit(vitalSign.name);
+                      
                       vitalSignsHook.updateFormData({ 
                         vital_sign_id: vitalSign.id,
                         value: '',
-                        unit: '',
+                        unit: autoUnit,
                         notes: ''
                       });
+                      
+                      // Auto-calculate BMI if IMC is selected and we have weight/height
+                      if (vitalSign.name.toLowerCase().includes('imc') || vitalSign.name.toLowerCase().includes('índice de masa corporal') || vitalSign.name.toLowerCase().includes('bmi')) {
+                        const allVitalSigns = vitalSignsHook.getAllVitalSigns() || [];
+                        const weightSign = (allVitalSigns || []).find(vs => 
+                          vs.vital_sign_name.toLowerCase().includes('peso')
+                        );
+                        const heightSign = (allVitalSigns || []).find(vs => 
+                          vs.vital_sign_name.toLowerCase().includes('estatura') || 
+                          vs.vital_sign_name.toLowerCase().includes('altura')
+                        );
+                        
+                        if (weightSign && heightSign) {
+                          const weight = parseFloat(weightSign.value);
+                          const height = parseFloat(heightSign.value);
+                          
+                          if (!isNaN(weight) && !isNaN(height) && height > 0) {
+                            const heightInMeters = height / 100;
+                            const bmi = weight / (heightInMeters * heightInMeters);
+                            const bmiRounded = Math.round(bmi * 10) / 10;
+                            
+                            // Auto-fill BMI value
+                            setTimeout(() => {
+                              vitalSignsHook.updateFormData({ value: bmiRounded.toString() });
+                            }, 100);
+                          }
+                        }
+                      }
                     }}
                   >
                     <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        {getVitalSignIcon(vitalSign.name)}
+                        {React.createElement(getVitalSignIcon(vitalSign.name), { sx: { color: getVitalSignColor(vitalSign.name) } })}
                         <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                           {vitalSign.name}
                         </Typography>
                       </Box>
                     </CardContent>
                   </Card>
-                </Grid>
-              );
-                })}
-              </Grid>
+                  </Box>
+                ))}
+              </Box>
             );
           })()}
         </DialogContent>
@@ -2563,13 +2569,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               );
               if (!selectedVitalSign) return <MonitorHeartIcon />;
               
-              const lowerName = selectedVitalSign.name.toLowerCase();
-              if (lowerName.includes('cardíaca') || lowerName.includes('cardiac')) return <HeartIcon sx={{ color: '#f44336' }} />;
-              if (lowerName.includes('temperatura')) return <ThermostatIcon sx={{ color: '#ff9800' }} />;
-              if (lowerName.includes('peso')) return <ScaleIcon sx={{ color: '#4caf50' }} />;
-              if (lowerName.includes('estatura') || lowerName.includes('altura')) return <HeightIcon sx={{ color: '#2196f3' }} />;
-              if (lowerName.includes('presión') || lowerName.includes('presion')) return <MonitorHeartIcon sx={{ color: '#9c27b0' }} />;
-              return <HospitalIcon2 sx={{ color: '#607d8b' }} />;
+              return React.createElement(getVitalSignIcon(selectedVitalSign.name), { sx: { color: getVitalSignColor(selectedVitalSign.name) } });
             })()}
             {vitalSignsHook.isEditingVitalSign ? 'Editar Signo Vital' : 'Agregar Signo Vital'}
           </Box>
@@ -2594,7 +2594,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             })()}
             
             <Grid container spacing={2}>
-              <Grid xs={12}>
+              <Box sx={{ mb: 2 }}>
                 <TextField
                   label="Valor"
                   value={vitalSignsHook.vitalSignFormData.value}
@@ -2681,8 +2681,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                     })()
                   }}
                 />
-              </Grid>
-              <Grid xs={12}>
+              </Box>
+              <Box sx={{ mb: 2 }}>
                 <TextField
                   label="Unidad de medida"
                   value={vitalSignsHook.vitalSignFormData.unit}
@@ -2691,8 +2691,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   placeholder="Ej: cm, kg, mmHg, °C, bpm"
                   helperText="Especifica la unidad de medida del valor"
                 />
-              </Grid>
-              <Grid xs={12}>
+              </Box>
+              <Box sx={{ mb: 2 }}>
                 <TextField
                   label="Notas adicionales (opcional)"
                   value={vitalSignsHook.vitalSignFormData.notes}
@@ -2702,7 +2702,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   rows={2}
                   placeholder="Observaciones o comentarios adicionales"
                 />
-              </Grid>
+              </Box>
             </Grid>
           </Box>
         </DialogContent>
