@@ -14,6 +14,7 @@ export interface UseDiagnosisManagementReturn {
   addDiagnosis: (diagnosis: DiagnosisCatalog) => void;
   removeDiagnosis: (diagnosisId: string) => void;
   updateDiagnosis: (diagnosisId: string, updatedDiagnosis: DiagnosisCatalog) => void;
+  loadDiagnoses: (diagnoses: DiagnosisCatalog[]) => void; // New method for loading without duplicate check
   
   // Dialog management
   openAddDialog: () => void;
@@ -105,6 +106,13 @@ export const useDiagnosisManagement = (): UseDiagnosisManagementReturn => {
     setError(null);
   }, []);
 
+  // Load diagnoses without duplicate check (for edit mode)
+  const loadDiagnoses = useCallback((diagnosesToLoad: DiagnosisCatalog[]) => {
+    console.log('📥 Loading diagnoses without duplicate check:', diagnosesToLoad);
+    setDiagnoses(diagnosesToLoad);
+    setError(null);
+  }, []);
+
   // Clear all diagnoses
   const clearDiagnoses = useCallback(() => {
     setDiagnoses([]);
@@ -129,6 +137,7 @@ export const useDiagnosisManagement = (): UseDiagnosisManagementReturn => {
     addDiagnosis,
     removeDiagnosis,
     updateDiagnosis,
+    loadDiagnoses,
     
     // Dialog management
     openAddDialog,

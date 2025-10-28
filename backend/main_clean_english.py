@@ -3028,31 +3028,26 @@ async def get_available_times(
         doctor_timezone = timezone_result[0] if timezone_result and timezone_result[0] else 'America/Mexico_City'
         
         # Get existing appointments for this date
+        # Since appointments are stored in CDMX timezone (without tzinfo), 
+        # we can query them directly without timezone conversion
         cursor.execute("""
             SELECT appointment_date, end_time 
             FROM appointments 
             WHERE doctor_id = %s 
-            AND DATE(appointment_date AT TIME ZONE 'UTC' AT TIME ZONE %s) = %s 
+            AND DATE(appointment_date) = %s 
             AND status IN ('confirmed', 'scheduled')
-        """, (doctor_id, doctor_timezone, date))
+        """, (doctor_id, date))
         
         existing_appointments = cursor.fetchall()
         
-        # Convert existing appointments to time ranges in doctor's timezone
+        # Convert existing appointments to time ranges
+        # Since appointments are stored in CDMX timezone (without tzinfo),
+        # we can use them directly
         booked_slots = []
         for apt_date, apt_end in existing_appointments:
-            # Convert UTC times to doctor's timezone
-            import pytz
-            utc_tz = pytz.UTC
-            doctor_tz = pytz.timezone(doctor_timezone)
-            
-            # Convert UTC to doctor's timezone
-            apt_date_local = utc_tz.localize(apt_date).astimezone(doctor_tz)
-            apt_end_local = utc_tz.localize(apt_end).astimezone(doctor_tz)
-            
             booked_slots.append({
-                'start': apt_date_local.time(),
-                'end': apt_end_local.time()
+                'start': apt_date.time(),
+                'end': apt_end.time()
             })
         
         # Generate available time slots based on schedule
@@ -4058,7 +4053,7 @@ async def get_appointments(
                 status=status,
                 doctor_id=current_user.id,
                 available_for_consultation=available_for_consultation
-            )
+        )
         
         # Transform to include patient information
         result = []
@@ -4078,18 +4073,17 @@ async def get_appointments(
                 patient_name = " ".join(filter(None, name_parts)) or "Paciente sin nombre"
             
             # Since appointments are stored in CDMX timezone (without tzinfo), 
-            # we need to localize them to CDMX timezone for proper display
-            cdmx_tz = pytz.timezone('America/Mexico_City')
-            appointment_date_cdmx = cdmx_tz.localize(appointment.appointment_date)
-            end_time_cdmx = cdmx_tz.localize(appointment.end_time) if appointment.end_time else None
+            # we assume they are already in CDMX timezone and just format them
+            appointment_date_str = appointment.appointment_date.strftime('%Y-%m-%dT%H:%M:%S')
+            end_time_str = appointment.end_time.strftime('%Y-%m-%dT%H:%M:%S') if appointment.end_time else None
             
             apt_dict = {
                 "id": str(appointment.id),
                 "patient_id": str(appointment.patient_id),
                 "doctor_id": appointment.doctor_id,  # ✅ Agregado doctor_id
-                "appointment_date": appointment_date_cdmx.strftime('%Y-%m-%dT%H:%M:%S'),  # CDMX timezone format without timezone info
-                "date_time": appointment_date_cdmx.strftime('%Y-%m-%dT%H:%M:%S'),  # CDMX timezone format without timezone info
-                "end_time": end_time_cdmx.strftime('%Y-%m-%dT%H:%M:%S') if end_time_cdmx else None,
+                "appointment_date": appointment_date_str,  # CDMX timezone format without timezone info
+                "date_time": appointment_date_str,  # CDMX timezone format without timezone info
+                "end_time": end_time_str,
                 "appointment_type_id": appointment.appointment_type_id,
                 "appointment_type_name": appointment.appointment_type_rel.name if appointment.appointment_type_rel else None,
                 "office_id": appointment.office_id,
@@ -4192,23 +4186,25 @@ async def get_calendar_appointments(
         appointments = query.order_by(Appointment.appointment_date).all()
         
         # Since appointments are stored in CDMX timezone (without tzinfo), 
-        # we need to localize them to CDMX timezone for proper display
+        # we need to assume they are already in CDMX timezone for proper display
         cdmx_tz = pytz.timezone('America/Mexico_City')
         
         # Create a list of appointment dictionaries with converted dates
         result = []
         for appointment in appointments:
-            appointment_date_cdmx = cdmx_tz.localize(appointment.appointment_date) if appointment.appointment_date else None
-            end_time_cdmx = cdmx_tz.localize(appointment.end_time) if appointment.end_time else None
+            # Since appointments are stored in CDMX timezone (without tzinfo),
+            # we assume they are already in CDMX timezone and just format them
+            appointment_date_str = appointment.appointment_date.strftime('%Y-%m-%dT%H:%M:%S') if appointment.appointment_date else None
+            end_time_str = appointment.end_time.strftime('%Y-%m-%dT%H:%M:%S') if appointment.end_time else None
             
             # Create appointment dict with converted dates
             apt_dict = {
                 "id": appointment.id,
                 "patient_id": appointment.patient_id,
                 "doctor_id": appointment.doctor_id,
-                "appointment_date": appointment_date_cdmx.strftime('%Y-%m-%dT%H:%M:%S') if appointment_date_cdmx else None,
-                "date_time": appointment_date_cdmx.strftime('%Y-%m-%dT%H:%M:%S') if appointment_date_cdmx else None,
-                "end_time": end_time_cdmx.strftime('%Y-%m-%dT%H:%M:%S') if end_time_cdmx else None,
+                "appointment_date": appointment_date_str,
+                "date_time": appointment_date_str,
+                "end_time": end_time_str,
                 "appointment_type_id": appointment.appointment_type_id,
                 "appointment_type_name": appointment.appointment_type_rel.name if appointment.appointment_type_rel else None,
                 "office_id": appointment.office_id,
@@ -4252,10 +4248,9 @@ async def get_appointment(
             raise HTTPException(status_code=404, detail="Appointment not found or access denied")
         
         # Since appointments are stored in CDMX timezone (without tzinfo), 
-        # we need to localize them to CDMX timezone for proper display
-        cdmx_tz = pytz.timezone('America/Mexico_City')
-        appointment_date_cdmx = cdmx_tz.localize(appointment.appointment_date)
-        end_time_cdmx = cdmx_tz.localize(appointment.end_time) if appointment.end_time else None
+        # we assume they are already in CDMX timezone and just format them
+        appointment_date_str = appointment.appointment_date.strftime('%Y-%m-%dT%H:%M:%S')
+        end_time_str = appointment.end_time.strftime('%Y-%m-%dT%H:%M:%S') if appointment.end_time else None
         
         # Return appointment data
         return {
@@ -4263,8 +4258,8 @@ async def get_appointment(
             "appointment_code": appointment.appointment_code,
             "patient_id": appointment.patient_id,
             "doctor_id": appointment.doctor_id,
-            "appointment_date": appointment_date_cdmx.strftime('%Y-%m-%dT%H:%M:%S'),
-            "end_time": end_time_cdmx.strftime('%Y-%m-%dT%H:%M:%S') if end_time_cdmx else None,
+            "appointment_date": appointment_date_str,
+            "end_time": end_time_str,
             "appointment_type_id": appointment.appointment_type_id,
             "appointment_type_name": appointment.appointment_type_rel.name if appointment.appointment_type_rel else None,
             "office_id": appointment.office_id,
@@ -4302,6 +4297,12 @@ async def create_appointment(
 ):
     """Create new appointment"""
     try:
+        print(f"🔍 Endpoint Debug - Received appointment_data:")
+        print(f"📅 appointment_date: {appointment_data.appointment_date}")
+        print(f"📅 appointment_date type: {type(appointment_data.appointment_date)}")
+        print(f"📅 end_time: {appointment_data.end_time}")
+        print(f"📅 end_time type: {type(appointment_data.end_time)}")
+        
         # Create the appointment using CRUD
         appointment = crud.create_appointment(db, appointment_data, current_user.id)
         return appointment

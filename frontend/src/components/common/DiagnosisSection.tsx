@@ -39,7 +39,7 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
   onRemoveDiagnosis,
   onEditDiagnosis,
   title = "Diagnósticos",
-  maxSelections = 10,
+  maxSelections = 999, // Increased limit to allow unlimited secondary diagnoses
   showAddButton = true,
   isLoading = false,
   error
@@ -72,7 +72,7 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
           <MedicalServicesIcon color="primary" />
           <Typography variant="h6">{title}</Typography>
           <Chip 
-            label={`${diagnoses.length}/${maxSelections}`} 
+            label={`${diagnoses.length}`} 
             size="small" 
             color={diagnoses.length >= maxSelections ? 'error' : 'primary'}
           />
@@ -199,7 +199,7 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
       {/* Max Selections Warning */}
       {diagnoses.length >= maxSelections && (
         <Alert severity="warning" sx={{ mt: 2 }}>
-          Has alcanzado el máximo de {maxSelections} diagnósticos permitidos.
+          Has alcanzado el límite máximo de diagnósticos ({maxSelections}). Considera consolidar diagnósticos similares.
         </Alert>
       )}
     </Box>

@@ -78,15 +78,15 @@ const AgendaView: React.FC<AgendaViewProps> = ({
     const today = new Date();
     const isSelectedDateToday = isSameDay(localSelectedDate, today);
     
-    if (isSelectedDateToday && agendaView === 'daily') {
-      // Forzar actualización si es necesario
-      if (forceRefresh) {
-        setTimeout(() => {
-          forceRefresh();
-        }, 100);
-      }
+    if (isSelectedDateToday && agendaView === 'daily' && forceRefresh) {
+      // Solo ejecutar una vez al montar el componente
+      const timeoutId = setTimeout(() => {
+        forceRefresh();
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
     }
-  }, [localSelectedDate, agendaView, forceRefresh]);
+  }, []); // Empty dependency array - only run once on mount
 
   // Función para enviar recordatorio por WhatsApp
   const handleSendWhatsAppReminder = async (appointment: any) => {
@@ -513,13 +513,13 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                 </Box>
               }
               secondary={
-                <Box sx={{ mt: 1 }}>
-                  <Typography variant="body2" color="text.secondary">
+                <Box component="div" sx={{ mt: 1 }}>
+                  <Typography variant="body2" color="text.secondary" component="div">
                     <TimeIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: 'middle' }} />
                     {formatTime(appointment.date_time)}
                   </Typography>
                   {appointment.office && (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }} component="div">
                       <LocationOnIcon sx={{ fontSize: 14, mr: 0.5, verticalAlign: 'middle' }} />
                       {appointment.office.name}
                       {appointment.office.address && ` - ${appointment.office.address}`}
@@ -531,7 +531,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                     </Typography>
                   )}
                   {appointment.reason && (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }} component="div">
                       Motivo: {appointment.reason}
                     </Typography>
                   )}

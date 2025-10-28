@@ -298,22 +298,22 @@ export const useAppointmentManager = (
       const mexicoTimeString = appointmentDate.toLocaleString("sv-SE", {timeZone: "America/Mexico_City"});
       const mexicoEndTimeString = endTime.toLocaleString("sv-SE", {timeZone: "America/Mexico_City"});
       
-      // Convert the sv-SE format (YYYY-MM-DD HH:mm:ss) to proper ISO string with CDMX timezone
-      const cdmxDate = new Date(mexicoTimeString.replace(' ', 'T') + '-06:00'); // Add CDMX timezone offset
-      const cdmxEndDate = new Date(mexicoEndTimeString.replace(' ', 'T') + '-06:00');
+      // Create ISO strings with CDMX timezone offset
+      // Format: YYYY-MM-DDTHH:mm:ss-06:00
+      const cdmxDateISO = mexicoTimeString.replace(' ', 'T') + '-06:00';
+      const cdmxEndDateISO = mexicoEndTimeString.replace(' ', 'T') + '-06:00';
       
       console.log('🔍 Frontend Debug - Appointment Creation:');
       console.log('📅 Original appointmentData.date_time:', appointmentData.date_time);
       console.log('📅 Parsed appointmentDate:', appointmentDate);
       console.log('📅 Mexico time string (sv-SE):', mexicoTimeString);
-      console.log('📅 CDMX Date object:', cdmxDate);
-      console.log('📅 CDMX Date ISO:', cdmxDate.toISOString());
+      console.log('📅 CDMX Date ISO string:', cdmxDateISO);
       
       const backendData = {
         patient_id: appointmentData.patient_id,
         doctor_id: user?.doctor?.id || doctorProfile?.id || 0,
-        appointment_date: cdmxDate.toISOString(),
-        end_time: cdmxEndDate.toISOString(),
+        appointment_date: cdmxDateISO,
+        end_time: cdmxEndDateISO,
         reason: appointmentData.reason,
         appointment_type: appointmentData.appointment_type, // Keep the original value without fallback
         status: appointmentData.status || 'confirmed',

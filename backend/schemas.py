@@ -417,8 +417,8 @@ class MedicalRecord(MedicalRecordBase):
 class AppointmentBase(BaseSchema):
     patient_id: int
     doctor_id: int
-    appointment_date: datetime
-    end_time: Optional[datetime] = None  # Now optional - calculated automatically by backend
+    appointment_date: str  # Changed from datetime to str to handle ISO strings with timezone
+    end_time: Optional[str] = None  # Changed from datetime to str - calculated automatically by backend
     appointment_type_id: int
     office_id: Optional[int] = None
     consultation_type: str = 'Seguimiento'  # 'Primera vez' or 'Seguimiento'
@@ -435,8 +435,8 @@ class AppointmentCreate(AppointmentBase):
 
 class AppointmentUpdate(BaseSchema):
     patient_id: Optional[int] = None
-    appointment_date: Optional[datetime] = None
-    end_time: Optional[datetime] = None
+    appointment_date: Optional[str] = None  # Changed from datetime to str
+    end_time: Optional[str] = None  # Changed from datetime to str
     appointment_type_id: Optional[int] = None
     office_id: Optional[int] = None
     consultation_type: Optional[str] = None

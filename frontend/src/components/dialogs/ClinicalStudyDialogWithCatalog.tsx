@@ -261,7 +261,7 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
             diagnosis={diagnosis}
             showRecommendations={true}
             showTemplates={true}
-            maxSelections={5}
+            maxSelections={999}
           />
 
           {selectedCatalogStudies.length > 0 && (

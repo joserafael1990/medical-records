@@ -48,7 +48,7 @@ const DiagnosisDialog: React.FC<DiagnosisDialogProps> = ({
   onAddDiagnosis,
   existingDiagnoses,
   title = "Agregar Diagnóstico",
-  maxSelections = 10
+  maxSelections = 999
 }) => {
   const {
     categories,

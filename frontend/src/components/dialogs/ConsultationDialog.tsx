@@ -366,11 +366,89 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           // These fields are now handled by the existing _history fields
         });
 
-        // Find and set selected patient
-        if (consultation.patient_id && patients.length > 0) {
-          const patient = (patients || []).find((p: any) => p.id === consultation.patient_id);
-          setSelectedPatient(patient || null);
-        }
+        // Load patient data from API
+        const loadPatientData = async () => {
+          if (consultation.patient_id) {
+            try {
+              const patientData = await apiService.getPatient(consultation.patient_id);
+              setSelectedPatient(patientData);
+              setPatientEditData(patientData);
+            } catch (error) {
+              console.error('Error loading patient data:', error);
+            }
+          }
+        };
+
+        // Load structured diagnoses from API
+        const loadStructuredDiagnoses = async () => {
+          try {
+            // Parse primary diagnosis from text
+            if (consultation.primary_diagnosis) {
+              const parseDiagnosesFromText = (text: string): DiagnosisCatalog[] => {
+                if (!text) return [];
+                
+                // Simple parsing for CIE-10 codes (e.g., "E11.9 - Diabetes mellitus tipo 2")
+                const diagnosisEntries = text.split(';').map(entry => entry.trim()).filter(entry => entry);
+                return diagnosisEntries.map((entry, index) => {
+                  const [code, ...nameParts] = entry.split(' - ');
+                  const name = nameParts.join(' - ');
+                  
+                  return {
+                    id: `temp_${Date.now()}_${index}`, // Temporary ID
+                    code: code || `TEMP${index}`,
+                    name: name || entry,
+                    description: '',
+                    category: '',
+                    specialty: '',
+                    severity_level: '',
+                    is_chronic: false,
+                    is_active: true
+                  };
+                });
+              };
+
+              const parsedPrimary = parseDiagnosesFromText(consultation.primary_diagnosis);
+              primaryDiagnosesHook.clearDiagnoses();
+              primaryDiagnosesHook.loadDiagnoses(parsedPrimary);
+            }
+
+            // Parse secondary diagnoses from text
+            if (consultation.secondary_diagnoses) {
+              const parseDiagnosesFromText = (text: string): DiagnosisCatalog[] => {
+                if (!text) return [];
+                
+                // Simple parsing for CIE-10 codes (e.g., "E11.9 - Diabetes mellitus tipo 2")
+                const diagnosisEntries = text.split(';').map(entry => entry.trim()).filter(entry => entry);
+                return diagnosisEntries.map((entry, index) => {
+                  const [code, ...nameParts] = entry.split(' - ');
+                  const name = nameParts.join(' - ');
+                  
+                  return {
+                    id: `temp_${Date.now()}_${index}`, // Temporary ID
+                    code: code || `TEMP${index}`,
+                    name: name || entry,
+                    description: '',
+                    category: '',
+                    specialty: '',
+                    severity_level: '',
+                    is_chronic: false,
+                    is_active: true
+                  };
+                });
+              };
+
+              const parsedSecondary = parseDiagnosesFromText(consultation.secondary_diagnoses);
+              secondaryDiagnosesHook.clearDiagnoses();
+              secondaryDiagnosesHook.loadDiagnoses(parsedSecondary);
+            }
+          } catch (error) {
+            console.error('Error loading structured diagnoses:', error);
+          }
+        };
+
+        // Execute async operations
+        loadPatientData();
+        loadStructuredDiagnoses();
 
         // Load clinical studies, vital signs and prescriptions for existing consultation
         clinicalStudiesHook.fetchStudies(String(consultation.id));
@@ -1249,12 +1327,18 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     secondaryDiagnosesHook.removeDiagnosis(diagnosisId);
     
     // Update formData immediately by filtering out the removed diagnosis
-    setFormData(prev => ({
-      ...prev,
-      secondary_diagnoses_list: prev.secondary_diagnoses_list.filter(d => d.id !== diagnosisId),
-      // Clear the text field when diagnosis is removed
-      secondary_diagnoses: ''
-    }));
+    setFormData(prev => {
+      const updatedList = prev.secondary_diagnoses_list.filter(d => d.id !== diagnosisId);
+      // Update the text field with remaining diagnosis names
+      const remainingDiagnosesText = updatedList.map(d => d.name).join('; ');
+      
+      return {
+        ...prev,
+        secondary_diagnoses_list: updatedList,
+        // Update the text field with remaining diagnosis names
+        secondary_diagnoses: remainingDiagnosesText
+      };
+    });
   };
 
   const handleAddPrimaryDiagnosisFromDialog = (diagnosis: DiagnosisCatalog) => {
@@ -1275,12 +1359,18 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     secondaryDiagnosesHook.addDiagnosis(diagnosis);
     
     // Update formData immediately
-    setFormData(prev => ({
-      ...prev,
-      secondary_diagnoses_list: [...prev.secondary_diagnoses_list, diagnosis],
-      // Auto-fill the text field with the diagnosis name
-      secondary_diagnoses: diagnosis.name
-    }));
+    setFormData(prev => {
+      const updatedList = [...prev.secondary_diagnoses_list, diagnosis];
+      // Concatenate all secondary diagnoses names
+      const allDiagnosesText = updatedList.map(d => d.name).join('; ');
+      
+      return {
+        ...prev,
+        secondary_diagnoses_list: updatedList,
+        // Auto-fill the text field with all diagnosis names
+        secondary_diagnoses: allDiagnosesText
+      };
+    });
   };
 
   return (
@@ -2661,7 +2751,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         onAddDiagnosis={handleAddSecondaryDiagnosisFromDialog}
         existingDiagnoses={secondaryDiagnosesHook.diagnoses}
         title="Agregar Diagnóstico Secundario"
-        maxSelections={1}
+        maxSelections={999}
       />
     </Dialog>
   );

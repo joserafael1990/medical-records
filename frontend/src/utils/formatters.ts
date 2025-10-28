@@ -45,16 +45,11 @@ export const parseBackendDate = (dateString: string): Date => {
     return new Date(dateString);
   }
   
-  // Backend now sends dates like "2025-01-27T15:00:00" which are in CDMX timezone
-  // Parse as naive datetime and treat as CDMX timezone
+  // Backend now sends dates like "2025-10-27T09:00:00" which are already in CDMX timezone
+  // Parse as naive datetime - no timezone adjustment needed
   const date = new Date(dateString);
   
-  // Since the backend sends dates in CDMX timezone but without timezone info,
-  // we need to adjust for the timezone difference
-  // CDMX is UTC-6, so we need to add 6 hours to get the correct UTC time
-  const adjustedDate = new Date(date.getTime() + (6 * 60 * 60 * 1000));
-  
-  return adjustedDate;
+  return date;
 };
 
 /**
