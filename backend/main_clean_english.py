@@ -333,7 +333,7 @@ async def get_clinical_studies_by_patient(
         studies = db.query(ClinicalStudy).filter(
             ClinicalStudy.patient_id == patient_id,
             ClinicalStudy.created_by == current_user.id  # Only show studies created by current user
-        ).order_by(ClinicalStudy.ordered_date.desc()).all()
+        ).order_by(ClinicalStudy.created_at.asc()).all()
         
         # Convert to response format
         studies_data = []
@@ -1160,7 +1160,7 @@ async def get_clinical_studies_by_consultation(
         studies = db.query(ClinicalStudy).filter(
             ClinicalStudy.consultation_id == consultation_id,
             ClinicalStudy.created_by == current_user.id  # Only show studies created by current user
-        ).order_by(ClinicalStudy.ordered_date.desc()).all()
+        ).order_by(ClinicalStudy.created_at.asc()).all()
         
         print(f"🔬 Found {len(studies)} studies for consultation {consultation_id}")
         for study in studies:

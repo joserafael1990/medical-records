@@ -34,7 +34,8 @@ import {
   Email as EmailIcon,
   Badge as BadgeIcon,
   LocalHospital as HospitalIcon,
-  MedicalServices as MedicalServicesIcon
+  MedicalServices as MedicalServicesIcon,
+  Info as InfoIcon
 } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -392,9 +393,13 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     }
   }, [open]);
 
-  // Initialize form data when dialog opens
+  // Initialize form data when dialog opens (only once when dialog opens)
   useEffect(() => {
     if (open) {
+      console.log('🚀 Initializing form data on dialog open');
+      console.log('  - formData.appointment_type:', formData.appointment_type);
+      console.log('  - patients.length:', patients.length);
+      
       // Set default status for new appointments
       const updatedFormData = {
         ...formData,
@@ -402,11 +407,14 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
         status: formData.status || 'confirmed',
         // If no patients exist, automatically set appointment type to primera vez
         // Normalize appointment_type to lowercase to match select options
-        appointment_type: patients.length === 0 ? 'primera vez' : (formData.appointment_type ? formData.appointment_type.toLowerCase() : '')
+        appointment_type: formData.appointment_type ? formData.appointment_type.toLowerCase() : (patients.length === 0 ? 'primera vez' : '')
       };
+      
+      console.log('  - Final appointment_type:', updatedFormData.appointment_type);
       setLocalFormData(updatedFormData);
     }
-  }, [open, formData, patients]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]); // Only run when dialog opens, not when formData or patients change
 
   // Handle patient selection when formData.patient_id changes
   useEffect(() => {
@@ -418,6 +426,33 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
       setSelectedPatient(null);
     }
   }, [formData.patient_id, patients]);
+
+  // Handle appointment type changes - clear patient data when switching to "seguimiento"
+  useEffect(() => {
+    console.log('🔄 useEffect appointment_type changed:', localFormData.appointment_type);
+    if (localFormData.appointment_type === 'seguimiento') {
+      console.log('🧹 Clearing new patient data for seguimiento');
+      // Clear new patient data when switching to follow-up
+      setNewPatientData({
+        first_name: '',
+        paternal_surname: '',
+        maternal_surname: '',
+        birth_date: '',
+        gender: '',
+        primary_phone: '',
+        email: '',
+        curp: '',
+        rfc: '',
+        civil_status: '',
+        birth_city: '',
+        birth_country_id: '',
+        birth_state_id: '',
+        emergency_contact_name: '',
+        emergency_contact_phone: '',
+        emergency_contact_relationship: ''
+      });
+    }
+  }, [localFormData.appointment_type]);
 
   // Handle date/time initialization for editing
   useEffect(() => {
@@ -754,7 +789,23 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
               </Typography>
               
               {/* Patient Selection Logic */}
-              {patients.length === 0 || (localFormData.appointment_type === 'primera vez' && !localFormData.patient_id) ? (
+              {(() => {
+                console.log('🔍 Debug Patient Selection Logic:');
+                console.log('  - patients.length:', patients.length);
+                console.log('  - localFormData.appointment_type:', localFormData.appointment_type);
+                
+                // More explicit condition
+                const shouldShowNewPatientForm = patients.length === 0 || localFormData.appointment_type === 'primera vez';
+                console.log('  - shouldShowNewPatientForm:', shouldShowNewPatientForm);
+                
+                if (shouldShowNewPatientForm) {
+                  console.log('  - Showing new patient form');
+                } else {
+                  console.log('  - Showing existing patient selector');
+                }
+                
+                return shouldShowNewPatientForm;
+              })() ? (
                 // Show inline patient creation for "primera vez" or when no patients
                 <Box sx={{ mt: 2 }}>
                   <Divider sx={{ my: 2 }}>
@@ -1114,42 +1165,52 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                 </Box>
               ) : (
                 // Show patient selection for "seguimiento" or when patient is selected
-                <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-                  <Box sx={{ flex: 1 }}>
-                    <Autocomplete
-                      options={patients || []}
-                      getOptionLabel={(option) => formatPatientNameWithAge(option)}
-                      value={selectedPatient}
-                      onChange={(_, newValue) => handlePatientChange(newValue)}
-                      disabled={isReadOnly || !isPatientSelectionEnabled()}
-                      renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          label="Seleccionar Paciente"
-                          required
-                          error={hasFieldError('patient_id') || (!localFormData.patient_id)}
-                          helperText={getFieldError('patient_id') || (!localFormData.patient_id ? 'Campo requerido' : '')}
-                        />
-                      )}
-                      renderOption={(props, option) => (
-                        <Box component="li" {...props}>
-                          <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
-                            {option.first_name[0]}{option.paternal_surname[0]}
-                          </Avatar>
-                          <Box>
-                            <Typography variant="body1">{formatPatientNameWithAge(option)}</Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              {option.primary_phone} • {option.email}
-                            </Typography>
+                <>
+                  {localFormData.appointment_type === 'seguimiento' && (
+                    <Box sx={{ mb: 2, p: 2, bgcolor: 'info.50', borderRadius: 1, border: '1px solid', borderColor: 'info.200' }}>
+                      <Typography variant="body2" color="info.main" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <InfoIcon sx={{ fontSize: 16 }} />
+                        Para citas de seguimiento, debe seleccionar un paciente existente
+                      </Typography>
+                    </Box>
+                  )}
+                  <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                    <Box sx={{ flex: 1 }}>
+                      <Autocomplete
+                        options={patients || []}
+                        getOptionLabel={(option) => formatPatientNameWithAge(option)}
+                        value={selectedPatient}
+                        onChange={(_, newValue) => handlePatientChange(newValue)}
+                        disabled={isReadOnly || !isPatientSelectionEnabled()}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="Seleccionar Paciente"
+                            required
+                            error={hasFieldError('patient_id') || (!localFormData.patient_id)}
+                            helperText={getFieldError('patient_id') || (!localFormData.patient_id ? 'Campo requerido' : '')}
+                          />
+                        )}
+                        renderOption={(props, option) => (
+                          <Box component="li" {...props}>
+                            <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
+                              {option.first_name[0]}{option.paternal_surname[0]}
+                            </Avatar>
+                            <Box>
+                              <Typography variant="body1">{formatPatientNameWithAge(option)}</Typography>
+                              <Typography variant="body2" color="text.secondary">
+                                {option.primary_phone} • {option.email}
+                              </Typography>
+                            </Box>
                           </Box>
-                        </Box>
-                      )}
-                      loading={patients.length === 0}
-                      loadingText="Cargando pacientes..."
-                      noOptionsText="No se encontraron pacientes"
-                    />
+                        )}
+                        loading={patients.length === 0}
+                        loadingText="Cargando pacientes..."
+                        noOptionsText="No se encontraron pacientes"
+                      />
+                    </Box>
                   </Box>
-                </Box>
+                </>
               )}
             </Box>
           )}

@@ -114,6 +114,15 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
   const currentLoading = externalLoading || loading;
   const currentError = formErrorMessage || error;
 
+  // Handle consultation type changes
+  useEffect(() => {
+    if (currentFormData.consultation_type === 'Seguimiento') {
+      setIsExistingPatient(true);
+    } else if (currentFormData.consultation_type === 'Primera vez') {
+      setIsExistingPatient(false);
+    }
+  }, [currentFormData.consultation_type]);
+
   // Hook para scroll automático a errores
   const { errorRef } = useScrollToErrorInDialog(currentError);
   
