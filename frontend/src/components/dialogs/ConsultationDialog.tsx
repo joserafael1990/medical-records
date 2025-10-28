@@ -2326,8 +2326,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       <Divider />
 
       <DialogActions sx={{ p: 2, flexDirection: 'column', gap: 2 }}>
-        {/* Print buttons - show when we have consultation data or are editing */}
-        {((isEditing && consultation) || consultation) && (
+        {/* Print buttons - show when we have consultation data, are editing, or have data to print */}
+        {((isEditing && consultation) || consultation || selectedPatient) && (
           <Box sx={{ width: '100%' }}>
             <PrintButtons
               patient={{
@@ -2371,17 +2371,19 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 }] : (doctorProfile?.offices && doctorProfile.offices.length > 0 ? doctorProfile.offices : [])
               }}
               consultation={{
-                id: consultation.id,
-                date: consultation.date || formData.date,
-                time: consultation.time || '10:00',
-                type: consultation.consultation_type || 'Seguimiento',
-                reason: consultation.chief_complaint || '',
-                diagnosis: (consultation.primary_diagnosis && consultation.primary_diagnosis.trim() !== '') 
+                id: consultation?.id || 0,
+                date: consultation?.date || formData.date,
+                time: consultation?.time || '10:00',
+                type: consultation?.consultation_type || 'Seguimiento',
+                reason: consultation?.chief_complaint || formData.chief_complaint || '',
+                diagnosis: (consultation?.primary_diagnosis && consultation.primary_diagnosis.trim() !== '') 
                   ? consultation.primary_diagnosis 
                   : (formData.primary_diagnosis && formData.primary_diagnosis.trim() !== '') 
                     ? formData.primary_diagnosis 
                     : 'No especificado',
-                notes: consultation.notes || ''
+                notes: consultation?.notes || '',
+                treatment_plan: consultation?.treatment_plan || formData.treatment_plan || '',
+                follow_up_instructions: consultation?.follow_up_instructions || formData.follow_up_instructions || ''
               }}
               medications={(prescriptionsHook.prescriptions || []).map(prescription => ({
                 name: prescription.medication_name,

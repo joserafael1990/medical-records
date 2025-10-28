@@ -28,6 +28,8 @@ import { apiService } from '../../services/api';
 import { getMediumSelectMenuProps } from '../../utils/selectMenuProps';
 import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
 import { useSimpleToast } from '../common/ToastNotification';
+import { CountryCodeSelector } from '../common/CountryCodeSelector';
+import { extractCountryCode } from '../../utils/countryCodes';
 
 // Helper function to calculate age
 const calculateAge = (birthDate: string | Date): number => {
@@ -93,7 +95,8 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
     maternal_surname: '',
     birth_date: '',
     gender: '',
-    primary_phone: ''
+    phone_country_code: '+52', // Código de país por defecto (México)
+    phone_number: '' // Número telefónico sin código de país
   });
 
   const [loading, setLoading] = useState(false);
@@ -209,6 +212,37 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
   useEffect(() => {
     if (open) {
       loadData();
+    }
+  }, [open]);
+
+  // Limpiar datos del nuevo paciente cuando cambia el tipo de consulta
+  useEffect(() => {
+    if (currentFormData.consultation_type === 'Seguimiento') {
+      // Si es seguimiento, limpiar datos del nuevo paciente
+      setNewPatientData({
+        first_name: '',
+        paternal_surname: '',
+        maternal_surname: '',
+        birth_date: '',
+        gender: '',
+        phone_country_code: '+52',
+        phone_number: ''
+      });
+    }
+  }, [currentFormData.consultation_type]);
+
+  // Limpiar datos del nuevo paciente cuando se cierra el diálogo
+  useEffect(() => {
+    if (!open) {
+      setNewPatientData({
+        first_name: '',
+        paternal_surname: '',
+        maternal_surname: '',
+        birth_date: '',
+        gender: '',
+        phone_country_code: '+52',
+        phone_number: ''
+      });
     }
   }, [open]);
 
@@ -374,8 +408,8 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
           setError('El apellido paterno del paciente es requerido');
           return;
         }
-        if (!newPatientData.primary_phone.trim()) {
-          setError('El teléfono del paciente es requerido');
+        if (!newPatientData.phone_number.trim()) {
+          setError('El número telefónico del paciente es requerido');
           return;
         }
         if (!newPatientData.birth_date) {
@@ -389,13 +423,16 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
         
         // Crear nuevo paciente
         try {
+          // Concatenar código de país + número telefónico
+          const fullPhoneNumber = `${newPatientData.phone_country_code}${newPatientData.phone_number.trim()}`;
+          
           const patientData = {
             first_name: newPatientData.first_name,
             paternal_surname: newPatientData.paternal_surname,
             maternal_surname: newPatientData.maternal_surname || '',
             birth_date: newPatientData.birth_date,
             gender: newPatientData.gender,
-            primary_phone: newPatientData.primary_phone,
+            primary_phone: fullPhoneNumber,
             person_type: 'patient'
           };
           
@@ -644,21 +681,40 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
                   />
                 </Box>
 
+                <TextField
+                  fullWidth
+                  label="Apellido Materno"
+                  value={newPatientData.maternal_surname}
+                  onChange={(e) => setNewPatientData(prev => ({ ...prev, maternal_surname: e.target.value }))}
+                  size="small"
+                />
+
                 <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+                  <Box sx={{ width: { xs: '100%', sm: '200px' } }}>
+                    <CountryCodeSelector
+                      value={newPatientData.phone_country_code}
+                      onChange={(code) => setNewPatientData(prev => ({ ...prev, phone_country_code: code }))}
+                      label="Código de país *"
+                    />
+                  </Box>
                   <TextField
                     fullWidth
-                    label="Apellido Materno"
-                    value={newPatientData.maternal_surname}
-                    onChange={(e) => setNewPatientData(prev => ({ ...prev, maternal_surname: e.target.value }))}
-                    size="small"
-                  />
-                  <TextField
-                    fullWidth
-                    label="Teléfono *"
-                    value={newPatientData.primary_phone}
-                    onChange={(e) => setNewPatientData(prev => ({ ...prev, primary_phone: e.target.value }))}
+                    label="Número telefónico *"
+                    type="tel"
+                    value={newPatientData.phone_number}
+                    onChange={(e) => {
+                      // Solo permitir números
+                      const value = e.target.value.replace(/\D/g, '');
+                      setNewPatientData(prev => ({ ...prev, phone_number: value }));
+                    }}
                     required
                     size="small"
+                    placeholder="Ej: 5551234567"
+                    inputProps={{
+                      autoComplete: 'tel',
+                      'data-form-type': 'other'
+                    }}
+                    autoComplete="tel"
                   />
                 </Box>
 

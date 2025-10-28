@@ -8,7 +8,6 @@ import {
   DialogActions,
   Button,
   TextField,
-  Grid,
   IconButton,
   Typography,
   Box,
@@ -39,6 +38,8 @@ import { PrintCertificateButtonPatient } from '../common/PrintCertificateButtonP
 import { PrivacyConsentDialog } from './PrivacyConsentDialog';
 import { ARCORequestDialog } from './ARCORequestDialog';
 import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
+import { CountryCodeSelector } from '../common/CountryCodeSelector';
+import { extractCountryCode } from '../../utils/countryCodes';
 
 interface EmergencyRelationship {
   code: string;
@@ -62,6 +63,10 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
 }) => {
   const isEditing = !!patient;
   const { showSuccess, showError } = useToast();
+  
+  // Estados separados para código de país y número telefónico
+  const [phoneCountryCode, setPhoneCountryCode] = useState<string>('+52');
+  const [phoneNumber, setPhoneNumber] = useState<string>('');
   
   const [formData, setFormData] = useState<PatientFormData>({
     first_name: '',
@@ -160,12 +165,21 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
     }
   }, [formData.address_country_id, formData.birth_country_id]);
 
+  // Función helper para extraer código de país del número telefónico
+  const extractPhoneData = (phone: string) => {
+    const phoneData = extractCountryCode(phone || '');
+    setPhoneCountryCode(phoneData.countryCode);
+    setPhoneNumber(phoneData.number);
+  };
+
   useEffect(() => {
     const loadPatientData = async () => {
       if (patient && open) {
         try {
           // Get decrypted patient data from API
           const decryptedPatient = await apiService.getPatient(patient.id.toString());
+          extractPhoneData(decryptedPatient.primary_phone || '');
+          
           setFormData({
             first_name: decryptedPatient.first_name || '',
             paternal_surname: decryptedPatient.paternal_surname || '',
@@ -203,6 +217,8 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
         } catch (error) {
           console.error('Error loading decrypted patient data:', error);
           // Fallback to encrypted data if API call fails
+          extractPhoneData(patient.primary_phone || '');
+          
           setFormData({
             first_name: patient.first_name || '',
             paternal_surname: patient.paternal_surname || '',
@@ -238,8 +254,12 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
             is_active: true
           });
         }
-      } else if (!open) {
-        // Reset form when dialog closes
+      } else {
+        // Reset form when creating new patient or when dialog closes
+        // Reset estados de teléfono
+        setPhoneCountryCode('+52');
+        setPhoneNumber('');
+        
         setFormData({
           first_name: '',
           paternal_surname: '',
@@ -301,14 +321,6 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
       }
     }
     
-    // Real-time validation for phone
-    if (field === 'primary_phone') {
-      if (!value || value.trim() === '') {
-        setErrors(prev => ({ ...prev, primary_phone: 'El teléfono es obligatorio' }));
-      } else {
-        setErrors(prev => ({ ...prev, primary_phone: '' }));
-      }
-    }
   };
 
   const handleCountryChange = async (field: 'address_country_id' | 'birth_country_id', countryId: string) => {
@@ -352,14 +364,22 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
       setError('El género es obligatorio');
       return;
     }
-    if (!formData.primary_phone || formData.primary_phone.trim() === '') {
-      setError('El teléfono es obligatorio');
+    if (!phoneNumber || phoneNumber.trim() === '') {
+      setError('El número telefónico es obligatorio');
       return;
     }
     // Birth date is optional - no validation needed
     setLoading(true);
     try {
-      await onSubmit(formData);
+      // Concatenar código de país + número telefónico
+      const fullPhoneNumber = `${phoneCountryCode}${phoneNumber.trim()}`;
+      const formDataToSubmit = {
+        ...formData,
+        primary_phone: fullPhoneNumber,
+        phone: fullPhoneNumber
+      };
+      
+      await onSubmit(formDataToSubmit);
       
       // Mostrar notificación de éxito según el tipo de operación
       if (isEditing) {
@@ -522,17 +542,44 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
             </Typography>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
 
-              <TextField
-                label="Teléfono - obligatorio"
-                name="primary_phone"
-                value={formData.primary_phone}
-                onChange={handleChange('primary_phone')}
-                size="small"
-                required
-                placeholder="Teléfono - obligatorio"
-                error={!!errors.primary_phone}
-                helperText={errors.primary_phone}
-              />
+              <Box sx={{ display: 'flex', gap: 2, gridColumn: { xs: '1 / -1', sm: '1' } }}>
+                <Box sx={{ width: { xs: '100%', sm: '200px' } }}>
+                  <CountryCodeSelector
+                    value={phoneCountryCode}
+                    onChange={(code) => setPhoneCountryCode(code)}
+                    label="Código de país *"
+                    error={!!errors.primary_phone}
+                  />
+                </Box>
+                <TextField
+                  label="Número telefónico *"
+                  name="phone_number"
+                  type="tel"
+                  value={phoneNumber}
+                  onChange={(e) => {
+                    // Solo permitir números
+                    const value = e.target.value.replace(/\D/g, '');
+                    setPhoneNumber(value);
+                    // Actualizar errores
+                    if (!value || value.trim() === '') {
+                      setErrors(prev => ({ ...prev, primary_phone: 'El número telefónico es obligatorio' }));
+                    } else {
+                      setErrors(prev => ({ ...prev, primary_phone: '' }));
+                    }
+                  }}
+                  size="small"
+                  required
+                  placeholder="Ej: 5551234567"
+                  error={!!errors.primary_phone}
+                  helperText={errors.primary_phone}
+                  fullWidth
+                  inputProps={{
+                    autoComplete: 'tel',
+                    'data-form-type': 'other'
+                  }}
+                  autoComplete="tel"
+                />
+              </Box>
               <TextField
                 label="Email - opcional"
                 name="email"
