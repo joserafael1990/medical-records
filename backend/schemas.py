@@ -548,6 +548,15 @@ class TokenData(BaseSchema):
     username: Optional[str] = None
     person_id: Optional[int] = None
     person_type: Optional[str] = None
+
+class PasswordResetRequest(BaseSchema):
+    email: str
+
+class PasswordResetConfirm(BaseSchema):
+    token: str
+    new_password: str
+    confirm_password: str
+
 class ChangePasswordRequest(BaseSchema):
     current_password: str
     new_password: str

@@ -299,8 +299,17 @@ async def root():
 
 @app.get("/health")
 async def health():
-    """Health endpoint"""
-    return {"status": "healthy", "timestamp": now_cdmx().isoformat()}
+    """
+    Health check endpoint
+    Verifica que el servidor esté funcionando correctamente
+    Usado por Docker health check y monitoreo
+    """
+    return {
+        "status": "healthy",
+        "timestamp": now_cdmx().isoformat(),
+        "service": "Medical Records API",
+        "version": "3.0.0"
+    }
 
 # Removed custom OPTIONS handler - let CORS middleware handle preflight requests
 
@@ -3368,6 +3377,125 @@ async def logout(current_user: Person = Depends(get_current_user)):
     """Logout user"""
     return {"message": "Logged out successfully"}
 
+@app.post("/api/auth/password-reset/request")
+async def request_password_reset(
+    reset_data: schemas.PasswordResetRequest,
+    db: Session = Depends(get_db),
+    request: Request = None
+):
+    """
+    Solicitar recuperación de contraseña
+    Envía un correo con un token para resetear la contraseña
+    """
+    try:
+        # Buscar usuario por email
+        user = db.query(Person).filter(Person.email == reset_data.email).first()
+        
+        # Por seguridad, siempre retornamos éxito aunque el email no exista
+        # Esto evita que se pueda descubrir qué emails están registrados
+        if not user or not user.is_active:
+            return {
+                "message": "Si el correo existe, recibirás un enlace para restablecer tu contraseña"
+            }
+        
+        # Generar token de recuperación
+        reset_token = auth.create_password_reset_token(user.id, user.email)
+        
+        # Construir URL de reset (frontend)
+        # En producción, usar variable de entorno
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        reset_link = f"{frontend_url}/reset-password?token={reset_token}"
+        
+        # Obtener nombre del usuario
+        user_name = user.first_name or user.email.split("@")[0]
+        
+        # Enviar email
+        from email_service import get_email_service
+        email_service = get_email_service()
+        email_result = email_service.send_password_reset_email(
+            to_email=user.email,
+            user_name=user_name,
+            reset_link=reset_link
+        )
+        
+        if email_result["success"]:
+            return {
+                "message": "Si el correo existe, recibirás un enlace para restablecer tu contraseña"
+            }
+        else:
+            # Log error pero no exponerlo al usuario
+            print(f"❌ Error sending password reset email: {email_result.get('error')}")
+            return {
+                "message": "Si el correo existe, recibirás un enlace para restablecer tu contraseña"
+            }
+            
+    except Exception as e:
+        print(f"❌ Error in password reset request: {str(e)}")
+        # Por seguridad, retornar siempre éxito
+        return {
+            "message": "Si el correo existe, recibirás un enlace para restablecer tu contraseña"
+        }
+
+@app.post("/api/auth/password-reset/confirm")
+async def confirm_password_reset(
+    reset_data: schemas.PasswordResetConfirm,
+    db: Session = Depends(get_db)
+):
+    """
+    Confirmar y cambiar contraseña con token de recuperación
+    """
+    try:
+        # Validar que las contraseñas coincidan
+        if reset_data.new_password != reset_data.confirm_password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Las contraseñas no coinciden"
+            )
+        
+        # Validar longitud mínima
+        if len(reset_data.new_password) < 6:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La contraseña debe tener al menos 6 caracteres"
+            )
+        
+        # Verificar token
+        payload = auth.verify_password_reset_token(reset_data.token)
+        if payload is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Token inválido o expirado"
+            )
+        
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Token inválido"
+            )
+        
+        # Cambiar contraseña
+        success = auth.reset_user_password(db, user_id, reset_data.new_password)
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Usuario no encontrado"
+            )
+        
+        return {
+            "message": "Contraseña restablecida exitosamente"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error in password reset confirm: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error al restablecer la contraseña"
+        )
+
 # ============================================================================
 # DOCTORS
 # ============================================================================
@@ -4053,7 +4181,7 @@ async def get_appointments(
                 status=status,
                 doctor_id=current_user.id,
                 available_for_consultation=available_for_consultation
-        )
+            )
         
         # Transform to include patient information
         result = []

@@ -10,6 +10,7 @@ import { useAuth } from './contexts/AuthContext';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import './styles/disable-payment-detection.css';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import AuthContainer from './components/auth/AuthContainer';
 import { ToastProvider } from './components/common/ToastNotification';
 import { twitterTheme } from './themes/twitterTheme';
 
@@ -17,8 +18,14 @@ import { twitterTheme } from './themes/twitterTheme';
 const theme = twitterTheme;
 
 const AppWithAuth: React.FC = () => {
-  const { logout } = useAuth();
+  const { logout, isAuthenticated } = useAuth();
   
+  // If not authenticated, show auth container (login, register, forgot password, reset password)
+  if (!isAuthenticated) {
+    return <AuthContainer />;
+  }
+  
+  // If authenticated, show main app
   return <AppLayout onLogout={logout} />;
 };
 
@@ -32,9 +39,7 @@ const App: React.FC = () => {
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
           <ToastProvider>
             <AuthProvider>
-              <ProtectedRoute>
-                <AppWithAuth />
-              </ProtectedRoute>
+              <AppWithAuth />
             </AuthProvider>
           </ToastProvider>
         </LocalizationProvider>

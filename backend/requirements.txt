@@ -8,8 +8,9 @@ sqlalchemy==2.0.23
 psycopg2-binary==2.9.9
 
 # Validación y serialización
-pydantic==2.5.0
-pydantic[email]==2.5.0
+pydantic==2.12.3
+pydantic[email]==2.12.3
+pydantic-settings==2.11.0
 
 # Autenticación y seguridad
 bcrypt==4.1.2

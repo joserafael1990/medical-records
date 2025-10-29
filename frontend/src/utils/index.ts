@@ -114,47 +114,25 @@ export const filterBySearchTerm = <T>(
 // ============================================================================
 // ERROR HANDLING UTILITIES
 // ============================================================================
+// Re-export error handling utilities from errorHandler.ts (consolidated)
+export { ErrorHandler, useErrorHandler, type ParsedError } from './errorHandler';
+export { safeConsoleError } from './errorHandling'; // Keep safeConsoleError as it's widely used
 
+// Simple wrapper for backwards compatibility
 export const parseApiError = (error: any): string => {
-  if (error.response?.data?.detail) {
-    const detail = error.response.data.detail;
-    
-    if (typeof detail === 'string') {
-      return detail;
-    }
-    
-    if (Array.isArray(detail)) {
-      return detail
-        .map((err: any) => `${err.loc?.[1] || 'Campo'}: ${err.msg}`)
-        .join(', ');
-    }
-  }
-  
-  if (error.message) {
-    return error.message;
-  }
-  
-  return 'Ha ocurrido un error inesperado';
+  const parsed = ErrorHandler.parseApiError(error);
+  return parsed.userFriendlyMessage || parsed.message;
 };
 
 export const getErrorMessage = (error: any): string => {
-  if (error.code === 'ERR_NETWORK') {
-    return 'Error de conexión. Verifica tu conexión a internet.';
+  // Simple error message extraction
+  if (error?.response?.data?.message) {
+    return error.response.data.message;
   }
-  
-  if (error.response?.status === 404) {
-    return 'El recurso solicitado no fue encontrado.';
+  if (error?.message) {
+    return error.message;
   }
-  
-  if (error.response?.status === 401) {
-    return 'No tienes permisos para realizar esta acción.';
-  }
-  
-  if (error.response?.status >= 500) {
-    return 'Error interno del servidor. Intenta más tarde.';
-  }
-  
-  return parseApiError(error);
+  return 'Ha ocurrido un error inesperado';
 };
 
 // ============================================================================

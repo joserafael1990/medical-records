@@ -12,14 +12,11 @@ export { default as AgendaView } from './views/AgendaView';
 export { default as PatientDialog } from './dialogs/PatientDialog';
 export { default as ConsultationDialog } from './dialogs/ConsultationDialog';
 export { default as DoctorProfileDialog } from './dialogs/DoctorProfileDialog';
-export { default as MedicalOrderDialog } from './dialogs/MedicalOrderDialog';
 
 // Common
 export { ErrorRibbon } from './common/ErrorRibbon';
 export { default as VirtualizedTable } from './common/VirtualizedTable';
 export { default as LoadingFallback } from './common/LoadingFallback';
-export { default as MedicalOrdersSection } from './common/MedicalOrdersSection';
-export { default as MedicalOrderPrintFormat } from './common/MedicalOrderPrintFormat';
 export { StudyCatalogSelector } from './common/StudyCatalogSelector';
 export { PrintPrescriptionButton } from './common/PrintPrescriptionButton';
 export { PrintMedicalOrderButton } from './common/PrintMedicalOrderButton';

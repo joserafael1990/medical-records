@@ -7,7 +7,6 @@ import {
   Select,
   MenuItem,
   Typography,
-  Grid,
   Autocomplete
 } from '@mui/material';
 import {
@@ -73,9 +72,9 @@ export const ProfessionalInfoStep: React.FC<ProfessionalInfoStepProps> = ({
         </Typography>
       </Box>
       
-      <Grid container spacing={2}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
         {/* Title */}
-        <Grid item xs={12} sm={6}>
+        <Box>
           <FormControl fullWidth error={!!fieldErrors.title}>
             <InputLabel>Título</InputLabel>
             <Select
@@ -95,10 +94,10 @@ export const ProfessionalInfoStep: React.FC<ProfessionalInfoStepProps> = ({
               </Typography>
             )}
           </FormControl>
-        </Grid>
+        </Box>
         
         {/* Specialty */}
-        <Grid item xs={12} sm={6}>
+        <Box>
           <Autocomplete
             options={specialties || []}
             getOptionLabel={(option) => option.name || option}
@@ -116,10 +115,10 @@ export const ProfessionalInfoStep: React.FC<ProfessionalInfoStepProps> = ({
               />
             )}
           />
-        </Grid>
+        </Box>
         
         {/* University */}
-        <Grid item xs={12} sm={6}>
+        <Box>
           <Autocomplete
             options={UNIVERSITIES}
             value={formData.university}
@@ -136,10 +135,10 @@ export const ProfessionalInfoStep: React.FC<ProfessionalInfoStepProps> = ({
               />
             )}
           />
-        </Grid>
+        </Box>
         
         {/* Graduation Year */}
-        <Grid item xs={12} sm={6}>
+        <Box>
           <FormControl fullWidth error={!!fieldErrors.graduation_year}>
             <InputLabel>Año de Graduación</InputLabel>
             <Select
@@ -159,10 +158,10 @@ export const ProfessionalInfoStep: React.FC<ProfessionalInfoStepProps> = ({
               </Typography>
             )}
           </FormControl>
-        </Grid>
+        </Box>
         
         {/* Professional License */}
-        <Grid item xs={12}>
+        <Box sx={{ gridColumn: '1 / -1' }}>
           <TextField
             label="Cédula Profesional"
             value={formData.professional_license}
@@ -173,8 +172,8 @@ export const ProfessionalInfoStep: React.FC<ProfessionalInfoStepProps> = ({
             required
             placeholder="Ej: 12345678"
           />
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
       
       {/* Professional Info Summary */}
       {formData.title && formData.specialty && (
@@ -195,7 +194,7 @@ export const ProfessionalInfoStep: React.FC<ProfessionalInfoStepProps> = ({
           )}
           {formData.professional_license && (
             <Typography variant="caption" color="text.secondary" display="block">
-              Cédula: {formData.professional_license}
+              Cédula Profesional: {formData.professional_license}
             </Typography>
           )}
         </Box>

@@ -24,8 +24,7 @@ import {
   Avatar,
   Card,
   CardContent,
-  Chip,
-  Grid
+  Chip
 } from '@mui/material';
 import {
   Visibility,
@@ -43,7 +42,7 @@ import {
   Add as AddIcon
 } from '@mui/icons-material';
 import CortexLogo from '../common/CortexLogo';
-import { MEDICAL_SPECIALTIES, MEXICAN_STATES, API_CONFIG } from '../../constants';
+import { MEDICAL_SPECIALTIES, API_CONFIG } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCatalogs } from '../../hooks/useCatalogs';
 import { useScrollToError } from '../../hooks/useScrollToError';
@@ -1195,8 +1194,8 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
                                   </IconButton>
                                 </Box>
                                 
-                                <Grid container spacing={2}>
-                                  <Grid item xs={6}>
+                                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                                  <Box>
                                     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
                                       <TimePicker
                                         label="Hora de inicio"
@@ -1219,8 +1218,8 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
                                         }}
                                       />
                                     </LocalizationProvider>
-                                  </Grid>
-                                  <Grid item xs={6}>
+                                  </Box>
+                                  <Box>
                                     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
                                       <TimePicker
                                         label="Hora de fin"
@@ -1243,8 +1242,8 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
                                         }}
                                       />
                                     </LocalizationProvider>
-                                  </Grid>
-                                </Grid>
+                                  </Box>
+                                </Box>
                               </CardContent>
                             </Card>
                           ))}
@@ -1326,7 +1325,6 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
                 <Typography color="white">{error}</Typography>
               </Box>
             )}
-            {console.log('🔍 Render - error state:', error)}
 
             <Box sx={{ width: '100%', mt: 3 }}>
               <Box sx={{ mb: 3 }}>

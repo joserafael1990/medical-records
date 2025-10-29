@@ -9,6 +9,12 @@ services:
       - "8000:8000"  # FastAPI default port
     networks:
       - appnet
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     environment:
       - MEDICAL_ENCRYPTION_KEY=17TAemFFyvzzOSCNdm9fISoQjiWzlWAgVJslIOYaGpU=
       - META_WHATSAPP_PHONE_ID=883218048200840

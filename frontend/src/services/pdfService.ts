@@ -43,6 +43,7 @@ export interface OfficeInfo {
   country_name?: string;
   phone?: string;
   mapsUrl?: string;
+  is_virtual?: boolean;
 }
 
 export interface MedicationInfo {
@@ -151,6 +152,26 @@ class PDFService {
       console.warn('Could not load CORTEX logo:', error);
       return null;
     }
+  }
+
+  /**
+   * Helper function to select the best office for PDF header
+   * Always prefers a presential office (is_virtual === false) over a virtual one
+   */
+  private selectBestOfficeForPDF(offices: OfficeInfo[]): OfficeInfo | null {
+    if (!offices || offices.length === 0) {
+      return null;
+    }
+
+    // First, try to find a presential office (is_virtual === false)
+    const presentialOffice = offices.find(office => office.is_virtual === false);
+    if (presentialOffice) {
+      return presentialOffice;
+    }
+
+    // If no presential office found, return the first available office
+    // This handles cases where is_virtual might be undefined or true
+    return offices[0];
   }
 
   private async addCortexHeader(doc: jsPDF, title: string, doctor: DoctorInfo, officeInfo?: OfficeInfo): Promise<void> {
@@ -437,19 +458,19 @@ class PDFService {
       medicationsCount: medications?.length
     });
     
-    // Get office information if not available
+    // Get office information - prefer presential office
     let officeInfo = null;
     if (!doctor.offices || doctor.offices.length === 0) {
       try {
         const offices = await apiService.getOffices();
         if (offices && offices.length > 0) {
-          officeInfo = offices[0];
+          officeInfo = this.selectBestOfficeForPDF(offices);
         }
       } catch (error) {
         console.warn('Could not fetch office information:', error);
       }
     } else {
-      officeInfo = doctor.offices[0];
+      officeInfo = this.selectBestOfficeForPDF(doctor.offices);
     }
     
     
@@ -594,19 +615,19 @@ class PDFService {
     consultation: ConsultationInfo,
     studies: StudyInfo[]
   ): Promise<void> {
-    // Get office information if not available
+    // Get office information - prefer presential office
     let officeInfo = null;
     if (!doctor.offices || doctor.offices.length === 0) {
       try {
         const offices = await apiService.getOffices();
         if (offices && offices.length > 0) {
-          officeInfo = offices[0];
+          officeInfo = this.selectBestOfficeForPDF(offices);
         }
       } catch (error) {
         console.warn('Could not fetch office information:', error);
       }
     } else {
-      officeInfo = doctor.offices[0];
+      officeInfo = this.selectBestOfficeForPDF(doctor.offices);
     }
     
 

@@ -212,6 +212,24 @@ const LoginView: React.FC = () => {
             </Button>
           </Box>
 
+          <Box sx={{ textAlign: 'center', mt: 2 }}>
+            <Button
+              variant="text"
+              onClick={() => {
+                window.history.pushState({}, '', '/forgot-password');
+                window.dispatchEvent(new PopStateEvent('popstate'));
+              }}
+              sx={{
+                color: 'text.secondary',
+                textTransform: 'none',
+                fontSize: '0.875rem',
+                textDecoration: 'underline'
+              }}
+            >
+              ¿Olvidaste tu contraseña?
+            </Button>
+          </Box>
+
           <Box sx={{ mt: 2, textAlign: 'center' }}>
             <Typography variant="caption" color="textSecondary">
               Sistema de Gestión de Historias Clínicas

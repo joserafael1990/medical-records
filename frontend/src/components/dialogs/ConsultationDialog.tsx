@@ -173,25 +173,12 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   const isEditing = !!consultation;
   const { showSuccess, showError } = useToast();
 
-  console.log('🔄 ConsultationDialog render:', {
-    open,
-    isEditing,
-    consultationId: consultation?.id,
-    consultationDate: consultation?.date,
-    patientsCount: patients.length,
-    consultationType: typeof consultation,
-    consultationIsNull: consultation === null,
-    consultationIsUndefined: consultation === undefined
-  });
+  // Render tracking (commented for production)
+  // console.log('🔄 ConsultationDialog render:', { open, isEditing, consultationId: consultation?.id });
 
   // Track consultation prop changes
   useEffect(() => {
-    console.log('🔄 Consultation prop changed:', {
-      consultation,
-      consultationId: consultation?.id,
-      consultationType: typeof consultation,
-      isEditing: !!consultation
-    });
+    // console.log('🔄 Consultation prop changed:', { consultation, consultationId: consultation?.id });
   }, [consultation]);
 
   // Helper function to get current date in CDMX timezone
@@ -472,9 +459,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
   // Separate useEffect for new consultation setup
   useEffect(() => {
-    console.log('🔄 useEffect for new consultation setup:', { open, consultation: !!consultation });
+    // console.log('🔄 useEffect for new consultation setup:', { open, consultation: !!consultation });
     if (open && !consultation) {
-      console.log('🔄 Setting up new consultation');
+      // console.log('🔄 Setting up new consultation');
       setFormData(initialFormData);
       setSelectedAppointment(null);
       setSelectedPatient(null);
@@ -608,9 +595,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
   // Clear diagnosis hooks when dialog opens for new consultation (not editing)
   useEffect(() => {
-    console.log('🔄 useEffect for diagnosis hooks clearing:', { open, isEditing, consultation: !!consultation });
+    // console.log('🔄 useEffect for diagnosis hooks clearing:', { open, isEditing, consultation: !!consultation });
     if (open && !isEditing && !consultation) {
-      console.log('🔄 Clearing diagnosis hooks for new consultation');
+      // console.log('🔄 Clearing diagnosis hooks for new consultation');
       primaryDiagnosesHook.clearDiagnoses();
       secondaryDiagnosesHook.clearDiagnoses();
     }
@@ -792,9 +779,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       
       // Reload previous studies to get updated data (but preserve local status update)
       if (selectedPatient) {
-        console.log('🔄 Reloading previous studies after file upload...');
+        // console.log('🔄 Reloading previous studies after file upload...');
         const updatedStudies = await apiService.getClinicalStudiesByPatient(String(selectedPatient.id));
-        console.log('🔬 Updated studies from API:', updatedStudies);
+          // console.log('🔬 Updated studies from API:', updatedStudies);
         
         // Update studies but preserve the completed status we just set
         setPatientPreviousStudies(prevStudies => {
@@ -802,27 +789,26 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             const localStudy = (prevStudies || []).find(prev => prev.id === apiStudy.id);
             // If we just updated this study locally, keep the completed status
             if (localStudy && localStudy.id === studyId && localStudy.status === 'completed') {
-              console.log('🔬 Preserving completed status for study:', studyId);
+              // console.log('🔬 Preserving completed status for study:', studyId);
               return { ...apiStudy, status: 'completed' };
             }
             return apiStudy;
           });
-          console.log('🔬 Final studies state:', newStudies);
-          console.log('🔬 Study statuses:', newStudies.map(s => ({ id: s.id, status: s.status })));
+          // console.log('🔬 Final studies state:', newStudies);
           
           // Check if the study we just updated is still completed
           const updatedStudy = (newStudies || []).find(s => s.id === studyId);
-          console.log('🔬 Updated study status:', updatedStudy ? updatedStudy.status : 'NOT FOUND');
+          // console.log('🔬 Updated study status:', updatedStudy ? updatedStudy.status : 'NOT FOUND');
           
           // Force a re-render by updating the state
           setTimeout(() => {
-            console.log('🔬 Forcing re-render after timeout');
+            // console.log('🔬 Forcing re-render after timeout');
             setPatientPreviousStudies(prev => [...prev]);
           }, 100);
           
           return newStudies;
         });
-        console.log('✅ Previous studies reloaded after file upload');
+        // console.log('✅ Previous studies reloaded after file upload');
       }
     } catch (error: any) {
       console.error('Error uploading study file:', error);
@@ -962,7 +948,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           setPatientEditData(null);
         }
       } else {
-        console.warn('No patient found for appointment:', appointment.id);
+        // console.warn('No patient found for appointment:', appointment.id);
         setSelectedPatient(null);
         setPatientEditData(null);
         setPatientHasPreviousConsultations(false);
@@ -1110,27 +1096,16 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         secondary_diagnoses_list: formData.secondary_diagnoses_list
       };
       
-      console.log('🔬 Final form data being sent:', finalFormData);
-      console.log('🔬 Laboratory results field:', finalFormData.laboratory_results);
-      console.log('🔬 Family history field:', finalFormData.family_history);
-      console.log('🔬 Personal pathological history field:', finalFormData.personal_pathological_history);
-      console.log('🔬 Personal non-pathological history field:', finalFormData.personal_non_pathological_history);
+      // console.log('🔬 Final form data being sent:', finalFormData);
       
       const createdConsultation = await onSubmit(finalFormData);
-      console.log('🔬 Consultation creation result:', createdConsultation);
-      console.log('🔬 Created consultation ID:', createdConsultation?.id);
       
       // Save clinical studies if any were added (only temporary studies for new consultations)
       if ((clinicalStudiesHook.studies || []).length > 0 && createdConsultation?.id) {
-        console.log('🔬 Saving clinical studies for consultation:', createdConsultation.id);
-        console.log('🔬 Studies to save:', clinicalStudiesHook.studies);
-        
         // Filter only temporary studies (those with temp_ IDs)
         const temporaryStudies = (clinicalStudiesHook.studies || []).filter(study => 
           study.id.toString().startsWith('temp_')
         );
-        
-        console.log('🔬 Temporary studies to save:', temporaryStudies);
         
         for (const study of temporaryStudies) {
           const studyData = {
@@ -1140,11 +1115,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           };
           
           try {
-            console.log('🔬 Study data to send:', studyData);
             await clinicalStudiesHook.createStudy(studyData);
           } catch (error) {
             console.error('❌ Error saving clinical study:', error);
-            console.error('❌ Study data that failed:', studyData);
             // Continue with other studies even if one fails
           }
         }
@@ -1154,41 +1127,25 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         
         // Refresh studies to show the newly created ones
         await clinicalStudiesHook.fetchStudies(String(createdConsultation.id));
-      } else {
-        console.log('🔬 No clinical studies to save or consultation not created');
-        console.log('🔬 Studies count:', clinicalStudiesHook.studies.length);
-        console.log('🔬 Consultation ID:', createdConsultation?.id);
       }
 
       // Save vital signs if any were added
       if (vitalSignsHook.temporaryVitalSigns.length > 0 && createdConsultation?.id) {
-        console.log('🫀 Saving vital signs for consultation:', createdConsultation.id);
-        console.log('🫀 Vital signs to save:', vitalSignsHook.temporaryVitalSigns);
-        
         for (const vitalSign of vitalSignsHook.temporaryVitalSigns) {
           try {
-            console.log('🫀 Vital sign data to send:', vitalSign);
             await vitalSignsHook.createVitalSign(String(createdConsultation.id), vitalSign);
           } catch (error) {
             console.error('❌ Error saving vital sign:', error);
-            console.error('❌ Vital sign data that failed:', vitalSign);
             // Continue with other vital signs even if one fails
           }
         }
         
         // Clear temporary vital signs after saving
         vitalSignsHook.clearTemporaryVitalSigns();
-      } else {
-        console.log('🫀 No vital signs to save or consultation not created');
-        console.log('🫀 Vital signs count:', vitalSignsHook.temporaryVitalSigns.length);
-        console.log('🫀 Consultation ID:', createdConsultation?.id);
       }
 
       // Save prescriptions if any were added
       if (prescriptionsHook.prescriptions.length > 0 && createdConsultation?.id) {
-        console.log('💊 Saving prescriptions for consultation:', createdConsultation.id);
-        console.log('💊 Prescriptions to save:', prescriptionsHook.prescriptions);
-        
         for (const prescription of prescriptionsHook.prescriptions) {
           const prescriptionData = {
             medication_id: prescription.medication_id,
@@ -1201,11 +1158,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           };
           
           try {
-            console.log('💊 Prescription data to send:', prescriptionData);
             await prescriptionsHook.createPrescription(prescriptionData, String(createdConsultation.id));
           } catch (error) {
             console.error('❌ Error saving prescription:', error);
-            console.error('❌ Prescription data that failed:', prescriptionData);
             // Continue with other prescriptions even if one fails
           }
         }
@@ -1215,10 +1170,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         
         // Clear temporary prescriptions after saving
         prescriptionsHook.clearTemporaryPrescriptions();
-      } else {
-        console.log('💊 No prescriptions to save or consultation not created');
-        console.log('💊 Prescriptions count:', prescriptionsHook.prescriptions.length);
-        console.log('💊 Consultation ID:', createdConsultation?.id);
       }
       
       // Mostrar notificación de éxito según el tipo de operación

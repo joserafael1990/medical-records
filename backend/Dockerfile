@@ -19,6 +19,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # Copy the rest of the backend code (excluding secrets, git, IDE files)
 COPY --link . ./
 
+# Validate Python syntax before building final image
+RUN python validate_syntax.py || (echo "❌ Syntax validation failed!" && exit 1)
+
 # ----------- Final stage -----------
 FROM base AS final
 

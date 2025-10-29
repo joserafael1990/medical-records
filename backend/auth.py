@@ -15,6 +15,8 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from database import Person
+import secrets
+import hashlib
 
 # ============================================================================
 # CONFIGURACIÓN DE SEGURIDAD
@@ -177,7 +179,7 @@ def login_user(db: Session, email: str, password: str) -> Dict[str, Any]:
     
     # Crear payload para tokens - ALL ENGLISH FIELD NAMES
     token_data = {
-        "sub": user.username or str(user.id),  # Use username or user ID as string if username is None
+        "sub": user.email,  # Use email as username/subject
         "user_id": user.id,
         "person_type": user.person_type,   # ENGLISH: tipo_persona → person_type
         "person_code": user.person_code    # ENGLISH: codigo_persona → person_code
@@ -190,7 +192,7 @@ def login_user(db: Session, email: str, password: str) -> Dict[str, Any]:
     # Crear objeto usuario base - ALL ENGLISH FIELD NAMES
     user_data = {
         "id": user.id,
-        "username": user.username,
+        "username": user.email,  # Use email as username
         "person_code": user.person_code,     # ENGLISH: codigo_persona → person_code
         "person_type": user.person_type,     # ENGLISH: tipo_persona → person_type
         "full_name": user.full_name,
@@ -409,3 +411,59 @@ def require_role(role: str):
         func.required_role = role
         return func
     return decorator
+
+# ============================================================================
+# PASSWORD RESET FUNCTIONS
+# ============================================================================
+
+def create_password_reset_token(user_id: int, email: str) -> str:
+    """
+    Crear token JWT para recuperación de contraseña
+    Expira en 1 hora
+    """
+    expire = datetime.now(timezone.utc) + timedelta(hours=1)
+    
+    to_encode = {
+        "exp": expire,
+        "iat": datetime.now(timezone.utc),
+        "type": "password_reset",
+        "user_id": user_id,
+        "email": email
+    }
+    
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def verify_password_reset_token(token: str) -> Optional[Dict[str, Any]]:
+    """
+    Verificar token de recuperación de contraseña
+    Retorna payload si es válido, None si no
+    """
+    try:
+        payload = verify_token(token, token_type="password_reset")
+        if payload is None:
+            return None
+        
+        # Verificar que tenga los campos necesarios
+        if "user_id" not in payload or "email" not in payload:
+            return None
+            
+        return payload
+    except Exception:
+        return None
+
+def reset_user_password(db: Session, user_id: int, new_password: str) -> bool:
+    """
+    Cambiar la contraseña de un usuario
+    Retorna True si fue exitoso
+    """
+    user = db.query(Person).filter(Person.id == user_id).first()
+    if not user:
+        return False
+    
+    # Hash nueva contraseña
+    user.hashed_password = get_password_hash(new_password)
+    db.commit()
+    db.refresh(user)
+    
+    return True

@@ -607,4 +607,5 @@ export interface DoctorProfile {
   updated_at: string;
   created_by?: number;
   offices?: Office[];
+  specialty?: string; // Para compatibilidad con componentes que usan specialty directamente
 }

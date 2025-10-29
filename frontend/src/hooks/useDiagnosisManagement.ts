@@ -37,17 +37,11 @@ export const useDiagnosisManagement = (): UseDiagnosisManagementReturn => {
 
   // Add a new diagnosis
   const addDiagnosis = useCallback((diagnosis: DiagnosisCatalog) => {
-    console.log('🔬 Adding diagnosis:', diagnosis);
-    console.log('🔬 Current diagnoses:', diagnoses);
-    console.log('🔬 Checking for existing diagnosis with code:', diagnosis.code);
-    
     // Check if diagnosis already exists
     const exists = diagnoses.some(d => d.code === diagnosis.code);
-    console.log('🔬 Diagnosis exists check result:', exists);
     
     if (exists) {
-      console.log('⚠️ Diagnosis already exists:', diagnosis.code);
-      console.log('⚠️ Existing diagnoses:', diagnoses.map(d => ({ id: d.id, code: d.code, name: d.name })));
+      // console.log('⚠️ Diagnosis already exists:', diagnosis.code);
       setError('Este diagnóstico ya ha sido agregado');
       return;
     }

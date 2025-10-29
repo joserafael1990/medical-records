@@ -68,11 +68,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     setError(null);
     
     try {
-      console.log('🔍 Fetching available vital signs...');
       const response = await apiService.get('/api/vital-signs');
-      console.log('🔍 Vital signs response:', response);
-      console.log('🔍 Vital signs response.data:', response.data);
-      console.log('🔍 Vital signs response type:', typeof response.data);
       
       // Handle different response structures
       let vitalSignsData = [];
@@ -84,7 +80,6 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
         vitalSignsData = response;
       }
       
-      console.log('🔍 Processed vital signs data:', vitalSignsData);
       setAvailableVitalSigns(vitalSignsData);
     } catch (err: any) {
       console.error('❌ Error fetching available vital signs:', err);
@@ -97,14 +92,12 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
   // Load available vital signs when dialog opens (only once)
   useEffect(() => {
     if (vitalSignDialogOpen && availableVitalSigns.length === 0) {
-      console.log('🔍 Loading available vital signs...');
       fetchAvailableVitalSigns();
     }
   }, [vitalSignDialogOpen]); // Removed availableVitalSigns and fetchAvailableVitalSigns from dependencies
 
   // Fetch consultation vital signs
   const fetchConsultationVitalSigns = useCallback(async (consultationId: string) => {
-    console.log('🫀 fetchConsultationVitalSigns called with consultationId:', consultationId);
     if (consultationId === 'temp_consultation') {
       return;
     }
@@ -114,9 +107,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     
     try {
       const response = await apiService.get(`/api/consultations/${consultationId}/vital-signs`);
-      console.log('🫀 fetchConsultationVitalSigns response:', response);
       const vitalSignsData = response.data || response;
-      console.log('🫀 fetchConsultationVitalSigns data:', vitalSignsData);
       setConsultationVitalSigns(vitalSignsData);
     } catch (err: any) {
       console.error('❌ Error fetching consultation vital signs:', err);
@@ -172,16 +163,8 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     try {
       if (consultationId === "temp_consultation") {
         // For temporary vital signs, remove by id
-        console.log('🗑️ Deleting temporary vital sign with ID:', vitalSignId);
         setTemporaryVitalSigns(prev => {
-          console.log('🗑️ Current temporary vital signs:', prev);
-          console.log('🗑️ Current vital signs IDs:', prev.map(vs => vs.id));
-          console.log('🗑️ Looking for ID:', vitalSignId);
-          const filtered = prev.filter(vs => {
-            console.log('🗑️ Comparing:', vs.id, '!==', vitalSignId, '=', vs.id !== vitalSignId);
-            return vs.id !== vitalSignId;
-          });
-          console.log('🗑️ Filtered temporary vital signs:', filtered);
+          const filtered = prev.filter(vs => vs.id !== vitalSignId);
           return filtered;
         });
       } else {
@@ -198,8 +181,6 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
 
   // Dialog management
   const openAddDialog = useCallback((vitalSign?: VitalSign) => {
-    console.log('🔍 openAddDialog called with:', vitalSign);
-    console.log('🔍 availableVitalSigns:', availableVitalSigns);
     
     if (vitalSign) {
       setVitalSignFormData({
@@ -310,9 +291,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
   }, []);
 
   const autoCalculateBMI = useCallback(() => {
-    console.log('🫀 autoCalculateBMI called');
     const allVitalSigns = [...consultationVitalSigns, ...temporaryVitalSigns];
-    console.log('🫀 All vital signs:', allVitalSigns);
     
     // Find weight and height signs
     const weightSign = allVitalSigns.find(vs => {
@@ -325,8 +304,6 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
       return vitalSign && (vitalSign.name.toLowerCase().includes('estatura') || vitalSign.name.toLowerCase().includes('altura'));
     });
     
-    console.log('🫀 Weight sign:', weightSign);
-    console.log('🫀 Height sign:', heightSign);
     
     // Find BMI sign
     const bmiSign = allVitalSigns.find(vs => {
@@ -334,26 +311,21 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
       return vitalSign && (vitalSign.name.toLowerCase().includes('imc') || vitalSign.name.toLowerCase().includes('índice de masa corporal') || vitalSign.name.toLowerCase().includes('bmi'));
     });
     
-    console.log('🫀 BMI sign:', bmiSign);
     
     if (weightSign && heightSign && bmiSign) {
       const weight = parseFloat(weightSign.value);
       const height = parseFloat(heightSign.value);
       
-      console.log('🫀 Weight:', weight, 'Height:', height);
       
       if (!isNaN(weight) && !isNaN(height) && height > 0) {
         const bmi = calculateBMI(weight, height);
-        console.log('🫀 Calculated BMI:', bmi);
         
         // Only auto-update BMI if it's empty or very close to the calculated value (allowing for small manual adjustments)
         const currentBMI = parseFloat(bmiSign.value);
         const isBMICloseToCalculated = Math.abs(currentBMI - bmi) < 0.1; // Allow 0.1 difference
         
-        console.log('🫀 Current BMI:', currentBMI, 'Is close to calculated:', isBMICloseToCalculated);
         
         if (!bmiSign.value || bmiSign.value.trim() === '' || isBMICloseToCalculated) {
-          console.log('🫀 Updating BMI to:', bmi);
           if (bmiSign.id && typeof bmiSign.id === 'number') {
             // Update existing BMI sign
             updateVitalSign('temp_consultation', bmiSign.id, {

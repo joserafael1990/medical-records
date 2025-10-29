@@ -14,9 +14,6 @@ import type {
   PatientFormData,
   AppointmentFormData,
   AppointmentUpdateData,
-  MedicalOrder,
-  MedicalOrderFormData,
-  OrderStatus,
   ApiError,
   Office,
   OfficeCreate,
@@ -883,29 +880,6 @@ class ApiService {
   }
 
   // ============================================================================
-  // MEDICAL ORDERS API - Órdenes Médicas
-  // ============================================================================
-
-  async createMedicalOrder(orderData: MedicalOrderFormData): Promise<MedicalOrder> {
-    const response = await this.api.post<MedicalOrder>('/api/medical-orders', orderData);
-    return response.data;
-  }
-
-  async getMedicalOrdersByConsultation(consultationId: string): Promise<MedicalOrder[]> {
-    const response = await this.api.get<MedicalOrder[]>(`/api/medical-orders/consultation/${consultationId}`);
-    return response.data;
-  }
-
-  async getMedicalOrdersByPatient(patientId: string): Promise<MedicalOrder[]> {
-    const response = await this.api.get<MedicalOrder[]>(`/api/medical-orders/patient/${patientId}`);
-    return response.data;
-  }
-
-  async updateMedicalOrderStatus(orderId: string, status: OrderStatus): Promise<void> {
-    await this.api.patch(`/api/medical-orders/${orderId}/status`, { status });
-  }
-
-  // ============================================================================
   // APPOINTMENT SERVICES
   // ============================================================================
 
@@ -1114,6 +1088,20 @@ class ApiService {
     return response.data;
   }
 
+  async requestPasswordReset(email: string): Promise<any> {
+    const response = await this.api.post('/api/auth/password-reset/request', { email });
+    return response.data;
+  }
+
+  async confirmPasswordReset(token: string, newPassword: string, confirmPassword: string): Promise<any> {
+    const response = await this.api.post('/api/auth/password-reset/confirm', {
+      token,
+      new_password: newPassword,
+      confirm_password: confirmPassword
+    });
+    return response.data;
+  }
+
   // ============================================================================
   // DASHBOARD SERVICES
   // ============================================================================
@@ -1287,10 +1275,6 @@ export const {
   createConsultation,
   updateConsultation,
   deleteConsultation,
-  createMedicalOrder,
-  getMedicalOrdersByConsultation,
-  getMedicalOrdersByPatient,
-  updateMedicalOrderStatus,
   createClinicalStudy,
   getClinicalStudiesByConsultation,
   getClinicalStudiesByPatient,

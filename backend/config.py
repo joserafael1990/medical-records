@@ -105,9 +105,11 @@ class Settings(BaseSettings):
         """Get asynchronous database URL for async drivers"""
         return self.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = {
+        "env_file": ".env",
+        "case_sensitive": True,
+        "extra": "ignore"  # Ignorar variables extra en lugar de fallar
+    }
 
 
 # Global settings instance
