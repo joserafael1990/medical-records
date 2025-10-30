@@ -429,6 +429,9 @@ class AppointmentBase(BaseSchema):
     follow_up_required: bool = False
     follow_up_date: Optional[date] = None
     room_number: Optional[str] = None
+    # Auto WhatsApp reminder
+    auto_reminder_enabled: bool = False
+    auto_reminder_offset_minutes: Optional[int] = 360  # 6 hours by default
 
 class AppointmentCreate(AppointmentBase):
     pass
@@ -451,6 +454,9 @@ class AppointmentUpdate(BaseSchema):
     estimated_cost: Optional[Decimal] = None
     insurance_covered: Optional[bool] = None
     cancelled_reason: Optional[str] = None
+    # Auto WhatsApp reminder
+    auto_reminder_enabled: Optional[bool] = None
+    auto_reminder_offset_minutes: Optional[int] = None
 
 class Appointment(AppointmentBase):
     id: int
@@ -459,6 +465,7 @@ class Appointment(AppointmentBase):
     confirmed_at: Optional[datetime] = None
     reminder_sent: bool = False
     reminder_sent_at: Optional[datetime] = None
+    auto_reminder_sent_at: Optional[datetime] = None
     cancelled_reason: Optional[str] = None
     cancelled_at: Optional[datetime] = None
     cancelled_by: Optional[int] = None

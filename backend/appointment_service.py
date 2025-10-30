@@ -2,7 +2,7 @@
 Appointment Service - Gestión de citas médicas
 Provides comprehensive appointment management functionality
 """
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_, desc, asc, func
 from datetime import datetime, date, time, timedelta
 from typing import List, Optional, Dict
@@ -316,6 +316,100 @@ class AppointmentService:
                         slot["reason"] = appointment.reason
         
         return slots
+
+    # ==============================
+    # Auto reminder helpers
+    # ==============================
+    @staticmethod
+    def get_reminder_send_time(appointment_dt: datetime, offset_minutes: int) -> datetime:
+        """Compute when the auto reminder should be sent (appointment time minus offset)."""
+        if offset_minutes is None:
+            offset_minutes = 360
+        return appointment_dt - timedelta(minutes=offset_minutes)
+
+    @staticmethod
+    def should_send_reminder(appointment) -> bool:
+        """Return True if reminder should be sent now based on flags and timestamps."""
+        try:
+            if not getattr(appointment, 'auto_reminder_enabled', False):
+                return False
+            if getattr(appointment, 'auto_reminder_sent_at', None) is not None:
+                return False
+            send_time = AppointmentService.get_reminder_send_time(
+                appointment.appointment_date,
+                getattr(appointment, 'auto_reminder_offset_minutes', 360)
+            )
+            now = now_cdmx().replace(tzinfo=None)
+            return send_time <= now <= appointment.end_time
+        except Exception:
+            return False
+
+    @staticmethod
+    def mark_reminder_sent(db: Session, appointment_id: int) -> None:
+        """Persist sent timestamp for auto reminder."""
+        apt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+        if not apt:
+            return
+        apt.auto_reminder_sent_at = now_cdmx().astimezone(pytz.utc)
+        db.commit()
+
+    @staticmethod
+    def send_appointment_reminder(db: Session, appointment_id: int) -> bool:
+        """Send WhatsApp reminder using existing WhatsAppService. Returns True on success."""
+        from whatsapp_service import WhatsAppService
+        apt = db.query(Appointment).options(
+            joinedload(Appointment.patient),
+            joinedload(Appointment.doctor),
+            joinedload(Appointment.office),
+            joinedload(Appointment.appointment_type_rel)
+        ).filter(Appointment.id == appointment_id).first()
+        if not apt:
+            return False
+        # Build parameters similarly to endpoint logic
+        mexico_tz = pytz.timezone('America/Mexico_City')
+        # Assume stored naive datetime is local CDMX
+        local_dt = mexico_tz.localize(apt.appointment_date)
+        appointment_date = local_dt.strftime('%d de %B de %Y')
+        appointment_time = local_dt.strftime('%I:%M %p')
+        appointment_type = "presencial"
+        if apt.appointment_type_rel:
+            appointment_type = "online" if apt.appointment_type_rel.name == "En línea" else "presencial"
+
+        service = WhatsAppService()
+        try:
+            # Preparar dirección y URL según si es consultorio virtual o físico
+            office_address = (apt.office.address if apt.office else "mi consultorio en linea - No especificado")
+            maps_url = None
+            if apt.office:
+                try:
+                    if getattr(apt.office, 'is_virtual', False) and getattr(apt.office, 'virtual_url', None):
+                        # Para virtual: usar la URL del consultorio como dirección y como maps_url
+                        office_address = apt.office.virtual_url
+                        maps_url = apt.office.virtual_url
+                        appointment_type = "online"
+                    else:
+                        maps_url = getattr(apt.office, 'maps_url', None)
+                except Exception:
+                    maps_url = getattr(apt.office, 'maps_url', None)
+
+            resp = service.send_appointment_reminder(
+                patient_phone=apt.patient.primary_phone if apt.patient else None,
+                patient_full_name=apt.patient.full_name if apt.patient else "Paciente",
+                appointment_date=appointment_date,
+                appointment_time=appointment_time,
+                doctor_title=(apt.doctor.title if apt.doctor else "Dr."),
+                doctor_full_name=(apt.doctor.full_name if apt.doctor else "Médico"),
+                office_address=office_address,
+                country_code=(apt.office.country.phone_code[1:] if apt.office and apt.office.country and apt.office.country.phone_code else '52'),
+                appointment_type=appointment_type,
+                maps_url=maps_url
+            )
+            if resp and resp.get('messages'):
+                AppointmentService.mark_reminder_sent(db, appointment_id)
+                return True
+        except Exception:
+            return False
+        return False
     
     @staticmethod
     def get_doctor_schedule(

@@ -18,7 +18,7 @@ class WhatsAppService:
         """Inicializar servicio con credenciales de Meta"""
         self.phone_id = os.getenv('META_WHATSAPP_PHONE_ID')
         self.access_token = os.getenv('META_WHATSAPP_TOKEN')
-        self.api_version = os.getenv('META_WHATSAPP_API_VERSION', 'v18.0')
+        self.api_version = os.getenv('META_WHATSAPP_API_VERSION', 'v24.0')
         self.base_url = f'https://graph.facebook.com/{self.api_version}'
         
         if not self.phone_id or not self.access_token:
@@ -134,8 +134,18 @@ class WhatsAppService:
             }
             
         except requests.exceptions.HTTPError as e:
-            error_detail = e.response.json() if e.response else str(e)
-            status_code = e.response.status_code if e.response else None
+            # Manejo robusto del cuerpo de error
+            status_code = e.response.status_code if e.response is not None else None
+            if e.response is not None:
+                try:
+                    error_detail = e.response.json()
+                except Exception:
+                    try:
+                        error_detail = e.response.text
+                    except Exception:
+                        error_detail = str(e)
+            else:
+                error_detail = str(e)
             
             # Try to extract status code from error message if not available directly
             if status_code is None and '401' in str(e):
@@ -235,7 +245,8 @@ class WhatsAppService:
         office_address: str,
         country_code: str = None,
         appointment_type: str = "presencial",
-        online_consultation_url: str = None
+        online_consultation_url: str = None,
+        maps_url: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Enviar recordatorio de cita médica usando plantilla aprobada
@@ -251,14 +262,31 @@ class WhatsAppService:
         # ¡Hola *{{1}}*, 🗓️
         # Este es un recordatorio de tu cita hoy *{{2}} a las {{3}}* con {{4}} {{5}}
         # 📍 *Lugar:* {{6}}
+        
+        # Usar maps_url de Office si viene, si no generar una de respaldo (param 7)
+        maps_url_final = maps_url or f"https://www.google.com/maps/search/?api=1&query={office_address.replace(' ', '+')}"
+
+        # Dirección limpia sin URL (param 6)
+        office_address_clean = str(office_address or "Consultorio médico")
+
+        # Parámetros EXACTOS según plantilla aprobada:
+        # {{1}} paciente, {{2}} fecha, {{3}} hora, {{4}} título, {{5}} nombre médico, {{6}} dirección, {{7}} URL Maps
         template_params = [
-            str(patient_full_name or "Paciente"),           # {{1}} - Nombre del paciente
-            str(appointment_date or "Fecha no especificada"),            # {{2}} - Fecha de la cita
-            str(appointment_time or "Hora no especificada"),            # {{3}} - Hora de la cita
-            str(doctor_title or "Dr"),                      # {{4}} - Título del doctor (Dr, Dra, etc.)
-            str(doctor_full_name.replace(doctor_title, "").strip() if doctor_title and doctor_title in doctor_full_name else doctor_full_name or "Médico"),  # {{5}} - Nombre del doctor (sin título)
-            str(office_address or "Consultorio médico")    # {{6}} - Dirección del consultorio
+            str(patient_full_name or "Paciente"),
+            str(appointment_date or "Fecha no especificada"),
+            str(appointment_time or "Hora no especificada"),
+            str(doctor_title or "Dr"),
+            str(doctor_full_name.replace(doctor_title, "").strip() if doctor_title and doctor_title in doctor_full_name else (doctor_full_name or "Médico")),
+            office_address_clean,
+            maps_url_final
         ]
+
+        # Debug logging
+        print(f"📱 Template parameters: {template_params}")
+        print(f"📱 Doctor title: {doctor_title}")
+        print(f"📱 Doctor full name: {doctor_full_name}")
+        print(f"📱 Office address: {office_address_clean}")
+        print(f"🗺️ Maps URL: {maps_url_final}")
         
         
         return self.send_template_message(

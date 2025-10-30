@@ -519,6 +519,9 @@ export interface Appointment {
   confirmed_at?: string;
   reminder_sent: boolean;
   reminder_sent_at?: string;
+  auto_reminder_enabled?: boolean;
+  auto_reminder_offset_minutes?: number;
+  auto_reminder_sent_at?: string;
   cancelled_reason?: string;
   cancelled_at?: string;
   cancelled_by?: number;
@@ -559,6 +562,9 @@ export interface AppointmentFormData {
   confirmed_at?: string;
   reminder_sent?: boolean;
   reminder_sent_at?: string;
+  // Auto reminder fields
+  auto_reminder_enabled?: boolean;
+  auto_reminder_offset_minutes?: number;
   cancelled_reason?: string;
   cancelled_at?: string;
   cancelled_by?: number;

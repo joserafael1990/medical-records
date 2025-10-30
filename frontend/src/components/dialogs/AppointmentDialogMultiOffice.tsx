@@ -15,7 +15,9 @@ import {
   CircularProgress,
   Typography,
   Autocomplete,
-  Avatar
+  Avatar,
+  Switch,
+  FormControlLabel
 } from '@mui/material';
 import { Person as PersonIcon } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -885,6 +887,71 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
               multiline
               rows={3}
             />
+
+            {/* 9. RECORDATORIO AUTOMÁTICO POR WHATSAPP */}
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                Recordatorio automático por WhatsApp
+              </Typography>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={!!currentFormData.auto_reminder_enabled}
+                    onChange={(_, checked) => {
+                      const updated = {
+                        ...currentFormData,
+                        auto_reminder_enabled: checked,
+                        auto_reminder_offset_minutes: checked
+                          ? (currentFormData.auto_reminder_offset_minutes ?? 360)
+                          : currentFormData.auto_reminder_offset_minutes
+                      };
+                      setFormData(updated);
+                      onFormDataChange && onFormDataChange(updated);
+                    }}
+                  />
+                }
+                label="Enviar recordatorio automático"
+              />
+
+              {currentFormData.auto_reminder_enabled && (
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: '160px 160px' }, gap: 2, mt: 1 }}>
+                  <TextField
+                    type="number"
+                    size="small"
+                    label="Horas antes"
+                    inputProps={{ min: 0, max: 168 }}
+                    value={Math.floor(((currentFormData.auto_reminder_offset_minutes ?? 360) / 60))}
+                    onChange={(e) => {
+                      const hours = Math.max(0, Math.min(168, parseInt(e.target.value || '0', 10)));
+                      const minutes = (currentFormData.auto_reminder_offset_minutes ?? 360) % 60;
+                      const updated = {
+                        ...currentFormData,
+                        auto_reminder_offset_minutes: hours * 60 + minutes
+                      };
+                      setFormData(updated);
+                      onFormDataChange && onFormDataChange(updated);
+                    }}
+                  />
+                  <TextField
+                    type="number"
+                    size="small"
+                    label="Minutos antes"
+                    inputProps={{ min: 0, max: 59 }}
+                    value={(currentFormData.auto_reminder_offset_minutes ?? 360) % 60}
+                    onChange={(e) => {
+                      const mins = Math.max(0, Math.min(59, parseInt(e.target.value || '0', 10)));
+                      const hours = Math.floor(((currentFormData.auto_reminder_offset_minutes ?? 360) / 60));
+                      const updated = {
+                        ...currentFormData,
+                        auto_reminder_offset_minutes: hours * 60 + mins
+                      };
+                      setFormData(updated);
+                      onFormDataChange && onFormDataChange(updated);
+                    }}
+                  />
+                </Box>
+              )}
+            </Box>
           </Box>
         </LocalizationProvider>
       </DialogContent>

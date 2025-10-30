@@ -209,6 +209,41 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+# ============================================================================
+# BACKGROUND SCHEDULER: Auto WhatsApp Appointment Reminders
+# ============================================================================
+import asyncio
+from database import SessionLocal, Appointment
+from appointment_service import AppointmentService
+
+async def _auto_reminder_loop():
+    """Background loop that sends due WhatsApp reminders every 60 seconds."""
+    await asyncio.sleep(5)
+    while True:
+        try:
+            db = SessionLocal()
+            # Fetch candidate appointments (quick filter by flags)
+            candidates = db.query(Appointment).filter(
+                Appointment.auto_reminder_enabled == True,
+                Appointment.auto_reminder_sent_at.is_(None),
+                Appointment.status != 'cancelled'
+            ).all()
+            for apt in candidates:
+                if AppointmentService.should_send_reminder(apt):
+                    success = AppointmentService.send_appointment_reminder(db, apt.id)
+                    if success:
+                        print(f"✅ Auto reminder sent for appointment {apt.id}")
+                    else:
+                        print(f"⚠️ Auto reminder failed for appointment {apt.id}")
+            db.close()
+        except Exception as e:
+            print(f"⚠️ Auto reminder loop error: {e}")
+        await asyncio.sleep(60)
+
+@app.on_event("startup")
+async def start_background_tasks():
+    asyncio.create_task(_auto_reminder_loop())
+
 # CORS - Enhanced configuration for development
 app.add_middleware(
     CORSMiddleware,
@@ -1674,8 +1709,16 @@ async def send_whatsapp_appointment_reminder(
         if not patient or not patient.primary_phone:
             raise HTTPException(status_code=400, detail="Patient phone number not found")
         
-        # Get doctor title from user profile (temporarily use default for testing)
-        doctor_title = "Dr"  # Default for testing
+        # Get doctor information
+        doctor = db.query(Person).filter(Person.id == appointment.doctor_id).first()
+        if doctor:
+            doctor_title = doctor.title or "Dr"  # Use doctor's title or default to "Dr"
+            doctor_full_name = f"{doctor.first_name} {doctor.paternal_surname}"
+            if doctor.maternal_surname:
+                doctor_full_name += f" {doctor.maternal_surname}"
+        else:
+            doctor_title = "Dr"
+            doctor_full_name = "Dr. Test"
         
         # Get patient full name
         patient_full_name = f"{patient.first_name} {patient.paternal_surname}"
@@ -1723,6 +1766,7 @@ async def send_whatsapp_appointment_reminder(
         appointment_type = "presencial"  # Default
         
         # Get office information from appointment
+        maps_url = None
         if appointment.office_id:
             from database import Office
             office = db.query(Office).filter(Office.id == appointment.office_id).first()
@@ -1730,18 +1774,24 @@ async def send_whatsapp_appointment_reminder(
                 # Check if it's a virtual office
                 if office.is_virtual and office.virtual_url:
                     office_address = office.virtual_url
+                    maps_url = office.virtual_url
                 else:
                     # For physical offices, only use name and address (no city, state, country)
                     office_address = f"{office.name} - {office.address or 'No especificado'}"
+                    maps_url = getattr(office, 'maps_url', None)
                 # Get country code from office
                 if office.country_id:
                     office_country = db.query(Country).filter(Country.id == office.country_id).first()
-            if office_country and office_country.phone_code:
-                country_code = office_country.phone_code.replace('+', '')  # Remove + if present
+                    if office_country and office_country.phone_code:
+                        country_code = office_country.phone_code.replace('+', '')  # Remove + if present
+                    else:
+                        print(f"🌍 No phone code found for country, using default: {country_code}")
+                else:
+                    print(f"🌍 No country_id in office, using default: {country_code}")
             else:
-                print(f"🌍 No phone code found for country, using default: {country_code}")
+                print(f"🌍 Office not found, using default: {country_code}")
         else:
-            print(f"🌍 No country_id in office, using default: {country_code}")
+            print(f"🌍 No office_id in appointment, using default: {country_code}")
         
         # Get appointment type
         if appointment.appointment_type_rel:
@@ -1758,10 +1808,11 @@ async def send_whatsapp_appointment_reminder(
             appointment_date=appointment_date,
             appointment_time=appointment_time,
             doctor_title=doctor_title,
-            doctor_full_name=f"{doctor_title}. Test",  # Default for testing
+            doctor_full_name=doctor_full_name,
             office_address=office_address,
             country_code=country_code,
-            appointment_type=appointment_type
+            appointment_type=appointment_type,
+            maps_url=(office.maps_url if 'office' in locals() and getattr(office, 'maps_url', None) else None)
         )
         
         if result['success']:

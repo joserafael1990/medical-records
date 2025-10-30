@@ -349,6 +349,11 @@ class Appointment(Base):
     confirmed_at = Column(DateTime)
     reminder_sent = Column(Boolean, default=False)
     reminder_sent_at = Column(DateTime)
+
+    # AUTO REMINDER (WhatsApp)
+    auto_reminder_enabled = Column(Boolean, default=False)
+    auto_reminder_offset_minutes = Column(Integer, default=360)  # 6 hours
+    auto_reminder_sent_at = Column(DateTime)
     
     # CANCELLATION
     cancelled_reason = Column(Text)

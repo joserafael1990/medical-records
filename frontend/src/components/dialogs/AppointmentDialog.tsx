@@ -46,6 +46,7 @@ import { apiService } from '../../services/api';
 import { ErrorRibbon } from '../common/ErrorRibbon';
 import { useToast } from '../common/ToastNotification';
 import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
+import { Switch, FormControlLabel } from '@mui/material';
 
 // Utility function to calculate age from birth date
 const calculateAge = (birthDate: string): number => {
@@ -1413,6 +1414,71 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                 readOnly: isReadOnly
               }}
             />
+          </Box>
+
+          {/* Auto WhatsApp Reminder */}
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+              Recordatorio automático por WhatsApp
+            </Typography>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={!!localFormData.auto_reminder_enabled}
+                  onChange={(_, checked) => {
+                    const updated = {
+                      ...localFormData,
+                      auto_reminder_enabled: checked,
+                      auto_reminder_offset_minutes: checked
+                        ? (localFormData.auto_reminder_offset_minutes ?? 360)
+                        : localFormData.auto_reminder_offset_minutes
+                    };
+                    setLocalFormData(updated);
+                    onFormDataChange && onFormDataChange(updated);
+                  }}
+                />
+              }
+              label="Enviar recordatorio automático"
+            />
+
+            {localFormData.auto_reminder_enabled && (
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: '160px 160px' }, gap: 2, mt: 1 }}>
+                <TextField
+                  type="number"
+                  size="small"
+                  label="Horas antes"
+                  inputProps={{ min: 0, max: 168 }}
+                  value={Math.floor(((localFormData.auto_reminder_offset_minutes ?? 360) / 60))}
+                  onChange={(e) => {
+                    const hours = Math.max(0, Math.min(168, parseInt(e.target.value || '0', 10)));
+                    const minutes = (localFormData.auto_reminder_offset_minutes ?? 360) % 60;
+                    const updated = {
+                      ...localFormData,
+                      auto_reminder_offset_minutes: hours * 60 + minutes
+                    };
+                    setLocalFormData(updated);
+                    onFormDataChange && onFormDataChange(updated);
+                  }}
+                />
+                <TextField
+                  type="number"
+                  size="small"
+                  label="Minutos antes"
+                  inputProps={{ min: 0, max: 59 }}
+                  value={(localFormData.auto_reminder_offset_minutes ?? 360) % 60}
+                  onChange={(e) => {
+                    const mins = Math.max(0, Math.min(59, parseInt(e.target.value || '0', 10)));
+                    const hours = Math.floor(((localFormData.auto_reminder_offset_minutes ?? 360) / 60));
+                    const updated = {
+                      ...localFormData,
+                      auto_reminder_offset_minutes: hours * 60 + mins
+                    };
+                    setLocalFormData(updated);
+                    onFormDataChange && onFormDataChange(updated);
+                  }}
+                />
+              </Box>
+            )}
           </Box>
         </Box>
       </DialogContent>
