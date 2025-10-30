@@ -137,6 +137,7 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
   useEffect(() => {
     if (open) {
       if (isEditing && externalFormData) {
+        // Usar exactamente el valor de BD sin fallback
         setFormData(externalFormData);
         // Para edición, determinar si es paciente existente basado en si hay patient_id
         setIsExistingPatient(externalFormData.patient_id && externalFormData.patient_id > 0 ? true : null);
@@ -180,6 +181,8 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
       setError(null);
     }
   }, [open, isEditing]);
+
+  // Nota: consultation_type viene de BD y NO se fuerza desde appointment_type_id
 
   // Load available times for default date when dialog opens
   useEffect(() => {
@@ -414,29 +417,27 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
           setError('El número telefónico del paciente es requerido');
           return;
         }
-        if (!newPatientData.birth_date) {
-          setError('La fecha de nacimiento del paciente es requerida');
-          return;
-        }
-        if (!newPatientData.gender) {
-          setError('El género del paciente es requerido');
-          return;
-        }
+        // birth_date y gender NO son requeridos para primera vez
         
         // Crear nuevo paciente
         try {
           // Concatenar código de país + número telefónico
           const fullPhoneNumber = `${newPatientData.phone_country_code}${newPatientData.phone_number.trim()}`;
           
-          const patientData = {
+          const patientData: any = {
             first_name: newPatientData.first_name,
             paternal_surname: newPatientData.paternal_surname,
-            maternal_surname: newPatientData.maternal_surname || '',
-            birth_date: newPatientData.birth_date,
-            gender: newPatientData.gender,
+            // solo enviar si trae valor real
+            ...(newPatientData.maternal_surname && { maternal_surname: newPatientData.maternal_surname }),
             primary_phone: fullPhoneNumber,
             person_type: 'patient'
           };
+          if (newPatientData.birth_date) {
+            patientData.birth_date = newPatientData.birth_date;
+          }
+          if (newPatientData.gender) {
+            patientData.gender = newPatientData.gender;
+          }
           
           
           // Crear el paciente usando la API
@@ -720,31 +721,7 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
                   />
                 </Box>
 
-                <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
-                  <TextField
-                    fullWidth
-                    label="Fecha de Nacimiento *"
-                    type="date"
-                    value={newPatientData.birth_date}
-                    onChange={(e) => setNewPatientData(prev => ({ ...prev, birth_date: e.target.value }))}
-                    InputLabelProps={{ shrink: true }}
-                    required
-                    size="small"
-                  />
-                  <FormControl fullWidth required size="small">
-                    <InputLabel>Género *</InputLabel>
-                    <Select
-                      value={newPatientData.gender}
-                      onChange={(e) => setNewPatientData(prev => ({ ...prev, gender: e.target.value }))}
-                      label="Género *"
-                      MenuProps={getMediumSelectMenuProps()}
-                    >
-                      <MenuItem value="Masculino">Masculino</MenuItem>
-                      <MenuItem value="Femenino">Femenino</MenuItem>
-                      <MenuItem value="Otro">Otro</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Box>
+                {/* Campos de fecha de nacimiento y género removidos en nueva cita (no requeridos ni visibles) */}
               </Box>
             )}
 
@@ -752,7 +729,7 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
             <FormControl size="small" fullWidth required>
               <InputLabel>Consultorio</InputLabel>
               <Select
-                value={currentFormData.office_id || 0}
+                value={(offices.some(o => o.id === (currentFormData.office_id as any)) ? currentFormData.office_id : 0) || 0}
                 onChange={handleChange('office_id')}
                 label="Consultorio"
                 MenuProps={getMediumSelectMenuProps()}
@@ -823,11 +800,17 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
               <FormControl fullWidth required>
                 <InputLabel>Hora de la cita</InputLabel>
                 <Select
-                  value={selectedTime}
+                  value={selectedTime || ''}
                   onChange={(e) => handleTimeChange(e.target.value)}
                   disabled={loadingTimes}
                   label="Hora de la cita"
                 >
+                  {/* Ensure current time is selectable even if not in availableTimes */}
+                  {selectedTime && (
+                    <MenuItem value={selectedTime}>
+                      {selectedTime} (Horario actual)
+                    </MenuItem>
+                  )}
                   {loadingTimes ? (
                     <MenuItem disabled>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -847,13 +830,6 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
                         {timeSlot.display} ({timeSlot.duration_minutes} min)
                       </MenuItem>
                     ))
-                  )}
-                  
-                  {/* Show current selected time even if not in available times (for editing) */}
-                  {selectedTime && !loadingTimes && !availableTimes.some(slot => slot.time === selectedTime) && (
-                    <MenuItem value={selectedTime}>
-                      {selectedTime} (Horario actual)
-                    </MenuItem>
                   )}
                 </Select>
               </FormControl>

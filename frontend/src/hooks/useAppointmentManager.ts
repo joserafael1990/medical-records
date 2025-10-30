@@ -244,35 +244,91 @@ export const useAppointmentManager = (
   }, [selectedDate]);
 
   // Handle edit appointment
-  const handleEditAppointment = useCallback((appointment: Appointment) => {
-    setIsEditingAppointment(true);
-    setSelectedAppointment(appointment);
-    const formattedDateTime = formatDateTimeForInput(appointment.appointment_date || appointment.date_time);
-    
-    const formData = {
-      patient_id: appointment.patient_id,
-      doctor_id: appointment.doctor_id,
-      appointment_date: formattedDateTime, // Direct CDMX format
-      appointment_type_id: appointment.appointment_type_id || 1, // Default to "Presencial" if not set
-      office_id: appointment.office_id,
-      consultation_type: appointment.consultation_type || '', // No default value
-      reason: appointment.reason,
-      notes: appointment.notes || '',
-      status: appointment.status,
-      priority: appointment.priority || 'normal',
-      preparation_instructions: appointment.preparation_instructions || '',
-      confirmation_required: appointment.confirmation_required || false,
-      estimated_cost: appointment.estimated_cost || '',
-      insurance_covered: appointment.insurance_covered || false,
-      room_number: appointment.room_number || '',
-      equipment_needed: appointment.equipment_needed || '',
-      cancelled_reason: appointment.cancelled_reason || ''
-    };
-    setAppointmentFormData(formData);
-    setFieldErrors({});
-    setFormErrorMessage('');
-    setAppointmentDialogOpen(true);
-  }, []);
+  const handleEditAppointment = useCallback(async (appointment: Appointment) => {
+    try {
+      setIsEditingAppointment(true);
+      // Always load fresh data from backend to avoid stale state
+      const latest = await apiService.getAppointment(String(appointment.id));
+      console.log('🟦 Editar cita - datos más recientes del backend:', {
+        id: (latest as any)?.id,
+        appointment_date: (latest as any)?.appointment_date,
+        auto_reminder_enabled: (latest as any)?.auto_reminder_enabled,
+        auto_reminder_offset_minutes: (latest as any)?.auto_reminder_offset_minutes
+      });
+      setSelectedAppointment(latest as unknown as Appointment);
+      const formattedDateTime = formatDateTimeForInput((latest as any).appointment_date || (latest as any).date_time);
+      const formData = {
+        id: (latest as any).id,
+        patient_id: (latest as any).patient_id,
+        doctor_id: (latest as any).doctor_id,
+        appointment_date: formattedDateTime,
+        appointment_type_id: (latest as any).appointment_type_id || 1,
+        // Map to legacy string used by dialogs
+        appointment_type: ((latest as any).appointment_type_id || 1) === 1 ? 'primera vez' : 'seguimiento',
+        office_id: (latest as any).office_id,
+        consultation_type: (latest as any).consultation_type,
+        reason: (latest as any).reason,
+        notes: (latest as any).notes || '',
+        status: (latest as any).status,
+        priority: (latest as any).priority || 'normal',
+        preparation_instructions: (latest as any).preparation_instructions || '',
+        confirmation_required: (latest as any).confirmation_required || false,
+        estimated_cost: (latest as any).estimated_cost || '',
+        insurance_covered: (latest as any).insurance_covered || false,
+        room_number: (latest as any).room_number || '',
+        equipment_needed: (latest as any).equipment_needed || '',
+        cancelled_reason: (latest as any).cancelled_reason || '',
+        auto_reminder_enabled: (latest as any).auto_reminder_enabled ?? false,
+        auto_reminder_offset_minutes: (latest as any).auto_reminder_offset_minutes ?? 360
+      } as any;
+      console.log('🟦 FormData al abrir edición (calculado):', {
+        id: formData.id,
+        appointment_date: formData.appointment_date,
+        auto_reminder_enabled: formData.auto_reminder_enabled,
+        auto_reminder_offset_minutes: formData.auto_reminder_offset_minutes
+      });
+      setAppointmentFormData(formData);
+      setFieldErrors({});
+      setFormErrorMessage('');
+      setAppointmentDialogOpen(true);
+    } catch (e) {
+      console.error('❌ Error loading latest appointment data:', e);
+      // Fallback to existing appointment object if request fails
+      setSelectedAppointment(appointment);
+      const formattedDateTime = formatDateTimeForInput(appointment.appointment_date || (appointment as any).date_time);
+      const formData = {
+        id: (appointment as any).id,
+        patient_id: appointment.patient_id,
+        doctor_id: appointment.doctor_id,
+        appointment_date: formattedDateTime,
+        appointment_type_id: appointment.appointment_type_id || 1,
+        appointment_type: (appointment.appointment_type_id || 1) === 1 ? 'primera vez' : 'seguimiento',
+        office_id: appointment.office_id,
+        consultation_type: (appointment as any).consultation_type,
+        reason: appointment.reason,
+        notes: appointment.notes || '',
+        status: appointment.status,
+        priority: appointment.priority || 'normal',
+        preparation_instructions: (appointment as any).preparation_instructions || '',
+        confirmation_required: (appointment as any).confirmation_required || false,
+        estimated_cost: (appointment as any).estimated_cost || '',
+        insurance_covered: (appointment as any).insurance_covered || false,
+        room_number: (appointment as any).room_number || '',
+        equipment_needed: (appointment as any).equipment_needed || '',
+        cancelled_reason: (appointment as any).cancelled_reason || '',
+        auto_reminder_enabled: (appointment as any).auto_reminder_enabled ?? false,
+        auto_reminder_offset_minutes: (appointment as any).auto_reminder_offset_minutes ?? 360
+      } as any;
+      console.log('🟨 Fallback FormData al abrir edición (sin backend):', {
+        id: formData.id,
+        appointment_date: formData.appointment_date,
+        auto_reminder_enabled: formData.auto_reminder_enabled,
+        auto_reminder_offset_minutes: formData.auto_reminder_offset_minutes
+      });
+      setAppointmentFormData(formData);
+      setAppointmentDialogOpen(true);
+    }
+  }, [apiService]);
 
   // Function to create appointment directly without using form state
   const createAppointmentDirect = useCallback(async (appointmentData: any) => {
@@ -390,7 +446,9 @@ export const useAppointmentManager = (
     // console.log('🔄 useAppointmentManager - formDataToUse:', formDataToUse);
 
     try {
-      if (isEditingAppointment && selectedAppointment) {
+      // Forzar modo edición si hay cita seleccionada, aunque el flag no esté seteado
+      const isEditFlow = !!(selectedAppointment && selectedAppointment.id);
+      if (isEditFlow) {
         // Update existing appointment - now using CDMX native
         // Parse appointment_date in new format
         const appointmentDate = new Date(formDataToUse.appointment_date);
@@ -398,7 +456,7 @@ export const useAppointmentManager = (
         const doctorDuration = user?.doctor?.appointment_duration || doctorProfile?.appointment_duration || 30;
         const endTime = new Date(appointmentDate.getTime() + doctorDuration * 60000);
 
-        // Send data in new format to backend
+        // Enviar fecha/hora en ISO (UTC) para que backend compute correctamente
         const updateData = {
           patient_id: formDataToUse.patient_id,
           appointment_date: appointmentDate.toISOString(),
@@ -415,10 +473,34 @@ export const useAppointmentManager = (
           room_number: formDataToUse.room_number || undefined,
           estimated_cost: formDataToUse.estimated_cost ? 
             parseFloat(formDataToUse.estimated_cost) : undefined,
-          insurance_covered: formDataToUse.insurance_covered || false
+          insurance_covered: formDataToUse.insurance_covered || false,
+          // WhatsApp auto reminder fields (enviar siempre lo que el usuario ve)
+          auto_reminder_enabled: !!formDataToUse.auto_reminder_enabled,
+          auto_reminder_offset_minutes: (formDataToUse.auto_reminder_offset_minutes ?? 360)
         };
         
-        const updatedAppointment = await apiService.updateAppointment(selectedAppointment.id, updateData);
+        console.log('🟧 Enviando actualización de cita:', {
+          id: selectedAppointment.id,
+          appointment_date_form_value: formDataToUse.appointment_date,
+          appointment_date_iso: appointmentDate.toISOString(),
+          auto_reminder_enabled: updateData.auto_reminder_enabled,
+          auto_reminder_offset_minutes: updateData.auto_reminder_offset_minutes
+        });
+        const updatedAppointment = await apiService.updateAppointment(String(selectedAppointment.id), updateData);
+        console.log('🟩 Respuesta backend actualización:', {
+          id: (updatedAppointment as any)?.id,
+          appointment_date: (updatedAppointment as any)?.appointment_date,
+          auto_reminder_enabled: (updatedAppointment as any)?.auto_reminder_enabled,
+          auto_reminder_offset_minutes: (updatedAppointment as any)?.auto_reminder_offset_minutes
+        });
+
+        // Mover la vista al día de la cita editada antes de refrescar
+        try {
+          const moveDate = new Date(formDataToUse.appointment_date);
+          if (!isNaN(moveDate.getTime())) {
+            setSelectedDate(moveDate);
+          }
+        } catch {}
         
         // Transform the updated appointment response to match frontend format
         const transformedAppointment = {
@@ -465,7 +547,11 @@ export const useAppointmentManager = (
                 const dateToRefresh = new Date(selectedDate);
                 
                 if (agendaView === 'daily') {
-                  const dateStr = dateToRefresh.toISOString().split('T')[0];
+                  const y = dateToRefresh.getFullYear();
+                  const m = String(dateToRefresh.getMonth() + 1).padStart(2, '0');
+                  const d = String(dateToRefresh.getDate()).padStart(2, '0');
+                  const dateStr = `${y}-${m}-${d}`;
+                  console.log('🔄 Refrescando agenda diaria para:', dateStr);
                   refreshData = await apiService.getDailyAgenda(dateStr);
                 } else if (agendaView === 'weekly') {
                   const start = new Date(dateToRefresh);
@@ -478,6 +564,7 @@ export const useAppointmentManager = (
 
                   const startStr = start.toISOString().split('T')[0];
                   const endStr = end.toISOString().split('T')[0];
+                  console.log('🔄 Refrescando agenda semanal:', { startStr, endStr });
                   refreshData = await apiService.getWeeklyAgenda(startStr, endStr);
                 } else if (agendaView === 'monthly') {
                   const start = new Date(dateToRefresh.getFullYear(), dateToRefresh.getMonth(), 1);
@@ -485,10 +572,28 @@ export const useAppointmentManager = (
                   
                   const startStr = start.toISOString().split('T')[0];
                   const endStr = end.toISOString().split('T')[0];
+                  console.log('🔄 Refrescando agenda mensual:', { startStr, endStr });
                   refreshData = await apiService.getMonthlyAgenda(startStr, endStr);
                 }
                 
-                setAppointments(refreshData);
+                // Si la cita cambió de día, navegar a ese día
+                try {
+                  const newDateISO = (updatedAppointment as any).appointment_date || (updatedAppointment as any).date_time;
+                  if (newDateISO) {
+                    const newDate = new Date(newDateISO);
+                    if (!isNaN(newDate.getTime())) {
+                      const oldDay = new Date(selectedDate);
+                      if (newDate.toDateString() !== oldDay.toDateString()) {
+                        console.log('📅 Cambiando a nuevo día de la cita:', newDate.toDateString());
+                        setSelectedDate(newDate);
+                      }
+                    }
+                  }
+                } catch {}
+
+                // Reemplazar lista siempre para reflejar cambios
+                console.log('📋 Citas refrescadas:', Array.isArray(refreshData) ? refreshData.length : 'N/A');
+                setAppointments(refreshData || []);
               } catch (error) {
                 console.error('❌ Error refreshing appointments:', error);
               }
@@ -546,7 +651,7 @@ export const useAppointmentManager = (
       setAppointmentDialogOpen(false);
       
       // Refresh appointments after creating new appointment
-      if (!isEditingAppointment) {
+      if (!isEditFlow) {
         // console.log('🔄 New appointment created, refreshing data...');
         
         // Refresh appointments after successful creation
@@ -692,7 +797,7 @@ export const useAppointmentManager = (
       }, 100);
     } catch (error) {
       console.error('❌ Error refreshing appointments:', error);
-      setAppointments([]);
+      // No limpiar la vista si falla el refresco
     }
   }, [selectedDate, agendaView]);
 
@@ -700,6 +805,15 @@ export const useAppointmentManager = (
 
   // Auto-refresh disabled to prevent infinite loops
   // TODO: Re-enable auto-refresh with proper dependency management
+
+  // Refrescar al cerrar el diálogo para asegurar que la vista del día muestre la info actual
+  useEffect(() => {
+    if (!appointmentDialogOpen) {
+      setTimeout(() => {
+        refreshAppointments().catch(() => {});
+      }, 200);
+    }
+  }, [appointmentDialogOpen, refreshAppointments]);
 
   return {
     // State

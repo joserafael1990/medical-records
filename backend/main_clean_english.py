@@ -212,37 +212,11 @@ app = FastAPI(
 # ============================================================================
 # BACKGROUND SCHEDULER: Auto WhatsApp Appointment Reminders
 # ============================================================================
-import asyncio
-from database import SessionLocal, Appointment
-from appointment_service import AppointmentService
-
-async def _auto_reminder_loop():
-    """Background loop that sends due WhatsApp reminders every 60 seconds."""
-    await asyncio.sleep(5)
-    while True:
-        try:
-            db = SessionLocal()
-            # Fetch candidate appointments (quick filter by flags)
-            candidates = db.query(Appointment).filter(
-                Appointment.auto_reminder_enabled == True,
-                Appointment.auto_reminder_sent_at.is_(None),
-                Appointment.status != 'cancelled'
-            ).all()
-            for apt in candidates:
-                if AppointmentService.should_send_reminder(apt):
-                    success = AppointmentService.send_appointment_reminder(db, apt.id)
-                    if success:
-                        print(f"✅ Auto reminder sent for appointment {apt.id}")
-                    else:
-                        print(f"⚠️ Auto reminder failed for appointment {apt.id}")
-            db.close()
-        except Exception as e:
-            print(f"⚠️ Auto reminder loop error: {e}")
-        await asyncio.sleep(60)
+from services.scheduler import start_auto_reminder_scheduler
 
 @app.on_event("startup")
 async def start_background_tasks():
-    asyncio.create_task(_auto_reminder_loop())
+    start_auto_reminder_scheduler(app)
 
 # CORS - Enhanced configuration for development
 app.add_middleware(
@@ -1685,178 +1659,8 @@ async def get_clinical_study_file(
 # WHATSAPP NOTIFICATIONS
 # ============================================================================
 
-@app.post("/api/whatsapp/appointment-reminder/{appointment_id}")
-async def send_whatsapp_appointment_reminder(
-    appointment_id: int,
-    db: Session = Depends(get_db),
-    current_user: Person = Depends(get_current_user)
-):
-    """Enviar recordatorio de cita por WhatsApp"""
-    print(f"📱 Sending WhatsApp reminder for appointment: {appointment_id}")
-    
-    try:
-        # Get appointment (temporarily without doctor filter for testing)
-        appointment = db.query(Appointment).filter(
-            Appointment.id == appointment_id
-        ).first()
-        
-        if not appointment:
-            raise HTTPException(status_code=404, detail="Appointment not found")
-        
-        # Get patient
-        patient = db.query(Person).filter(Person.id == appointment.patient_id).first()
-        
-        if not patient or not patient.primary_phone:
-            raise HTTPException(status_code=400, detail="Patient phone number not found")
-        
-        # Get doctor information
-        doctor = db.query(Person).filter(Person.id == appointment.doctor_id).first()
-        if doctor:
-            doctor_title = doctor.title or "Dr"  # Use doctor's title or default to "Dr"
-            doctor_full_name = f"{doctor.first_name} {doctor.paternal_surname}"
-            if doctor.maternal_surname:
-                doctor_full_name += f" {doctor.maternal_surname}"
-        else:
-            doctor_title = "Dr"
-            doctor_full_name = "Dr. Test"
-        
-        # Get patient full name
-        patient_full_name = f"{patient.first_name} {patient.paternal_surname}"
-        if patient.maternal_surname:
-            patient_full_name += f" {patient.maternal_surname}"
-        
-        # Format appointment date and time separately
-        # Ejemplo fecha: "25 de Enero de 2024"
-        # Ejemplo hora: "10:30 AM"
-        import locale
-        from datetime import datetime
-        import pytz
-        
-        try:
-            locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
-        except:
-            try:
-                locale.setlocale(locale.LC_TIME, 'es_MX.UTF-8')
-            except:
-                pass  # Use default locale if Spanish not available
-        
-        # Convert UTC time to Mexico City timezone
-        utc_tz = pytz.UTC
-        mexico_tz = pytz.timezone('America/Mexico_City')
-        
-        # Convert appointment date from UTC to Mexico timezone
-        if appointment.appointment_date.tzinfo is None:
-            # If naive datetime, assume it's UTC
-            appointment_utc = utc_tz.localize(appointment.appointment_date)
-        else:
-            # If already timezone aware, convert to UTC first
-            appointment_utc = appointment.appointment_date.astimezone(utc_tz)
-        
-        # Convert to Mexico timezone
-        appointment_mexico = appointment_utc.astimezone(mexico_tz)
-        
-        # Format in Mexico timezone
-        appointment_date = appointment_mexico.strftime('%d de %B de %Y')
-        appointment_time = appointment_mexico.strftime('%I:%M %p')
-        
-        
-        # Get office information and appointment type
-        office_address = "Consultorio Médico"  # Default
-        country_code = '52'  # Default: México
-        appointment_type = "presencial"  # Default
-        
-        # Get office information from appointment
-        maps_url = None
-        if appointment.office_id:
-            from database import Office
-            office = db.query(Office).filter(Office.id == appointment.office_id).first()
-            if office:
-                # Check if it's a virtual office
-                if office.is_virtual and office.virtual_url:
-                    office_address = office.virtual_url
-                    maps_url = office.virtual_url
-                else:
-                    # For physical offices, only use name and address (no city, state, country)
-                    office_address = f"{office.name} - {office.address or 'No especificado'}"
-                    maps_url = getattr(office, 'maps_url', None)
-                # Get country code from office
-                if office.country_id:
-                    office_country = db.query(Country).filter(Country.id == office.country_id).first()
-                    if office_country and office_country.phone_code:
-                        country_code = office_country.phone_code.replace('+', '')  # Remove + if present
-                    else:
-                        print(f"🌍 No phone code found for country, using default: {country_code}")
-                else:
-                    print(f"🌍 No country_id in office, using default: {country_code}")
-            else:
-                print(f"🌍 Office not found, using default: {country_code}")
-        else:
-            print(f"🌍 No office_id in appointment, using default: {country_code}")
-        
-        # Get appointment type
-        if appointment.appointment_type_rel:
-            appointment_type = "online" if appointment.appointment_type_rel.name == "En línea" else "presencial"
-        
-        print(f"📞 Using country code: +{country_code} for WhatsApp")
-        print(f"📞 Patient phone before formatting: {patient.primary_phone}")
-        
-        # Send WhatsApp
-        whatsapp = get_whatsapp_service()
-        result = whatsapp.send_appointment_reminder(
-            patient_phone=patient.primary_phone,
-            patient_full_name=patient_full_name,
-            appointment_date=appointment_date,
-            appointment_time=appointment_time,
-            doctor_title=doctor_title,
-            doctor_full_name=doctor_full_name,
-            office_address=office_address,
-            country_code=country_code,
-            appointment_type=appointment_type,
-            maps_url=(office.maps_url if 'office' in locals() and getattr(office, 'maps_url', None) else None)
-        )
-        
-        if result['success']:
-            print(f"✅ WhatsApp sent successfully to {patient.primary_phone}")
-            return {
-                "message": "WhatsApp reminder sent successfully",
-                "message_id": result.get('message_id'),
-                "phone": patient.primary_phone
-            }
-        else:
-            error_msg = result.get('error', 'Unknown error')
-            print(f"❌ Failed to send WhatsApp: {error_msg}")
-            
-            # Check for specific WhatsApp errors
-            if ('more than 24 hours' in str(error_msg).lower() or 
-                '24 hours have passed' in str(error_msg).lower() or
-                're-engagement message' in str(error_msg).lower()):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Message failed to send because more than 24 hours have passed since the customer last replied to this number."
-                )
-            elif ('401' in str(error_msg) or 'Unauthorized' in str(error_msg) or 
-                'credentials invalid' in str(error_msg).lower() or 
-                'credentials expired' in str(error_msg).lower()):
-                raise HTTPException(
-                    status_code=503,
-                    detail="WhatsApp service not configured. Please contact administrator to set up WhatsApp credentials."
-                )
-            elif 'not configured' in str(error_msg).lower():
-                raise HTTPException(
-                    status_code=503,
-                    detail="WhatsApp service not configured. Please contact administrator to set up WhatsApp credentials."
-                )
-            else:
-                raise HTTPException(
-                    status_code=500, 
-                    detail=f"Failed to send WhatsApp: {error_msg}"
-                )
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"❌ Error sending WhatsApp reminder: {e}")
-        raise HTTPException(status_code=500, detail=f"Error sending WhatsApp: {str(e)}")
+from routes.whatsapp import router as whatsapp_router
+app.include_router(whatsapp_router)
 
 @app.get("/api/whatsapp/webhook")
 async def whatsapp_webhook_verify(request: Request):
@@ -4275,6 +4079,10 @@ async def get_appointments(
                 "room_number": appointment.room_number,
                 "estimated_cost": str(getattr(appointment, 'estimated_cost', None)) if getattr(appointment, 'estimated_cost', None) else None,
                 "insurance_covered": getattr(appointment, 'insurance_covered', None),
+                # Auto reminder fields
+                "auto_reminder_enabled": getattr(appointment, 'auto_reminder_enabled', None),
+                "auto_reminder_offset_minutes": getattr(appointment, 'auto_reminder_offset_minutes', None),
+                "auto_reminder_sent_at": appointment.auto_reminder_sent_at.isoformat() if getattr(appointment, 'auto_reminder_sent_at', None) else None,
                 "cancelled_reason": appointment.cancelled_reason,
                 "cancelled_at": appointment.cancelled_at.isoformat() if appointment.cancelled_at else None,
                 "created_at": appointment.created_at.isoformat(),
@@ -4394,6 +4202,10 @@ async def get_calendar_appointments(
                 "status": appointment.status,
                 "priority": appointment.priority,
                 "room_number": appointment.room_number,
+                # Auto reminder fields included for FE editing
+                "auto_reminder_enabled": getattr(appointment, 'auto_reminder_enabled', None),
+                "auto_reminder_offset_minutes": getattr(appointment, 'auto_reminder_offset_minutes', None),
+                "auto_reminder_sent_at": appointment.auto_reminder_sent_at.isoformat() if getattr(appointment, 'auto_reminder_sent_at', None) else None,
                 "patient": appointment.patient,
                 "office": appointment.office
             }
@@ -4441,6 +4253,7 @@ async def get_appointment(
             "end_time": end_time_str,
             "appointment_type_id": appointment.appointment_type_id,
             "appointment_type_name": appointment.appointment_type_rel.name if appointment.appointment_type_rel else None,
+            "consultation_type": appointment.consultation_type,
             "office_id": appointment.office_id,
             "office_name": appointment.office.name if appointment.office else None,
             "reason": appointment.reason,
@@ -4452,8 +4265,11 @@ async def get_appointment(
             "insurance_covered": getattr(appointment, 'insurance_covered', None),
             "follow_up_required": appointment.follow_up_required,
             "follow_up_date": appointment.follow_up_date.isoformat() if appointment.follow_up_date else None,
-            "preparation_instructions": appointment.preparation_instructions,
-            "confirmation_required": appointment.confirmation_required,
+            # Campos opcionales (sin preparation_instructions; columna eliminada)
+            "auto_reminder_enabled": getattr(appointment, 'auto_reminder_enabled', None),
+            "auto_reminder_offset_minutes": getattr(appointment, 'auto_reminder_offset_minutes', None),
+            "auto_reminder_sent_at": appointment.auto_reminder_sent_at.isoformat() if getattr(appointment, 'auto_reminder_sent_at', None) else None,
+            # confirmation_required fue eliminado del modelo
             "confirmed_at": appointment.confirmed_at.isoformat() if appointment.confirmed_at else None,
             "cancelled_reason": appointment.cancelled_reason,
             "cancelled_at": appointment.cancelled_at.isoformat() if appointment.cancelled_at else None,
@@ -4507,8 +4323,34 @@ async def update_appointment(
         if not appointment:
             raise HTTPException(status_code=404, detail="Appointment not found or access denied")
         
-        # Update the appointment using CRUD
-        updated_appointment = crud.update_appointment(db, appointment_id, appointment_data)
+        # Normalize incoming datetimes to CDMX naive to avoid timezone shifts
+        from datetime import datetime
+        import pytz
+
+        def to_cdmx_naive(value):
+            if not value:
+                return None
+            if isinstance(value, str):
+                try:
+                    dt = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                except Exception:
+                    dt = datetime.fromisoformat(value)
+            else:
+                dt = value
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=pytz.UTC)
+            cdmx_tz = pytz.timezone('America/Mexico_City')
+            local_dt = dt.astimezone(cdmx_tz)
+            return local_dt.replace(tzinfo=None)
+
+        data_dict = appointment_data.dict()
+        if data_dict.get('appointment_date'):
+            data_dict['appointment_date'] = to_cdmx_naive(data_dict['appointment_date'])
+        if data_dict.get('end_time'):
+            data_dict['end_time'] = to_cdmx_naive(data_dict['end_time'])
+
+        # Update the appointment using CRUD (with normalized datetimes) pasando dict para evitar revalidación
+        updated_appointment = crud.update_appointment(db, appointment_id, data_dict)
         
         # Reload the appointment with relationships for the response
         updated_appointment_with_relations = db.query(Appointment).options(

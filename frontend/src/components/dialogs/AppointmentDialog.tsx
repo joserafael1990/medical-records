@@ -112,6 +112,12 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
   doctorProfile
 }) => {
   const { showSuccess, showError } = useToast();
+  // Infer edit mode defensively in case parent doesn't pass isEditing correctly
+  const computedIsEditing = isEditing || Boolean((formData as any)?.id) || Boolean(formData?.patient_id && formData?.appointment_date);
+  // Debug props
+  console.log('[AppointmentDialog] props isEditing:', isEditing, 'computedIsEditing:', computedIsEditing,
+    'auto_reminder_enabled:', (formData as any)?.auto_reminder_enabled,
+    'auto_reminder_offset_minutes:', (formData as any)?.auto_reminder_offset_minutes);
   
   // State for available time slots
   const [availableTimes, setAvailableTimes] = useState<any[]>([]);
@@ -408,7 +414,10 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
         status: formData.status || 'confirmed',
         // If no patients exist, automatically set appointment type to primera vez
         // Normalize appointment_type to lowercase to match select options
-        appointment_type: formData.appointment_type ? formData.appointment_type.toLowerCase() : (patients.length === 0 ? 'primera vez' : '')
+        appointment_type: formData.appointment_type ? formData.appointment_type.toLowerCase() : (patients.length === 0 ? 'primera vez' : ''),
+        // Ensure auto reminder fields are initialized from formData or sensible defaults
+        auto_reminder_enabled: (formData as any)?.auto_reminder_enabled ?? false,
+        auto_reminder_offset_minutes: (formData as any)?.auto_reminder_offset_minutes ?? 360
       };
       
       console.log('  - Final appointment_type:', updatedFormData.appointment_type);
@@ -556,7 +565,8 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     
 
     // Handle "Primera vez" (first visit) - create patient inline if no patient selected
-    if (localFormData.appointment_type === 'primera vez' && !localFormData.patient_id) {
+    // Never execute this path when editing an existing appointment
+    if (!computedIsEditing && localFormData.appointment_type === 'primera vez' && !localFormData.patient_id) {
       try {
         // Create patient first - map to PatientFormData interface
         const patientData: PatientFormData = {
@@ -618,11 +628,18 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
         // Call onSubmit directly with the final form data
         await onSubmit(finalFormData);
         
-        // Show success notification
-        showSuccess(
-          'Cita creada exitosamente',
-          '¡Operación completada!'
-        );
+        // Show success notification (use computed edit mode)
+        if (computedIsEditing) {
+          showSuccess(
+            'Cita actualizada exitosamente',
+            '¡Edición completada!'
+          );
+        } else {
+          showSuccess(
+            'Cita creada exitosamente',
+            '¡Operación completada!'
+          );
+        }
         
         // Close dialog after a brief delay
         setTimeout(() => {
@@ -647,8 +664,8 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
       try {
         await onSubmit(finalFormData);
         
-        // Show success notification
-        if (isEditing) {
+        // Show success notification (use computed edit mode)
+        if (computedIsEditing) {
           showSuccess(
             'Cita actualizada exitosamente',
             '¡Edición completada!'
@@ -712,7 +729,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <ScheduleIcon color="primary" />
           <Typography variant="h6" component="span">
-            {isEditing ? 'Editar Cita' : 'Nueva Cita'}
+            {computedIsEditing ? 'Editar Cita' : 'Nueva Cita'}
           </Typography>
         </Box>
         <IconButton onClick={handleClose} size="small">

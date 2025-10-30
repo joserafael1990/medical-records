@@ -280,49 +280,49 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 3 }}>
           {/* Personal Information */}
           <Card sx={{ height: 'fit-content' }}>
-            <CardContent>
+          <CardContent>
               <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <PersonIcon color="primary" />
                 Información Personal
-              </Typography>
-              <List dense>
-                <ListItem sx={{ px: 0 }}>
-                  <ListItemIcon>
+                </Typography>
+                    <List dense>
+                            <ListItem sx={{ px: 0 }}>
+                              <ListItemIcon>
                     <PersonIcon color="action" />
-                  </ListItemIcon>
-                  <ListItemText 
+                              </ListItemIcon>
+                              <ListItemText 
                     primary="Nombre Completo" 
                     secondary={doctorProfile.full_name || `${doctorProfile.title || ''} ${doctorProfile.first_name} ${doctorProfile.paternal_surname}`.trim()} 
-                  />
-                </ListItem>
-                <ListItem sx={{ px: 0 }}>
-                  <ListItemIcon>
+                            />
+                          </ListItem>
+                          <ListItem sx={{ px: 0 }}>
+                            <ListItemIcon>
                     <EmailIcon color="action" />
-                  </ListItemIcon>
-                  <ListItemText 
+                            </ListItemIcon>
+                            <ListItemText 
                     primary="Email" 
                     secondary={doctorProfile.email || "No especificado"} 
-                  />
-                </ListItem>
-                <ListItem sx={{ px: 0 }}>
-                  <ListItemIcon>
-                    <PhoneIcon color="action" />
-                  </ListItemIcon>
-                  <ListItemText 
-                    primary="Teléfono" 
+                            />
+                          </ListItem>
+                          <ListItem sx={{ px: 0 }}>
+                            <ListItemIcon>
+                              <PhoneIcon color="action" />
+                            </ListItemIcon>
+                            <ListItemText 
+                              primary="Teléfono" 
                     secondary={doctorProfile.primary_phone || doctorProfile.phone || "No especificado"} 
-                  />
-                </ListItem>
-                <ListItem sx={{ px: 0 }}>
-                  <ListItemIcon>
+                            />
+                          </ListItem>
+                            <ListItem sx={{ px: 0 }}>
+                              <ListItemIcon>
                     <BadgeIcon color="action" />
-                  </ListItemIcon>
-                  <ListItemText 
+                              </ListItemIcon>
+                              <ListItemText 
                     primary="CURP" 
                     secondary={doctorProfile.curp || "No especificada"} 
-                  />
-                </ListItem>
-              </List>
+                        />
+                      </ListItem>
+                    </List>
             </CardContent>
           </Card>
 
@@ -333,44 +333,44 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                 <WorkIcon color="primary" />
                 Información Profesional
               </Typography>
-              <List dense>
-                <ListItem sx={{ px: 0 }}>
-                  <ListItemIcon>
+                    <List dense>
+                            <ListItem sx={{ px: 0 }}>
+                              <ListItemIcon>
                     <WorkIcon color="action" />
-                  </ListItemIcon>
-                  <ListItemText 
+                              </ListItemIcon>
+                              <ListItemText 
                     primary="Título Profesional" 
                     secondary={doctorProfile.title || "No especificado"} 
-                  />
-                </ListItem>
-                <ListItem sx={{ px: 0 }}>
-                  <ListItemIcon>
+                              />
+                            </ListItem>
+                          <ListItem sx={{ px: 0 }}>
+                            <ListItemIcon>
                     <SchoolIcon color="action" />
-                  </ListItemIcon>
-                  <ListItemText 
+                            </ListItemIcon>
+                            <ListItemText 
                     primary="Especialidad" 
                     secondary={doctorProfile.specialty_name || "No especificada"} 
-                  />
-                </ListItem>
-                <ListItem sx={{ px: 0 }}>
-                  <ListItemIcon>
+                            />
+                          </ListItem>
+                          <ListItem sx={{ px: 0 }}>
+                            <ListItemIcon>
                     <BadgeIcon color="action" />
-                  </ListItemIcon>
-                  <ListItemText 
+                            </ListItemIcon>
+                            <ListItemText 
                     primary="Cédula Profesional" 
                     secondary={doctorProfile.professional_license || "No especificada"} 
-                  />
-                </ListItem>
-                <ListItem sx={{ px: 0 }}>
-                  <ListItemIcon>
+                            />
+                          </ListItem>
+                          <ListItem sx={{ px: 0 }}>
+                            <ListItemIcon>
                     <HospitalIcon color="action" />
-                  </ListItemIcon>
-                  <ListItemText 
+                            </ListItemIcon>
+                            <ListItemText 
                     primary="Institución" 
                     secondary={doctorProfile.university || doctorProfile.institution || "No especificada"} 
-                  />
-                </ListItem>
-              </List>
+                        />
+                      </ListItem>
+                    </List>
             </CardContent>
           </Card>
         </Box>

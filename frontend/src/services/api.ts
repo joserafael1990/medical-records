@@ -1011,6 +1011,11 @@ class ApiService {
     return response.data;
   }
 
+  async getAppointment(id: string): Promise<Appointment> {
+    const response = await this.api.get<Appointment>(`/api/appointments/${id}`);
+    return response.data as unknown as Appointment;
+  }
+
   async updateAppointmentStatus(id: string, status: string): Promise<Appointment> {
     const response = await this.api.put<Appointment>(`${API_CONFIG.ENDPOINTS.APPOINTMENTS}/${id}`, { status });
     return response.data;

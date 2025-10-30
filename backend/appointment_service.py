@@ -12,6 +12,7 @@ import os
 os.environ['TZ'] = 'America/Mexico_City'
 
 from database import Appointment, Person
+from services.office_helpers import build_office_address, resolve_maps_url, resolve_country_code
 
 # Global CDMX Timezone configuration 
 SYSTEM_TIMEZONE = pytz.timezone('America/Mexico_City')
@@ -377,20 +378,12 @@ class AppointmentService:
 
         service = WhatsAppService()
         try:
-            # Preparar dirección y URL según si es consultorio virtual o físico
-            office_address = (apt.office.address if apt.office else "mi consultorio en linea - No especificado")
-            maps_url = None
-            if apt.office:
-                try:
-                    if getattr(apt.office, 'is_virtual', False) and getattr(apt.office, 'virtual_url', None):
-                        # Para virtual: usar la URL del consultorio como dirección y como maps_url
-                        office_address = apt.office.virtual_url
-                        maps_url = apt.office.virtual_url
-                        appointment_type = "online"
-                    else:
-                        maps_url = getattr(apt.office, 'maps_url', None)
-                except Exception:
-                    maps_url = getattr(apt.office, 'maps_url', None)
+            # Preparar dirección y URL usando helpers
+            office_address_val = build_office_address(apt.office) if getattr(apt, 'office', None) else "mi consultorio en linea - No especificado"
+            maps_url_val = resolve_maps_url(apt.office, office_address_val) if getattr(apt, 'office', None) else None
+            country_code_val = resolve_country_code(apt.office) if getattr(apt, 'office', None) else '52'
+            if getattr(apt, 'office', None) and getattr(apt.office, 'is_virtual', False) and getattr(apt.office, 'virtual_url', None):
+                appointment_type = "online"
 
             resp = service.send_appointment_reminder(
                 patient_phone=apt.patient.primary_phone if apt.patient else None,
@@ -399,10 +392,10 @@ class AppointmentService:
                 appointment_time=appointment_time,
                 doctor_title=(apt.doctor.title if apt.doctor else "Dr."),
                 doctor_full_name=(apt.doctor.full_name if apt.doctor else "Médico"),
-                office_address=office_address,
-                country_code=(apt.office.country.phone_code[1:] if apt.office and apt.office.country and apt.office.country.phone_code else '52'),
+                office_address=office_address_val,
+                country_code=country_code_val,
                 appointment_type=appointment_type,
-                maps_url=maps_url
+                maps_url=maps_url_val
             )
             if resp and resp.get('messages'):
                 AppointmentService.mark_reminder_sent(db, appointment_id)

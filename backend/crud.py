@@ -446,13 +446,19 @@ def get_appointments_by_doctor(db: Session, doctor_id: int, date_from: Optional[
     
     return query.order_by(Appointment.appointment_date).all()
 
-def update_appointment(db: Session, appointment_id: int, appointment_data: schemas.AppointmentUpdate) -> Appointment:
-    """Update appointment with CDMX timezone support"""
+def update_appointment(db: Session, appointment_id: int, appointment_data) -> Appointment:
+    """Update appointment with CDMX timezone support
+    appointment_data puede ser schemas.AppointmentUpdate o dict.
+    """
     appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
     
-    update_data = appointment_data.dict(exclude_unset=True)
+    # Permitir dict directo o modelo pydantic
+    if isinstance(appointment_data, dict):
+        update_data = {k: v for k, v in appointment_data.items() if v is not None}
+    else:
+        update_data = appointment_data.dict(exclude_unset=True)
     
     print(f"🔄 CRUD update_appointment - ID: {appointment_id}")
     print(f"📝 Original appointment_date: {appointment.appointment_date}")

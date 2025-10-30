@@ -37,8 +37,7 @@ export const getSelectMenuProps = (options?: {
       horizontal: 'left' as const,
     },
     disableScrollLock: false, // Allow scroll lock for better positioning
-    disablePortal: true, // Disable portal to prevent positioning issues
-    getContentAnchorEl: null, // Prevent anchor issues
+    disablePortal: true // Disable portal to prevent positioning issues
   };
 };
 

@@ -262,6 +262,8 @@ class DoctorUpdate(BaseSchema):
 # Medical data for patients
 class PatientCreate(PersonBase):
     person_type: Literal['patient'] = 'patient'
+    # En creación de paciente (cita de primera vez), género no es obligatorio
+    gender: Optional[str] = None
     
     # Medical data
     insurance_provider: Optional[str] = None
