@@ -340,8 +340,10 @@ class AppointmentService:
                 appointment.appointment_date,
                 getattr(appointment, 'auto_reminder_offset_minutes', 360)
             )
+            # Estrictamente en la hora programada (tolerancia breve para el loop)
             now = now_cdmx().replace(tzinfo=None)
-            return send_time <= now <= appointment.end_time
+            window_end = send_time + timedelta(minutes=2)
+            return send_time <= now <= window_end
         except Exception:
             return False
 

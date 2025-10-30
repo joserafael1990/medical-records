@@ -4,6 +4,7 @@ import locale
 import pytz
 
 from database import Appointment, Person, Country, get_db
+import os
 from auth import get_user_from_token
 from whatsapp_service import get_whatsapp_service
 from services.office_helpers import build_office_address, resolve_maps_url, resolve_country_code
@@ -119,6 +120,15 @@ async def send_whatsapp_appointment_reminder(
 
         # Send WhatsApp
         whatsapp = get_whatsapp_service()
+        # Debug seguro: presencia de variables de entorno (sin exponer valores)
+        try:
+            token_present = bool(os.getenv('META_WHATSAPP_TOKEN'))
+            print(f"🔧 META_WHATSAPP_TOKEN present: {token_present}")
+            print(f"🔧 META_WHATSAPP_PHONE_ID: {os.getenv('META_WHATSAPP_PHONE_ID')}")
+            print(f"🔧 META_WHATSAPP_BUSINESS_ID: {os.getenv('META_WHATSAPP_BUSINESS_ID')}")
+            print(f"🔧 META_WHATSAPP_API_VERSION: {os.getenv('META_WHATSAPP_API_VERSION')}")
+        except Exception:
+            pass
         result = whatsapp.send_appointment_reminder(
             patient_phone=patient.primary_phone,
             patient_full_name=patient_full_name,
@@ -153,10 +163,15 @@ async def send_whatsapp_appointment_reminder(
                 )
             elif ('401' in str(error_msg) or 'Unauthorized' in str(error_msg) or 
                 'credentials invalid' in str(error_msg).lower() or 
-                'credentials expired' in str(error_msg).lower()):
+                'credentials expired' in str(error_msg).lower() or 'access token' in str(error_msg).lower() or 'oauth' in str(error_msg).lower()):
                 raise HTTPException(
                     status_code=503,
-                    detail="WhatsApp service not configured. Please contact administrator to set up WhatsApp credentials."
+                    detail="WhatsApp credentials invalid or expired. Update META_WHATSAPP_TOKEN and restart."
+                )
+            elif ('template' in str(error_msg).lower() and ('not exist' in str(error_msg).lower() or 'does not exist' in str(error_msg).lower())):
+                raise HTTPException(
+                    status_code=400,
+                    detail="WhatsApp template not approved or missing in 'es'. Approve 'appointment_reminder' in Spanish."
                 )
             elif 'not configured' in str(error_msg).lower():
                 raise HTTPException(
