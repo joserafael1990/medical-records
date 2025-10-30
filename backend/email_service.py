@@ -168,10 +168,12 @@ class EmailService:
                     <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta.</p>
                     <p>Haz clic en el siguiente botón para crear una nueva contraseña:</p>
                     <p style="text-align: center;">
-                        <a href="{reset_link}" class="button">Restablecer Contraseña</a>
+                        <a href="{reset_link}" class="button" style="color: white !important; text-decoration: none !important;">Restablecer Contraseña</a>
                     </p>
-                    <p>O copia y pega el siguiente enlace en tu navegador:</p>
-                    <p style="word-break: break-all; color: #1976d2;">{reset_link}</p>
+                    <p>O haz clic en el siguiente enlace:</p>
+                    <p style="word-break: break-all; margin: 10px 0;">
+                        <a href="{reset_link}" style="color: #1976d2; text-decoration: underline;">{reset_link}</a>
+                    </p>
                     <p class="warning">⏱️ Este enlace expirará en 1 hora por seguridad.</p>
                     <p>Si no solicitaste este cambio, puedes ignorar este correo. Tu contraseña no será modificada.</p>
                 </div>

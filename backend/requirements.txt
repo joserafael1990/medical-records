@@ -34,3 +34,4 @@ pytest-asyncio==0.21.1
 
 # Desarrollo
 python-dotenv==1.0.0
+twilio==8.11.0

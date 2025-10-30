@@ -17,10 +17,17 @@ services:
       start_period: 40s
     environment:
       - MEDICAL_ENCRYPTION_KEY=17TAemFFyvzzOSCNdm9fISoQjiWzlWAgVJslIOYaGpU=
-      - META_WHATSAPP_PHONE_ID=883218048200840
-      - META_WHATSAPP_TOKEN=EAAWQZA7pGNZAIBP4D2xUmzUuYIyrMBiBepZA8jMGVjfWWV7KZAoZAeQs8LtgKd59ozoKLI9ZBdepBcr8fYyQoFNogs52MK9bqFjdsZCLY5o9PlWf3QRWMmJXj2ABqLW8gU9R4y0VC3SvsNoiUz6ZBQOhdqGuZCKyPiBgYLJBsgZANPZCbFS0XHJyukiDJDZArCxLvqNaBBaskS2AYEoMnq1E6fUq7OJ1mcZBx5oyaMiJlUkZAYnz4YpH9y72lrstO81hHTx82P0JPp9H5ZAIT2LB1sHqNQkwvpfvSquuKYZD
-      - META_WHATSAPP_BUSINESS_ID=1356461769229365
-      - META_WHATSAPP_API_VERSION=v24.0
+      - WHATSAPP_PROVIDER=twilio
+      # Twilio credentials - MUST be set via environment variables or .env file
+      # DO NOT hardcode credentials in this file
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - TWILIO_WHATSAPP_FROM=${TWILIO_WHATSAPP_FROM}
+      # Content SIDs de templates aprobados en Twilio (opcional)
+      - TWILIO_CONTENT_SID_APPOINTMENT_REMINDER=${TWILIO_CONTENT_SID_APPOINTMENT_REMINDER:-}
+      - TWILIO_CONTENT_SID_PRIVACY_NOTICE=${TWILIO_CONTENT_SID_PRIVACY_NOTICE:-}
+
+      
     # env_file: ./backend/.env  # Uncomment if .env file exists
     volumes:
       # Mount backend source code for hot reload (exclude venv)

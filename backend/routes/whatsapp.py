@@ -120,13 +120,13 @@ async def send_whatsapp_appointment_reminder(
 
         # Send WhatsApp
         whatsapp = get_whatsapp_service()
-        # Debug seguro: presencia de variables de entorno (sin exponer valores)
+        # Debug proveedor actual
         try:
-            token_present = bool(os.getenv('META_WHATSAPP_TOKEN'))
-            print(f"🔧 META_WHATSAPP_TOKEN present: {token_present}")
-            print(f"🔧 META_WHATSAPP_PHONE_ID: {os.getenv('META_WHATSAPP_PHONE_ID')}")
-            print(f"🔧 META_WHATSAPP_BUSINESS_ID: {os.getenv('META_WHATSAPP_BUSINESS_ID')}")
-            print(f"🔧 META_WHATSAPP_API_VERSION: {os.getenv('META_WHATSAPP_API_VERSION')}")
+            provider = (os.getenv('WHATSAPP_PROVIDER') or 'auto').lower()
+            print(f"🔌 WhatsApp provider: {provider}")
+            # Señales de configuración Twilio
+            print(f"🔧 TWILIO_ACCOUNT_SID present: {bool(os.getenv('TWILIO_ACCOUNT_SID'))}")
+            print(f"🔧 TWILIO_WHATSAPP_FROM: {os.getenv('TWILIO_WHATSAPP_FROM')}")
         except Exception:
             pass
         result = whatsapp.send_appointment_reminder(
@@ -146,37 +146,35 @@ async def send_whatsapp_appointment_reminder(
             print(f"✅ WhatsApp sent successfully to {patient.primary_phone}")
             return {
                 "message": "WhatsApp reminder sent successfully",
-                "message_id": result.get('message_id'),
+                "message_id": result.get('message_id') or result.get('message_sid'),
                 "phone": patient.primary_phone
             }
         else:
             error_msg = result.get('error', 'Unknown error')
             print(f"❌ Failed to send WhatsApp: {error_msg}")
 
-            # Check for specific WhatsApp errors
-            if ('more than 24 hours' in str(error_msg).lower() or 
-                '24 hours have passed' in str(error_msg).lower() or
-                're-engagement message' in str(error_msg).lower()):
+            # Mapeo genérico de errores (proveedor-agnóstico)
+            if ('24 hours' in str(error_msg).lower() or '24-hour' in str(error_msg).lower()):
                 raise HTTPException(
                     status_code=400,
-                    detail="Message failed to send because more than 24 hours have passed since the customer last replied to this number."
+                    detail="No es posible enviar el mensaje: ventana de 24 horas expirada."
                 )
-            elif ('401' in str(error_msg) or 'Unauthorized' in str(error_msg) or 
-                'credentials invalid' in str(error_msg).lower() or 
-                'credentials expired' in str(error_msg).lower() or 'access token' in str(error_msg).lower() or 'oauth' in str(error_msg).lower()):
+            elif ('401' in str(error_msg) or 'unauthorized' in str(error_msg).lower() or 
+                'invalid' in str(error_msg).lower() and 'token' in str(error_msg).lower() or
+                'authentication' in str(error_msg).lower()):
                 raise HTTPException(
                     status_code=503,
-                    detail="WhatsApp credentials invalid or expired. Update META_WHATSAPP_TOKEN and restart."
+                    detail="Credenciales de WhatsApp inválidas o expiradas. Verifique configuración del proveedor."
                 )
-            elif ('template' in str(error_msg).lower() and ('not exist' in str(error_msg).lower() or 'does not exist' in str(error_msg).lower())):
+            elif ('template' in str(error_msg).lower() or 'approval' in str(error_msg).lower() or 'permission' in str(error_msg).lower()):
                 raise HTTPException(
                     status_code=400,
-                    detail="WhatsApp template not approved or missing in 'es'. Approve 'appointment_reminder' in Spanish."
+                    detail="La cuenta no tiene permisos/plantillas aprobadas para enviar este mensaje."
                 )
             elif 'not configured' in str(error_msg).lower():
                 raise HTTPException(
                     status_code=503,
-                    detail="WhatsApp service not configured. Please contact administrator to set up WhatsApp credentials."
+                    detail="Servicio de WhatsApp no configurado. Configure las credenciales del proveedor."
                 )
             else:
                 raise HTTPException(

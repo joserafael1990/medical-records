@@ -1752,25 +1752,22 @@ async def test_whatsapp_service(
     current_user: Person = Depends(get_current_user)
 ):
     """
-    Endpoint de prueba para WhatsApp
-    Envía un mensaje de prueba usando la plantilla 'hello_world' de Meta
+    Endpoint de prueba para WhatsApp (agnóstico del proveedor)
+    Envía un mensaje de prueba de texto simple
     """
     print(f"📱 Testing WhatsApp service to {phone}")
     
     try:
         whatsapp = get_whatsapp_service()
-        # Usar plantilla hello_world que viene pre-aprobada por Meta
-        result = whatsapp.send_template_message(
+        result = whatsapp.send_text_message(
             to_phone=phone,
-            template_name='hello_world',
-            template_params=[],
-            language_code='en_US'
+            message='Mensaje de prueba desde el sistema de citas',
         )
         
         if result['success']:
             return {
-                "message": "Test message sent successfully using 'hello_world' template",
-                "message_id": result.get('message_id'),
+                "message": "Test message sent successfully",
+                "message_id": result.get('message_id') or result.get('message_sid'),
                 "phone": phone,
                 "note": "If you didn't receive the message, make sure your number is registered in Meta WhatsApp dashboard"
             }

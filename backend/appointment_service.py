@@ -359,7 +359,7 @@ class AppointmentService:
     @staticmethod
     def send_appointment_reminder(db: Session, appointment_id: int) -> bool:
         """Send WhatsApp reminder using existing WhatsAppService. Returns True on success."""
-        from whatsapp_service import WhatsAppService
+        from whatsapp_service import get_whatsapp_service
         apt = db.query(Appointment).options(
             joinedload(Appointment.patient),
             joinedload(Appointment.doctor),
@@ -378,7 +378,7 @@ class AppointmentService:
         if apt.appointment_type_rel:
             appointment_type = "online" if apt.appointment_type_rel.name == "En línea" else "presencial"
 
-        service = WhatsAppService()
+        service = get_whatsapp_service()
         try:
             # Preparar dirección y URL usando helpers
             office_address_val = build_office_address(apt.office) if getattr(apt, 'office', None) else "mi consultorio en linea - No especificado"
@@ -399,7 +399,7 @@ class AppointmentService:
                 appointment_type=appointment_type,
                 maps_url=maps_url_val
             )
-            if resp and resp.get('messages'):
+            if resp and resp.get('success'):
                 AppointmentService.mark_reminder_sent(db, appointment_id)
                 return True
         except Exception:
