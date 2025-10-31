@@ -61,6 +61,11 @@ temp/
 **/temp_*.json
 **/test_*.json
 **/token_*.txt
+**/*token*
+**/*secret*
+**/*.key
+**/*.pem
+.git/config
 
 # Additional exclusions
 frontend/node_modules/
