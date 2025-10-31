@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { DoctorProfile, DoctorFormData, FieldErrors } from '../types';
 import { API_CONFIG } from '../constants';
 import { apiService } from '../services/api';
+import { useToast } from '../components/common/ToastNotification';
 
 interface UseDoctorProfileReturn {
   // State
@@ -21,7 +22,7 @@ interface UseDoctorProfileReturn {
   handleEdit: () => void;
   handleCreate: () => void;
   handleCancel: () => void;
-  handleSubmit: () => Promise<void>;
+  handleSubmit: (documents?: { professional_documents?: any[], personal_documents?: any[] }) => Promise<void>;
   fetchProfile: () => Promise<void>;
   clearMessages: () => void;
 }
@@ -87,6 +88,8 @@ const formatDateForBackend = (inputDate: string): string => {
 };
 
 export const useDoctorProfile = (): UseDoctorProfileReturn => {
+  const { showSuccess } = useToast();
+  
   // ============================================================================
   // STATE
   // ============================================================================
@@ -250,17 +253,62 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
     const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.DOCTOR_PROFILE}`;
     const method = isEditing ? 'PUT' : 'POST';
 
+    // Extract documents if they were added to formData
+    // IMPORTANTE: Los documentos pueden venir en formData como parte del objeto
+    let professional_documents = (data as any).professional_documents || [];
+    let personal_documents = (data as any).personal_documents || [];
+    
+    // Si no están en data directamente, intentar leerlos del formData actual
+    // Esto maneja el caso donde setFormData es asíncrono
+    if (professional_documents.length === 0 && personal_documents.length === 0) {
+      // Los documentos deberían estar ya en formData gracias al setTimeout en DoctorProfileDialog
+      console.log('⚠️ No documents in data, checking current formData state...');
+    }
+    
+    console.log('📋 Documents extracted:', {
+      professional: professional_documents.length,
+      personal: personal_documents.length,
+      professionalData: professional_documents,
+      personalData: personal_documents
+    });
+    
+    // Convert specialty name to specialty_id if needed
+    let specialty_id = null;
+    if (data.specialty) {
+      // Try to find specialty ID from API
+      try {
+        const specialties = await apiService.getSpecialties();
+        const specialty = specialties.find((s: any) => s.name === data.specialty);
+        if (specialty) {
+          specialty_id = specialty.id;
+        }
+      } catch (error) {
+        console.error('Error getting specialties:', error);
+      }
+    }
+    
+    // Filter documents to only include those with document_id (value can be empty if only type changed)
+    const filteredProfessionalDocs = professional_documents.filter((d: any) => d && d.document_id);
+    const filteredPersonalDocs = personal_documents.filter((d: any) => d && d.document_id);
+    
     // Transform string fields to arrays and format date for backend
     let transformedData: any = {
       ...data,
       birth_date: formatDateForBackend(data.birth_date),
       appointment_duration: data.appointment_duration ? parseInt(data.appointment_duration) : null,
       office_state_id: data.office_state_id ? parseInt(data.office_state_id) : null,
-      // board_certifications and professional_memberships removed per user request
-      created_by: doctorProfile 
-        ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name || ''} ${doctorProfile.paternal_surname || ''}`.trim()
-        : "Usuario"
+      specialty_id: specialty_id,
+      specialty: undefined // Remove specialty name, use specialty_id instead
     };
+    
+    // Agregar documentos en formato correcto - SIEMPRE incluir si tienen datos, incluso en modo edición
+    // IMPORTANTE: Incluir documentos incluso si están vacíos en modo edición para que el backend los procese
+    if (filteredProfessionalDocs.length > 0) {
+      transformedData.professional_documents = filteredProfessionalDocs;
+    }
+    if (filteredPersonalDocs.length > 0) {
+      transformedData.personal_documents = filteredPersonalDocs;
+    }
 
     // En modo edición, solo enviar campos que tienen contenido (edición parcial)
     if (method === 'PUT') {
@@ -269,20 +317,32 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
       // Solo incluir campos que tienen valor
       Object.keys(transformedData).forEach(key => {
         const value = transformedData[key];
-        if (value !== null && value !== undefined && value !== '') {
-          // Para arrays, solo incluir si no están vacíos
-          if (Array.isArray(value)) {
-            if (value.length > 0) {
-              fieldsToSend[key] = value;
-            }
-          } else {
+        // Para arrays de documentos, SIEMPRE incluir si tienen elementos (incluso con valores vacíos)
+        if (key === 'professional_documents' || key === 'personal_documents') {
+          if (Array.isArray(value) && value.length > 0) {
             fieldsToSend[key] = value;
           }
+        } else if (Array.isArray(value)) {
+          // Para otros arrays, solo incluir si no están vacíos
+          if (value.length > 0) {
+            fieldsToSend[key] = value;
+          }
+        } else if (value !== null && value !== undefined && value !== '') {
+          fieldsToSend[key] = value;
         }
       });
       
       transformedData = fieldsToSend;
     }
+    
+    // Debug: Log antes de enviar
+    console.log('📤 Sending to backend:', {
+      hasProfessionalDocs: !!transformedData.professional_documents,
+      professionalDocsLength: transformedData.professional_documents?.length || 0,
+      hasPersonalDocs: !!transformedData.personal_documents,
+      personalDocsLength: transformedData.personal_documents?.length || 0,
+      allKeys: Object.keys(transformedData)
+    });
 
     // Use apiService instead of fetch to ensure authentication headers are included
     if (method === 'PUT') {
@@ -355,13 +415,51 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
     clearMessages();
   }, [clearMessages]);
 
-  const handleSubmit = useCallback(async () => {
+  const handleSubmit = useCallback(async (documents?: { professional_documents?: any[], personal_documents?: any[] }) => {
     setIsSubmitting(true);
     clearMessages();
 
     try {
+      // Combinar formData con documentos si se proporcionan
+      const dataToSave: any = { ...formData };
+      
+      // Agregar documentos si se proporcionaron
+      console.log('📋 handleSubmit - Parameter received:', {
+        hasDocuments: !!documents,
+        documentsType: typeof documents,
+        documentsKeys: documents ? Object.keys(documents) : [],
+        documentsValue: documents
+      });
+      
+      if (documents && typeof documents === 'object' && !Array.isArray(documents)) {
+        // Verificar que documents tenga la estructura esperada
+        if ('professional_documents' in documents || 'personal_documents' in documents) {
+          console.log('📋 handleSubmit - Valid documents structure detected:', {
+            hasProfessional: 'professional_documents' in documents,
+            hasPersonal: 'personal_documents' in documents,
+            professional: documents.professional_documents,
+            personal: documents.personal_documents
+          });
+          if (documents.professional_documents) {
+            dataToSave.professional_documents = documents.professional_documents;
+          }
+          if (documents.personal_documents) {
+            dataToSave.personal_documents = documents.personal_documents;
+          }
+        } else {
+          console.warn('⚠️ handleSubmit - documents parameter does not have expected structure:', documents);
+        }
+      }
+      
+      console.log('📋 dataToSave before validation:', {
+        hasProfessional: !!dataToSave.professional_documents,
+        professionalCount: dataToSave.professional_documents?.length || 0,
+        hasPersonal: !!dataToSave.personal_documents,
+        personalCount: dataToSave.personal_documents?.length || 0
+      });
+      
       // Validate form (más flexible en modo edición)
-      const { isValid, errors } = validateForm(formData, isEditing);
+      const { isValid, errors } = validateForm(dataToSave, isEditing);
       
       if (!isValid) {
         setFieldErrors(errors);
@@ -369,20 +467,18 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
         return;
       }
 
-      // Save profile
-      await saveProfile(formData);
+      // Save profile - usar dataToSave que incluye documentos
+      await saveProfile(dataToSave);
 
-      // Success
-      setSuccessMessage(
+      // Success - Show toast notification instead of inline message
+      showSuccess(
         isEditing 
-          ? '✅ Perfil actualizado exitosamente' 
-          : '✅ Perfil creado exitosamente'
+          ? 'Perfil actualizado exitosamente' 
+          : 'Perfil creado exitosamente',
+        isEditing ? '¡Actualización completada!' : '¡Perfil creado!'
       );
       setDialogOpen(false);
       setFormData(initialFormData);
-      
-      // Auto-hide success message after 5 seconds
-      setTimeout(() => setSuccessMessage(''), 5000);
 
     } catch (error: any) {
       console.error('Error saving doctor profile:', error);

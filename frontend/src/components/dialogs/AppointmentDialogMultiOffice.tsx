@@ -692,8 +692,8 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
                   size="small"
                 />
 
-                <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
-                  <Box sx={{ width: { xs: '100%', sm: '200px' } }}>
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexDirection: { xs: 'column', sm: 'row' } }}>
+                  <Box sx={{ flex: '0 0 200px', minWidth: 200, width: { xs: '100%', sm: '200px' } }}>
                     <CountryCodeSelector
                       value={newPatientData.phone_country_code}
                       onChange={(code) => setNewPatientData(prev => ({ ...prev, phone_country_code: code }))}
@@ -713,6 +713,7 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
                     required
                     size="small"
                     placeholder="Ej: 5551234567"
+                    sx={{ flex: 1 }}
                     inputProps={{
                       autoComplete: 'tel',
                       'data-form-type': 'other'

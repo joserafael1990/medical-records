@@ -57,10 +57,29 @@ CREATE TABLE IF NOT EXISTS specialties (
 CREATE TABLE IF NOT EXISTS medical_specialties (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
-    description TEXT,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Tabla de tipos de documento
+CREATE TABLE IF NOT EXISTS document_types (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Tabla de documentos
+CREATE TABLE IF NOT EXISTS documents (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    document_type_id INTEGER REFERENCES document_types(id) ON DELETE CASCADE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(name, document_type_id)
 );
 
 -- Tabla de categorías de estudios clínicos
@@ -205,10 +224,8 @@ CREATE TABLE IF NOT EXISTS persons (
     first_name VARCHAR(100) NOT NULL,
     paternal_surname VARCHAR(100) NOT NULL,
     maternal_surname VARCHAR(100),
-    curp VARCHAR(18) UNIQUE,
-    rfc VARCHAR(13),
     birth_date DATE,
-    gender VARCHAR(20) NOT NULL,
+    gender VARCHAR(20),  -- Optional: can be NULL for first-time appointments
     civil_status VARCHAR(20),
     birth_city VARCHAR(100),
     
@@ -237,20 +254,93 @@ CREATE TABLE IF NOT EXISTS persons (
     
     -- Especialidad médica (solo doctores)
     specialty_id INTEGER REFERENCES specialties(id),
-    medical_license VARCHAR(50),
-    professional_license VARCHAR(50),
+    university VARCHAR(200),
+    graduation_year INTEGER,
+    appointment_duration INTEGER,  -- Duración de citas en minutos (solo doctores)
+    
+    -- Datos médicos (solo pacientes)
+    insurance_provider VARCHAR(100),  -- Proveedor de seguro médico
+    insurance_number VARCHAR(50),  -- Número de seguro médico
     
     -- Contacto de emergencia
     emergency_contact_name VARCHAR(200),
     emergency_contact_phone VARCHAR(20),
     emergency_contact_relationship VARCHAR(20) REFERENCES emergency_relationships(code),
     
+    -- Autenticación
+    hashed_password VARCHAR(255),  -- Contraseña hasheada
+    
     -- Sistema
     is_active BOOLEAN DEFAULT TRUE,
+    last_login TIMESTAMP,  -- Fecha y hora del último inicio de sesión
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
     created_by INTEGER REFERENCES persons(id)
 );
+
+-- ============================================================================
+-- TABLA DE RELACIÓN: PERSON_DOCUMENTS
+-- ============================================================================
+
+-- Tabla de relación entre personas y documentos (normalización)
+CREATE TABLE IF NOT EXISTS person_documents (
+    id SERIAL PRIMARY KEY,
+    person_id INTEGER REFERENCES persons(id) ON DELETE CASCADE NOT NULL,
+    document_id INTEGER REFERENCES documents(id) ON DELETE CASCADE NOT NULL,
+    document_value VARCHAR(255) NOT NULL,  -- Valor del documento (ej: número de CURP, RFC, etc.)
+    issue_date DATE,  -- Fecha de emisión del documento
+    expiration_date DATE,  -- Fecha de expiración del documento (si aplica)
+    issuing_authority VARCHAR(200),  -- Autoridad emisora (ej: SAT, Secretaría de Salud, etc.)
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(person_id, document_id)  -- Una persona solo puede tener un valor por tipo de documento
+);
+
+-- Índice para búsquedas rápidas por persona
+CREATE INDEX IF NOT EXISTS idx_person_documents_person_id ON person_documents(person_id);
+
+-- Índice para búsquedas rápidas por documento
+CREATE INDEX IF NOT EXISTS idx_person_documents_document_id ON person_documents(document_id);
+
+-- Índice para búsquedas por valor del documento
+CREATE INDEX IF NOT EXISTS idx_person_documents_value ON person_documents(document_value);
+
+-- ============================================================================
+-- TABLAS DE CONFIGURACIÓN (OFFICES)
+-- ============================================================================
+
+-- Tabla de oficinas/consultorios
+CREATE TABLE IF NOT EXISTS offices (
+    id SERIAL PRIMARY KEY,
+    doctor_id INTEGER REFERENCES persons(id) NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    
+    -- Dirección
+    address TEXT,
+    city VARCHAR(100),
+    state_id INTEGER REFERENCES states(id),
+    country_id INTEGER REFERENCES countries(id),
+    postal_code VARCHAR(10),
+    
+    -- Contacto
+    phone VARCHAR(20),
+    
+    -- Configuración
+    timezone VARCHAR(50) DEFAULT 'America/Mexico_City',
+    maps_url TEXT,  -- URL de Google Maps
+    
+    -- Sistema
+    is_active BOOLEAN DEFAULT TRUE,
+    is_virtual BOOLEAN DEFAULT FALSE,  -- Indica si es consultorio virtual
+    virtual_url VARCHAR(500),  -- URL para consultas virtuales (Zoom, Teams, etc.)
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Índices para offices
+CREATE INDEX IF NOT EXISTS idx_offices_doctor_id ON offices(doctor_id);
+CREATE INDEX IF NOT EXISTS idx_offices_is_active ON offices(is_active);
 
 -- ============================================================================
 -- TABLAS MÉDICAS TRANSACCIONALES
@@ -294,15 +384,57 @@ CREATE TABLE IF NOT EXISTS medical_records (
     created_by INTEGER REFERENCES persons(id)
 );
 
+-- Tabla de tipos de citas
+CREATE TABLE IF NOT EXISTS appointment_types (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
 -- Tabla de citas médicas
 CREATE TABLE IF NOT EXISTS appointments (
     id SERIAL PRIMARY KEY,
+    appointment_code VARCHAR(20) UNIQUE,  -- Código único de identificación (formato: APT00000001)
     patient_id INTEGER REFERENCES persons(id) NOT NULL,
     doctor_id INTEGER REFERENCES persons(id) NOT NULL,
+    
+    -- SCHEDULING
     appointment_date TIMESTAMP NOT NULL,
-    duration_minutes INTEGER DEFAULT 30,
-    status VARCHAR(20) DEFAULT 'scheduled',
+    end_time TIMESTAMP NOT NULL,
+    
+    -- DETAILS
+    appointment_type_id INTEGER REFERENCES appointment_types(id) NOT NULL,
+    office_id INTEGER REFERENCES offices(id),
+    consultation_type VARCHAR(50) DEFAULT 'Seguimiento',  -- 'Primera vez' or 'Seguimiento'
+    status VARCHAR(20) DEFAULT 'confirmed',
+    priority VARCHAR(20) DEFAULT 'normal',
+    
+    -- CLINICAL INFORMATION
+    reason TEXT NOT NULL,
     notes TEXT,
+    
+    -- FOLLOW-UP
+    follow_up_required BOOLEAN DEFAULT FALSE,
+    follow_up_date DATE,
+    
+    -- ADMINISTRATIVE
+    room_number VARCHAR(20),
+    confirmed_at TIMESTAMP,
+    reminder_sent BOOLEAN DEFAULT FALSE,
+    reminder_sent_at TIMESTAMP,
+    
+    -- AUTO REMINDER (WhatsApp)
+    auto_reminder_enabled BOOLEAN DEFAULT FALSE,
+    auto_reminder_offset_minutes INTEGER DEFAULT 360,  -- 6 hours default
+    auto_reminder_sent_at TIMESTAMP,
+    
+    -- CANCELLATION
+    cancelled_reason TEXT,
+    cancelled_at TIMESTAMP,
+    cancelled_by INTEGER REFERENCES persons(id),
+    
+    -- SYSTEM
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
     created_by INTEGER REFERENCES persons(id)
@@ -379,11 +511,14 @@ CREATE TABLE IF NOT EXISTS consultation_vital_signs (
 CREATE TABLE IF NOT EXISTS schedule_templates (
     id SERIAL PRIMARY KEY,
     doctor_id INTEGER REFERENCES persons(id) ON DELETE CASCADE,
+    office_id INTEGER REFERENCES offices(id) ON DELETE CASCADE,
     day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
     start_time TIME NOT NULL,
     end_time TIME NOT NULL,
     is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT NOW()
+    time_blocks JSONB DEFAULT '[]',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
 );
 
 -- Tabla de excepciones de horarios
@@ -484,7 +619,6 @@ CREATE TABLE IF NOT EXISTS data_retention_logs (
 -- Índices para búsquedas frecuentes
 CREATE INDEX IF NOT EXISTS idx_persons_person_type ON persons(person_type);
 CREATE INDEX IF NOT EXISTS idx_persons_email ON persons(email);
-CREATE INDEX IF NOT EXISTS idx_persons_curp ON persons(curp);
 CREATE INDEX IF NOT EXISTS idx_medical_records_patient_id ON medical_records(patient_id);
 CREATE INDEX IF NOT EXISTS idx_medical_records_doctor_id ON medical_records(doctor_id);
 CREATE INDEX IF NOT EXISTS idx_appointments_patient_id ON appointments(patient_id);
@@ -549,6 +683,9 @@ COMMENT ON TABLE states IS 'Catálogo de estados/provincias por país';
 COMMENT ON TABLE emergency_relationships IS 'Relaciones familiares para contactos de emergencia';
 COMMENT ON TABLE specialties IS 'Especialidades médicas';
 COMMENT ON TABLE medical_specialties IS 'Especialidades médicas (tabla adicional)';
+COMMENT ON TABLE document_types IS 'Tipos de documento (Personal, Profesional)';
+COMMENT ON TABLE documents IS 'Documentos por tipo (DNI, CURP, Cédula Profesional, etc.)';
+COMMENT ON TABLE person_documents IS 'Relación normalizada entre personas y documentos';
 COMMENT ON TABLE study_categories IS 'Categorías de estudios clínicos';
 COMMENT ON TABLE study_catalog IS 'Catálogo de estudios clínicos disponibles';
 COMMENT ON TABLE medications IS 'Catálogo de medicamentos';

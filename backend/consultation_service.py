@@ -336,8 +336,7 @@ def create_medical_record_object(
         secondary_diagnoses=encrypted_data.get("secondary_diagnoses", ""),
         notes=encrypted_data.get("notes") or encrypted_data.get("interconsultations", ""),
         consultation_type=encrypted_data.get("consultation_type", "Seguimiento"),
-        appointment_type_id=encrypted_data.get("appointment_type_id", 1),  # Default to "Presencial"
-        office_id=encrypted_data.get("office_id"),
+        # appointment_type_id and office_id columns don't exist in medical_records table - removed
         created_by=doctor_id
     )
 

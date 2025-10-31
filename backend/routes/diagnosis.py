@@ -38,31 +38,20 @@ logger = logging.getLogger(__name__)
 
 @router.get("/categories")
 async def get_diagnosis_categories(
-    parent_id: Optional[int] = Query(None, description="Filter by parent category ID"),
-    level: Optional[int] = Query(None, ge=1, le=5, description="Filter by category level"),
     is_active: bool = Query(True, description="Filter by active status"),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
     """Get diagnosis categories with optional filtering"""
     try:
-        # Use raw SQL to avoid any relationship issues
+        # Use raw SQL - only select columns that exist in DB
         sql = """
-        SELECT id, code, name, description, parent_id, level, is_active, created_at, updated_at
+        SELECT id, code, name, description, active, created_at
         FROM diagnosis_categories 
-        WHERE is_active = :is_active
+        WHERE active = :active
+        ORDER BY code
         """
-        params = {"is_active": is_active}
-        
-        if parent_id is not None:
-            sql += " AND parent_id = :parent_id"
-            params["parent_id"] = parent_id
-        
-        if level is not None:
-            sql += " AND level = :level"
-            params["level"] = level
-        
-        sql += " ORDER BY code"
+        params = {"active": is_active}
         
         result = db.execute(text(sql), params).fetchall()
         
@@ -74,11 +63,9 @@ async def get_diagnosis_categories(
                 "code": row.code,
                 "name": row.name,
                 "description": row.description,
-                "parent_id": row.parent_id,
-                "level": row.level,
-                "is_active": row.is_active,
-                "created_at": row.created_at.isoformat() if row.created_at else None,
-                "updated_at": row.updated_at.isoformat() if row.updated_at else None
+                "is_active": row.active,  # Map 'active' to 'is_active' for API
+                "created_at": row.created_at.isoformat() if row.created_at else None
+                # parent_id, level, and updated_at don't exist in DB
             })
         
         return categories
@@ -106,7 +93,7 @@ async def get_diagnosis_category(
     try:
         category = db.query(DiagnosisCategory).filter(
             DiagnosisCategory.id == category_id,
-            DiagnosisCategory.is_active == True
+            DiagnosisCategory.active == True
         ).first()
         
         if not category:
@@ -143,7 +130,7 @@ async def get_diagnosis_catalog(
     """Get diagnosis catalog with optional filtering"""
     try:
         query = db.query(DiagnosisCatalog).join(DiagnosisCategory).filter(
-            DiagnosisCatalog.is_active == True
+            DiagnosisCatalog.active == True
         )
         
         if category_id is not None:
@@ -190,7 +177,7 @@ async def get_diagnosis_catalog(
                 "name": diagnosis.name,
                 "category_id": diagnosis.category_id,
                 "description": diagnosis.description,
-                "synonyms": diagnosis.synonyms,
+                "synonyms": getattr(diagnosis, 'synonyms', None) or [],
                 "severity_level": diagnosis.severity_level,
                 "is_chronic": diagnosis.is_chronic,
                 "is_contagious": diagnosis.is_contagious,
@@ -205,11 +192,9 @@ async def get_diagnosis_catalog(
                     "code": diagnosis.category.code,
                     "name": diagnosis.category.name,
                     "description": diagnosis.category.description,
-                    "parent_id": diagnosis.category.parent_id,
-                    "level": diagnosis.category.level,
                     "is_active": diagnosis.category.is_active,
-                    "created_at": diagnosis.category.created_at,
-                    "updated_at": diagnosis.category.updated_at
+                    "created_at": diagnosis.category.created_at
+                    # parent_id, level, and updated_at columns don't exist in DB
                 } if diagnosis.category else None
             }
             result.append(diagnosis_dict)
@@ -237,7 +222,7 @@ async def get_diagnosis(
             joinedload(DiagnosisCatalog.primary_differentials).joinedload(DiagnosisDifferential.differential_diagnosis)
         ).filter(
             DiagnosisCatalog.id == diagnosis_id,
-            DiagnosisCatalog.is_active == True
+            DiagnosisCatalog.active == True
         ).first()
         
         if not diagnosis:
@@ -267,18 +252,17 @@ async def search_diagnoses(
     try:
         # Build base query
         query = db.query(DiagnosisCatalog).join(DiagnosisCategory).filter(
-            DiagnosisCatalog.is_active == True
+            DiagnosisCatalog.active == True
         )
         
-        # Add text search
+        # Add text search (synonyms column doesn't exist in DB, so we only search name, description, and code)
         if search_request.query:
             search_term = f"%{search_request.query}%"
             query = query.filter(
                 or_(
                     DiagnosisCatalog.name.ilike(search_term),
                     DiagnosisCatalog.description.ilike(search_term),
-                    DiagnosisCatalog.code.ilike(search_term),
-                    func.array_to_string(DiagnosisCatalog.synonyms, ' ').ilike(search_term)
+                    DiagnosisCatalog.code.ilike(search_term)
                 )
             )
         
@@ -334,7 +318,7 @@ async def search_diagnoses(
                 is_contagious=diagnosis.is_contagious,
                 age_group=diagnosis.age_group,
                 gender_specific=diagnosis.gender_specific,
-                synonyms=diagnosis.synonyms
+                synonyms=getattr(diagnosis, 'synonyms', None) or []
             ))
         
         return search_results
@@ -357,7 +341,7 @@ async def get_diagnosis_recommendations(
         # Get diagnosis
         diagnosis = db.query(DiagnosisCatalog).filter(
             DiagnosisCatalog.id == diagnosis_id,
-            DiagnosisCatalog.is_active == True
+            DiagnosisCatalog.active == True
         ).first()
         
         if not diagnosis:
@@ -419,7 +403,7 @@ async def get_diagnosis_differentials(
         # Get diagnosis
         diagnosis = db.query(DiagnosisCatalog).filter(
             DiagnosisCatalog.id == diagnosis_id,
-            DiagnosisCatalog.is_active == True
+            DiagnosisCatalog.active == True
         ).first()
         
         if not diagnosis:
@@ -475,16 +459,16 @@ async def get_diagnosis_stats(
 ):
     """Get diagnosis catalog statistics"""
     try:
-        # Total counts
-        total_diagnoses = db.query(DiagnosisCatalog).filter(DiagnosisCatalog.is_active == True).count()
-        total_categories = db.query(DiagnosisCategory).filter(DiagnosisCategory.is_active == True).count()
+        # Total counts (using 'active' column name from database)
+        total_diagnoses = db.query(DiagnosisCatalog).filter(DiagnosisCatalog.active == True).count()
+        total_categories = db.query(DiagnosisCategory).filter(DiagnosisCategory.active == True).count()
         
         # Diagnoses by specialty
         specialty_stats = db.query(
             DiagnosisCatalog.specialty,
             func.count(DiagnosisCatalog.id).label('count')
         ).filter(
-            DiagnosisCatalog.is_active == True,
+            DiagnosisCatalog.active == True,
             DiagnosisCatalog.specialty.isnot(None)
         ).group_by(DiagnosisCatalog.specialty).all()
         
@@ -495,7 +479,7 @@ async def get_diagnosis_stats(
             DiagnosisCatalog.severity_level,
             func.count(DiagnosisCatalog.id).label('count')
         ).filter(
-            DiagnosisCatalog.is_active == True,
+            DiagnosisCatalog.active == True,
             DiagnosisCatalog.severity_level.isnot(None)
         ).group_by(DiagnosisCatalog.severity_level).all()
         
@@ -503,12 +487,12 @@ async def get_diagnosis_stats(
         
         # Chronic and contagious conditions
         chronic_conditions = db.query(DiagnosisCatalog).filter(
-            DiagnosisCatalog.is_active == True,
+            DiagnosisCatalog.active == True,
             DiagnosisCatalog.is_chronic == True
         ).count()
         
         contagious_conditions = db.query(DiagnosisCatalog).filter(
-            DiagnosisCatalog.is_active == True,
+            DiagnosisCatalog.active == True,
             DiagnosisCatalog.is_contagious == True
         ).count()
         
@@ -536,7 +520,7 @@ async def get_diagnosis_specialties(
     """Get list of all medical specialties in the diagnosis catalog"""
     try:
         specialties = db.query(DiagnosisCatalog.specialty).filter(
-            DiagnosisCatalog.is_active == True,
+            DiagnosisCatalog.active == True,
             DiagnosisCatalog.specialty.isnot(None)
         ).distinct().order_by(DiagnosisCatalog.specialty).all()
         

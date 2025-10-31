@@ -44,6 +44,7 @@ export const CountryCodeSelector: React.FC<CountryCodeSelectorProps> = ({
           label={label}
           error={error}
           helperText={helperText}
+          size="small"
           inputProps={{
             ...params.inputProps,
             style: { textAlign: 'left' }
@@ -65,12 +66,15 @@ export const CountryCodeSelector: React.FC<CountryCodeSelectorProps> = ({
       ListboxProps={{
         style: { maxHeight: 300 }
       }}
+      componentsProps={{
+        popper: {
+          style: { zIndex: 13000 }
+        }
+      }}
       sx={{
-        '& .MuiOutlinedInput-root': {
-          paddingLeft: '14px',
-          '& .MuiAutocomplete-input': {
-            padding: '8.5px 4px 8.5px 8px !important'
-          }
+        width: '100%',
+        '& .MuiAutocomplete-popper': {
+          zIndex: 13000
         }
       }}
     />

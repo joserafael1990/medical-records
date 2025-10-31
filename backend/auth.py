@@ -14,7 +14,7 @@ from passlib.context import CryptContext
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from database import Person
+from database import Person, PersonDocument, Document, DocumentType
 import secrets
 import hashlib
 
@@ -207,15 +207,46 @@ def login_user(db: Session, email: str, password: str) -> Dict[str, Any]:
     
     # Si es doctor, agregar campos profesionales
     if user.person_type == "doctor":  # FIXED: tipo_persona → person_type
+        # Get professional documents from person_documents table
+        professional_type = db.query(DocumentType).filter(DocumentType.name == 'Profesional').first()
+        professional_documents = []
+        if professional_type:
+            professional_docs = db.query(PersonDocument).join(Document).filter(
+                PersonDocument.person_id == user.id,
+                PersonDocument.is_active == True,
+                Document.document_type_id == professional_type.id
+            ).all()
+            professional_documents = [{"document_name": doc.document.name, "document_value": doc.document_value} for doc in professional_docs]
+        
+        # Get personal documents (for CURP, RFC)
+        personal_type = db.query(DocumentType).filter(DocumentType.name == 'Personal').first()
+        personal_documents = []
+        if personal_type:
+            personal_docs = db.query(PersonDocument).join(Document).filter(
+                PersonDocument.person_id == user.id,
+                PersonDocument.is_active == True,
+                Document.document_type_id == personal_type.id
+            ).all()
+            personal_documents = {doc.document.name: doc.document_value for doc in personal_docs}
+        
+        # Legacy fields for backward compatibility (get from documents)
+        professional_license = None
+        for doc in professional_documents:
+            if doc["document_name"] in ["Cédula Profesional", "Número de Colegiación", "Matrícula Nacional"]:
+                professional_license = doc["document_value"]
+                break
+        
         user_data.update({
-            "professional_license": user.professional_license,
+            "professional_license": professional_license,  # Legacy field from documents
+            "professional_documents": professional_documents,  # New normalized format
+            "personal_documents": personal_documents,  # CURP, RFC, etc.
             "specialty": user.specialty.name if user.specialty else None,      # ENGLISH: especialidad → specialty
             "university": user.university,
             "graduation_year": user.graduation_year,
-            "subspecialty": user.subspecialty,
+            "subspecialty": user.subspecialty if hasattr(user, 'subspecialty') else None,
             "office_address": None,  # Moved to offices table
-            "curp": user.curp,
-            "rfc": user.rfc,
+            "curp": personal_documents.get("CURP", None),  # From documents
+            "rfc": personal_documents.get("RFC", None),  # From documents
         })
     
     return {

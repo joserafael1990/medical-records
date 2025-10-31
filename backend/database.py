@@ -92,7 +92,7 @@ class Office(Base):
     state = relationship("State")
     country = relationship("Country")
     appointments = relationship("Appointment", back_populates="office")
-    medical_records = relationship("MedicalRecord", back_populates="office")
+    # medical_records relationship removed - office_id column doesn't exist in medical_records table
     # schedule_templates = relationship("ScheduleTemplate", back_populates="office", lazy="select")
 
 
@@ -102,12 +102,13 @@ class Office(Base):
 
 
 class Specialty(Base):
-    __tablename__ = "specialties"
+    __tablename__ = "medical_specialties"
     
     id = Column(Integer, primary_key=True)
-    name = Column(String(100), nullable=False, unique=True)
-    active = Column(Boolean, default=True)
+    name = Column(String(100), nullable=False)
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
     doctors = relationship("Person", back_populates="specialty")
@@ -132,6 +133,54 @@ class AppointmentType(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 # ============================================================================
+# DOCUMENT MANAGEMENT
+# ============================================================================
+
+class DocumentType(Base):
+    __tablename__ = "document_types"
+    
+    id = Column(Integer, primary_key=True)
+    name = Column(String(50), nullable=False, unique=True)  # "Personal", "Profesional"
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    documents = relationship("Document", back_populates="document_type")
+
+class Document(Base):
+    __tablename__ = "documents"
+    
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False)  # "DNI", "CURP", "Cédula Profesional", etc.
+    document_type_id = Column(Integer, ForeignKey("document_types.id", ondelete="CASCADE"))
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    document_type = relationship("DocumentType", back_populates="documents")
+    person_documents = relationship("PersonDocument", back_populates="document")
+
+class PersonDocument(Base):
+    __tablename__ = "person_documents"
+    
+    id = Column(Integer, primary_key=True)
+    person_id = Column(Integer, ForeignKey("persons.id", ondelete="CASCADE"), nullable=False)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    document_value = Column(String(255), nullable=False)  # Valor del documento
+    issue_date = Column(Date)  # Fecha de emisión
+    expiration_date = Column(Date)  # Fecha de expiración
+    issuing_authority = Column(String(200))  # Autoridad emisora
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    person = relationship("Person", back_populates="person_documents")
+    document = relationship("Document", back_populates="person_documents")
+
+# ============================================================================
 # MAIN TABLE: PERSONS (UNIFIED)
 # ============================================================================
 
@@ -148,10 +197,8 @@ class Person(Base):
     first_name = Column(String(100), nullable=False)
     paternal_surname = Column(String(100), nullable=False)
     maternal_surname = Column(String(100))
-    curp = Column(String(18), unique=True)
-    rfc = Column(String(13))
     birth_date = Column(Date, nullable=True)  # Optional field
-    gender = Column(String(20), nullable=False)
+    gender = Column(String(20), nullable=True)
     civil_status = Column(String(20))
     birth_city = Column(String(100))  # Ciudad de nacimiento (reemplaza birth_place)
     
@@ -172,14 +219,9 @@ class Person(Base):
     
     # PROFESSIONAL DATA (doctors only)
     appointment_duration = Column(Integer)  # Duration of appointments in minutes (optional)
-    professional_license = Column(String(20), unique=True)
-    specialty_id = Column(Integer, ForeignKey("specialties.id"))
-    specialty_license = Column(String(20))
+    specialty_id = Column(Integer, ForeignKey("medical_specialties.id"))
     university = Column(String(200))
     graduation_year = Column(Integer)
-    subspecialty = Column(String(100))
-    digital_signature = Column(String(500))
-    professional_seal = Column(String(500))
     
     # MEDICAL DATA (patients only)
     insurance_provider = Column(String(100))
@@ -210,6 +252,9 @@ class Person(Base):
     
     # Office relationships
     offices = relationship("Office", back_populates="doctor")
+    
+    # Document relationships
+    person_documents = relationship("PersonDocument", back_populates="person")
     
     # Medical relationships
     medical_records_as_patient = relationship("MedicalRecord", foreign_keys="MedicalRecord.patient_id", back_populates="patient")
@@ -289,8 +334,7 @@ class MedicalRecord(Base):
     
     # CONSULTATION TYPE
     consultation_type = Column(String(50), default='Seguimiento')
-    appointment_type_id = Column(Integer, ForeignKey("appointment_types.id"), nullable=False)
-    office_id = Column(Integer, ForeignKey("offices.id"), nullable=True)
+    # appointment_type_id and office_id columns do not exist in medical_records table - removed
     
     # FIRST-TIME CONSULTATION FIELDS (removed duplicate _story fields)
     # These fields are now handled by the existing _history fields:
@@ -314,8 +358,7 @@ class MedicalRecord(Base):
     # RELATIONSHIPS
     patient = relationship("Person", foreign_keys=[patient_id], back_populates="medical_records_as_patient")
     doctor = relationship("Person", foreign_keys=[doctor_id], back_populates="medical_records_as_doctor")
-    office = relationship("Office", back_populates="medical_records")
-    appointment_type_rel = relationship("AppointmentType")
+    # office and appointment_type_rel relationships removed - columns don't exist
 
 class Appointment(Base):
     __tablename__ = "appointments"
@@ -440,9 +483,18 @@ class StudyCategory(Base):
     code = Column(String(10), unique=True, nullable=False, index=True)
     name = Column(String(100), nullable=False)
     description = Column(Text)
-    is_active = Column(Boolean, default=True)
+    active = Column('active', Boolean, default=True)  # Database column is 'active', not 'is_active'
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # Note: updated_at column does not exist in study_categories table
+    
+    # Alias for backward compatibility
+    @property
+    def is_active(self):
+        return self.active
+    
+    @is_active.setter
+    def is_active(self, value):
+        self.active = value
     
     # Relationships
     studies = relationship("StudyCatalog", back_populates="category")
@@ -458,12 +510,30 @@ class StudyCatalog(Base):
     description = Column(Text)
     preparation = Column(Text)  # Instructions for patient preparation
     methodology = Column(Text)
-    duration_hours = Column(Integer)  # Delivery time in hours
+    duration_minutes = Column('duration_minutes', Integer)  # Delivery time in minutes (DB column name)
+    
+    # Alias for backward compatibility (convert minutes to hours)
+    @property
+    def duration_hours(self):
+        return self.duration_minutes // 60 if self.duration_minutes else None
+    
+    @duration_hours.setter
+    def duration_hours(self, value):
+        self.duration_minutes = value * 60 if value else None
     specialty = Column(String(100), index=True)
-    is_active = Column(Boolean, default=True)
+    active = Column('is_active', Boolean, default=True)  # Database column is 'is_active', using 'active' for consistency
     regulatory_compliance = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Alias for backward compatibility
+    @property
+    def is_active(self):
+        return self.active
+    
+    @is_active.setter
+    def is_active(self, value):
+        self.active = value
     
     # Relationships
     category = relationship("StudyCategory", back_populates="studies")
@@ -478,12 +548,29 @@ class StudyNormalValue(Base):
     study_id = Column(Integer, ForeignKey("study_catalog.id", ondelete="CASCADE"), nullable=False)
     age_min = Column(Integer)
     age_max = Column(Integer)
-    gender = Column(String(1), CheckConstraint("gender IN ('M', 'F', 'B')"))
-    min_value = Column(Numeric(10, 3))
-    max_value = Column(Numeric(10, 3))
-    unit = Column(String(20))
-    notes = Column(Text)
+    gender = Column(String(20))  # DB has VARCHAR(20), not VARCHAR(1)
+    normal_min = Column('normal_min', Numeric(10, 3))  # DB column name is 'normal_min'
+    normal_max = Column('normal_max', Numeric(10, 3))  # DB column name is 'normal_max'
+    unit = Column(String(50))  # DB has VARCHAR(50)
+    notes = Column(Text, nullable=True)  # Notes may not exist in DB
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Alias for backward compatibility
+    @property
+    def min_value(self):
+        return self.normal_min
+    
+    @min_value.setter
+    def min_value(self, value):
+        self.normal_min = value
+    
+    @property
+    def max_value(self):
+        return self.normal_max
+    
+    @max_value.setter
+    def max_value(self, value):
+        self.normal_max = value
     
     # Relationships
     study = relationship("StudyCatalog", back_populates="normal_values")

@@ -16,14 +16,18 @@ Estos scripts permiten crear una base de datos completamente funcional con todos
   - Vistas para reportes
 
 ### 2. **`02_insert_master_data.sql`**
-- **Propósito**: Insertar datos maestros básicos
+- **Propósito**: Insertar datos maestros básicos y completos
 - **Contenido**:
   - 28 países
   - 32 estados de México
   - 29 relaciones de emergencia
   - 174 especialidades médicas
   - 18 categorías de estudios clínicos
-  - 43 categorías de diagnósticos
+  - 20 categorías de diagnósticos
+  - **Incluye automáticamente (vía `\i`):**
+    - 1000 medicamentos comunes (`06_insert_medications_1000.sql`)
+    - 100 diagnósticos CIE-10 (`07_insert_diagnoses_500.sql`)
+    - 55 estudios clínicos (`08_insert_studies_500.sql`)
 
 ### 3. **`03_insert_existing_data.sql`**
 - **Propósito**: Insertar datos existentes del sistema actual
@@ -51,9 +55,12 @@ Estos scripts permiten crear una base de datos completamente funcional con todos
 docker-compose exec postgres-db psql -U postgres -c "CREATE DATABASE historias_clinicas;"
 
 # 2. Ejecutar scripts en orden
+# NOTA: El script 02_insert_master_data.sql ahora incluye automáticamente:
+#       - 1000 medicamentos (06_insert_medications_1000.sql)
+#       - 100 diagnósticos CIE-10 (07_insert_diagnoses_500.sql)
+#       - 55 estudios clínicos (08_insert_studies_500.sql)
 docker-compose exec postgres-db psql -U historias_user -d historias_clinicas -f /app/01_create_database_structure.sql
 docker-compose exec postgres-db psql -U historias_user -d historias_clinicas -f /app/02_insert_master_data.sql
-docker-compose exec postgres-db psql -U historias_user -d historias_clinicas -f /app/03_insert_existing_data.sql
 docker-compose exec postgres-db psql -U historias_user -d historias_clinicas -f /app/04_additional_functions.sql
 ```
 

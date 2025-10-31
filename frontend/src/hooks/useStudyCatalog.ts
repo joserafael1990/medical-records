@@ -282,8 +282,23 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
 
   // Load initial data
   useEffect(() => {
-    fetchCategories();
-    fetchStudies();
+    const loadInitialData = async () => {
+      try {
+        // Load critical data first
+        await Promise.all([
+          fetchCategories(),
+          fetchStudies()
+        ]);
+      } catch (err) {
+        console.error('❌ Error loading initial study data:', err);
+        // Don't set error state for non-critical failures
+        if (err instanceof Error && !err.message.includes('studies')) {
+          setError(err.message);
+        }
+      }
+    };
+    
+    loadInitialData();
   }, [fetchCategories, fetchStudies]);
 
   useEffect(() => {

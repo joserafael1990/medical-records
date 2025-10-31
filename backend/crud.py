@@ -28,7 +28,8 @@ def to_utc_for_storage(dt: datetime) -> datetime:
 
 from database import (
     Person, MedicalRecord, Appointment, VitalSign, ConsultationVitalSign,
-    Country, State, Specialty, EmergencyRelationship
+    Country, State, Specialty, EmergencyRelationship,
+    DocumentType, Document, PersonDocument
 )
 import schemas
 
@@ -148,8 +149,9 @@ def create_doctor_safe(db: Session, doctor_data: schemas.DoctorCreate) -> Person
     
     # Extract password and hash it, excluding fields that are not Person fields
     doctor_dict = doctor_data.dict(exclude={
-        'person_type', 'password', 'schedule_data', 
-        'office_name', 'office_address', 'office_city', 'office_state_id', 'office_phone', 'office_maps_url'
+        'person_type', 'password', 'schedule_data', 'username', 'online_consultation_url',
+        'office_name', 'office_address', 'office_city', 'office_state_id', 'office_phone', 'office_maps_url',
+        'documents'  # Documents are handled separately
     })
     hashed_password = hash_password(doctor_data.password) if doctor_data.password else None
     
@@ -164,6 +166,20 @@ def create_doctor_safe(db: Session, doctor_data: schemas.DoctorCreate) -> Person
     db.add(db_doctor)
     # NO COMMIT - let the caller handle the transaction
     db.flush()  # This makes the object available for queries within the transaction
+    
+    # Process documents if provided
+    if hasattr(doctor_data, 'documents') and doctor_data.documents:
+        for doc in doctor_data.documents:
+            upsert_person_document(
+                db=db,
+                person_id=db_doctor.id,
+                document_id=doc.document_id,
+                document_value=doc.document_value,
+                issue_date=doc.issue_date,
+                expiration_date=doc.expiration_date,
+                issuing_authority=doc.issuing_authority
+            )
+    
     db.refresh(db_doctor)
     return db_doctor
 
@@ -178,13 +194,37 @@ def update_doctor_profile(db: Session, doctor_id: int, doctor_data: schemas.Doct
     if not db_doctor:
         return None  # Return None if not found, let the API handle the error
     
-    # Update only provided fields
-    update_data = doctor_data.dict(exclude_unset=True)
+    # Handle phone parsing if provided
+    if hasattr(doctor_data, 'primary_phone_country_code') and hasattr(doctor_data, 'primary_phone_number'):
+        if doctor_data.primary_phone_country_code is not None or doctor_data.primary_phone_number is not None:
+            db_doctor.primary_phone = build_phone(
+                doctor_data.primary_phone_country_code or '+52',
+                doctor_data.primary_phone_number or ''
+            )
+    elif hasattr(doctor_data, 'primary_phone') and doctor_data.primary_phone is not None:
+        # If primary_phone is provided directly, use it
+        db_doctor.primary_phone = doctor_data.primary_phone
+    
+    # Update only provided fields (excluding documents, phone fields)
+    update_data = doctor_data.dict(exclude_unset=True, exclude={'documents', 'primary_phone_country_code', 'primary_phone_number', 'primary_phone'})
     
     for field, value in update_data.items():
         # Verify the field exists in the model
         if hasattr(db_doctor, field):
             setattr(db_doctor, field, value)
+    
+    # Process documents if provided
+    if hasattr(doctor_data, 'documents') and doctor_data.documents:
+        for doc in doctor_data.documents:
+            upsert_person_document(
+                db=db,
+                person_id=doctor_id,
+                document_id=doc.document_id,
+                document_value=doc.document_value,
+                issue_date=doc.issue_date,
+                expiration_date=doc.expiration_date,
+                issuing_authority=doc.issuing_authority
+            )
     
     try:
         db.commit()
@@ -197,7 +237,7 @@ def update_doctor_profile(db: Session, doctor_id: int, doctor_data: schemas.Doct
 def create_patient_with_code(db: Session, patient_data: schemas.PatientCreate, person_code: str, created_by_doctor_id: int = None) -> Person:
     """Create a new patient with a pre-generated code"""
     # Prepare patient data with proper null handling for foreign keys
-    patient_dict = patient_data.dict(exclude={'person_type'})
+    patient_dict = patient_data.dict(exclude={'person_type', 'documents'})  # Documents handled separately
     
     # Handle foreign key fields and date fields - convert empty strings to None
     nullable_fields = [
@@ -224,6 +264,35 @@ def create_patient_with_code(db: Session, patient_data: schemas.PatientCreate, p
     
     db.add(db_patient)
     db.flush()  # Flush to get the ID but don't commit yet
+    
+    # Process documents if provided - validate uniqueness before saving
+    if hasattr(patient_data, 'documents') and patient_data.documents:
+        # Check for duplicate document values (same document_id only)
+        for doc in patient_data.documents:
+            if doc.document_id and doc.document_value:
+                existing_doc = db.query(PersonDocument).filter(
+                    PersonDocument.document_id == doc.document_id,
+                    PersonDocument.document_value == doc.document_value,
+                    PersonDocument.is_active == True
+                ).first()
+                if existing_doc:
+                    document = db.query(Document).filter(Document.id == doc.document_id).first()
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"El documento {document.name if document else 'desconocido'} con valor '{doc.document_value}' ya está registrado. Cada tipo de documento debe tener un valor único."
+                    )
+            
+            upsert_person_document(
+                db=db,
+                person_id=db_patient.id,
+                document_id=doc.document_id,
+                document_value=doc.document_value,
+                issue_date=doc.issue_date,
+                expiration_date=doc.expiration_date,
+                issuing_authority=doc.issuing_authority,
+                check_uniqueness=False  # Ya validamos arriba
+            )
+    
     db.refresh(db_patient)
     return db_patient
 
@@ -242,8 +311,25 @@ def get_person_by_code(db: Session, person_code: str) -> Optional[Person]:
     return db.query(Person).filter(Person.person_code == person_code).first()
 
 def get_person_by_curp(db: Session, curp: str) -> Optional[Person]:
-    """Get person by CURP"""
-    return db.query(Person).filter(Person.curp == curp).first()
+    """Get person by CURP - searches in person_documents table"""
+    # Find document ID for CURP (document_type_id = 1 is Personal, name = 'CURP')
+    curp_document = db.query(Document).filter(
+        Document.name == 'CURP',
+        Document.document_type_id == 1
+    ).first()
+    
+    if not curp_document:
+        return None
+    
+    # Find person with this CURP value
+    person_doc = db.query(PersonDocument).filter(
+        PersonDocument.document_id == curp_document.id,
+        PersonDocument.document_value == curp.upper()
+    ).first()
+    
+    if person_doc:
+        return db.query(Person).filter(Person.id == person_doc.person_id).first()
+    return None
 
 def get_person_by_email(db: Session, email: str) -> Optional[Person]:
     """Get person by email"""
@@ -315,27 +401,225 @@ def delete_person(db: Session, person_id: int) -> bool:
     return True
 
 def search_persons(db: Session, search_term: str, person_type: Optional[str] = None) -> List[Person]:
-    """Search persons by name, code, CURP, or email"""
+    """Search persons by name, code, documents, or email"""
     query = db.query(Person).options(
         joinedload(Person.specialty)
     )
     
-    # Search conditions
+    # Search conditions (remove curp since it's now in person_documents)
     search_conditions = [
         Person.first_name.ilike(f'%{search_term}%'),
         Person.paternal_surname.ilike(f'%{search_term}%'),
         Person.maternal_surname.ilike(f'%{search_term}%'),
         Person.person_code.ilike(f'%{search_term}%'),
-        Person.curp.ilike(f'%{search_term}%'),
         Person.email.ilike(f'%{search_term}%')
     ]
     
-    query = query.filter(or_(*search_conditions))
+    # Also search in person_documents
+    person_ids_from_documents = db.query(PersonDocument.person_id).join(Document).filter(
+        PersonDocument.document_value.ilike(f'%{search_term}%')
+    ).distinct().subquery()
+    
+    query = query.filter(
+        or_(
+            *search_conditions,
+            Person.id.in_(db.query(person_ids_from_documents.c.person_id))
+        )
+    )
     
     if person_type:
         query = query.filter(Person.person_type == person_type)
     
     return query.limit(50).all()
+
+# ============================================================================
+# DOCUMENT MANAGEMENT CRUD
+# ============================================================================
+
+def get_document_types(db: Session, active_only: bool = True) -> List[DocumentType]:
+    """Get all document types"""
+    query = db.query(DocumentType)
+    if active_only:
+        query = query.filter(DocumentType.is_active == True)
+    return query.order_by(DocumentType.name).all()
+
+def get_documents_by_type(db: Session, document_type_id: int, active_only: bool = True) -> List[Document]:
+    """Get all documents of a specific type"""
+    query = db.query(Document).filter(Document.document_type_id == document_type_id)
+    if active_only:
+        query = query.filter(Document.is_active == True)
+    return query.order_by(Document.name).all()
+
+def get_documents(db: Session, document_type_id: Optional[int] = None, active_only: bool = True) -> List[Document]:
+    """Get all documents with optional filter by type"""
+    query = db.query(Document)
+    if document_type_id:
+        query = query.filter(Document.document_type_id == document_type_id)
+    if active_only:
+        query = query.filter(Document.is_active == True)
+    return query.order_by(Document.name).all()
+
+def get_person_documents(db: Session, person_id: int, active_only: bool = True) -> List[PersonDocument]:
+    """Get all documents for a person"""
+    query = db.query(PersonDocument).filter(PersonDocument.person_id == person_id)
+    if active_only:
+        query = query.filter(PersonDocument.is_active == True)
+    return query.options(joinedload(PersonDocument.document)).all()
+
+def upsert_person_document(
+    db: Session,
+    person_id: int,
+    document_id: int,
+    document_value: str,
+    issue_date: Optional[date] = None,
+    expiration_date: Optional[date] = None,
+    issuing_authority: Optional[str] = None,
+    check_uniqueness: bool = True
+) -> PersonDocument:
+    """
+    Create or update a person document (UPSERT)
+    check_uniqueness: If True, validates that the document_value is unique for this document_id
+    """
+    # Check for duplicate document values (same document_id only)
+    # Ejemplo: C.I="12345" y C.I.E="12345" pueden coexistir, pero no dos C.I="12345"
+    if check_uniqueness:
+        existing_with_same_value = db.query(PersonDocument).filter(
+            PersonDocument.document_id == document_id,
+            PersonDocument.document_value == document_value,
+            PersonDocument.person_id != person_id,  # Excluir el mismo usuario si está actualizando
+            PersonDocument.is_active == True
+        ).first()
+        
+        if existing_with_same_value:
+            document = db.query(Document).filter(Document.id == document_id).first()
+            raise HTTPException(
+                status_code=400,
+                detail=f"El documento {document.name if document else 'desconocido'} con valor '{document_value}' ya está registrado para otra persona. Cada tipo de documento debe tener un valor único."
+            )
+    
+    # Get document type to check if we should update existing document of same type
+    document_obj = db.query(Document).filter(Document.id == document_id).first()
+    if not document_obj:
+        raise HTTPException(status_code=400, detail=f"Document with id {document_id} not found")
+    
+    document_type_id = document_obj.document_type_id
+    
+    # Check if this person already has a document of this TYPE (not just this specific document_id)
+    # This allows updating the document_id when changing document type
+    existing_same_type = db.query(PersonDocument).join(Document).filter(
+        PersonDocument.person_id == person_id,
+        Document.document_type_id == document_type_id,
+        PersonDocument.is_active == True
+    ).first()
+    
+    if existing_same_type:
+        # Update existing document: change document_id (if different) and value
+        existing_same_type.document_id = document_id
+        existing_same_type.document_value = document_value
+        if issue_date is not None:
+            existing_same_type.issue_date = issue_date
+        if expiration_date is not None:
+            existing_same_type.expiration_date = expiration_date
+        if issuing_authority is not None:
+            existing_same_type.issuing_authority = issuing_authority
+        existing_same_type.updated_at = datetime.utcnow()
+        return existing_same_type
+    else:
+        # Check if there's an inactive document of the same type to reactivate/update
+        existing_inactive = db.query(PersonDocument).join(Document).filter(
+            PersonDocument.person_id == person_id,
+            Document.document_type_id == document_type_id,
+            PersonDocument.is_active == False
+        ).order_by(PersonDocument.updated_at.desc()).first()
+        
+        if existing_inactive:
+            # Reactivate and update the inactive document
+            existing_inactive.document_id = document_id
+            existing_inactive.document_value = document_value
+            existing_inactive.is_active = True
+            if issue_date is not None:
+                existing_inactive.issue_date = issue_date
+            if expiration_date is not None:
+                existing_inactive.expiration_date = expiration_date
+            if issuing_authority is not None:
+                existing_inactive.issuing_authority = issuing_authority
+            existing_inactive.updated_at = datetime.utcnow()
+            return existing_inactive
+        else:
+            # Create new document
+            new_doc = PersonDocument(
+                person_id=person_id,
+                document_id=document_id,
+                document_value=document_value,
+                issue_date=issue_date,
+                expiration_date=expiration_date,
+                issuing_authority=issuing_authority
+            )
+            db.add(new_doc)
+            db.flush()
+            db.refresh(new_doc)
+            return new_doc
+
+def delete_person_document(db: Session, person_id: int, document_id: int) -> bool:
+    """Delete a person document"""
+    person_doc = db.query(PersonDocument).filter(
+        PersonDocument.person_id == person_id,
+        PersonDocument.document_id == document_id
+    ).first()
+    
+    if person_doc:
+        db.delete(person_doc)
+        return True
+    return False
+
+# ============================================================================
+# PHONE NUMBER HELPERS
+# ============================================================================
+
+def parse_phone_with_country_code(phone: str) -> dict:
+    """
+    Parse a phone number to extract country code and number
+    Returns: {country_code: str, number: str}
+    """
+    if not phone:
+        return {'country_code': '+52', 'number': ''}
+    
+    phone = phone.strip()
+    
+    # Common country codes (sorted by length descending to match longest first)
+    country_codes = [
+        '+593', '+595', '+598', '+591', '+592', '+597', '+594', '+596',
+        '+502', '+503', '+504', '+505', '+506', '+507', '+509', '+501',
+        '+971', '+972', '+973', '+974', '+975', '+976', '+977', '+992',
+        '+993', '+994', '+995', '+996', '+998',
+        '+52', '+54', '+55', '+56', '+57', '+58',
+        '+1', '+7', '+20', '+27', '+30', '+31', '+32', '+33', '+34', 
+        '+36', '+39', '+40', '+41', '+43', '+44', '+45', '+46', '+47',
+        '+48', '+49', '+51', '+60', '+61', '+62', '+63', '+64', '+65',
+        '+66', '+81', '+82', '+84', '+86', '+90', '+91', '+92', '+93',
+        '+94', '+95', '+98'
+    ]
+    
+    # Sort by length descending to match longest codes first
+    country_codes.sort(key=len, reverse=True)
+    
+    for code in country_codes:
+        if phone.startswith(code):
+            return {
+                'country_code': code,
+                'number': phone[len(code):].strip()
+            }
+    
+    # Default to Mexico if no code found
+    return {'country_code': '+52', 'number': phone}
+
+def build_phone(country_code: str, number: str) -> str:
+    """Build full phone number from country code and number"""
+    if not number:
+        return ''
+    country_code = country_code.strip() if country_code else '+52'
+    number = number.strip().replace(' ', '').replace('-', '')
+    return f"{country_code}{number}"
 
 # ============================================================================
 # MEDICAL RECORD OPERATIONS
@@ -648,7 +932,7 @@ from database import StudyCategory, StudyCatalog, StudyNormalValue, StudyTemplat
 
 def get_study_categories(db: Session, skip: int = 0, limit: int = 100) -> List[StudyCategory]:
     """Get all study categories"""
-    return db.query(StudyCategory).filter(StudyCategory.is_active == True).offset(skip).limit(limit).all()
+    return db.query(StudyCategory).filter(StudyCategory.active == True).offset(skip).limit(limit).all()
 
 def get_study_category(db: Session, category_id: int) -> Optional[StudyCategory]:
     """Get study category by ID"""
@@ -663,7 +947,10 @@ def get_study_catalog(
     search: Optional[str] = None
 ) -> List[StudyCatalog]:
     """Get studies from catalog with filters"""
-    query = db.query(StudyCatalog).join(StudyCategory).filter(StudyCatalog.is_active == True)
+    # Don't load normal_values to avoid schema issues
+    query = db.query(StudyCatalog).options(
+        joinedload(StudyCatalog.category)
+    ).join(StudyCategory).filter(StudyCatalog.active == True)
     
     if category_id:
         query = query.filter(StudyCatalog.category_id == category_id)
@@ -743,7 +1030,7 @@ def get_studies_by_specialty(db: Session, specialty: str) -> List[StudyCatalog]:
     """Get studies recommended for a specific specialty"""
     return db.query(StudyCatalog).filter(
         and_(
-            StudyCatalog.is_active == True,
+            StudyCatalog.active == True,
             StudyCatalog.specialty.ilike(f"%{specialty}%")
         )
     ).all()

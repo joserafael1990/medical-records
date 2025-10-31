@@ -47,6 +47,7 @@ import { ErrorRibbon } from '../common/ErrorRibbon';
 import { useToast } from '../common/ToastNotification';
 import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
 import { Switch, FormControlLabel } from '@mui/material';
+import { DocumentSelector } from '../common/DocumentSelector';
 
 // Utility function to calculate age from birth date
 const calculateAge = (birthDate: string): number => {
@@ -159,8 +160,6 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     address_postal_code: '',
     address_country_id: '',
     address_state_id: '',
-    curp: '',
-    rfc: '',
     civil_status: '',
     birth_city: '',
     birth_country_id: '',
@@ -171,6 +170,12 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     insurance_provider: '',
     insurance_number: ''
   });
+  
+  // State for personal document (only one allowed)
+  const [personalDocument, setPersonalDocument] = useState<{
+    document_id: number | null;
+    document_value: string;
+  }>({ document_id: null, document_value: '' });
   
   // State for advanced patient data
   const [showAdvancedPatientData, setShowAdvancedPatientData] = useState<boolean>(false);
@@ -443,6 +448,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     if (localFormData.appointment_type === 'seguimiento') {
       console.log('🧹 Clearing new patient data for seguimiento');
       // Clear new patient data when switching to follow-up
+      setPersonalDocument({ document_id: null, document_value: '' });
       setNewPatientData({
         first_name: '',
         paternal_surname: '',
@@ -451,8 +457,6 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
         gender: '',
         primary_phone: '',
         email: '',
-        curp: '',
-        rfc: '',
         civil_status: '',
         birth_city: '',
         birth_country_id: '',
@@ -518,6 +522,7 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
     
     // Clear new patient data when selecting existing patient
     if (patient) {
+      setPersonalDocument({ document_id: null, document_value: '' });
       setNewPatientData({
         first_name: '',
         paternal_surname: '',
@@ -607,13 +612,12 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
           insurance_provider: '',
           insurance_number: '',
           
-          // Mexican official fields (optional)
-          curp: '',
-          rfc: '',
-          
           // Technical fields
           active: true,
-          is_active: true
+          is_active: true,
+          
+          // Personal document (normalized)
+          personal_documents: personalDocument.document_id ? [personalDocument] : undefined
         };
 
         const newPatient = await apiService.createPatient(patientData);
@@ -1015,24 +1019,18 @@ const AppointmentDialog: React.FC<AppointmentDialogProps> = memo(({
                             Información Adicional
                           </Typography>
                           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-                            <TextField
-                              label="CURP"
-                              value={newPatientData.curp || ''}
-                              onChange={(e) => handleNewPatientFieldChange('curp', e.target.value)}
-                              size="small"
-                              inputProps={{ maxLength: 18 }}
-                              helperText={newPatientData.curp && newPatientData.curp.length !== 18 ? 'El CURP debe tener exactamente 18 caracteres' : ''}
-                              error={newPatientData.curp && newPatientData.curp.length !== 18}
-                            />
-                            <TextField
-                              label="RFC"
-                              value={newPatientData.rfc || ''}
-                              onChange={(e) => handleNewPatientFieldChange('rfc', e.target.value)}
-                              size="small"
-                              inputProps={{ maxLength: 13 }}
-                              helperText={newPatientData.rfc && newPatientData.rfc.length < 10 ? 'El RFC debe tener al menos 10 caracteres' : ''}
-                              error={newPatientData.rfc && newPatientData.rfc.length < 10}
-                            />
+                            {/* Documento Personal - Solo uno permitido */}
+                            <Box sx={{ gridColumn: { xs: '1 / -1', sm: '1 / -1' } }}>
+                              <DocumentSelector
+                                documentType="personal"
+                                value={personalDocument}
+                                onChange={(newValue) => {
+                                  setPersonalDocument(newValue);
+                                }}
+                                label="Documento Personal"
+                                required={false}
+                              />
+                            </Box>
                             <FormControl size="small" fullWidth>
                               <InputLabel>Estado Civil</InputLabel>
                               <Select

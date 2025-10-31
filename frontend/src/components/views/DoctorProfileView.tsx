@@ -49,7 +49,7 @@ interface DoctorProfileViewProps {
   doctorProfile: any;
   isLoading: boolean;
   onEdit: () => void;
-  onSave: (profile: any) => void;
+  onSave: (documents?: { professional_documents?: any[], personal_documents?: any[] }) => void;
   isEditing: boolean;
   dialogOpen: boolean;
   formData: any;
@@ -228,13 +228,17 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                 <Chip 
                   size="small"
                 />
-                {doctorProfile.professional_license && (
-                  <Chip 
-                    label={`Cédula: ${doctorProfile.professional_license}`}
-                    color="primary"
-                    variant="outlined"
-                    size="small"
-                  />
+                {/* Mostrar todos los documentos profesionales */}
+                {doctorProfile.professional_documents && doctorProfile.professional_documents.length > 0 && (
+                  doctorProfile.professional_documents.map((doc: any, index: number) => (
+                    <Chip 
+                      key={index}
+                      label={`${doc.document_name || 'Documento'}: ${doc.document_value || ''}`}
+                      color="primary"
+                      variant="outlined"
+                      size="small"
+                    />
+                  ))
                 )}
               </Box>
             </Box>
@@ -265,11 +269,6 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
       </Box>
 
       {/* Messages */}
-      {successMessage && (
-        <Alert severity="success" sx={{ mb: 3 }}>
-          {successMessage}
-        </Alert>
-      )}
       {errorMessage && (
         <Box sx={{ mb: 3, p: 2, bgcolor: 'error.main', borderRadius: 1 }}>
           <Typography color="white">{errorMessage}</Typography>
@@ -313,15 +312,30 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                     secondary={doctorProfile.primary_phone || doctorProfile.phone || "No especificado"} 
                             />
                           </ListItem>
-                            <ListItem sx={{ px: 0 }}>
-                              <ListItemIcon>
-                    <BadgeIcon color="action" />
-                              </ListItemIcon>
-                              <ListItemText 
-                    primary="CURP" 
-                    secondary={doctorProfile.curp || "No especificada"} 
-                        />
-                      </ListItem>
+                            {/* Documentos Personales */}
+                            {doctorProfile.personal_documents && Object.keys(doctorProfile.personal_documents).length > 0 ? (
+                              Object.entries(doctorProfile.personal_documents).map(([docName, docValue]: [string, any]) => (
+                                <ListItem key={docName} sx={{ px: 0 }}>
+                                  <ListItemIcon>
+                                    <BadgeIcon color="action" />
+                                  </ListItemIcon>
+                                  <ListItemText 
+                                    primary={docName} 
+                                    secondary={docValue || "No especificado"} 
+                                  />
+                                </ListItem>
+                              ))
+                            ) : doctorProfile.curp ? (
+                              <ListItem sx={{ px: 0 }}>
+                                <ListItemIcon>
+                                  <BadgeIcon color="action" />
+                                </ListItemIcon>
+                                <ListItemText 
+                                  primary="CURP" 
+                                  secondary={doctorProfile.curp} 
+                                />
+                              </ListItem>
+                            ) : null}
                     </List>
             </CardContent>
           </Card>
@@ -352,15 +366,30 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                     secondary={doctorProfile.specialty_name || "No especificada"} 
                             />
                           </ListItem>
-                          <ListItem sx={{ px: 0 }}>
-                            <ListItemIcon>
-                    <BadgeIcon color="action" />
-                            </ListItemIcon>
-                            <ListItemText 
-                    primary="Cédula Profesional" 
-                    secondary={doctorProfile.professional_license || "No especificada"} 
-                            />
-                          </ListItem>
+                          {/* Documentos Profesionales */}
+                          {doctorProfile.professional_documents && doctorProfile.professional_documents.length > 0 ? (
+                            doctorProfile.professional_documents.map((doc: any, index: number) => (
+                              <ListItem key={index} sx={{ px: 0 }}>
+                                <ListItemIcon>
+                                  <BadgeIcon color="action" />
+                                </ListItemIcon>
+                                <ListItemText 
+                                  primary={doc.document_name || "Documento Profesional"} 
+                                  secondary={doc.document_value || "No especificado"} 
+                                />
+                              </ListItem>
+                            ))
+                          ) : (
+                            <ListItem sx={{ px: 0 }}>
+                              <ListItemIcon>
+                                <BadgeIcon color="action" />
+                              </ListItemIcon>
+                              <ListItemText 
+                                primary="Documento Profesional" 
+                                secondary="No especificado" 
+                              />
+                            </ListItem>
+                          )}
                           <ListItem sx={{ px: 0 }}>
                             <ListItemIcon>
                     <HospitalIcon color="action" />
@@ -744,8 +773,13 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
         isEditing={isEditing}
         formData={formData}
         setFormData={setFormData}
-        onSubmit={() => {
-          onSave(formData);
+        onSubmit={(documents) => {
+          // onSave es handleSubmit del hook, que acepta documentos como parámetro
+          if (documents) {
+            onSave(documents);
+          } else {
+            onSave();
+          }
         }}
         formErrorMessage={formErrorMessage || ''}
         setFormErrorMessage={setFormErrorMessage || (() => {})}

@@ -164,7 +164,7 @@ export const PersonalInfoSection: React.FC<PersonalInfoSectionProps> = ({
           </FormControl>
         </Grid>
         
-        {/* CURP */}
+        {/* CURP - LEGACY: Este componente parece no estar en uso, manteniendo por compatibilidad */}
         <Grid item xs={12} sm={6}>
           <TextField
             label="CURP"
@@ -174,11 +174,10 @@ export const PersonalInfoSection: React.FC<PersonalInfoSectionProps> = ({
             helperText={errors.curp || 'Clave Única de Registro de Población'}
             fullWidth
             required
-            inputProps={{ maxLength: 18 }}
           />
         </Grid>
         
-        {/* RFC */}
+        {/* RFC - LEGACY: Este componente parece no estar en uso, manteniendo por compatibilidad */}
         <Grid item xs={12} sm={6}>
           <TextField
             label="RFC"
@@ -187,7 +186,6 @@ export const PersonalInfoSection: React.FC<PersonalInfoSectionProps> = ({
             error={!!errors.rfc}
             helperText={errors.rfc || 'Registro Federal de Contribuyentes'}
             fullWidth
-            inputProps={{ maxLength: 13 }}
           />
         </Grid>
       </Grid>

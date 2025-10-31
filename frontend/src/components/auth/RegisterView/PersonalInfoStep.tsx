@@ -7,12 +7,14 @@ import {
   Select,
   MenuItem,
   Typography,
-  Grid
+  Grid,
+  FormHelperText
 } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
+import { CountryCodeSelector } from '../../common/CountryCodeSelector';
 
 interface PersonalInfoStepProps {
   formData: {
@@ -22,7 +24,8 @@ interface PersonalInfoStepProps {
     curp: string;
     gender: string;
     birth_date: string;
-    phone: string;
+    phone_country_code: string;
+    phone_number: string;
   };
   onInputChange: (field: string, value: string) => void;
   fieldErrors: Record<string, string>;
@@ -95,11 +98,10 @@ export const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({
             helperText={fieldErrors.curp || 'Clave Única de Registro de Población'}
             fullWidth
             required
-            inputProps={{ maxLength: 18 }}
           />
         </Grid>
         
-        {/* Gender */}
+        {/* Gender and Birth Date in same row */}
         <Grid item xs={12} sm={6}>
           <FormControl fullWidth error={!!fieldErrors.gender}>
             <InputLabel>Género</InputLabel>
@@ -118,7 +120,6 @@ export const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({
           </FormControl>
         </Grid>
         
-        {/* Birth Date */}
         <Grid item xs={12} sm={6}>
           <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
             <DatePicker
@@ -139,17 +140,40 @@ export const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({
         
         {/* Phone */}
         <Grid item xs={12}>
-          <TextField
-            label="Teléfono"
-            type="tel"
-            value={formData.phone}
-            onChange={(e) => onInputChange('phone', e.target.value)}
-            error={!!fieldErrors.phone}
-            helperText={fieldErrors.phone}
-            fullWidth
-            required
-            placeholder="+52 55 1234 5678"
-          />
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <Box sx={{ flex: '0 0 200px', minWidth: 200 }}>
+              <CountryCodeSelector
+                value={formData.phone_country_code}
+                onChange={(code) => onInputChange('phone_country_code', code)}
+                label="Código de país *"
+                error={!!fieldErrors.phone_country_code}
+                helperText={fieldErrors.phone_country_code}
+              />
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 200 }}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Número telefónico *"
+                type="tel"
+                value={formData.phone_number}
+                onChange={(e) => {
+                  // Solo permitir números
+                  const value = e.target.value.replace(/\D/g, '');
+                  onInputChange('phone_number', value);
+                }}
+                required
+                placeholder="Ej: 5551234567"
+                error={!!fieldErrors.phone_number}
+                helperText={fieldErrors.phone_number}
+                inputProps={{
+                  autoComplete: 'tel',
+                  'data-form-type': 'other'
+                }}
+                autoComplete="tel"
+              />
+            </Box>
+          </Box>
         </Grid>
       </Grid>
     </Box>

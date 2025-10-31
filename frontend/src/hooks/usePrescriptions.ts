@@ -129,7 +129,18 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
       console.log('✅ Final medications array:', medicationsArray);
       console.log('✅ Final medications array length:', medicationsArray.length);
       
-      setMedications(medicationsArray);
+      // Remove duplicates by medication name (case-insensitive)
+      const uniqueMedications = medicationsArray.reduce((acc: Medication[], medication: Medication) => {
+        const nameLower = (medication.name || '').toLowerCase().trim();
+        const exists = acc.some(m => (m.name || '').toLowerCase().trim() === nameLower);
+        if (!exists) {
+          acc.push(medication);
+        }
+        return acc;
+      }, []);
+      
+      console.log('✅ Unique medications count:', uniqueMedications.length);
+      setMedications(uniqueMedications);
     } catch (err) {
       console.error('❌ Error fetching medications:', err);
       console.error('❌ Error response:', err.response?.data);
@@ -211,8 +222,15 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
       const response = await apiService.post('/api/medications', { name: medicationName });
       const newMedication = response.data;
       
-      // Add to local medications list
-      setMedications(prev => [...prev, newMedication]);
+      // Add to local medications list (avoid duplicates)
+      setMedications(prev => {
+        const nameLower = (newMedication.name || '').toLowerCase().trim();
+        const exists = prev.some(m => (m.name || '').toLowerCase().trim() === nameLower);
+        if (!exists) {
+          return [...prev, newMedication];
+        }
+        return prev;
+      });
       
       return newMedication;
     } catch (err) {

@@ -13,6 +13,7 @@ import {
   Business as BusinessIcon,
   LocationOn as LocationIcon
 } from '@mui/icons-material';
+import { CountryCodeSelector } from '../../common/CountryCodeSelector';
 
 interface OfficeInfoStepProps {
   formData: {
@@ -20,7 +21,8 @@ interface OfficeInfoStepProps {
     office_country: string;
     office_state_id: string;
     office_city: string;
-    office_phone: string;
+    office_phone_country_code: string;
+    office_phone_number: string;
     appointment_duration: string;
   };
   onInputChange: (field: string, value: string) => void;
@@ -137,18 +139,41 @@ export const OfficeInfoStep: React.FC<OfficeInfoStepProps> = ({
         </Grid>
         
         {/* Office Phone */}
-        <Grid item xs={12} sm={6}>
-          <TextField
-            label="Teléfono del Consultorio"
-            type="tel"
-            value={formData.office_phone}
-            onChange={(e) => onInputChange('office_phone', e.target.value)}
-            error={!!fieldErrors.office_phone}
-            helperText={fieldErrors.office_phone}
-            fullWidth
-            required
-            placeholder="+52 55 1234 5678"
-          />
+        <Grid item xs={12}>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <Box sx={{ flex: '0 0 200px', minWidth: 200 }}>
+              <CountryCodeSelector
+                value={formData.office_phone_country_code}
+                onChange={(code) => onInputChange('office_phone_country_code', code)}
+                label="Código de país *"
+                error={!!fieldErrors.office_phone_country_code}
+                helperText={fieldErrors.office_phone_country_code}
+              />
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 200 }}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Número telefónico *"
+                type="tel"
+                value={formData.office_phone_number}
+                onChange={(e) => {
+                  // Solo permitir números
+                  const value = e.target.value.replace(/\D/g, '');
+                  onInputChange('office_phone_number', value);
+                }}
+                required
+                placeholder="Ej: 5551234567"
+                error={!!fieldErrors.office_phone_number}
+                helperText={fieldErrors.office_phone_number}
+                inputProps={{
+                  autoComplete: 'tel',
+                  'data-form-type': 'other'
+                }}
+                autoComplete="tel"
+              />
+            </Box>
+          </Box>
         </Grid>
         
         {/* Appointment Duration */}
@@ -190,9 +215,9 @@ export const OfficeInfoStep: React.FC<OfficeInfoStepProps> = ({
           <Typography variant="body2" color="text.secondary">
             {formData.office_city}, {selectedOfficeCountry}
           </Typography>
-          {formData.office_phone && (
+          {formData.office_phone_country_code && formData.office_phone_number && (
             <Typography variant="body2" color="text.secondary">
-              Tel: {formData.office_phone}
+              Tel: {formData.office_phone_country_code}{formData.office_phone_number}
             </Typography>
           )}
           {formData.appointment_duration && (

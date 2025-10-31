@@ -128,6 +128,61 @@ class EmergencyRelationship(EmergencyRelationshipBase):
     created_at: datetime
 
 # ============================================================================
+# DOCUMENT MANAGEMENT
+# ============================================================================
+
+class DocumentTypeResponse(BaseSchema):
+    id: int
+    name: str
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class DocumentResponse(BaseSchema):
+    id: int
+    name: str
+    document_type_id: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class PersonDocumentCreate(BaseSchema):
+    document_id: int
+    document_value: str
+    issue_date: Optional[date] = None
+    expiration_date: Optional[date] = None
+    issuing_authority: Optional[str] = None
+
+class PersonDocumentUpdate(BaseSchema):
+    document_value: Optional[str] = None
+    issue_date: Optional[date] = None
+    expiration_date: Optional[date] = None
+    issuing_authority: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class PersonDocumentResponse(BaseSchema):
+    id: int
+    person_id: int
+    document_id: int
+    document_value: str
+    issue_date: Optional[date] = None
+    expiration_date: Optional[date] = None
+    issuing_authority: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    document: Optional[DocumentResponse] = None
+    
+    class Config:
+        from_attributes = True
+
+# ============================================================================
 # PERSONS (UNIFIED)
 # ============================================================================
 
@@ -137,8 +192,6 @@ class PersonBase(BaseSchema):
     first_name: str
     paternal_surname: str
     maternal_surname: Optional[str] = None
-    curp: Optional[str] = None
-    rfc: Optional[str] = None
     birth_date: Optional[date] = None
     gender: str
     civil_status: Optional[str] = None
@@ -171,14 +224,6 @@ class PersonBase(BaseSchema):
         if '@' not in v:
             raise ValueError('Email inválido')
         return v.strip().lower()
-    
-    @validator('curp')
-    def validate_curp(cls, v):
-        if not v or v.strip() == '':
-            return None
-        if len(v) != 18:
-            raise ValueError('CURP debe tener 18 caracteres')
-        return v.upper().strip()
 
 # Professional data for doctors
 class DoctorCreate(PersonBase):
@@ -193,14 +238,12 @@ class DoctorCreate(PersonBase):
     appointment_duration: Optional[int] = None  # Duration in minutes
     
     # Professional data
-    professional_license: Optional[str] = None
     specialty_id: Optional[int] = None
-    specialty_license: Optional[str] = None
     university: Optional[str] = None
     graduation_year: Optional[int] = None
-    subspecialty: Optional[str] = None
-    digital_signature: Optional[str] = None
-    professional_seal: Optional[str] = None
+    
+    # Documents (normalized)
+    documents: List[PersonDocumentCreate] = []
     
     # Schedule data (for registration)
     schedule_data: Optional[dict] = None
@@ -222,11 +265,11 @@ class DoctorUpdate(BaseSchema):
     maternal_surname: Optional[str] = None
     email: Optional[EmailStr] = None
     primary_phone: Optional[str] = None
+    primary_phone_country_code: Optional[str] = None
+    primary_phone_number: Optional[str] = None
     birth_date: Optional[date] = None
     gender: Optional[Literal['M', 'F', 'O']] = None
     civil_status: Optional[str] = None
-    curp: Optional[str] = None
-    rfc: Optional[str] = None
     birth_city: Optional[str] = None
     birth_state_id: Optional[int] = None
     
@@ -245,14 +288,14 @@ class DoctorUpdate(BaseSchema):
     offices: List[OfficeCreate] = []
     
     # Professional data
-    professional_license: Optional[str] = None
     specialty_id: Optional[int] = None
-    specialty_license: Optional[str] = None
     university: Optional[str] = None
     graduation_year: Optional[int] = None
-    subspecialty: Optional[str] = None
-    digital_signature: Optional[str] = None
-    professional_seal: Optional[str] = None
+    
+    # Documents (normalized) - accept both formats for flexibility
+    documents: List[PersonDocumentCreate] = []
+    professional_documents: Optional[List[PersonDocumentCreate]] = None
+    personal_documents: Optional[List[PersonDocumentCreate]] = None
     
     # Emergency contact
     emergency_contact_name: Optional[str] = None
@@ -268,6 +311,9 @@ class PatientCreate(PersonBase):
     # Medical data
     insurance_provider: Optional[str] = None
     insurance_number: Optional[str] = None
+    
+    # Documents (normalized)
+    documents: List[PersonDocumentCreate] = []
 
 class PersonUpdate(BaseSchema):
     # Personal data
@@ -275,8 +321,6 @@ class PersonUpdate(BaseSchema):
     first_name: Optional[str] = None
     paternal_surname: Optional[str] = None
     maternal_surname: Optional[str] = None
-    curp: Optional[str] = None
-    rfc: Optional[str] = None
     birth_date: Optional[date] = None
     gender: Optional[str] = None
     civil_status: Optional[str] = None
@@ -299,14 +343,12 @@ class PersonUpdate(BaseSchema):
     
     # Professional data (doctors)
     appointment_duration: Optional[int] = None  # Duration in minutes
-    
-    # Professional data (doctors)
-    professional_license: Optional[str] = None
     specialty_id: Optional[int] = None
-    specialty_license: Optional[str] = None
     university: Optional[str] = None
     graduation_year: Optional[int] = None
-    subspecialty: Optional[str] = None
+    
+    # Documents (normalized)
+    documents: List[PersonDocumentCreate] = []
     
     # Medical data (patients)
     insurance_provider: Optional[str] = None
@@ -613,12 +655,15 @@ class StudyCategoryBase(BaseSchema):
 class StudyCategory(StudyCategoryBase):
     id: int
     created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    # Note: updated_at column does not exist in study_categories table
 
 class StudyNormalValueBase(BaseSchema):
     age_min: Optional[int] = None
     age_max: Optional[int] = None
     gender: Optional[Literal['M', 'F', 'B']] = None
+    normal_min: Optional[Decimal] = None  # DB column name
+    normal_max: Optional[Decimal] = None  # DB column name
+    # Aliases for backward compatibility
     min_value: Optional[Decimal] = None
     max_value: Optional[Decimal] = None
     unit: Optional[str] = None

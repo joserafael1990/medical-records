@@ -39,6 +39,7 @@ import { PrivacyConsentDialog } from './PrivacyConsentDialog';
 import { ARCORequestDialog } from './ARCORequestDialog';
 import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
 import { CountryCodeSelector } from '../common/CountryCodeSelector';
+import { DocumentSelector } from '../common/DocumentSelector';
 import { extractCountryCode } from '../../utils/countryCodes';
 
 interface EmergencyRelationship {
@@ -68,6 +69,13 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
   const [phoneCountryCode, setPhoneCountryCode] = useState<string>('+52');
   const [phoneNumber, setPhoneNumber] = useState<string>('');
   
+  // State for personal documents
+  const [personalDocuments, setPersonalDocuments] = useState<Array<{
+    document_id: number | null;
+    document_value: string;
+    id?: number; // For existing documents
+  }>>([{ document_id: null, document_value: '' }]);
+
   const [formData, setFormData] = useState<PatientFormData>({
     first_name: '',
     paternal_surname: '',
@@ -79,8 +87,6 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
     primary_phone: '',
     phone: '',
     home_address: '',
-    curp: '',
-    rfc: '',
     civil_status: '',
     address_city: '',
     city: '',
@@ -180,6 +186,18 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
           const decryptedPatient = await apiService.getPatient(patient.id.toString());
           extractPhoneData(decryptedPatient.primary_phone || '');
           
+          // Load person documents
+          const documents = await apiService.getPersonDocuments(patient.id);
+          const personalDocs = documents
+            .filter(doc => doc.document?.document_type_id === 1) // Personal documents
+            .map(doc => ({
+              id: doc.id,
+              document_id: doc.document_id,
+              document_value: doc.document_value
+            }));
+          
+          setPersonalDocuments(personalDocs.length > 0 ? personalDocs : [{ document_id: null, document_value: '' }]);
+          
           setFormData({
             first_name: decryptedPatient.first_name || '',
             paternal_surname: decryptedPatient.paternal_surname || '',
@@ -191,8 +209,6 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
             primary_phone: decryptedPatient.primary_phone || '',
             phone: decryptedPatient.primary_phone || '',
             home_address: decryptedPatient.home_address || '',
-            curp: decryptedPatient.curp || '',
-            rfc: decryptedPatient.rfc || '',
             civil_status: decryptedPatient.civil_status || '',
             address_city: decryptedPatient.address_city || '',
             city: decryptedPatient.address_city || '',
@@ -219,6 +235,22 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
           // Fallback to encrypted data if API call fails
           extractPhoneData(patient.primary_phone || '');
           
+          // Try to load documents even if patient data fails
+          try {
+            const documents = await apiService.getPersonDocuments(patient.id);
+            const personalDocs = documents
+              .filter(doc => doc.document?.document_type_id === 1)
+              .map(doc => ({
+                id: doc.id,
+                document_id: doc.document_id,
+                document_value: doc.document_value
+              }));
+            setPersonalDocuments(personalDocs.length > 0 ? personalDocs : [{ document_id: null, document_value: '' }]);
+          } catch (docError) {
+            console.error('Error loading documents:', docError);
+            setPersonalDocuments([{ document_id: null, document_value: '' }]);
+          }
+          
           setFormData({
             first_name: patient.first_name || '',
             paternal_surname: patient.paternal_surname || '',
@@ -230,8 +262,6 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
             primary_phone: patient.primary_phone || '',
             phone: patient.primary_phone || '',
             home_address: patient.home_address || '',
-            curp: patient.curp || '',
-            rfc: patient.rfc || '',
             civil_status: patient.civil_status || '',
             address_city: patient.address_city || '',
             city: patient.address_city || '',
@@ -259,6 +289,7 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
         // Reset estados de teléfono
         setPhoneCountryCode('+52');
         setPhoneNumber('');
+        setPersonalDocuments([{ document_id: null, document_value: '' }]);
         
         setFormData({
           first_name: '',
@@ -271,8 +302,6 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
           primary_phone: '',
           phone: '',
           home_address: '',
-          curp: '',
-          rfc: '',
           civil_status: '',
           address_city: '',
           city: '',
@@ -380,6 +409,26 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
       };
       
       await onSubmit(formDataToSubmit);
+      
+      // Save/update documents after patient is created/updated
+      const finalPatientId = patient?.id || (await apiService.getPatients()).find(p => 
+        p.first_name === formDataToSubmit.first_name && 
+        p.paternal_surname === formDataToSubmit.paternal_surname
+      )?.id;
+      
+      if (finalPatientId) {
+        const validDocs = personalDocuments.filter(doc => doc.document_id && doc.document_value.trim());
+        for (const doc of validDocs) {
+          try {
+            await apiService.savePersonDocument(finalPatientId, {
+              document_id: doc.document_id!,
+              document_value: doc.document_value.trim()
+            });
+          } catch (docError) {
+            console.error('Error saving document:', docError);
+          }
+        }
+      }
       
       // Mostrar notificación de éxito según el tipo de operación
       if (isEditing) {
@@ -542,8 +591,8 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
             </Typography>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
 
-              <Box sx={{ display: 'flex', gap: 2, gridColumn: { xs: '1 / -1', sm: '1' } }}>
-                <Box sx={{ width: { xs: '100%', sm: '200px' } }}>
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', gridColumn: { xs: '1 / -1', sm: '1' } }}>
+                <Box sx={{ flex: '0 0 200px', minWidth: 200 }}>
                   <CountryCodeSelector
                     value={phoneCountryCode}
                     onChange={(code) => setPhoneCountryCode(code)}
@@ -573,6 +622,7 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
                   error={!!errors.primary_phone}
                   helperText={errors.primary_phone}
                   fullWidth
+                  sx={{ flex: 1 }}
                   inputProps={{
                     autoComplete: 'tel',
                     'data-form-type': 'other'
@@ -669,49 +719,72 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
               <BadgeIcon sx={{ fontSize: 20 }} />
               Información Adicional
             </Typography>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-
-              <TextField
-                label="CURP - opcional"
-                name="curp"
-                value={formData.curp}
-                onChange={handleChange('curp')}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {/* Documentos Personales */}
+              {personalDocuments.map((doc, index) => (
+                <Box key={index} sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                  <Box sx={{ flex: 1 }}>
+                    <DocumentSelector
+                      documentType="personal"
+                      value={doc}
+                      onChange={(docValue) => {
+                        const newDocs = [...personalDocuments];
+                        newDocs[index] = docValue;
+                        setPersonalDocuments(newDocs);
+                      }}
+                      label="Documento Personal"
+                      helperText="Opcional"
+                    />
+                  </Box>
+                  {personalDocuments.length > 1 && (
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        const newDocs = personalDocuments.filter((_, i) => i !== index);
+                        if (newDocs.length === 0) {
+                          setPersonalDocuments([{ document_id: null, document_value: '' }]);
+                        } else {
+                          setPersonalDocuments(newDocs);
+                        }
+                      }}
+                      sx={{ mt: '32px' }}
+                    >
+                      Eliminar
+                    </Button>
+                  )}
+                </Box>
+              ))}
+              
+              {/* Botón para agregar más documentos */}
+              <Button
                 size="small"
-                inputProps={{ maxLength: 18 }}
-                placeholder="CURP - opcional"
-                error={!!errors.curp}
-                helperText={errors.curp}
-              />
-              <TextField
-                label="RFC - opcional"
-                name="rfc"
-                value={formData.rfc}
-                onChange={handleChange('rfc')}
-                size="small"
-                inputProps={{ maxLength: 13 }}
-                placeholder="RFC - opcional"
-                error={!!errors.rfc}
-                helperText={errors.rfc}
-              />
-              <FormControl size="small" error={!!errors.civil_status} fullWidth>
-                <InputLabel id="civil-status-label">Estado Civil - opcional</InputLabel>
-                <Select
-                  name="civil_status"
-                  value={formData.civil_status}
-                  labelId="civil-status-label"
-                  label="Estado Civil - opcional"
-                  onChange={handleChange('civil_status')}
-                >
-                  <MenuItem value=""><em>Seleccione</em></MenuItem>
-                  <MenuItem value="single">Soltero(a)</MenuItem>
-                  <MenuItem value="married">Casado(a)</MenuItem>
-                  <MenuItem value="divorced">Divorciado(a)</MenuItem>
-                  <MenuItem value="widowed">Viudo(a)</MenuItem>
-                  <MenuItem value="free_union">Unión libre</MenuItem>
-                </Select>
-                {errors.civil_status && <FormHelperText>{errors.civil_status}</FormHelperText>}
-              </FormControl>
+                variant="outlined"
+                onClick={() => {
+                  setPersonalDocuments([...personalDocuments, { document_id: null, document_value: '' }]);
+                }}
+              >
+                + Agregar otro documento personal
+              </Button>
             </Box>
+            
+            <FormControl size="small" error={!!errors.civil_status} fullWidth sx={{ mt: 2 }}>
+              <InputLabel id="civil-status-label">Estado Civil - opcional</InputLabel>
+              <Select
+                name="civil_status"
+                value={formData.civil_status}
+                labelId="civil-status-label"
+                label="Estado Civil - opcional"
+                onChange={handleChange('civil_status')}
+              >
+                <MenuItem value=""><em>Seleccione</em></MenuItem>
+                <MenuItem value="single">Soltero(a)</MenuItem>
+                <MenuItem value="married">Casado(a)</MenuItem>
+                <MenuItem value="divorced">Divorciado(a)</MenuItem>
+                <MenuItem value="widowed">Viudo(a)</MenuItem>
+                <MenuItem value="free_union">Unión libre</MenuItem>
+              </Select>
+              {errors.civil_status && <FormHelperText>{errors.civil_status}</FormHelperText>}
+            </FormControl>
           </Box>
           {/* Birth Information Section */}
           <Box>

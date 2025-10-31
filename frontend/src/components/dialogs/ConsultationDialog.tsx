@@ -59,6 +59,7 @@ import {
   isVitalSignUnitReadOnly,
   TEMP_IDS
 } from '../../utils/vitalSignUtils';
+import { DocumentSelector } from '../common/DocumentSelector';
 import { apiService } from '../../services/api';
 import ClinicalStudiesSection from '../common/ClinicalStudiesSection';
 import ClinicalStudyDialogWithCatalog from './ClinicalStudyDialogWithCatalog';
@@ -229,6 +230,13 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   const [selectedAppointment, setSelectedAppointment] = useState<any | null>(null);
   const [appointmentOffice, setAppointmentOffice] = useState<any | null>(null);
   const [patientEditData, setPatientEditData] = useState<PatientFormData | null>(null);
+  
+  // State for personal document (only one allowed)
+  const [personalDocument, setPersonalDocument] = useState<{
+    document_id: number | null;
+    document_value: string;
+  }>({ document_id: null, document_value: '' });
+  
   const [countries, setCountries] = useState<any[]>([]);
   const [states, setStates] = useState<any[]>([]);
   const [birthStates, setBirthStates] = useState<any[]>([]);
@@ -366,6 +374,12 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               const patientData = await apiService.getPatient(consultation.patient_id);
               setSelectedPatient(patientData);
               setPatientEditData(patientData);
+              // Load personal document if exists
+              if (patientData.personal_documents && patientData.personal_documents.length > 0) {
+                setPersonalDocument(patientData.personal_documents[0]);
+              } else {
+                setPersonalDocument({ document_id: null, document_value: '' });
+              }
             } catch (error) {
               console.error('Error loading patient data:', error);
             }
@@ -667,6 +681,12 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       try {
         const fullPatientData = await apiService.getPatient(patient.id);
         setPatientEditData(fullPatientData);
+        // Load personal document if exists
+        if (fullPatientData.personal_documents && fullPatientData.personal_documents.length > 0) {
+          setPersonalDocument(fullPatientData.personal_documents[0]);
+        } else {
+          setPersonalDocument({ document_id: null, document_value: '' });
+        }
         
         // Check if patient has previous consultations and load previous studies
         await Promise.all([
@@ -676,9 +696,11 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       } catch (error) {
         console.error('Error loading patient data:', error);
         setPatientEditData(null);
+        setPersonalDocument({ document_id: null, document_value: '' });
       }
     } else {
       setPatientEditData(null);
+      setPersonalDocument({ document_id: null, document_value: '' });
       setPatientHasPreviousConsultations(false);
       setPatientPreviousStudies([]);
     }
@@ -935,6 +957,12 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         try {
           const fullPatientData = await apiService.getPatient(patient.id);
           setPatientEditData(fullPatientData);
+          // Load personal document if exists
+          if (fullPatientData.personal_documents && fullPatientData.personal_documents.length > 0) {
+            setPersonalDocument(fullPatientData.personal_documents[0]);
+          } else {
+            setPersonalDocument({ document_id: null, document_value: '' });
+          }
           // Update selectedPatient with fresh data including birth_date and gender
           setSelectedPatient(fullPatientData);
           
@@ -946,11 +974,13 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         } catch (error) {
           console.error('❌ Error loading decrypted patient data:', error);
           setPatientEditData(null);
+          setPersonalDocument({ document_id: null, document_value: '' });
         }
       } else {
         // console.warn('No patient found for appointment:', appointment.id);
         setSelectedPatient(null);
         setPatientEditData(null);
+        setPersonalDocument({ document_id: null, document_value: '' });
         setPatientHasPreviousConsultations(false);
         setPatientPreviousStudies([]);
         setAppointmentOffice(null);
@@ -1065,7 +1095,12 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     // Update patient data if modified
     if (patientEditData && selectedPatient) {
       try {
-        await apiService.updatePatient(selectedPatient.id.toString(), patientEditData);
+        // Include personal document if it has a document_id
+        const patientDataWithDocument = {
+          ...patientEditData,
+          personal_documents: personalDocument.document_id ? [personalDocument] : undefined
+        };
+        await apiService.updatePatient(selectedPatient.id.toString(), patientDataWithDocument);
       } catch (error) {
         console.error('Error updating patient data:', error);
         setError('Error al actualizar los datos del paciente');
@@ -1650,24 +1685,18 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                     Información Adicional
                   </Typography>
                   <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-                    <TextField
-                      label="CURP"
-                      value={patientEditData.curp || ''}
-                      onChange={(e: any) => handlePatientDataChange('curp', e.target.value)}
-                      size="small"
-                      inputProps={{ maxLength: 18 }}
-                      helperText={patientEditData.curp && patientEditData.curp.length !== 18 ? 'El CURP debe tener exactamente 18 caracteres' : ''}
-                      error={patientEditData.curp && patientEditData.curp.length !== 18}
-                    />
-                    <TextField
-                      label="RFC"
-                      value={patientEditData.rfc || ''}
-                      onChange={(e: any) => handlePatientDataChange('rfc', e.target.value)}
-                      size="small"
-                      inputProps={{ maxLength: 13 }}
-                      helperText={patientEditData.rfc && patientEditData.rfc.length < 10 ? 'El RFC debe tener al menos 10 caracteres' : ''}
-                      error={patientEditData.rfc && patientEditData.rfc.length < 10}
-                    />
+                    {/* Documento Personal - Solo uno permitido */}
+                    <Box sx={{ gridColumn: { xs: '1 / -1', sm: '1 / -1' } }}>
+                      <DocumentSelector
+                        documentType="personal"
+                        value={personalDocument}
+                        onChange={(newValue) => {
+                          setPersonalDocument(newValue);
+                        }}
+                        label="Documento Personal"
+                        required={false}
+                      />
+                    </Box>
                     <FormControl size="small" fullWidth>
                       <InputLabel>Estado Civil</InputLabel>
                       <Select

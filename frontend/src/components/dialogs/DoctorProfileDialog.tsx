@@ -16,7 +16,8 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem
+  MenuItem,
+  Autocomplete
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -24,6 +25,9 @@ import {
   Edit as EditIcon
 } from '@mui/icons-material';
 import { apiService } from '../../services/api';
+import { CountryCodeSelector } from '../common/CountryCodeSelector';
+import { DocumentSelector } from '../common/DocumentSelector';
+import { extractCountryCode } from '../../utils/countryCodes';
 
 interface DoctorFormData {
   title: string;
@@ -31,12 +35,10 @@ interface DoctorFormData {
   paternal_surname: string;
   maternal_surname: string;
   email: string;
-  phone: string;
+  phone: string; // Mantener para compatibilidad, se parseará a country_code + number
   birth_date: string;
   gender: string;
-  curp: string;
-  rfc: string;
-  professional_license: string;
+  // Documentos normalizados - se manejan en estado separado
   university: string;
   graduation_year: string;
   specialty: string;
@@ -55,7 +57,7 @@ interface DoctorProfileDialogProps {
   isEditing: boolean;
   formData: DoctorFormData;
   setFormData: (data: DoctorFormData | ((prev: DoctorFormData) => DoctorFormData)) => void;
-  onSubmit: () => void;
+  onSubmit: (documents?: { professional_documents?: any[], personal_documents?: any[] }) => void;
   formErrorMessage: string;
   setFormErrorMessage: (message: string) => void;
   isSubmitting: boolean;
@@ -77,6 +79,22 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
   const [countries, setCountries] = useState<{ id: number; name: string }[]>([]);
   const [states, setStates] = useState<{ id: number; name: string }[]>([]);
   const [timezones, setTimezones] = useState<{ value: string; label: string }[]>([]);
+  const [specialties, setSpecialties] = useState<Array<{ id: number; name: string }>>([]);
+  
+  // Estados para teléfono con código de país
+  const [phoneCountryCode, setPhoneCountryCode] = useState<string>('+52');
+  const [phoneNumber, setPhoneNumber] = useState<string>('');
+  
+  // Estados para documentos
+  const [professionalDocuments, setProfessionalDocuments] = useState<Array<{
+    document_id: number | null;
+    document_value: string;
+  }>>([{ document_id: null, document_value: '' }]);
+  
+  const [personalDocuments, setPersonalDocuments] = useState<Array<{
+    document_id: number | null;
+    document_value: string;
+  }>>([{ document_id: null, document_value: '' }]);
 
   useEffect(() => {
     const loadCountries = async () => {
@@ -97,11 +115,84 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
       }
     };
 
+    const loadSpecialties = async () => {
+      try {
+        const specialtiesData = await apiService.getSpecialties();
+        setSpecialties(specialtiesData);
+      } catch (error) {
+        console.error('Error loading specialties:', error);
+      }
+    };
+
     if (open) {
       loadCountries();
       loadTimezones();
+      loadSpecialties();
+      
+      // Si está en modo edición, cargar documentos existentes
+      if (isEditing) {
+        loadExistingDocuments();
+        // Parsear teléfono existente
+        if (formData.phone) {
+          const phoneData = extractCountryCode(formData.phone);
+          setPhoneCountryCode(phoneData.countryCode);
+          setPhoneNumber(phoneData.number);
+        }
+      } else {
+        // Resetear estados para modo creación
+        setPhoneCountryCode('+52');
+        setPhoneNumber('');
+        setProfessionalDocuments([{ document_id: null, document_value: '' }]);
+        setPersonalDocuments([{ document_id: null, document_value: '' }]);
+      }
     }
-  }, [open]);
+  }, [open, isEditing, formData.phone]);
+  
+  const loadExistingDocuments = async () => {
+    try {
+      // Obtener perfil completo para acceder a documentos
+      const profile = await apiService.getDoctorProfile();
+      
+      // Cargar documentos profesionales
+      if (profile.professional_documents && profile.professional_documents.length > 0) {
+        setProfessionalDocuments(
+          profile.professional_documents.map((doc: any) => ({
+            document_id: doc.document_id || null,
+            document_value: doc.document_value || ''
+          }))
+        );
+      } else {
+        setProfessionalDocuments([{ document_id: null, document_value: '' }]);
+      }
+      
+      // Cargar documentos personales
+      if (profile.personal_documents) {
+        const personalDocsArray = Object.entries(profile.personal_documents).map(([name, value]: [string, any]) => {
+          // Necesitamos encontrar el document_id por nombre
+          return { name, value: value as string };
+        });
+        
+        // Cargar los tipos de documentos para mapear nombres a IDs
+        const docTypes = await apiService.getDocumentTypes();
+        const personalType = docTypes.find((t: any) => t.name === 'Personal');
+        if (personalType) {
+          const allPersonalDocs = await apiService.getDocumentsByType(personalType.id);
+          const docsWithIds = personalDocsArray.map(({ name, value }) => {
+            const doc = allPersonalDocs.find((d: any) => d.name === name);
+            return {
+              document_id: doc ? doc.id : null,
+              document_value: value
+            };
+          });
+          setPersonalDocuments(docsWithIds.length > 0 ? docsWithIds : [{ document_id: null, document_value: '' }]);
+        }
+      } else {
+        setPersonalDocuments([{ document_id: null, document_value: '' }]);
+      }
+    } catch (error) {
+      console.error('Error loading existing documents:', error);
+    }
+  };
 
   // Cargar estados cuando cambie el país seleccionado
   useEffect(() => {
@@ -153,7 +244,51 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
   };
 
   const handleSubmit = () => {
-    onSubmit();
+    // Construir teléfono completo antes de enviar
+    const fullPhone = phoneCountryCode + phoneNumber;
+    
+    // Debug: Ver estado actual de los documentos ANTES de filtrar
+    console.log('📋 DoctorProfileDialog.handleSubmit - RAW documents state:', {
+      allProfessional: professionalDocuments,
+      allPersonal: personalDocuments,
+      professionalCount: professionalDocuments.length,
+      personalCount: personalDocuments.length
+    });
+    
+    // Enviar todos los documentos que tengan document_id (incluso si el valor cambió o solo cambió el tipo)
+    // Filtrar solo los que NO tienen document_id (documentos vacíos)
+    const validProfessionalDocs = professionalDocuments.filter(d => {
+      const hasId = !!d.document_id;
+      console.log('🔍 Filtering professional doc:', { doc: d, hasId, document_id: d.document_id });
+      return hasId;
+    });
+    const validPersonalDocs = personalDocuments.filter(d => {
+      const hasId = !!d.document_id;
+      console.log('🔍 Filtering personal doc:', { doc: d, hasId, document_id: d.document_id });
+      return hasId;
+    });
+    
+    console.log('📋 DoctorProfileDialog.handleSubmit - FILTERED documents to send:', {
+      professional: validProfessionalDocs,
+      personal: validPersonalDocs,
+      professionalCount: validProfessionalDocs.length,
+      personalCount: validPersonalDocs.length
+    });
+    
+    // Actualizar formData con teléfono
+    setFormData(prev => ({
+      ...prev,
+      phone: fullPhone
+    }));
+    
+    // Pasar documentos directamente a onSubmit para evitar problemas de asincronía con setFormData
+    const docsToSend = {
+      professional_documents: validProfessionalDocs.length > 0 ? validProfessionalDocs : undefined,
+      personal_documents: validPersonalDocs.length > 0 ? validPersonalDocs : undefined
+    };
+    
+    console.log('📤 Calling onSubmit with:', docsToSend);
+    onSubmit(docsToSend);
   };
   return (
     <Dialog 
@@ -245,28 +380,7 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
               error={!!fieldErrors.email}
               helperText={fieldErrors.email}
             />
-              <TextField
-              name="phone"
-              label="Teléfono *"
-                value={formData.phone || ''}
-              onChange={handleChange}
-              size="small"
-                required
-                error={!!fieldErrors.phone}
-              helperText={fieldErrors.phone}
-            />
-            <TextField
-              name="birth_date"
-                  label="Fecha de Nacimiento *"
-              type="date"
-              value={formData.birth_date || ''}
-              onChange={handleChange}
-              size="small"
-              required
-              error={!!fieldErrors.birth_date}
-              helperText={fieldErrors.birth_date}
-              InputLabelProps={{ shrink: true }}
-            />
+            {/* Género y Fecha de Nacimiento en la misma fila */}
             <TextField
               name="gender"
               label="Género"
@@ -320,19 +434,68 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
               <option value="O">Otro</option>
             </TextField>
             <TextField
-              name="curp"
-              label="CURP *"
-              value={formData.curp || ''}
+              name="birth_date"
+                  label="Fecha de Nacimiento *"
+              type="date"
+              value={formData.birth_date || ''}
               onChange={handleChange}
               size="small"
               required
-              error={!!fieldErrors.curp}
-              helperText={fieldErrors.curp}
-              inputProps={{
-                maxLength: 18,
-                style: { textTransform: 'uppercase' }
-              }}
+              error={!!fieldErrors.birth_date}
+              helperText={fieldErrors.birth_date}
+              InputLabelProps={{ shrink: true }}
             />
+            {/* Código de país y teléfono en la siguiente fila */}
+              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', gridColumn: { xs: '1 / -1', sm: '1 / -1' } }}>
+                <Box sx={{ flex: '1 1 250px' }}>
+                  <CountryCodeSelector
+                    value={phoneCountryCode}
+                    onChange={(code) => setPhoneCountryCode(code)}
+                    label="Código de país *"
+                    error={!!fieldErrors.phone}
+                  />
+                </Box>
+                <Box sx={{ flex: '1 1 250px' }}>
+                  <TextField
+                    fullWidth
+                    margin="normal"
+                    label="Número telefónico *"
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => {
+                      // Solo permitir números
+                      const value = e.target.value.replace(/\D/g, '');
+                      setPhoneNumber(value);
+                    }}
+                    placeholder="Ej: 5551234567"
+                    error={!!fieldErrors.phone}
+                    helperText={fieldErrors.phone}
+                    inputProps={{
+                      autoComplete: 'tel',
+                      'data-form-type': 'other'
+                    }}
+                    required
+                  />
+                </Box>
+              </Box>
+            </Box>
+            
+            {/* Documento Personal - Solo uno permitido */}
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                Documento Personal
+              </Typography>
+              <DocumentSelector
+                documentType="personal"
+                value={personalDocuments[0] || { document_id: null, document_value: '' }}
+                onChange={(newValue) => {
+                  setPersonalDocuments([newValue]);
+                }}
+                label="Documento Personal"
+                required={!isEditing}
+                error={!isEditing && !personalDocuments[0]?.document_id && !!fieldErrors.curp}
+                helperText={!isEditing ? fieldErrors.curp : undefined}
+              />
             </Box>
 
           {/* Información Profesional */}
@@ -362,16 +525,23 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
                 <option value="M.C.">M.C.</option>
                 <option value="Esp.">Esp.</option>
               </TextField>
-              <TextField
-              name="professional_license"
-              label="Cédula Profesional *"
-              value={formData.professional_license || ''}
-              onChange={handleChange}
-              size="small"
-                required
-              error={!!fieldErrors.professional_license}
-              helperText={fieldErrors.professional_license}
-            />
+              {/* Documento Profesional - Solo uno permitido */}
+              <Box sx={{ gridColumn: { xs: '1 / -1', sm: '1 / -1' } }}>
+                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                  Documento Profesional
+                </Typography>
+                <DocumentSelector
+                  documentType="professional"
+                  value={professionalDocuments[0] || { document_id: null, document_value: '' }}
+                  onChange={(newValue) => {
+                    setProfessionalDocuments([newValue]);
+                  }}
+                  label="Documento Profesional"
+                  required={!isEditing}
+                  error={!isEditing && !professionalDocuments[0]?.document_id && !!fieldErrors.professional_license}
+                  helperText={!isEditing ? fieldErrors.professional_license : undefined}
+                />
+              </Box>
             <TextField
               name="university"
               label="Universidad *"
@@ -393,15 +563,37 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
               error={!!fieldErrors.graduation_year}
               helperText={fieldErrors.graduation_year}
             />
-            <TextField
-              name="specialty"
-              label="Especialidad *"
-              value={formData.specialty || ''}
-              onChange={handleChange}
-              size="small"
+            <Autocomplete
+              value={specialties.find(s => s.name === formData.specialty) || null}
+              onChange={(event, newValue: { id: number; name: string } | null) => {
+                setFormData(prev => ({ ...prev, specialty: newValue?.name || '' }));
+                if (fieldErrors.specialty) {
+                  setFormErrorMessage('');
+                }
+              }}
+              options={specialties}
+              getOptionLabel={(option) => option.name}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Especialidad *"
                   required
+                  size="small"
                   error={!!fieldErrors.specialty}
-              helperText={fieldErrors.specialty}
+                  helperText={fieldErrors.specialty}
+                />
+              )}
+              componentsProps={{
+                popper: {
+                  style: { zIndex: 13000 }
+                }
+              }}
+              sx={{
+                width: '100%',
+                '& .MuiAutocomplete-popper': {
+                  zIndex: 13000
+                }
+              }}
             />
             <TextField
               name="appointment_duration"

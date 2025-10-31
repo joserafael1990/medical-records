@@ -24,9 +24,23 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log the error safely
-    safeConsoleError('React Error Boundary caught an error:', error);
-    safeConsoleError('Error Info:', errorInfo);
+    // Log the error safely with better serialization
+    try {
+      const errorDetails = {
+        message: error?.message || 'Unknown error',
+        name: error?.name || 'Error',
+        stack: error?.stack || 'No stack trace',
+        componentStack: errorInfo?.componentStack || 'No component stack'
+      };
+      
+      safeConsoleError('React Error Boundary caught an error:', errorDetails);
+      console.error('Full error object:', error);
+      console.error('Error Info:', errorInfo);
+    } catch (logError) {
+      // Fallback if logging fails
+      console.error('Error in ErrorBoundary logging:', logError);
+      console.error('Original error message:', error?.message || String(error));
+    }
     
     this.setState({
       hasError: true,
@@ -85,13 +99,29 @@ class ErrorBoundary extends Component<Props, State> {
                   }}
                 >
                   <Typography variant="body2" component="pre" sx={{ fontSize: '0.8rem' }}>
-                    {this.state.error.message}
-                    {this.state.error.stack && (
-                      <>
-                        {'\n\nStack trace:\n'}
-                        {this.state.error.stack}
-                      </>
-                    )}
+                    {(() => {
+                      const error = this.state.error;
+                      if (!error) return 'Error desconocido';
+                      
+                      // Safe error message extraction
+                      let errorMessage = 'Error desconocido';
+                      try {
+                        if (error.message) {
+                          errorMessage = error.message;
+                        } else if (typeof error === 'string') {
+                          errorMessage = error;
+                        } else if (typeof error === 'object') {
+                          // Try to extract meaningful info from object
+                          errorMessage = JSON.stringify(error, Object.getOwnPropertyNames(error), 2);
+                        } else {
+                          errorMessage = String(error);
+                        }
+                      } catch (e) {
+                        errorMessage = String(error);
+                      }
+                      
+                      return errorMessage + (error.stack ? `\n\nStack trace:\n${error.stack}` : '');
+                    })()}
                   </Typography>
                 </Paper>
               </Box>

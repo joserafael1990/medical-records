@@ -29,8 +29,6 @@ export interface PatientFormData {
   gender?: string;
   civil_status?: string;
   home_address?: string;
-  curp?: string;
-  rfc?: string;
   address_city?: string;
   address_state_id?: string;
   address_postal_code?: string;

@@ -331,21 +331,17 @@ export const useDiagnosisCatalog = () => {
     }
   }, []);
 
-  // Get diagnosis statistics
+  // Get diagnosis statistics (non-critical, used for display only)
   const getStats = useCallback(async () => {
     try {
-      setLoading(true);
-      setError(null);
-      
+      // Don't set loading state for stats as it's non-critical
       const response = await apiService.get('/api/diagnosis/stats');
       setStats(response.data);
       return response.data;
     } catch (err: any) {
-      const errorMessage = err.response?.data?.detail || 'Error loading diagnosis statistics';
-      setError(errorMessage);
-      throw new Error(errorMessage);
-    } finally {
-      setLoading(false);
+      // Don't set error state or throw - stats are non-critical
+      console.warn('⚠️ Could not load diagnosis statistics (non-critical):', err);
+      return null;
     }
   }, []);
 
@@ -415,13 +411,25 @@ export const useDiagnosisCatalog = () => {
   useEffect(() => {
     const loadInitialData = async () => {
       try {
+        // Load critical data first (categories and specialties)
         await Promise.all([
           getCategories(),
-          getSpecialties(),
-          getStats()
+          getSpecialties()
         ]);
+        
+        // Try to load stats, but don't fail if it errors (non-critical)
+        try {
+          await getStats();
+        } catch (statsErr) {
+          console.warn('⚠️ Could not load diagnosis statistics (non-critical):', statsErr);
+          // Don't set error state for stats failure as it's not critical
+        }
       } catch (err) {
-        console.error('Error loading initial diagnosis data:', err);
+        console.error('❌ Error loading initial diagnosis data:', err);
+        // Only set error for critical failures (categories/specialties)
+        if (err instanceof Error && !err.message.includes('statistics')) {
+          setError(err.message);
+        }
       }
     };
 

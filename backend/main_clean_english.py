@@ -22,7 +22,7 @@ import uuid
 import crud
 import schemas
 import auth
-from database import get_db, Person, Specialty, Country, State, EmergencyRelationship, Appointment, MedicalRecord, ClinicalStudy, VitalSign, ConsultationVitalSign, Medication, ConsultationPrescription, AuditLog, PrivacyNotice, PrivacyConsent, ARCORequest, Office, AppointmentType
+from database import get_db, Person, Specialty, Country, State, EmergencyRelationship, Appointment, MedicalRecord, ClinicalStudy, VitalSign, ConsultationVitalSign, Medication, ConsultationPrescription, AuditLog, PrivacyNotice, PrivacyConsent, ARCORequest, Office, AppointmentType, DocumentType, Document, PersonDocument
 from appointment_service import AppointmentService
 from audit_service import audit_service
 import data_retention_service as retention
@@ -612,27 +612,34 @@ async def get_medications(
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
-    """Get all medications or search by name"""
+    """Get all medications or search by name (returns unique medications by name)"""
     print(f"💊 Getting medications. Search term: {search}")
     
     try:
-        query = db.query(Medication).order_by(Medication.name)
-        
+        # Use DISTINCT ON to get unique medications by name (keeping the first one by id)
         if search:
-            query = query.filter(Medication.name.ilike(f"%{search}%"))
+            # For search, get distinct names and return the first medication with each name
+            query = db.query(Medication).filter(Medication.name.ilike(f"%{search}%")).order_by(Medication.name, Medication.id)
+        else:
+            query = db.query(Medication).order_by(Medication.name, Medication.id)
         
         medications = query.all()
         
+        # Filter duplicates by name, keeping only the first occurrence (lowest id)
+        seen_names = {}
         medications_data = []
         for medication in medications:
-            medication_data = {
-                "id": medication.id,
-                "name": medication.name,
-                "created_at": medication.created_at.isoformat() if medication.created_at else None
-            }
-            medications_data.append(medication_data)
+            name_lower = medication.name.lower().strip()
+            if name_lower not in seen_names:
+                seen_names[name_lower] = True
+                medication_data = {
+                    "id": medication.id,
+                    "name": medication.name,
+                    "created_at": medication.created_at.isoformat() if medication.created_at else None
+                }
+                medications_data.append(medication_data)
         
-        print(f"✅ Found {len(medications_data)} medications")
+        print(f"✅ Found {len(medications_data)} unique medications (from {len(medications)} total)")
         return medications_data
         
     except Exception as e:
@@ -2163,7 +2170,7 @@ async def process_text_cancellation_request(text: str, patient_phone: str, db: S
 
 @app.get("/api/catalogs/specialties")
 async def get_specialties():
-    """Get list of medical specialties"""
+    """Get list of medical specialties from medical_specialties table"""
     import psycopg2
     try:
         conn = psycopg2.connect(
@@ -2175,7 +2182,8 @@ async def get_specialties():
         )
         cur = conn.cursor()
         
-        cur.execute('SELECT id, name, active FROM specialties WHERE active = true ORDER BY name')
+        # Query medical_specialties table (not specialties)
+        cur.execute('SELECT id, name, is_active FROM medical_specialties WHERE is_active = true ORDER BY name')
         specialties = cur.fetchall()
         
         result = []
@@ -2206,7 +2214,104 @@ async def get_states(
     """Get list of states"""
     return crud.get_states(db, country_id=country_id, active=True)
 
+# ============================================================================
+# DOCUMENT MANAGEMENT ENDPOINTS
+# ============================================================================
 
+@app.get("/api/document-types", response_model=List[schemas.DocumentTypeResponse])
+async def get_document_types(
+    active_only: bool = Query(True),
+    db: Session = Depends(get_db)
+):
+    """Get list of document types"""
+    return crud.get_document_types(db, active_only=active_only)
+
+@app.get("/api/document-types/{document_type_id}/documents", response_model=List[schemas.DocumentResponse])
+async def get_documents_by_type(
+    document_type_id: int,
+    active_only: bool = Query(True),
+    db: Session = Depends(get_db)
+):
+    """Get all documents of a specific type"""
+    return crud.get_documents_by_type(db, document_type_id, active_only=active_only)
+
+@app.get("/api/documents", response_model=List[schemas.DocumentResponse])
+async def get_documents(
+    document_type_id: Optional[int] = Query(None),
+    active_only: bool = Query(True),
+    db: Session = Depends(get_db)
+):
+    """Get all documents with optional filter by type"""
+    return crud.get_documents(db, document_type_id=document_type_id, active_only=active_only)
+
+@app.get("/api/persons/{person_id}/documents", response_model=List[schemas.PersonDocumentResponse])
+async def get_person_documents(
+    person_id: int,
+    active_only: bool = Query(True),
+    current_user: Person = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all documents for a person"""
+    # Verify access (doctor can only access own documents or own patients' documents)
+    if current_user.person_type == 'doctor':
+        if person_id != current_user.id:
+            # Check if it's a patient created by this doctor
+            person = crud.get_person(db, person_id)
+            if not person or person.created_by != current_user.id:
+                raise HTTPException(status_code=403, detail="Access denied")
+    
+    return crud.get_person_documents(db, person_id, active_only=active_only)
+
+@app.post("/api/persons/{person_id}/documents", response_model=schemas.PersonDocumentResponse)
+async def create_person_document(
+    person_id: int,
+    document_data: schemas.PersonDocumentCreate,
+    current_user: Person = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create or update a person document"""
+    # Verify access
+    if current_user.person_type == 'doctor':
+        if person_id != current_user.id:
+            person = crud.get_person(db, person_id)
+            if not person or person.created_by != current_user.id:
+                raise HTTPException(status_code=403, detail="Access denied")
+    
+    person_doc = crud.upsert_person_document(
+        db=db,
+        person_id=person_id,
+        document_id=document_data.document_id,
+        document_value=document_data.document_value,
+        issue_date=document_data.issue_date,
+        expiration_date=document_data.expiration_date,
+        issuing_authority=document_data.issuing_authority
+    )
+    db.commit()
+    db.refresh(person_doc)
+    # Load document relationship
+    person_doc = db.query(PersonDocument).options(joinedload(PersonDocument.document)).filter(PersonDocument.id == person_doc.id).first()
+    return person_doc
+
+@app.delete("/api/persons/{person_id}/documents/{document_id}")
+async def delete_person_document(
+    person_id: int,
+    document_id: int,
+    current_user: Person = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a person document"""
+    # Verify access
+    if current_user.person_type == 'doctor':
+        if person_id != current_user.id:
+            person = crud.get_person(db, person_id)
+            if not person or person.created_by != current_user.id:
+                raise HTTPException(status_code=403, detail="Access denied")
+    
+    deleted = crud.delete_person_document(db, person_id, document_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Document not found")
+    db.commit()
+    return {"message": "Document deleted successfully"}
 
 @app.get("/api/catalogs/emergency-relationships")
 async def get_emergency_relationships(db: Session = Depends(get_db)):
@@ -2360,20 +2465,23 @@ async def debug_consultation_system(
                 'patient_id': record.patient_id,
                 'doctor_id': record.doctor_id,
                 'consultation_date': record.consultation_date.isoformat() if record.consultation_date else None,
-                'appointment_type_id': record.appointment_type_id,
-                'office_id': record.office_id,
+                # appointment_type_id and office_id columns don't exist in medical_records table
+                'appointment_type_id': None,
+                'office_id': None,
                 'chief_complaint': record.chief_complaint[:100] + '...' if record.chief_complaint and len(record.chief_complaint) > 100 else record.chief_complaint
             }
             medical_records_data.append(record_info)
         
         # Check medical records without office_id
         records_without_office = db.query(MedicalRecord).filter(
-            MedicalRecord.office_id.is_(None)
+            # office_id column doesn't exist in medical_records table - removed filter
+            False
         ).count()
         
         # Check medical records without appointment_type_id
         records_without_type = db.query(MedicalRecord).filter(
-            MedicalRecord.appointment_type_id.is_(None)
+            # appointment_type_id column doesn't exist in medical_records table - removed filter
+            False
         ).count()
         
         return {
@@ -2523,16 +2631,119 @@ async def get_timezones():
 # SCHEDULE MANAGEMENT ENDPOINTS
 # ============================================================================
 
-# TODO: Update this endpoint to work with offices
-# @app.post("/api/schedule/generate-weekly-template")
-# async def generate_weekly_template(
-#     current_user: Person = Depends(get_current_user),
-#     db: Session = Depends(get_db)
-# ):
-#     """Generate default weekly schedule template for doctor"""
-#     # This endpoint needs to be updated to work with the new office-based schedule system
-#     # For now, it's commented out to prevent errors
-#     pass
+@app.post("/api/schedule/generate-weekly-template")
+async def generate_weekly_template(
+    current_user: Person = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate default weekly schedule template for doctor"""
+    try:
+        api_logger.info("Generating default weekly schedule template", doctor_id=current_user.id)
+        
+        # Get doctor's first active office (or create one if none exists)
+        office_result = db.execute(text("""
+            SELECT id FROM offices 
+            WHERE doctor_id = :doctor_id AND is_active = TRUE 
+            LIMIT 1
+        """), {'doctor_id': current_user.id})
+        office_row = office_result.fetchone()
+        office_id = office_row[0] if office_row else None
+        
+        # If no office exists, create a default one
+        if not office_id:
+            # Get office data from doctor or use defaults
+            office_name = getattr(current_user, 'office_name', 'Consultorio Principal') or 'Consultorio Principal'
+            office_address = getattr(current_user, 'office_address', '') or ''
+            
+            office_insert = db.execute(text("""
+                INSERT INTO offices (doctor_id, name, address, is_active, created_at, updated_at)
+                VALUES (:doctor_id, :name, :address, TRUE, NOW(), NOW())
+                RETURNING id
+            """), {
+                'doctor_id': current_user.id,
+                'name': office_name,
+                'address': office_address
+            })
+            office_id = office_insert.fetchone()[0]
+            db.commit()
+            api_logger.info("Created default office for schedule", doctor_id=current_user.id, office_id=office_id)
+        
+        # Default schedule: Monday to Friday 9:00-18:00 with one time block
+        default_time_blocks = [{"start_time": "09:00", "end_time": "18:00"}]
+        day_names = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+        
+        weekly_schedule = {}
+        
+        # Generate schedules for Monday to Friday (active)
+        for day_index in range(5):  # 0-4 = Monday to Friday
+            day_name = day_names[day_index]
+            
+            # Check if schedule already exists for this day
+            existing = db.execute(text("""
+                SELECT id FROM schedule_templates 
+                WHERE doctor_id = :doctor_id 
+                AND day_of_week = :day_of_week 
+                AND (office_id = :office_id OR office_id IS NULL)
+                LIMIT 1
+            """), {
+                'doctor_id': current_user.id,
+                'day_of_week': day_index,
+                'office_id': office_id
+            }).fetchone()
+            
+            if existing:
+                # Update existing
+                db.execute(text("""
+                    UPDATE schedule_templates 
+                    SET start_time = '09:00',
+                        end_time = '18:00',
+                        is_active = TRUE,
+                        time_blocks = :time_blocks::jsonb,
+                        updated_at = NOW()
+                    WHERE id = :template_id
+                """), {
+                    'template_id': existing[0],
+                    'time_blocks': json.dumps(default_time_blocks)
+                })
+            else:
+                # Create new
+                result = db.execute(text("""
+                    INSERT INTO schedule_templates 
+                    (doctor_id, office_id, day_of_week, start_time, end_time, is_active, time_blocks, created_at, updated_at)
+                    VALUES (:doctor_id, :office_id, :day_of_week, '09:00', '18:00', TRUE, :time_blocks::jsonb, NOW(), NOW())
+                    RETURNING id, day_of_week, start_time, end_time, is_active
+                """), {
+                    'doctor_id': current_user.id,
+                    'office_id': office_id,
+                    'day_of_week': day_index,
+                    'time_blocks': json.dumps(default_time_blocks)
+                })
+                template_row = result.fetchone()
+            
+            weekly_schedule[day_name] = {
+                "id": existing[0] if existing else template_row[0],
+                "day_of_week": day_index,
+                "start_time": "09:00",
+                "end_time": "18:00",
+                "is_active": True,
+                "time_blocks": default_time_blocks
+            }
+        
+        # Set Saturday and Sunday to null (inactive)
+        weekly_schedule["saturday"] = None
+        weekly_schedule["sunday"] = None
+        
+        db.commit()
+        api_logger.info("Default weekly schedule generated", doctor_id=current_user.id)
+        
+        return weekly_schedule
+        
+    except Exception as e:
+        db.rollback()
+        import traceback
+        error_detail = traceback.format_exc()
+        api_logger.error("Error generating default weekly schedule", doctor_id=current_user.id, error=str(e), traceback=error_detail)
+        raise HTTPException(status_code=500, detail=f"Error generando horario por defecto: {str(e)}")
 
 @app.get("/api/schedule/templates")
 async def get_schedule_templates(current_user: Person = Depends(get_current_user)):
@@ -2569,8 +2780,7 @@ async def get_weekly_schedule_templates(
         
         # Query templates from database using SQL
         result = db.execute(text("""
-            SELECT id, day_of_week, start_time, end_time, consultation_duration,
-                   break_duration, lunch_start, lunch_end, is_active, time_blocks
+            SELECT id, day_of_week, start_time, end_time, is_active, time_blocks
             FROM schedule_templates 
             WHERE doctor_id = :doctor_id
             ORDER BY day_of_week
@@ -2612,10 +2822,6 @@ async def get_weekly_schedule_templates(
                     "day_of_week": template.day_of_week,
                     "start_time": template.start_time.strftime("%H:%M") if template.start_time else None,
                     "end_time": template.end_time.strftime("%H:%M") if template.end_time else None,
-                    "consultation_duration": template.consultation_duration,
-                    "break_duration": template.break_duration,
-                    "lunch_start": template.lunch_start.strftime("%H:%M") if template.lunch_start else None,
-                    "lunch_end": template.lunch_end.strftime("%H:%M") if template.lunch_end else None,
                     "is_active": template.is_active,
                     "time_blocks": time_blocks
                 }
@@ -2624,8 +2830,19 @@ async def get_weekly_schedule_templates(
         return weekly_schedule
         
     except Exception as e:
-        api_logger.error("Error getting weekly schedule templates", doctor_id=current_user.id, error=str(e))
-        raise HTTPException(status_code=500, detail=f"Error getting weekly templates: {str(e)}")
+        import traceback
+        error_detail = traceback.format_exc()
+        api_logger.error("Error getting weekly schedule templates", doctor_id=current_user.id, error=str(e), traceback=error_detail)
+        # Return empty schedule instead of 500 error - better UX
+        return {
+            "monday": None,
+            "tuesday": None,
+            "wednesday": None,
+            "thursday": None,
+            "friday": None,
+            "saturday": None,
+            "sunday": None
+        }
 
 @app.post("/api/schedule/templates")
 async def create_schedule_template(
@@ -2643,15 +2860,16 @@ async def create_schedule_template(
         time_blocks = template_data.get('time_blocks', [])
         
         # Set default times from first time block if available
-        start_time = None
-        end_time = None
-        if time_blocks and len(time_blocks) > 0:
-            first_block = time_blocks[0]
-            start_time = first_block.get('start_time', '09:00')
-            end_time = first_block.get('end_time', '17:00')
-        else:
-            start_time = '09:00'
-            end_time = '17:00'
+        start_time = template_data.get('start_time')
+        end_time = template_data.get('end_time')
+        if not start_time or not end_time:
+            if time_blocks and len(time_blocks) > 0:
+                first_block = time_blocks[0]
+                start_time = first_block.get('start_time', '09:00')
+                end_time = first_block.get('end_time', '17:00')
+            else:
+                start_time = start_time or '09:00'
+                end_time = end_time or '17:00'
         
         # Prepare time_blocks JSONB
         time_blocks_json = json.dumps(time_blocks) if time_blocks else '[]'
@@ -2659,20 +2877,14 @@ async def create_schedule_template(
         # Create template in database
         result = db.execute(text("""
             INSERT INTO schedule_templates 
-            (doctor_id, day_of_week, start_time, end_time, consultation_duration, 
-             break_duration, lunch_start, lunch_end, is_active, time_blocks, created_at, updated_at)
-            VALUES (:doctor_id, :day_of_week, :start_time, :end_time, :consultation_duration,
-                    :break_duration, :lunch_start, :lunch_end, :is_active, :time_blocks, NOW(), NOW())
+            (doctor_id, day_of_week, start_time, end_time, is_active, time_blocks, created_at, updated_at)
+            VALUES (:doctor_id, :day_of_week, :start_time, :end_time, :is_active, :time_blocks, NOW(), NOW())
             RETURNING id
         """), {
             "doctor_id": current_user.id,
             "day_of_week": day_of_week,
             "start_time": start_time,
             "end_time": end_time,
-            "consultation_duration": 30,
-            "break_duration": 10,
-            "lunch_start": "13:00" if is_active else None,
-            "lunch_end": "14:00" if is_active else None,
             "is_active": is_active,
             "time_blocks": time_blocks_json
         })
@@ -2686,10 +2898,6 @@ async def create_schedule_template(
             "day_of_week": day_of_week,
             "start_time": start_time,
             "end_time": end_time,
-            "consultation_duration": 30,
-            "break_duration": 10,
-            "lunch_start": "13:00" if is_active else None,
-            "lunch_end": "14:00" if is_active else None,
             "is_active": is_active,
             "time_blocks": time_blocks if time_blocks else [{"start_time": start_time, "end_time": end_time}]
         }
@@ -2749,8 +2957,7 @@ async def update_schedule_template(
         
         # Return the updated template data
         result = db.execute(text("""
-            SELECT id, day_of_week, start_time, end_time, consultation_duration,
-                   break_duration, lunch_start, lunch_end, is_active, time_blocks
+            SELECT id, day_of_week, start_time, end_time, is_active, time_blocks
             FROM schedule_templates 
             WHERE id = :template_id AND doctor_id = :doctor_id
         """), {"template_id": template_id, "doctor_id": current_user.id})
@@ -2784,10 +2991,6 @@ async def update_schedule_template(
                 "day_of_week": template.day_of_week,
                 "start_time": template.start_time.strftime("%H:%M") if template.start_time else None,
                 "end_time": template.end_time.strftime("%H:%M") if template.end_time else None,
-                "consultation_duration": template.consultation_duration,
-                "break_duration": template.break_duration,
-                "lunch_start": template.lunch_start.strftime("%H:%M") if template.lunch_start else None,
-                "lunch_end": template.lunch_end.strftime("%H:%M") if template.lunch_end else None,
                 "is_active": template.is_active,
                 "time_blocks": time_blocks
             }
@@ -2991,26 +3194,60 @@ async def register_doctor(
                 detail="El email ya está registrado en el sistema"
             )
         
-        # Check if CURP already exists
-        if doctor_data.curp:
-            existing_curp = db.query(Person).filter(Person.curp == doctor_data.curp).first()
-            if existing_curp:
-                db.rollback()
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="El CURP ya está registrado en el sistema"
-                )
+        # Validate documents: require at least 1 personal and 1 professional document
+        if not hasattr(doctor_data, 'documents') or not doctor_data.documents:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Se requiere al menos un documento personal y un documento profesional"
+            )
         
-        # Check if professional license already exists
-        if doctor_data.professional_license:
-            existing_license = db.query(Person).filter(
-                Person.professional_license == doctor_data.professional_license
+        # Get document types
+        personal_type = db.query(DocumentType).filter(DocumentType.name == 'Personal').first()
+        professional_type = db.query(DocumentType).filter(DocumentType.name == 'Profesional').first()
+        
+        if not personal_type or not professional_type:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error en configuración de tipos de documento"
+            )
+        
+        # Check documents - get all documents of each type to verify
+        personal_doc_ids = [doc.id for doc in crud.get_documents_by_type(db, personal_type.id)]
+        professional_doc_ids = [doc.id for doc in crud.get_documents_by_type(db, professional_type.id)]
+        
+        personal_docs = [d for d in doctor_data.documents if d.document_id in personal_doc_ids]
+        professional_docs = [d for d in doctor_data.documents if d.document_id in professional_doc_ids]
+        
+        if not personal_docs:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Se requiere al menos un documento personal"
+            )
+        
+        if not professional_docs:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Se requiere al menos un documento profesional"
+            )
+        
+        # Check for duplicate document values (same document_id only, not across different document types)
+        # Ejemplo: C.I="12345" y C.I.E="12345" pueden coexistir, pero no dos C.I="12345"
+        for doc in doctor_data.documents:
+            existing_doc = db.query(PersonDocument).filter(
+                PersonDocument.document_id == doc.document_id,  # Mismo documento específico (C.I, C.I.E, CURP, etc.)
+                PersonDocument.document_value == doc.document_value,
+                PersonDocument.is_active == True
             ).first()
-            if existing_license:
+            if existing_doc:
+                document = db.query(Document).filter(Document.id == doc.document_id).first()
                 db.rollback()
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="La cédula profesional ya está registrada en el sistema"
+                    detail=f"El documento {document.name if document else 'desconocido'} con valor '{doc.document_value}' ya está registrado. Cada tipo de documento debe tener un valor único."
                 )
         
         # Create doctor
@@ -3020,7 +3257,48 @@ async def register_doctor(
         db.commit()
         api_logger.info(f"Doctor {doctor.id} created successfully")
         
-        # Save schedule data if provided (in a separate transaction)
+        # Create office FIRST if office data is provided (needed for schedule templates)
+        office_data = {
+            'office_name': getattr(doctor_data, 'office_name', None),
+            'office_address': getattr(doctor_data, 'office_address', None),
+            'office_city': getattr(doctor_data, 'office_city', None),
+            'office_state_id': getattr(doctor_data, 'office_state_id', None),
+            'office_phone': getattr(doctor_data, 'office_phone', None),
+            'office_maps_url': getattr(doctor_data, 'office_maps_url', None)
+        }
+        
+        # Check if any office data is provided
+        has_office_data = any(value is not None and value != '' for value in office_data.values())
+        office_id = None
+        
+        if has_office_data:
+            try:
+                api_logger.info(f"Creating office for doctor {doctor.id}", office_data=office_data)
+                
+                # Create office record
+                office_name = office_data['office_name'] or f"Consultorio de {doctor.title} {doctor.first_name} {doctor.paternal_surname}"
+                office = Office(
+                    doctor_id=doctor.id,
+                    name=office_name,
+                    address=office_data['office_address'],
+                    city=office_data['office_city'],
+                    state_id=office_data['office_state_id'],
+                    phone=office_data['office_phone'],
+                    maps_url=office_data['office_maps_url'],
+                    is_active=True,
+                    timezone='America/Mexico_City'
+                )
+                db.add(office)
+                db.commit()
+                db.refresh(office)
+                office_id = office.id
+                api_logger.info(f"Office {office.id} created for doctor {doctor.id}")
+            except Exception as office_error:
+                api_logger.error(f"Error creating office for doctor {doctor.id}: {str(office_error)}")
+                db.rollback()
+                # Continue without office - schedule can use NULL office_id
+        
+        # Save schedule data if provided (after office is created)
         schedule_data = getattr(doctor_data, 'schedule_data', None)
         if schedule_data and isinstance(schedule_data, dict):
             try:
@@ -3044,84 +3322,65 @@ async def register_doctor(
                             start_time = first_block.get('start_time', '09:00')
                             end_time = first_block.get('end_time', '17:00')
                             
-                            # Insert into schedule_templates table with time_blocks
-                            insert_query = text("""
-                                INSERT INTO schedule_templates 
-                                (doctor_id, day_of_week, start_time, end_time, consultation_duration, is_active, time_blocks, created_at, updated_at)
-                                VALUES (:doctor_id, :day_of_week, :start_time, :end_time, :consultation_duration, :is_active, :time_blocks, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                                ON CONFLICT (doctor_id, day_of_week) 
-                                DO UPDATE SET 
-                                    start_time = EXCLUDED.start_time,
-                                    end_time = EXCLUDED.end_time,
-                                    is_active = EXCLUDED.is_active,
-                                    time_blocks = EXCLUDED.time_blocks,
-                                    updated_at = CURRENT_TIMESTAMP
-                            """)
-                            
-                            db.execute(insert_query, {
+                            # Check if template already exists for this day and office
+                            existing_template = db.execute(text("""
+                                SELECT id FROM schedule_templates 
+                                WHERE doctor_id = :doctor_id 
+                                AND day_of_week = :day_of_week 
+                                AND (office_id = :office_id OR (:office_id IS NULL AND office_id IS NULL))
+                                LIMIT 1
+                            """), {
                                 'doctor_id': doctor.id,
                                 'day_of_week': day_of_week,
-                                'start_time': start_time,
-                                'end_time': end_time,
-                                'consultation_duration': doctor.appointment_duration or 30,
-                                'is_active': is_active,
-                                'time_blocks': json.dumps(time_blocks)  # Convert to JSON string
-                            })
+                                'office_id': office_id
+                            }).fetchone()
+                            
+                            if existing_template:
+                                # Update existing template
+                                update_query = text("""
+                                    UPDATE schedule_templates 
+                                    SET start_time = :start_time,
+                                        end_time = :end_time,
+                                        is_active = :is_active,
+                                        time_blocks = :time_blocks::jsonb,
+                                        updated_at = CURRENT_TIMESTAMP
+                                    WHERE id = :template_id
+                                """)
+                                db.execute(update_query, {
+                                    'template_id': existing_template[0],
+                                    'start_time': start_time,
+                                    'end_time': end_time,
+                                    'is_active': is_active,
+                                    'time_blocks': json.dumps(time_blocks)
+                                })
+                            else:
+                                # Insert new template
+                                insert_query = text("""
+                                    INSERT INTO schedule_templates 
+                                    (doctor_id, office_id, day_of_week, start_time, end_time, is_active, time_blocks, created_at, updated_at)
+                                    VALUES (:doctor_id, :office_id, :day_of_week, :start_time, :end_time, :is_active, :time_blocks::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                                """)
+                                db.execute(insert_query, {
+                                    'doctor_id': doctor.id,
+                                    'office_id': office_id,
+                                    'day_of_week': day_of_week,
+                                    'start_time': start_time,
+                                    'end_time': end_time,
+                                    'is_active': is_active,
+                                    'time_blocks': json.dumps(time_blocks)
+                                })
                 
+                db.commit()
                 api_logger.info(f"Successfully saved schedule data for doctor {doctor.id}")
             except Exception as schedule_error:
                 # Log the error but don't fail the registration
                 api_logger.error(f"Error saving schedule data for doctor {doctor.id}: {str(schedule_error)}")
-                # Rollback only the schedule transaction
                 db.rollback()
                 # Doctor creation is already committed, so this is OK
         
         # Commit schedule data if it was saved successfully
         if schedule_data and isinstance(schedule_data, dict):
             db.commit()
-        
-        # Create office if office data is provided
-        office_data = {
-            'office_name': getattr(doctor_data, 'office_name', None),
-            'office_address': getattr(doctor_data, 'office_address', None),
-            'office_city': getattr(doctor_data, 'office_city', None),
-            'office_state_id': getattr(doctor_data, 'office_state_id', None),
-            'office_phone': getattr(doctor_data, 'office_phone', None),
-            'office_maps_url': getattr(doctor_data, 'office_maps_url', None)
-        }
-        
-        # Check if any office data is provided
-        has_office_data = any(value is not None and value != '' for value in office_data.values())
-        
-        if has_office_data:
-            try:
-                api_logger.info(f"Creating office for doctor {doctor.id}", office_data=office_data)
-                
-                # Create office record
-                office_name = office_data['office_name'] or f"Consultorio de {doctor.title} {doctor.first_name} {doctor.paternal_surname}"
-                office = Office(
-                    doctor_id=doctor.id,
-                    name=office_name,
-                    address=office_data['office_address'],
-                    city=office_data['office_city'],
-                    state_id=office_data['office_state_id'],
-                    phone=office_data['office_phone'],
-                    maps_url=office_data['office_maps_url'],
-                    is_active=True,
-                    timezone='America/Mexico_City'
-                )
-                
-                db.add(office)
-                db.commit()
-                db.refresh(office)
-                
-                api_logger.info(f"Successfully created office {office.id} for doctor {doctor.id}")
-                
-            except Exception as office_error:
-                # Log the error but don't fail the registration
-                api_logger.error(f"Error creating office for doctor {doctor.id}: {str(office_error)}")
-                db.rollback()
-                # Doctor creation is already committed, so this is OK
         
         # Login the newly created doctor (doctor is already in the database)
         login_response = auth.login_user(db, doctor_data.email, doctor_data.password)
@@ -3145,6 +3404,18 @@ async def register_doctor(
         db.rollback()
         error_str = str(e).lower()
         
+        # Log the full error for debugging
+        import traceback
+        api_logger.error(
+            f"Error during doctor registration: {str(e)}",
+            email=doctor_data.email if hasattr(doctor_data, 'email') else 'unknown',
+            error_type=type(e).__name__,
+            traceback=traceback.format_exc()
+        )
+        print(f"❌ Registration error: {str(e)}")
+        print(f"❌ Error type: {type(e).__name__}")
+        traceback.print_exc()
+        
         # Handle specific database constraint violations
         if "unique constraint" in error_str:
             if "email" in error_str:
@@ -3165,9 +3436,27 @@ async def register_doctor(
         else:
             # Log the actual error for debugging
             api_logger.error(f"Registration error: {str(e)}", exc_info=True)
+            
+            # If it's a validation error (Pydantic), return the error details
+            if hasattr(e, 'errors') and e.errors:
+                # Pydantic validation error
+                errors_list = []
+                for error in e.errors():
+                    field = ".".join(str(x) for x in error.get('loc', []))
+                    message = error.get('msg', 'Error de validación')
+                    errors_list.append(f"{field}: {message}")
+                
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Error de validación: {'; '.join(errors_list)}"
+                )
+            
+            # Return more helpful error message in development
+            error_detail = str(e) if "development" in os.environ.get("ENVIRONMENT", "").lower() else "Error interno del servidor. Por favor, intente nuevamente."
+            
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Error interno del servidor. Por favor, intente nuevamente."
+                detail=error_detail
             )
 
 # Test endpoints removed - system is working
@@ -3219,10 +3508,71 @@ async def login(
 
 @app.get("/api/auth/me")
 async def get_current_user_info(
-    current_user: Person = Depends(get_current_user)
+    current_user: Person = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    """Get current user information"""
-    return current_user
+    """Get current user information with formatted data including documents"""
+    # Format user data same way as login_user
+    user_data = {
+        "id": current_user.id,
+        "username": current_user.email,
+        "person_code": current_user.person_code,
+        "person_type": current_user.person_type,
+        "full_name": current_user.full_name,
+        "email": current_user.email,
+        "first_name": current_user.first_name,
+        "paternal_surname": current_user.paternal_surname,
+        "maternal_surname": current_user.maternal_surname,
+        "birth_date": current_user.birth_date.isoformat() if current_user.birth_date else None,
+        "primary_phone": current_user.primary_phone,
+    }
+    
+    # If doctor, add professional fields
+    if current_user.person_type == "doctor":
+        # Get professional documents from person_documents table
+        professional_type = db.query(DocumentType).filter(DocumentType.name == 'Profesional').first()
+        professional_documents = []
+        if professional_type:
+            professional_docs = db.query(PersonDocument).join(Document).filter(
+                PersonDocument.person_id == current_user.id,
+                PersonDocument.is_active == True,
+                Document.document_type_id == professional_type.id
+            ).all()
+            professional_documents = [{"document_name": doc.document.name, "document_value": doc.document_value} for doc in professional_docs]
+        
+        # Get personal documents (for CURP, RFC)
+        personal_type = db.query(DocumentType).filter(DocumentType.name == 'Personal').first()
+        personal_documents = {}
+        if personal_type:
+            personal_docs = db.query(PersonDocument).join(Document).filter(
+                PersonDocument.person_id == current_user.id,
+                PersonDocument.is_active == True,
+                Document.document_type_id == personal_type.id
+            ).all()
+            personal_documents = {doc.document.name: doc.document_value for doc in personal_docs}
+        
+        # Legacy fields for backward compatibility
+        professional_license = None
+        for doc in professional_documents:
+            if doc["document_name"] in ["Cédula Profesional", "Número de Colegiación", "Matrícula Nacional"]:
+                professional_license = doc["document_value"]
+                break
+        
+        user_data.update({
+            "professional_license": professional_license,
+            "professional_documents": professional_documents,
+            "personal_documents": personal_documents,
+            "specialty": (lambda s: s.name if s else None)(db.query(Specialty).filter(Specialty.id == current_user.specialty_id).first()) if current_user.specialty_id else None,
+            "university": current_user.university,
+            "graduation_year": current_user.graduation_year,
+            "subspecialty": current_user.subspecialty if hasattr(current_user, 'subspecialty') else None,
+            "office_address": None,  # Moved to offices table
+            "curp": personal_documents.get("CURP", None),
+            "rfc": personal_documents.get("RFC", None),
+            "title": current_user.title,
+        })
+    
+    return user_data
 
 @app.post("/api/auth/logout")
 async def logout(current_user: Person = Depends(get_current_user)):
@@ -3367,7 +3717,6 @@ async def get_my_profile(
     # Load the user with relationships to get state and country names
     print(f"🔍 [AUTH/ME] Loading user with ID: {current_user.id}")
     user_with_relations = db.query(Person).options(
-        joinedload(Person.specialty),
         joinedload(Person.offices)
     ).filter(Person.id == current_user.id).first()
     
@@ -3386,10 +3735,73 @@ async def get_my_profile(
             detail="Doctor profile not found"
         )
     
-    # Get specialty name
+    # Get specialty name from medical_specialties table directly
     specialty_name = None
     if user_with_relations.specialty_id:
-        specialty_name = user_with_relations.specialty.name if user_with_relations.specialty else None
+        # Query medical_specialties directly (not using relationship to avoid table mismatch)
+        specialty = db.query(Specialty).filter(Specialty.id == user_with_relations.specialty_id).first()
+        specialty_name = specialty.name if specialty else None
+    
+    # Get professional documents from person_documents table
+    professional_type = db.query(DocumentType).filter(DocumentType.name == 'Profesional').first()
+    professional_documents = []
+    professional_license = None
+    if professional_type:
+        professional_docs = db.query(PersonDocument).join(Document).filter(
+            PersonDocument.person_id == user_with_relations.id,
+            PersonDocument.is_active == True,
+            Document.document_type_id == professional_type.id
+        ).all()
+        professional_documents = [{"document_id": doc.document_id, "document_name": doc.document.name, "document_value": doc.document_value} for doc in professional_docs]
+        # Get professional_license from documents for backward compatibility
+        for doc in professional_documents:
+            if doc["document_name"] in ["Cédula Profesional", "Número de Colegiación", "Matrícula Nacional"]:
+                professional_license = doc["document_value"]
+                break
+    
+    # Get personal documents (for CURP, RFC)
+    personal_type = db.query(DocumentType).filter(DocumentType.name == 'Personal').first()
+    personal_documents = {}
+    curp = None
+    rfc = None
+    if personal_type:
+        personal_docs = db.query(PersonDocument).join(Document).filter(
+            PersonDocument.person_id == user_with_relations.id,
+            PersonDocument.is_active == True,
+            Document.document_type_id == personal_type.id
+        ).all()
+        personal_documents = {doc.document.name: doc.document_value for doc in personal_docs}
+        curp = personal_documents.get("CURP", None)
+        rfc = personal_documents.get("RFC", None)
+    
+    # Load office states and countries
+    offices_with_details = []
+    for office in user_with_relations.offices:
+        state_name = None
+        country_name = None
+        if office.state_id:
+            state = db.query(State).filter(State.id == office.state_id).first()
+            if state:
+                state_name = state.name
+                if state.country_id:
+                    country = db.query(Country).filter(Country.id == state.country_id).first()
+                    if country:
+                        country_name = country.name
+        
+        offices_with_details.append({
+            "id": office.id,
+            "name": office.name,
+            "address": office.address,
+            "city": office.city,
+            "state_id": office.state_id,
+            "state_name": state_name,
+            "country_name": country_name,
+            "postal_code": office.postal_code,
+            "phone": office.phone,
+            "timezone": office.timezone,
+            "maps_url": office.maps_url,
+            "is_active": office.is_active
+        })
     
     return {
         "id": user_with_relations.id,
@@ -3405,8 +3817,8 @@ async def get_my_profile(
         "birth_date": user_with_relations.birth_date,
         "gender": user_with_relations.gender,
         "civil_status": user_with_relations.civil_status,
-        "curp": user_with_relations.curp,
-        "rfc": user_with_relations.rfc,
+        "curp": curp,  # From person_documents
+        "rfc": rfc,  # From person_documents
         "birth_city": user_with_relations.birth_city,
         "birth_state_id": user_with_relations.birth_state_id,
         
@@ -3419,36 +3831,23 @@ async def get_my_profile(
         "address_postal_code": user_with_relations.address_postal_code,
         
         # Professional Address (Office) - Now using offices table
-        "offices": [
-            {
-                "id": office.id,
-                "name": office.name,
-                "address": office.address,
-                "city": office.city,
-                "state_id": office.state_id,
-                "state_name": None,  # Will be loaded separately
-                "country_name": None,  # Will be loaded separately
-                "postal_code": office.postal_code,
-                "phone": office.phone,
-                "timezone": office.timezone,
-                "maps_url": office.maps_url,
-                "is_active": office.is_active
-            } for office in user_with_relations.offices
-        ],
+        "offices": offices_with_details,
         "office_phone": None,  # Moved to offices table
         "office_timezone": None,  # Moved to offices table
         "appointment_duration": user_with_relations.appointment_duration,
         
         # Professional Data
-        "professional_license": user_with_relations.professional_license,
+        "professional_license": professional_license,  # From person_documents
+        "professional_documents": professional_documents,  # New normalized format
+        "personal_documents": personal_documents,  # New normalized format
         "specialty_id": user_with_relations.specialty_id,
         "specialty_name": specialty_name,
-        "specialty_license": user_with_relations.specialty_license,
+        "specialty_license": None,  # Removed from persons table
         "university": user_with_relations.university,
         "graduation_year": user_with_relations.graduation_year,
-        "subspecialty": user_with_relations.subspecialty,
-        "digital_signature": user_with_relations.digital_signature,
-        "professional_seal": user_with_relations.professional_seal,
+        "subspecialty": None,  # Removed from persons table
+        "digital_signature": None,  # Removed from persons table
+        "professional_seal": None,  # Removed from persons table
         
         # Emergency Contact
         "emergency_contact_name": user_with_relations.emergency_contact_name,
@@ -3474,7 +3873,7 @@ async def create_doctor(
 
 @app.put("/api/doctors/me/profile")
 async def update_my_profile(
-    doctor_data: schemas.DoctorUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
@@ -3486,18 +3885,297 @@ async def update_my_profile(
         )
     
     try:
-        updated_doctor = crud.update_doctor_profile(db, current_user.id, doctor_data)
-        if not updated_doctor:
+        import traceback
+        api_logger.info(f"🔄 Updating doctor profile for user {current_user.id}")
+        
+        # Read raw request JSON directly (without Pydantic validation first)
+        raw_json = await request.json()
+        api_logger.info(f"📋 Raw request JSON keys: {list(raw_json.keys()) if raw_json else []}")
+        api_logger.info(f"📋 Raw professional_documents: {raw_json.get('professional_documents')}")
+        api_logger.info(f"📋 Raw personal_documents: {raw_json.get('personal_documents')}")
+        
+        # Extract documents from raw JSON FIRST
+        raw_professional_docs = raw_json.get('professional_documents', [])
+        raw_personal_docs = raw_json.get('personal_documents', [])
+        
+        # Now parse with Pydantic (remove documents from dict to avoid validation issues)
+        doctor_data_dict = raw_json.copy()
+        doctor_data_dict.pop('professional_documents', None)
+        doctor_data_dict.pop('personal_documents', None)
+        
+        try:
+            doctor_data = schemas.DoctorUpdate(**doctor_data_dict)
+        except Exception as e:
+            api_logger.error(f"❌ Error parsing DoctorUpdate schema: {str(e)}")
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Doctor profile not found"
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid data format: {str(e)}"
             )
+        
+        # Handle documents if provided
+        documents_to_save = []
+        
+        # Get dict WITHOUT exclude_unset to see all fields including None/empty arrays
+        doctor_data_dict_full = doctor_data.dict() if hasattr(doctor_data, 'dict') else {}
+        doctor_data_dict = doctor_data.dict(exclude_unset=True) if hasattr(doctor_data, 'dict') else {}
+        
+        api_logger.info(f"📋 Received doctor_data_dict keys: {list(doctor_data_dict.keys())}")
+        api_logger.info(f"📋 Full doctor_data_dict_full keys: {list(doctor_data_dict_full.keys())}")
+        api_logger.info(f"📋 professional_documents in full: {'professional_documents' in doctor_data_dict_full}")
+        api_logger.info(f"📋 personal_documents in full: {'personal_documents' in doctor_data_dict_full}")
+        if 'professional_documents' in doctor_data_dict_full:
+            api_logger.info(f"📋 professional_documents value: {doctor_data_dict_full['professional_documents']}")
+        if 'personal_documents' in doctor_data_dict_full:
+            api_logger.info(f"📋 personal_documents value: {doctor_data_dict_full['personal_documents']}")
+        
+        # Check for documents in multiple formats
+        all_docs = []
+        
+        # 1. Check for documents (legacy format)
+        if hasattr(doctor_data, 'documents') and doctor_data.documents:
+            all_docs.extend(doctor_data.documents)
+            api_logger.info(f"📋 Found {len(doctor_data.documents)} documents in doctor_data.documents")
+        
+        # 2. Check for professional_documents (from raw JSON FIRST, then schema or dict) - PRIORIDAD: raw JSON
+        # SOLO PERMITIR UN DOCUMENTO PROFESIONAL
+        if raw_professional_docs:
+            api_logger.info(f"📋 Processing professional_documents from RAW JSON: {raw_professional_docs} (type: {type(raw_professional_docs)})")
+            if isinstance(raw_professional_docs, list):
+                # Solo tomar el primer documento profesional
+                if len(raw_professional_docs) > 1:
+                    api_logger.warning(f"⚠️ Multiple professional documents received, only taking the first one: {len(raw_professional_docs)}")
+                doc = raw_professional_docs[0]
+                if isinstance(doc, dict) and doc.get('document_id'):
+                    all_docs.append(schemas.PersonDocumentCreate(
+                        document_id=doc['document_id'],
+                        document_value=doc.get('document_value', '') or ''
+                    ))
+            elif isinstance(raw_professional_docs, dict) and raw_professional_docs.get('document_id'):
+                # Si viene como objeto único en lugar de lista
+                all_docs.append(schemas.PersonDocumentCreate(
+                    document_id=raw_professional_docs['document_id'],
+                    document_value=raw_professional_docs.get('document_value', '') or ''
+                ))
+        elif hasattr(doctor_data, 'professional_documents') and doctor_data.professional_documents:
+            api_logger.info(f"📋 Processing professional_documents from schema: {doctor_data.professional_documents}")
+            all_docs.extend(doctor_data.professional_documents)
+        elif 'professional_documents' in doctor_data_dict_full:
+            docs = doctor_data_dict_full['professional_documents']
+            api_logger.info(f"📋 Processing professional_documents from dict_full: {docs} (type: {type(docs)})")
+            if docs:  # Si no es None ni lista vacía
+                if isinstance(docs, list):
+                    for doc in docs:
+                        if isinstance(doc, dict) and doc.get('document_id'):
+                            all_docs.append(schemas.PersonDocumentCreate(
+                                document_id=doc['document_id'],
+                                document_value=doc.get('document_value', '') or ''
+                            ))
+                        elif hasattr(doc, 'document_id'):
+                            all_docs.append(doc)
+        
+        # 3. Check for personal_documents (from raw JSON FIRST, then schema or dict) - PRIORIDAD: raw JSON
+        # SOLO PERMITIR UN DOCUMENTO PERSONAL
+        if raw_personal_docs:
+            api_logger.info(f"📋 Processing personal_documents from RAW JSON: {raw_personal_docs} (type: {type(raw_personal_docs)})")
+            if isinstance(raw_personal_docs, list):
+                # Solo tomar el primer documento personal
+                if len(raw_personal_docs) > 1:
+                    api_logger.warning(f"⚠️ Multiple personal documents received, only taking the first one: {len(raw_personal_docs)}")
+                doc = raw_personal_docs[0]
+                if isinstance(doc, dict) and doc.get('document_id'):
+                    all_docs.append(schemas.PersonDocumentCreate(
+                        document_id=doc['document_id'],
+                        document_value=doc.get('document_value', '') or ''
+                    ))
+            elif isinstance(raw_personal_docs, dict) and raw_personal_docs.get('document_id'):
+                # Si viene como objeto único en lugar de lista
+                all_docs.append(schemas.PersonDocumentCreate(
+                    document_id=raw_personal_docs['document_id'],
+                    document_value=raw_personal_docs.get('document_value', '') or ''
+                ))
+        elif hasattr(doctor_data, 'personal_documents') and doctor_data.personal_documents:
+            api_logger.info(f"📋 Processing personal_documents from schema: {doctor_data.personal_documents}")
+            # SOLO PERMITIR UN DOCUMENTO PERSONAL - tomar solo el primero
+            if isinstance(doctor_data.personal_documents, list) and len(doctor_data.personal_documents) > 0:
+                if len(doctor_data.personal_documents) > 1:
+                    api_logger.warning(f"⚠️ Multiple personal documents in schema, only taking the first one: {len(doctor_data.personal_documents)}")
+                all_docs.append(doctor_data.personal_documents[0])
+            else:
+                all_docs.extend(doctor_data.personal_documents)
+        elif 'personal_documents' in doctor_data_dict_full:
+            docs = doctor_data_dict_full['personal_documents']
+            api_logger.info(f"📋 Processing personal_documents from dict_full: {docs} (type: {type(docs)})")
+            if docs:  # Si no es None ni lista vacía
+                if isinstance(docs, list):
+                    # SOLO PERMITIR UN DOCUMENTO PERSONAL - tomar solo el primero
+                    if len(docs) > 1:
+                        api_logger.warning(f"⚠️ Multiple personal documents in dict_full, only taking the first one: {len(docs)}")
+                    doc = docs[0]
+                    if isinstance(doc, dict) and doc.get('document_id'):
+                        all_docs.append(schemas.PersonDocumentCreate(
+                            document_id=doc['document_id'],
+                            document_value=doc.get('document_value', '') or ''
+                        ))
+                    elif hasattr(doc, 'document_id'):
+                        all_docs.append(doc)
+        
+        # Filter valid documents - solo necesita document_id (el valor puede estar vacío)
+        valid_docs = [doc for doc in all_docs if doc and ((hasattr(doc, 'document_id') and doc.document_id) or (isinstance(doc, dict) and doc.get('document_id')))]
+        
+        if valid_docs:
+            documents_to_save = valid_docs
+            api_logger.info(f"📋 Total {len(documents_to_save)} valid documents to save")
+        else:
+            api_logger.info(f"⚠️ No valid documents found in request")
+        
+        # Handle specialty conversion from name to ID if needed
+        if 'specialty' in doctor_data_dict and doctor_data_dict.get('specialty'):
+            # If specialty is sent as name, convert to ID
+            specialty_name = doctor_data_dict['specialty']
+            specialty_obj = db.query(Specialty).filter(Specialty.name == specialty_name, Specialty.is_active == True).first()
+            if specialty_obj:
+                # Update doctor_data to use specialty_id instead of specialty
+                doctor_data.specialty_id = specialty_obj.id
+                api_logger.info(f"✅ Converted specialty '{specialty_name}' to ID {specialty_obj.id}")
+            else:
+                api_logger.warning(f"⚠️ Specialty '{specialty_name}' not found, skipping specialty update")
+        
+        # Remove specialty from dict to avoid errors
+        if 'specialty' in doctor_data_dict:
+            del doctor_data_dict['specialty']
+        
+        # Update doctor profile (this will handle phone parsing)
+        try:
+            updated_doctor = crud.update_doctor_profile(db, current_user.id, doctor_data)
+            if not updated_doctor:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Doctor profile not found"
+                )
+        except Exception as e:
+            api_logger.error(f"❌ Error updating doctor profile: {str(e)}", error_type=type(e).__name__, traceback=traceback.format_exc())
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error updating profile: {str(e)}"
+            )
+        
+        # Save documents if provided (after profile update)
+        if documents_to_save:
+            api_logger.info(f"💾 Saving {len(documents_to_save)} documents for user {current_user.id}")
+            try:
+                # SEPARAR documentos por tipo para aplicar regla de "solo uno por tipo"
+                professional_docs = []
+                personal_docs = []
+                
+                # Obtener tipos de documentos
+                professional_type = db.query(DocumentType).filter(DocumentType.name == 'Profesional').first()
+                personal_type = db.query(DocumentType).filter(DocumentType.name == 'Personal').first()
+                
+                # Clasificar documentos
+                for doc in documents_to_save:
+                    doc_id = doc.document_id if hasattr(doc, 'document_id') else (doc.get('document_id') if isinstance(doc, dict) else None)
+                    if doc_id:
+                        document_obj = db.query(Document).filter(Document.id == doc_id).first()
+                        if document_obj:
+                            if professional_type and document_obj.document_type_id == professional_type.id:
+                                professional_docs.append(doc)
+                            elif personal_type and document_obj.document_type_id == personal_type.id:
+                                personal_docs.append(doc)
+                
+                # SOLO PERMITIR UN DOCUMENTO DE CADA TIPO - tomar solo el primero si hay múltiples
+                docs_to_process = []
+                
+                if professional_docs:
+                    if len(professional_docs) > 1:
+                        api_logger.warning(f"⚠️ Multiple professional documents to save, only taking the first one: {len(professional_docs)}")
+                    docs_to_process.append(professional_docs[0])
+                    # NO desactivar documentos profesionales aquí - upsert_person_document lo manejará
+                    # La función upsert_person_document ahora actualiza el documento existente del mismo tipo
+                
+                if personal_docs:
+                    if len(personal_docs) > 1:
+                        api_logger.warning(f"⚠️ Multiple personal documents to save, only taking the first one: {len(personal_docs)}")
+                    docs_to_process.append(personal_docs[0])
+                    # Eliminar todos los documentos personales existentes de este usuario antes de guardar el nuevo
+                    if personal_type:
+                        existing_personal = db.query(PersonDocument).join(Document).filter(
+                            PersonDocument.person_id == current_user.id,
+                            Document.document_type_id == personal_type.id,
+                            PersonDocument.is_active == True
+                        ).all()
+                        for existing_doc in existing_personal:
+                            # Solo eliminar si no es el mismo document_id que vamos a guardar
+                            if existing_doc.document_id != (personal_docs[0].document_id if hasattr(personal_docs[0], 'document_id') else personal_docs[0].get('document_id')):
+                                existing_doc.is_active = False
+                                api_logger.info(f"🗑️ Deactivating old personal document: document_id={existing_doc.document_id}")
+                
+                # Guardar solo los documentos seleccionados (máximo 1 de cada tipo)
+                for doc in docs_to_process:
+                    # Handle both Pydantic models and dicts
+                    doc_id = doc.document_id if hasattr(doc, 'document_id') else (doc.get('document_id') if isinstance(doc, dict) else None)
+                    doc_value = doc.document_value if hasattr(doc, 'document_value') else (doc.get('document_value') if isinstance(doc, dict) else None)
+                    
+                    if doc_id:
+                        # Permitir valores vacíos si solo cambió el tipo de documento
+                        final_value = str(doc_value) if doc_value else ''
+                        api_logger.info(f"💾 Upserting document: document_id={doc_id}, document_value={final_value[:20] if len(final_value) > 20 else final_value}...")
+                        crud.upsert_person_document(
+                            db=db,
+                            person_id=current_user.id,
+                            document_id=doc_id,
+                            document_value=final_value,
+                            check_uniqueness=True
+                        )
+                db.commit()
+                api_logger.info(f"✅ Successfully saved {len(docs_to_process)} documents (max 1 professional + 1 personal)")
+            except Exception as e:
+                api_logger.error(f"❌ Error saving documents: {str(e)}", error_type=type(e).__name__, traceback=traceback.format_exc())
+                db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Error saving documents: {str(e)}"
+                )
+        else:
+            api_logger.info(f"ℹ️ No documents to save")
         
         # Get specialty name for response
         specialty_name = None
         if updated_doctor.specialty_id:
             specialty = db.query(Specialty).filter(Specialty.id == updated_doctor.specialty_id).first()
             specialty_name = specialty.name if specialty else None
+        
+        # Get professional documents from person_documents table
+        professional_type = db.query(DocumentType).filter(DocumentType.name == 'Profesional').first()
+        professional_documents = []
+        professional_license = None
+        if professional_type:
+            professional_docs = db.query(PersonDocument).join(Document).filter(
+                PersonDocument.person_id == updated_doctor.id,
+                PersonDocument.is_active == True,
+                Document.document_type_id == professional_type.id
+            ).all()
+            professional_documents = [{"document_id": doc.document_id, "document_name": doc.document.name, "document_value": doc.document_value} for doc in professional_docs]
+            # Get professional_license from documents for backward compatibility
+            for doc in professional_documents:
+                if doc["document_name"] in ["Cédula Profesional", "Número de Colegiación", "Matrícula Nacional"]:
+                    professional_license = doc["document_value"]
+                    break
+        
+        # Get personal documents (for CURP, RFC)
+        personal_type = db.query(DocumentType).filter(DocumentType.name == 'Personal').first()
+        personal_documents = {}
+        curp = None
+        rfc = None
+        if personal_type:
+            personal_docs = db.query(PersonDocument).join(Document).filter(
+                PersonDocument.person_id == updated_doctor.id,
+                PersonDocument.is_active == True,
+                Document.document_type_id == personal_type.id
+            ).all()
+            personal_documents = {doc.document.name: doc.document_value for doc in personal_docs}
+            curp = personal_documents.get("CURP", None)
+            rfc = personal_documents.get("RFC", None)
         
         return {
             "id": updated_doctor.id,
@@ -3513,8 +4191,8 @@ async def update_my_profile(
             "birth_date": updated_doctor.birth_date,
             "gender": updated_doctor.gender,
             "civil_status": updated_doctor.civil_status,
-            "curp": updated_doctor.curp,
-            "rfc": updated_doctor.rfc,
+            "curp": curp,  # From person_documents
+            "rfc": rfc,  # From person_documents
             "birth_city": updated_doctor.birth_city,
             "birth_state_id": updated_doctor.birth_state_id,
             
@@ -3537,15 +4215,17 @@ async def update_my_profile(
             "appointment_duration": updated_doctor.appointment_duration,
             
             # Professional Data
-            "professional_license": updated_doctor.professional_license,
+            "professional_license": professional_license,  # From person_documents
+            "professional_documents": professional_documents,  # New normalized format
+            "personal_documents": personal_documents,  # New normalized format
             "specialty_id": updated_doctor.specialty_id,
             "specialty_name": specialty_name,
-            "specialty_license": updated_doctor.specialty_license,
+            "specialty_license": None,  # Removed from persons table
             "university": updated_doctor.university,
             "graduation_year": updated_doctor.graduation_year,
-            "subspecialty": updated_doctor.subspecialty,
-            "digital_signature": updated_doctor.digital_signature,
-            "professional_seal": updated_doctor.professional_seal,
+            "subspecialty": None,  # Removed from persons table
+            "digital_signature": None,  # Removed from persons table
+            "professional_seal": None,  # Removed from persons table
             
             # Emergency Contact
             "emergency_contact_name": updated_doctor.emergency_contact_name,
@@ -3613,13 +4293,26 @@ async def get_patients(
                 'full_name': getattr(patient, 'full_name', None)
             }
             
-            # Decrypt sensitive fields
-            if getattr(patient, 'curp', None):
-                try:
-                    patient_data['curp'] = patient.curp
-                except Exception as e:
-                    print(f"⚠️ Could not decrypt CURP for patient {patient.id}: {str(e)}")
-                    patient_data['curp'] = patient.curp
+            # Note: CURP and other documents are now in person_documents table
+            # Load documents from person_documents if needed
+            person_docs = db.query(PersonDocument).filter(
+                PersonDocument.person_id == patient.id,
+                PersonDocument.is_active == True
+            ).all()
+            
+            if person_docs:
+                patient_data['personal_documents'] = []
+                patient_data['professional_documents'] = []
+                for pd in person_docs:
+                    doc_data = {
+                        'document_id': pd.document_id,
+                        'document_value': pd.document_value,
+                        'document_name': pd.document.name if pd.document else None
+                    }
+                    if pd.document and pd.document.document_type_id == 1:  # Personal
+                        patient_data['personal_documents'].append(doc_data)
+                    elif pd.document and pd.document.document_type_id == 2:  # Profesional
+                        patient_data['professional_documents'].append(doc_data)
             
             if getattr(patient, 'email', None):
                 try:
@@ -3687,19 +4380,26 @@ async def get_patient(
         if not patient:
             raise HTTPException(status_code=404, detail="Patient not found or access denied")
         
-        # Decrypt sensitive fields before returning
-        decrypted_curp = None
+        # Note: CURP and other documents are now in person_documents table
+        # Load documents from person_documents
+        person_docs = db.query(PersonDocument).join(Document).filter(
+            PersonDocument.person_id == patient.id,
+            PersonDocument.is_active == True
+        ).all()
+        
+        personal_documents_dict = {}
+        professional_documents_dict = {}
+        for pd in person_docs:
+            doc_name = pd.document.name if pd.document else None
+            if pd.document and pd.document.document_type_id == 1:  # Personal
+                personal_documents_dict[doc_name] = pd.document_value
+            elif pd.document and pd.document.document_type_id == 2:  # Profesional
+                professional_documents_dict[doc_name] = pd.document_value
+        
+        decrypted_curp = personal_documents_dict.get('CURP', None)
         decrypted_email = None
         decrypted_phone = None
         decrypted_insurance = None
-        
-        if patient.curp:
-            try:
-                decrypted_curp = patient.curp
-                print(f"🔓 Decrypted CURP: {patient.curp[:40]}... -> {decrypted_curp}")
-            except Exception as e:
-                print(f"⚠️ Could not decrypt CURP (might be unencrypted): {str(e)}")
-                decrypted_curp = patient.curp  # Return as-is if not encrypted
         
         if patient.email:
             try:
@@ -3729,6 +4429,8 @@ async def get_patient(
         patient_response = {
             'id': patient.id,
             'person_code': patient.person_code,
+            'personal_documents': [{'document_name': name, 'document_value': value} for name, value in personal_documents_dict.items()],
+            'professional_documents': [{'document_name': name, 'document_value': value} for name, value in professional_documents_dict.items()],
             'person_type': patient.person_type,
             'first_name': patient.first_name,
             'paternal_surname': patient.paternal_surname,
@@ -3781,17 +4483,24 @@ async def create_patient(
         print("=" * 80)
         security_logger.info("Creating patient with encryption", operation="create_patient", doctor_id=current_user.id)
         
-        # Check if patient already exists by CURP or email (before encryption)
-        if patient_data.curp:
-            existing_patient = db.query(Person).filter(
-                Person.curp == patient_data.curp,
-                Person.person_type == 'patient'
-            ).first()
-            if existing_patient:
-                raise HTTPException(
-                    status_code=409, 
-                    detail=f"Ya existe un paciente con CURP: {patient_data.curp}"
-                )
+        # Check if patient already exists by documents (normalized) or email
+        # Validate document uniqueness before creating patient
+        if hasattr(patient_data, 'documents') and patient_data.documents:
+            for doc in patient_data.documents:
+                if doc.document_id and doc.document_value:
+                    # Check if this document value already exists for this document type
+                    existing_doc = db.query(PersonDocument).join(Person).filter(
+                        PersonDocument.document_id == doc.document_id,
+                        PersonDocument.document_value == doc.document_value.strip(),
+                        PersonDocument.is_active == True,
+                        Person.person_type == 'patient'
+                    ).first()
+                    if existing_doc:
+                        document = db.query(Document).filter(Document.id == doc.document_id).first()
+                        raise HTTPException(
+                            status_code=409,
+                            detail=f"Ya existe un paciente con {document.name if document else 'documento'}: {doc.document_value}"
+                        )
         
         if patient_data.email:
             existing_patient = db.query(Person).filter(
@@ -3820,11 +4529,7 @@ async def create_patient(
         patient = crud.create_patient_with_code(db, patient_data, person_code, current_user.id)
         
         # NOW encrypt sensitive fields directly in the database model BEFORE commit
-        if patient.curp:
-            original_curp = patient.curp
-            patient.curp = patient.curp
-            print(f"🔐 Encrypted CURP: {original_curp} -> {patient.curp[:40]}...")
-        
+        # Note: CURP and other documents are now in person_documents table, not encrypted for now
         if patient.email:
             original_email = patient.email
             patient.email = patient.email
@@ -3885,17 +4590,24 @@ async def update_patient(
             raise HTTPException(status_code=404, detail=f"No se encontró el paciente con ID: {patient_id} o acceso denegado")
         
         # Check for conflicts with other patients (excluding current patient)
-        if patient_data.curp and patient_data.curp != patient.curp:
-            existing_patient = db.query(Person).filter(
-                Person.curp == patient_data.curp,
-                Person.person_type == 'patient',
-                Person.id != patient_id
-            ).first()
-            if existing_patient:
-                raise HTTPException(
-                    status_code=409, 
-                    detail=f"Ya existe otro paciente con CURP: {patient_data.curp}"
-                )
+        # Validate document uniqueness before updating patient
+        if hasattr(patient_data, 'documents') and patient_data.documents:
+            for doc in patient_data.documents:
+                if doc.document_id and doc.document_value:
+                    # Check if this document value already exists for this document type in another patient
+                    existing_doc = db.query(PersonDocument).join(Person).filter(
+                        PersonDocument.document_id == doc.document_id,
+                        PersonDocument.document_value == doc.document_value.strip(),
+                        PersonDocument.is_active == True,
+                        Person.person_type == 'patient',
+                        Person.id != patient_id
+                    ).first()
+                    if existing_doc:
+                        document = db.query(Document).filter(Document.id == doc.document_id).first()
+                        raise HTTPException(
+                            status_code=409,
+                            detail=f"Ya existe otro paciente con {document.name if document else 'documento'}: {doc.document_value}"
+                        )
         
         if patient_data.email and patient_data.email != patient.email:
             existing_patient = db.query(Person).filter(
@@ -4110,12 +4822,21 @@ async def get_calendar_appointments(
         effective_target_date = date or target_date
         
         # Build the base query
-        query = db.query(Appointment).options(
-            joinedload(Appointment.patient),
-            joinedload(Appointment.doctor),
-            joinedload(Appointment.office),
-            joinedload(Appointment.appointment_type_rel)
-        ).filter(Appointment.doctor_id == current_user.id)
+        # Try to include appointment_type_rel, but handle gracefully if table doesn't exist
+        try:
+            query = db.query(Appointment).options(
+                joinedload(Appointment.patient),
+                joinedload(Appointment.doctor),
+                joinedload(Appointment.office),
+                joinedload(Appointment.appointment_type_rel)
+            ).filter(Appointment.doctor_id == current_user.id)
+        except Exception:
+            # Fallback if appointment_types table doesn't exist
+            query = db.query(Appointment).options(
+                joinedload(Appointment.patient),
+                joinedload(Appointment.doctor),
+                joinedload(Appointment.office)
+            ).filter(Appointment.doctor_id == current_user.id)
         
         
         # Handle different date filtering scenarios with CDMX timezone
@@ -5137,7 +5858,7 @@ async def get_study_categories(
     """Get all study categories"""
     try:
         categories = crud.get_study_categories(db, skip=skip, limit=limit)
-        return [schemas.StudyCategory.from_orm(category) for category in categories]
+        return [schemas.StudyCategory.model_validate(category) for category in categories]
     except Exception as e:
         print(f"❌ Error in get_study_categories: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
@@ -5162,7 +5883,36 @@ async def get_study_catalog(
             specialty=specialty,
             search=search
         )
-        return [schemas.StudyCatalog.from_orm(study) for study in studies]
+        # Convert to dict to exclude normal_values relationship (which has schema issues)
+        result = []
+        for study in studies:
+            study_dict = {
+                "id": study.id,
+                "code": study.code,
+                "name": study.name,
+                "category_id": study.category_id,
+                "subcategory": study.subcategory,
+                "description": study.description,
+                "preparation": study.preparation,
+                "methodology": study.methodology,
+                "duration_hours": study.duration_hours,
+                "specialty": study.specialty,
+                "is_active": study.is_active,
+                "regulatory_compliance": study.regulatory_compliance,
+                "created_at": study.created_at,
+                "updated_at": study.updated_at,
+                "category": {
+                    "id": study.category.id if study.category else None,
+                    "code": study.category.code if study.category else None,
+                    "name": study.category.name if study.category else None,
+                    "description": study.category.description if study.category else None,
+                    "is_active": study.category.is_active if study.category else None,
+                    "created_at": study.category.created_at if study.category else None
+                } if study.category else None,
+                "normal_values": []  # Exclude for now due to schema issues
+            }
+            result.append(study_dict)
+        return result
     except Exception as e:
         print(f"❌ Error in get_study_catalog: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
@@ -5178,7 +5928,7 @@ async def get_study_by_id(
         study = crud.get_study_by_id(db, study_id)
         if not study:
             raise HTTPException(status_code=404, detail="Study not found")
-        return schemas.StudyCatalog.from_orm(study)
+        return schemas.StudyCatalog.model_validate(study)
     except HTTPException:
         raise
     except Exception as e:
@@ -5196,7 +5946,7 @@ async def get_study_by_code(
         study = crud.get_study_by_code(db, code)
         if not study:
             raise HTTPException(status_code=404, detail="Study not found")
-        return schemas.StudyCatalog.from_orm(study)
+        return schemas.StudyCatalog.model_validate(study)
     except HTTPException:
         raise
     except Exception as e:
@@ -5267,7 +6017,7 @@ async def get_study_recommendations(
     """Get study recommendations based on diagnosis and specialty"""
     try:
         studies = crud.get_study_recommendations(db, diagnosis=diagnosis, specialty=specialty)
-        return [schemas.StudyCatalog.from_orm(study) for study in studies]
+        return [schemas.StudyCatalog.model_validate(study) for study in studies]
     except Exception as e:
         print(f"❌ Error in get_study_recommendations: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
@@ -5290,7 +6040,7 @@ async def search_studies(
             specialty=specialty,
             limit=limit
         )
-        return [schemas.StudyCatalog.from_orm(study) for study in studies]
+        return [schemas.StudyCatalog.model_validate(study) for study in studies]
     except Exception as e:
         print(f"❌ Error in search_studies: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")

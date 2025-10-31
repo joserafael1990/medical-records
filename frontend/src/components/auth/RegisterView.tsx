@@ -42,10 +42,12 @@ import {
   Add as AddIcon
 } from '@mui/icons-material';
 import CortexLogo from '../common/CortexLogo';
+import { CountryCodeSelector } from '../common/CountryCodeSelector';
 import { MEDICAL_SPECIALTIES, API_CONFIG } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCatalogs } from '../../hooks/useCatalogs';
 import { useScrollToError } from '../../hooks/useScrollToError';
+import { DocumentSelector } from '../common/DocumentSelector';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -93,17 +95,18 @@ interface RegistrationData {
   first_name: string;
   paternal_surname: string;
   maternal_surname: string;
-  curp: string;
+  personal_documents: Array<{ document_id: number | null; document_value: string }>;
   gender: string;
   birth_date: string;
-  phone: string;
+  phone_country_code: string;
+  phone_number: string;
   
   // Step 3: Professional Information
   title: string;
   specialty: string;
   university: string;
   graduation_year: string;
-  professional_license: string;
+  professional_documents: Array<{ document_id: number | null; document_value: string }>;
   
   // Step 4: Office Data
   office_name: string;
@@ -111,7 +114,8 @@ interface RegistrationData {
   office_country: string;
   office_state_id: string;
   office_city: string;
-  office_phone: string;
+  office_phone_country_code: string;
+  office_phone_number: string;
   office_maps_url: string;
   appointment_duration: string;
   
@@ -147,11 +151,20 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
   useEffect(() => {
     const loadSpecialties = async () => {
       try {
-        const response = await fetch(`${API_CONFIG.BASE_URL}/api/catalogs/specialties`);
-        const data = await response.json();
+        const data = await apiService.getSpecialties();
         setSpecialties(data);
+        console.log('✅ Especialidades cargadas:', data);
       } catch (error) {
-        console.error('Error loading specialties:', error);
+        console.error('❌ Error loading specialties:', error);
+        // Intentar con el endpoint alternativo
+        try {
+          const response = await fetch(`${API_CONFIG.BASE_URL}/api/catalogs/specialties`);
+          const data = await response.json();
+          setSpecialties(data);
+          console.log('✅ Especialidades cargadas (fallback):', data);
+        } catch (fallbackError) {
+          console.error('❌ Error en fallback de especialidades:', fallbackError);
+        }
       }
     };
     loadSpecialties();
@@ -167,17 +180,18 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
     first_name: '',
     paternal_surname: '',
     maternal_surname: '',
-    curp: '',
+    personal_documents: [{ document_id: null, document_value: '' }],
     gender: '',
     birth_date: '',
-    phone: '',
+    phone_country_code: '+52', // Código de país por defecto (México)
+    phone_number: '',
     
     // Step 3
     title: 'Dr.',
     specialty: '',
     university: '',
     graduation_year: '',
-    professional_license: '',
+    professional_documents: [{ document_id: null, document_value: '' }],
     
     // Step 4
     office_name: '',
@@ -185,7 +199,8 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
     office_country: 'México',
     office_state_id: '',
     office_city: '',
-    office_phone: '',
+    office_phone_country_code: '+52', // Código de país por defecto (México)
+    office_phone_number: '',
     office_maps_url: '',
     appointment_duration: '',
     
@@ -356,24 +371,30 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
         return true;
       
       case 1:
-        const requiredFields = ['first_name', 'paternal_surname', 'curp', 'gender', 'birth_date', 'phone'];
+        const requiredFields = ['first_name', 'paternal_surname', 'gender', 'birth_date', 'phone_country_code', 'phone_number'];
         const missingFields = requiredFields.filter(field => !formData[field as keyof RegistrationData]);
         if (missingFields.length > 0) {
           setError('Por favor, completa todos los campos obligatorios');
           return false;
         }
-        // Validate CURP format
-        if (formData.curp && formData.curp.length !== 18) {
-          setError('El CURP debe tener exactamente 18 caracteres');
+        // Validate phone number has at least some digits
+        if (!formData.phone_number || formData.phone_number.trim().length < 7) {
+          setError('El número telefónico debe tener al menos 7 dígitos');
           return false;
         }
         return true;
       
       case 2:
-        const requiredStep2Fields = ['title', 'specialty', 'university', 'graduation_year', 'professional_license'];
+        const requiredStep2Fields = ['title', 'specialty', 'university', 'graduation_year'];
         const missingStep2Fields = requiredStep2Fields.filter(field => !formData[field as keyof RegistrationData]);
         if (missingStep2Fields.length > 0) {
           setError('Por favor, completa todos los campos obligatorios');
+          return false;
+        }
+        // Validate at least one professional document
+        const validProfessionalDocs = formData.professional_documents.filter(doc => doc.document_id && doc.document_value.trim());
+        if (validProfessionalDocs.length === 0) {
+          setError('Debe proporcionar al menos un documento profesional con su valor');
           return false;
         }
         // Validate graduation year
@@ -388,10 +409,16 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
         return true;
       
       case 3:
-        const requiredStep3Fields = ['office_name', 'office_address', 'office_city', 'office_state_id', 'appointment_duration'];
+        const requiredStep3Fields = ['office_name', 'office_address', 'office_city', 'office_state_id', 'office_phone_country_code', 'office_phone_number', 'appointment_duration'];
         const missingStep3Fields = requiredStep3Fields.filter(field => !formData[field as keyof RegistrationData]);
         if (missingStep3Fields.length > 0) {
           setError('Por favor, completa todos los campos obligatorios');
+          return false;
+        }
+        
+        // Validate office phone number has at least some digits
+        if (!formData.office_phone_number || formData.office_phone_number.trim().length < 7) {
+          setError('El número telefónico del consultorio debe tener al menos 7 dígitos');
           return false;
         }
         
@@ -456,17 +483,30 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
     setError('');
 
     try {
+      // Concatenar código de país con número telefónico personal
+      const fullPhoneNumber = `${formData.phone_country_code}${formData.phone_number.trim()}`;
+      
+      // Concatenar código de país con número telefónico del consultorio
+      const fullOfficePhoneNumber = `${formData.office_phone_country_code}${formData.office_phone_number.trim()}`;
+      
+      // Prepare documents array (filter out empty ones)
+      const allDocuments = [
+        ...formData.personal_documents.filter(doc => doc.document_id && doc.document_value.trim()),
+        ...formData.professional_documents.filter(doc => doc.document_id && doc.document_value.trim())
+      ].map(doc => ({
+        document_id: doc.document_id!,
+        document_value: doc.document_value.trim()
+      }));
+
       // Create doctor profile first
       const doctorProfileData = {
         title: formData.title,
         first_name: formData.first_name,
         paternal_surname: formData.paternal_surname,
         maternal_surname: formData.maternal_surname || '',
-        curp: formData.curp,
         gender: formData.gender,
-        professional_license: formData.professional_license,
         birth_date: formData.birth_date, // Ensure YYYY-MM-DD format
-        primary_phone: formData.phone, // Fixed field name
+        primary_phone: fullPhoneNumber, // Concatenar código de país + número
         email: formData.email,
         password: formData.password, // Added required password field
         // Required fields
@@ -479,8 +519,10 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
         office_state_id: parseInt(formData.office_state_id) || null,
         appointment_duration: parseInt(formData.appointment_duration) || null,
         // Optional fields
-        office_phone: formData.office_phone || '',
+        office_phone: fullOfficePhoneNumber || '', // Concatenar código de país + número
         office_maps_url: formData.office_maps_url || '',
+        // Documents (normalized)
+        documents: allDocuments,
         // Schedule data
         schedule_data: formData.scheduleData,
         // System fields
@@ -713,36 +755,40 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
               </Box>
             </Box>
 
-            <TextField
-              fullWidth
-              margin="normal"
-              label="CURP"
-              value={formData.curp}
-              onChange={handleInputChange('curp')}
-              required
-              placeholder="AAAA######HAAAAA##"
-              inputProps={{
-                maxLength: 18,
-                style: { textTransform: 'uppercase' }
-              }}
-              helperText="Clave Única de Registro de Población (18 caracteres)"
-            />
-
-            <FormControl fullWidth margin="normal" required>
-              <InputLabel required>Género</InputLabel>
-              <Select
-                value={formData.gender}
-                onChange={handleInputChange('gender')}
-                label="Género"
+            {/* Documento Personal */}
+            <Box sx={{ mb: 2 }}>
+              <DocumentSelector
+                documentType="personal"
+                value={formData.personal_documents[0]}
+                onChange={(docValue) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    personal_documents: [docValue]
+                  }));
+                }}
                 required
-              >
-                <MenuItem value="M">Masculino</MenuItem>
-                <MenuItem value="F">Femenino</MenuItem>
-                <MenuItem value="O">Otro</MenuItem>
-              </Select>
-            </FormControl>
+                error={!formData.personal_documents[0]?.document_id || !formData.personal_documents[0]?.document_value}
+                helperText="Seleccione un documento personal e ingrese su valor"
+              />
+            </Box>
 
+            {/* Género y Fecha de Nacimiento en la misma fila */}
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Box sx={{ flex: '1 1 250px' }}>
+                <FormControl fullWidth margin="normal" required>
+                  <InputLabel required>Género</InputLabel>
+                  <Select
+                    value={formData.gender}
+                    onChange={handleInputChange('gender')}
+                    label="Género"
+                    required
+                  >
+                    <MenuItem value="M">Masculino</MenuItem>
+                    <MenuItem value="F">Femenino</MenuItem>
+                    <MenuItem value="O">Otro</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
               <Box sx={{ flex: '1 1 250px' }}>
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
                   <DatePicker
@@ -767,20 +813,35 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
                   />
                 </LocalizationProvider>
               </Box>
+            </Box>
+
+            {/* Código de país y Teléfono en la siguiente fila */}
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Box sx={{ flex: '1 1 250px' }}>
+                <CountryCodeSelector
+                  value={formData.phone_country_code}
+                  onChange={(code) => handleInputChange('phone_country_code')({ target: { value: code } })}
+                  label="Código de país *"
+                />
+              </Box>
               <Box sx={{ flex: '1 1 250px' }}>
                 <TextField
                   fullWidth
                   margin="normal"
-                  label="Teléfono"
-                  value={formData.phone}
+                  label="Número telefónico *"
+                  type="tel"
+                  value={formData.phone_number}
                   onChange={(e) => {
                     // Solo permitir números
-                    const value = e.target.value.replace(/[^0-9]/g, '');
-                    handleInputChange('phone')({ target: { value } });
+                    const value = e.target.value.replace(/\D/g, '');
+                    handleInputChange('phone_number')({ target: { value } });
                   }}
-                  placeholder="5551234567"
-                  helperText="Solo números (10 dígitos)"
-                  inputProps={{ maxLength: 15 }}
+                  placeholder="Ej: 5551234567"
+                  inputProps={{ 
+                    maxLength: 15,
+                    autoComplete: 'tel',
+                    'data-form-type': 'other'
+                  }}
                   required
                 />
               </Box>
@@ -807,9 +868,6 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
                   >
                     <MenuItem value="Dr.">Dr.</MenuItem>
                     <MenuItem value="Dra.">Dra.</MenuItem>
-                    <MenuItem value="Lic.">Lic.</MenuItem>
-                    <MenuItem value="M.C.">M.C.</MenuItem>
-                    <MenuItem value="Esp.">Esp.</MenuItem>
                   </Select>
                 </FormControl>
               </Box>
@@ -862,21 +920,22 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
               </Box>
             </Box>
 
-            <TextField
-              fullWidth
-              margin="normal"
-              label="Cédula Profesional"
-              value={formData.professional_license}
-              onChange={(e) => {
-                // Solo permitir números
-                const value = e.target.value.replace(/[^0-9]/g, '');
-                handleInputChange('professional_license')({ target: { value } });
-              }}
-              placeholder="12345678"
-              helperText="Solo números (7-8 dígitos)"
-              inputProps={{ maxLength: 8 }}
-              required
-            />
+            {/* Documento Profesional */}
+            <Box sx={{ mb: 2 }}>
+              <DocumentSelector
+                documentType="professional"
+                value={formData.professional_documents[0]}
+                onChange={(docValue) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    professional_documents: [docValue]
+                  }));
+                }}
+                required
+                error={!formData.professional_documents[0]?.document_id || !formData.professional_documents[0]?.document_value}
+                helperText="Seleccione un documento profesional e ingrese su valor"
+              />
+            </Box>
           </Box>
         );
 
@@ -994,20 +1053,36 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
             </Box>
 
             {/* 4. Teléfono del Consultorio */}
-            <TextField
-              fullWidth
-              margin="normal"
-              label="Teléfono del Consultorio"
-              value={formData.office_phone}
-              onChange={(e) => {
-                // Solo permitir números
-                const value = e.target.value.replace(/[^0-9]/g, '');
-                handleInputChange('office_phone')({ target: { value } });
-              }}
-              placeholder="5551234567"
-              helperText="Solo números (opcional)"
-              inputProps={{ maxLength: 15 }}
-            />
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Box sx={{ flex: '1 1 250px' }}>
+                <CountryCodeSelector
+                  value={formData.office_phone_country_code}
+                  onChange={(code) => handleInputChange('office_phone_country_code')({ target: { value: code } })}
+                  label="Código de país *"
+                />
+              </Box>
+              <Box sx={{ flex: '1 1 250px' }}>
+                <TextField
+                  fullWidth
+                  margin="normal"
+                  label="Número telefónico del Consultorio *"
+                  type="tel"
+                  value={formData.office_phone_number}
+                  onChange={(e) => {
+                    // Solo permitir números
+                    const value = e.target.value.replace(/\D/g, '');
+                    handleInputChange('office_phone_number')({ target: { value } });
+                  }}
+                  placeholder="Ej: 5551234567"
+                  inputProps={{ 
+                    maxLength: 15,
+                    autoComplete: 'tel-national',
+                    'data-form-type': 'other'
+                  }}
+                  required
+                />
+              </Box>
+            </Box>
 
             {/* 5. URL de Google Maps */}
             <TextField
