@@ -150,12 +150,23 @@ export const useAppointmentManager = (
     const timeoutId = setTimeout(async () => {
       try {
         // Don't show loading for quick refreshes to prevent flickering
-        const dateToFetch = new Date(selectedDate);
+        // Validate selectedDate - if invalid, use today's date
+        let dateToFetch: Date;
+        if (selectedDate instanceof Date && !isNaN(selectedDate.getTime())) {
+          dateToFetch = new Date(selectedDate);
+        } else {
+          dateToFetch = new Date();
+        }
+        
         let data: any[] = [];
         let dateStr = '';
 
         if (agendaView === 'daily') {
           // Fix timezone issue - use local date string instead of ISO
+          // Validate date is still valid before using
+          if (isNaN(dateToFetch.getTime())) {
+            dateToFetch = new Date();
+          }
           const year = dateToFetch.getFullYear();
           const month = String(dateToFetch.getMonth() + 1).padStart(2, '0');
           const day = String(dateToFetch.getDate()).padStart(2, '0');
@@ -673,13 +684,18 @@ export const useAppointmentManager = (
         }, 1000); // Increased delay for better stability
         
         // If the appointment was created for a different date, navigate to that date
-        const appointmentDate = new Date(appointmentFormData.date_time);
-        const currentDate = selectedDate;
-        
-        // Compare just the date parts (ignore time)
-        if (appointmentDate.toDateString() !== currentDate.toDateString()) {
-          // console.log('🔄 Appointment created for different date, navigating to:', appointmentDate.toDateString());
-          setSelectedDate(appointmentDate);
+        if (appointmentFormData.date_time) {
+          const appointmentDate = new Date(appointmentFormData.date_time);
+          // Validate appointment date before using it
+          if (!isNaN(appointmentDate.getTime())) {
+            const currentDate = selectedDate instanceof Date && !isNaN(selectedDate.getTime()) ? selectedDate : new Date();
+            
+            // Compare just the date parts (ignore time)
+            if (appointmentDate.toDateString() !== currentDate.toDateString()) {
+              // console.log('🔄 Appointment created for different date, navigating to:', appointmentDate.toDateString());
+              setSelectedDate(appointmentDate);
+            }
+          }
         }
       }
       
