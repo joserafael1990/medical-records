@@ -78,6 +78,10 @@ import { useToast } from '../common/ToastNotification';
 import { disablePaymentDetection } from '../../utils/disablePaymentDetection';
 import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
 import { parseBackendDate } from '../../utils/formatters';
+import { ConsultationFormHeader } from './ConsultationDialog/ConsultationFormHeader';
+import { ConsultationActions } from './ConsultationDialog/ConsultationActions';
+import { ConsultationFormFields } from './ConsultationDialog/ConsultationFormFields';
+import { PatientDataSection } from './ConsultationDialog/PatientDataSection';
 // import { useSnackbar } from '../../contexts/SnackbarContext';
 
 // Define ConsultationFormData interface based on the hook
@@ -1464,458 +1468,47 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         )}
         
         <Box component="form" sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
-          
-          {/* Appointment Selection - Always show for new consultations */}
+          {/* Appointment Selection - Only show for new consultations */}
           {!consultation && (
-              <Box>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <ScheduleIcon sx={{ fontSize: 20 }} />
-                Seleccionar Cita
-                  <Typography component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Typography>
-                </Typography>
-              
-              {availableAppointments.length === 0 ? (
-                <Box sx={{ 
-                  border: '1px dashed', 
-                  borderColor: 'grey.300', 
-                  borderRadius: 1, 
-                  p: 3, 
-                  textAlign: 'center',
-                  bgcolor: 'grey.50'
-                }}>
-                  <CalendarIcon sx={{ fontSize: 48, color: 'grey.400', mb: 2 }} />
-                  <Typography variant="h6" color="text.secondary" gutterBottom>
-                    No hay citas programadas
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    Para crear una nueva consulta, primero debe programar una cita
-                  </Typography>
-                  <Button
-                    variant="contained"
-                    startIcon={<CalendarIcon />}
-                    onClick={() => {
-                      // Close consultation dialog and open appointment dialog
+            <ConsultationFormHeader
+              isEditing={isEditing}
+              onClose={handleClose}
+              isNewConsultation={true}
+              availableAppointments={availableAppointments}
+              selectedAppointmentId={formData.appointment_id || ''}
+              onAppointmentChange={(appointmentId: string) => {
+                const appointment = (availableAppointments || []).find((apt: any) => apt.id.toString() === appointmentId);
+                handleAppointmentChange(appointment);
+              }}
+              onNewAppointment={() => {
                       onClose();
-                      // Trigger appointment dialog opening
                       if (onNewAppointment) {
                         onNewAppointment();
                       }
                     }}
-                    sx={{ mt: 1 }}
-                  >
-                    Crear Nueva Cita
-                  </Button>
-                </Box>
-              ) : (
-              <FormControl size="small" fullWidth>
-                <InputLabel>Citas Programadas</InputLabel>
-                <Select
-                  value={formData.appointment_id || ''}
-                  onChange={(e: any) => {
-                    const appointmentId = e.target.value;
-                    const appointment = (availableAppointments || []).find((apt: any) => apt.id.toString() === appointmentId);
-                    handleAppointmentChange(appointment);
-                  }}
-                  label="Citas Programadas"
-                >
-                  {(availableAppointments || []).map((appointment: any) => {
-                    // Use patient information from the appointment object (comes from backend)
-                    const patient = appointment.patient;
-                    
-                    const appointmentDate = parseBackendDate(appointment.appointment_date).toLocaleDateString('es-ES', {
-                      timeZone: 'America/Mexico_City'
-                    });
-                    const appointmentTime = parseBackendDate(appointment.appointment_date).toLocaleTimeString('es-ES', { 
-                      hour: '2-digit', 
-                      minute: '2-digit',
-                      timeZone: 'America/Mexico_City'
-                    });
-                    // Get consultation type - normalize display
-                    const getConsultationTypeDisplay = (type: string) => {
-                      switch (type) {
-                        case 'primera vez':
-                        case 'first_visit':
-                        case 'Primera vez':
-                          return 'Primera vez';
-                        case 'seguimiento':
-                        case 'follow_up':
-                        case 'Seguimiento':
-                          return 'Seguimiento';
-                        default:
-                          return type || 'No especificado';
-                      }
-                    };
-                    
-                    const consultationType = getConsultationTypeDisplay(appointment.consultation_type);
-                    
-                    // Use patient_name from backend or fallback to patient object
-                    const patientName = appointment.patient_name || 
-                                      (patient ? `${patient.first_name || ''} ${patient.paternal_surname || ''}`.trim() : 'Paciente no encontrado');
-                    
-                    return (
-                      <MenuItem key={appointment.id} value={appointment.id.toString()}>
-                        {patientName} - {appointmentDate} {appointmentTime} - {consultationType}
-                      </MenuItem>
-                    );
-                  })}
-                </Select>
-              </FormControl>
-                )}
-              </Box>
+            />
           )}
-
 
           {/* Patient Data Section - Show only when patient is selected (existing patients) */}
           {selectedPatient && patientEditData && (
-            <Box>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <EditIcon sx={{ fontSize: 20 }} />
-                Datos del Paciente (Editable)
-              </Typography>
-              
-              <Paper sx={{ p: 3, bgcolor: 'grey.50', border: '1px solid', borderColor: 'grey.200' }}>
-                {/* Basic Patient Information - Always shown */}
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <PersonIcon sx={{ fontSize: 20 }} />
-                    Información Básica
-                  </Typography>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-                    <TextField
-                      label="Nombre"
-                      value={getPatientData('first_name')}
-                      onChange={(e: any) => handlePatientDataChangeWrapper('first_name', e.target.value)}
-                      size="small"
-                      required
-                    />
-                    <TextField
-                      label="Apellido Paterno"
-                      value={getPatientData('paternal_surname')}
-                      onChange={(e: any) => handlePatientDataChangeWrapper('paternal_surname', e.target.value)}
-                      size="small"
-                      required
-                    />
-                    <TextField
-                      label="Apellido Materno"
-                      value={getPatientData('maternal_surname')}
-                      onChange={(e: any) => handlePatientDataChangeWrapper('maternal_surname', e.target.value)}
-                      size="small"
-                    />
-                    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
-                      <DatePicker
-                        label="Fecha de Nacimiento - opcional"
-                        value={getPatientData('birth_date') ? new Date(getPatientData('birth_date')) : null}
-                        onChange={(newValue: any) => {
-                          const dateStr = newValue ? newValue.toISOString().split('T')[0] : '';
-                          handlePatientDataChangeWrapper('birth_date', dateStr);
-                        }}
-                        slotProps={{
-                          textField: {
-                            size: 'small',
-                            fullWidth: true
-                          }
-                        }}
-                      />
-                    </LocalizationProvider>
-                    <FormControl size="small" fullWidth required>
-                      <InputLabel>Género *</InputLabel>
-                      <Select
-                        value={getPatientData('gender')}
-                        onChange={(e: any) => handlePatientDataChangeWrapper('gender', e.target.value)}
-                        label="Género *"
-                        required
-                      >
-                        <MenuItem value="Masculino">Masculino</MenuItem>
-                        <MenuItem value="Femenino">Femenino</MenuItem>
-                        <MenuItem value="Otro">Otro</MenuItem>
-                      </Select>
-                    </FormControl>
-                    <TextField
-                      label="Teléfono"
-                      value={getPatientData('primary_phone')}
-                      onChange={(e: any) => handlePatientDataChangeWrapper('primary_phone', e.target.value)}
-                      size="small"
-                      required
-                    />
-                  </Box>
-                </Box>
-
-                {/* Show Advanced Data Button and Previous Consultations Button - For existing patients */}
-                {!showAdvancedPatientData && (
-                  <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center', gap: 2 }}>
-                    <Button
-                      variant="outlined"
-                      onClick={() => setShowAdvancedPatientData(true)}
-                      startIcon={<EditIcon />}
-                      sx={{ minWidth: 200 }}
-                    >
-                      Ver Datos Avanzados
-                    </Button>
-                    {shouldShowPreviousConsultationsButton() && (
-                      <Button
-                        variant="outlined"
-                        color="primary"
-                        onClick={handleViewPreviousConsultations}
-                        startIcon={<HospitalIcon />}
-                        sx={{ minWidth: 200 }}
-                      >
-                        Ver Consultas Previas
-                      </Button>
-                    )}
-                  </Box>
-                )}
-
-                {/* Advanced Patient Data - Show when requested or for existing patients */}
-                {(!shouldShowOnlyBasicPatientData()) && (
-                  <>
-                    <Divider sx={{ my: 3 }} />
-
-                    {/* Contact Information Section */}
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <PhoneIcon sx={{ fontSize: 20 }} />
-                    Información de Contacto
-                  </Typography>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-                    <TextField
-                      label="Teléfono"
-                      value={patientEditData.primary_phone || ''}
-                      onChange={(e: any) => handlePatientDataChange('primary_phone', e.target.value)}
-                      size="small"
-                      required
-                    />
-                    <TextField
-                      label="Email"
-                      type="email"
-                      value={patientEditData.email || ''}
-                      onChange={(e: any) => handlePatientDataChange('email', e.target.value)}
-                      size="small"
-                      helperText={patientEditData.email && patientEditData.email !== '' && !patientEditData.email.includes('@') ? 'El email debe tener un formato válido' : ''}
-                      error={patientEditData.email && patientEditData.email !== '' && !patientEditData.email.includes('@')}
-                    />
-                    <TextField
-                      label="Dirección"
-                      value={patientEditData.home_address || ''}
-                      onChange={(e: any) => handlePatientDataChange('home_address', e.target.value)}
-                      size="small"
-                      fullWidth
-                      sx={{ gridColumn: '1 / -1' }}
-                    />
-                    <TextField
-                      label="Ciudad"
-                      value={patientEditData.address_city || ''}
-                      onChange={(e: any) => handlePatientDataChange('address_city', e.target.value)}
-                      size="small"
-                    />
-                    <TextField
-                      label="Código Postal"
-                      value={patientEditData.address_postal_code || ''}
-                      onChange={(e: any) => handlePatientDataChange('address_postal_code', e.target.value)}
-                      size="small"
-                      inputProps={{ maxLength: 5 }}
-                      helperText="Opcional"
-                    />
-                    <FormControl size="small">
-                      <InputLabel>País</InputLabel>
-                      <Select
-                        value={patientEditData.address_country_id || ''}
-                        onChange={(e: any) => handleCountryChange('address_country_id', e.target.value as string)}
-                        label="País"
-                      >
-                        {(countries || []).map((country: any) => (
-                          <MenuItem key={country.id} value={country.id.toString()}>
-                            {country.name}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <FormControl size="small">
-                      <InputLabel>Estado</InputLabel>
-                      <Select
-                        value={patientEditData.address_state_id || ''}
-                        onChange={(e: any) => handlePatientDataChange('address_state_id', e.target.value)}
-                        label="Estado"
-                        disabled={!patientEditData.address_country_id}
-                      >
-                        {(states || []).map((state: any) => (
-                          <MenuItem key={state.id} value={state.id.toString()}>
-                            {state.name}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Box>
-                </Box>
-
-                <Divider sx={{ my: 3 }} />
-
-                {/* Additional Information Section */}
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <BadgeIcon sx={{ fontSize: 20 }} />
-                    Información Adicional
-                  </Typography>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-                    {/* Documento Personal - Solo uno permitido */}
-                    <Box sx={{ gridColumn: { xs: '1 / -1', sm: '1 / -1' } }}>
-                      <DocumentSelector
-                        documentType="personal"
-                        value={personalDocument}
-                        onChange={(newValue) => {
-                          setPersonalDocument(newValue);
-                        }}
-                        label="Documento Personal"
-                        required={false}
-                      />
-                    </Box>
-                    <FormControl size="small" fullWidth>
-                      <InputLabel>Estado Civil</InputLabel>
-                      <Select
-                        value={patientEditData.civil_status || ''}
-                        onChange={(e: any) => handlePatientDataChange('civil_status', e.target.value)}
-                        label="Estado Civil"
-                      >
-                        <MenuItem value=""><em>Seleccione</em></MenuItem>
-                        <MenuItem value="single">Soltero(a)</MenuItem>
-                        <MenuItem value="married">Casado(a)</MenuItem>
-                        <MenuItem value="divorced">Divorciado(a)</MenuItem>
-                        <MenuItem value="widowed">Viudo(a)</MenuItem>
-                        <MenuItem value="free_union">Unión libre</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Box>
-                </Box>
-
-                <Divider sx={{ my: 3 }} />
-
-                {/* Birth Information Section */}
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <PersonIcon sx={{ fontSize: 20 }} />
-                    Información de Nacimiento
-                  </Typography>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-                    <TextField
-                      label="Ciudad de Nacimiento"
-                      value={patientEditData.birth_city || ''}
-                      onChange={(e: any) => handlePatientDataChange('birth_city', e.target.value)}
-                      size="small"
-                    />
-                    <FormControl size="small">
-                      <InputLabel>País de Nacimiento</InputLabel>
-                      <Select
-                        value={patientEditData.birth_country_id || ''}
-                        onChange={(e: any) => handleCountryChange('birth_country_id', e.target.value as string)}
-                        label="País de Nacimiento"
-                      >
-                        {(countries || []).map((country: any) => (
-                          <MenuItem key={country.id} value={country.id.toString()}>
-                            {country.name}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <FormControl size="small">
-                      <InputLabel>Estado de Nacimiento</InputLabel>
-                      <Select
-                        value={patientEditData.birth_state_id || ''}
-                        onChange={(e: any) => handlePatientDataChange('birth_state_id', e.target.value)}
-                        label="Estado de Nacimiento"
-                        disabled={!patientEditData.birth_country_id}
-                      >
-                        {(birthStates || []).map((state: any) => (
-                          <MenuItem key={state.id} value={state.id.toString()}>
-                            {state.name}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Box>
-                </Box>
-
-                <Divider sx={{ my: 3 }} />
-
-                {/* Emergency Contact Section */}
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <PhoneIcon sx={{ fontSize: 20 }} />
-                    Contacto de Emergencia
-                  </Typography>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-                    <TextField
-                      label="Nombre del Contacto"
-                      value={patientEditData.emergency_contact_name || ''}
-                      onChange={(e: any) => handlePatientDataChange('emergency_contact_name', e.target.value)}
-                      size="small"
-                    />
-                    <TextField
-                      label="Teléfono del Contacto"
-                      value={patientEditData.emergency_contact_phone || ''}
-                      onChange={(e: any) => handlePatientDataChange('emergency_contact_phone', e.target.value)}
-                      size="small"
-                    />
-                    <FormControl size="small" fullWidth>
-                      <InputLabel>Relación con el Paciente</InputLabel>
-                      <Select
-                        value={patientEditData.emergency_contact_relationship || ''}
-                        onChange={(e: any) => handlePatientDataChange('emergency_contact_relationship', e.target.value)}
-                        label="Relación con el Paciente"
-                        sx={{ gridColumn: '1 / -1' }}
-                      >
-                        <MenuItem value=""><em>Seleccione</em></MenuItem>
-                        {(emergencyRelationships || []).map((relationship: any) => (
-                          <MenuItem key={relationship.code} value={relationship.code}>
-                            {relationship.name}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Box>
-                </Box>
-
-                <Divider sx={{ my: 3 }} />
-
-                {/* Medical Information Section */}
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <BadgeIcon sx={{ fontSize: 20 }} />
-                    Información Médica
-                  </Typography>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-                    <TextField
-                      label="Proveedor de Seguro"
-                      value={patientEditData.insurance_provider || ''}
-                      onChange={(e: any) => handlePatientDataChange('insurance_provider', e.target.value)}
-                      size="small"
-                    />
-                    <TextField
-                      label="Código de Seguro"
-                      value={patientEditData.insurance_number || ''}
-                      onChange={(e: any) => handlePatientDataChange('insurance_number', e.target.value)}
-                      size="small"
-                      inputProps={{ 
-                        autoComplete: 'new-password',
-                        'data-form-type': 'other',
-                        'data-lpignore': 'true',
-                        'data-1p-ignore': 'true',
-                        'data-bwignore': 'true',
-                        'data-autofill': 'off',
-                        'autocapitalize': 'off',
-                        'autocorrect': 'off',
-                        'spellcheck': 'false',
-                        'name': 'medical_insurance_code',
-                        'id': 'medical_insurance_code',
-                        'type': 'text',
-                        'role': 'textbox',
-                        'aria-label': 'Código de seguro médico'
-                      }}
-                    />
-                  </Box>
-                </Box>
-                  </>
-                )}
-              </Paper>
-            </Box>
+            <PatientDataSection
+              patientEditData={patientEditData}
+              personalDocument={personalDocument}
+              showAdvancedPatientData={showAdvancedPatientData}
+              setShowAdvancedPatientData={setShowAdvancedPatientData}
+              countries={countries}
+              states={states}
+              birthStates={birthStates}
+              emergencyRelationships={emergencyRelationships}
+              getPatientData={getPatientData}
+              handlePatientDataChange={handlePatientDataChange}
+              handlePatientDataChangeWrapper={handlePatientDataChangeWrapper}
+              handleCountryChange={handleCountryChange}
+              setPersonalDocument={setPersonalDocument}
+              shouldShowOnlyBasicPatientData={shouldShowOnlyBasicPatientData}
+              shouldShowPreviousConsultationsButton={shouldShowPreviousConsultationsButton}
+              handleViewPreviousConsultations={handleViewPreviousConsultations}
+            />
           )}
 
           {/* Date */}
@@ -1940,27 +1533,13 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             </LocalizationProvider>
           </Box>
 
-          {/* Chief Complaint */}
-          <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <NotesIcon sx={{ fontSize: 20 }} />
-              Motivo de Consulta
-              <Typography component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Typography>
-            </Typography>
-            <TextField
-              name="chief_complaint"
-              label="Motivo de consulta"
-              value={formData.chief_complaint}
+          {/* Consultation Form Fields */}
+          <ConsultationFormFields
+            formData={formData}
               onChange={handleChange}
-              size="small"
-              fullWidth
-              multiline
-              rows={2}
-              required
-              error={!!error && !formData.chief_complaint.trim()}
-              helperText={error && !formData.chief_complaint.trim() ? 'Campo requerido' : ''}
-            />
-          </Box>
+            shouldShowFirstTimeFields={shouldShowFirstTimeFields}
+            error={error}
+          />
 
           {/* Previous Clinical Studies Section - Show when patient is selected */}
           {selectedPatient && patientPreviousStudies.length > 0 && (
@@ -2101,106 +1680,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             </Box>
           )}
 
-          {/* First-time consultation fields - shown conditionally */}
-          {(() => {
-            const shouldShow = shouldShowFirstTimeFields();
-            return shouldShow;
-          })() && (
-            <>
-              {/* History of Present Illness */}
-              <Box>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <MedicalServicesIcon sx={{ fontSize: 20 }} />
-                  Descripción de la Enfermedad Actual
-                </Typography>
-                <TextField
-                  name="history_present_illness"
-                  label="Descripción de la enfermedad actual"
-                  value={formData.history_present_illness}
-                  onChange={handleChange}
-                  size="small"
-                  fullWidth
-                  multiline
-                  rows={3}
-                />
-              </Box>
-              {/* Family History */}
-              <Box>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <HeartIcon sx={{ fontSize: 20 }} />
-                  Antecedentes Familiares
-                </Typography>
-                <TextField
-                  name="family_history"
-                  label="Antecedentes familiares"
-                  value={formData.family_history}
-                  onChange={handleChange}
-                  size="small"
-                  fullWidth
-                  multiline
-                  rows={3}
-                  placeholder="Describa los antecedentes familiares relevantes del paciente..."
-                />
-              </Box>
-
-              {/* Perinatal History */}
-              <Box>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <HeartIcon sx={{ fontSize: 20 }} />
-                  Antecedentes Perinatales
-                </Typography>
-                <TextField
-                  name="perinatal_history"
-                  label="Antecedentes perinatales"
-                  value={formData.perinatal_history}
-                  onChange={handleChange}
-                  size="small"
-                  fullWidth
-                  multiline
-                  rows={3}
-                  placeholder="Describa los antecedentes perinatales relevantes del paciente..."
-                />
-              </Box>
-
-              {/* Personal Pathological History */}
-              <Box>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <HospitalIcon sx={{ fontSize: 20 }} />
-                  Antecedentes Patológicos
-                </Typography>
-                <TextField
-                  name="personal_pathological_history"
-                  label="Antecedentes patológicos"
-                  value={formData.personal_pathological_history}
-                  onChange={handleChange}
-                  size="small"
-                  fullWidth
-                  multiline
-                  rows={3}
-                  placeholder="Describa los antecedentes patológicos del paciente (enfermedades previas, cirugías, etc.)..."
-                />
-              </Box>
-
-              {/* Personal Non-Pathological History */}
-              <Box>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <PersonIcon sx={{ fontSize: 20 }} />
-                  Antecedentes No Patológicos
-                </Typography>
-                <TextField
-                  name="personal_non_pathological_history"
-                  label="Antecedentes no patológicos"
-                  value={formData.personal_non_pathological_history}
-                  onChange={handleChange}
-                  size="small"
-                  fullWidth
-                  multiline
-                  rows={3}
-                  placeholder="Describa los antecedentes no patológicos del paciente (hábitos, alimentación, ejercicio, etc.)..."
-                />
-              </Box>
-            </>
-          )}
 
           {/* Vital Signs Section - Always show */}
           <VitalSignsSection
@@ -2239,43 +1718,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             }}
           />
 
-          {/* Physical Examination */}
-          <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <HospitalIcon sx={{ fontSize: 20 }} />
-              Exploración Física
-            </Typography>
-            <TextField
-              name="physical_examination"
-              label="Exploración física"
-              value={formData.physical_examination}
-              onChange={handleChange}
-              size="small"
-              fullWidth
-              multiline
-              rows={3}
-            />
-          </Box>
-
-          {/* Laboratory Results */}
-          <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <MedicalServicesIcon sx={{ fontSize: 20 }} />
-              Resultados de Laboratorio
-            </Typography>
-            <TextField
-              name="laboratory_results"
-              label="Resultados de laboratorio"
-              value={formData.laboratory_results}
-              onChange={handleChange}
-              size="small"
-              fullWidth
-              multiline
-              rows={3}
-              placeholder="Registre los resultados de análisis de laboratorio que el paciente trajo para la consulta..."
-              sx={{ mb: 2 }}
-            />
-          </Box>
 
           {/* Structured Diagnoses */}
           <Box>
@@ -2365,23 +1807,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             onCreateMedication={prescriptionsHook.createMedication}
           />
 
-          {/* Treatment Plan */}
-          <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <NotesIcon sx={{ fontSize: 20 }} />
-              Plan de Tratamiento
-            </Typography>
-            <TextField
-              name="treatment_plan"
-              label="Plan de tratamiento"
-              value={formData.treatment_plan}
-              onChange={handleChange}
-              size="small"
-              fullWidth
-              multiline
-              rows={3}
-            />
-          </Box>
 
         </Box>
 
@@ -2498,18 +1923,12 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         )}
         
         {/* Action buttons */}
-        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', width: '100%' }}>
-        <Button onClick={handleClose} color="inherit" disabled={loading}>
-          Cancelar
-        </Button>
-        <Button
-          variant="contained"
-          onClick={handleSubmit}
-          disabled={loading}
-        >
-          {loading ? 'Guardando...' : (isEditing ? 'Actualizar Consulta' : 'Crear Consulta')}
-        </Button>
-        </Box>
+        <ConsultationActions
+          onClose={handleClose}
+          onSubmit={handleSubmit}
+          loading={loading}
+          isEditing={isEditing}
+        />
       </DialogActions>
 
       {/* Vital Signs Selection Dialog */}
