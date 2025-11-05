@@ -377,7 +377,7 @@ async def health():
 # - POST /api/consultations/{consultation_id}/vital-signs ✅ ELIMINADO
 # - DELETE /api/consultations/{consultation_id}/vital-signs/{vital_sign_id} ✅ ELIMINADO
 
-# Endpoints eliminados - ahora están en routes/vital_signs.py
+# ✅ Migrados a routes/vital_signs.py
 
 # ============================================================================
 # MEDICATIONS AND PRESCRIPTIONS ENDPOINTS
@@ -397,9 +397,8 @@ async def health():
 # - POST /api/consultations/{consultation_id}/prescriptions
 # - PUT /api/consultations/{consultation_id}/prescriptions/{prescription_id}
 # - DELETE /api/consultations/{consultation_id}/prescriptions/{prescription_id}
-# TODO: Eliminar código después de validar que todo funciona
 
-# Endpoints eliminados - ahora están en routes/consultations.py
+# ✅ Migrados a routes/consultations.py
 
 # ============================================================================
 # CLINICAL STUDIES ENDPOINTS
@@ -412,7 +411,7 @@ async def health():
 # - PUT /api/clinical-studies/{study_id}/upload ✅ ELIMINADO
 # - GET /api/clinical-studies/{study_id}/file ✅ ELIMINADO
 
-# Endpoints eliminados - ahora están en routes/clinical_studies.py
+# ✅ Migrados a routes/clinical_studies.py
 
 # ============================================================================
 # WHATSAPP NOTIFICATIONS
@@ -1243,9 +1242,7 @@ async def debug_full_system(
 # - GET /api/doctor/schedule
 # - PUT /api/doctor/schedule
 # - GET /api/doctor/availability
-# TODO: Eliminar código después de validar que todo funciona
-
-# Endpoints eliminados - ahora están en routes/schedule.py
+# ✅ Migrados a routes/schedule.py
 
 # ============================================================================
 # AUDIT LOGGING ENDPOINTS
@@ -1329,7 +1326,7 @@ async def get_audit_logs(
 # MIGRADO a routes/auth.py - Endpoint register también migrado:
 # - POST /api/auth/register ✅ ELIMINADO
 
-# Endpoints eliminados - ahora están en routes/auth.py
+# ✅ Migrados a routes/auth.py
 
 # ============================================================================
 # DOCTORS
@@ -1339,7 +1336,7 @@ async def get_audit_logs(
 # - POST /api/doctors ✅ ELIMINADO
 # - PUT /api/doctors/me/profile ✅ ELIMINADO
 
-# Endpoints eliminados - ahora están en routes/doctors.py
+# ✅ Migrados a routes/doctors.py
 
 # ============================================================================
 # PATIENTS
@@ -1349,7 +1346,7 @@ async def get_audit_logs(
 # - GET /api/patients/{patient_id}
 # - POST /api/patients
 # - PUT /api/patients/{patient_id}
-# TODO: Eliminar código después de validar que todo funciona
+# ✅ Migrados a routes/patients.py
 
 # ============================================================================
 # PATIENTS
@@ -1360,7 +1357,7 @@ async def get_audit_logs(
 # - POST /api/patients ✅ ELIMINADO
 # - PUT /api/patients/{patient_id} ✅ ELIMINADO
 
-# Endpoints eliminados - ahora están en routes/patients.py
+# ✅ Migrados a routes/patients.py
 
 # ============================================================================
 # DASHBOARD
@@ -1368,7 +1365,7 @@ async def get_audit_logs(
 # MIGRADO a routes/dashboard.py - El siguiente endpoint fue migrado:
 # - GET /api/dashboard/stats ✅ ELIMINADO
 
-# Endpoints eliminados - ahora están en routes/dashboard.py
+# ✅ Migrados a routes/dashboard.py
 
 # ============================================================================
 # APPOINTMENTS
@@ -1380,9 +1377,8 @@ async def get_audit_logs(
 # - POST /api/appointments
 # - PUT /api/appointments/{appointment_id}
 # - DELETE /api/appointments/{appointment_id}
-# TODO: Eliminar código después de validar que todo funciona
 
-# Endpoints eliminados - ahora están en routes/appointments.py
+# ✅ Migrados a routes/appointments.py
 
 # ============================================================================
 # APPOINTMENTS
@@ -1390,7 +1386,7 @@ async def get_audit_logs(
 # MIGRADO a routes/dashboard.py - El siguiente endpoint fue migrado:
 # - GET /api/dashboard/stats ✅ ELIMINADO
 
-# Endpoints eliminados - ahora están en routes/dashboard.py
+# ✅ Migrados a routes/dashboard.py
 
 # ============================================================================
 # APPOINTMENTS
@@ -1403,7 +1399,7 @@ async def get_audit_logs(
 # - PUT /api/appointments/{appointment_id} ✅ ELIMINADO
 # - DELETE /api/appointments/{appointment_id} ✅ ELIMINADO
 
-# Endpoints eliminados - ahora están en routes/appointments.py
+# ✅ Migrados a routes/appointments.py
 
 # ============================================================================
 # CONSULTATIONS
@@ -1419,9 +1415,8 @@ async def get_audit_logs(
 # - PUT /api/consultations/{consultation_id}/medical-records/{record_id}
 # - DELETE /api/consultations/{consultation_id}/medical-records/{record_id}
 # - GET /api/consultations/{consultation_id}/prescriptions
-# TODO: Eliminar código después de validar que todo funciona
 
-# Endpoints eliminados - ahora están en routes/consultations.py
+# ✅ Migrados a routes/consultations.py
 
 # ============================================================================
 # PRESCRIPTIONS
@@ -1431,9 +1426,8 @@ async def get_audit_logs(
 # - POST /api/consultations/{consultation_id}/prescriptions
 # - PUT /api/consultations/{consultation_id}/prescriptions/{prescription_id}
 # - DELETE /api/consultations/{consultation_id}/prescriptions/{prescription_id}
-# TODO: Eliminar código después de validar que todo funciona
 
-# Endpoints eliminados - ahora están en routes/consultations.py
+# ✅ Migrados a routes/consultations.py
 
 # ============================================================================
 # DASHBOARD
@@ -1441,7 +1435,7 @@ async def get_audit_logs(
 # MIGRADO a routes/dashboard.py - El siguiente endpoint fue migrado:
 # - GET /api/dashboard/stats ✅ ELIMINADO
 
-# Endpoints eliminados - ahora están en routes/dashboard.py
+# ✅ Migrados a routes/dashboard.py
 
 # ============================================================================
 # APPOINTMENTS
@@ -1454,7 +1448,7 @@ async def get_audit_logs(
 # - PUT /api/appointments/{appointment_id} ✅ ELIMINADO
 # - DELETE /api/appointments/{appointment_id} ✅ ELIMINADO
 
-# Endpoints eliminados - ahora están en routes/appointments.py
+# ✅ Migrados a routes/appointments.py
 
 # ============================================================================
 # CONSULTATIONS
@@ -1471,7 +1465,7 @@ async def get_audit_logs(
 # - DELETE /api/consultations/{consultation_id}/medical-records/{record_id} ✅ ELIMINADO
 # - GET /api/consultations/{consultation_id}/prescriptions ✅ ELIMINADO
 
-# Endpoints eliminados - ahora están en routes/consultations.py
+# ✅ Migrados a routes/consultations.py
 
 # ============================================================================
 # PRESCRIPTIONS
@@ -1482,9 +1476,9 @@ async def get_audit_logs(
 # - PUT /api/consultations/{consultation_id}/prescriptions/{prescription_id} ✅ ELIMINADO
 # - DELETE /api/consultations/{consultation_id}/prescriptions/{prescription_id} ✅ ELIMINADO
 
-# Endpoints eliminados - ahora están en routes/consultations.py
+# ✅ Migrados a routes/consultations.py
 
-# Endpoints eliminados - ahora están en routes/consultations.py
+# ✅ Migrados a routes/consultations.py
 
 # ============================================================================
 # APPOINTMENTS
@@ -1497,7 +1491,7 @@ async def get_audit_logs(
 # - PUT /api/appointments/{appointment_id} ✅ ELIMINADO
 # - DELETE /api/appointments/{appointment_id} ✅ ELIMINADO
 
-# Endpoints eliminados - ahora están en routes/appointments.py
+# ✅ Migrados a routes/appointments.py
 
 # ============================================================================
 # CONSULTATIONS
@@ -1513,9 +1507,8 @@ async def get_audit_logs(
 # - POST /api/medical-records
 # - PUT /api/medical-records/{record_id}
 # - DELETE /api/medical-records/{record_id}
-# TODO: Eliminar código después de validar que todo funciona
 
-# Endpoints eliminados - ahora están en routes/consultations.py
+# ✅ Migrados a routes/consultations.py
 
 # ============================================================================
 # MEDICAL RECORDS
@@ -1526,9 +1519,8 @@ async def get_audit_logs(
 # - POST /api/medical-records
 # - PUT /api/medical-records/{record_id}
 # - DELETE /api/medical-records/{record_id}
-# TODO: Eliminar código después de validar que todo funciona
 
-# Endpoints eliminados - ahora están en routes/consultations.py
+# ✅ Migrados a routes/consultations.py
 
 # ============================================================================
 # SCHEDULE MANAGEMENT ENDPOINTS (continuación)
@@ -1538,9 +1530,9 @@ async def get_audit_logs(
 # - PUT /api/doctor/schedule ✅ ELIMINADO
 # - GET /api/doctor/availability ✅ ELIMINADO
 
-# Endpoints eliminados - ahora están en routes/schedule.py
+# ✅ Migrados a routes/schedule.py
 
-# Endpoints eliminados - ahora están en routes/consultations.py
+# ✅ Migrados a routes/consultations.py
 
 # - /api/test-patient-creation
 # - /api/test-cors
@@ -1555,7 +1547,7 @@ async def get_audit_logs(
 # - GET /api/study-catalog/{study_id} ✅ ELIMINADO
 # - GET /api/study-catalog/code/{code} ✅ ELIMINADO
 
-# Endpoints eliminados - ahora están en routes/clinical_studies.py
+# ✅ Migrados a routes/clinical_studies.py
 
 # Study templates endpoints removed - table deleted
 
@@ -1770,7 +1762,6 @@ async def get_audit_statistics(
 # - GET /api/privacy/arco-requests/{patient_id}
 # - PUT /api/privacy/arco-request/{request_id}
 # - GET /api/privacy/public-notice
-# TODO: Eliminar código después de validar que todo funciona
 
 @app.get("/api/privacy/active-notice")
 async def get_active_privacy_notice(
