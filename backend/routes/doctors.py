@@ -220,7 +220,9 @@ async def update_my_profile(
         doctor_data_dict.pop('personal_documents', None)
         
         try:
+            api_logger.info(f"📞 Creating DoctorUpdate with primary_phone: {doctor_data_dict.get('primary_phone')}")
             doctor_data = schemas.DoctorUpdate(**doctor_data_dict)
+            api_logger.info(f"📞 DoctorUpdate created - primary_phone attribute: {getattr(doctor_data, 'primary_phone', 'NOT_SET')}, has_attr: {hasattr(doctor_data, 'primary_phone')}")
         except Exception as e:
             api_logger.error(f"❌ Error parsing DoctorUpdate schema: {str(e)}")
             raise HTTPException(
@@ -362,12 +364,16 @@ async def update_my_profile(
         
         # Update doctor profile (this will handle phone parsing)
         try:
+            # Log phone data before update
+            api_logger.info(f"📞 Phone data before update: primary_phone={getattr(doctor_data, 'primary_phone', None)}, has_attr={hasattr(doctor_data, 'primary_phone')}")
             updated_doctor = crud.update_doctor_profile(db, current_user.id, doctor_data)
             if not updated_doctor:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Doctor profile not found"
                 )
+            # Log phone after update
+            api_logger.info(f"📞 Phone data after update: primary_phone={updated_doctor.primary_phone}")
         except Exception as e:
             api_logger.error(f"❌ Error updating doctor profile: {str(e)}", error_type=type(e).__name__, traceback=traceback.format_exc())
             db.rollback()

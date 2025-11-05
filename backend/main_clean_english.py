@@ -306,6 +306,10 @@ app.include_router(dashboard_router)
 from routes.vital_signs import router as vital_signs_router
 app.include_router(vital_signs_router)
 
+# Include authentication routes
+from routes.auth import router as auth_router
+app.include_router(auth_router)
+
 # ============================================================================
 # AUTHENTICATION DEPENDENCY
 # ============================================================================
@@ -3038,6 +3042,18 @@ async def register_doctor(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=error_detail
             )
+
+# ============================================================================
+# AUTHENTICATION
+# ============================================================================
+# MIGRADO a routes/auth.py - Los siguientes 6 endpoints fueron migrados:
+# - POST /api/auth/register
+# - POST /api/auth/login
+# - GET /api/auth/me
+# - POST /api/auth/logout
+# - POST /api/auth/password-reset/request
+# - POST /api/auth/password-reset/confirm
+# TODO: Eliminar código después de validar que todo funciona
 
 # Test endpoints removed - system is working
 

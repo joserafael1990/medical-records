@@ -198,9 +198,16 @@ def update_doctor_profile(db: Session, doctor_id: int, doctor_data: schemas.Doct
                 doctor_data.primary_phone_country_code or '+52',
                 doctor_data.primary_phone_number or ''
             )
+            print(f"📞 [CRUD] Set phone from country_code + number: {db_doctor.primary_phone}")
     elif hasattr(doctor_data, 'primary_phone') and doctor_data.primary_phone is not None:
         # If primary_phone is provided directly, use it
-        db_doctor.primary_phone = doctor_data.primary_phone
+        phone_value = doctor_data.primary_phone
+        # Handle empty string as None (don't update if empty)
+        if phone_value and phone_value.strip():
+            db_doctor.primary_phone = phone_value.strip()
+            print(f"📞 [CRUD] Set phone from primary_phone: {db_doctor.primary_phone}")
+        elif phone_value == '':
+            print(f"📞 [CRUD] Skipping empty primary_phone value")
     
     # Update only provided fields (excluding documents, phone fields)
     update_data = doctor_data.dict(exclude_unset=True, exclude={'documents', 'primary_phone_country_code', 'primary_phone_number', 'primary_phone'})
