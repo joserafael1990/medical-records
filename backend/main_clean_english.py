@@ -4742,95 +4742,13 @@ async def delete_medical_record(
 # ============================================================================
 # STUDY CATALOG ENDPOINTS
 # ============================================================================
+# MIGRADO a routes/clinical_studies.py - Los siguientes endpoints fueron migrados:
+# - GET /api/study-categories ✅ ELIMINADO
+# - GET /api/study-catalog ✅ ELIMINADO
+# - GET /api/study-catalog/{study_id} ✅ ELIMINADO
+# - GET /api/study-catalog/code/{code} ✅ ELIMINADO
 
-@app.get("/api/study-categories")
-async def get_study_categories(
-    skip: int = 0,
-    limit: int = 100,
-    db: Session = Depends(get_db)
-):
-    """Get all study categories"""
-    try:
-        categories = crud.get_study_categories(db, skip=skip, limit=limit)
-        return [schemas.StudyCategory.model_validate(category) for category in categories]
-    except Exception as e:
-        print(f"❌ Error in get_study_categories: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-
-@app.get("/api/study-catalog")
-async def get_study_catalog(
-    skip: int = 0,
-    limit: int = 100,
-    category_id: Optional[int] = None,
-    search: Optional[str] = None,
-    db: Session = Depends(get_db)
-):
-    """Get studies from catalog with filters"""
-    try:
-        studies = crud.get_study_catalog(
-            db, 
-            skip=skip, 
-            limit=limit,
-            category_id=category_id,
-            search=search
-        )
-        # Convert to dict with only existing columns
-        result = []
-        for study in studies:
-            study_dict = {
-                "id": study.id,
-                "name": study.name,
-                "category_id": study.category_id,
-                "is_active": study.is_active,
-                "created_at": study.created_at.isoformat() if study.created_at else None,
-                "updated_at": study.updated_at.isoformat() if study.updated_at else None,
-                "category": {
-                    "id": study.category.id if study.category else None,
-                    "name": study.category.name if study.category else None,
-                    # code and description fields removed from study_categories
-                    "active": study.category.active if study.category else None,
-                    "created_at": study.category.created_at.isoformat() if study.category and study.category.created_at else None
-                } if study.category else None
-            }
-            result.append(study_dict)
-        return result
-    except Exception as e:
-        print(f"❌ Error in get_study_catalog: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-
-@app.get("/api/study-catalog/{study_id}")
-async def get_study_by_id(
-    study_id: int,
-    db: Session = Depends(get_db)
-):
-    """Get study by ID with normal values"""
-    try:
-        study = crud.get_study_by_id(db, study_id)
-        if not study:
-            raise HTTPException(status_code=404, detail="Study not found")
-        return schemas.StudyCatalog.model_validate(study)
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"❌ Error in get_study_by_id: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-
-@app.get("/api/study-catalog/code/{code}")
-async def get_study_by_code(
-    code: str,
-    db: Session = Depends(get_db)
-):
-    """Get study by code"""
-    try:
-        study = crud.get_study_by_code(db, code)
-        if not study:
-            raise HTTPException(status_code=404, detail="Study not found")
-        return schemas.StudyCatalog.model_validate(study)
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"❌ Error in get_study_by_code: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+# Endpoints eliminados - ahora están en routes/clinical_studies.py
 
 # Study templates endpoints removed - table deleted
 
