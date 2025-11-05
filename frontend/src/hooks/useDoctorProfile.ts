@@ -34,7 +34,7 @@ const initialFormData: DoctorFormData = {
   paternal_surname: '',
   maternal_surname: '',
   email: '',
-  phone: '',
+  primary_phone: '',
   birth_date: '',
   gender: '',
   
@@ -138,9 +138,9 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
       errors.email = 'El correo electrónico es requerido';
     }
     
-    if (!isEditMode || data.phone?.trim()) {
-      if (!data.phone?.trim()) {
-        errors.phone = 'El teléfono es requerido';
+    if (!isEditMode || data.primary_phone?.trim()) {
+      if (!data.primary_phone?.trim()) {
+        errors.primary_phone = 'El teléfono es requerido';
       }
     }
     
@@ -373,7 +373,7 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
         paternal_surname: doctorProfile.paternal_surname || '',
         maternal_surname: doctorProfile.maternal_surname || '',
         email: doctorProfile.email || '',
-        phone: doctorProfile.primary_phone || '',
+        primary_phone: doctorProfile.primary_phone || '',
         birth_date: formatDateForInput(doctorProfile.birth_date || ''),
         gender: (doctorProfile as any).gender || '',
         curp: doctorProfile.curp || '',

@@ -36,7 +36,7 @@ interface DoctorFormData {
   paternal_surname: string;
   maternal_surname: string;
   email: string;
-  phone: string; // Mantener para compatibilidad, se parseará a country_code + number
+  primary_phone: string; // Renombrado de 'phone' para consistencia con backend
   birth_date: string;
   gender: string;
   // Documentos normalizados - se manejan en estado separado
@@ -134,8 +134,8 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
       if (isEditing) {
         loadExistingDocuments();
         // Parsear teléfono existente
-        if (formData.phone) {
-          const phoneData = extractCountryCode(formData.phone);
+        if (formData.primary_phone) {
+          const phoneData = extractCountryCode(formData.primary_phone);
           setPhoneCountryCode(phoneData.countryCode);
           setPhoneNumber(phoneData.number);
         }
@@ -147,7 +147,7 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
         setPersonalDocuments([{ document_id: null, document_value: '' }]);
       }
     }
-  }, [open, isEditing, formData.phone]);
+  }, [open, isEditing, formData.primary_phone]);
   
   const loadExistingDocuments = async () => {
     try {
@@ -279,7 +279,7 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
     // Actualizar formData con teléfono
     setFormData(prev => ({
       ...prev,
-      phone: fullPhone
+      primary_phone: fullPhone
     }));
     
     // Pasar documentos directamente a onSubmit para evitar problemas de asincronía con setFormData
@@ -461,8 +461,8 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
                   required
                   placeholder="Ej: 222 123 4567"
                   fullWidth
-                  error={!!fieldErrors.phone}
-                  helperText={fieldErrors.phone}
+                  error={!!fieldErrors.primary_phone}
+                  helperText={fieldErrors.primary_phone}
                 />
               </Box>
             </Box>
