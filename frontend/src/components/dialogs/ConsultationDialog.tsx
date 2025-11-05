@@ -84,6 +84,7 @@ import { ConsultationFormFields } from './ConsultationDialog/ConsultationFormFie
 import { PatientDataSection } from './ConsultationDialog/PatientDataSection';
 import { PreviousClinicalStudiesSection } from './ConsultationDialog/PreviousClinicalStudiesSection';
 import { ConsultationDateSection } from './ConsultationDialog/ConsultationDateSection';
+import { ConsultationDiagnosisSection } from './ConsultationDialog/DiagnosisSection';
 // import { useSnackbar } from '../../contexts/SnackbarContext';
 
 // Define ConsultationFormData interface based on the hook
@@ -1577,63 +1578,21 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
 
           {/* Structured Diagnoses */}
-          <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <MedicalServicesIcon sx={{ fontSize: 20 }} />
-              Diagnósticos (CIE-10)
-            </Typography>
-            
-            {/* Primary Diagnoses */}
-        <Box sx={{ mb: 3 }}>
-          <DiagnosisSection
-            diagnoses={primaryDiagnosesHook.diagnoses}
-            onAddDiagnosis={handleAddPrimaryDiagnosis}
-            onRemoveDiagnosis={handleRemovePrimaryDiagnosis}
-            title="Diagnósticos Principales"
-            maxSelections={1}
-            showAddButton={true}
-            isLoading={loading}
-            error={primaryDiagnosesHook.error}
+          <ConsultationDiagnosisSection
+            primaryDiagnoses={primaryDiagnosesHook.diagnoses}
+            onAddPrimaryDiagnosis={handleAddPrimaryDiagnosis}
+            onRemovePrimaryDiagnosis={handleRemovePrimaryDiagnosis}
+            primaryDiagnosisText={formData.primary_diagnosis}
+            onPrimaryDiagnosisTextChange={handleChange}
+            secondaryDiagnoses={secondaryDiagnosesHook.diagnoses}
+            onAddSecondaryDiagnosis={handleAddSecondaryDiagnosis}
+            onRemoveSecondaryDiagnosis={handleRemoveSecondaryDiagnosis}
+            secondaryDiagnosesText={formData.secondary_diagnoses}
+            onSecondaryDiagnosesTextChange={handleChange}
+            loading={loading}
+            primaryDiagnosesError={primaryDiagnosesHook.error}
+            secondaryDiagnosesError={secondaryDiagnosesHook.error}
           />
-        </Box>
-            <TextField
-              name="primary_diagnosis"
-                label="Diagnóstico principal (texto)"
-              value={formData.primary_diagnosis}
-              onChange={handleChange}
-              size="small"
-              fullWidth
-              multiline
-              rows={2}
-                sx={{ mb: 1 }}
-              />
-            <Divider sx={{ my: 2 }} />
-
-            {/* Secondary Diagnoses */}
-        <Box sx={{ mb: 2 }}>
-          <DiagnosisSection
-            diagnoses={secondaryDiagnosesHook.diagnoses}
-            onAddDiagnosis={handleAddSecondaryDiagnosis}
-            onRemoveDiagnosis={handleRemoveSecondaryDiagnosis}
-            title="Diagnósticos Secundarios"
-            showAddButton={true}
-            isLoading={loading}
-            error={secondaryDiagnosesHook.error}
-          />
-        </Box>
-
-            {/* Legacy text fields for backward compatibility */}
-              <TextField
-                name="secondary_diagnoses"
-                label="Diagnósticos secundarios (texto)"
-                value={formData.secondary_diagnoses}
-              onChange={handleChange}
-              size="small"
-              fullWidth
-              multiline
-              rows={2}
-            />
-          </Box>
 
           {/* Prescribed Medications Section - Inline */}
           <PrescriptionsSection
