@@ -32,7 +32,7 @@ class DiagnosisCategory(Base):
     diagnoses = relationship("DiagnosisCatalog", back_populates="category")
     
     def __repr__(self):
-        return f"<DiagnosisCategory(code='{self.code}', name='{self.name}')>"
+        return f"<DiagnosisCategory(id={self.id}, name='{self.name}')>"
 
 class DiagnosisCatalog(Base):
     __tablename__ = "diagnosis_catalog"
