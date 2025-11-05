@@ -290,6 +290,10 @@ app.include_router(doctors_router)
 from routes.patients import router as patients_router
 app.include_router(patients_router)
 
+# Include appointment management routes
+from routes.appointments import router as appointments_router
+app.include_router(appointments_router)
+
 # ============================================================================
 # AUTHENTICATION DEPENDENCY
 # ============================================================================
@@ -4246,6 +4250,14 @@ async def get_dashboard_stats():
 # ============================================================================
 # APPOINTMENTS
 # ============================================================================
+# MIGRADO a routes/appointments.py - Los siguientes 6 endpoints fueron migrados:
+# - GET /api/appointments
+# - GET /api/appointments/calendar
+# - GET /api/appointments/{appointment_id}
+# - POST /api/appointments
+# - PUT /api/appointments/{appointment_id}
+# - DELETE /api/appointments/{appointment_id}
+# TODO: Eliminar código después de validar que todo funciona
 
 @app.get("/api/appointments")
 async def get_appointments(
