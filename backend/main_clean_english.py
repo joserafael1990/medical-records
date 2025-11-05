@@ -286,6 +286,10 @@ app.include_router(schedule_router)
 from routes.doctors import router as doctors_router
 app.include_router(doctors_router)
 
+# Include patient management routes
+from routes.patients import router as patients_router
+app.include_router(patients_router)
+
 # ============================================================================
 # AUTHENTICATION DEPENDENCY
 # ============================================================================
@@ -3786,6 +3790,12 @@ async def update_my_profile(
 # ============================================================================
 # PATIENTS
 # ============================================================================
+# MIGRADO a routes/patients.py - Los siguientes 4 endpoints fueron migrados:
+# - GET /api/patients
+# - GET /api/patients/{patient_id}
+# - POST /api/patients
+# - PUT /api/patients/{patient_id}
+# TODO: Eliminar código después de validar que todo funciona
 
 @app.get("/api/patients")
 async def get_patients(
