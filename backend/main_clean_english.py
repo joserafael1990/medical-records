@@ -298,6 +298,10 @@ app.include_router(appointments_router)
 from routes.clinical_studies import router as clinical_studies_router
 app.include_router(clinical_studies_router)
 
+# Include dashboard routes
+from routes.dashboard import router as dashboard_router
+app.include_router(dashboard_router)
+
 # ============================================================================
 # AUTHENTICATION DEPENDENCY
 # ============================================================================
@@ -4245,6 +4249,9 @@ async def update_patient(
 # ============================================================================
 # DASHBOARD
 # ============================================================================
+# MIGRADO a routes/dashboard.py - El siguiente endpoint fue migrado:
+# - GET /api/dashboard/stats
+# TODO: Eliminar código después de validar que todo funciona
 
 @app.get("/api/dashboard/stats")
 async def get_dashboard_stats():
