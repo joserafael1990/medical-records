@@ -262,6 +262,10 @@ security = HTTPBearer()
 from routes.diagnosis import router as diagnosis_router
 app.include_router(diagnosis_router, tags=["diagnosis-catalog"])
 
+# Include catalog routes (specialties, countries, states, etc.)
+from routes.catalogs import router as catalogs_router
+app.include_router(catalogs_router)
+
 # ============================================================================
 # AUTHENTICATION DEPENDENCY
 # ============================================================================
@@ -2157,36 +2161,7 @@ async def process_text_cancellation_request(text: str, patient_phone: str, db: S
 # ============================================================================
 # CATALOGS (PUBLIC ENDPOINTS)
 # ============================================================================
-
-@app.get("/api/catalogs/specialties")
-async def get_specialties(db: Session = Depends(get_db)):
-    """Get list of medical specialties from medical_specialties table"""
-    try:
-        specialties = crud.get_specialties(db, active=True)
-        return [
-            {
-                "id": spec.id,
-                "name": spec.name,
-                "active": spec.active,
-                "created_at": spec.created_at.isoformat() if spec.created_at else None
-            }
-            for spec in specialties
-        ]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error getting specialties: {str(e)}")
-
-@app.get("/api/catalogs/countries")
-async def get_countries(db: Session = Depends(get_db)):
-    """Get list of countries"""
-    return crud.get_countries(db, active=True)
-
-@app.get("/api/catalogs/states")
-async def get_states(
-    country_id: Optional[int] = Query(None),
-    db: Session = Depends(get_db)
-):
-    """Get list of states"""
-    return crud.get_states(db, country_id=country_id, active=True)
+# MIGRADO a routes/catalogs.py
 
 # ============================================================================
 # DOCUMENT MANAGEMENT ENDPOINTS
@@ -2284,10 +2259,7 @@ async def delete_person_document(
     db.commit()
     return {"message": "Document deleted successfully"}
 
-@app.get("/api/catalogs/emergency-relationships")
-async def get_emergency_relationships(db: Session = Depends(get_db)):
-    """Get list of emergency relationships"""
-    return crud.get_emergency_relationships(db, active=True)
+# MIGRADO a routes/catalogs.py
 
 # ============================================================================
 # DEBUGGING ENDPOINTS
@@ -2591,12 +2563,7 @@ async def debug_full_system(
             'timestamp': datetime.now().isoformat()
         }
 
-@app.get("/api/catalogs/timezones")
-async def get_timezones():
-    """Get list of available timezones for doctor offices"""
-    from timezone_list import get_timezone_options
-    timezone_options = get_timezone_options()
-    return [{"value": tz[0], "label": tz[1]} for tz in timezone_options]
+# MIGRADO a routes/catalogs.py
 
 # ============================================================================
 # SCHEDULE MANAGEMENT ENDPOINTS
