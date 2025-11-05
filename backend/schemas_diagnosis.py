@@ -36,9 +36,7 @@ class PriorityLevel(int, Enum):
 
 # Base schemas
 class DiagnosisCategoryBase(BaseModel):
-    code: str = Field(..., max_length=10, description="CIE-10 category code")
     name: str = Field(..., max_length=200, description="Category name")
-    description: Optional[str] = Field(None, description="Category description")
     parent_id: Optional[int] = Field(None, description="Parent category ID")
     level: int = Field(1, ge=1, le=5, description="Category level (1-5)")
     is_active: bool = Field(True, description="Whether category is active")
@@ -47,9 +45,7 @@ class DiagnosisCategoryCreate(DiagnosisCategoryBase):
     pass
 
 class DiagnosisCategoryUpdate(BaseModel):
-    code: Optional[str] = Field(None, max_length=10)
     name: Optional[str] = Field(None, max_length=200)
-    description: Optional[str] = None
     parent_id: Optional[int] = None
     level: Optional[int] = Field(None, ge=1, le=5)
     is_active: Optional[bool] = None
@@ -106,55 +102,7 @@ class DiagnosisCatalog(DiagnosisCatalogBase):
     class Config:
         from_attributes = True
 
-class DiagnosisRecommendationBase(BaseModel):
-    diagnosis_id: int = Field(..., description="Diagnosis ID")
-    recommended_study_id: int = Field(..., description="Recommended study ID")
-    recommendation_type: RecommendationType = Field(..., description="Type of recommendation")
-    priority: PriorityLevel = Field(1, description="Priority level")
-    notes: Optional[str] = Field(None, description="Additional notes")
-
-class DiagnosisRecommendationCreate(DiagnosisRecommendationBase):
-    pass
-
-class DiagnosisRecommendationUpdate(BaseModel):
-    diagnosis_id: Optional[int] = None
-    recommended_study_id: Optional[int] = None
-    recommendation_type: Optional[RecommendationType] = None
-    priority: Optional[PriorityLevel] = None
-    notes: Optional[str] = None
-
-class DiagnosisRecommendation(DiagnosisRecommendationBase):
-    id: int
-    created_at: datetime
-    diagnosis: DiagnosisCatalog
-    recommended_study: Dict[str, Any]  # Simplified to avoid circular imports
-    
-    class Config:
-        from_attributes = True
-
-class DiagnosisDifferentialBase(BaseModel):
-    primary_diagnosis_id: int = Field(..., description="Primary diagnosis ID")
-    differential_diagnosis_id: int = Field(..., description="Differential diagnosis ID")
-    similarity_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Similarity score (0.0-1.0)")
-    notes: Optional[str] = Field(None, description="Additional notes")
-
-class DiagnosisDifferentialCreate(DiagnosisDifferentialBase):
-    pass
-
-class DiagnosisDifferentialUpdate(BaseModel):
-    primary_diagnosis_id: Optional[int] = None
-    differential_diagnosis_id: Optional[int] = None
-    similarity_score: Optional[float] = Field(None, ge=0.0, le=1.0)
-    notes: Optional[str] = None
-
-class DiagnosisDifferential(DiagnosisDifferentialBase):
-    id: int
-    created_at: datetime
-    primary_diagnosis: DiagnosisCatalog
-    differential_diagnosis: DiagnosisCatalog
-    
-    class Config:
-        from_attributes = True
+# DiagnosisRecommendation and DiagnosisDifferential schemas removed - tables deleted
 
 # Search and filter schemas
 class DiagnosisSearchRequest(BaseModel):
@@ -174,7 +122,7 @@ class DiagnosisSearchResult(BaseModel):
     name: str
     description: Optional[str]
     category_name: str
-    category_code: str
+    category_id: Optional[int] = None  # Use category_id instead of category_code
     specialty: Optional[str]
     severity_level: Optional[SeverityLevel]
     is_chronic: bool
@@ -184,13 +132,7 @@ class DiagnosisSearchResult(BaseModel):
     synonyms: Optional[List[str]]
     rank: Optional[float] = Field(None, description="Search relevance rank")
 
-class DiagnosisRecommendationResult(BaseModel):
-    diagnosis: DiagnosisCatalog
-    recommended_studies: List[Dict[str, Any]] = Field(..., description="List of recommended studies with details")
-
-class DiagnosisDifferentialResult(BaseModel):
-    primary_diagnosis: DiagnosisCatalog
-    differential_diagnoses: List[Dict[str, Any]] = Field(..., description="List of differential diagnoses with similarity scores")
+# DiagnosisRecommendationResult and DiagnosisDifferentialResult removed - tables deleted
 
 # Statistics schemas
 class DiagnosisStats(BaseModel):
@@ -239,5 +181,4 @@ class SimpleDiagnosisCatalog(BaseModel):
 # Update forward references
 DiagnosisCategory.model_rebuild()
 DiagnosisCatalog.model_rebuild()
-DiagnosisRecommendation.model_rebuild()
-DiagnosisDifferential.model_rebuild()
+# DiagnosisRecommendation and DiagnosisDifferential removed - tables deleted

@@ -174,10 +174,7 @@ def create_doctor_safe(db: Session, doctor_data: schemas.DoctorCreate) -> Person
                 db=db,
                 person_id=db_doctor.id,
                 document_id=doc.document_id,
-                document_value=doc.document_value,
-                issue_date=doc.issue_date,
-                expiration_date=doc.expiration_date,
-                issuing_authority=doc.issuing_authority
+                document_value=doc.document_value
             )
     
     db.refresh(db_doctor)
@@ -220,10 +217,7 @@ def update_doctor_profile(db: Session, doctor_id: int, doctor_data: schemas.Doct
                 db=db,
                 person_id=doctor_id,
                 document_id=doc.document_id,
-                document_value=doc.document_value,
-                issue_date=doc.issue_date,
-                expiration_date=doc.expiration_date,
-                issuing_authority=doc.issuing_authority
+                document_value=doc.document_value
             )
     
     try:
@@ -287,9 +281,6 @@ def create_patient_with_code(db: Session, patient_data: schemas.PatientCreate, p
                 person_id=db_patient.id,
                 document_id=doc.document_id,
                 document_value=doc.document_value,
-                issue_date=doc.issue_date,
-                expiration_date=doc.expiration_date,
-                issuing_authority=doc.issuing_authority,
                 check_uniqueness=False  # Ya validamos arriba
             )
     
@@ -471,9 +462,6 @@ def upsert_person_document(
     person_id: int,
     document_id: int,
     document_value: str,
-    issue_date: Optional[date] = None,
-    expiration_date: Optional[date] = None,
-    issuing_authority: Optional[str] = None,
     check_uniqueness: bool = True
 ) -> PersonDocument:
     """
@@ -516,12 +504,6 @@ def upsert_person_document(
         # Update existing document: change document_id (if different) and value
         existing_same_type.document_id = document_id
         existing_same_type.document_value = document_value
-        if issue_date is not None:
-            existing_same_type.issue_date = issue_date
-        if expiration_date is not None:
-            existing_same_type.expiration_date = expiration_date
-        if issuing_authority is not None:
-            existing_same_type.issuing_authority = issuing_authority
         existing_same_type.updated_at = datetime.utcnow()
         return existing_same_type
     else:
@@ -537,12 +519,6 @@ def upsert_person_document(
             existing_inactive.document_id = document_id
             existing_inactive.document_value = document_value
             existing_inactive.is_active = True
-            if issue_date is not None:
-                existing_inactive.issue_date = issue_date
-            if expiration_date is not None:
-                existing_inactive.expiration_date = expiration_date
-            if issuing_authority is not None:
-                existing_inactive.issuing_authority = issuing_authority
             existing_inactive.updated_at = datetime.utcnow()
             return existing_inactive
         else:
@@ -550,10 +526,7 @@ def upsert_person_document(
             new_doc = PersonDocument(
                 person_id=person_id,
                 document_id=document_id,
-                document_value=document_value,
-                issue_date=issue_date,
-                expiration_date=expiration_date,
-                issuing_authority=issuing_authority
+                document_value=document_value
             )
             db.add(new_doc)
             db.flush()
@@ -687,15 +660,9 @@ def create_appointment(db: Session, appointment_data: schemas.AppointmentCreate,
     """Create a new appointment"""
     from appointment_service import AppointmentService
     
-    # Generate appointment code
-    last_appointment = db.query(Appointment).order_by(desc(Appointment.id)).first()
-    appointment_number = (last_appointment.id + 1) if last_appointment else 1
-    appointment_code = f"APT{appointment_number:08d}"
-    
     # Prepare appointment data for the service
     appointment_dict = appointment_data.dict()
     appointment_dict['doctor_id'] = doctor_id
-    appointment_dict['appointment_code'] = appointment_code
     
     # Remove end_time if present since AppointmentService will calculate it automatically
     if 'end_time' in appointment_dict:
@@ -928,7 +895,7 @@ def get_estados(db: Session, pais_id: Optional[int] = None, activo: bool = True)
 # STUDY CATALOG CRUD OPERATIONS
 # ============================================================================
 
-from database import StudyCategory, StudyCatalog, StudyNormalValue, StudyTemplate, StudyTemplateItem
+from database import StudyCategory, StudyCatalog
 
 def get_study_categories(db: Session, skip: int = 0, limit: int = 100) -> List[StudyCategory]:
     """Get all study categories"""
@@ -939,32 +906,26 @@ def get_study_category(db: Session, category_id: int) -> Optional[StudyCategory]
     return db.query(StudyCategory).filter(StudyCategory.id == category_id).first()
 
 def get_study_catalog(
-    db: Session, 
-    skip: int = 0, 
+    db: Session,
+    skip: int = 0,
     limit: int = 100,
     category_id: Optional[int] = None,
-    specialty: Optional[str] = None,
     search: Optional[str] = None
 ) -> List[StudyCatalog]:
     """Get studies from catalog with filters"""
     # Don't load normal_values to avoid schema issues
     query = db.query(StudyCatalog).options(
         joinedload(StudyCatalog.category)
-    ).join(StudyCategory).filter(StudyCatalog.active == True)
+    ).join(StudyCategory).filter(StudyCatalog.is_active == True)
     
     if category_id:
         query = query.filter(StudyCatalog.category_id == category_id)
     
-    if specialty:
-        query = query.filter(StudyCatalog.specialty.ilike(f"%{specialty}%"))
+    # specialty filter removed - column does not exist
     
     if search:
         query = query.filter(
-            or_(
-                StudyCatalog.name.ilike(f"%{search}%"),
-                StudyCatalog.code.ilike(f"%{search}%"),
-                StudyCatalog.description.ilike(f"%{search}%")
-            )
+            StudyCatalog.name.ilike(f"%{search}%")
         )
     
     return query.offset(skip).limit(limit).all()
@@ -972,82 +933,28 @@ def get_study_catalog(
 def get_study_by_id(db: Session, study_id: int) -> Optional[StudyCatalog]:
     """Get study by ID with normal values"""
     return db.query(StudyCatalog).options(
-        joinedload(StudyCatalog.normal_values),
         joinedload(StudyCatalog.category)
     ).filter(StudyCatalog.id == study_id).first()
 
-def get_study_by_code(db: Session, code: str) -> Optional[StudyCatalog]:
-    """Get study by code"""
-    return db.query(StudyCatalog).options(
-        joinedload(StudyCatalog.normal_values),
-        joinedload(StudyCatalog.category)
-    ).filter(StudyCatalog.code == code).first()
+# get_study_by_code removed - code column does not exist in study_catalog
 
-def get_study_templates(
-    db: Session, 
-    skip: int = 0, 
-    limit: int = 100,
-    specialty: Optional[str] = None
-) -> List[StudyTemplate]:
-    """Get study templates with filters"""
-    query = db.query(StudyTemplate)
-    
-    if specialty:
-        query = query.filter(StudyTemplate.specialty.ilike(f"%{specialty}%"))
-    
-    return query.offset(skip).limit(limit).all()
+# StudyTemplate CRUD functions removed - table deleted
 
-def get_study_template(db: Session, template_id: int) -> Optional[StudyTemplate]:
-    """Get study template by ID with items"""
-    return db.query(StudyTemplate).options(
-        joinedload(StudyTemplate.template_items).joinedload(StudyTemplateItem.study)
-    ).filter(StudyTemplate.id == template_id).first()
-
-def create_study_template(db: Session, template_data: schemas.StudyTemplateCreate) -> StudyTemplate:
-    """Create a new study template"""
-    template = StudyTemplate(
-        name=template_data.name,
-        description=template_data.description,
-        specialty=template_data.specialty
-    )
-    db.add(template)
-    db.flush()  # Get the ID
-    
-    # Add template items
-    for i, study_id in enumerate(template_data.study_ids):
-        template_item = StudyTemplateItem(
-            template_id=template.id,
-            study_id=study_id,
-            order_index=i
-        )
-        db.add(template_item)
-    
-    db.commit()
-    db.refresh(template)
-    return template
-
-def get_studies_by_specialty(db: Session, specialty: str) -> List[StudyCatalog]:
-    """Get studies recommended for a specific specialty"""
-    return db.query(StudyCatalog).filter(
-        and_(
-            StudyCatalog.active == True,
-            StudyCatalog.specialty.ilike(f"%{specialty}%")
-        )
-    ).all()
+# get_studies_by_specialty removed - specialty column does not exist in study_catalog
 
 def get_study_recommendations(
     db: Session, 
     diagnosis: Optional[str] = None,
-    specialty: Optional[str] = None
+    category_id: Optional[int] = None
 ) -> List[StudyCatalog]:
-    """Get study recommendations based on diagnosis and specialty"""
+    """Get study recommendations based on category"""
     query = db.query(StudyCatalog).filter(StudyCatalog.is_active == True)
     
-    if specialty:
-        query = query.filter(StudyCatalog.specialty.ilike(f"%{specialty}%"))
+    if category_id:
+        query = query.filter(StudyCatalog.category_id == category_id)
     
     # This could be enhanced with a recommendation engine
-    # For now, return studies by specialty
+    # For now, return studies by category
     return query.limit(10).all()
 
 def search_studies(
@@ -1062,18 +969,12 @@ def search_studies(
     
     if search_term:
         query = query.filter(
-            or_(
-                StudyCatalog.name.ilike(f"%{search_term}%"),
-                StudyCatalog.code.ilike(f"%{search_term}%"),
-                StudyCatalog.description.ilike(f"%{search_term}%"),
-                StudyCatalog.subcategory.ilike(f"%{search_term}%")
-            )
+            StudyCatalog.name.ilike(f"%{search_term}%")
         )
     
     if category_id:
         query = query.filter(StudyCatalog.category_id == category_id)
     
-    if specialty:
-        query = query.filter(StudyCatalog.specialty.ilike(f"%{specialty}%"))
+    # specialty filter removed - column does not exist
     
     return query.limit(limit).all()

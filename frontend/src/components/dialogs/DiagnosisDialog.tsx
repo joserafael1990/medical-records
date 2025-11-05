@@ -100,7 +100,7 @@ const DiagnosisDialog: React.FC<DiagnosisDialogProps> = ({
 
       const searchRequest = {
         query: searchTerm.trim() || '',
-        category_code: selectedCategory || undefined,
+        category_id: selectedCategory ? parseInt(selectedCategory) : undefined,
         specialty: selectedSpecialty || undefined,
         severity_level: severityFilter || undefined,
         is_chronic: chronicFilter !== null ? chronicFilter : undefined,

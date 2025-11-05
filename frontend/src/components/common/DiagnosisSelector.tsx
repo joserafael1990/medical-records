@@ -51,8 +51,8 @@ const DiagnosisSelector: React.FC<DiagnosisSelectorProps> = ({
     categories,
     specialties,
     searchDiagnoses,
-    getDiagnosisRecommendations,
-    getDiagnosisDifferentials,
+    // getDiagnosisRecommendations removed - table deleted
+    // getDiagnosisDifferentials removed - table deleted
     loading,
     error
   } = useDiagnosisCatalog();
@@ -90,7 +90,7 @@ const DiagnosisSelector: React.FC<DiagnosisSelectorProps> = ({
       // Build search request
       const searchRequest = {
         query: searchTerm.trim() || '',
-        category_code: selectedCategory || undefined,
+        category_id: selectedCategory ? parseInt(selectedCategory) : undefined,
         specialty: selectedSpecialty || undefined,
         severity_level: severityFilter || undefined,
         is_chronic: chronicFilter !== null ? chronicFilter : undefined,
@@ -154,8 +154,8 @@ const DiagnosisSelector: React.FC<DiagnosisSelectorProps> = ({
         created_at: '',
         updated_at: '',
         category: {
-          id: 0,
-          code: diagnosisResult.category_code,
+          id: diagnosisResult.category_id || 0,
+          code: '',  // category_code field removed
           name: diagnosisResult.category_name,
           level: 1,
           is_active: true,

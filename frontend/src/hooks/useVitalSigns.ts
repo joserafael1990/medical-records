@@ -40,6 +40,9 @@ export interface UseVitalSignsReturn {
   
   // BMI calculation
   calculateBMI: (weight: number, height: number) => number;
+  
+  // Direct add method (no dialog)
+  addTemporaryVitalSign: (vitalSignData: VitalSignFormData & { vital_sign_name: string }) => void;
 }
 
 export const useVitalSigns = (): UseVitalSignsReturn => {
@@ -58,8 +61,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
   const [vitalSignFormData, setVitalSignFormData] = useState<VitalSignFormData>({
     vital_sign_id: 0,
     value: '',
-    unit: '',
-    notes: ''
+    unit: ''
   });
 
   // Fetch available vital signs
@@ -186,15 +188,13 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
       setVitalSignFormData({
         vital_sign_id: vitalSign.id,
         value: '',
-        unit: '',
-        notes: ''
+        unit: ''
       });
     } else {
       setVitalSignFormData({
         vital_sign_id: 0,
         value: '',
-        unit: '',
-        notes: ''
+        unit: ''
       });
     }
     
@@ -209,8 +209,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     setVitalSignFormData({
       vital_sign_id: vitalSign.vital_sign_id,
       value: vitalSign.value,
-      unit: vitalSign.unit || '',
-      notes: vitalSign.notes || ''
+      unit: vitalSign.unit || ''
     });
     
     setIsEditingVitalSign(true);
@@ -236,8 +235,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     setVitalSignFormData({
       vital_sign_id: 0,
       value: '',
-      unit: '',
-      notes: ''
+      unit: ''
     });
   }, []);
 
@@ -326,22 +324,20 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
         
         
         if (!bmiSign.value || bmiSign.value.trim() === '' || isBMICloseToCalculated) {
-          if (bmiSign.id && typeof bmiSign.id === 'number') {
-            // Update existing BMI sign
-            updateVitalSign('temp_consultation', bmiSign.id, {
-              ...bmiSign,
-              value: bmi.toString()
-            });
-          } else {
-            // Update temporary BMI sign
-            setTemporaryVitalSigns(prev => 
-              prev.map(vs => 
-                vs.vital_sign_id === bmiSign.vital_sign_id 
-                  ? { ...vs, value: bmi.toString() }
-                  : vs
-              )
-            );
-          }
+          // For temp consultations, update in local state only
+        if (bmiSign.id && typeof bmiSign.id === 'number' && bmiSign.id > 0) {
+          // This is a saved vital sign - skip auto-update for now
+          // Auto-update only works for temporary vital signs
+        } else {
+          // Update temporary BMI sign in local state
+          setTemporaryVitalSigns(prev => 
+            prev.map(vs => 
+              vs.vital_sign_id === bmiSign.vital_sign_id 
+                ? { ...vs, value: bmi.toString() }
+                : vs
+            )
+          );
+        }
         }
       }
     }
@@ -351,6 +347,15 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
   useEffect(() => {
     autoCalculateBMI();
   }, [consultationVitalSigns, temporaryVitalSigns, autoCalculateBMI]);
+
+  // Direct add method for temporary vital signs (no dialog)
+  const addTemporaryVitalSign = useCallback((vitalSignData: VitalSignFormData & { vital_sign_name: string }) => {
+    const newTempVitalSign = {
+      ...vitalSignData,
+      id: Date.now() + Math.random()
+    };
+    setTemporaryVitalSigns(prev => [...prev, newTempVitalSign]);
+  }, []);
 
   // Clear temporary vital signs (for new consultations)
   const clearTemporaryVitalSigns = useCallback(() => {
@@ -371,7 +376,6 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
         vital_sign_name: ((availableVitalSigns || []).find(v => v.id === vs.vital_sign_id) || {}).name || 'Signo Vital',
         value: vs.value,
         unit: vs.unit,
-        notes: vs.notes,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }));
@@ -414,6 +418,9 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     resetForm,
     
     // BMI calculation
-    calculateBMI
+    calculateBMI,
+    
+    // Direct add method
+    addTemporaryVitalSign
   };
 };

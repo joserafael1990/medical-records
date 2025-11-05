@@ -9,18 +9,16 @@ from typing import List, Optional, Dict, Any
 import logging
 
 from database import get_db, StudyCatalog
-from models.diagnosis import DiagnosisCategory, DiagnosisCatalog, DiagnosisRecommendation, DiagnosisDifferential
+from models.diagnosis import DiagnosisCategory, DiagnosisCatalog
 from schemas_diagnosis import (
     DiagnosisCategory as DiagnosisCategorySchema,
     DiagnosisCatalog as DiagnosisCatalogSchema,
-    DiagnosisRecommendation as DiagnosisRecommendationSchema,
-    DiagnosisDifferential as DiagnosisDifferentialSchema,
+    # DiagnosisRecommendation and DiagnosisDifferential schemas removed - tables deleted
     SimpleDiagnosisCategory,
     SimpleDiagnosisCatalog,
     DiagnosisSearchRequest,
     DiagnosisSearchResult,
-    DiagnosisRecommendationResult,
-    DiagnosisDifferentialResult,
+    # DiagnosisRecommendationResult and DiagnosisDifferentialResult removed - tables deleted
     DiagnosisStats,
     SeverityLevel,
     AgeGroup,
@@ -60,12 +58,10 @@ async def get_diagnosis_categories(
         for row in result:
             categories.append({
                 "id": row.id,
-                "code": row.code,
                 "name": row.name,
-                "description": row.description,
                 "is_active": row.active,  # Map 'active' to 'is_active' for API
                 "created_at": row.created_at.isoformat() if row.created_at else None
-                # parent_id, level, and updated_at don't exist in DB
+                # parent_id, level, code, description, and updated_at don't exist in DB
             })
         
         return categories
@@ -189,9 +185,7 @@ async def get_diagnosis_catalog(
                 "updated_at": diagnosis.updated_at,
                 "category": {
                     "id": diagnosis.category.id,
-                    "code": diagnosis.category.code,
                     "name": diagnosis.category.name,
-                    "description": diagnosis.category.description,
                     "is_active": diagnosis.category.is_active,
                     "created_at": diagnosis.category.created_at
                     # parent_id, level, and updated_at columns don't exist in DB
@@ -218,8 +212,7 @@ async def get_diagnosis(
     try:
         diagnosis = db.query(DiagnosisCatalog).options(
             joinedload(DiagnosisCatalog.category),
-            joinedload(DiagnosisCatalog.recommendations).joinedload(DiagnosisRecommendation.recommended_study),
-            joinedload(DiagnosisCatalog.primary_differentials).joinedload(DiagnosisDifferential.differential_diagnosis)
+            # DiagnosisRecommendation and DiagnosisDifferential relationships removed - tables deleted
         ).filter(
             DiagnosisCatalog.id == diagnosis_id,
             DiagnosisCatalog.active == True
@@ -250,14 +243,17 @@ async def search_diagnoses(
 ):
     """Search diagnoses using full-text search"""
     try:
-        # Build base query
-        query = db.query(DiagnosisCatalog).join(DiagnosisCategory).filter(
+        logger.info(f"🔍 Searching diagnoses with query: {search_request.query}")
+        
+        # Build base query - use LEFT JOIN to avoid filtering out diagnoses without categories
+        query = db.query(DiagnosisCatalog).outerjoin(DiagnosisCategory).filter(
             DiagnosisCatalog.active == True
         )
         
         # Add text search (synonyms column doesn't exist in DB, so we only search name, description, and code)
         if search_request.query:
             search_term = f"%{search_request.query}%"
+            logger.info(f"🔍 Using search term: {search_term}")
             query = query.filter(
                 or_(
                     DiagnosisCatalog.name.ilike(search_term),
@@ -270,8 +266,9 @@ async def search_diagnoses(
         if search_request.specialty:
             query = query.filter(DiagnosisCatalog.specialty.ilike(f"%{search_request.specialty}%"))
         
-        if search_request.category_code:
-            query = query.filter(DiagnosisCategory.code == search_request.category_code)
+        # category_code filter removed - DiagnosisCategory.code field no longer exists
+        # if search_request.category_code:
+        #     query = query.filter(DiagnosisCategory.code == search_request.category_code)
         
         if search_request.severity_level:
             query = query.filter(DiagnosisCatalog.severity_level == search_request.severity_level)
@@ -296,22 +293,29 @@ async def search_diagnoses(
             )
         
         # Execute query
+        logger.info(f"🔍 Executing search query with limit: {search_request.limit}, offset: {search_request.offset}")
         results = query.options(
             joinedload(DiagnosisCatalog.category)
         ).order_by(DiagnosisCatalog.name).offset(
             search_request.offset
         ).limit(search_request.limit).all()
         
+        logger.info(f"🔍 Found {len(results)} diagnoses matching search criteria")
+        
         # Convert to search results
         search_results = []
         for diagnosis in results:
+            # Handle case where category might be None (if LEFT JOIN didn't find a match)
+            category_name = diagnosis.category.name if diagnosis.category else None
+            category_id = diagnosis.category_id if diagnosis.category_id else None
+            
             search_results.append(DiagnosisSearchResult(
                 id=diagnosis.id,
                 code=diagnosis.code,
                 name=diagnosis.name,
                 description=diagnosis.description,
-                category_name=diagnosis.category.name,
-                category_code=diagnosis.category.code,
+                category_name=category_name,
+                category_id=category_id,  # Use category_id instead of category_code
                 specialty=diagnosis.specialty,
                 severity_level=diagnosis.severity_level,
                 is_chronic=diagnosis.is_chronic,
@@ -321,6 +325,7 @@ async def search_diagnoses(
                 synonyms=getattr(diagnosis, 'synonyms', None) or []
             ))
         
+        logger.info(f"🔍 Returning {len(search_results)} search results")
         return search_results
     
     except Exception as e:
@@ -330,127 +335,7 @@ async def search_diagnoses(
             detail="Error searching diagnoses"
         )
 
-@router.get("/catalog/{diagnosis_id}/recommendations", response_model=DiagnosisRecommendationResult)
-async def get_diagnosis_recommendations(
-    diagnosis_id: int,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
-):
-    """Get recommended studies for a specific diagnosis"""
-    try:
-        # Get diagnosis
-        diagnosis = db.query(DiagnosisCatalog).filter(
-            DiagnosisCatalog.id == diagnosis_id,
-            DiagnosisCatalog.active == True
-        ).first()
-        
-        if not diagnosis:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Diagnosis not found"
-            )
-        
-        # Get recommendations
-        recommendations = db.query(DiagnosisRecommendation).options(
-            joinedload(DiagnosisRecommendation.recommended_study)
-        ).filter(
-            DiagnosisRecommendation.diagnosis_id == diagnosis_id
-        ).order_by(
-            DiagnosisRecommendation.priority,
-            DiagnosisRecommendation.recommendation_type
-        ).all()
-        
-        # Format recommendations
-        recommended_studies = []
-        for rec in recommendations:
-            recommended_studies.append({
-                "id": rec.id,
-                "study": {
-                    "id": rec.recommended_study.id,
-                    "code": rec.recommended_study.code,
-                    "name": rec.recommended_study.name,
-                    "description": rec.recommended_study.description,
-                    "specialty": rec.recommended_study.specialty,
-                    "duration_hours": rec.recommended_study.duration_hours
-                },
-                "recommendation_type": rec.recommendation_type,
-                "priority": rec.priority,
-                "notes": rec.notes
-            })
-        
-        return DiagnosisRecommendationResult(
-            diagnosis=diagnosis,
-            recommended_studies=recommended_studies
-        )
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting diagnosis recommendations {diagnosis_id}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error retrieving diagnosis recommendations"
-        )
-
-@router.get("/catalog/{diagnosis_id}/differentials", response_model=DiagnosisDifferentialResult)
-async def get_diagnosis_differentials(
-    diagnosis_id: int,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
-):
-    """Get differential diagnoses for a specific diagnosis"""
-    try:
-        # Get diagnosis
-        diagnosis = db.query(DiagnosisCatalog).filter(
-            DiagnosisCatalog.id == diagnosis_id,
-            DiagnosisCatalog.active == True
-        ).first()
-        
-        if not diagnosis:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Diagnosis not found"
-            )
-        
-        # Get differentials
-        differentials = db.query(DiagnosisDifferential).options(
-            joinedload(DiagnosisDifferential.differential_diagnosis)
-        ).filter(
-            DiagnosisDifferential.primary_diagnosis_id == diagnosis_id
-        ).order_by(
-            DiagnosisDifferential.similarity_score.desc()
-        ).all()
-        
-        # Format differentials
-        differential_diagnoses = []
-        for diff in differentials:
-            differential_diagnoses.append({
-                "id": diff.id,
-                "diagnosis": {
-                    "id": diff.differential_diagnosis.id,
-                    "code": diff.differential_diagnosis.code,
-                    "name": diff.differential_diagnosis.name,
-                    "description": diff.differential_diagnosis.description,
-                    "specialty": diff.differential_diagnosis.specialty,
-                    "severity_level": diff.differential_diagnosis.severity_level
-                },
-                "similarity_score": float(diff.similarity_score) if diff.similarity_score else None,
-                "notes": diff.notes
-            })
-        
-        return DiagnosisDifferentialResult(
-            primary_diagnosis=diagnosis,
-            differential_diagnoses=differential_diagnoses
-        )
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting diagnosis differentials {diagnosis_id}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error retrieving diagnosis differentials"
-        )
+# Diagnosis recommendations and differentials endpoints removed - tables deleted
 
 @router.get("/stats", response_model=DiagnosisStats)
 async def get_diagnosis_stats(

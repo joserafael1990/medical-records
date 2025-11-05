@@ -63,7 +63,7 @@ export interface DiagnosisDifferential {
 export interface DiagnosisSearchRequest {
   query: string;
   specialty?: string;
-  category_code?: string;
+  category_id?: number;  // Changed from category_code to category_id
   severity_level?: 'mild' | 'moderate' | 'severe' | 'critical';
   is_chronic?: boolean;
   age_group?: 'pediatric' | 'adult' | 'geriatric' | 'all';
@@ -78,7 +78,7 @@ export interface DiagnosisSearchResult {
   name: string;
   description?: string;
   category_name: string;
-  category_code: string;
+  category_id?: number;  // Changed from category_code to category_id
   specialty?: string;
   severity_level?: 'mild' | 'moderate' | 'severe' | 'critical';
   is_chronic: boolean;
@@ -297,39 +297,7 @@ export const useDiagnosisCatalog = () => {
     }
   }, []);
 
-  // Get diagnosis recommendations
-  const getDiagnosisRecommendations = useCallback(async (diagnosisId: number) => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const response = await apiService.get(`/api/diagnosis/catalog/${diagnosisId}/recommendations`);
-      return response.data;
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.detail || 'Error loading diagnosis recommendations';
-      setError(errorMessage);
-      throw new Error(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Get diagnosis differentials
-  const getDiagnosisDifferentials = useCallback(async (diagnosisId: number) => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const response = await apiService.get(`/api/diagnosis/catalog/${diagnosisId}/differentials`);
-      return response.data;
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.detail || 'Error loading diagnosis differentials';
-      setError(errorMessage);
-      throw new Error(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // getDiagnosisRecommendations and getDiagnosisDifferentials removed - tables deleted
 
   // Get diagnosis statistics (non-critical, used for display only)
   const getStats = useCallback(async () => {
@@ -450,8 +418,7 @@ export const useDiagnosisCatalog = () => {
     getDiagnoses,
     getDiagnosis,
     searchDiagnoses,
-    getDiagnosisRecommendations,
-    getDiagnosisDifferentials,
+    // getDiagnosisRecommendations and getDiagnosisDifferentials removed - tables deleted
     getStats,
     getSpecialties,
     
