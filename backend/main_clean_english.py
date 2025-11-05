@@ -314,6 +314,10 @@ app.include_router(auth_router)
 from routes.privacy import router as privacy_router
 app.include_router(privacy_router)
 
+# Include consultations routes
+from routes.consultations import router as consultations_router
+app.include_router(consultations_router)
+
 # ============================================================================
 # AUTHENTICATION DEPENDENCY
 # ============================================================================
@@ -4736,6 +4740,18 @@ async def delete_appointment(
 # ============================================================================
 # CONSULTATIONS
 # ============================================================================
+# MIGRADO a routes/consultations.py - Los siguientes 10 endpoints fueron migrados:
+# - GET /api/consultations
+# - GET /api/consultations/{consultation_id}
+# - POST /api/consultations
+# - PUT /api/consultations/{consultation_id}
+# - DELETE /api/consultations/{consultation_id}
+# - GET /api/medical-records
+# - GET /api/medical-records/{record_id}
+# - POST /api/medical-records
+# - PUT /api/medical-records/{record_id}
+# - DELETE /api/medical-records/{record_id}
+# TODO: Eliminar código después de validar que todo funciona
 
 @app.get("/api/consultations")
 async def get_consultations(
