@@ -83,6 +83,7 @@ import { ConsultationActions } from './ConsultationDialog/ConsultationActions';
 import { ConsultationFormFields } from './ConsultationDialog/ConsultationFormFields';
 import { PatientDataSection } from './ConsultationDialog/PatientDataSection';
 import { PreviousClinicalStudiesSection } from './ConsultationDialog/PreviousClinicalStudiesSection';
+import { ConsultationDateSection } from './ConsultationDialog/ConsultationDateSection';
 // import { useSnackbar } from '../../contexts/SnackbarContext';
 
 // Define ConsultationFormData interface based on the hook
@@ -1513,26 +1514,10 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           )}
 
           {/* Date */}
-          <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <CalendarIcon sx={{ fontSize: 20 }} />
-              Fecha de Consulta
-            </Typography>
-            <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
-              <DatePicker
-                label="Fecha"
-                value={formData.date ? new Date(formData.date) : null}
-                maxDate={new Date()}
-                onChange={handleDateChange}
-                slotProps={{
-                  textField: {
-                    size: 'small',
-                    fullWidth: true
-                  }
-                }}
-              />
-            </LocalizationProvider>
-          </Box>
+          <ConsultationDateSection
+            date={formData.date}
+            onChange={handleDateChange}
+          />
 
           {/* Consultation Form Fields */}
           <ConsultationFormFields
