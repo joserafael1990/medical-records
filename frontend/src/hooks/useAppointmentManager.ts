@@ -394,8 +394,9 @@ export const useAppointmentManager = (
       const response = await apiService.createAgendaAppointment(backendData);
       
       // If the appointment was created for a different date, navigate to that date first
-      const currentDate = selectedDate;
-      const targetDate = appointmentDate.toDateString() !== currentDate.toDateString() ? appointmentDate : selectedDate;
+      // Validate selectedDate before using
+      const currentDate = (selectedDate instanceof Date && !isNaN(selectedDate.getTime())) ? selectedDate : new Date();
+      const targetDate = appointmentDate.toDateString() !== currentDate.toDateString() ? appointmentDate : currentDate;
       
       if (appointmentDate.toDateString() !== currentDate.toDateString()) {
         // console.log('🔄 Appointment created for different date, navigating to:', appointmentDate.toDateString());
@@ -405,12 +406,15 @@ export const useAppointmentManager = (
       // Refresh appointments after successful creation using the correct date
       setTimeout(async () => {
         try {
+          // Validate targetDate before using
+          const validTargetDate = (targetDate instanceof Date && !isNaN(targetDate.getTime())) ? targetDate : new Date();
+          
           if (agendaView === 'daily') {
-            const dateStr = targetDate.toISOString().split('T')[0];
+            const dateStr = validTargetDate.toISOString().split('T')[0];
             const refreshData = await apiService.getDailyAgenda(dateStr);
             setAppointments(refreshData || []);
           } else if (agendaView === 'weekly') {
-            const start = new Date(targetDate);
+            const start = new Date(validTargetDate);
             const day = start.getDay();
             const mondayOffset = day === 0 ? -6 : 1 - day;
             start.setDate(start.getDate() + mondayOffset);
@@ -422,8 +426,8 @@ export const useAppointmentManager = (
             );
             setAppointments(refreshData || []);
           } else if (agendaView === 'monthly') {
-            const start = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
-            const end = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
+            const start = new Date(validTargetDate.getFullYear(), validTargetDate.getMonth(), 1);
+            const end = new Date(validTargetDate.getFullYear(), validTargetDate.getMonth() + 1, 0);
             const startStr = start.toISOString().split('T')[0];
             const endStr = end.toISOString().split('T')[0];
             const refreshData = await apiService.getMonthlyAgenda(startStr, endStr);
@@ -555,7 +559,18 @@ export const useAppointmentManager = (
               try {
                 
                 let refreshData: any[] = [];
-                const dateToRefresh = new Date(selectedDate);
+                // Validate selectedDate - if invalid, use today's date
+                let dateToRefresh: Date;
+                if (selectedDate instanceof Date && !isNaN(selectedDate.getTime())) {
+                  dateToRefresh = new Date(selectedDate);
+                } else {
+                  dateToRefresh = new Date();
+                }
+                
+                // Double-check date is still valid before using
+                if (isNaN(dateToRefresh.getTime())) {
+                  dateToRefresh = new Date();
+                }
                 
                 if (agendaView === 'daily') {
                   const y = dateToRefresh.getFullYear();
@@ -726,7 +741,18 @@ export const useAppointmentManager = (
       setTimeout(async () => {
         try {
           let refreshData: any[] = [];
-          const dateToRefresh = new Date(selectedDate);
+          // Validate selectedDate - if invalid, use today's date
+          let dateToRefresh: Date;
+          if (selectedDate instanceof Date && !isNaN(selectedDate.getTime())) {
+            dateToRefresh = new Date(selectedDate);
+          } else {
+            dateToRefresh = new Date();
+          }
+          
+          // Double-check date is still valid before using
+          if (isNaN(dateToRefresh.getTime())) {
+            dateToRefresh = new Date();
+          }
           
           if (agendaView === 'daily') {
             const dateStr = dateToRefresh.toISOString().split('T')[0];
@@ -768,7 +794,19 @@ export const useAppointmentManager = (
   const refreshAppointments = useCallback(async () => {
 
     try {
-      const dateToRefresh = new Date(selectedDate);
+      // Validate selectedDate - if invalid, use today's date
+      let dateToRefresh: Date;
+      if (selectedDate instanceof Date && !isNaN(selectedDate.getTime())) {
+        dateToRefresh = new Date(selectedDate);
+      } else {
+        dateToRefresh = new Date();
+      }
+      
+      // Double-check date is still valid before using
+      if (isNaN(dateToRefresh.getTime())) {
+        dateToRefresh = new Date();
+      }
+      
       let data: any[] = [];
 
       if (agendaView === 'daily') {
