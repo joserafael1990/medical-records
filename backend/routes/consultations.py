@@ -11,7 +11,7 @@ import pytz
 import uuid
 import traceback
 
-from database import get_db, Person, MedicalRecord
+from database import get_db, Person, MedicalRecord, ConsultationPrescription, Medication
 from dependencies import get_current_user
 from logger import get_logger
 from audit_service import audit_service
@@ -767,4 +767,249 @@ async def delete_medical_record(
         db.rollback()
         print(f"❌ Error in delete_medical_record: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+# ============================================================================
+# PRESCRIPTIONS ENDPOINTS
+# ============================================================================
+
+@router.get("/consultations/{consultation_id}/prescriptions")
+async def get_consultation_prescriptions(
+    consultation_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Get prescriptions for a specific consultation"""
+    api_logger.info("Getting prescriptions for consultation", consultation_id=consultation_id, doctor_id=current_user.id)
+    
+    try:
+        # Verify consultation exists and user has access
+        consultation = db.query(MedicalRecord).filter(
+            MedicalRecord.id == consultation_id,
+            MedicalRecord.created_by == current_user.id
+        ).first()
+        
+        if not consultation:
+            api_logger.warning("Consultation not found or no access", consultation_id=consultation_id, doctor_id=current_user.id)
+            return []
+
+        # Get prescriptions for this consultation with medication relationship loaded
+        prescriptions = db.query(ConsultationPrescription).options(
+            joinedload(ConsultationPrescription.medication)
+        ).filter(
+            ConsultationPrescription.consultation_id == consultation_id
+        ).all()
+        
+        api_logger.info("Found prescriptions", consultation_id=consultation_id, count=len(prescriptions))
+        
+        # Convert to response format
+        prescriptions_data = []
+        for prescription in prescriptions:
+            # Handle case where medication might not exist (defensive programming)
+            medication_name = prescription.medication.name if prescription.medication else "Medicamento no encontrado"
+            
+            prescription_data = {
+                "id": prescription.id,
+                "consultation_id": prescription.consultation_id,
+                "medication_id": prescription.medication_id,
+                "medication_name": medication_name,
+                "dosage": prescription.dosage,
+                "frequency": prescription.frequency,
+                "duration": prescription.duration,
+                "instructions": prescription.instructions,
+                "quantity": prescription.quantity,
+                "via_administracion": prescription.via_administracion,
+                "created_at": prescription.created_at.isoformat() if prescription.created_at else None,
+            }
+            prescriptions_data.append(prescription_data)
+        
+        return prescriptions_data
+        
+    except Exception as e:
+        api_logger.error("Error getting consultation prescriptions", consultation_id=consultation_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Error retrieving consultation prescriptions")
+
+@router.post("/consultations/{consultation_id}/prescriptions")
+async def create_consultation_prescription(
+    consultation_id: int,
+    prescription_data: dict,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Create a prescription for a consultation"""
+    api_logger.info("Creating prescription for consultation", consultation_id=consultation_id, doctor_id=current_user.id)
+    
+    try:
+        # Verify consultation exists and user has access
+        consultation = db.query(MedicalRecord).filter(
+            MedicalRecord.id == consultation_id,
+            MedicalRecord.created_by == current_user.id
+        ).first()
+        
+        if not consultation:
+            raise HTTPException(status_code=404, detail="Consultation not found or no access")
+        
+        # Verify medication exists
+        medication = db.query(Medication).filter(
+            Medication.id == prescription_data.get('medication_id')
+        ).first()
+        
+        if not medication:
+            raise HTTPException(status_code=404, detail="Medication not found")
+        
+        # Create new prescription
+        new_prescription = ConsultationPrescription(
+            consultation_id=consultation_id,
+            medication_id=prescription_data.get('medication_id'),
+            dosage=prescription_data.get('dosage'),
+            frequency=prescription_data.get('frequency'),
+            duration=prescription_data.get('duration'),
+            instructions=prescription_data.get('instructions'),
+            quantity=prescription_data.get('quantity'),
+            via_administracion=prescription_data.get('via_administracion')
+        )
+        
+        db.add(new_prescription)
+        db.commit()
+        db.refresh(new_prescription)
+        
+        response_data = {
+            "id": new_prescription.id,
+            "consultation_id": new_prescription.consultation_id,
+            "medication_id": new_prescription.medication_id,
+            "medication_name": medication.name,
+            "dosage": new_prescription.dosage,
+            "frequency": new_prescription.frequency,
+            "duration": new_prescription.duration,
+            "instructions": new_prescription.instructions,
+            "quantity": new_prescription.quantity,
+            "via_administracion": new_prescription.via_administracion,
+            "created_at": new_prescription.created_at.isoformat() if new_prescription.created_at else None
+        }
+        
+        api_logger.info("Prescription created successfully", prescription_id=new_prescription.id, consultation_id=consultation_id)
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error("Error creating consultation prescription", consultation_id=consultation_id, error=str(e))
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error creating consultation prescription")
+
+@router.put("/consultations/{consultation_id}/prescriptions/{prescription_id}")
+async def update_consultation_prescription(
+    consultation_id: int,
+    prescription_id: int,
+    prescription_data: dict,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Update a prescription"""
+    api_logger.info("Updating prescription", prescription_id=prescription_id, consultation_id=consultation_id, doctor_id=current_user.id)
+    
+    try:
+        # Verify consultation exists and user has access
+        consultation = db.query(MedicalRecord).filter(
+            MedicalRecord.id == consultation_id,
+            MedicalRecord.created_by == current_user.id
+        ).first()
+        
+        if not consultation:
+            raise HTTPException(status_code=404, detail="Consultation not found or no access")
+        
+        # Find the prescription to update
+        prescription = db.query(ConsultationPrescription).filter(
+            ConsultationPrescription.id == prescription_id,
+            ConsultationPrescription.consultation_id == consultation_id
+        ).first()
+        
+        if not prescription:
+            raise HTTPException(status_code=404, detail="Prescription not found")
+        
+        # Update fields
+        if 'dosage' in prescription_data:
+            prescription.dosage = prescription_data['dosage']
+        if 'frequency' in prescription_data:
+            prescription.frequency = prescription_data['frequency']
+        if 'duration' in prescription_data:
+            prescription.duration = prescription_data['duration']
+        if 'instructions' in prescription_data:
+            prescription.instructions = prescription_data['instructions']
+        if 'quantity' in prescription_data:
+            prescription.quantity = prescription_data['quantity']
+        if 'via_administracion' in prescription_data:
+            prescription.via_administracion = prescription_data['via_administracion']
+        
+        db.commit()
+        db.refresh(prescription)
+        
+        # Load medication relationship for response
+        db.refresh(prescription, ['medication'])
+        
+        response_data = {
+            "id": prescription.id,
+            "consultation_id": prescription.consultation_id,
+            "medication_id": prescription.medication_id,
+            "medication_name": prescription.medication.name if prescription.medication else "Medicamento no encontrado",
+            "dosage": prescription.dosage,
+            "frequency": prescription.frequency,
+            "duration": prescription.duration,
+            "instructions": prescription.instructions,
+            "quantity": prescription.quantity,
+            "via_administracion": prescription.via_administracion,
+            "created_at": prescription.created_at.isoformat() if prescription.created_at else None
+        }
+        
+        api_logger.info("Prescription updated successfully", prescription_id=prescription.id, consultation_id=consultation_id)
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error("Error updating consultation prescription", prescription_id=prescription_id, error=str(e))
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error updating consultation prescription")
+
+@router.delete("/consultations/{consultation_id}/prescriptions/{prescription_id}")
+async def delete_consultation_prescription(
+    consultation_id: int,
+    prescription_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Delete a prescription from a consultation"""
+    api_logger.info("Deleting prescription", prescription_id=prescription_id, consultation_id=consultation_id, doctor_id=current_user.id)
+    
+    try:
+        # Verify consultation exists and user has access
+        consultation = db.query(MedicalRecord).filter(
+            MedicalRecord.id == consultation_id,
+            MedicalRecord.created_by == current_user.id
+        ).first()
+        
+        if not consultation:
+            raise HTTPException(status_code=404, detail="Consultation not found or no access")
+        
+        # Find the prescription to delete
+        prescription = db.query(ConsultationPrescription).filter(
+            ConsultationPrescription.id == prescription_id,
+            ConsultationPrescription.consultation_id == consultation_id
+        ).first()
+        
+        if not prescription:
+            raise HTTPException(status_code=404, detail="Prescription not found")
+        
+        db.delete(prescription)
+        db.commit()
+        
+        api_logger.info("Prescription deleted successfully", prescription_id=prescription_id, consultation_id=consultation_id)
+        return {"message": "Prescription deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error("Error deleting consultation prescription", prescription_id=prescription_id, error=str(e))
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error deleting consultation prescription")
 
