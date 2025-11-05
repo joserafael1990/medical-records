@@ -82,6 +82,7 @@ import { ConsultationFormHeader } from './ConsultationDialog/ConsultationFormHea
 import { ConsultationActions } from './ConsultationDialog/ConsultationActions';
 import { ConsultationFormFields } from './ConsultationDialog/ConsultationFormFields';
 import { PatientDataSection } from './ConsultationDialog/PatientDataSection';
+import { PreviousClinicalStudiesSection } from './ConsultationDialog/PreviousClinicalStudiesSection';
 // import { useSnackbar } from '../../contexts/SnackbarContext';
 
 // Define ConsultationFormData interface based on the hook
@@ -1542,143 +1543,14 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           />
 
           {/* Previous Clinical Studies Section - Show when patient is selected */}
-          {selectedPatient && patientPreviousStudies.length > 0 && (
-            <Box>
-              <Divider sx={{ my: 3 }}>
-                <Chip icon={<ScienceIcon />} label="Estudios Clínicos Previos del Paciente" color="info" />
-              </Divider>
-              
-              {loadingPreviousStudies ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-                  <CircularProgress />
-                </Box>
-              ) : (
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
-                        {patientPreviousStudies.map((study) => {
-                          return (
-                    <Card key={study.id} variant="outlined" sx={{ '&:hover': { boxShadow: 2 } }}>
-                      <CardContent>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                          <Box sx={{ flex: 1 }}>
-                            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                              {study.study_name}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              {study.study_type}
-                            </Typography>
-                          </Box>
-                          <Chip
-                            size="small"
-                            label={study.status === 'ordered' ? 'Ordenado' : study.status === 'in_progress' ? 'En Proceso' : study.status === 'completed' ? 'Completado' : study.status === 'cancelled' ? 'Cancelado' : study.status === 'failed' ? 'Fallido' : study.status}
-                            color={study.status === 'completed' ? 'success' : 'warning'}
-                          />
-                        </Box>
-                        
-                        
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                          <Typography variant="caption" color="text.secondary">
-                            Solicitado: {new Date(study.ordered_date).toLocaleDateString('es-MX')}
-                          </Typography>
-                          {/* results_text field removed */}
-                          {false && (
-                            <Typography variant="caption" color="success.main" sx={{ fontWeight: 500 }}>
-                              Resultados cargados: {(() => {
-                                // Parse the date as UTC and convert to Mexico City time
-                                const rawDate = study.results_text;
-                                let date;
-                                try {
-                                  if (rawDate.includes('T')) {
-                                    // It's a datetime string like "2025-10-23T07:57:33.560675"
-                                    // Treat this as UTC time and convert to Mexico time
-                                    const [datePart, timePart] = rawDate.split('T');
-                                    const [time, microseconds] = timePart.split('.');
-                                    const [hours, minutes, seconds] = time.split(':');
-                                    
-                                    // Create date as UTC
-                                    const utcString = `${datePart}T${hours}:${minutes}:${seconds}Z`;
-                                    date = new Date(utcString);
-                                  } else {
-                                    // Fallback to original parsing
-                                    date = new Date(rawDate);
-                                  }
-                                  
-                                  if (isNaN(date.getTime())) {
-                                    return 'Fecha inválida';
-                                  }
-                                  
-                                  // Convert to Mexico City timezone
-                                  const formatted = date.toLocaleString('es-MX', {
-                                    year: 'numeric',
-                                    month: 'long',
-                                    day: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                    timeZone: 'America/Mexico_City'
-                                  });
-                                  
-                                  return formatted;
-                                } catch (error) {
-                                  return 'Error al mostrar fecha';
-                                }
-                              })()}
-                            </Typography>
-                          )}
-                          
-                          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
-                            {study.status === 'ordered' && (
-                              <>
-                                <Button
-                                  size="small"
-                                  variant="contained"
-                                  component="label"
-                                  startIcon={<UploadIcon />}
-                                >
-                                  Cargar Archivo
-                                  <input
-                                    type="file"
-                                    hidden
-                                    onChange={(e) => {
-                                      const file = e.target.files?.[0];
-                                      if (file) {
-                                        handleUploadStudyFile(study.id, file);
-                                      }
-                                    }}
-                                  />
-                                </Button>
-                                <Button
-                                  size="small"
-                                  variant="contained"
-                                  color="success"
-                                  onClick={() => handleUpdateStudyStatus(study.id, 'completed')}
-                                >
-                                  Marcar Completado
-                                </Button>
-                              </>
-                            )}
-                            
-                            {study.file_path && (
-                              <>
-                                <Button
-                                  size="small"
-                                  variant="contained"
-                                  color="primary"
-                                  startIcon={<ViewIcon />}
-                                  onClick={() => handleViewStudyFile(study.id)}
-                                >
-                                  Ver Archivo
-                                </Button>
-                              </>
-                            )}
-                          </Box>
-                        </Box>
-                      </CardContent>
-                    </Card>
-                          );
-                        })}
-                </Box>
-              )}
-            </Box>
-          )}
+          <PreviousClinicalStudiesSection
+            selectedPatient={selectedPatient}
+            patientPreviousStudies={patientPreviousStudies}
+            loadingPreviousStudies={loadingPreviousStudies}
+            onUploadStudyFile={(studyId: number, file: File) => handleUploadStudyFile(studyId.toString(), file)}
+            onUpdateStudyStatus={(studyId: number, status: string) => handleUpdateStudyStatus(studyId.toString(), status)}
+            onViewStudyFile={(studyId: number) => handleViewStudyFile(studyId.toString())}
+          />
 
 
           {/* Vital Signs Section - Always show */}
