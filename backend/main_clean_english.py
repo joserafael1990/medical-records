@@ -278,6 +278,14 @@ app.include_router(offices_router)
 from routes.medications import router as medications_router
 app.include_router(medications_router)
 
+# Include schedule management routes
+from routes.schedule import router as schedule_router
+app.include_router(schedule_router)
+
+# Include doctor management routes
+from routes.doctors import router as doctors_router
+app.include_router(doctors_router)
+
 # ============================================================================
 # AUTHENTICATION DEPENDENCY
 # ============================================================================
@@ -3232,6 +3240,11 @@ async def confirm_password_reset(
 # ============================================================================
 # DOCTORS
 # ============================================================================
+# MIGRADO a routes/doctors.py - Los siguientes 3 endpoints fueron migrados:
+# - GET /api/doctors/me/profile
+# - POST /api/doctors
+# - PUT /api/doctors/me/profile
+# TODO: Eliminar código después de validar que todo funciona
 
 @app.get("/api/doctors/me/profile")
 async def get_my_profile(
