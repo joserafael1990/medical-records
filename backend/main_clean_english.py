@@ -2018,23 +2018,6 @@ async def get_available_times(
 # Endpoints eliminados - ahora están en routes/auth.py
 
 # ============================================================================
-# AUTHENTICATION
-# ============================================================================
-# MIGRADO a routes/auth.py - Los siguientes 6 endpoints fueron migrados:
-# - POST /api/auth/register ✅ ELIMINADO
-# - POST /api/auth/login ✅ ELIMINADO
-# - GET /api/auth/me ✅ ELIMINADO
-# - POST /api/auth/logout ✅ ELIMINADO
-# - POST /api/auth/password-reset/request ✅ ELIMINADO
-# - POST /api/auth/password-reset/confirm ✅ ELIMINADO
-
-# Endpoints eliminados - ahora están en routes/auth.py
-
-# ============================================================================
-# DOCTORS
-# ============================================================================
-
-# ============================================================================
 # DOCTORS
 # ============================================================================
 # MIGRADO a routes/doctors.py - Los siguientes 3 endpoints fueron migrados:
