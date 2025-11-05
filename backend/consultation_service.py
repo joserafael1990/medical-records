@@ -195,7 +195,7 @@ def get_consultation_clinical_studies(db: Session, consultation_id: int) -> List
             "id": study.id,
             "study_name": study.study_name,
             "study_type": study.study_type,
-            "description": study.study_description,
+            "description": study.clinical_indication or "",  # Use clinical_indication instead of non-existent study_description
             "pdf_url": study.file_path,  # Corregido: file_path en lugar de pdf_path
             "created_at": study.created_at.isoformat() if study.created_at else None
         }
