@@ -219,6 +219,11 @@ async def update_my_profile(
         doctor_data_dict.pop('professional_documents', None)
         doctor_data_dict.pop('personal_documents', None)
         
+        # Convert 'phone' to 'primary_phone' if provided (frontend compatibility)
+        if 'phone' in doctor_data_dict and 'primary_phone' not in doctor_data_dict:
+            doctor_data_dict['primary_phone'] = doctor_data_dict.pop('phone')
+            api_logger.info(f"📞 Converted 'phone' to 'primary_phone': {doctor_data_dict.get('primary_phone')}")
+        
         try:
             doctor_data = schemas.DoctorUpdate(**doctor_data_dict)
         except Exception as e:
