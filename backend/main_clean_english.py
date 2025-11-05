@@ -294,6 +294,10 @@ app.include_router(patients_router)
 from routes.appointments import router as appointments_router
 app.include_router(appointments_router)
 
+# Include clinical studies management routes
+from routes.clinical_studies import router as clinical_studies_router
+app.include_router(clinical_studies_router)
+
 # ============================================================================
 # AUTHENTICATION DEPENDENCY
 # ============================================================================
@@ -335,6 +339,17 @@ async def health():
 # ============================================================================
 # CLINICAL STUDIES API ENDPOINTS
 # ============================================================================
+# MIGRADO a routes/clinical_studies.py - Los siguientes 9 endpoints fueron migrados:
+# - GET /api/clinical-studies/patient/{patient_id}
+# - GET /api/clinical-studies/consultation/{consultation_id}
+# - POST /api/clinical-studies
+# - PUT /api/clinical-studies/{study_id}
+# - DELETE /api/clinical-studies/{study_id}
+# - PUT /api/clinical-studies/{study_id}/upload
+# - GET /api/clinical-studies/{study_id}/file
+# - GET /api/study-categories
+# - GET /api/study-catalog
+# TODO: Eliminar código después de validar que todo funciona
 
 @app.get("/api/clinical-studies/patient/{patient_id}")
 async def get_clinical_studies_by_patient(
