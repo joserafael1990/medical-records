@@ -43,11 +43,12 @@ async def get_diagnosis_categories(
     """Get diagnosis categories with optional filtering"""
     try:
         # Use raw SQL - only select columns that exist in DB
+        # Note: diagnosis_categories table doesn't have 'code' column, only id, name, active, created_at
         sql = """
-        SELECT id, code, name, description, active, created_at
+        SELECT id, name, active, created_at
         FROM diagnosis_categories 
         WHERE active = :active
-        ORDER BY code
+        ORDER BY id
         """
         params = {"active": is_active}
         
