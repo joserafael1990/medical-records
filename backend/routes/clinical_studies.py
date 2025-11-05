@@ -179,11 +179,15 @@ async def create_clinical_study(
     print(f"🔬 Creating clinical study with data: {study_data}")
     
     try:
-        # Validate required fields
-        required_fields = ['consultation_id', 'patient_id', 'study_type', 'study_name', 'clinical_indication', 'ordering_doctor']
+        # Validate required fields (clinical_indication can be empty string)
+        required_fields = ['consultation_id', 'patient_id', 'study_type', 'study_name', 'ordering_doctor']
         for field in required_fields:
-            if not study_data.get(field):
+            if field not in study_data or study_data[field] is None:
                 raise HTTPException(status_code=400, detail=f"Field '{field}' is required")
+        
+        # clinical_indication is optional but must be present (can be empty string)
+        if 'clinical_indication' not in study_data:
+            raise HTTPException(status_code=400, detail="Field 'clinical_indication' is required")
         
         # Verify consultation exists and user has access
         consultation = db.query(MedicalRecord).filter(
@@ -218,7 +222,7 @@ async def create_clinical_study(
             # results_date removed - column does not exist in clinical_studies table
             status=study_data.get('status', 'ordered'),
             urgency=study_data.get('urgency', 'routine'),
-            clinical_indication=study_data['clinical_indication'],
+            clinical_indication=study_data.get('clinical_indication', '') or '',
             ordering_doctor=study_data['ordering_doctor'],
             file_name=study_data.get('file_name'),
             file_path=study_data.get('file_path'),
