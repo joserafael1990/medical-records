@@ -302,6 +302,10 @@ app.include_router(clinical_studies_router)
 from routes.dashboard import router as dashboard_router
 app.include_router(dashboard_router)
 
+# Include vital signs routes
+from routes.vital_signs import router as vital_signs_router
+app.include_router(vital_signs_router)
+
 # ============================================================================
 # AUTHENTICATION DEPENDENCY
 # ============================================================================
@@ -414,6 +418,16 @@ async def get_clinical_studies_by_patient(
     except Exception as e:
         print(f"❌ Error getting clinical studies for patient {patient_id}: {e}")
         return []
+
+# ============================================================================
+# VITAL SIGNS
+# ============================================================================
+# MIGRADO a routes/vital_signs.py - Los siguientes 4 endpoints fueron migrados:
+# - GET /api/vital-signs
+# - GET /api/consultations/{consultation_id}/vital-signs
+# - POST /api/consultations/{consultation_id}/vital-signs
+# - DELETE /api/consultations/{consultation_id}/vital-signs/{vital_sign_id}
+# TODO: Eliminar código después de validar que todo funciona
 
 @app.get("/api/vital-signs")
 async def get_vital_signs(
