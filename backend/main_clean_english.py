@@ -310,6 +310,10 @@ app.include_router(vital_signs_router)
 from routes.auth import router as auth_router
 app.include_router(auth_router)
 
+# Include privacy and ARCO routes
+from routes.privacy import router as privacy_router
+app.include_router(privacy_router)
+
 # ============================================================================
 # AUTHENTICATION DEPENDENCY
 # ============================================================================
@@ -5837,6 +5841,16 @@ async def get_audit_statistics(
 # ============================================================================
 # PRIVACY AND CONSENT - LFPDPPP Compliance
 # ============================================================================
+# MIGRADO a routes/privacy.py - Los siguientes 8 endpoints fueron migrados:
+# - GET /api/privacy/active-notice
+# - POST /api/privacy/send-whatsapp-notice
+# - GET /api/privacy/consent-status/{patient_id}
+# - POST /api/privacy/revoke
+# - POST /api/privacy/arco-request
+# - GET /api/privacy/arco-requests/{patient_id}
+# - PUT /api/privacy/arco-request/{request_id}
+# - GET /api/privacy/public-notice
+# TODO: Eliminar código después de validar que todo funciona
 
 @app.get("/api/privacy/active-notice")
 async def get_active_privacy_notice(
