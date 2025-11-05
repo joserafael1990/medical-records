@@ -2157,6 +2157,8 @@ async def debug_full_system(
 # ============================================================================
 # SCHEDULE MANAGEMENT ENDPOINTS
 # ============================================================================
+# MIGRADO a routes/schedule.py - Los siguientes 9 endpoints fueron migrados
+# TODO: Eliminar código después de validar que todo funciona
 
 @app.post("/api/schedule/generate-weekly-template")
 async def generate_weekly_template(
@@ -5104,8 +5106,9 @@ async def delete_consultation(
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 # ============================================================================
-# SCHEDULE MANAGEMENT ENDPOINTS
+# SCHEDULE MANAGEMENT ENDPOINTS (continuación)
 # ============================================================================
+# MIGRADO a routes/schedule.py - Endpoints doctor/schedule también migrados
 
 @app.get("/api/doctor/schedule")
 async def get_doctor_schedule(
