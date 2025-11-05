@@ -191,7 +191,12 @@ async def get_calendar_appointments(
             
         elif effective_target_date:
             # Single date query for daily view
-            parsed_date = datetime.fromisoformat(effective_target_date).date()
+            try:
+                parsed_date = datetime.fromisoformat(effective_target_date).date()
+            except ValueError:
+                # Handle invalid date format (e.g., 'NaN-NaN-NaN' from frontend)
+                print(f"⚠️ Invalid date format received: {effective_target_date}, defaulting to today")
+                parsed_date = now_cdmx().date()
             
             # Create naive datetime bounds for the day (assuming appointments are stored in local time)
             day_start = datetime.combine(parsed_date, datetime.min.time())

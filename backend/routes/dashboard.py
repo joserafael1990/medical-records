@@ -31,11 +31,16 @@ async def get_dashboard_stats(
         SYSTEM_TIMEZONE = pytz.timezone('America/Mexico_City')
         today_cdmx = datetime.now(SYSTEM_TIMEZONE).date()
         
-        # Count appointments for today (confirmed and scheduled)
+        # Count appointments for today (all statuses except cancelled)
+        # Use date comparison that works with naive datetimes (stored in CDMX timezone)
+        today_start = datetime.combine(today_cdmx, datetime.min.time())
+        today_end = datetime.combine(today_cdmx, datetime.max.time())
+        
         today_query = db.query(Appointment).filter(
             Appointment.doctor_id == current_user.id,
-            func.date(Appointment.appointment_date) == today_cdmx,
-            Appointment.status.in_(['confirmed', 'scheduled'])
+            Appointment.appointment_date >= today_start,
+            Appointment.appointment_date <= today_end,
+            Appointment.status != 'cancelled'
         )
         appointments_today = today_query.count()
         
