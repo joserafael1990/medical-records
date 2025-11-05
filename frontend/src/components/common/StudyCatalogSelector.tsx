@@ -31,7 +31,7 @@ import {
   Science as ScienceIcon,
   LocalHospital as HospitalIcon
 } from '@mui/icons-material';
-import { StudyCatalog, StudyCategory, StudyTemplate, StudySearchFilters } from '../../types';
+import { StudyCatalog, StudyCategory, StudySearchFilters } from '../../types';
 import { useStudyCatalog } from '../../hooks/useStudyCatalog';
 import { normalizeText } from '../../utils';
 
@@ -174,22 +174,7 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
     onSelectStudies((selectedStudies || []).filter(s => s.id !== studyId));
   };
 
-  const handleTemplateApply = (template: StudyTemplate) => {
-    const templateStudies = template.template_items
-      .map(item => item.study)
-      .filter(study => study && study.id) as StudyCatalog[];
-
-    const newStudies = templateStudies.filter(
-      study => !selectedStudies.find(s => s.id === study.id)
-    );
-
-    if (maxSelections) {
-      const remainingSlots = maxSelections - (selectedStudies?.length || 0);
-      onSelectStudies([...(selectedStudies || []), ...newStudies.slice(0, remainingSlots)]);
-    } else {
-      onSelectStudies([...(selectedStudies || []), ...newStudies]);
-    }
-  };
+  // handleTemplateApply removed - StudyTemplate table deleted
 
   const handleRecommendationSelect = (study: StudyCatalog) => {
     handleStudySelect(study);

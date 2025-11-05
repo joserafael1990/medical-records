@@ -643,12 +643,18 @@ class TwilioWhatsAppService:
         from_ = self.whatsapp_from if self.whatsapp_from.startswith('whatsapp:') else f"whatsapp:{self.whatsapp_from}"
 
         try:
-            # Twilio acepta content_variables como dict o JSON string
+            # Twilio requiere content_variables como JSON string
+            import json
+            content_variables_json = json.dumps(content_variables)
+            
+            logger.info(f"📤 Sending template message with Content SID: {content_sid}")
+            logger.info(f"📤 Content variables: {content_variables_json}")
+            
             msg = self._client.messages.create(
                 content_sid=content_sid,
                 from_=from_,
                 to=to,
-                content_variables=content_variables
+                content_variables=content_variables_json
             )
             return {'success': True, 'message_sid': msg.sid}
         except Exception as e:
@@ -671,17 +677,31 @@ class TwilioWhatsAppService:
     ) -> Dict[str, Any]:
         # Si hay Content SID configurado, usar template aprobado de Twilio
         if self.content_sid_appointment_reminder:
+            # Limpiar nombre del doctor (remover título si está incluido)
+            doctor_name_clean = doctor_full_name
+            if doctor_title and doctor_title in doctor_full_name:
+                doctor_name_clean = doctor_full_name.replace(doctor_title, "").strip()
+            
+            # Asegurar que maps_url tenga un valor válido
+            if not maps_url:
+                # Crear URL de Google Maps con la dirección
+                maps_url = f"https://www.google.com/maps/search/?api=1&query={office_address.replace(' ', '+')}"
+            
             # Variables para el template (ajusta según tu template en Twilio)
-            # Template espera: {1} paciente, {2} fecha, {3} hora, {4} título médico, {5} nombre médico, {6} dirección, {7} URL Maps
+            # Template espera: {{1}} paciente, {{2}} fecha, {{3}} hora, {{4}} título médico, {{5}} nombre médico, {{6}} dirección, {{7}} URL Maps
+            # Asegurar que todos los valores sean strings no vacíos
             content_variables = {
-                '1': patient_full_name,
-                '2': appointment_date,
-                '3': appointment_time,
-                '4': doctor_title,
-                '5': doctor_full_name.replace(doctor_title, "").strip() if doctor_title and doctor_title in doctor_full_name else doctor_full_name,
-                '6': office_address,
-                '7': maps_url or f"https://www.google.com/maps/search/?api=1&query={office_address.replace(' ', '+')}"
+                '1': str(patient_full_name or 'Paciente'),
+                '2': str(appointment_date or ''),
+                '3': str(appointment_time or ''),
+                '4': str(doctor_title or 'Dr'),
+                '5': str(doctor_name_clean or ''),
+                '6': str(office_address or 'Consultorio'),
+                '7': str(maps_url or 'https://maps.google.com')
             }
+            
+            # Log para debugging
+            logger.info(f"📋 Appointment reminder variables: {content_variables}")
             return self.send_template_message(
                 to_phone=patient_phone,
                 content_sid=self.content_sid_appointment_reminder,

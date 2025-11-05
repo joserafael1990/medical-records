@@ -1,13 +1,13 @@
 
 import { useState, useEffect, useCallback } from 'react';
-import { StudyCatalog, StudyCategory, StudyTemplate, StudySearchFilters, StudyRecommendation } from '../types';
+import { StudyCatalog, StudyCategory, StudySearchFilters, StudyRecommendation } from '../types';
 import { apiService } from '../services/api';
 
 interface UseStudyCatalogReturn {
   // State
   studies: StudyCatalog[];
   categories: StudyCategory[];
-  templates: StudyTemplate[];
+  // templates removed - table deleted
   recommendations: StudyRecommendation[];
   isLoading: boolean;
   error: string | null;
@@ -15,7 +15,7 @@ interface UseStudyCatalogReturn {
   // Actions
   fetchStudies: (filters?: StudySearchFilters) => Promise<void>;
   fetchCategories: () => Promise<void>;
-  fetchTemplates: (specialty?: string) => Promise<void>;
+  // fetchTemplates removed - table deleted
   searchStudies: (query: string, filters?: StudySearchFilters) => Promise<void>;
   getRecommendations: (diagnosis?: string, specialty?: string) => Promise<void>;
   getStudyById: (id: number) => Promise<StudyCatalog | null>;
@@ -30,7 +30,7 @@ interface UseStudyCatalogReturn {
 export const useStudyCatalog = (): UseStudyCatalogReturn => {
   const [studies, setStudies] = useState<StudyCatalog[]>([]);
   const [categories, setCategories] = useState<StudyCategory[]>([]);
-  const [templates, setTemplates] = useState<StudyTemplate[]>([]);
+  // templates state removed - table deleted
   const [recommendations, setRecommendations] = useState<StudyRecommendation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +57,6 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
       if (filters?.category_id) params.append('category_id', filters.category_id.toString());
       if (filters?.specialty) params.append('specialty', filters.specialty);
       if (filters?.name) params.append('search', filters.name);
-      if (filters?.code) params.append('search', filters.code);
       if (filters?.duration_hours) params.append('duration_hours', filters.duration_hours.toString());
       
       // Request all studies by setting a high limit
@@ -153,23 +152,7 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
     }
   }, []);
 
-  const fetchTemplates = useCallback(async (specialty?: string) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      const params = new URLSearchParams();
-      if (specialty) params.append('specialty', specialty);
-      
-      const response = await apiService.get(`/api/study-templates?${params.toString()}`);
-      setTemplates(response.data);
-    } catch (err: any) {
-      console.error('Error fetching templates:', err);
-      setError(err.response?.data?.detail || 'Error al cargar plantillas');
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  // fetchTemplates function removed - table deleted
 
   const searchStudies = useCallback(async (query: string, filters?: StudySearchFilters) => {
     try {
@@ -217,7 +200,19 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
       console.log('✅ Final studies array:', studiesArray);
       console.log('✅ Final studies array length:', studiesArray.length);
       
-      setStudies(studiesArray);
+      // Map the response to include description field for StudyCatalog type
+      const mappedStudies = studiesArray.map((study: any) => ({
+        id: study.id,
+        name: study.name,
+        category_id: study.category_id,
+        is_active: study.is_active,
+        created_at: study.created_at,
+        updated_at: study.updated_at,
+        description: study.description || '', // Add description field even if not in DB
+        category: study.category
+      }));
+      
+      setStudies(mappedStudies);
     } catch (err: any) {
       console.error('❌ Error searching studies:', err);
       console.error('❌ Error response:', err.response?.data);
@@ -308,7 +303,7 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
     // State
     studies,
     categories,
-    templates,
+    // templates removed - table deleted
     recommendations,
     isLoading,
     error,
@@ -316,7 +311,7 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
     // Actions
     fetchStudies,
     fetchCategories,
-    fetchTemplates,
+    // fetchTemplates removed - table deleted
     searchStudies,
     getRecommendations,
     getStudyById,

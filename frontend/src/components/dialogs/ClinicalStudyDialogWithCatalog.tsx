@@ -110,9 +110,24 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
     // If only one study is selected, auto-fill the form
     if (studies.length === 1) {
       const study = studies[0];
+      // Map category name to StudyType
+      const categoryNameToType = (name: string | undefined): StudyType => {
+        if (!name) return 'otro';
+        const normalized = name.toLowerCase();
+        if (normalized.includes('hematolog')) return 'hematologia';
+        if (normalized.includes('química') || normalized.includes('sanguínea') || normalized.includes('bioquímica')) return 'bioquimica';
+        if (normalized.includes('microbiolog')) return 'microbiologia';
+        if (normalized.includes('radiolog')) return 'radiologia';
+        if (normalized.includes('ultrasonido') || normalized.includes('ecografía')) return 'ecografia';
+        if (normalized.includes('tomografía')) return 'tomografia';
+        if (normalized.includes('resonancia')) return 'resonancia';
+        if (normalized.includes('endoscopía') || normalized.includes('endoscopia') || normalized.includes('gastroenterolog')) return 'endoscopia';
+        if (normalized.includes('biopsia') || normalized.includes('patolog')) return 'biopsia';
+        return 'otro';
+      };
       onFormDataChange({
         study_name: study.name,
-        study_type: study.category?.code.toLowerCase() as StudyType || 'laboratorio',
+        study_type: categoryNameToType(study.category?.name),
         study_description: study.description || '',
         clinical_indication: study.preparation || ''
       });
@@ -134,11 +149,26 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
           const catalogStudy = selectedCatalogStudies[i];
           console.log(`🔬 Creating study ${i + 1}/${selectedCatalogStudies.length}:`, catalogStudy.name);
           
+          // Map category name to StudyType
+          const categoryNameToType = (name: string | undefined): StudyType => {
+            if (!name) return 'otro';
+            const normalized = name.toLowerCase();
+            if (normalized.includes('hematolog')) return 'hematologia';
+            if (normalized.includes('química') || normalized.includes('sanguínea') || normalized.includes('bioquímica')) return 'bioquimica';
+            if (normalized.includes('microbiolog')) return 'microbiologia';
+            if (normalized.includes('radiolog')) return 'radiologia';
+            if (normalized.includes('ultrasonido') || normalized.includes('ecografía')) return 'ecografia';
+            if (normalized.includes('tomografía')) return 'tomografia';
+            if (normalized.includes('resonancia')) return 'resonancia';
+            if (normalized.includes('endoscopía') || normalized.includes('endoscopia') || normalized.includes('gastroenterolog')) return 'endoscopia';
+            if (normalized.includes('biopsia') || normalized.includes('patolog')) return 'biopsia';
+            return 'otro';
+          };
           // Create a fresh studyData object for each study to avoid mutation
           const studyData: CreateClinicalStudyData = {
             consultation_id: formData.consultation_id,
             patient_id: formData.patient_id,
-            study_type: (catalogStudy.category?.code.toLowerCase() as StudyType) || 'hematologia',
+            study_type: categoryNameToType(catalogStudy.category?.name),
             study_name: catalogStudy.name,
             study_description: catalogStudy.description || '',
             ordered_date: formData.ordered_date,
@@ -409,7 +439,7 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
                     <FormControl fullWidth>
                       <InputLabel>Nivel de Urgencia</InputLabel>
                       <Select
-                        value={formData.urgency || 'normal'}
+                        value={formData.urgency || 'routine'}
                         onChange={(e) => onFormDataChange({ urgency: e.target.value as UrgencyLevel })}
                         label="Nivel de Urgencia"
                       >

@@ -1054,8 +1054,27 @@ class ApiService {
   // ============================================================================
 
   async getSpecialties(): Promise<any[]> {
-    const response = await this.api.get(API_CONFIG.ENDPOINTS.SPECIALTIES);
-    return response.data;
+    try {
+      const response = await this.api.get(API_CONFIG.ENDPOINTS.SPECIALTIES);
+      const data = response.data;
+      // Asegurar que siempre devolvamos un array
+      if (Array.isArray(data)) {
+        return data;
+      }
+      // Si la respuesta viene envuelta en un objeto, intentar extraer el array
+      if (data?.data && Array.isArray(data.data)) {
+        return data.data;
+      }
+      if (data?.results && Array.isArray(data.results)) {
+        return data.results;
+      }
+      // Si no es un array, devolver array vacío
+      console.warn('⚠️ getSpecialties: respuesta no es un array:', data);
+      return [];
+    } catch (error) {
+      console.error('❌ Error getting specialties:', error);
+      return [];
+    }
   }
 
   async getCountries(): Promise<Array<{id: number, name: string}>> {
@@ -1121,9 +1140,6 @@ class ApiService {
     documentData: {
       document_id: number;
       document_value: string;
-      issue_date?: string;
-      expiration_date?: string;
-      issuing_authority?: string;
     }
   ): Promise<any> {
     const response = await this.api.post(`/api/persons/${personId}/documents`, documentData);

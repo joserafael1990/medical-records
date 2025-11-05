@@ -102,9 +102,10 @@ export const PRIORITY_LEVELS = {
 
 // Urgency Levels
 export const URGENCY_LEVELS = [
-  { value: 'normal', label: 'Normal', color: '#4caf50' },
+  { value: 'routine', label: 'Rutina', color: '#4caf50' },
   { value: 'urgent', label: 'Urgente', color: '#ff9800' },
-  { value: 'stat', label: 'STAT', color: '#f44336' }
+  { value: 'stat', label: 'STAT', color: '#f44336' },
+  { value: 'emergency', label: 'Emergencia', color: '#d32f2f' }
 ] as const;
 
 // Gender Options
@@ -193,7 +194,7 @@ export const SUCCESS_MESSAGES = {
 
 // Clinical Studies Constants
 export const STUDY_STATUS_OPTIONS = [
-  { value: 'pending', label: 'Pendiente', color: '#ff9800' },
+  { value: 'ordered', label: 'Ordenado', color: '#ff9800' },
   { value: 'in_progress', label: 'En Proceso', color: '#2196f3' },
   { value: 'completed', label: 'Completado', color: '#4caf50' },
   { value: 'cancelled', label: 'Cancelado', color: '#f44336' },

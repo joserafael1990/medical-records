@@ -222,10 +222,6 @@ class AppointmentService:
         if appointment_data.get('status') == 'cancelled' and 'cancelled_reason' in appointment_data:
             appointment_data['cancelled_at'] = now_cdmx().astimezone(pytz.utc)
         
-        # Handle confirmation
-        if appointment_data.get('status') == 'confirmed':
-            appointment_data['confirmed_at'] = now_cdmx().astimezone(pytz.utc)
-        
         # Update fields
         for key, value in appointment_data.items():
             if hasattr(appointment, key):
@@ -334,8 +330,8 @@ class AppointmentService:
         try:
             if not getattr(appointment, 'auto_reminder_enabled', False):
                 return False
-            if getattr(appointment, 'auto_reminder_sent_at', None) is not None:
-                return False
+            # auto_reminder_sent_at field removed - no longer check if reminder was already sent
+            # Use should_send_reminder logic to determine if reminder should be sent
             send_time = AppointmentService.get_reminder_send_time(
                 appointment.appointment_date,
                 getattr(appointment, 'auto_reminder_offset_minutes', 360)
@@ -353,7 +349,7 @@ class AppointmentService:
         apt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
         if not apt:
             return
-        apt.auto_reminder_sent_at = now_cdmx().astimezone(pytz.utc)
+        # auto_reminder_sent_at field removed
         db.commit()
 
     @staticmethod

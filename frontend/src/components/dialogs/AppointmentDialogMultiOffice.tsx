@@ -31,6 +31,7 @@ import { getMediumSelectMenuProps } from '../../utils/selectMenuProps';
 import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
 import { useSimpleToast } from '../common/ToastNotification';
 import { CountryCodeSelector } from '../common/CountryCodeSelector';
+import { PhoneNumberInput } from '../common/PhoneNumberInput';
 import { extractCountryCode } from '../../utils/countryCodes';
 
 // Helper function to calculate age
@@ -692,35 +693,20 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
                   size="small"
                 />
 
-                <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexDirection: { xs: 'column', sm: 'row' } }}>
-                  <Box sx={{ flex: '0 0 200px', minWidth: 200, width: { xs: '100%', sm: '200px' } }}>
-                    <CountryCodeSelector
-                      value={newPatientData.phone_country_code}
-                      onChange={(code) => setNewPatientData(prev => ({ ...prev, phone_country_code: code }))}
-                      label="Código de país *"
-                    />
-                  </Box>
-                  <TextField
-                    fullWidth
-                    label="Número telefónico *"
-                    type="tel"
-                    value={newPatientData.phone_number}
-                    onChange={(e) => {
-                      // Solo permitir números
-                      const value = e.target.value.replace(/\D/g, '');
-                      setNewPatientData(prev => ({ ...prev, phone_number: value }));
-                    }}
-                    required
-                    size="small"
-                    placeholder="Ej: 5551234567"
-                    sx={{ flex: 1 }}
-                    inputProps={{
-                      autoComplete: 'tel',
-                      'data-form-type': 'other'
-                    }}
-                    autoComplete="tel"
-                  />
-                </Box>
+                <PhoneNumberInput
+                  countryCode={newPatientData.phone_country_code}
+                  phoneNumber={newPatientData.phone_number}
+                  onCountryCodeChange={(code) => setNewPatientData(prev => ({ ...prev, phone_country_code: code }))}
+                  onPhoneNumberChange={(number) => {
+                    // Solo permitir números
+                    const value = number.replace(/\D/g, '');
+                    setNewPatientData(prev => ({ ...prev, phone_number: value }));
+                  }}
+                  label="Número telefónico *"
+                  required
+                  placeholder="Ej: 222 123 4567"
+                  fullWidth
+                />
 
                 {/* Campos de fecha de nacimiento y género removidos en nueva cita (no requeridos ni visibles) */}
               </Box>

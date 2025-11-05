@@ -12,6 +12,7 @@ export interface ConsultationFormData {
   chief_complaint: string;
   history_present_illness: string;
   family_history: string;
+  perinatal_history: string;
   personal_pathological_history: string;
   personal_non_pathological_history: string;
   physical_examination: string;
@@ -102,6 +103,7 @@ export const useConsultationDialog = (
     chief_complaint: '',
     history_present_illness: '',
     family_history: '',
+    perinatal_history: '',
     personal_pathological_history: '',
     personal_non_pathological_history: '',
     physical_examination: '',
@@ -153,6 +155,7 @@ export const useConsultationDialog = (
         chief_complaint: consultation.chief_complaint || '',
         history_present_illness: consultation.history_present_illness || '',
         family_history: consultation.family_history || '',
+        perinatal_history: consultation.perinatal_history || '',
         personal_pathological_history: consultation.personal_pathological_history || '',
         personal_non_pathological_history: consultation.personal_non_pathological_history || '',
         physical_examination: consultation.physical_examination || '',

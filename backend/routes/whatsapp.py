@@ -144,6 +144,14 @@ async def send_whatsapp_appointment_reminder(
 
         if result['success']:
             print(f"✅ WhatsApp sent successfully to {patient.primary_phone}")
+            
+            # Actualizar appointment: marcar reminder_sent y reminder_sent_at
+            from datetime import datetime
+            import pytz
+            appointment.reminder_sent = True
+            appointment.reminder_sent_at = datetime.utcnow()
+            db.commit()
+            
             return {
                 "message": "WhatsApp reminder sent successfully",
                 "message_id": result.get('message_id') or result.get('message_sid'),

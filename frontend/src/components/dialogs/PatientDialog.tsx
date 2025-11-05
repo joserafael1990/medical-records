@@ -39,6 +39,7 @@ import { PrivacyConsentDialog } from './PrivacyConsentDialog';
 import { ARCORequestDialog } from './ARCORequestDialog';
 import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
 import { CountryCodeSelector } from '../common/CountryCodeSelector';
+import { PhoneNumberInput } from '../common/PhoneNumberInput';
 import { DocumentSelector } from '../common/DocumentSelector';
 import { extractCountryCode } from '../../utils/countryCodes';
 
@@ -591,23 +592,14 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
             </Typography>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
 
-              <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', gridColumn: { xs: '1 / -1', sm: '1' } }}>
-                <Box sx={{ flex: '0 0 200px', minWidth: 200 }}>
-                  <CountryCodeSelector
-                    value={phoneCountryCode}
-                    onChange={(code) => setPhoneCountryCode(code)}
-                    label="Código de país *"
-                    error={!!errors.primary_phone}
-                  />
-                </Box>
-                <TextField
-                  label="Número telefónico *"
-                  name="phone_number"
-                  type="tel"
-                  value={phoneNumber}
-                  onChange={(e) => {
+              <Box sx={{ gridColumn: { xs: '1 / -1', sm: '1' } }}>
+                <PhoneNumberInput
+                  countryCode={phoneCountryCode}
+                  phoneNumber={phoneNumber}
+                  onCountryCodeChange={(code) => setPhoneCountryCode(code)}
+                  onPhoneNumberChange={(number) => {
                     // Solo permitir números
-                    const value = e.target.value.replace(/\D/g, '');
+                    const value = number.replace(/\D/g, '');
                     setPhoneNumber(value);
                     // Actualizar errores
                     if (!value || value.trim() === '') {
@@ -616,18 +608,12 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
                       setErrors(prev => ({ ...prev, primary_phone: '' }));
                     }
                   }}
-                  size="small"
+                  label="Número telefónico *"
                   required
-                  placeholder="Ej: 5551234567"
+                  placeholder="Ej: 222 123 4567"
+                  fullWidth
                   error={!!errors.primary_phone}
                   helperText={errors.primary_phone}
-                  fullWidth
-                  sx={{ flex: 1 }}
-                  inputProps={{
-                    autoComplete: 'tel',
-                    'data-form-type': 'other'
-                  }}
-                  autoComplete="tel"
                 />
               </Box>
               <TextField

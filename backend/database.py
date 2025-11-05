@@ -13,12 +13,12 @@ import os
 
 # Import schedule models early to avoid circular import issues
 try:
-    from models.schedule import ScheduleTemplate, ScheduleException
+    from models.schedule import ScheduleTemplate
     print("✅ Schedule models imported successfully")
 except ImportError as e:
     print(f"⚠️ Warning: Could not import schedule models: {e}")
     ScheduleTemplate = None
-    ScheduleException = None
+    # ScheduleException removed - table deleted
 
 # Base para modelos
 Base = declarative_base()
@@ -106,9 +106,8 @@ class Specialty(Base):
     
     id = Column(Integer, primary_key=True)
     name = Column(String(100), nullable=False)
-    is_active = Column(Boolean, default=True)
+    active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
     doctors = relationship("Person", back_populates="specialty")
@@ -169,9 +168,6 @@ class PersonDocument(Base):
     person_id = Column(Integer, ForeignKey("persons.id", ondelete="CASCADE"), nullable=False)
     document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
     document_value = Column(String(255), nullable=False)  # Valor del documento
-    issue_date = Column(Date)  # Fecha de emisión
-    expiration_date = Column(Date)  # Fecha de expiración
-    issuing_authority = Column(String(200))  # Autoridad emisora
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -314,7 +310,6 @@ class MedicalRecord(Base):
     __tablename__ = "medical_records"
     
     id = Column(Integer, primary_key=True)
-    record_code = Column(String(20), unique=True)
     patient_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
     doctor_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
     consultation_date = Column(DateTime, nullable=False)
@@ -323,14 +318,12 @@ class MedicalRecord(Base):
     chief_complaint = Column(Text, nullable=False)
     history_present_illness = Column(Text, nullable=False)
     family_history = Column(Text, nullable=False)
+    perinatal_history = Column(Text, nullable=False)
     personal_pathological_history = Column(Text, nullable=False)
     personal_non_pathological_history = Column(Text, nullable=False)
     physical_examination = Column(Text, nullable=False)
-    laboratory_analysis = Column(Text)
     primary_diagnosis = Column(Text, nullable=False)
     treatment_plan = Column(Text, nullable=False)
-    follow_up_instructions = Column(Text, nullable=False)
-    prognosis = Column(Text, nullable=False)
     
     # CONSULTATION TYPE
     consultation_type = Column(String(50), default='Seguimiento')
@@ -339,15 +332,14 @@ class MedicalRecord(Base):
     # FIRST-TIME CONSULTATION FIELDS (removed duplicate _story fields)
     # These fields are now handled by the existing _history fields:
     # - family_history
+    # - perinatal_history
     # - personal_pathological_history  
     # - personal_non_pathological_history
     
     # OPTIONAL FIELDS
     secondary_diagnoses = Column(Text)
-    differential_diagnosis = Column(Text)
     prescribed_medications = Column(Text)
     laboratory_results = Column(Text)
-    imaging_results = Column(Text)
     notes = Column(Text)
     
     # SYSTEM
@@ -364,7 +356,6 @@ class Appointment(Base):
     __tablename__ = "appointments"
     
     id = Column(Integer, primary_key=True)
-    appointment_code = Column(String(20), unique=True)
     patient_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
     doctor_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
     
@@ -383,20 +374,13 @@ class Appointment(Base):
     reason = Column(Text, nullable=False)
     notes = Column(Text)
     
-    # FOLLOW-UP
-    follow_up_required = Column(Boolean, default=False)
-    follow_up_date = Column(Date)
-    
     # ADMINISTRATIVE
-    room_number = Column(String(20))
-    confirmed_at = Column(DateTime)
     reminder_sent = Column(Boolean, default=False)
     reminder_sent_at = Column(DateTime)
 
     # AUTO REMINDER (WhatsApp)
     auto_reminder_enabled = Column(Boolean, default=False)
     auto_reminder_offset_minutes = Column(Integer, default=360)  # 6 hours
-    auto_reminder_sent_at = Column(DateTime)
     
     # CANCELLATION
     cancelled_reason = Column(Text)
@@ -418,40 +402,33 @@ class ClinicalStudy(Base):
     __tablename__ = "clinical_studies"
     
     id = Column(Integer, primary_key=True, index=True)
-    study_code = Column(String(20), unique=True)
+    # study_code column does not exist in clinical_studies table - removed
     consultation_id = Column(Integer, ForeignKey("medical_records.id"), nullable=False)
     patient_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
     doctor_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
-    study_catalog_id = Column(Integer, ForeignKey("study_catalog.id"), nullable=True)  # New field
+    # study_catalog_id column does not exist in clinical_studies table - removed
     
     # STUDY INFORMATION
     study_type = Column(String(50), nullable=False)  # hematologia, bioquimica, radiologia, etc.
     study_name = Column(String(200), nullable=False)
-    study_description = Column(Text)
     
     # DATES
     ordered_date = Column(DateTime, nullable=False)
     performed_date = Column(DateTime)
-    results_date = Column(DateTime)
+    # results_date column does not exist in clinical_studies table - removed
     
     # STATUS AND URGENCY
-    status = Column(String(20), default='pending')  # pending, in_progress, completed, cancelled, failed
-    urgency = Column(String(20), default='normal')  # normal, urgent, stat
+    status = Column(String(20), default='ordered')  # ordered, in_progress, completed, cancelled, failed
+    urgency = Column(String(20), default='routine')  # routine, urgent, stat, emergency
     
     # MEDICAL INFORMATION
-    clinical_indication = Column(Text, nullable=False)
-    relevant_history = Column(Text)
-    results_text = Column(Text)
-    interpretation = Column(Text)
+    clinical_indication = Column(Text)  # Nullable in database
     
     # NEW FIELDS FOR NORMALIZED CATALOG
-    results = Column(JSON)  # New field for structured results
-    normal_values = Column(JSON)  # New field for normal values
+    # results and normal_values columns do not exist in clinical_studies table - removed
     
     # MEDICAL STAFF
-    ordering_doctor = Column(String(200), nullable=False)
-    performing_doctor = Column(String(200))
-    institution = Column(String(200))
+    ordering_doctor = Column(String(200))  # Nullable in database
     
     # FILE ATTACHMENTS
     file_name = Column(String(255))
@@ -468,7 +445,7 @@ class ClinicalStudy(Base):
     consultation = relationship("MedicalRecord", backref="clinical_studies")
     patient = relationship("Person", foreign_keys=[patient_id], back_populates="clinical_studies_as_patient")
     doctor = relationship("Person", foreign_keys=[doctor_id], back_populates="clinical_studies_as_doctor")
-    catalog_study = relationship("StudyCatalog", back_populates="clinical_studies")  # New relationship
+    # catalog_study relationship removed - study_catalog_id column does not exist in clinical_studies table
 
 
 # ============================================================================
@@ -480,9 +457,7 @@ class StudyCategory(Base):
     __tablename__ = "study_categories"
     
     id = Column(Integer, primary_key=True, index=True)
-    code = Column(String(10), unique=True, nullable=False, index=True)
     name = Column(String(100), nullable=False)
-    description = Column(Text)
     active = Column('active', Boolean, default=True)  # Database column is 'active', not 'is_active'
     created_at = Column(DateTime, default=datetime.utcnow)
     # Note: updated_at column does not exist in study_categories table
@@ -503,104 +478,16 @@ class StudyCatalog(Base):
     __tablename__ = "study_catalog"
     
     id = Column(Integer, primary_key=True, index=True)
-    code = Column(String(20), unique=True, nullable=False, index=True)
     name = Column(String(200), nullable=False)
     category_id = Column(Integer, ForeignKey("study_categories.id"), nullable=False)
-    subcategory = Column(String(100))
-    description = Column(Text)
-    preparation = Column(Text)  # Instructions for patient preparation
-    methodology = Column(Text)
-    duration_minutes = Column('duration_minutes', Integer)  # Delivery time in minutes (DB column name)
-    
-    # Alias for backward compatibility (convert minutes to hours)
-    @property
-    def duration_hours(self):
-        return self.duration_minutes // 60 if self.duration_minutes else None
-    
-    @duration_hours.setter
-    def duration_hours(self, value):
-        self.duration_minutes = value * 60 if value else None
-    specialty = Column(String(100), index=True)
-    active = Column('is_active', Boolean, default=True)  # Database column is 'is_active', using 'active' for consistency
-    regulatory_compliance = Column(JSON)
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    # Alias for backward compatibility
-    @property
-    def is_active(self):
-        return self.active
-    
-    @is_active.setter
-    def is_active(self, value):
-        self.active = value
     
     # Relationships
     category = relationship("StudyCategory", back_populates="studies")
-    normal_values = relationship("StudyNormalValue", back_populates="study", cascade="all, delete-orphan")
-    template_items = relationship("StudyTemplateItem", back_populates="study")
-    clinical_studies = relationship("ClinicalStudy", back_populates="catalog_study")
 
-class StudyNormalValue(Base):
-    __tablename__ = "study_normal_values"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    study_id = Column(Integer, ForeignKey("study_catalog.id", ondelete="CASCADE"), nullable=False)
-    age_min = Column(Integer)
-    age_max = Column(Integer)
-    gender = Column(String(20))  # DB has VARCHAR(20), not VARCHAR(1)
-    normal_min = Column('normal_min', Numeric(10, 3))  # DB column name is 'normal_min'
-    normal_max = Column('normal_max', Numeric(10, 3))  # DB column name is 'normal_max'
-    unit = Column(String(50))  # DB has VARCHAR(50)
-    notes = Column(Text, nullable=True)  # Notes may not exist in DB
-    created_at = Column(DateTime, default=datetime.utcnow)
-    
-    # Alias for backward compatibility
-    @property
-    def min_value(self):
-        return self.normal_min
-    
-    @min_value.setter
-    def min_value(self, value):
-        self.normal_min = value
-    
-    @property
-    def max_value(self):
-        return self.normal_max
-    
-    @max_value.setter
-    def max_value(self, value):
-        self.normal_max = value
-    
-    # Relationships
-    study = relationship("StudyCatalog", back_populates="normal_values")
-
-class StudyTemplate(Base):
-    __tablename__ = "study_templates"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(200), nullable=False)
-    description = Column(Text)
-    specialty = Column(String(100))
-    is_default = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    # Relationships
-    template_items = relationship("StudyTemplateItem", back_populates="template", cascade="all, delete-orphan")
-
-class StudyTemplateItem(Base):
-    __tablename__ = "study_template_items"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    template_id = Column(Integer, ForeignKey("study_templates.id", ondelete="CASCADE"), nullable=False)
-    study_id = Column(Integer, ForeignKey("study_catalog.id", ondelete="CASCADE"), nullable=False)
-    order_index = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    
-    # Relationships
-    template = relationship("StudyTemplate", back_populates="template_items")
-    study = relationship("StudyCatalog", back_populates="template_items")
+# StudyNormalValue, StudyTemplate, StudyTemplateItem models removed - tables deleted
 
 # ClinicalStudy model updated with catalog reference
 
@@ -647,7 +534,6 @@ class ConsultationVitalSign(Base):
     vital_sign_id = Column(Integer, ForeignKey("vital_signs.id"), nullable=False)
     value = Column(String(100), nullable=False)
     unit = Column(String(20))
-    notes = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -664,8 +550,10 @@ class Medication(Base):
     
     id = Column(Integer, primary_key=True)
     name = Column(String(255), nullable=False, unique=True)
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = Column(Integer, default=0)  # No foreign key - 0 = sistema inicial
     
     # Relationships
     consultation_prescriptions = relationship("ConsultationPrescription", back_populates="medication")
@@ -683,7 +571,7 @@ class ConsultationPrescription(Base):
     quantity = Column(Integer)
     via_administracion = Column(String(100))
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # updated_at column does not exist in consultation_prescriptions table - removed
     
     # Relationships
     consultation = relationship("MedicalRecord")
@@ -779,47 +667,16 @@ class PrivacyConsent(Base):
     
     id = Column(Integer, primary_key=True)
     patient_id = Column(Integer, ForeignKey("persons.id", ondelete="CASCADE"))
-    privacy_notice_id = Column(Integer, ForeignKey("privacy_notices.id"))
-    privacy_notice_version = Column(String(20))
-    
-    # Tipos de consentimiento
-    consent_data_collection = Column(Boolean, default=False)
-    consent_data_processing = Column(Boolean, default=False)
-    consent_data_sharing = Column(Boolean, default=False)
-    consent_marketing = Column(Boolean, default=False)
-    
-    # Método de consentimiento
-    consent_method = Column(String(50))  # 'whatsapp_button', 'papel_firmado', etc.
-    consent_status = Column(String(20), default='pending')  # 'pending', 'sent', 'accepted', etc.
-    consent_date = Column(DateTime)
-    
-    # Datos de WhatsApp
-    whatsapp_message_id = Column(String(100))
-    whatsapp_sent_at = Column(DateTime)
-    whatsapp_delivered_at = Column(DateTime)
-    whatsapp_read_at = Column(DateTime)
-    whatsapp_response_text = Column(Text)
-    whatsapp_response_at = Column(DateTime)
-    
-    # Metadatos del consentimiento
+    notice_id = Column(Integer, ForeignKey("privacy_notices.id"))  # Alineado con DB: notice_id
+    consent_given = Column(Boolean, nullable=False)
+    consent_date = Column(DateTime, nullable=False)
     ip_address = Column(String(45))
     user_agent = Column(Text)
-    digital_signature = Column(Text)  # Base64 o button_id
-    
-    # Revocación
-    is_revoked = Column(Boolean, default=False)
-    revoked_date = Column(DateTime)
-    revocation_reason = Column(Text)
-    
-    # Metadatos adicionales
-    metadata_json = Column("metadata", JSON)
-    
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
     patient = relationship("Person", foreign_keys=[patient_id], backref="privacy_consents")
-    privacy_notice = relationship("PrivacyNotice", back_populates="consents")
+    privacy_notice = relationship("PrivacyNotice", foreign_keys=[notice_id], back_populates="consents")
 
 class ARCORequest(Base):
     """

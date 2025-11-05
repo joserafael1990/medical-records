@@ -105,10 +105,11 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending': return 'warning';
+      case 'ordered': return 'warning';
       case 'in_progress': return 'info';
       case 'completed': return 'success';
       case 'cancelled': return 'error';
+      case 'failed': return 'error';
       default: return 'default';
     }
   };
@@ -387,7 +388,7 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
             </Paper>
 
             {/* Additional Information */}
-            {(consultation.prognosis || consultation.laboratory_results || consultation.imaging_studies) && (
+            {(consultation.laboratory_results) && (
               <Accordion sx={{ borderRadius: '16px !important' }}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography variant="h6" sx={{ fontWeight: 600 }}>
@@ -397,17 +398,6 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
                 <AccordionDetails>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                     
-                    {consultation.prognosis && (
-                      <Box>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                          Pronóstico:
-                        </Typography>
-                        <Typography variant="body1" sx={{ lineHeight: 1.6 }}>
-                          {consultation.prognosis}
-                        </Typography>
-                      </Box>
-                    )}
-
                     {consultation.laboratory_results && (
                       <Box>
                         <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
@@ -419,16 +409,6 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
                       </Box>
                     )}
 
-                    {consultation.imaging_studies && (
-                      <Box>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                          Estudios de Imagen:
-                        </Typography>
-                        <Typography variant="body1" sx={{ lineHeight: 1.6 }}>
-                          {consultation.imaging_studies}
-                        </Typography>
-                      </Box>
-                    )}
 
                     {consultation.interconsultations && (
                       <Box>

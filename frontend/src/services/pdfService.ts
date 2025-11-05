@@ -75,7 +75,6 @@ export interface ConsultationInfo {
   prescribed_medications?: string;
   notes?: string;
   treatment_plan?: string;
-  follow_up_instructions?: string;
 }
 
 export interface CertificateInfo {
@@ -572,8 +571,8 @@ class PDFService {
         currentY += 5;
       }
       
-      // Add Follow-up Instructions section
-      if (consultation.follow_up_instructions && consultation.follow_up_instructions.trim()) {
+      // Follow-up Instructions section removed
+      if (false && false) {
         doc.setFontSize(10);
         doc.setTextColor(0, 0, 0);
         doc.setFont('helvetica', 'bold');

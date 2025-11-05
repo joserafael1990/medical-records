@@ -155,15 +155,9 @@ class DocumentResponse(BaseSchema):
 class PersonDocumentCreate(BaseSchema):
     document_id: int
     document_value: str
-    issue_date: Optional[date] = None
-    expiration_date: Optional[date] = None
-    issuing_authority: Optional[str] = None
 
 class PersonDocumentUpdate(BaseSchema):
     document_value: Optional[str] = None
-    issue_date: Optional[date] = None
-    expiration_date: Optional[date] = None
-    issuing_authority: Optional[str] = None
     is_active: Optional[bool] = None
 
 class PersonDocumentResponse(BaseSchema):
@@ -171,9 +165,6 @@ class PersonDocumentResponse(BaseSchema):
     person_id: int
     document_id: int
     document_value: str
-    issue_date: Optional[date] = None
-    expiration_date: Optional[date] = None
-    issuing_authority: Optional[str] = None
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -387,14 +378,12 @@ class MedicalRecordBase(BaseSchema):
     chief_complaint: str
     history_present_illness: str
     family_history: str
+    perinatal_history: str
     personal_pathological_history: str
     personal_non_pathological_history: str
     physical_examination: str
-    laboratory_analysis: Optional[str] = None
     primary_diagnosis: str
     treatment_plan: str
-    follow_up_instructions: str
-    prognosis: str
     
     # Appointment type and office
     appointment_type_id: int
@@ -403,15 +392,14 @@ class MedicalRecordBase(BaseSchema):
     # First-time consultation fields (removed duplicate _story fields)
     # These fields are now handled by the existing _history fields:
     # - family_history
+    # - perinatal_history
     # - personal_pathological_history  
     # - personal_non_pathological_history
     
     # Optional fields
     secondary_diagnoses: Optional[str] = None
-    differential_diagnosis: Optional[str] = None
     prescribed_medications: Optional[str] = None
     laboratory_results: Optional[str] = None
-    imaging_results: Optional[str] = None
     notes: Optional[str] = None
 
 class MedicalRecordCreate(MedicalRecordBase):
@@ -421,31 +409,27 @@ class MedicalRecordUpdate(BaseSchema):
     chief_complaint: Optional[str] = None
     history_present_illness: Optional[str] = None
     family_history: Optional[str] = None
+    perinatal_history: Optional[str] = None
     personal_pathological_history: Optional[str] = None
     personal_non_pathological_history: Optional[str] = None
     physical_examination: Optional[str] = None
-    laboratory_analysis: Optional[str] = None
     primary_diagnosis: Optional[str] = None
     treatment_plan: Optional[str] = None
-    follow_up_instructions: Optional[str] = None
-    prognosis: Optional[str] = None
     
     # First-time consultation fields (removed duplicate _story fields)
     # These fields are now handled by the existing _history fields:
     # - family_history
+    # - perinatal_history
     # - personal_pathological_history  
     # - personal_non_pathological_history
     
     secondary_diagnoses: Optional[str] = None
-    differential_diagnosis: Optional[str] = None
     prescribed_medications: Optional[str] = None
     laboratory_results: Optional[str] = None
-    imaging_results: Optional[str] = None
     notes: Optional[str] = None
 
 class MedicalRecord(MedicalRecordBase):
     id: int
-    record_code: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     created_by: Optional[int] = None
@@ -470,9 +454,6 @@ class AppointmentBase(BaseSchema):
     priority: str = 'normal'
     reason: str
     notes: Optional[str] = None
-    follow_up_required: bool = False
-    follow_up_date: Optional[date] = None
-    room_number: Optional[str] = None
     # Auto WhatsApp reminder
     auto_reminder_enabled: bool = False
     auto_reminder_offset_minutes: Optional[int] = 360  # 6 hours by default
@@ -492,9 +473,6 @@ class AppointmentUpdate(BaseSchema):
     reason: Optional[str] = None
     notes: Optional[str] = None
     preparation_instructions: Optional[str] = None
-    follow_up_required: Optional[bool] = None
-    follow_up_date: Optional[date] = None
-    room_number: Optional[str] = None
     estimated_cost: Optional[Decimal] = None
     insurance_covered: Optional[bool] = None
     cancelled_reason: Optional[str] = None
@@ -504,12 +482,9 @@ class AppointmentUpdate(BaseSchema):
 
 class Appointment(AppointmentBase):
     id: int
-    appointment_code: Optional[str] = None
     confirmation_required: bool = False
-    confirmed_at: Optional[datetime] = None
     reminder_sent: bool = False
     reminder_sent_at: Optional[datetime] = None
-    auto_reminder_sent_at: Optional[datetime] = None
     cancelled_reason: Optional[str] = None
     cancelled_at: Optional[datetime] = None
     cancelled_by: Optional[int] = None
@@ -540,7 +515,6 @@ class VitalSignsBase(BaseSchema):
     abdominal_circumference: Optional[str] = None
     head_circumference: Optional[str] = None
     glucose_level: Optional[str] = None
-    notes: Optional[str] = None
     recorded_by: Optional[int] = None
     measurement_context: Optional[str] = None
 
@@ -647,9 +621,7 @@ class DashboardStats(BaseSchema):
 # ============================================================================
 
 class StudyCategoryBase(BaseSchema):
-    code: str
     name: str
-    description: Optional[str] = None
     is_active: bool = True
 
 class StudyCategory(StudyCategoryBase):
@@ -657,70 +629,21 @@ class StudyCategory(StudyCategoryBase):
     created_at: Optional[datetime] = None
     # Note: updated_at column does not exist in study_categories table
 
-class StudyNormalValueBase(BaseSchema):
-    age_min: Optional[int] = None
-    age_max: Optional[int] = None
-    gender: Optional[Literal['M', 'F', 'B']] = None
-    normal_min: Optional[Decimal] = None  # DB column name
-    normal_max: Optional[Decimal] = None  # DB column name
-    # Aliases for backward compatibility
-    min_value: Optional[Decimal] = None
-    max_value: Optional[Decimal] = None
-    unit: Optional[str] = None
-    notes: Optional[str] = None
-
-class StudyNormalValue(StudyNormalValueBase):
-    id: int
-    study_id: int
-    created_at: datetime
+# StudyNormalValue schemas removed - table deleted
 
 class StudyCatalogBase(BaseSchema):
-    code: str
     name: str
     category_id: int
-    subcategory: Optional[str] = None
-    description: Optional[str] = None
-    preparation: Optional[str] = None
-    methodology: Optional[str] = None
-    duration_hours: Optional[int] = None
-    specialty: Optional[str] = None
     is_active: bool = True
-    regulatory_compliance: Optional[dict] = None
 
 class StudyCatalog(StudyCatalogBase):
     id: int
     created_at: datetime
     updated_at: datetime
     category: Optional[StudyCategory] = None
-    normal_values: List[StudyNormalValue] = []
+    # normal_values field removed - table deleted
 
-class StudyTemplateItemBase(BaseSchema):
-    study_id: int
-    order_index: int = 0
-
-class StudyTemplateItem(StudyTemplateItemBase):
-    id: int
-    template_id: int
-    created_at: datetime
-    study: Optional[StudyCatalog] = None
-
-class StudyTemplateBase(BaseSchema):
-    name: str
-    description: Optional[str] = None
-    specialty: Optional[str] = None
-    is_default: bool = False
-
-class StudyTemplate(StudyTemplateBase):
-    id: int
-    created_at: datetime
-    updated_at: datetime
-    template_items: List[StudyTemplateItem] = []
-
-class StudyTemplateCreate(BaseSchema):
-    name: str
-    description: Optional[str] = None
-    specialty: Optional[str] = None
-    study_ids: List[int] = []
+# StudyTemplate and StudyTemplateItem schemas removed - tables deleted
 
 class StudySearchFilters(BaseSchema):
     category_id: Optional[int] = None

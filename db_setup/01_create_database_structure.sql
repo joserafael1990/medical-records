@@ -44,22 +44,11 @@ CREATE TABLE IF NOT EXISTS emergency_relationships (
 -- ============================================================================
 
 -- Tabla de especialidades médicas
-CREATE TABLE IF NOT EXISTS specialties (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    code VARCHAR(20) UNIQUE,
-    description TEXT,
-    active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
--- Tabla de especialidades médicas (tabla adicional)
 CREATE TABLE IF NOT EXISTS medical_specialties (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL UNIQUE,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
+    name VARCHAR(100) NOT NULL,
+    active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- Tabla de tipos de documento
@@ -86,8 +75,6 @@ CREATE TABLE IF NOT EXISTS documents (
 CREATE TABLE IF NOT EXISTS study_categories (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    code VARCHAR(20) UNIQUE,
-    description TEXT,
     active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT NOW()
 );
@@ -96,81 +83,30 @@ CREATE TABLE IF NOT EXISTS study_categories (
 CREATE TABLE IF NOT EXISTS study_catalog (
     id SERIAL PRIMARY KEY,
     name VARCHAR(200) NOT NULL,
-    code VARCHAR(50) UNIQUE,
-    description TEXT,
     category_id INTEGER REFERENCES study_categories(id),
-    specialty VARCHAR(100),
-    subcategory VARCHAR(100),
-    clinical_use TEXT,
-    sample_type VARCHAR(100),
-    preparation TEXT,
-    methodology TEXT,
-    normal_range TEXT,
-    duration_minutes INTEGER,
-    price DECIMAL(10,2),
     is_active BOOLEAN DEFAULT TRUE,
-    regulatory_compliance JSON,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
--- Tabla de valores normales de estudios
-CREATE TABLE IF NOT EXISTS study_normal_values (
-    id SERIAL PRIMARY KEY,
-    study_id INTEGER REFERENCES study_catalog(id) ON DELETE CASCADE,
-    age_min INTEGER,
-    age_max INTEGER,
-    gender VARCHAR(20),
-    normal_min DECIMAL(10,3),
-    normal_max DECIMAL(10,3),
-    unit VARCHAR(50),
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
--- Tabla de plantillas de estudios
-CREATE TABLE IF NOT EXISTS study_templates (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(200) NOT NULL,
-    description TEXT,
-    specialty VARCHAR(100),
-    active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
--- Tabla de elementos de plantillas
-CREATE TABLE IF NOT EXISTS study_template_items (
-    id SERIAL PRIMARY KEY,
-    template_id INTEGER REFERENCES study_templates(id) ON DELETE CASCADE,
-    study_id INTEGER REFERENCES study_catalog(id) ON DELETE CASCADE,
-    order_index INTEGER DEFAULT 0,
-    created_at TIMESTAMP DEFAULT NOW()
-);
+-- study_normal_values table removed - not used
+-- study_templates table removed - not used
+-- study_template_items table removed - not used
 
 -- Tabla de medicamentos
 CREATE TABLE IF NOT EXISTS medications (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(200) NOT NULL,
-    code VARCHAR(50) UNIQUE,
-    generic_name VARCHAR(200),
-    dosage_form VARCHAR(100),
-    strength VARCHAR(100),
-    manufacturer VARCHAR(200),
-    active_ingredient TEXT,
-    indications TEXT,
-    contraindications TEXT,
-    side_effects TEXT,
-    dosage_instructions TEXT,
+    name VARCHAR(200) NOT NULL UNIQUE,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
+    updated_at TIMESTAMP DEFAULT NOW(),
+    created_by INTEGER DEFAULT 0
 );
 
 -- Tabla de categorías de diagnósticos
 CREATE TABLE IF NOT EXISTS diagnosis_categories (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    code VARCHAR(20) UNIQUE,
-    description TEXT,
     active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT NOW()
 );
@@ -193,22 +129,8 @@ CREATE TABLE IF NOT EXISTS diagnosis_catalog (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
--- Tabla de diagnósticos diferenciales
-CREATE TABLE IF NOT EXISTS diagnosis_differentials (
-    id SERIAL PRIMARY KEY,
-    primary_diagnosis_id INTEGER REFERENCES diagnosis_catalog(id) ON DELETE CASCADE,
-    differential_diagnosis_id INTEGER REFERENCES diagnosis_catalog(id) ON DELETE CASCADE,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
--- Tabla de recomendaciones de diagnósticos
-CREATE TABLE IF NOT EXISTS diagnosis_recommendations (
-    id SERIAL PRIMARY KEY,
-    diagnosis_id INTEGER REFERENCES diagnosis_catalog(id) ON DELETE CASCADE,
-    recommended_study_id INTEGER REFERENCES study_catalog(id) ON DELETE CASCADE,
-    priority INTEGER DEFAULT 1,
-    created_at TIMESTAMP DEFAULT NOW()
-);
+-- diagnosis_differentials table removed - not used
+-- diagnosis_recommendations table removed - not used
 
 -- ============================================================================
 -- TABLA PRINCIPAL: PERSONAS
@@ -253,7 +175,7 @@ CREATE TABLE IF NOT EXISTS persons (
     office_timezone VARCHAR(50) DEFAULT 'America/Mexico_City',
     
     -- Especialidad médica (solo doctores)
-    specialty_id INTEGER REFERENCES specialties(id),
+    specialty_id INTEGER REFERENCES medical_specialties(id),
     university VARCHAR(200),
     graduation_year INTEGER,
     appointment_duration INTEGER,  -- Duración de citas en minutos (solo doctores)
@@ -288,9 +210,6 @@ CREATE TABLE IF NOT EXISTS person_documents (
     person_id INTEGER REFERENCES persons(id) ON DELETE CASCADE NOT NULL,
     document_id INTEGER REFERENCES documents(id) ON DELETE CASCADE NOT NULL,
     document_value VARCHAR(255) NOT NULL,  -- Valor del documento (ej: número de CURP, RFC, etc.)
-    issue_date DATE,  -- Fecha de emisión del documento
-    expiration_date DATE,  -- Fecha de expiración del documento (si aplica)
-    issuing_authority VARCHAR(200),  -- Autoridad emisora (ej: SAT, Secretaría de Salud, etc.)
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
@@ -349,7 +268,6 @@ CREATE INDEX IF NOT EXISTS idx_offices_is_active ON offices(is_active);
 -- Tabla de historias clínicas/consultas
 CREATE TABLE IF NOT EXISTS medical_records (
     id SERIAL PRIMARY KEY,
-    record_code VARCHAR(20) UNIQUE,
     patient_id INTEGER REFERENCES persons(id) NOT NULL,
     doctor_id INTEGER REFERENCES persons(id) NOT NULL,
     consultation_date TIMESTAMP NOT NULL,
@@ -358,24 +276,20 @@ CREATE TABLE IF NOT EXISTS medical_records (
     chief_complaint TEXT NOT NULL,
     history_present_illness TEXT NOT NULL,
     family_history TEXT NOT NULL,
+    perinatal_history TEXT NOT NULL,
     personal_pathological_history TEXT NOT NULL,
     personal_non_pathological_history TEXT NOT NULL,
     physical_examination TEXT NOT NULL,
-    laboratory_analysis TEXT,
     primary_diagnosis TEXT NOT NULL,
     treatment_plan TEXT NOT NULL,
-    follow_up_instructions TEXT NOT NULL,
-    prognosis TEXT NOT NULL,
     
     -- Tipo de consulta
     consultation_type VARCHAR(50) DEFAULT 'Seguimiento',
     
     -- Campos opcionales
     secondary_diagnoses TEXT,
-    differential_diagnosis TEXT,
     prescribed_medications TEXT,
     laboratory_results TEXT,
-    imaging_results TEXT,
     notes TEXT,
     
     -- Sistema
@@ -395,7 +309,6 @@ CREATE TABLE IF NOT EXISTS appointment_types (
 -- Tabla de citas médicas
 CREATE TABLE IF NOT EXISTS appointments (
     id SERIAL PRIMARY KEY,
-    appointment_code VARCHAR(20) UNIQUE,  -- Código único de identificación (formato: APT00000001)
     patient_id INTEGER REFERENCES persons(id) NOT NULL,
     doctor_id INTEGER REFERENCES persons(id) NOT NULL,
     
@@ -414,20 +327,13 @@ CREATE TABLE IF NOT EXISTS appointments (
     reason TEXT NOT NULL,
     notes TEXT,
     
-    -- FOLLOW-UP
-    follow_up_required BOOLEAN DEFAULT FALSE,
-    follow_up_date DATE,
-    
     -- ADMINISTRATIVE
-    room_number VARCHAR(20),
-    confirmed_at TIMESTAMP,
     reminder_sent BOOLEAN DEFAULT FALSE,
     reminder_sent_at TIMESTAMP,
     
     -- AUTO REMINDER (WhatsApp)
     auto_reminder_enabled BOOLEAN DEFAULT FALSE,
     auto_reminder_offset_minutes INTEGER DEFAULT 360,  -- 6 hours default
-    auto_reminder_sent_at TIMESTAMP,
     
     -- CANCELLATION
     cancelled_reason TEXT,
@@ -448,18 +354,12 @@ CREATE TABLE IF NOT EXISTS clinical_studies (
     doctor_id INTEGER REFERENCES persons(id) NOT NULL,
     study_type VARCHAR(100),
     study_name VARCHAR(200),
-    study_description TEXT,
     ordered_date TIMESTAMP,
     performed_date TIMESTAMP,
-    results_text TEXT,
     status VARCHAR(50) DEFAULT 'ordered',
     urgency VARCHAR(20) DEFAULT 'normal',
     clinical_indication TEXT,
-    relevant_history TEXT,
-    interpretation TEXT,
     ordering_doctor VARCHAR(200),
-    performing_doctor VARCHAR(200),
-    institution VARCHAR(200),
     file_name VARCHAR(255),
     file_path VARCHAR(500),
     file_type VARCHAR(50),
@@ -474,7 +374,6 @@ CREATE TABLE IF NOT EXISTS consultation_prescriptions (
     id SERIAL PRIMARY KEY,
     consultation_id INTEGER REFERENCES medical_records(id) ON DELETE CASCADE,
     medication_id INTEGER REFERENCES medications(id),
-    medication_name VARCHAR(200),
     dosage VARCHAR(100),
     frequency VARCHAR(100),
     duration VARCHAR(100),
@@ -498,7 +397,6 @@ CREATE TABLE IF NOT EXISTS consultation_vital_signs (
     vital_sign_id INTEGER REFERENCES vital_signs(id),
     value VARCHAR(100) NOT NULL,
     unit VARCHAR(20),
-    notes TEXT,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -521,17 +419,7 @@ CREATE TABLE IF NOT EXISTS schedule_templates (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
--- Tabla de excepciones de horarios
-CREATE TABLE IF NOT EXISTS schedule_exceptions (
-    id SERIAL PRIMARY KEY,
-    doctor_id INTEGER REFERENCES persons(id) ON DELETE CASCADE,
-    exception_date DATE NOT NULL,
-    start_time TIME,
-    end_time TIME,
-    is_available BOOLEAN DEFAULT FALSE,
-    reason TEXT,
-    created_at TIMESTAMP DEFAULT NOW()
-);
+-- schedule_exceptions table removed - not used
 
 -- ============================================================================
 -- SISTEMA DE AUDITORÍA Y COMPLIANCE
@@ -681,8 +569,7 @@ ORDER BY expiration_date ASC;
 COMMENT ON TABLE countries IS 'Catálogo de países del mundo';
 COMMENT ON TABLE states IS 'Catálogo de estados/provincias por país';
 COMMENT ON TABLE emergency_relationships IS 'Relaciones familiares para contactos de emergencia';
-COMMENT ON TABLE specialties IS 'Especialidades médicas';
-COMMENT ON TABLE medical_specialties IS 'Especialidades médicas (tabla adicional)';
+COMMENT ON TABLE medical_specialties IS 'Especialidades médicas';
 COMMENT ON TABLE document_types IS 'Tipos de documento (Personal, Profesional)';
 COMMENT ON TABLE documents IS 'Documentos por tipo (DNI, CURP, Cédula Profesional, etc.)';
 COMMENT ON TABLE person_documents IS 'Relación normalizada entre personas y documentos';

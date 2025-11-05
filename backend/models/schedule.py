@@ -45,41 +45,9 @@ class ScheduleTemplate(Base):
     
     # Relaciones
     # office = relationship("Office", back_populates="schedule_templates")
-    schedule_exceptions = relationship("ScheduleException", back_populates="template")
+    # schedule_exceptions relationship removed - table deleted
 
-class ScheduleException(Base):
-    """
-    Excepciones al horario base (días feriados, vacaciones, etc.)
-    """
-    __tablename__ = "schedule_exceptions"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    doctor_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
-    template_id = Column(Integer, ForeignKey("schedule_templates.id"), nullable=True)
-    
-    # Fecha específica de la excepción
-    exception_date = Column(DateTime, nullable=False)
-    
-    # Tipo de excepción
-    exception_type = Column(String(50), nullable=False)  # 'vacation', 'holiday', 'sick_leave', 'custom'
-    
-    # Horarios especiales (si aplica)
-    start_time = Column(Time, nullable=True)
-    end_time = Column(Time, nullable=True)
-    
-    # Estado
-    is_day_off = Column(Boolean, default=False)  # True si es día libre completo
-    
-    # Descripción
-    description = Column(Text, nullable=True)
-    
-    # Metadatos
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    # Relaciones - temporarily commented out to fix initialization
-    # doctor = relationship("DoctorProfile", back_populates="schedule_exceptions")
-    template = relationship("ScheduleTemplate", back_populates="schedule_exceptions")
+# ScheduleException model removed - table deleted
 
 # ============================================================================
 # PYDANTIC MODELS
@@ -132,26 +100,7 @@ class ScheduleTemplate(ScheduleTemplateBase):
     class Config:
         from_attributes = True
 
-class ScheduleExceptionBase(BaseModel):
-    exception_date: date = Field(..., description="Fecha de la excepción")
-    exception_type: str = Field(..., description="Tipo de excepción")
-    start_time: Optional[time] = None
-    end_time: Optional[time] = None
-    is_day_off: bool = Field(False, description="Día libre completo")
-    description: Optional[str] = None
-
-class ScheduleExceptionCreate(ScheduleExceptionBase):
-    pass
-
-class ScheduleException(ScheduleExceptionBase):
-    id: int
-    doctor_id: int
-    template_id: Optional[int]
-    created_at: datetime
-    updated_at: datetime
-    
-    class Config:
-        from_attributes = True
+# ScheduleException Pydantic models removed - table deleted
 
 class WeeklySchedule(BaseModel):
     """Representación del horario semanal completo"""
@@ -178,7 +127,7 @@ class DaySchedule(BaseModel):
     date: date
     is_working_day: bool
     available_slots: List[AvailableSlot]
-    exceptions: List[ScheduleException] = []
+    # exceptions field removed - ScheduleException table deleted
     
     class Config:
         from_attributes = True

@@ -37,6 +37,7 @@ export interface UsePrescriptionsReturn {
   
   // Utility functions
   clearTemporaryPrescriptions: () => void;
+  addTemporaryPrescription: (prescriptionData: CreatePrescriptionData) => void;
 }
 
 export const usePrescriptions = (): UsePrescriptionsReturn => {
@@ -282,6 +283,42 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
     setPrescriptions([]);
   }, []);
 
+  // Add temporary prescription (for new consultations before saving)
+  const addTemporaryPrescription = useCallback((prescriptionData: CreatePrescriptionData) => {
+    // Find medication name from medications list
+    const medication = medications.find(m => m.id === prescriptionData.medication_id);
+    
+    if (!medication) {
+      console.error('Medication not found for ID:', prescriptionData.medication_id);
+      return;
+    }
+    
+    // Generate unique ID with timestamp and random component
+    const uniqueId = Date.now() + Math.floor(Math.random() * 1000);
+    
+    const tempPrescription: ConsultationPrescription = {
+      id: uniqueId,
+      consultation_id: 0, // Temporary, will be set when consultation is created
+      medication_id: prescriptionData.medication_id,
+      medication_name: medication.name,
+      dosage: prescriptionData.dosage,
+      frequency: prescriptionData.frequency,
+      duration: prescriptionData.duration,
+      instructions: prescriptionData.instructions,
+      quantity: prescriptionData.quantity,
+      via_administracion: prescriptionData.via_administracion,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    console.log('💊 Adding temp prescription:', tempPrescription);
+    setPrescriptions(prev => {
+      const newPrescriptions = [...prev, tempPrescription];
+      console.log('💊 Updated prescriptions list:', newPrescriptions);
+      return newPrescriptions;
+    });
+  }, [medications]);
+
   // Form management
   const updateFormData = useCallback((data: Partial<CreatePrescriptionData>) => {
     setPrescriptionFormData(prev => ({ ...prev, ...data }));
@@ -414,7 +451,8 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
     submitForm,
     
     // Utility functions
-    clearTemporaryPrescriptions
+    clearTemporaryPrescriptions,
+    addTemporaryPrescription
   };
 };
 

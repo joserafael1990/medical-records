@@ -41,10 +41,10 @@ export const CountryCodeSelector: React.FC<CountryCodeSelectorProps> = ({
       renderInput={(params) => (
         <TextField
           {...params}
-          label={label}
+          placeholder={label}
           error={error}
           helperText={helperText}
-          size="small"
+          margin="none"
           inputProps={{
             ...params.inputProps,
             style: { textAlign: 'left' }
@@ -73,6 +73,58 @@ export const CountryCodeSelector: React.FC<CountryCodeSelectorProps> = ({
       }}
       sx={{
         width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative',
+        '& .MuiAutocomplete-root': {
+          width: '100%',
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column'
+        },
+        '& .MuiFormControl-root': {
+          width: '100%',
+          margin: 0,
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          '& .MuiOutlinedInput-root': {
+            marginTop: 0
+          }
+        },
+        '& .MuiTextField-root': {
+          margin: 0,
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          '& .MuiInputBase-root': {
+            marginTop: 0
+          }
+        },
+        '& .MuiAutocomplete-inputRoot': {
+          height: '56px !important',
+          minHeight: '56px !important',
+          maxHeight: '56px !important',
+          alignItems: 'center',
+          margin: 0,
+          marginTop: '0 !important'
+        },
+        '& .MuiAutocomplete-input': {
+          padding: '16.5px 14px !important',
+          paddingRight: '42px !important'
+        },
+        '& .MuiAutocomplete-endAdornment': {
+          position: 'absolute',
+          right: '14px',
+          top: '50%',
+          transform: 'translateY(-50%)'
+        },
+        '& .MuiFormHelperText-root': {
+          margin: '3px 14px 0',
+          lineHeight: '1.66',
+          minHeight: '1.66em'
+        },
         '& .MuiAutocomplete-popper': {
           zIndex: 13000
         }

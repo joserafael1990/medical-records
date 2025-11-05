@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -50,7 +50,7 @@ import {
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
-import { Patient, PatientFormData, ClinicalStudy } from '../../types';
+import { Patient, PatientFormData, ClinicalStudy, CreateClinicalStudyData } from '../../types';
 import { MEDICAL_VALIDATION_RULES, validateForm } from '../../utils/validation';
 import {
   getVitalSignIcon,
@@ -62,19 +62,17 @@ import {
 import { DocumentSelector } from '../common/DocumentSelector';
 import { apiService } from '../../services/api';
 import ClinicalStudiesSection from '../common/ClinicalStudiesSection';
-import ClinicalStudyDialogWithCatalog from './ClinicalStudyDialogWithCatalog';
 import { useClinicalStudies } from '../../hooks/useClinicalStudies';
 import VitalSignsSection from '../common/VitalSignsSection';
 import { useVitalSigns } from '../../hooks/useVitalSigns';
 import PrescriptionsSection from '../common/PrescriptionsSection';
 import { usePrescriptions } from '../../hooks/usePrescriptions';
-import PrescriptionDialog from './PrescriptionDialog';
 import DiagnosisSelector from '../common/DiagnosisSelector';
 import { DiagnosisCatalog } from '../../hooks/useDiagnosisCatalog';
-import DiagnosisDialog from './DiagnosisDialog';
 import DiagnosisSection from '../common/DiagnosisSection';
 import { useDiagnosisManagement } from '../../hooks/useDiagnosisManagement';
 import { PrintButtons } from '../common/PrintButtons';
+import ScheduleAppointmentSection from '../common/ScheduleAppointmentSection';
 import { PatientInfo, DoctorInfo, ConsultationInfo, MedicationInfo, StudyInfo } from '../../services/pdfService';
 import { useToast } from '../common/ToastNotification';
 import { disablePaymentDetection } from '../../utils/disablePaymentDetection';
@@ -89,6 +87,7 @@ export interface ConsultationFormData {
   chief_complaint: string;
   history_present_illness: string;
   family_history: string;
+  perinatal_history: string;
   personal_pathological_history: string;
   personal_non_pathological_history: string;
   physical_examination: string;
@@ -96,10 +95,7 @@ export interface ConsultationFormData {
   secondary_diagnoses: string;
   treatment_plan: string;
   therapeutic_plan: string;
-  follow_up_instructions: string;
-  prognosis: string;
   laboratory_results: string;
-  imaging_studies: string;
   interconsultations: string;
   doctor_name: string;
   doctor_professional_license: string;
@@ -107,6 +103,7 @@ export interface ConsultationFormData {
   // New fields for appointment selection
   has_appointment: boolean;
   appointment_id: string;
+  consultation_type?: string;
   // New fields for structured diagnoses
   primary_diagnoses: DiagnosisCatalog[];
   secondary_diagnoses_list: DiagnosisCatalog[];
@@ -192,12 +189,14 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     return cdmxDate.toISOString();
   };
 
-  const initialFormData: ConsultationFormData = {
+  // Memoize initialFormData to prevent recreation on every render
+  const initialFormData: ConsultationFormData = useMemo(() => ({
     patient_id: '',
     date: getCDMXDateTime(),
     chief_complaint: '',
     history_present_illness: '',
     family_history: '',
+    perinatal_history: '',
     personal_pathological_history: '',
     personal_non_pathological_history: '',
     physical_examination: '',
@@ -205,10 +204,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     secondary_diagnoses: '',
     treatment_plan: '',
     therapeutic_plan: '',
-    follow_up_instructions: '',
-    prognosis: '',
     laboratory_results: '',
-    imaging_studies: '',
     interconsultations: '',
     doctor_name: doctorProfile?.first_name && doctorProfile?.last_name 
       ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name} ${doctorProfile.last_name}`.trim()
@@ -223,7 +219,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     secondary_diagnoses_list: [],
     // First-time consultation fields (removed duplicate _story fields)
     // These fields are now handled by the existing _history fields
-  };
+  }), [doctorProfile?.first_name, doctorProfile?.last_name, doctorProfile?.title, doctorProfile?.professional_license, doctorProfile?.specialty]);
 
   const [formData, setFormData] = useState<ConsultationFormData>(initialFormData);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -266,17 +262,39 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     // Show button if:
     // 1. Selected appointment is of type "Seguimiento" OR
     // 2. Patient is selected AND has at least one previous consultation
+    
+    // Check if appointment is follow-up type
     const isFollowUpAppointment = selectedAppointment && (
       selectedAppointment.consultation_type === 'Seguimiento' ||
       selectedAppointment.appointment_type === 'Seguimiento' ||
       selectedAppointment.appointment_type === 'seguimiento' ||
-      selectedAppointment.appointment_type === 'follow_up'
+      selectedAppointment.appointment_type === 'follow_up' ||
+      (selectedAppointment.appointment_type_id && selectedAppointment.appointment_type_id !== 1) // Assuming 1 = primera vez
     );
     
     // Check if patient is selected
-    const isExistingPatientSelected = selectedPatient;
+    const isExistingPatientSelected = selectedPatient && selectedPatient.id;
     
-    const shouldShow = isFollowUpAppointment || (isExistingPatientSelected && patientHasPreviousConsultations);
+    // If it's a follow-up appointment and patient is selected, always show button
+    if (isFollowUpAppointment && isExistingPatientSelected) {
+      return true;
+    }
+    
+    // Otherwise, show if patient has previous consultations
+    const shouldShow = isExistingPatientSelected && patientHasPreviousConsultations;
+    
+    console.log('🔍 shouldShowPreviousConsultationsButton:', {
+      isFollowUpAppointment,
+      isExistingPatientSelected,
+      patientHasPreviousConsultations,
+      shouldShow,
+      selectedAppointment: selectedAppointment ? {
+        id: selectedAppointment.id,
+        consultation_type: selectedAppointment.consultation_type,
+        appointment_type: selectedAppointment.appointment_type,
+        appointment_type_id: selectedAppointment.appointment_type_id
+      } : null
+    });
     
     return shouldShow;
   };
@@ -335,8 +353,25 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   }, [open]);
 
   // Separate useEffect for consultation data loading
+  // Use a ref to track if we've already loaded this consultation
+  const loadedConsultationIdRef = React.useRef<string | number | undefined>(undefined);
+  
   useEffect(() => {
     if (open && consultation) {
+        // Use consultation.id as the key to prevent unnecessary re-runs
+        const consultationId = consultation.id;
+        if (!consultationId) return;
+        
+        // Skip if we've already loaded this consultation
+        if (loadedConsultationIdRef.current === consultationId) {
+          return;
+        }
+        
+        // Mark as loaded
+        loadedConsultationIdRef.current = consultationId;
+
+        console.log('💊 Loading consultation data for ID:', consultationId);
+
         // Map consultation data to form data
         setFormData({
           ...initialFormData,
@@ -345,6 +380,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           chief_complaint: consultation.chief_complaint || '',
           history_present_illness: consultation.history_present_illness || '',
           family_history: consultation.family_history || '',
+          perinatal_history: consultation.perinatal_history || '',
           personal_pathological_history: consultation.personal_pathological_history || '',
           personal_non_pathological_history: consultation.personal_non_pathological_history || '',
           physical_examination: consultation.physical_examination || '',
@@ -352,10 +388,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           secondary_diagnoses: consultation.secondary_diagnoses || '',
           treatment_plan: consultation.treatment_plan || '',
           therapeutic_plan: consultation.therapeutic_plan || '',
-          follow_up_instructions: consultation.follow_up_instructions || '',
-          prognosis: consultation.prognosis || '',
           laboratory_results: consultation.laboratory_results || '',
-          imaging_studies: consultation.imaging_studies || '',
           interconsultations: consultation.interconsultations || '',
           doctor_name: consultation.doctor_name || initialFormData.doctor_name,
           doctor_professional_license: consultation.doctor_professional_license || initialFormData.doctor_professional_license,
@@ -414,9 +447,17 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 });
               };
 
-              const parsedPrimary = parseDiagnosesFromText(consultation.primary_diagnosis);
-              primaryDiagnosesHook.clearDiagnoses();
-              primaryDiagnosesHook.loadDiagnoses(parsedPrimary);
+              // Use structured diagnoses from API if available, otherwise parse from text
+              if (consultation.primary_diagnoses && Array.isArray(consultation.primary_diagnoses) && consultation.primary_diagnoses.length > 0) {
+                // Use structured diagnoses from API
+                primaryDiagnosesHook.clearDiagnoses();
+                primaryDiagnosesHook.loadDiagnoses(consultation.primary_diagnoses);
+              } else {
+                // Fallback to parsing from text
+                const parsedPrimary = parseDiagnosesFromText(consultation.primary_diagnosis);
+                primaryDiagnosesHook.clearDiagnoses();
+                primaryDiagnosesHook.loadDiagnoses(parsedPrimary);
+              }
             }
 
             // Parse secondary diagnoses from text
@@ -444,9 +485,17 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 });
               };
 
-              const parsedSecondary = parseDiagnosesFromText(consultation.secondary_diagnoses);
-              secondaryDiagnosesHook.clearDiagnoses();
-              secondaryDiagnosesHook.loadDiagnoses(parsedSecondary);
+              // Use structured diagnoses from API if available, otherwise parse from text
+              if (consultation.secondary_diagnoses_list && Array.isArray(consultation.secondary_diagnoses_list) && consultation.secondary_diagnoses_list.length > 0) {
+                // Use structured diagnoses from API
+                secondaryDiagnosesHook.clearDiagnoses();
+                secondaryDiagnosesHook.loadDiagnoses(consultation.secondary_diagnoses_list);
+              } else {
+                // Fallback to parsing from text
+                const parsedSecondary = parseDiagnosesFromText(consultation.secondary_diagnoses);
+                secondaryDiagnosesHook.clearDiagnoses();
+                secondaryDiagnosesHook.loadDiagnoses(parsedSecondary);
+              }
             }
           } catch (error) {
             console.error('Error loading structured diagnoses:', error);
@@ -458,6 +507,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         loadStructuredDiagnoses();
 
         // Load clinical studies, vital signs and prescriptions for existing consultation
+        console.log('💊 Fetching prescriptions for consultation:', consultationId);
         clinicalStudiesHook.fetchStudies(String(consultation.id));
         vitalSignsHook.fetchConsultationVitalSigns(String(consultation.id));
         prescriptionsHook.fetchPrescriptions(String(consultation.id));
@@ -468,41 +518,95 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         } else {
           loadDefaultOffice();
         }
+    } else if (!open) {
+      // Reset loaded consultation ID when dialog closes
+      loadedConsultationIdRef.current = undefined;
     }
-  }, [open, consultation, patients, doctorProfile]);
+    // Only depend on consultation.id and open, not the entire objects
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, consultation?.id]);
 
   // Separate useEffect for new consultation setup
+  // Use a ref to track if we've already initialized for this dialog opening
+  const hasInitializedRef = React.useRef(false);
+  const lastConsultationIdRef = React.useRef<string | number | undefined>(undefined);
+  
   useEffect(() => {
     // console.log('🔄 useEffect for new consultation setup:', { open, consultation: !!consultation });
-    if (open && !consultation) {
+    const currentConsultationId = consultation?.id;
+    
+    // Reset initialization flag when dialog closes
+    if (!open) {
+      hasInitializedRef.current = false;
+      lastConsultationIdRef.current = undefined;
+      return;
+    }
+    
+    // Only initialize once per dialog opening and consultation change
+    // IMPORTANT: Only clear temporary data for NEW consultations, not when editing
+    if (open && !consultation && !hasInitializedRef.current) {
       // console.log('🔄 Setting up new consultation');
+      console.log('💊 Setting up NEW consultation - clearing temporary prescriptions');
       setFormData(initialFormData);
       setSelectedAppointment(null);
       setSelectedPatient(null);
       setShowAdvancedPatientData(false);
       
-      // Clear clinical studies, vital signs and prescriptions for new consultation
+      // Clear clinical studies, vital signs and prescriptions for new consultation ONLY
       clinicalStudiesHook.clearTemporaryStudies();
       vitalSignsHook.clearTemporaryVitalSigns();
       prescriptionsHook.clearTemporaryPrescriptions();
+      
+      hasInitializedRef.current = true;
+    } else if (open && currentConsultationId) {
+      // When editing an existing consultation, make sure we don't clear prescriptions
+      // The prescriptions should be loaded by the main useEffect above
+      if (currentConsultationId !== lastConsultationIdRef.current) {
+        // Consultation changed - reset flag but DO NOT clear prescriptions
+        console.log('💊 Consultation changed to:', currentConsultationId, '- NOT clearing prescriptions, they will be loaded from DB');
+        hasInitializedRef.current = false;
+        lastConsultationIdRef.current = currentConsultationId;
+      }
     }
-  }, [open, consultation]);
+    // Only depend on open and consultation.id, not the entire object
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, consultation?.id]);
 
   // Refresh clinical studies when clinical study dialog closes (for existing consultations)
+  // Store dialog state in a ref to avoid dependency issues
+  const prevClinicalDialogOpen = React.useRef(clinicalStudiesHook.clinicalStudyDialogOpen);
   useEffect(() => {
-    if (isEditing && consultation && !clinicalStudiesHook.clinicalStudyDialogOpen) {
+    const wasOpen = prevClinicalDialogOpen.current;
+    const isOpen = clinicalStudiesHook.clinicalStudyDialogOpen;
+    
+    // Only refresh if dialog was open and is now closed (transition from open to closed)
+    if (isEditing && consultation?.id && wasOpen && !isOpen) {
       // Refresh studies when clinical study dialog closes
       clinicalStudiesHook.fetchStudies(String(consultation.id));
     }
-  }, [clinicalStudiesHook.clinicalStudyDialogOpen, isEditing, consultation]);
+    
+    // Update ref
+    prevClinicalDialogOpen.current = isOpen;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clinicalStudiesHook.clinicalStudyDialogOpen, isEditing, consultation?.id]);
 
   // Refresh vital signs when vital signs dialog closes (for existing consultations)
+  // Store dialog state in a ref to avoid dependency issues
+  const prevVitalSignDialogOpen = React.useRef(vitalSignsHook.vitalSignDialogOpen);
   useEffect(() => {
-    if (isEditing && consultation && !vitalSignsHook.vitalSignDialogOpen) {
+    const wasOpen = prevVitalSignDialogOpen.current;
+    const isOpen = vitalSignsHook.vitalSignDialogOpen;
+    
+    // Only refresh if dialog was open and is now closed (transition from open to closed)
+    if (isEditing && consultation?.id && wasOpen && !isOpen) {
       // Refresh vital signs when vital signs dialog closes
       vitalSignsHook.fetchConsultationVitalSigns(String(consultation.id));
     }
-  }, [vitalSignsHook.vitalSignDialogOpen, isEditing, consultation]);
+    
+    // Update ref
+    prevVitalSignDialogOpen.current = isOpen;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vitalSignsHook.vitalSignDialogOpen, isEditing, consultation?.id]);
 
   // Load countries, emergency relationships, patients for appointments, and vital signs
   useEffect(() => {
@@ -539,73 +643,12 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     if (open) {
       loadInitialData();
     }
-  }, [open, appointments]);
+    // Only depend on open and appointments length, not the entire array
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, appointments?.length]);
 
-  // Load structured diagnoses when editing a consultation
-  useEffect(() => {
-    const loadStructuredDiagnoses = async () => {
-      if (consultation && consultation.id) {
-        try {
-          // For now, we'll parse from the text fields if they contain CIE-10 codes
-          const parseDiagnosesFromText = (text: string): DiagnosisCatalog[] => {
-            if (!text) return [];
-            
-            // Simple parsing for CIE-10 codes (e.g., "E11.9 - Diabetes mellitus tipo 2")
-            const diagnosisEntries = text.split(';').map(entry => entry.trim()).filter(entry => entry);
-            return diagnosisEntries.map((entry, index) => {
-              const [code, ...nameParts] = entry.split(' - ');
-              const name = nameParts.join(' - ');
-              
-              return {
-                id: index + 1, // Temporary ID
-                code: code?.trim() || '',
-                name: name?.trim() || entry,
-                category_id: 0,
-                description: '',
-                synonyms: [],
-                severity_level: undefined,
-                is_chronic: false,
-                is_contagious: false,
-                age_group: undefined,
-                gender_specific: undefined,
-                specialty: undefined,
-                is_active: true,
-                created_at: '',
-                updated_at: '',
-                category: {
-                  id: 0,
-                  code: '',
-                  name: '',
-                  level: 1,
-                  is_active: true,
-                  created_at: '',
-                  updated_at: ''
-                }
-              };
-            });
-          };
-
-          // Parse primary diagnoses
-          if (consultation.primary_diagnosis) {
-            const parsedPrimary = parseDiagnosesFromText(consultation.primary_diagnosis);
-            setFormData((prev: ConsultationFormData) => ({ ...prev, primary_diagnoses: parsedPrimary }));
-          }
-
-          // Parse secondary diagnoses
-          if (consultation.secondary_diagnoses) {
-            const parsedSecondary = parseDiagnosesFromText(consultation.secondary_diagnoses);
-            setFormData((prev: ConsultationFormData) => ({ ...prev, secondary_diagnoses_list: parsedSecondary }));
-          }
-        } catch (error) {
-          console.error('Error loading structured diagnoses:', error);
-        }
-      }
-    };
-
-    if (open && consultation) {
-      loadStructuredDiagnoses();
-    }
-  }, [open, consultation]);
+  // Load structured diagnoses when editing a consultation - REMOVED (duplicate logic)
+  // This is now handled in the main consultation loading useEffect above
 
   // Clear diagnosis hooks when dialog opens for new consultation (not editing)
   useEffect(() => {
@@ -615,7 +658,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       primaryDiagnosesHook.clearDiagnoses();
       secondaryDiagnosesHook.clearDiagnoses();
     }
-  }, [open, isEditing, consultation]); // Added consultation to dependencies
+    // Only depend on open and consultation.id, not the entire consultation object
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, isEditing, consultation?.id]);
 
   // Load states when patient data changes
   useEffect(() => {
@@ -736,8 +781,16 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   const loadPatientPreviousStudies = async (patientId: number) => {
     setLoadingPreviousStudies(true);
     try {
+      console.log('🔬 Loading previous studies for patient:', patientId);
       const studies = await apiService.getClinicalStudiesByPatient(String(patientId));
-      setPatientPreviousStudies(studies || []);
+      // Sort studies by ordered_date descending (most recent first), then by created_at
+      const sortedStudies = (studies || []).sort((a: any, b: any) => {
+        const dateA = a.ordered_date ? new Date(a.ordered_date).getTime() : (a.created_at ? new Date(a.created_at).getTime() : 0);
+        const dateB = b.ordered_date ? new Date(b.ordered_date).getTime() : (b.created_at ? new Date(b.created_at).getTime() : 0);
+        return dateB - dateA; // Descending order (most recent first)
+      });
+      console.log('🔬 Loaded', sortedStudies.length, 'previous studies, sorted by date (most recent first)');
+      setPatientPreviousStudies(sortedStudies);
     } catch (error) {
       console.error('❌ Error loading patient previous studies:', error);
       setPatientPreviousStudies([]);
@@ -967,6 +1020,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           setSelectedPatient(fullPatientData);
           
           // Check if patient has previous consultations and load previous studies
+          // This should happen for ALL patients, especially for follow-up appointments
+          console.log('🔄 Loading patient previous consultations and studies for patient:', patient.id);
           await Promise.all([
             checkPatientPreviousConsultations(patient.id),
             loadPatientPreviousStudies(patient.id)
@@ -1243,24 +1298,38 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     onClose();
   };
 
-  // Clinical studies handlers
-  const handleAddStudy = () => {
+  // Clinical studies handlers - Now inline
+  const handleAddStudy = async (studyData: CreateClinicalStudyData) => {
+    const consultationIdStr = isEditing && consultation?.id ? String(consultation.id) : TEMP_IDS.CONSULTATION;
+    const patientId = selectedPatient?.id?.toString() || TEMP_IDS.PATIENT;
+    const doctorName = doctorProfile?.full_name || `${doctorProfile?.title || 'Dr.'} ${doctorProfile?.first_name || 'Usuario'} ${doctorProfile?.last_name || 'Sistema'}`.trim();
     
-    // Allow adding studies even without a selected patient
-    // Use temp_patient ID when no patient is selected
-    const patientId = selectedPatient?.id || TEMP_IDS.PATIENT;
-    const consultationId = isEditing ? String(consultation.id) : TEMP_IDS.CONSULTATION;
-    const doctorName = doctorProfile?.full_name || `${doctorProfile?.title || 'Dr.'} Usuario Sistema`;
-    
-    clinicalStudiesHook.openAddDialog(
-      consultationId,
-      patientId.toString(),
-      doctorName
-    );
-    
-  };
-  const handleEditStudy = (study: ClinicalStudy) => {
-    clinicalStudiesHook.openEditDialog(study);
+    if (consultationIdStr === TEMP_IDS.CONSULTATION) {
+      // Add to temporary studies
+      const tempStudy: ClinicalStudy = {
+        id: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        consultation_id: consultationIdStr,
+        patient_id: patientId,
+        study_type: studyData.study_type,
+        study_name: studyData.study_name,
+        ordered_date: studyData.ordered_date,
+        status: studyData.status || 'ordered',
+        urgency: studyData.urgency || 'routine',
+        ordering_doctor: doctorName,
+        clinical_indication: studyData.clinical_indication || '',
+        created_by: '',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      clinicalStudiesHook.addTemporaryStudy(tempStudy);
+    } else {
+      // Save to database
+      await clinicalStudiesHook.createStudy({
+        ...studyData,
+        ordering_doctor: doctorName
+      });
+      await clinicalStudiesHook.fetchStudies(consultationIdStr);
+    }
   };
 
   const handleDeleteStudy = async (studyId: string) => {
@@ -1284,16 +1353,47 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     }
   };
 
-  // Diagnosis handlers
-  const handleAddPrimaryDiagnosis = () => {
-    primaryDiagnosesHook.openAddDialog();
-  };
+  // Diagnosis handlers - Now inline, no need for dialog handlers
+  // Use stable references to hook methods instead of the entire hook object
+  const handleAddPrimaryDiagnosis = useCallback((diagnosis: DiagnosisCatalog) => {
+    primaryDiagnosesHook.addDiagnosis(diagnosis);
+    // Update formData synchronously but avoid causing infinite loops
+    setFormData((prev: ConsultationFormData) => {
+      // Check if already in formData to avoid duplicates
+      const alreadyExists = prev.primary_diagnoses.some(d => d.id === diagnosis.id || d.code === diagnosis.code);
+      if (alreadyExists) {
+        return prev;
+      }
+      return {
+        ...prev,
+        primary_diagnoses: [...prev.primary_diagnoses, diagnosis],
+        primary_diagnosis: diagnosis.name
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - hook methods are stable
 
-  const handleAddSecondaryDiagnosis = () => {
-    secondaryDiagnosesHook.openAddDialog();
-  };
+  const handleAddSecondaryDiagnosis = useCallback((diagnosis: DiagnosisCatalog) => {
+    secondaryDiagnosesHook.addDiagnosis(diagnosis);
+    // Update formData synchronously but avoid causing infinite loops
+    setFormData((prev: ConsultationFormData) => {
+      // Check if already in formData to avoid duplicates
+      const alreadyExists = prev.secondary_diagnoses_list.some(d => d.id === diagnosis.id || d.code === diagnosis.code);
+      if (alreadyExists) {
+        return prev;
+      }
+      const updatedList = [...prev.secondary_diagnoses_list, diagnosis];
+      const allDiagnosesText = updatedList.map(d => d.name).join('; ');
+      return {
+        ...prev,
+        secondary_diagnoses_list: updatedList,
+        secondary_diagnoses: allDiagnosesText
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - hook methods are stable
 
-  const handleRemovePrimaryDiagnosis = (diagnosisId: string) => {
+  const handleRemovePrimaryDiagnosis = useCallback((diagnosisId: string) => {
     // console.log('🗑️ Removing primary diagnosis:', diagnosisId);
     primaryDiagnosesHook.removeDiagnosis(diagnosisId);
     
@@ -1304,9 +1404,10 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       // Clear the text field when diagnosis is removed
       primary_diagnosis: ''
     }));
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - hook methods are stable
 
-  const handleRemoveSecondaryDiagnosis = (diagnosisId: string) => {
+  const handleRemoveSecondaryDiagnosis = useCallback((diagnosisId: string) => {
     // console.log('🗑️ Removing secondary diagnosis:', diagnosisId);
     secondaryDiagnosesHook.removeDiagnosis(diagnosisId);
     
@@ -1317,45 +1418,15 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       const remainingDiagnosesText = updatedList.map(d => d.name).join('; ');
       
       return {
-      ...prev,
+        ...prev,
         secondary_diagnoses_list: updatedList,
         // Update the text field with remaining diagnosis names
         secondary_diagnoses: remainingDiagnosesText
       };
     });
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - hook methods are stable
 
-  const handleAddPrimaryDiagnosisFromDialog = (diagnosis: DiagnosisCatalog) => {
-    // // console.log('🔍 Adding primary diagnosis:', diagnosis);
-    primaryDiagnosesHook.addDiagnosis(diagnosis);
-    
-    // Update formData immediately
-    setFormData(prev => ({
-      ...prev,
-      primary_diagnoses: [...prev.primary_diagnoses, diagnosis],
-      // Auto-fill the text field with the diagnosis name
-      primary_diagnosis: diagnosis.name
-    }));
-  };
-
-  const handleAddSecondaryDiagnosisFromDialog = (diagnosis: DiagnosisCatalog) => {
-    // // console.log('🔍 Adding secondary diagnosis:', diagnosis);
-    secondaryDiagnosesHook.addDiagnosis(diagnosis);
-    
-    // Update formData immediately
-    setFormData(prev => {
-      const updatedList = [...prev.secondary_diagnoses_list, diagnosis];
-      // Concatenate all secondary diagnoses names
-      const allDiagnosesText = updatedList.map(d => d.name).join('; ');
-      
-      return {
-      ...prev,
-        secondary_diagnoses_list: updatedList,
-        // Auto-fill the text field with all diagnosis names
-        secondary_diagnoses: allDiagnosesText
-      };
-    });
-  };
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="lg" fullWidth>
@@ -1919,22 +1990,18 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                           </Box>
                           <Chip
                             size="small"
-                            label={study.status === 'pending' ? 'Pendiente' : study.status === 'completed' ? 'Completado' : study.status}
+                            label={study.status === 'ordered' ? 'Ordenado' : study.status === 'in_progress' ? 'En Proceso' : study.status === 'completed' ? 'Completado' : study.status === 'cancelled' ? 'Cancelado' : study.status === 'failed' ? 'Fallido' : study.status}
                             color={study.status === 'completed' ? 'success' : 'warning'}
                           />
                         </Box>
                         
-                        {study.study_description && (
-                          <Typography variant="body2" sx={{ mb: 2 }}>
-                            {study.study_description}
-                          </Typography>
-                        )}
                         
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                           <Typography variant="caption" color="text.secondary">
                             Solicitado: {new Date(study.ordered_date).toLocaleDateString('es-MX')}
                           </Typography>
-                          {study.results_text && (
+                          {/* results_text field removed */}
+                          {false && (
                             <Typography variant="caption" color="success.main" sx={{ fontWeight: 500 }}>
                               Resultados cargados: {(() => {
                                 // Parse the date as UTC and convert to Mexico City time
@@ -1979,7 +2046,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                           )}
                           
                           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
-                            {study.status === 'pending' && (
+                            {study.status === 'ordered' && (
                               <>
                                 <Button
                                   size="small"
@@ -2076,6 +2143,25 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 />
               </Box>
 
+              {/* Perinatal History */}
+              <Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <HeartIcon sx={{ fontSize: 20 }} />
+                  Antecedentes Perinatales
+                </Typography>
+                <TextField
+                  name="perinatal_history"
+                  label="Antecedentes perinatales"
+                  value={formData.perinatal_history}
+                  onChange={handleChange}
+                  size="small"
+                  fullWidth
+                  multiline
+                  rows={3}
+                  placeholder="Describa los antecedentes perinatales relevantes del paciente..."
+                />
+              </Box>
+
               {/* Personal Pathological History */}
               <Box>
                 <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -2121,16 +2207,35 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             consultationId={isEditing && consultation?.id ? String(consultation.id) : TEMP_IDS.CONSULTATION}
             patientId={selectedPatient?.id || 0}
             vitalSigns={vitalSignsHook.getAllVitalSigns() || []}
+            availableVitalSigns={vitalSignsHook.availableVitalSigns || []}
             isLoading={vitalSignsHook.isLoading}
-            onAddVitalSign={vitalSignsHook.openAddDialog}
-            onEditVitalSign={vitalSignsHook.openEditDialog}
-            onDeleteVitalSign={(vitalSignId) => {
-              if (isEditing && consultation?.id) {
-                vitalSignsHook.deleteVitalSign(String(consultation.id), vitalSignId);
+            onAddVitalSign={async (vitalSignData) => {
+              const consultationIdStr = isEditing && consultation?.id ? String(consultation.id) : TEMP_IDS.CONSULTATION;
+              
+              // For temporary consultations, add directly to temporary vital signs
+              if (consultationIdStr === TEMP_IDS.CONSULTATION) {
+                // Find the vital sign name for the ID
+                const vitalSign = vitalSignsHook.availableVitalSigns.find(vs => vs.id === vitalSignData.vital_sign_id);
+                if (vitalSign) {
+                  vitalSignsHook.addTemporaryVitalSign({
+                    ...vitalSignData,
+                    vital_sign_name: vitalSign.name
+                  });
+                }
               } else {
-                // For temporary vital signs, delete specific vital sign
-                vitalSignsHook.deleteVitalSign("temp_consultation", vitalSignId);
+                // Save to database
+                await vitalSignsHook.createVitalSign(consultationIdStr, vitalSignData);
+                // Refresh to get the new vital sign
+                await vitalSignsHook.fetchConsultationVitalSigns(consultationIdStr);
               }
+            }}
+            onEditVitalSign={(vitalSign, vitalSignData) => {
+              const consultationIdStr = isEditing && consultation?.id ? String(consultation.id) : TEMP_IDS.CONSULTATION;
+              vitalSignsHook.updateVitalSign(consultationIdStr, vitalSign.id, vitalSignData);
+            }}
+            onDeleteVitalSign={(vitalSignId) => {
+              const consultationIdStr = isEditing && consultation?.id ? String(consultation.id) : TEMP_IDS.CONSULTATION;
+              vitalSignsHook.deleteVitalSign(consultationIdStr, vitalSignId);
             }}
           />
 
@@ -2231,13 +2336,22 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             />
           </Box>
 
-          {/* Prescribed Medications Section - Replaced with structured prescriptions */}
+          {/* Prescribed Medications Section - Inline */}
           <PrescriptionsSection
             consultationId={isEditing && consultation?.id ? String(consultation.id) : TEMP_IDS.CONSULTATION}
             prescriptions={prescriptionsHook.prescriptions}
             isLoading={prescriptionsHook.isLoading}
-            onAddPrescription={prescriptionsHook.openAddDialog}
-            onEditPrescription={prescriptionsHook.openEditDialog}
+            onAddPrescription={async (prescriptionData) => {
+              const consultationIdStr = isEditing && consultation?.id ? String(consultation.id) : TEMP_IDS.CONSULTATION;
+              if (consultationIdStr === TEMP_IDS.CONSULTATION) {
+                // Add to temporary prescriptions
+                prescriptionsHook.addTemporaryPrescription(prescriptionData);
+              } else {
+                // Save to database
+                await prescriptionsHook.createPrescription(prescriptionData, consultationIdStr);
+                await prescriptionsHook.fetchPrescriptions(consultationIdStr);
+              }
+            }}
             onDeletePrescription={(prescriptionId) => {
               if (isEditing && consultation?.id) {
                 prescriptionsHook.deletePrescription(prescriptionId, String(consultation.id));
@@ -2246,6 +2360,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 prescriptionsHook.deletePrescription(prescriptionId, "temp_consultation");
               }
             }}
+            medications={prescriptionsHook.medications}
+            onFetchMedications={prescriptionsHook.fetchMedications}
+            onCreateMedication={prescriptionsHook.createMedication}
           />
 
           {/* Treatment Plan */}
@@ -2266,23 +2383,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             />
           </Box>
 
-          {/* Follow-up Instructions */}
-          <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <CalendarIcon sx={{ fontSize: 20 }} />
-              Instrucciones de Seguimiento
-            </Typography>
-            <TextField
-              name="follow_up_instructions"
-              label="Instrucciones de seguimiento"
-              value={formData.follow_up_instructions}
-              onChange={handleChange}
-              size="small"
-              fullWidth
-              multiline
-              rows={2}
-            />
-          </Box>
         </Box>
 
         {/* Clinical Studies Section - Always show */}
@@ -2295,19 +2395,26 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             studies={clinicalStudiesHook.studies}
             isLoading={clinicalStudiesHook.isLoading}
             onAddStudy={handleAddStudy}
-            onEditStudy={handleEditStudy}
             onRemoveStudy={handleDeleteStudy}
             onViewFile={clinicalStudiesHook.viewFile}
             onDownloadFile={clinicalStudiesHook.downloadFile}
+            doctorName={doctorProfile?.full_name || `${doctorProfile?.title || 'Dr.'} ${doctorProfile?.first_name || 'Usuario'} ${doctorProfile?.last_name || 'Sistema'}`.trim()}
           />
         </Box>
+
+        {/* Schedule Follow-up Appointment Section - Inline Form */}
+        {(selectedPatient || formData.patient_id) && <ScheduleAppointmentSection
+          patientId={selectedPatient?.id || parseInt(formData.patient_id) || 0}
+          doctorProfile={doctorProfile}
+        />}
       </DialogContent>
 
       <Divider />
 
       <DialogActions sx={{ p: 2, flexDirection: 'column', gap: 2 }}>
-        {/* Print buttons - show when we have consultation data, are editing, or have data to print */}
-        {((isEditing && consultation) || consultation || selectedPatient) && (
+        {/* Print buttons - show when we have medications or studies */}
+        {((prescriptionsHook.prescriptions && prescriptionsHook.prescriptions.length > 0) || 
+          (clinicalStudiesHook.studies && clinicalStudiesHook.studies.length > 0)) && (
           <Box sx={{ width: '100%' }}>
             <PrintButtons
               patient={{
@@ -2363,7 +2470,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                     : 'No especificado',
                 notes: consultation?.notes || '',
                 treatment_plan: consultation?.treatment_plan || formData.treatment_plan || '',
-                follow_up_instructions: consultation?.follow_up_instructions || formData.follow_up_instructions || ''
               }}
               medications={(prescriptionsHook.prescriptions || []).map(prescription => ({
                 name: prescription.medication_name,
@@ -2378,8 +2484,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 name: study.study_name,
                 type: study.study_type,
                 category: study.study_type, // Using study_type as category
-                description: study.study_description || 'Sin descripción',
-                instructions: study.study_description || 'Seguir indicaciones del laboratorio',
+                description: study.study_name || 'Sin descripción',
+                instructions: study.study_name || 'Seguir indicaciones del laboratorio',
                 urgency: study.urgency || 'Rutina'
               }))}
               variant="outlined"
@@ -2405,20 +2511,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         </Button>
         </Box>
       </DialogActions>
-
-      {/* Clinical Study Dialog with Catalog */}
-      <ClinicalStudyDialogWithCatalog
-        open={clinicalStudiesHook.clinicalStudyDialogOpen}
-        onClose={clinicalStudiesHook.closeDialog}
-        onSubmit={clinicalStudiesHook.submitForm}
-        formData={clinicalStudiesHook.clinicalStudyFormData}
-        onFormDataChange={clinicalStudiesHook.updateFormData}
-        isEditing={clinicalStudiesHook.isEditingClinicalStudy}
-        isSubmitting={clinicalStudiesHook.isSubmitting}
-        error={clinicalStudiesHook.error}
-        specialty={doctorProfile?.specialty}
-        diagnosis={formData.primary_diagnosis}
-      />
 
       {/* Vital Signs Selection Dialog */}
       <Dialog open={vitalSignsHook.vitalSignDialogOpen && !vitalSignsHook.isEditingVitalSign} onClose={vitalSignsHook.closeDialog} maxWidth="md" fullWidth>
@@ -2675,15 +2767,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 />
               </Box>
               <Box sx={{ mb: 2 }}>
-                <TextField
-                  label="Notas adicionales (opcional)"
-                  value={vitalSignsHook.vitalSignFormData.notes}
-                  onChange={(e) => vitalSignsHook.updateFormData({ notes: e.target.value })}
-                  fullWidth
-                  multiline
-                  rows={2}
-                  placeholder="Observaciones o comentarios adicionales"
-                />
               </Box>
             </Grid>
           </Box>
@@ -2700,41 +2783,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         </DialogActions>
       </Dialog>
 
-      {/* Prescription Dialog */}
-      <PrescriptionDialog
-        open={prescriptionsHook.prescriptionDialogOpen}
-        onClose={prescriptionsHook.closeDialog}
-        onSubmit={prescriptionsHook.submitForm}
-        formData={prescriptionsHook.prescriptionFormData}
-        onFormDataChange={prescriptionsHook.updateFormData}
-        medications={prescriptionsHook.medications}
-        onFetchMedications={prescriptionsHook.fetchMedications}
-        onCreateMedication={prescriptionsHook.createMedication}
-        isEditing={prescriptionsHook.isEditingPrescription}
-        isSubmitting={prescriptionsHook.isSubmitting}
-        error={prescriptionsHook.error}
-        consultationId={isEditing && consultation?.id ? String(consultation.id) : "temp_consultation"}
-      />
 
-      {/* Primary Diagnosis Dialog */}
-      <DiagnosisDialog
-        open={primaryDiagnosesHook.diagnosisDialogOpen}
-        onClose={primaryDiagnosesHook.closeDialog}
-        onAddDiagnosis={handleAddPrimaryDiagnosisFromDialog}
-        existingDiagnoses={primaryDiagnosesHook.diagnoses}
-        title="Agregar Diagnóstico Principal"
-        maxSelections={1}
-      />
-
-      {/* Secondary Diagnosis Dialog */}
-      <DiagnosisDialog
-        open={secondaryDiagnosesHook.diagnosisDialogOpen}
-        onClose={secondaryDiagnosesHook.closeDialog}
-        onAddDiagnosis={handleAddSecondaryDiagnosisFromDialog}
-        existingDiagnoses={secondaryDiagnosesHook.diagnoses}
-        title="Agregar Diagnóstico Secundario"
-        maxSelections={999}
-      />
     </Dialog>
   );
 };

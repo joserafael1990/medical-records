@@ -122,7 +122,7 @@ Una vez completada la instalación, tendrás acceso a:
 - ✅ **Gestión de Pacientes**
 - ✅ **Consultas Médicas**
 - ✅ **Sistema de Citas**
-- ✅ **Dashboard Analítico**
+
 - ✅ **Perfil del Doctor**
 - ✅ **Estudios Clínicos**
 - ✅ **Generación de Recetas Médicas (PDF)**

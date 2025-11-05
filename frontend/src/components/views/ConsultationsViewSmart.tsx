@@ -48,6 +48,16 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
   handleNewConsultation,
   handleEditConsultation
 }) => {
+  // Debug logging
+  React.useEffect(() => {
+    console.log('🔍 ConsultationsViewSmart - consultations prop received:', consultations);
+    console.log('🔍 ConsultationsViewSmart - consultations length:', consultations?.length);
+    console.log('🔍 ConsultationsViewSmart - consultations type:', Array.isArray(consultations) ? 'Array' : typeof consultations);
+    if (Array.isArray(consultations) && consultations.length > 0) {
+      console.log('🔍 ConsultationsViewSmart - first consultation:', consultations[0]);
+    }
+  }, [consultations]);
+  
   // Estados para filtros de búsqueda
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -539,8 +549,10 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
           
           {consultations.length === 0 ? (
             <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'grey.50' }}>
-              <Typography variant="body1" color="text.secondary">
-                No hay consultas registradas
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+                {consultations === null || consultations === undefined 
+                  ? 'Cargando consultas...' 
+                  : 'No hay consultas registradas'}
               </Typography>
               <Button
                 variant="outlined"

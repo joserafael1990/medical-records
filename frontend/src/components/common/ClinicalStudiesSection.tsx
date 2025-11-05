@@ -2,7 +2,6 @@ import React, { memo, useState, useEffect } from 'react';
 import {
   Box,
   Typography,
-  Button,
   Card,
   CardContent,
   CardActions,
@@ -10,14 +9,19 @@ import {
   IconButton,
   Tooltip,
   Divider,
-
   Alert,
-  LinearProgress
+  LinearProgress,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Grid,
+  CircularProgress,
+  Autocomplete
 } from '@mui/material';
 import {
   Science as ScienceIcon,
-  Add as AddIcon,
-  Edit as EditIcon,
   Delete as DeleteIcon,
   Visibility as ViewIcon,
   Download as DownloadIcon,
@@ -25,21 +29,25 @@ import {
   Assignment as AssignmentIcon,
   CalendarToday as CalendarIcon,
   Person as PersonIcon,
-  Business as BusinessIcon
+  Business as BusinessIcon,
+  Search as SearchIcon
 } from '@mui/icons-material';
-import { ClinicalStudy, StudyStatus } from '../../types';
-import { STUDY_STATUS_OPTIONS, STUDY_TYPES } from '../../constants';
+import { ClinicalStudy, StudyStatus, CreateClinicalStudyData, StudyType, UrgencyLevel, StudyCategory, StudyCatalog } from '../../types';
+import { STUDY_STATUS_OPTIONS, STUDY_TYPES, URGENCY_LEVELS } from '../../constants';
+import { TEMP_IDS } from '../../utils/vitalSignUtils';
+import { useStudyCatalog } from '../../hooks/useStudyCatalog';
 
 interface ClinicalStudiesSectionProps {
   consultationId: string;
   patientId: string;
   studies: ClinicalStudy[];
   isLoading?: boolean;
-  onAddStudy: () => void;
-  onEditStudy: (study: ClinicalStudy) => void;
+  onAddStudy: (studyData: CreateClinicalStudyData) => Promise<void>;
+  onEditStudy?: (study: ClinicalStudy) => void;
   onRemoveStudy: (studyId: string) => void;
   onViewFile?: (fileUrl: string) => void;
   onDownloadFile?: (fileUrl: string, fileName: string) => void;
+  doctorName?: string;
 }
 
 const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
@@ -51,9 +59,54 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
   onEditStudy,
   onRemoveStudy,
   onViewFile,
-  onDownloadFile
+  onDownloadFile,
+  doctorName = ''
 }) => {
   const [filteredStudies, setFilteredStudies] = useState<ClinicalStudy[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const { categories, studies: catalogStudies, fetchCategories, fetchStudies, searchStudies, isLoading: isCatalogLoading } = useStudyCatalog();
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | ''>('');
+  const [studySearchTerm, setStudySearchTerm] = useState('');
+  const [selectedStudy, setSelectedStudy] = useState<StudyCatalog | null>(null);
+  
+  // Load categories and initial studies on mount
+  useEffect(() => {
+    fetchCategories();
+    fetchStudies({ limit: 100 }); // Load initial studies
+  }, [fetchCategories, fetchStudies]);
+  
+  // Search studies when user types in the study name field
+  useEffect(() => {
+    if (studySearchTerm && studySearchTerm.trim().length >= 2) {
+      const timeoutId = setTimeout(async () => {
+        try {
+          await searchStudies(studySearchTerm.trim(), {
+            category_id: selectedCategoryId ? Number(selectedCategoryId) : undefined
+          });
+        } catch (error) {
+          console.error('Error searching studies:', error);
+        }
+      }, 300);
+      return () => clearTimeout(timeoutId);
+    } else if (studySearchTerm.trim().length === 0 && catalogStudies.length === 0) {
+      // If search term is cleared and we have no studies, load initial studies again
+      fetchStudies({ limit: 100 });
+    }
+  }, [studySearchTerm, selectedCategoryId, searchStudies, fetchStudies, catalogStudies.length]);
+  
+  const [formData, setFormData] = useState<CreateClinicalStudyData>({
+    consultation_id: consultationId,
+    patient_id: patientId,
+    study_type: 'hematologia', // Keep for backward compatibility but not used in UI
+    study_name: '',
+    study_description: '',
+    ordered_date: new Date().toISOString().split('T')[0],
+    status: 'ordered',
+    urgency: 'routine',
+    ordering_doctor: doctorName,
+    clinical_indication: ''
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Handle view file with authentication
   const handleViewFile = async (studyId: string) => {
@@ -93,22 +146,75 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
   };
 
   useEffect(() => {
-    const consultationStudies = (studies || []).filter(study => {
-      // Handle both string and number comparisons
-      const studyConsultationId = study.consultation_id;
-      const studyPatientId = study.patient_id;
-      
-      // For temp consultations, compare as strings
-      if (consultationId === 'temp_consultation' || studyConsultationId === 'temp_consultation') {
-        return studyConsultationId === consultationId && studyPatientId === patientId;
-      }
-      
-      // For real consultations, compare as numbers
-      return Number(studyConsultationId) === Number(consultationId) && Number(studyPatientId) === Number(patientId);
+    console.log('🔬 Filtering studies:', { 
+      studies, 
+      studiesLength: studies?.length || 0,
+      consultationId, 
+      patientId,
+      searchTerm,
+      studiesData: studies?.map(s => ({ id: s.id, consultation_id: s.consultation_id, patient_id: s.patient_id, name: s.study_name }))
     });
     
+    // First filter by consultation and patient IDs
+    let consultationStudies = (studies || []).filter(study => {
+      // Normalize IDs to strings for comparison
+      const studyConsultationId = String(study.consultation_id || '');
+      const studyPatientId = String(study.patient_id || '');
+      const normalizedConsultationId = String(consultationId || '');
+      const normalizedPatientId = String(patientId || '');
+      
+      // For temp consultations, only check consultation_id match (ignore patient_id for temp)
+      if (normalizedConsultationId === 'temp_consultation' || normalizedConsultationId === TEMP_IDS.CONSULTATION || studyConsultationId === 'temp_consultation') {
+        const matches = studyConsultationId === normalizedConsultationId || studyConsultationId === TEMP_IDS.CONSULTATION;
+        return matches;
+      }
+      
+      // For real consultations, be more flexible:
+      // 1. If patientId is TEMP_IDS.PATIENT or '0' or empty, only check consultation_id
+      if (normalizedPatientId === TEMP_IDS.PATIENT || normalizedPatientId === '0' || normalizedPatientId === '') {
+        // Only filter by consultation_id
+        return studyConsultationId === normalizedConsultationId;
+      }
+      
+      // 2. For real consultations, check both IDs but be lenient with type conversions
+      // Try multiple ways to compare IDs
+      const consultationMatches = studyConsultationId === normalizedConsultationId || 
+                                  Number(studyConsultationId) === Number(normalizedConsultationId);
+      
+      const patientMatches = studyPatientId === normalizedPatientId || 
+                            Number(studyPatientId) === Number(normalizedPatientId) ||
+                            String(studyPatientId) === String(normalizedPatientId);
+      
+      // If consultation matches, include it (patient_id is secondary)
+      // This is more lenient - if consultation matches, show the study
+      if (consultationMatches) {
+        // If patient also matches, great. If not, still include it if patient_id is not critical
+        return patientMatches || normalizedPatientId === TEMP_IDS.PATIENT || normalizedPatientId === '0';
+      }
+      
+      return false;
+    });
+    
+    // Then apply search filter if searchTerm exists
+    if (searchTerm && searchTerm.trim().length > 0) {
+      const searchLower = searchTerm.toLowerCase().trim();
+      consultationStudies = consultationStudies.filter(study => {
+        const studyName = (study.study_name || '').toLowerCase();
+        const studyDescription = (study.study_description || '').toLowerCase();
+        const studyType = (study.study_type || '').toLowerCase();
+        return studyName.includes(searchLower) || 
+               studyDescription.includes(searchLower) || 
+               studyType.includes(searchLower);
+      });
+    }
+    
+    console.log('🔬 Filtered studies result:', { 
+      filteredCount: consultationStudies.length, 
+      searchTerm,
+      filteredStudies: consultationStudies.map(s => ({ id: s.id, name: s.study_name }))
+    });
     setFilteredStudies(consultationStudies);
-  }, [studies, consultationId, patientId]);
+  }, [studies, consultationId, patientId, searchTerm]);
 
   const getStatusColor = (status: StudyStatus): string => {
     const statusOption = STUDY_STATUS_OPTIONS.find(option => option.value === status);
@@ -154,39 +260,246 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
       </Box>
     );
   }
+  const handleSave = async () => {
+    if (!formData.study_name.trim() || !formData.ordered_date) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await onAddStudy({
+        ...formData,
+        consultation_id: consultationId,
+        patient_id: patientId,
+        ordering_doctor: doctorName || formData.ordering_doctor
+      });
+      // Clear form
+      setSelectedStudy(null);
+      setStudySearchTerm('');
+      setFormData({
+        consultation_id: consultationId,
+        patient_id: patientId,
+        study_type: 'hematologia',
+        study_name: '',
+        study_description: '',
+        ordered_date: new Date().toISOString().split('T')[0],
+        status: 'ordered',
+        urgency: 'routine',
+        ordering_doctor: doctorName,
+        clinical_indication: ''
+      });
+    } catch (error) {
+      console.error('Error saving clinical study:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <ScienceIcon color="primary" />
-          Solicitar nuevos Estudios clínicos
-          {filteredStudies.length > 0 && (
-            <Chip 
-              size="small" 
-              label={filteredStudies.length} 
-              color="primary" 
-              variant="outlined" 
-            />
-          )}
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={onAddStudy}
-          size="small"
-        >
-          Nuevo Estudio
-        </Button>
-      </Box>
+      <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+        <ScienceIcon color="primary" />
+        Estudios Clínicos
+        {filteredStudies.length > 0 && (
+          <Chip 
+            size="small" 
+            label={filteredStudies.length} 
+            color="primary" 
+            variant="outlined" 
+          />
+        )}
+      </Typography>
+
+      {/* Add Study - Inline Form */}
+      <Card sx={{ mb: 3, border: '1px dashed', borderColor: 'grey.300', backgroundColor: '#fafafa' }}>
+        <CardContent sx={{ p: 2 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {/* First row: Autocomplete (widest), Category, Date, Urgency */}
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+              {/* Autocomplete - Widest field (double size) */}
+              <Box sx={{ flex: { xs: '1 1 100%', sm: '2 2 0%' }, minWidth: 0 }}>
+                <Autocomplete
+                  options={catalogStudies || []}
+                  getOptionLabel={(option) => option.name || ''}
+                  value={selectedStudy}
+                  onChange={(event, newValue) => {
+                    setSelectedStudy(newValue);
+                    if (newValue) {
+                      setFormData(prev => ({ 
+                        ...prev, 
+                        study_name: newValue.name,
+                        study_description: newValue.description || prev.study_description
+                      }));
+                    } else {
+                      setFormData(prev => ({ 
+                        ...prev, 
+                        study_name: studySearchTerm
+                      }));
+                    }
+                  }}
+                  onInputChange={(event, newInputValue) => {
+                    setStudySearchTerm(newInputValue);
+                    if (!selectedStudy) {
+                      setFormData(prev => ({ ...prev, study_name: newInputValue }));
+                    }
+                  }}
+                  loading={isCatalogLoading}
+                  filterOptions={(x) => x} // Disable default filtering, we do it server-side
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      placeholder="Buscar estudio clínico..."
+                      size="small"
+                      fullWidth
+                      required
+                      InputProps={{
+                        ...params.InputProps,
+                        startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                        endAdornment: (
+                          <>
+                            {isCatalogLoading ? <CircularProgress size={20} /> : null}
+                            {params.InputProps.endAdornment}
+                          </>
+                        )
+                      }}
+                    />
+                  )}
+                  renderOption={(props, option) => (
+                    <Box component="li" {...props} key={option.id}>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {option.name}
+                        </Typography>
+                        {option.description && (
+                          <Typography variant="caption" color="text.secondary">
+                            {option.description.length > 80 ? `${option.description.substring(0, 80)}...` : option.description}
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
+                  )}
+                />
+              </Box>
+              
+              {/* Category - Half size */}
+              <Box sx={{ flex: { xs: '1 1 calc(50% - 8px)', sm: '1 1 0%' }, minWidth: { xs: 'calc(50% - 8px)', sm: '120px' } }}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Categoría</InputLabel>
+                  <Select
+                    value={selectedCategoryId}
+                    onChange={(e) => {
+                      const categoryId = e.target.value as number | '';
+                      setSelectedCategoryId(categoryId);
+                      // Optionally update formData with category name if needed
+                      if (categoryId) {
+                        const category = categories.find(c => c.id === categoryId);
+                        if (category) {
+                          setFormData(prev => ({ ...prev, study_type: category.name.toLowerCase().replace(/\s+/g, '_') as StudyType }));
+                        }
+                      }
+                    }}
+                    label="Categoría"
+                  >
+                    <MenuItem value="">
+                      <em>Todas</em>
+                    </MenuItem>
+                    {categories.filter(c => c.is_active).map((category) => (
+                      <MenuItem key={category.id} value={category.id}>
+                        {category.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+              
+              {/* Date - Half size */}
+              <Box sx={{ flex: { xs: '1 1 calc(50% - 8px)', sm: '1 1 0%' }, minWidth: { xs: 'calc(50% - 8px)', sm: '120px' } }}>
+                <TextField
+                  type="date"
+                  label="Fecha"
+                  value={formData.ordered_date}
+                  onChange={(e) => setFormData(prev => ({ ...prev, ordered_date: e.target.value }))}
+                  size="small"
+                  fullWidth
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Box>
+              
+              {/* Urgency - Half size */}
+              <Box sx={{ flex: { xs: '1 1 calc(50% - 8px)', sm: '1 1 0%' }, minWidth: { xs: 'calc(50% - 8px)', sm: '120px' } }}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Urgencia</InputLabel>
+                  <Select
+                    value={formData.urgency || 'routine'}
+                    onChange={(e) => setFormData(prev => ({ ...prev, urgency: e.target.value as UrgencyLevel }))}
+                    label="Urgencia"
+                  >
+                    {URGENCY_LEVELS.map((level) => (
+                      <MenuItem key={level.value} value={level.value}>
+                        {level.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+            </Box>
+            
+            {/* Second row: Clinical indication and Add button */}
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              {/* Clinical indication - Takes available space */}
+              <TextField
+                placeholder="Indicación clínica (opcional)"
+                value={formData.clinical_indication || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, clinical_indication: e.target.value }))}
+                size="small"
+                sx={{ flex: 1 }}
+              />
+              
+              {/* Add button - Fixed size */}
+              <IconButton
+                color="primary"
+                onClick={handleSave}
+                disabled={isSubmitting || !formData.study_name.trim() || !formData.ordered_date}
+                sx={{ flexShrink: 0 }}
+              >
+                {isSubmitting ? <CircularProgress size={20} /> : <ScienceIcon />}
+              </IconButton>
+            </Box>
+          </Box>
+        </CardContent>
+      </Card>
+
+      {/* Search field for filtering studies - Always show if there are any studies */}
+      {(studies && studies.length > 0) && (
+        <Box sx={{ mb: 2 }}>
+          <TextField
+            placeholder="Buscar estudios clínicos..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            size="small"
+            fullWidth
+            InputProps={{
+              startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+            }}
+            sx={{ mb: 2 }}
+          />
+        </Box>
+      )}
 
       {filteredStudies.length === 0 ? (
         <Alert severity="info" sx={{ display: 'flex', alignItems: 'center' }}>
           <Box>
             <Typography variant="subtitle2">
-              No hay estudios clínicos registrados
+              {searchTerm && searchTerm.trim().length > 0 
+                ? 'No se encontraron estudios que coincidan con la búsqueda'
+                : 'No hay estudios clínicos registrados'
+              }
             </Typography>
             <Typography variant="body2">
-              Agrega estudios de laboratorio, radiología u otros para esta consulta.
+              {searchTerm && searchTerm.trim().length > 0
+                ? 'Intenta con otros términos de búsqueda o limpia el filtro.'
+                : 'Agrega estudios de laboratorio, radiología u otros para esta consulta.'
+              }
             </Typography>
           </Box>
         </Alert>
@@ -261,7 +574,7 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
                       </Box>
                     )}
 
-                    {study.urgency && study.urgency !== 'normal' && (
+                    {study.urgency && study.urgency !== 'routine' && (
                       <Chip
                         size="small"
                         label={study.urgency === 'urgent' ? 'Urgente' : study.urgency === 'stat' ? 'STAT' : study.urgency}
@@ -378,3 +691,4 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
 };
 
 export default memo(ClinicalStudiesSection);
+

@@ -19,7 +19,7 @@ class AutoReminderScheduler:
                 db = SessionLocal()
                 candidates = db.query(Appointment).filter(
                     Appointment.auto_reminder_enabled == True,
-                    Appointment.auto_reminder_sent_at.is_(None),
+                    # auto_reminder_sent_at field removed - always check if reminder should be sent
                     Appointment.status != 'cancelled'
                 ).all()
                 for apt in candidates:

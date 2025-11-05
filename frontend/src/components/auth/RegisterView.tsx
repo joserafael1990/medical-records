@@ -43,6 +43,7 @@ import {
 } from '@mui/icons-material';
 import CortexLogo from '../common/CortexLogo';
 import { CountryCodeSelector } from '../common/CountryCodeSelector';
+import { PhoneNumberInput } from '../common/PhoneNumberInput';
 import { MEDICAL_SPECIALTIES, API_CONFIG } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCatalogs } from '../../hooks/useCatalogs';
@@ -139,6 +140,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [specialties, setSpecialties] = useState<any[]>([]);
+  const [attemptedContinue, setAttemptedContinue] = useState<Set<number>>(new Set());
   
   const { login } = useAuth();
   const { countries, getStatesByCountry, loading: catalogsLoading } = useCatalogs();
@@ -152,18 +154,23 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
     const loadSpecialties = async () => {
       try {
         const data = await apiService.getSpecialties();
-        setSpecialties(data);
-        console.log('✅ Especialidades cargadas:', data);
+        // Asegurar que siempre sea un array
+        const specialtiesArray = Array.isArray(data) ? data : (data?.data || data?.results || []);
+        setSpecialties(specialtiesArray);
+        console.log('✅ Especialidades cargadas:', specialtiesArray);
       } catch (error) {
         console.error('❌ Error loading specialties:', error);
         // Intentar con el endpoint alternativo
         try {
           const response = await fetch(`${API_CONFIG.BASE_URL}/api/catalogs/specialties`);
           const data = await response.json();
-          setSpecialties(data);
-          console.log('✅ Especialidades cargadas (fallback):', data);
+          // Asegurar que siempre sea un array
+          const specialtiesArray = Array.isArray(data) ? data : (data?.data || data?.results || []);
+          setSpecialties(specialtiesArray);
+          console.log('✅ Especialidades cargadas (fallback):', specialtiesArray);
         } catch (fallbackError) {
           console.error('❌ Error en fallback de especialidades:', fallbackError);
+          setSpecialties([]); // Asegurar array vacío en caso de error
         }
       }
     };
@@ -377,6 +384,12 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
           setError('Por favor, completa todos los campos obligatorios');
           return false;
         }
+        // Validate personal document
+        const validPersonalDocs = formData.personal_documents.filter(doc => doc.document_id && doc.document_value.trim());
+        if (validPersonalDocs.length === 0) {
+          setError('Debe proporcionar un documento personal con su valor');
+          return false;
+        }
         // Validate phone number has at least some digits
         if (!formData.phone_number || formData.phone_number.trim().length < 7) {
           setError('El número telefónico debe tener al menos 7 dígitos');
@@ -454,6 +467,9 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
   };
 
   const handleNext = () => {
+    // Mark that user attempted to continue on this step
+    setAttemptedContinue(prev => new Set(prev).add(activeStep));
+    
     if (validateStep(activeStep)) {
       setActiveStep(prev => {
         const newStep = prev + 1;
@@ -767,8 +783,8 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
                   }));
                 }}
                 required
-                error={!formData.personal_documents[0]?.document_id || !formData.personal_documents[0]?.document_value}
-                helperText="Seleccione un documento personal e ingrese su valor"
+                error={attemptedContinue.has(1) && (!formData.personal_documents[0]?.document_id || !formData.personal_documents[0]?.document_value)}
+                helperText={attemptedContinue.has(1) ? "Seleccione un documento personal e ingrese su valor" : undefined}
               />
             </Box>
 
@@ -815,36 +831,22 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
               </Box>
             </Box>
 
-            {/* Código de país y Teléfono en la siguiente fila */}
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <Box sx={{ flex: '1 1 250px' }}>
-                <CountryCodeSelector
-                  value={formData.phone_country_code}
-                  onChange={(code) => handleInputChange('phone_country_code')({ target: { value: code } })}
-                  label="Código de país *"
-                />
-              </Box>
-              <Box sx={{ flex: '1 1 250px' }}>
-                <TextField
-                  fullWidth
-                  margin="normal"
-                  label="Número telefónico *"
-                  type="tel"
-                  value={formData.phone_number}
-                  onChange={(e) => {
-                    // Solo permitir números
-                    const value = e.target.value.replace(/\D/g, '');
-                    handleInputChange('phone_number')({ target: { value } });
-                  }}
-                  placeholder="Ej: 5551234567"
-                  inputProps={{ 
-                    maxLength: 15,
-                    autoComplete: 'tel',
-                    'data-form-type': 'other'
-                  }}
-                  required
-                />
-              </Box>
+            {/* Código de país y Teléfono unificado */}
+            <Box sx={{ mt: 2, mb: 1 }}>
+              <PhoneNumberInput
+                countryCode={formData.phone_country_code}
+                phoneNumber={formData.phone_number}
+                onCountryCodeChange={(code) => handleInputChange('phone_country_code')({ target: { value: code } })}
+                onPhoneNumberChange={(number) => {
+                  // Solo permitir números
+                  const value = number.replace(/\D/g, '');
+                  handleInputChange('phone_number')({ target: { value } });
+                }}
+                label="Número telefónico *"
+                required
+                placeholder="Ej: 222 123 4567"
+                fullWidth
+              />
             </Box>
           </Box>
         );
@@ -880,7 +882,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
                     label="Especialidad"
                     required
                   >
-                    {specialties.map((specialty) => (
+                    {Array.isArray(specialties) && specialties.map((specialty) => (
                       <MenuItem key={specialty.id} value={specialty.id.toString()}>
                         {specialty.name}
                       </MenuItem>
@@ -932,8 +934,8 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
                   }));
                 }}
                 required
-                error={!formData.professional_documents[0]?.document_id || !formData.professional_documents[0]?.document_value}
-                helperText="Seleccione un documento profesional e ingrese su valor"
+                error={attemptedContinue.has(2) && (!formData.professional_documents[0]?.document_id || !formData.professional_documents[0]?.document_value)}
+                helperText={attemptedContinue.has(2) ? "Seleccione un documento profesional e ingrese su valor" : undefined}
               />
             </Box>
           </Box>
@@ -1053,35 +1055,22 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
             </Box>
 
             {/* 4. Teléfono del Consultorio */}
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <Box sx={{ flex: '1 1 250px' }}>
-                <CountryCodeSelector
-                  value={formData.office_phone_country_code}
-                  onChange={(code) => handleInputChange('office_phone_country_code')({ target: { value: code } })}
-                  label="Código de país *"
-                />
-              </Box>
-              <Box sx={{ flex: '1 1 250px' }}>
-                <TextField
-                  fullWidth
-                  margin="normal"
-                  label="Número telefónico del Consultorio *"
-                  type="tel"
-                  value={formData.office_phone_number}
-                  onChange={(e) => {
-                    // Solo permitir números
-                    const value = e.target.value.replace(/\D/g, '');
-                    handleInputChange('office_phone_number')({ target: { value } });
-                  }}
-                  placeholder="Ej: 5551234567"
-                  inputProps={{ 
-                    maxLength: 15,
-                    autoComplete: 'tel-national',
-                    'data-form-type': 'other'
-                  }}
-                  required
-                />
-              </Box>
+            {/* Código de país y Teléfono del Consultorio unificado */}
+            <Box sx={{ mt: 2, mb: 1 }}>
+              <PhoneNumberInput
+                countryCode={formData.office_phone_country_code}
+                phoneNumber={formData.office_phone_number}
+                onCountryCodeChange={(code) => handleInputChange('office_phone_country_code')({ target: { value: code } })}
+                onPhoneNumberChange={(number) => {
+                  // Solo permitir números
+                  const value = number.replace(/\D/g, '');
+                  handleInputChange('office_phone_number')({ target: { value } });
+                }}
+                label="Número telefónico del Consultorio *"
+                required
+                placeholder="Ej: 222 123 4567"
+                fullWidth
+              />
             </Box>
 
             {/* 5. URL de Google Maps */}

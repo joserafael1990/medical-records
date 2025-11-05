@@ -48,17 +48,13 @@ export const PrintPrescriptionButton: React.FC<PrintPrescriptionButtonProps> = (
 
   // Button should be enabled if:
   // 1. There are medications, OR
-  // 2. There is text in treatment_plan, OR
-  // 3. There is text in follow_up_instructions
+  // 2. There is text in treatment_plan
   const hasMedications = medications.length > 0;
   const hasTreatmentPlan = consultation?.treatment_plan 
     ? consultation.treatment_plan.trim() !== '' 
     : false;
-  const hasFollowUpInstructions = consultation?.follow_up_instructions 
-    ? consultation.follow_up_instructions.trim() !== '' 
-    : false;
   
-  const isEnabled = !disabled && (hasMedications || hasTreatmentPlan || hasFollowUpInstructions);
+  const isEnabled = !disabled && (hasMedications || hasTreatmentPlan);
 
   return (
     <Tooltip title="Imprimir Receta Médica">

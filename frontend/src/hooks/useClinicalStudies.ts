@@ -34,6 +34,7 @@ export interface UseClinicalStudiesReturn {
   
   // Utility functions
   clearTemporaryStudies: () => void;
+  addTemporaryStudy: (study: ClinicalStudy) => void;
   
   // File operations
   downloadFile: (fileUrl: string, fileName: string) => void;
@@ -58,13 +59,13 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
     study_name: '',
     study_description: '',
     ordered_date: new Date().toISOString().split('T')[0],
-    status: 'pending',
+    status: 'ordered',
     results_text: '',
     interpretation: '',
     ordering_doctor: '',
     performing_doctor: '',
     institution: '',
-    urgency: 'normal',
+    urgency: 'routine',
     clinical_indication: '',
     relevant_history: '',
     created_by: ''
@@ -162,13 +163,13 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
       study_name: '',
       study_description: '',
       ordered_date: new Date().toISOString().split('T')[0],
-      status: 'pending',
+      status: 'ordered',
       results_text: '',
       interpretation: '',
       ordering_doctor: doctorName,
       performing_doctor: '',
       institution: '',
-      urgency: 'normal',
+      urgency: 'routine',
       clinical_indication: '',
       relevant_history: '',
       created_by: ''
@@ -215,6 +216,16 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
     setStudies([]);
   }, []);
 
+  // Add temporary study (for new consultations before saving)
+  const addTemporaryStudy = useCallback((study: ClinicalStudy) => {
+    console.log('🔬 Adding temp study:', study);
+    setStudies(prev => {
+      const newStudies = [...prev, study];
+      console.log('🔬 Updated studies list:', newStudies);
+      return newStudies;
+    });
+  }, []);
+
   // Form management
   const updateFormData = useCallback((data: Partial<CreateClinicalStudyData>) => {
     setClinicalStudyFormData(prev => ({ ...prev, ...data }));
@@ -234,6 +245,11 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
     try {
       if (isEditingClinicalStudy && selectedClinicalStudy) {
         await updateStudy(selectedClinicalStudy.id, dataToSubmit);
+        // Refresh studies after update
+        if (dataToSubmit.consultation_id && dataToSubmit.consultation_id !== 'temp_consultation') {
+          console.log('🔬 Refreshing studies after update');
+          await fetchStudies(dataToSubmit.consultation_id);
+        }
       } else {
         // For new consultations, add to temporary studies list
         if (dataToSubmit.consultation_id === 'temp_consultation') {
@@ -276,8 +292,14 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
             return newStudies;
           });
         } else {
-          console.log('🔬 Creating study in database');
+          // For existing consultations, create in database and refresh
+          console.log('🔬 Creating study in database for existing consultation');
           await createStudy(dataToSubmit);
+          // Refresh studies from database to ensure we have the latest data
+          if (dataToSubmit.consultation_id) {
+            console.log('🔬 Refreshing studies after creation');
+            await fetchStudies(dataToSubmit.consultation_id);
+          }
         }
       }
       
@@ -285,10 +307,11 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
     } catch (err) {
       console.error('❌ Error submitting clinical study form:', err);
       setError('Error al guardar el estudio clínico');
+      throw err; // Re-throw to let the dialog handle it
     } finally {
       setIsSubmitting(false);
     }
-  }, [isEditingClinicalStudy, selectedClinicalStudy, clinicalStudyFormData, createStudy, updateStudy]);
+  }, [isEditingClinicalStudy, selectedClinicalStudy, clinicalStudyFormData, createStudy, updateStudy, fetchStudies]);
 
   // File operations
   const downloadFile = useCallback((fileUrl: string, fileName: string) => {
@@ -340,6 +363,7 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
     
     // Utility functions
     clearTemporaryStudies,
+    addTemporaryStudy,
     
     // File operations
     downloadFile,

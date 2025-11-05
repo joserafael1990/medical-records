@@ -140,8 +140,20 @@ export const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({
         
         {/* Phone */}
         <Grid item xs={12}>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-            <Box sx={{ flex: '0 0 200px', minWidth: 200 }}>
+          <Box 
+            sx={{ 
+              display: 'flex', 
+              gap: 2,
+              alignItems: 'stretch',
+              flexWrap: { xs: 'wrap', sm: 'nowrap' }
+            }}
+          >
+            <Box sx={{ 
+              flex: { xs: '1 1 100%', sm: '0 0 200px' },
+              width: { xs: '100%', sm: '200px' },
+              display: 'flex',
+              alignItems: 'stretch'
+            }}>
               <CountryCodeSelector
                 value={formData.phone_country_code}
                 onChange={(code) => onInputChange('phone_country_code', code)}
@@ -150,11 +162,15 @@ export const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({
                 helperText={fieldErrors.phone_country_code}
               />
             </Box>
-            <Box sx={{ flex: 1, minWidth: 200 }}>
+            <Box sx={{ 
+              flex: { xs: '1 1 100%', sm: '1 1 auto' },
+              width: { xs: '100%', sm: 'auto' },
+              display: 'flex',
+              alignItems: 'stretch'
+            }}>
               <TextField
                 fullWidth
-                size="small"
-                label="Número telefónico *"
+                placeholder="Número telefónico *"
                 type="tel"
                 value={formData.phone_number}
                 onChange={(e) => {
@@ -163,7 +179,6 @@ export const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({
                   onInputChange('phone_number', value);
                 }}
                 required
-                placeholder="Ej: 5551234567"
                 error={!!fieldErrors.phone_number}
                 helperText={fieldErrors.phone_number}
                 inputProps={{
@@ -171,6 +186,22 @@ export const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({
                   'data-form-type': 'other'
                 }}
                 autoComplete="tel"
+                margin="none"
+                sx={{
+                  width: '100%',
+                  '& .MuiFormHelperText-root': {
+                    margin: '3px 14px 0',
+                    lineHeight: '1.66',
+                    minHeight: '1.66em'
+                  },
+                  '& .MuiInputBase-root': {
+                    height: '56px',
+                    marginTop: 0
+                  },
+                  '& .MuiOutlinedInput-root': {
+                    marginTop: 0
+                  }
+                }}
               />
             </Box>
           </Box>

@@ -58,7 +58,6 @@ export interface ApiError {
 
 export interface MedicalRecord {
   id: number;
-  record_code?: string;
   patient_id: number;
   doctor_id: number;
   consultation_date: string;
@@ -67,20 +66,18 @@ export interface MedicalRecord {
   chief_complaint: string;
   history_present_illness: string;
   family_history: string;
+  perinatal_history: string;
   personal_pathological_history: string;
   personal_non_pathological_history: string;
   physical_examination: string;
   primary_diagnosis: string;
   treatment_plan: string;
   follow_up_instructions: string;
-  prognosis: string;
   
   // Optional fields
   secondary_diagnoses?: string;
-  differential_diagnosis?: string;
   prescribed_medications?: string;
   laboratory_results?: string;
-  imaging_results?: string;
   notes?: string;
   
   // System fields
@@ -99,18 +96,16 @@ export interface MedicalRecordFormData {
   chief_complaint: string;
   history_present_illness: string;
   family_history: string;
+  perinatal_history: string;
   personal_pathological_history: string;
   personal_non_pathological_history: string;
   physical_examination: string;
   primary_diagnosis: string;
   treatment_plan: string;
   follow_up_instructions: string;
-  prognosis: string;
   secondary_diagnoses?: string;
-  differential_diagnosis?: string;
   prescribed_medications?: string;
   laboratory_results?: string;
-  imaging_results?: string;
   notes?: string;
 }
 
@@ -118,9 +113,9 @@ export interface MedicalRecordFormData {
 // CLINICAL STUDIES TYPES
 // ============================================================================
 
-export type StudyStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
+export type StudyStatus = 'ordered' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
 export type StudyType = 'hematologia' | 'bioquimica' | 'microbiologia' | 'radiologia' | 'ecografia' | 'tomografia' | 'resonancia' | 'endoscopia' | 'biopsia' | 'otro';
-export type UrgencyLevel = 'normal' | 'urgent' | 'stat';
+export type UrgencyLevel = 'routine' | 'urgent' | 'stat' | 'emergency';
 
 export interface ClinicalStudy {
   id: string;
@@ -128,18 +123,12 @@ export interface ClinicalStudy {
   patient_id: string;
   study_type: StudyType;
   study_name: string;
-  study_description?: string;
   ordered_date: string;
   performed_date?: string;
   status: StudyStatus;
-  results_text?: string;
-  interpretation?: string;
   ordering_doctor: string;
-  performing_doctor?: string;
-  institution?: string;
   urgency: UrgencyLevel;
   clinical_indication?: string;
-  relevant_history?: string;
   file_name?: string;
   file_path?: string;
   file_type?: string;
@@ -154,17 +143,11 @@ export interface CreateClinicalStudyData {
   patient_id: string;
   study_type: StudyType;
   study_name: string;
-  study_description?: string;
   ordered_date: string;
   status?: StudyStatus;
-  results_text?: string;
-  interpretation?: string;
   ordering_doctor: string;
-  performing_doctor?: string;
-  institution?: string;
   urgency?: UrgencyLevel;
   clinical_indication?: string;
-  relevant_history?: string;
   file?: File;
 }
 
@@ -178,15 +161,13 @@ export interface UpdateClinicalStudyData extends Partial<CreateClinicalStudyData
 
 export interface StudyCategory {
   id: number;
-  code: string;
   name: string;
-  description?: string;
   is_active: boolean;
   created_at: string;
-  updated_at: string;
 }
 
-export interface StudyNormalValue {
+// StudyNormalValue interface removed - table deleted
+export interface StudyNormalValue_removed {
   id: number;
   study_id: number;
   age_min?: number;
@@ -201,24 +182,16 @@ export interface StudyNormalValue {
 
 export interface StudyCatalog {
   id: number;
-  code: string;
   name: string;
   category_id: number;
-  subcategory?: string;
-  description?: string;
-  preparation?: string;
-  methodology?: string;
-  duration_hours?: number;
-  specialty?: string;
   is_active: boolean;
-  regulatory_compliance?: any;
   created_at: string;
   updated_at: string;
   category?: StudyCategory;
-  normal_values: StudyNormalValue[];
 }
 
-export interface StudyTemplateItem {
+// StudyTemplateItem interface removed - table deleted
+export interface StudyTemplateItem_removed {
   id: number;
   template_id: number;
   study_id: number;
@@ -227,7 +200,8 @@ export interface StudyTemplateItem {
   study?: StudyCatalog;
 }
 
-export interface StudyTemplate {
+// StudyTemplate interface removed - table deleted
+export interface StudyTemplate_removed {
   id: number;
   name: string;
   description?: string;
@@ -238,7 +212,8 @@ export interface StudyTemplate {
   template_items: StudyTemplateItem[];
 }
 
-export interface StudyTemplateCreate {
+// StudyTemplateCreate removed - table deleted
+export interface StudyTemplateCreate_removed {
   name: string;
   description?: string;
   specialty?: string;
@@ -249,10 +224,9 @@ export interface StudySearchFilters {
   category_id?: number;
   subcategory?: string;
   name?: string;
-  code?: string;
   specialty?: string;
   duration_hours?: number;
-  has_normal_values?: boolean;
+  // has_normal_values removed - table deleted
   is_active?: boolean;
 }
 
@@ -279,7 +253,6 @@ export interface ConsultationVitalSign {
   vital_sign_name: string;
   value: string;
   unit?: string;
-  notes?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -298,7 +271,7 @@ export interface ConsultationPrescription {
   id: number;
   consultation_id: number;
   medication_id: number;
-  medication_name: string;
+  medication_name: string; // Campo calculado desde medication.name en el backend
   dosage: string;
   frequency: string;
   duration: string;
@@ -332,7 +305,6 @@ export interface VitalSignFormData {
   vital_sign_id: number;
   value: string;
   unit?: string;
-  notes?: string;
 }
 
 // ============================================================================
@@ -495,7 +467,6 @@ export interface AppointmentType {
 
 export interface Appointment {
   id: number;
-  appointment_code?: string;
   patient_id: number;
   doctor_id: number;
   appointment_date: string;
@@ -508,18 +479,13 @@ export interface Appointment {
   reason: string;
   notes?: string;
   preparation_instructions?: string;
-  follow_up_required: boolean;
-  follow_up_date?: string;
-  room_number?: string;
   estimated_cost?: number;
   insurance_covered: boolean;
   confirmation_required: boolean;
-  confirmed_at?: string;
   reminder_sent: boolean;
   reminder_sent_at?: string;
   auto_reminder_enabled?: boolean;
   auto_reminder_offset_minutes?: number;
-  auto_reminder_sent_at?: string;
   cancelled_reason?: string;
   cancelled_at?: string;
   cancelled_by?: number;
@@ -551,13 +517,9 @@ export interface AppointmentFormData {
   reason: string;
   notes?: string;
   preparation_instructions?: string;
-  follow_up_required?: boolean;
-  follow_up_date?: string;
-  room_number?: string;
   estimated_cost?: number;
   insurance_covered?: boolean;
   confirmation_required?: boolean;
-  confirmed_at?: string;
   reminder_sent?: boolean;
   reminder_sent_at?: string;
   // Auto reminder fields

@@ -12,9 +12,7 @@ class DiagnosisCategory(Base):
     __tablename__ = "diagnosis_categories"
     
     id = Column(Integer, primary_key=True, index=True)
-    code = Column(String(10), unique=True, nullable=False, index=True)
     name = Column(String(200), nullable=False)
-    description = Column(Text)
     # parent_id and level columns do not exist in database - removed
     active = Column('active', Boolean, default=True)  # Database column is 'active', not 'is_active'
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -68,50 +66,11 @@ class DiagnosisCatalog(Base):
     
     # Relationships
     category = relationship("DiagnosisCategory", back_populates="diagnoses")
-    recommendations = relationship("DiagnosisRecommendation", back_populates="diagnosis", cascade="all, delete-orphan")
-    primary_differentials = relationship("DiagnosisDifferential", foreign_keys="DiagnosisDifferential.primary_diagnosis_id", back_populates="primary_diagnosis", cascade="all, delete-orphan")
-    differential_diagnoses = relationship("DiagnosisDifferential", foreign_keys="DiagnosisDifferential.differential_diagnosis_id", back_populates="differential_diagnosis", cascade="all, delete-orphan")
+    # recommendations relationship removed - table deleted
+    # primary_differentials relationship removed - table deleted
+    # differential_diagnoses relationship removed - table deleted
     
     def __repr__(self):
         return f"<DiagnosisCatalog(code='{self.code}', name='{self.name}')>"
 
-class DiagnosisRecommendation(Base):
-    __tablename__ = "diagnosis_recommendations"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    diagnosis_id = Column(Integer, ForeignKey("diagnosis_catalog.id", ondelete="CASCADE"), nullable=False)
-    recommended_study_id = Column(Integer, ForeignKey("study_catalog.id", ondelete="CASCADE"), nullable=False)
-    recommendation_type = Column(String(50))  # required, recommended, optional
-    priority = Column(Integer, default=1)  # 1=high, 2=medium, 3=low
-    notes = Column(Text)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    # Relationships
-    diagnosis = relationship("DiagnosisCatalog", back_populates="recommendations")
-    recommended_study = relationship("StudyCatalog", backref="diagnosis_recommendations")
-    
-    def __repr__(self):
-        return f"<DiagnosisRecommendation(diagnosis_id={self.diagnosis_id}, study_id={self.recommended_study_id})>"
-
-class DiagnosisDifferential(Base):
-    __tablename__ = "diagnosis_differentials"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    primary_diagnosis_id = Column(Integer, ForeignKey("diagnosis_catalog.id", ondelete="CASCADE"), nullable=False)
-    differential_diagnosis_id = Column(Integer, ForeignKey("diagnosis_catalog.id", ondelete="CASCADE"), nullable=False)
-    similarity_score = Column(DECIMAL(3, 2))  # 0.00 to 1.00
-    notes = Column(Text)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    # Relationships
-    primary_diagnosis = relationship("DiagnosisCatalog", foreign_keys=[primary_diagnosis_id], back_populates="primary_differentials")
-    differential_diagnosis = relationship("DiagnosisCatalog", foreign_keys=[differential_diagnosis_id], back_populates="differential_diagnoses")
-    
-    def __repr__(self):
-        return f"<DiagnosisDifferential(primary={self.primary_diagnosis_id}, differential={self.differential_diagnosis_id})>"
-
-# Create indexes for better performance
-Index('idx_diagnosis_recommendations_diagnosis_id', DiagnosisRecommendation.diagnosis_id)
-Index('idx_diagnosis_recommendations_study_id', DiagnosisRecommendation.recommended_study_id)
-Index('idx_diagnosis_differentials_primary', DiagnosisDifferential.primary_diagnosis_id)
-Index('idx_diagnosis_differentials_differential', DiagnosisDifferential.differential_diagnosis_id)
+# DiagnosisRecommendation and DiagnosisDifferential models removed - tables deleted

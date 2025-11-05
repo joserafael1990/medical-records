@@ -37,30 +37,30 @@ export const useDiagnosisManagement = (): UseDiagnosisManagementReturn => {
 
   // Add a new diagnosis
   const addDiagnosis = useCallback((diagnosis: DiagnosisCatalog) => {
-    // Check if diagnosis already exists
-    const exists = diagnoses.some(d => d.code === diagnosis.code);
-    
-    if (exists) {
-      // console.log('⚠️ Diagnosis already exists:', diagnosis.code);
-      setError('Este diagnóstico ya ha sido agregado');
-      return;
-    }
-
-    // Generate unique ID for temporary diagnoses
-    const uniqueId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const diagnosisWithId = {
-      ...diagnosis,
-      id: uniqueId
-    };
-
+    // Use functional update to avoid dependency on diagnoses
     setDiagnoses(prev => {
+      // Check if diagnosis already exists
+      const exists = prev.some(d => d.code === diagnosis.code);
+      
+      if (exists) {
+        // console.log('⚠️ Diagnosis already exists:', diagnosis.code);
+        setError('Este diagnóstico ya ha sido agregado');
+        return prev; // Return previous state unchanged
+      }
+
+      // Generate unique ID for temporary diagnoses
+      const uniqueId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const diagnosisWithId = {
+        ...diagnosis,
+        id: uniqueId
+      };
+
       const newDiagnoses = [...prev, diagnosisWithId];
       console.log('🔬 Updated diagnoses list:', newDiagnoses);
+      setError(null);
       return newDiagnoses;
     });
-    
-    setError(null);
-  }, [diagnoses]);
+  }, []);
 
   // Remove a diagnosis
   const removeDiagnosis = useCallback((diagnosisId: string) => {
@@ -113,9 +113,10 @@ export const useDiagnosisManagement = (): UseDiagnosisManagementReturn => {
     setError(null);
   }, []);
 
-  // Get diagnosis by ID
-  const getDiagnosisById = useCallback((diagnosisId: string) => {
-    return diagnoses.find(d => d.id === diagnosisId);
+  // Get diagnosis by ID - use state getter pattern
+  const getDiagnosisById = useCallback((diagnosisId: string, currentDiagnoses?: DiagnosisCatalog[]) => {
+    const diagnosesToSearch = currentDiagnoses || diagnoses;
+    return diagnosesToSearch.find(d => d.id === diagnosisId);
   }, [diagnoses]);
 
   return {

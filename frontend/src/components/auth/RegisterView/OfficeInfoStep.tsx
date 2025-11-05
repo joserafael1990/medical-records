@@ -14,6 +14,7 @@ import {
   LocationOn as LocationIcon
 } from '@mui/icons-material';
 import { CountryCodeSelector } from '../../common/CountryCodeSelector';
+import { PhoneNumberInput } from '../../common/PhoneNumberInput';
 
 interface OfficeInfoStepProps {
   formData: {
@@ -140,40 +141,22 @@ export const OfficeInfoStep: React.FC<OfficeInfoStepProps> = ({
         
         {/* Office Phone */}
         <Grid item xs={12}>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-            <Box sx={{ flex: '0 0 200px', minWidth: 200 }}>
-              <CountryCodeSelector
-                value={formData.office_phone_country_code}
-                onChange={(code) => onInputChange('office_phone_country_code', code)}
-                label="Código de país *"
-                error={!!fieldErrors.office_phone_country_code}
-                helperText={fieldErrors.office_phone_country_code}
-              />
-            </Box>
-            <Box sx={{ flex: 1, minWidth: 200 }}>
-              <TextField
-                fullWidth
-                size="small"
-                label="Número telefónico *"
-                type="tel"
-                value={formData.office_phone_number}
-                onChange={(e) => {
-                  // Solo permitir números
-                  const value = e.target.value.replace(/\D/g, '');
-                  onInputChange('office_phone_number', value);
-                }}
-                required
-                placeholder="Ej: 5551234567"
-                error={!!fieldErrors.office_phone_number}
-                helperText={fieldErrors.office_phone_number}
-                inputProps={{
-                  autoComplete: 'tel',
-                  'data-form-type': 'other'
-                }}
-                autoComplete="tel"
-              />
-            </Box>
-          </Box>
+          <PhoneNumberInput
+            countryCode={formData.office_phone_country_code}
+            phoneNumber={formData.office_phone_number}
+            onCountryCodeChange={(code) => onInputChange('office_phone_country_code', code)}
+            onPhoneNumberChange={(number) => {
+              // Solo permitir números
+              const value = number.replace(/\D/g, '');
+              onInputChange('office_phone_number', value);
+            }}
+            label="Número telefónico del Consultorio *"
+            required
+            placeholder="Ej: 222 123 4567"
+            fullWidth
+            error={!!(fieldErrors.office_phone_country_code || fieldErrors.office_phone_number)}
+            helperText={fieldErrors.office_phone_country_code || fieldErrors.office_phone_number}
+          />
         </Grid>
         
         {/* Appointment Duration */}

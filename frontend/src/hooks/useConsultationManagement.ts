@@ -150,13 +150,17 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
   useEffect(() => {
     console.log('🔄 useConsultationManagement useEffect triggered, isAuthenticated:', isAuthenticated);
     if (!isAuthenticated) {
+      console.log('⚠️ User not authenticated, skipping consultations fetch');
       return;
     }
     
+    console.log('✅ User authenticated, fetching consultations...');
     fetchConsultations().catch(error => {
       console.warn('⚠️ Could not load consultations on mount:', error.message);
+      console.error('⚠️ Full error:', error);
     });
-  }, [isAuthenticated]); // Run when authentication status changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]); // Only depend on isAuthenticated, fetchConsultations is stable
 
   // localStorage functions removed - backend-only approach
 
@@ -164,8 +168,18 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
   const fetchConsultations = useCallback(async () => {
     try {
       console.log('🔄 Fetching consultations from backend...');
+      setIsLoading(true);
       const data = await apiService.getConsultations();
       console.log('📊 Raw consultations data from API:', data);
+      console.log('📊 Data type:', Array.isArray(data) ? 'Array' : typeof data);
+      console.log('📊 Data length:', Array.isArray(data) ? data.length : 'N/A');
+      
+      if (!data || !Array.isArray(data)) {
+        console.warn('⚠️ API returned invalid data format:', data);
+        setConsultations([]);
+        setIsLoading(false);
+        return;
+      }
       
       // Transform consultation data
       const transformedData = data.map((consultation: any) => ({
@@ -177,10 +191,14 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
       }));
       
       console.log(`📈 Total consultations loaded: ${transformedData.length}`);
+      console.log('📊 Transformed consultations:', transformedData);
       setConsultations(transformedData);
     } catch (error: any) {
       console.error('❌ Error fetching consultations:', error?.message || 'Unknown error');
+      console.error('❌ Full error:', error);
       setConsultations([]);
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 

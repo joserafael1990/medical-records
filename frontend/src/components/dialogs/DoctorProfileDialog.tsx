@@ -26,6 +26,7 @@ import {
 } from '@mui/icons-material';
 import { apiService } from '../../services/api';
 import { CountryCodeSelector } from '../common/CountryCodeSelector';
+import { PhoneNumberInput } from '../common/PhoneNumberInput';
 import { DocumentSelector } from '../common/DocumentSelector';
 import { extractCountryCode } from '../../utils/countryCodes';
 
@@ -445,38 +446,24 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
               helperText={fieldErrors.birth_date}
               InputLabelProps={{ shrink: true }}
             />
-            {/* Código de país y teléfono en la siguiente fila */}
-              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', gridColumn: { xs: '1 / -1', sm: '1 / -1' } }}>
-                <Box sx={{ flex: '1 1 250px' }}>
-                  <CountryCodeSelector
-                    value={phoneCountryCode}
-                    onChange={(code) => setPhoneCountryCode(code)}
-                    label="Código de país *"
-                    error={!!fieldErrors.phone}
-                  />
-                </Box>
-                <Box sx={{ flex: '1 1 250px' }}>
-                  <TextField
-                    fullWidth
-                    margin="normal"
-                    label="Número telefónico *"
-                    type="tel"
-                    value={phoneNumber}
-                    onChange={(e) => {
-                      // Solo permitir números
-                      const value = e.target.value.replace(/\D/g, '');
-                      setPhoneNumber(value);
-                    }}
-                    placeholder="Ej: 5551234567"
-                    error={!!fieldErrors.phone}
-                    helperText={fieldErrors.phone}
-                    inputProps={{
-                      autoComplete: 'tel',
-                      'data-form-type': 'other'
-                    }}
-                    required
-                  />
-                </Box>
+            {/* Código de país y teléfono unificado */}
+              <Box sx={{ gridColumn: { xs: '1 / -1', sm: '1 / -1' }, mt: 2, mb: 1 }}>
+                <PhoneNumberInput
+                  countryCode={phoneCountryCode}
+                  phoneNumber={phoneNumber}
+                  onCountryCodeChange={(code) => setPhoneCountryCode(code)}
+                  onPhoneNumberChange={(number) => {
+                    // Solo permitir números
+                    const value = number.replace(/\D/g, '');
+                    setPhoneNumber(value);
+                  }}
+                  label="Número telefónico *"
+                  required
+                  placeholder="Ej: 222 123 4567"
+                  fullWidth
+                  error={!!fieldErrors.phone}
+                  helperText={fieldErrors.phone}
+                />
               </Box>
             </Box>
             
