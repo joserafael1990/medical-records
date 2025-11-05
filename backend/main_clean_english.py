@@ -27,8 +27,7 @@ from database import get_db, Person, Specialty, Country, State, EmergencyRelatio
 from appointment_service import AppointmentService
 from audit_service import audit_service
 import data_retention_service as retention
-# Schedule routes are implemented directly in this file (lines 1726-2100)
-# No separate router needed - endpoints use models/schedule.py models
+# Schedule routes migrated to routes/schedule.py
 from consultation_service import (
     decrypt_patient_data,
     decrypt_consultation_data,
@@ -255,8 +254,7 @@ from dependencies import security
 # ROUTER REGISTRATION
 # ============================================================================
 
-# Schedule endpoints are implemented directly in this file (no separate router)
-# See lines 1726-2100 for schedule implementation
+# Schedule endpoints migrated to routes/schedule.py
 
 # Include diagnosis catalog routes
 from routes.diagnosis import router as diagnosis_router
@@ -1368,24 +1366,9 @@ async def get_audit_logs(
 # DASHBOARD
 # ============================================================================
 # MIGRADO a routes/dashboard.py - El siguiente endpoint fue migrado:
-# - GET /api/dashboard/stats
-# TODO: Eliminar código después de validar que todo funciona
+# - GET /api/dashboard/stats ✅ ELIMINADO
 
-@app.get("/api/dashboard/stats")
-async def get_dashboard_stats():
-    """Get dashboard statistics - no auth for testing"""
-    return {
-        "appointments_today": 0,
-        "time_saved": "0.0h",
-        "pending_messages": 0,
-        "compliance": 100,
-        "monthly_revenue": 0,
-        "revenue_change": 0,
-        "avg_consultation_time": 30,
-        "documentation_efficiency": 94,
-        "patient_satisfaction": 4.8,
-        "total_patients": 4
-    }
+# Endpoints eliminados - ahora están en routes/dashboard.py
 
 # ============================================================================
 # APPOINTMENTS
@@ -1617,78 +1600,7 @@ async def search_studies(
 # ============================================================================
 # AUDIT LOG - Traceability and Compliance
 # ============================================================================
-
-@app.get("/api/audit/logs")
-async def get_audit_logs(
-    skip: int = 0,
-    limit: int = 100,
-    action: Optional[str] = None,
-    user_email: Optional[str] = None,
-    security_level: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    db: Session = Depends(get_db),
-    current_user: Person = Depends(get_current_user)
-):
-    """
-    Get audit logs with filters
-    Only accessible by doctors (for their own actions) or admins
-    """
-    try:
-        # Build query
-        query = db.query(AuditLog)
-        
-        # Security: Doctors can only see their own audit logs
-        if current_user.person_type == 'doctor':
-            query = query.filter(AuditLog.user_id == current_user.id)
-        
-        # Apply filters
-        if action:
-            query = query.filter(AuditLog.action == action)
-        if user_email:
-            query = query.filter(AuditLog.user_email == user_email)
-        if security_level:
-            query = query.filter(AuditLog.security_level == security_level)
-        if start_date:
-            query = query.filter(AuditLog.timestamp >= start_date)
-        if end_date:
-            query = query.filter(AuditLog.timestamp <= end_date)
-        
-        # Order by most recent first
-        query = query.order_by(AuditLog.timestamp.desc())
-        
-        # Pagination
-        total = query.count()
-        logs = query.offset(skip).limit(limit).all()
-        
-        # Convert to dict
-        result = []
-        for log in logs:
-            result.append({
-                "id": log.id,
-                "user_email": log.user_email,
-                "user_name": log.user_name,
-                "action": log.action,
-                "table_name": log.table_name,
-                "operation_type": log.operation_type,
-                "changes_summary": log.changes_summary,
-                "affected_patient_name": log.affected_patient_name,
-                "timestamp": log.timestamp.isoformat(),
-                "ip_address": log.ip_address,
-                "success": log.success,
-                "security_level": log.security_level,
-                "error_message": log.error_message
-            })
-        
-        return {
-            "total": total,
-            "skip": skip,
-            "limit": limit,
-            "logs": result
-        }
-    except Exception as e:
-        print(f"❌ Error in get_audit_logs: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error fetching audit logs: {str(e)}")
+# Note: get_audit_logs endpoint is defined above (line 1256)
 
 @app.get("/api/audit/critical")
 async def get_critical_audit_events(
