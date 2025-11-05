@@ -3,6 +3,7 @@ import { DoctorProfile, DoctorFormData, FieldErrors } from '../types';
 import { API_CONFIG } from '../constants';
 import { apiService } from '../services/api';
 import { useToast } from '../components/common/ToastNotification';
+import { logger } from '../utils/logger';
 
 interface UseDoctorProfileReturn {
   // State
@@ -239,7 +240,7 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
       } else {
         // Log error for debugging in development
         if (process.env.NODE_ENV === 'development') {
-          console.error('Error fetching doctor profile:', error);
+          logger.error('Error fetching doctor profile', error, 'api');
         }
         setFormErrorMessage('Error al cargar el perfil del médico');
         setDoctorProfile(null);
@@ -262,10 +263,10 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
     // Esto maneja el caso donde setFormData es asíncrono
     if (professional_documents.length === 0 && personal_documents.length === 0) {
       // Los documentos deberían estar ya en formData gracias al setTimeout en DoctorProfileDialog
-      console.log('⚠️ No documents in data, checking current formData state...');
+      logger.debug('No documents in data, checking current formData state', undefined, 'ui');
     }
     
-    console.log('📋 Documents extracted:', {
+    logger.debug('Documents extracted', {
       professional: professional_documents.length,
       personal: personal_documents.length,
       professionalData: professional_documents,
@@ -283,7 +284,7 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
           specialty_id = specialty.id;
         }
       } catch (error) {
-        console.error('Error getting specialties:', error);
+        logger.error('Error getting specialties', error, 'api');
       }
     }
     
@@ -336,7 +337,7 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
     }
     
     // Debug: Log antes de enviar
-    console.log('📤 Sending to backend:', {
+    logger.debug('Sending to backend', {
       hasProfessionalDocs: !!transformedData.professional_documents,
       professionalDocsLength: transformedData.professional_documents?.length || 0,
       hasPersonalDocs: !!transformedData.personal_documents,
@@ -424,7 +425,7 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
       const dataToSave: any = { ...formData };
       
       // Agregar documentos si se proporcionaron
-      console.log('📋 handleSubmit - Parameter received:', {
+      logger.debug('handleSubmit - Parameter received', {
         hasDocuments: !!documents,
         documentsType: typeof documents,
         documentsKeys: documents ? Object.keys(documents) : [],
@@ -434,7 +435,7 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
       if (documents && typeof documents === 'object' && !Array.isArray(documents)) {
         // Verificar que documents tenga la estructura esperada
         if ('professional_documents' in documents || 'personal_documents' in documents) {
-          console.log('📋 handleSubmit - Valid documents structure detected:', {
+          logger.debug('handleSubmit - Valid documents structure detected', {
             hasProfessional: 'professional_documents' in documents,
             hasPersonal: 'personal_documents' in documents,
             professional: documents.professional_documents,
@@ -447,11 +448,11 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
             dataToSave.personal_documents = documents.personal_documents;
           }
         } else {
-          console.warn('⚠️ handleSubmit - documents parameter does not have expected structure:', documents);
+          logger.warn('handleSubmit - documents parameter does not have expected structure', documents, 'validation');
         }
       }
       
-      console.log('📋 dataToSave before validation:', {
+      logger.debug('dataToSave before validation', {
         hasProfessional: !!dataToSave.professional_documents,
         professionalCount: dataToSave.professional_documents?.length || 0,
         hasPersonal: !!dataToSave.personal_documents,

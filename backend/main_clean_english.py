@@ -1914,8 +1914,13 @@ async def process_text_cancellation_request(text: str, patient_phone: str, db: S
 # ============================================================================
 # DEBUGGING ENDPOINTS
 # ============================================================================
+# NOTE: These endpoints are for development only. In production, they should be disabled.
+# Consider using environment variable check: if os.getenv('ENABLE_DEBUG_ENDPOINTS') == 'true'
 
-@app.get("/api/debug/office-system")
+# Debug endpoints disabled by default - uncomment if needed for development
+# To enable debug endpoints, uncomment the block below and set ENABLE_DEBUG_ENDPOINTS=true
+# if os.getenv('ENABLE_DEBUG_ENDPOINTS') == 'true':
+#     @app.get("/api/debug/office-system")
 async def debug_office_system(
     current_user: Person = Depends(get_current_user),
     db: Session = Depends(get_db)

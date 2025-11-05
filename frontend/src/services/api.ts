@@ -151,7 +151,7 @@ class ApiService {
   }
 
   private getErrorMessage(error: AxiosError): string {
-    console.log('🔍 getErrorMessage called with:', {
+    logger.debug('getErrorMessage called', {
       hasResponse: !!error.response,
       hasData: !!error.response?.data,
       data: error.response?.data,
@@ -163,7 +163,7 @@ class ApiService {
       const data = error.response.data as any;
       if (data.detail) {
         if (typeof data.detail === 'string') {
-          console.log('🔍 Returning string detail:', data.detail);
+          logger.debug('Returning string detail', { detail: data.detail });
           return data.detail;
         } else if (Array.isArray(data.detail)) {
           // Handle Pydantic validation errors
@@ -288,24 +288,24 @@ class ApiService {
   }
 
   async testPatientsEndpoint(): Promise<{ status: string; authRequired: boolean }> {
-    console.log('🏥 Testing patients endpoint specifically...');
+    logger.debug('Testing patients endpoint specifically', undefined, 'api');
     try {
       // Test patients endpoint - should return 403 if not authenticated
       await this.api.get('/api/patients');
       return { status: 'accessible', authRequired: false };
     } catch (error: any) {
       if (error.response?.status === 403 || error.response?.status === 401) {
-        console.log('🔒 Patients endpoint requires authentication (expected)');
+        logger.debug('Patients endpoint requires authentication (expected)', undefined, 'api');
         return { status: 'requires_auth', authRequired: true };
       } else {
-        console.error('❌ Patients endpoint test failed:', error);
+        logger.error('Patients endpoint test failed', error, 'api');
         throw new Error(`Patients endpoint test failed: ${error.message}`);
       }
     }
   }
 
   async testAuth(): Promise<{ status: string; user?: any }> {
-    console.log('🔐 Testing authentication...');
+    logger.debug('Testing authentication', undefined, 'auth');
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -328,7 +328,7 @@ class ApiService {
   }
 
   async testBackendHealth(): Promise<{ status: string; error?: string }> {
-    console.log('🏥 Testing backend health endpoint...');
+    logger.debug('Testing backend health endpoint', undefined, 'api');
     try {
       const response = await this.api.get('/health');
       return { status: 'healthy' };
@@ -341,14 +341,14 @@ class ApiService {
   }
 
   async testTokenValidity(): Promise<{ status: string; error?: string; user?: any }> {
-    console.log('🔐 Testing token validity...');
+    logger.debug('Testing token validity', undefined, 'auth');
     try {
       const token = localStorage.getItem('token');
       if (!token) {
         return { status: 'no_token' };
       }
 
-      console.log('🔐 Token format check:', {
+      logger.debug('Token format check', {
         hasThreeParts: token.split('.').length === 3,
         parts: token.split('.').map((part, i) => `Part ${i + 1}: ${part.length} chars`)
       });
@@ -369,7 +369,7 @@ class ApiService {
   }
 
   async testCreateMinimalPatient(): Promise<{ status: string; error?: string; details?: any }> {
-    console.log('🧪 Testing patient creation with minimal valid data...');
+    logger.debug('Testing patient creation with minimal valid data', undefined, 'api');
 
     try {
       // Create minimal valid patient data
