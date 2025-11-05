@@ -5,6 +5,7 @@
 import { useState, useCallback } from 'react';
 import { ConsultationPrescription, CreatePrescriptionData, UpdatePrescriptionData, Medication } from '../types';
 import { apiService } from '../services/api';
+import { logger } from '../utils/logger';
 
 export interface UsePrescriptionsReturn {
   // State
@@ -64,7 +65,7 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
 
   // Fetch prescriptions for a consultation
   const fetchPrescriptions = useCallback(async (consultationId: string) => {
-    console.log('💊 fetchPrescriptions called with consultationId:', consultationId);
+    logger.debug('fetchPrescriptions called', { consultationId }, 'api');
     setIsLoading(true);
     setError(null);
     
@@ -75,7 +76,7 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
       console.log('💊 fetchPrescriptions data:', prescriptionsData);
       setPrescriptions(prescriptionsData || []);
     } catch (err) {
-      console.error('❌ Error fetching prescriptions:', err);
+      logger.error('Error fetching prescriptions', err, 'api');
       setError('Error al cargar las prescripciones');
       setPrescriptions([]);
     } finally {
@@ -86,30 +87,30 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
   // Fetch medications (for autocomplete)
   const fetchMedications = useCallback(async (search?: string) => {
     try {
-      console.log('💊 fetchMedications called with search:', search);
-      console.log('💊 fetchMedications function exists:', !!fetchMedications);
+      logger.debug('fetchMedications called', { search, functionExists: !!fetchMedications }, 'api');
       const params = search ? `?search=${encodeURIComponent(search)}` : '';
       const url = `/api/medications${params}`;
-      console.log('🌐 Making request to:', url);
+      logger.debug('Making request to medications endpoint', { url }, 'api');
       
       // Debug: Check token
       const token = localStorage.getItem('token');
-      console.log('🔐 Token check:', {
+      logger.debug('Token check', {
         exists: !!token,
         length: token?.length || 0,
         isValidFormat: token ? token.split('.').length === 3 : false
       });
       
       const response = await apiService.get(url);
-      console.log('✅ Medications response:', response);
-      console.log('✅ Medications response.data:', response.data);
-      console.log('✅ Medications response.data type:', typeof response.data);
-      console.log('✅ Medications response.data length:', response.data?.length || 0);
+      logger.debug('Medications response', { 
+        count: response.data?.length || 0,
+        dataType: typeof response.data,
+        dataLength: response.data?.length || 0
+      }, 'api');
       
       // Handle different response structures (same as diagnoses)
       let medicationsArray = [];
       if (Array.isArray(response.data)) {
-        console.log('✅ Using response.data (array)');
+        logger.debug('Using response.data (array)', undefined, 'api');
         medicationsArray = response.data;
       } else if (Array.isArray(response)) {
         console.log('✅ Using response directly (array)');

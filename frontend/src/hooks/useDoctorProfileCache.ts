@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { DoctorProfile, DoctorFormData, FieldErrors } from '../types';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { logger } from '../utils/logger';
 
 interface UseDoctorProfileReturn {
   // State
@@ -97,7 +98,7 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
     setFormErrorMessage('');
     
     if (process.env.NODE_ENV === 'development') {
-      console.log('📋 Token in localStorage:', localStorage.getItem('token') ? 'Present' : 'Missing');
+      logger.debug('Token in localStorage', { present: !!localStorage.getItem('token') }, 'auth');
     }
     
     try {
@@ -113,13 +114,12 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
       setDoctorProfile(data);
       
       if (process.env.NODE_ENV === 'development') {
-        console.log('🔄 Profile state updated:', data.specialty_name);
+        logger.debug('Profile state updated', { specialty: data.specialty_name }, 'api');
       }
     } catch (error: any) {
       if (process.env.NODE_ENV === 'development') {
-        console.error('❌ Error fetching doctor profile:', error);
-        console.log('📋 Error status:', error.response?.status);
-        console.log('📋 Error data:', error.response?.data);
+        logger.error('Error fetching doctor profile', error, 'api');
+        logger.debug('Error details', { status: error.response?.status, data: error.response?.data }, 'api');
       }
       
       // Handle 404 specifically (profile doesn't exist yet)
@@ -130,7 +130,7 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
       } else {
         // Log error for debugging in development
         if (process.env.NODE_ENV === 'development') {
-          console.error('Error fetching doctor profile:', error);
+          logger.error('Error fetching doctor profile', error, 'api');
         }
         setFormErrorMessage('Error al cargar el perfil del médico');
         setDoctorProfile(null);
@@ -215,7 +215,7 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
         const foundSpecialty = specialties.find(spec => spec.name === data.specialty);
         specialtyId = foundSpecialty ? foundSpecialty.id : null;
       } catch (error) {
-        console.warn('Could not fetch specialties for ID conversion:', error);
+        logger.warn('Could not fetch specialties for ID conversion', error, 'api');
       }
     }
     
@@ -277,7 +277,7 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
         // Profile updated and reloaded successfully
       }
     } catch (error: any) {
-      console.error('❌ Error in saveProfile:', error);
+      logger.error('Error in saveProfile', error, 'api');
       
       // Handle specific error types with user-friendly messages
       if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
@@ -315,7 +315,7 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
       setTimeout(() => setSuccessMessage(''), 5000);
 
     } catch (error: any) {
-      console.error('Error saving doctor profile:', error);
+      logger.error('Error saving doctor profile', error, 'api');
       setFormErrorMessage(error.message || 'Error al guardar el perfil');
     } finally {
       setIsSubmitting(false);
@@ -324,7 +324,7 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
 
   // Load profile when authenticated
   useEffect(() => {
-    console.log('🔄 useEffect - Load profile when authenticated', {
+    logger.debug('useEffect - Load profile when authenticated', {
       isAuthenticated,
       fetchCalledRef: fetchCalledRef.current,
       doctorProfile: doctorProfile ? 'exists' : 'null'
@@ -334,11 +334,6 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
       // Calling fetchProfile
       fetchCalledRef.current = true;
       fetchProfile();
-    } else {
-        isAuthenticated,
-        fetchCalled: fetchCalledRef.current,
-        hasProfile: !!doctorProfile
-      });
     }
   }, [isAuthenticated, fetchProfile, doctorProfile]);
 
