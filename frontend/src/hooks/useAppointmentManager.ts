@@ -680,25 +680,8 @@ export const useAppointmentManager = (
       if (!isEditFlow) {
         // console.log('🔄 New appointment created, refreshing data...');
         
-        // Refresh appointments after successful creation
-        
-        // Call the refresh function immediately and also with a delay for stability
-        try {
-          await refreshAppointments();
-        } catch (error) {
-          // Silent error handling
-        }
-        
-        // Also refresh with a delay to ensure backend has processed the new appointment
-        setTimeout(async () => {
-          try {
-            await refreshAppointments();
-          } catch (error) {
-            // Silent error handling
-          }
-        }, 1000); // Increased delay for better stability
-        
-        // If the appointment was created for a different date, navigate to that date
+        // If the appointment was created for a different date, navigate to that date FIRST
+        // This ensures refreshAppointments uses the correct date
         if (appointmentFormData.date_time) {
           const appointmentDate = new Date(appointmentFormData.date_time);
           // Validate appointment date before using it
@@ -709,9 +692,47 @@ export const useAppointmentManager = (
             if (appointmentDate.toDateString() !== currentDate.toDateString()) {
               // console.log('🔄 Appointment created for different date, navigating to:', appointmentDate.toDateString());
               setSelectedDate(appointmentDate);
+              // Wait a bit for state to update before refreshing
+              setTimeout(async () => {
+                try {
+                  await refreshAppointments();
+                } catch (error) {
+                  // Silent error handling
+                }
+              }, 100);
+            } else {
+              // Same date, refresh immediately
+              try {
+                await refreshAppointments();
+              } catch (error) {
+                // Silent error handling
+              }
+            }
+          } else {
+            // Invalid date, refresh with current (valid) date
+            try {
+              await refreshAppointments();
+            } catch (error) {
+              // Silent error handling
             }
           }
+        } else {
+          // No date in form data, refresh with current date
+          try {
+            await refreshAppointments();
+          } catch (error) {
+            // Silent error handling
+          }
         }
+        
+        // Also refresh with a delay to ensure backend has processed the new appointment
+        setTimeout(async () => {
+          try {
+            await refreshAppointments();
+          } catch (error) {
+            // Silent error handling
+          }
+        }, 1000); // Increased delay for better stability
       }
       
     } catch (error: any) {
