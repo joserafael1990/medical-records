@@ -2,47 +2,74 @@ import React from 'react';
 import {
   Box,
   Typography,
-  TextField,
-  Paper,
-  Divider
+  TextField
 } from '@mui/material';
-import {
-  Notes as NotesIcon
-} from '@mui/icons-material';
+import { Notes as NotesIcon } from '@mui/icons-material';
 
 interface NotesSectionProps {
+  preparationInstructions: string;
   notes: string;
-  onNotesChange: (notes: string) => void;
-  errors: Record<string, string>;
+  onPreparationInstructionsChange: (value: string) => void;
+  onNotesChange: (value: string) => void;
+  hasNotesError: boolean;
+  notesErrorMessage: string;
+  isReadOnly: boolean;
 }
 
 export const NotesSection: React.FC<NotesSectionProps> = ({
+  preparationInstructions,
   notes,
+  onPreparationInstructionsChange,
   onNotesChange,
-  errors
+  hasNotesError,
+  notesErrorMessage,
+  isReadOnly
 }) => {
   return (
-    <Paper sx={{ p: 2, mb: 2 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-        <NotesIcon sx={{ mr: 1, color: 'primary.main' }} />
-        <Typography variant="h6" component="h3">
-          Notas Adicionales
+    <>
+      {/* Preparation Instructions */}
+      <Box>
+        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <NotesIcon sx={{ fontSize: 20 }} />
+          Instrucciones de Preparación - opcional
+          <Typography component="span" sx={{ color: 'text.secondary', ml: 1, fontSize: '0.875rem', fontWeight: 400 }}>(Opcional)</Typography>
         </Typography>
+        <TextField
+          fullWidth
+          multiline
+          rows={2}
+          label="Instrucciones de preparación - opcional"
+          value={preparationInstructions || ''}
+          onChange={(e) => onPreparationInstructionsChange(e.target.value)}
+          size="small"
+          placeholder="Ej: Ayuno de 12 horas, traer estudios previos..."
+          InputProps={{
+            readOnly: isReadOnly
+          }}
+        />
       </Box>
-      
-      <Divider sx={{ mb: 2 }} />
-      
-      <TextField
-        label="Notas de la cita"
-        multiline
-        rows={4}
-        value={notes}
-        onChange={(e) => onNotesChange(e.target.value)}
-        placeholder="Agregar notas adicionales sobre la cita..."
-        fullWidth
-        error={!!errors.notes}
-        helperText={errors.notes || 'Información adicional que pueda ser útil para la consulta'}
-      />
-    </Paper>
+
+      {/* Notes */}
+      <Box>
+        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+          Notas Adicionales - opcional
+          <Typography component="span" sx={{ color: 'text.secondary', ml: 1, fontSize: '0.875rem', fontWeight: 400 }}>(Opcional)</Typography>
+        </Typography>
+        <TextField
+          fullWidth
+          multiline
+          rows={2}
+          label="Notas opcionales - opcional"
+          value={notes || ''}
+          onChange={(e) => onNotesChange(e.target.value)}
+          size="small"
+          error={hasNotesError}
+          helperText={notesErrorMessage}
+          InputProps={{
+            readOnly: isReadOnly
+          }}
+        />
+      </Box>
+    </>
   );
 };

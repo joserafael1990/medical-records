@@ -16,6 +16,13 @@ export { usePatientManagement } from './usePatientManagement';
 export { useConsultationManagement } from './useConsultationManagement';
 export { useEmergencyRelationships } from './useEmergencyRelationships';
 
+// Consultation form hooks (extracted from ConsultationDialog)
+export { useConsultationForm, type ConsultationFormData } from './useConsultationForm';
+export { usePatientPreviousStudies } from './usePatientPreviousStudies';
+
+// Appointment form hooks (extracted from AppointmentDialog)
+export { useAppointmentForm } from './useAppointmentForm';
+
 // Enhanced UX Error Handling hooks
 export { useLoadingStates } from './useLoadingStates';
 export { useRealTimeValidation } from './useRealTimeValidation';
