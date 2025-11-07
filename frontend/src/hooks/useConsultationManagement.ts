@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { apiService } from '../services/api';
+import { apiService } from '../services';
 import type { Consultation, ConsultationFormData, ClinicalStudy } from '../types';
 import { getCurrentCDMXDateTime } from '../constants';
 import { useAuth } from '../contexts/AuthContext';
@@ -135,8 +135,8 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
   const loadAllAppointments = useCallback(async () => {
     try {
       // Get appointments available for consultation (only confirmed appointments)
-      const consultationAppointments = await apiService.getAppointments({ 
-        available_for_consultation: true 
+      const consultationAppointments = await apiService.appointments.getAppointments({
+        status: 'confirmed'
       });
       
       setAllAvailableAppointments(consultationAppointments || []);
@@ -169,7 +169,7 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
     try {
       console.log('🔄 Fetching consultations from backend...');
       setIsLoading(true);
-      const data = await apiService.getConsultations();
+      const data = await apiService.consultations.getConsultations();
       console.log('📊 Raw consultations data from API:', data);
       console.log('📊 Data type:', Array.isArray(data) ? 'Array' : typeof data);
       console.log('📊 Data length:', Array.isArray(data) ? data.length : 'N/A');
@@ -206,7 +206,7 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
   const createConsultation = useCallback(async (data: ConsultationFormData): Promise<Consultation> => {
     setIsSubmitting(true);
     try {
-      const newConsultation = await apiService.createConsultation(data.patient_id.toString(), data);
+      const newConsultation = await apiService.consultations.createConsultation(data);
       await fetchConsultations(); // Refresh list
       
       // Navigate to consultations view after successful creation
@@ -228,7 +228,7 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
   const updateConsultation = useCallback(async (id: string, data: ConsultationFormData): Promise<Consultation> => {
     setIsSubmitting(true);
     try {
-      const updatedConsultation = await apiService.updateConsultation(id, data);
+      const updatedConsultation = await apiService.consultations.updateConsultation(id, data);
       await fetchConsultations(); // Refresh list
       return updatedConsultation;
     } catch (error: any) {
@@ -242,7 +242,7 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
   const deleteConsultation = useCallback(async (id: string): Promise<void> => {
     setIsSubmitting(true);
     try {
-      await apiService.deleteConsultation(id);
+      await apiService.consultations.deleteConsultation(id);
       await fetchConsultations(); // Refresh list
     } catch (error: any) {
       throw new Error(error.message || 'Error al eliminar consulta');
@@ -367,9 +367,8 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
       // Fetch complete consultation data from backend
       console.log('🔄 Fetching complete consultation data for ID:', consultation.id);
       console.log('🔄 Making API call to:', `/api/consultations/${consultation.id}`);
-      const response = await apiService.get(`/api/consultations/${consultation.id}`);
-      console.log('🔄 API response received:', response);
-      const fullConsultationData = response.data || response;
+      const fullConsultationData = await apiService.consultations.getConsultationById(consultation.id);
+      console.log('🔄 API response received:', fullConsultationData);
       
       console.log('🔄 Full consultation data received:', fullConsultationData?.id || 'null/undefined');
       // Update the selectedConsultation with the fresh data so the dialog's useEffect will re-run

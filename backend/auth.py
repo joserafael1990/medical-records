@@ -203,6 +203,7 @@ def login_user(db: Session, email: str, password: str) -> Dict[str, Any]:
         "maternal_surname": user.maternal_surname,
         "birth_date": user.birth_date.isoformat() if user.birth_date else None,
         "primary_phone": user.primary_phone,  # ✅ UNIFICADO
+        "title": user.title if hasattr(user, 'title') and user.title else None,  # Doctor title (Dr., Dra., etc.)
     }
     
     # Si es doctor, agregar campos profesionales

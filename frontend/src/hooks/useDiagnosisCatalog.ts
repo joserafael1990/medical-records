@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { apiService } from '../services/api';
+import { apiService } from '../services';
 
 export interface DiagnosisCategory {
   id: number;
@@ -152,7 +152,7 @@ export const useDiagnosisCatalog = () => {
       if (level !== undefined) params.append('level', level.toString());
       
       console.log('🔍 Fetching diagnosis categories...');
-      const response = await apiService.get(`/api/diagnosis/categories?${params.toString()}`);
+      const response = await apiService.consultations.api.get(`/api/diagnosis/categories?${params.toString()}`);
       console.log('🔍 Categories response:', response);
       
       let categoriesData = [];
@@ -222,7 +222,7 @@ export const useDiagnosisCatalog = () => {
         });
       }
       
-      const response = await apiService.get(`/api/diagnosis/catalog?${params.toString()}`);
+      const response = await apiService.consultations.api.get(`/api/diagnosis/catalog?${params.toString()}`);
       setDiagnoses(response.data);
       return response.data;
     } catch (err: any) {
@@ -240,7 +240,7 @@ export const useDiagnosisCatalog = () => {
       setLoading(true);
       setError(null);
       
-      const response = await apiService.get(`/api/diagnosis/catalog/${diagnosisId}`);
+      const response = await apiService.consultations.api.get(`/api/diagnosis/catalog/${diagnosisId}`);
       return response.data;
     } catch (err: any) {
       const errorMessage = err.response?.data?.detail || 'Error loading diagnosis';
@@ -258,7 +258,7 @@ export const useDiagnosisCatalog = () => {
       setError(null);
       
       console.log('🔍 Searching diagnoses with request:', searchRequest);
-      const response = await apiService.post('/api/diagnosis/search', searchRequest);
+      const response = await apiService.consultations.api.post('/api/diagnosis/search', searchRequest);
       console.log('🔍 Diagnosis search response:', response);
       console.log('🔍 Diagnosis search data:', response.data);
       
@@ -303,7 +303,7 @@ export const useDiagnosisCatalog = () => {
   const getStats = useCallback(async () => {
     try {
       // Don't set loading state for stats as it's non-critical
-      const response = await apiService.get('/api/diagnosis/stats');
+      const response = await apiService.consultations.api.get('/api/diagnosis/stats');
       setStats(response.data);
       return response.data;
     } catch (err: any) {
@@ -320,7 +320,7 @@ export const useDiagnosisCatalog = () => {
       setError(null);
       
       console.log('🔍 Fetching diagnosis specialties...');
-      const response = await apiService.get('/api/diagnosis/specialties');
+      const response = await apiService.consultations.api.get('/api/diagnosis/specialties');
       console.log('🔍 Specialties response:', response);
       
       let specialtiesData = [];

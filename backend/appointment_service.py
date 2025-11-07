@@ -3,7 +3,7 @@ Appointment Service - Gestión de citas médicas
 Provides comprehensive appointment management functionality
 """
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_, or_, desc, asc, func
+from sqlalchemy import and_, or_, desc, asc, func, update
 from datetime import datetime, date, time, timedelta
 from typing import List, Optional, Dict
 import uuid
@@ -330,7 +330,10 @@ class AppointmentService:
         try:
             if not getattr(appointment, 'auto_reminder_enabled', False):
                 return False
-            # auto_reminder_sent_at field removed - no longer check if reminder was already sent
+            # Check if reminder was already sent (avoid duplicates)
+            if getattr(appointment, 'reminder_sent', False):
+                # If reminder was already sent, don't send again
+                return False
             # Use should_send_reminder logic to determine if reminder should be sent
             send_time = AppointmentService.get_reminder_send_time(
                 appointment.appointment_date,
@@ -346,16 +349,56 @@ class AppointmentService:
     @staticmethod
     def mark_reminder_sent(db: Session, appointment_id: int) -> None:
         """Persist sent timestamp for auto reminder."""
-        apt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
-        if not apt:
-            return
-        # auto_reminder_sent_at field removed
-        db.commit()
+        try:
+            apt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+            if not apt:
+                print(f"⚠️ Appointment {appointment_id} not found for marking reminder sent")
+                return
+            # Update reminder_sent and reminder_sent_at fields
+            apt.reminder_sent = True
+            apt.reminder_sent_at = datetime.utcnow()
+            db.commit()
+            print(f"✅ Marked reminder_sent=True and reminder_sent_at={apt.reminder_sent_at} for appointment {appointment_id}")
+        except Exception as e:
+            print(f"❌ Error marking reminder sent for appointment {appointment_id}: {e}")
+            db.rollback()
+            raise
 
     @staticmethod
     def send_appointment_reminder(db: Session, appointment_id: int) -> bool:
-        """Send WhatsApp reminder using existing WhatsAppService. Returns True on success."""
+        """Send WhatsApp reminder using existing WhatsAppService. Returns True on success.
+        
+        Uses atomic update to prevent duplicate reminders: marks reminder_sent BEFORE sending
+        to avoid race conditions when scheduler runs multiple times.
+        """
         from whatsapp_service import get_whatsapp_service
+        
+        # Atomic update: mark reminder_sent BEFORE sending to prevent duplicates
+        # This ensures that if two scheduler processes run simultaneously, only one will succeed
+        try:
+            result = db.execute(
+                update(Appointment)
+                .where(Appointment.id == appointment_id)
+                .where(Appointment.reminder_sent == False)  # Only update if not already sent
+                .values(
+                    reminder_sent=True,
+                    reminder_sent_at=datetime.utcnow()
+                )
+            )
+            db.commit()
+            
+            # If no rows were updated, reminder was already sent by another process
+            if result.rowcount == 0:
+                print(f"⚠️ Reminder already sent for appointment {appointment_id} (skipping duplicate)")
+                return False
+                
+            print(f"✅ Marked reminder_sent=True for appointment {appointment_id} (atomic update)")
+        except Exception as e:
+            db.rollback()
+            print(f"❌ Error marking reminder sent for appointment {appointment_id}: {e}")
+            return False
+        
+        # Now fetch the appointment and send the reminder
         apt = db.query(Appointment).options(
             joinedload(Appointment.patient),
             joinedload(Appointment.doctor),
@@ -364,6 +407,7 @@ class AppointmentService:
         ).filter(Appointment.id == appointment_id).first()
         if not apt:
             return False
+        
         # Build parameters similarly to endpoint logic
         mexico_tz = pytz.timezone('America/Mexico_City')
         # Assume stored naive datetime is local CDMX
@@ -396,11 +440,37 @@ class AppointmentService:
                 maps_url=maps_url_val
             )
             if resp and resp.get('success'):
-                AppointmentService.mark_reminder_sent(db, appointment_id)
+                print(f"✅ Reminder sent successfully for appointment {appointment_id}")
                 return True
-        except Exception:
+            else:
+                # If sending failed, rollback the reminder_sent flag
+                print(f"⚠️ Reminder sending failed for appointment {appointment_id}, rolling back reminder_sent")
+                db.execute(
+                    update(Appointment)
+                    .where(Appointment.id == appointment_id)
+                    .values(
+                        reminder_sent=False,
+                        reminder_sent_at=None
+                    )
+                )
+                db.commit()
+                return False
+        except Exception as e:
+            # If exception occurred, rollback the reminder_sent flag
+            print(f"❌ Exception sending reminder for appointment {appointment_id}: {e}")
+            try:
+                db.execute(
+                    update(Appointment)
+                    .where(Appointment.id == appointment_id)
+                    .values(
+                        reminder_sent=False,
+                        reminder_sent_at=None
+                    )
+                )
+                db.commit()
+            except:
+                db.rollback()
             return False
-        return False
     
     @staticmethod
     def get_doctor_schedule(

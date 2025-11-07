@@ -489,7 +489,7 @@ export interface Appointment {
   cancelled_reason?: string;
   cancelled_at?: string;
   cancelled_by?: number;
-  created_by?: number;
+  // created_by removed - not used, doctor_id already identifies the doctor
   created_at: string;
   updated_at: string;
   

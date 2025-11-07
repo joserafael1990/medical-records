@@ -4,7 +4,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { VitalSign, ConsultationVitalSign, VitalSignFormData } from '../types';
-import { apiService } from '../services/api';
+import { apiService } from '../services';
 
 export interface UseVitalSignsReturn {
   // State
@@ -70,7 +70,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     setError(null);
     
     try {
-      const response = await apiService.get('/api/vital-signs');
+      const response = await apiService.consultations.api.get('/api/vital-signs');
       
       // Handle different response structures
       let vitalSignsData = [];
@@ -108,7 +108,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     setError(null);
     
     try {
-      const response = await apiService.get(`/api/consultations/${consultationId}/vital-signs`);
+      const response = await apiService.consultations.api.get(`/api/consultations/${consultationId}/vital-signs`);
       const vitalSignsData = response.data || response;
       setConsultationVitalSigns(vitalSignsData);
     } catch (err: any) {
@@ -127,7 +127,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
         throw new Error("Invalid consultation ID. Please save the consultation first.");
       }
       
-      const response = await apiService.post(`/api/consultations/${consultationId}/vital-signs`, vitalSignData);
+      const response = await apiService.consultations.api.post(`/api/consultations/${consultationId}/vital-signs`, vitalSignData);
       const newVitalSign = response.data;
       
       // Add to local state
@@ -145,7 +145,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     try {
       
       // Use POST endpoint which handles both create and update
-      const response = await apiService.post(`/api/consultations/${consultationId}/vital-signs`, vitalSignData);
+      const response = await apiService.consultations.api.post(`/api/consultations/${consultationId}/vital-signs`, vitalSignData);
       const updatedVitalSign = response.data;
       
       // Update local state
@@ -170,7 +170,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
           return filtered;
         });
       } else {
-        await apiService.delete(`/api/consultations/${consultationId}/vital-signs/${vitalSignId}`);
+        await apiService.consultations.api.delete(`/api/consultations/${consultationId}/vital-signs/${vitalSignId}`);
         
         // Remove from local state
         setConsultationVitalSigns(prev => prev.filter(vs => vs.id !== vitalSignId));

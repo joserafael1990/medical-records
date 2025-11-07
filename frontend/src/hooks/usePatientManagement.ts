@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { apiService } from '../services/api';
+import { apiService } from '../services';
 import { useAuth } from '../contexts/AuthContext';
 import type { Patient, PatientFormData } from '../types';
 
@@ -62,10 +62,19 @@ export const usePatientManagement = (onNavigate?: (view: string) => void): Patie
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Fetch patients from API
+  // Authentication state
+  const { isAuthenticated } = useAuth();
+  
+  // Fetch patients from API (without search term - filtering is done on frontend)
   const fetchPatients = useCallback(async () => {
+    if (!isAuthenticated) {
+      return;
+    }
+    
+    setIsLoading(true);
     try {
-      const data = await apiService.getPatients(patientSearchTerm);
+      debugLog('🔍 Fetching patients from API...');
+      const data = await apiService.patients.getPatients(); // Get all patients
       
       // Clean and normalize patient data
       const cleanedData = data.map((patient: any) => ({
@@ -73,7 +82,7 @@ export const usePatientManagement = (onNavigate?: (view: string) => void): Patie
         // Map backend fields to frontend expected fields
         full_name: `${patient.first_name || ''} ${patient.paternal_surname || ''} ${patient.maternal_surname || ''}`.trim(),
         primary_phone: patient.primary_phone || '',
-        address_street: patient.address_street || '',
+        address_street: patient.address_street || patient.home_address || '',
         
         // Convert object fields to strings
         nationality: typeof patient.nacionalidad === 'object' 
@@ -87,6 +96,7 @@ export const usePatientManagement = (onNavigate?: (view: string) => void): Patie
           : patient.ciudad_residencia || ''
       }));
       
+      debugLog(`✅ Fetched ${cleanedData.length} patients`);
       setPatients(cleanedData);
     } catch (error: any) {
       console.error('❌ Error fetching patients:', {
@@ -98,11 +108,10 @@ export const usePatientManagement = (onNavigate?: (view: string) => void): Patie
       setPatients([]);
       // No fallback logic - backend is required
       throw error;
+    } finally {
+      setIsLoading(false);
     }
-  }, [patientSearchTerm]);
-
-  // Authentication state
-  const { isAuthenticated } = useAuth();
+  }, [isAuthenticated]);
   
   // Load patients on mount - only if authenticated
   useEffect(() => {
@@ -113,13 +122,13 @@ export const usePatientManagement = (onNavigate?: (view: string) => void): Patie
     fetchPatients().catch(error => {
       console.warn('⚠️ Could not load patients on mount:', error.message);
     });
-  }, [isAuthenticated]); // Only depend on authentication, not fetchPatients
+  }, [isAuthenticated, fetchPatients]);
 
   // Create new patient
   const createPatient = useCallback(async (data: PatientFormData): Promise<Patient> => {
     setIsSubmitting(true);
     try {
-      const newPatient = await apiService.createPatient(data);
+      const newPatient = await apiService.patients.createPatient(data);
       await fetchPatients(); // Refresh list
       
       // Navigate to patients view after successful creation
@@ -142,7 +151,7 @@ export const usePatientManagement = (onNavigate?: (view: string) => void): Patie
   const updatePatient = useCallback(async (id: string, data: PatientFormData): Promise<Patient> => {
     setIsSubmitting(true);
     try {
-      const updatedPatient = await apiService.updatePatient(id, data);
+      const updatedPatient = await apiService.patients.updatePatient(id, data);
       await fetchPatients(); // Refresh list
       return updatedPatient;
     } catch (error: any) {

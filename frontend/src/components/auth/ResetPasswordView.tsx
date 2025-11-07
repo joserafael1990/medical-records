@@ -20,7 +20,7 @@ import {
   LockReset as LockResetIcon
 } from '@mui/icons-material';
 import CortexLogo from '../common/CortexLogo';
-import { apiService } from '../../services/api';
+import { apiService } from '../../services';
 import { useScrollToError } from '../../hooks/useScrollToError';
 
 const ResetPasswordView: React.FC = () => {
@@ -74,7 +74,7 @@ const ResetPasswordView: React.FC = () => {
 
     setIsLoading(true);
     try {
-      await apiService.confirmPasswordReset(token, newPassword, confirmPassword);
+      await apiService.auth.confirmPasswordReset(token, newPassword, confirmPassword);
       setSuccess(true);
       setError('');
       

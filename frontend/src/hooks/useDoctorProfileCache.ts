@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { DoctorProfile, DoctorFormData, FieldErrors } from '../types';
-import { apiService } from '../services/api';
+import { apiService } from '../services';
 import { useAuth } from '../contexts/AuthContext';
 import { logger } from '../utils/logger';
 
@@ -102,7 +102,7 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
     }
     
     try {
-      const data = await apiService.getDoctorProfile();
+      const data = await apiService.doctors.getDoctorProfile();
       
       // Doctor profile loaded successfully
       
@@ -211,7 +211,7 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
     let specialtyId = null;
     if (data.specialty) {
       try {
-        const specialties = await apiService.getSpecialties();
+        const specialties = await apiService.catalogs.getSpecialties();
         const foundSpecialty = specialties.find(spec => spec.name === data.specialty);
         specialtyId = foundSpecialty ? foundSpecialty.id : null;
       } catch (error) {
@@ -261,9 +261,9 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
     });
     try {
       if (isEditing) {
-        await apiService.updateDoctorProfile(cleanedData);
+        await apiService.doctors.updateDoctorProfile(cleanedData);
       } else {
-        await apiService.createDoctorProfile(cleanedData);
+        await apiService.doctors.createDoctorProfile(cleanedData);
       }
 
       // Invalidate cache after save

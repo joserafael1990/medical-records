@@ -38,7 +38,7 @@ import {
   CheckCircle as CheckIcon
 } from '@mui/icons-material';
 
-import { apiService } from '../../services/api';
+import { apiService } from '../../services';
 import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
 
 interface DigitalSignatureDialogProps {
@@ -97,7 +97,7 @@ const DigitalSignatureDialog: React.FC<DigitalSignatureDialogProps> = ({
   const checkCertificateStatus = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await apiService.get('/digital-signature/certificate-info');
+      const response = await apiService.consultations.api.get('/digital-signature/certificate-info');
       setHasCertificate(response.data.has_certificate);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Error verificando certificado');
@@ -121,7 +121,7 @@ const DigitalSignatureDialog: React.FC<DigitalSignatureDialogProps> = ({
       setLoading(true);
       setError(null);
 
-      const response = await apiService.post('/digital-signature/generate-certificate', {
+      const response = await apiService.consultations.api.post('/digital-signature/generate-certificate', {
         password,
         validity_days: validityDays
       });
@@ -181,7 +181,7 @@ const DigitalSignatureDialog: React.FC<DigitalSignatureDialogProps> = ({
       setLoading(true);
       setError(null);
 
-      const response = await apiService.post('/digital-signature/sign-document', {
+      const response = await apiService.consultations.api.post('/digital-signature/sign-document', {
         document_type: documentType || 'consultation',
         document_data: documentData,
         certificate_password: password

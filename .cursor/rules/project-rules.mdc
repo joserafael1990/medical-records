@@ -41,9 +41,16 @@ alwaysApply: true
 
 ### Code Quality Standards
 - **Maximum function length:** 100 lines
-- If endpoint exceeds 100 lines → refactor to service layer
+- **Maximum component length:** 300 lines
+- **Maximum service method length:** 50 lines
+- **Maximum endpoint length:** 50 lines
+- If endpoint exceeds 50 lines → refactor to service layer
+- If component exceeds 300 lines → split into smaller components
+- If function exceeds 100 lines → split into smaller functions
+- If service method exceeds 50 lines → split into helpers
 - Avoid code duplication - create helpers instead
 - Use descriptive function names that explain intent
+- **Extract complex logic to service layer (backend) or custom hooks (frontend)**
 
 ### File Structure
 ```
@@ -56,13 +63,116 @@ backend/
 
 frontend/
   - src/
-    - services/      # API and PDF services
+    - services/      # API services (modular structure)
+      - base/        # ApiBase and common utilities
+      - auth/        # AuthService
+      - patients/    # PatientService
+      - appointments/# AppointmentService
+      - consultations/# ConsultationService
+      - catalogs/    # CatalogService
+      - documents/   # DocumentService
+      - clinical-studies/# ClinicalStudyService
+      - doctors/     # DoctorService
+      - offices/     # OfficeService
+      - whatsapp/    # WhatsAppService
+      - ApiService.ts # Main aggregator
+      - index.ts     # Exports
     - hooks/         # Custom React hooks
     - components/
       - common/      # Reusable components
       - dialogs/     # Modal dialogs
+        - ConsultationDialog/  # Component subdirectory pattern
+          - ConsultationDialog.tsx
+          - ConsultationBasicInfo.tsx
+          - ConsultationActions.tsx
       - layout/      # Layout components
 ```
+
+---
+
+## 🔌 API SERVICES - Arquitectura Modular (Frontend)
+
+### Estructura de Servicios
+**NUNCA** crear métodos API directamente en componentes o hooks.
+**SIEMPRE** usar servicios modulares organizados por dominio.
+
+### Reglas de Importación
+```typescript
+// ✅ CORRECTO - Importar desde index.ts
+import { apiService } from '../services';
+// o
+import { apiService } from '../services/ApiService';
+
+// ✅ CORRECTO - Importar servicio específico si se necesita instanciar
+import { AuthService } from '../services/auth/AuthService';
+
+// ❌ INCORRECTO - NO usar api.ts antiguo
+import { apiService } from '../services/api';
+```
+
+### Uso de Servicios
+```typescript
+// ✅ CORRECTO - Usar servicios modulares
+const patients = await apiService.patients.getPatients();
+const appointments = await apiService.appointments.getAppointments();
+await apiService.auth.login({ email, password });
+
+// ✅ CORRECTO - Para endpoints genéricos, usar api directo
+const response = await apiService.consultations.api.get('/api/custom-endpoint');
+const response = await apiService.patients.api.post('/api/custom-endpoint', data);
+
+// ❌ INCORRECTO - NO usar métodos genéricos del apiService principal
+await apiService.get('/api/patients'); // ❌
+await apiService.post('/api/patients', data); // ❌
+```
+
+### Crear Nuevo Servicio
+1. Crear clase que extienda `ApiBase`
+2. Ubicar en `frontend/src/services/{domain}/`
+3. Nombre: `{Domain}Service.ts` (ej: `InvoiceService.ts`)
+4. Agregar al `ApiService.ts` como propiedad pública
+5. Exportar en `index.ts`
+6. Ejemplo:
+```typescript
+// frontend/src/services/invoices/InvoiceService.ts
+import { ApiBase } from '../base/ApiBase';
+import { logger } from '../../utils/logger';
+
+export class InvoiceService extends ApiBase {
+  async getInvoices(): Promise<Invoice[]> {
+    try {
+      logger.debug('Fetching invoices', undefined, 'api');
+      const response = await this.api.get<Invoice[]>('/api/invoices');
+      logger.debug('Invoices fetched successfully', undefined, 'api');
+      return response.data;
+    } catch (error: any) {
+      logger.error('Failed to fetch invoices', error, 'api');
+      throw error;
+    }
+  }
+}
+```
+
+### Logging en Servicios
+**SIEMPRE** usar `logger` con categoría apropiada:
+```typescript
+// ✅ CORRECTO
+logger.debug('Fetching data', { id }, 'api');
+logger.error('Failed to fetch data', error, 'api');
+
+// ❌ INCORRECTO - NO usar console.log directamente
+console.log('Fetching data'); // ❌
+```
+
+### Manejo de Errores
+Todos los servicios heredan de `ApiBase` que maneja:
+- Interceptores de request/response
+- Manejo automático de tokens
+- Transformación de errores
+- Logging de errores
+- Manejo de 401/403 (expiración de sesión)
+
+**NO** crear manejo de errores personalizado en servicios, usar el de `ApiBase`.
 
 ---
 
@@ -74,6 +184,10 @@ frontend/
 - Use Depends() for dependency injection
 - Authentication required for all medical data endpoints
 - Use `get_current_user` dependency for auth
+- **Service layer pattern: Extract complex logic to service files**
+- **Keep endpoints thin - delegate to service layer**
+- Maximum endpoint length: 50 lines
+- If endpoint exceeds 50 lines → refactor to service layer
 
 ### Database
 - **ORM:** SQLAlchemy
@@ -102,6 +216,8 @@ frontend/
 - Include operation, doctor_id, patient_id when relevant
 - Use emoji prefixes for visibility: 📋 🔍 ✅ ❌ ⚠️
 - Log at appropriate levels: info, warning, error
+- **Frontend: Use `logger` from `utils/logger.ts` instead of `console.log`**
+- **Backend: Use `api_logger` or `security_logger` from `logger.py`**
 
 ### Data Validation
 - Use Pydantic schemas for request/response validation
@@ -115,15 +231,48 @@ frontend/
 
 ### Component Structure
 - Use functional components with hooks
-- Keep components under 300 lines
+- **Maximum component length: 300 lines**
+- **If component exceeds 300 lines → split into smaller components**
 - Extract complex logic to custom hooks
 - One component per file
+- Follow the pattern used in `RegisterView.tsx` and `ConsultationDialog.tsx`:
+  - Split large components by logical sections (steps, tabs, sections)
+  - Create subdirectories for component groups
+  - Keep parent component focused on orchestration
+  - Example structure:
+    ```
+    components/
+      dialogs/
+        ConsultationDialog/
+          ├── ConsultationDialog.tsx       # Main orchestrator
+          ├── ConsultationBasicInfo.tsx    # Section component
+          ├── ConsultationActions.tsx      # Action buttons
+          └── ConsultationDiagnosis.tsx    # Diagnosis section
+    ```
 
 ### Custom Hooks Pattern
 - Create custom hooks for business logic
 - Prefix with `use` (e.g., `usePrescriptions`, `useScrollToError`)
 - Hooks should manage state and side effects
 - Keep components focused on rendering
+- **Hooks should use modular services, NOT direct API calls**
+- **Never use `console.log` in hooks - use `logger` instead**
+- Example pattern:
+  ```typescript
+  // ✅ CORRECTO - Hook usando servicios modulares
+  export const usePrescriptions = (consultationId: number) => {
+    const [prescriptions, setPrescriptions] = useState([]);
+    
+    const fetchPrescriptions = useCallback(async () => {
+      const data = await apiService.consultations.api.get(
+        `/api/consultations/${consultationId}/prescriptions`
+      );
+      setPrescriptions(data);
+    }, [consultationId]);
+    
+    return { prescriptions, fetchPrescriptions };
+  };
+  ```
 
 ### State Management
 - Use React hooks (useState, useEffect)
@@ -250,11 +399,45 @@ passlib[bcrypt]
 9. Commit with descriptive message
 
 ### Refactoring Checklist
-- Extract to service layer if >100 lines
+- Extract to service layer if >100 lines (functions) or >50 lines (endpoints)
+- Split components if >300 lines
 - Create reusable helpers
 - Remove code duplication
 - Update tests if applicable
 - Verify with Docker restart
+
+### Refactoring Patterns
+
+#### When to Refactor
+- Component > 300 lines → Split into sub-components
+- Function > 100 lines → Split into smaller functions
+- Endpoint > 50 lines → Extract to service layer
+- Service method > 50 lines → Split into helpers
+- Duplicate code in 3+ places → Extract to helper/utility
+- Complex logic in component → Extract to custom hook
+
+#### Refactoring Large Components
+1. Identify logical sections (steps, tabs, sections)
+2. Create subdirectory: `ComponentName/`
+3. Extract sections to separate components
+4. Keep main component as orchestrator
+5. Example: `RegisterView.tsx` → `RegisterView/` with step components
+
+#### Refactoring API Code (Frontend)
+1. Identify domain (auth, patients, appointments, etc.)
+2. Create service class extending `ApiBase`
+3. Move related methods to service
+4. Update imports in consuming code: `from '../services/api'` → `from '../services'`
+5. Update method calls: `apiService.getPatients()` → `apiService.patients.getPatients()`
+6. Add to `ApiService.ts` aggregator
+7. Export in `index.ts`
+
+#### Refactoring API Code (Backend)
+1. Identify domain logic
+2. Create service file: `{domain}_service.py`
+3. Move business logic from endpoint to service
+4. Keep endpoint thin - delegate to service
+5. Update endpoint to use service
 
 ### Git Commit Messages
 ```
@@ -286,7 +469,15 @@ refactor: Extract consultation logic to service layer
 - ❌ Store sensitive data unencrypted
 - ❌ Use `any` type in TypeScript
 - ❌ Create functions longer than 100 lines
+- ❌ Create components longer than 300 lines
+- ❌ Create service methods longer than 50 lines
+- ❌ Create endpoints longer than 50 lines
 - ❌ Duplicate logic instead of extracting to helper
+- ❌ Use `console.log` instead of `logger`
+- ❌ Import from `services/api.ts` (use `services/` instead)
+- ❌ Make direct API calls in components (use services)
+- ❌ Create service methods without logging
+- ❌ Create services that don't extend `ApiBase`
 
 ### Database
 - ❌ Store dates without timezone awareness
@@ -468,6 +659,84 @@ Before deploying:
 
 ---
 
-**Last Updated:** 2025-10-22
-**Version:** 1.0
+---
+
+## 📝 LOGGING STANDARDS
+
+### Logger Utility
+**SIEMPRE** usar `logger` de `utils/logger.ts` (frontend) o `logger.py` (backend) en lugar de `console.log` o `print`.
+
+### Categorías de Logging (Frontend)
+- `'api'` - Para operaciones de API
+- `'auth'` - Para autenticación
+- `'ui'` - Para interacciones de UI
+- `'error'` - Para errores críticos
+
+### Uso Correcto (Frontend)
+```typescript
+// ✅ CORRECTO
+import { logger } from '../utils/logger';
+
+logger.debug('Fetching patients', { filters }, 'api');
+logger.error('Failed to fetch patients', error, 'api');
+logger.auth.info('Login attempt', { email });
+
+// ❌ INCORRECTO
+console.log('Fetching patients'); // ❌
+console.error('Error:', error); // ❌
+```
+
+### Uso Correcto (Backend)
+```python
+# ✅ CORRECTO
+from logger import api_logger, security_logger
+
+api_logger.info('Fetching patients', extra={'doctor_id': doctor_id})
+api_logger.error('Failed to fetch patients', exc_info=True)
+security_logger.warning('Unauthorized access attempt')
+
+# ❌ INCORRECTO
+print('Fetching patients')  # ❌
+```
+
+### Niveles de Logging
+- `debug` - Información de depuración
+- `info` - Información general
+- `warning` - Advertencias
+- `error` - Errores que requieren atención
+
+---
+
+## 🔄 MIGRATION CHECKLIST
+
+### Migrating from Old API to New Services (Frontend)
+1. ✅ Update import: `from '../services/api'` → `from '../services'`
+2. ✅ Update method calls: `apiService.getPatients()` → `apiService.patients.getPatients()`
+3. ✅ Replace `console.log` with `logger.debug/error`
+4. ✅ Verify error handling (handled by ApiBase)
+5. ✅ Test the migrated code
+6. ✅ Remove old `api.ts` references
+
+### Creating New API Endpoint (Frontend)
+1. ✅ Identify domain (auth, patients, appointments, etc.)
+2. ✅ Find or create appropriate service
+3. ✅ Add method to service extending `ApiBase`
+4. ✅ Use `logger` for logging
+5. ✅ Handle errors (inherited from `ApiBase`)
+6. ✅ Export from `index.ts`
+7. ✅ Update `ApiService.ts` if needed
+
+### Creating New API Endpoint (Backend)
+1. ✅ Create service file if needed: `{domain}_service.py`
+2. ✅ Add business logic to service
+3. ✅ Create endpoint in route file
+4. ✅ Keep endpoint thin - delegate to service
+5. ✅ Add authentication if needed
+6. ✅ Add logging with `api_logger`
+7. ✅ Add error handling
+
+---
+
+**Last Updated:** 2025-01-22
+**Version:** 2.0
 **Project:** Sistema de Historias Clínicas Electrónicas

@@ -23,7 +23,7 @@ import {
   Gavel as GavelIcon,
   Info as InfoIcon
 } from '@mui/icons-material';
-import { apiService } from '../../services/api';
+import { apiService } from '../../services';
 import type { PrivacyNotice } from '../../types';
 
 export const PublicPrivacyNotice: React.FC = () => {
@@ -41,7 +41,7 @@ export const PublicPrivacyNotice: React.FC = () => {
 
     try {
       // This endpoint doesn't require authentication
-      const response = await apiService.get('/api/privacy/public-notice');
+      const response = await apiService.patients.api.get('/api/privacy/public-notice');
       console.log('✅ Public privacy notice loaded:', response);
       setNotice(response);
     } catch (err: any) {

@@ -1,11 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   TextField,
   InputAdornment,
   IconButton,
   Typography,
-  FormHelperText,
   LinearProgress
 } from '@mui/material';
 import {
@@ -15,150 +14,135 @@ import {
   Cancel
 } from '@mui/icons-material';
 
-interface AccountInfoStepProps {
-  formData: {
-    email: string;
-    password: string;
-    confirmPassword: string;
-  };
-  onInputChange: (field: string, value: string) => void;
-  showPassword: boolean;
-  setShowPassword: (show: boolean) => void;
-  showConfirmPassword: boolean;
-  setShowConfirmPassword: (show: boolean) => void;
-  passwordValidation: {
-    minLength: boolean;
-    hasUppercase: boolean;
-    hasLowercase: boolean;
-    hasNumbers: boolean;
-    hasSpecialChars: boolean;
-  };
-  fieldErrors: Record<string, string>;
+interface PasswordValidation {
+  minLength: boolean;
+  hasUppercase: boolean;
+  hasLowercase: boolean;
+  hasNumbers: boolean;
+  hasSpecialChars: boolean;
 }
 
-export const AccountInfoStep: React.FC<AccountInfoStepProps> = ({
-  formData,
-  onInputChange,
-  showPassword,
-  setShowPassword,
-  showConfirmPassword,
-  setShowConfirmPassword,
-  passwordValidation,
-  fieldErrors
-}) => {
-  const getPasswordStrength = () => {
-    const validations = Object.values(passwordValidation);
-    const validCount = validations.filter(Boolean).length;
-    return (validCount / validations.length) * 100;
-  };
+interface AccountInfoStepProps {
+  email: string;
+  password: string;
+  confirmPassword: string;
+  onEmailChange: (value: string) => void;
+  onPasswordChange: (value: string) => void;
+  onConfirmPasswordChange: (value: string) => void;
+}
 
-  const getPasswordStrengthColor = () => {
-    const strength = getPasswordStrength();
-    if (strength < 40) return 'error';
-    if (strength < 80) return 'warning';
-    return 'success';
+const validatePassword = (password: string): PasswordValidation => {
+  return {
+    minLength: password.length >= 8,
+    hasUppercase: /[A-Z]/.test(password),
+    hasLowercase: /[a-z]/.test(password),
+    hasNumbers: /\d/.test(password),
+    hasSpecialChars: /[!@#$%^&*(),.?":{}|<>]/.test(password)
   };
+};
+
+const getPasswordStrength = (validation: PasswordValidation): number => {
+  const criteria = Object.values(validation);
+  return criteria.filter(Boolean).length;
+};
+
+export const AccountInfoStep: React.FC<AccountInfoStepProps> = ({
+  email,
+  password,
+  confirmPassword,
+  onEmailChange,
+  onPasswordChange,
+  onConfirmPasswordChange
+}) => {
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const passwordValidation = validatePassword(password);
+  const passwordStrength = getPasswordStrength(passwordValidation);
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <Typography variant="h6" gutterBottom>
-        Información de Cuenta
-      </Typography>
-      
-      {/* Email Field */}
+    <Box>
       <TextField
+        fullWidth
+        margin="normal"
         label="Correo Electrónico"
         type="email"
-        value={formData.email}
-        onChange={(e) => onInputChange('email', e.target.value)}
-        error={!!fieldErrors.email}
-        helperText={fieldErrors.email}
-        fullWidth
+        value={email}
+        onChange={(e) => onEmailChange(e.target.value)}
         required
+        autoComplete="email"
       />
       
-      {/* Password Field */}
-      <Box>
-        <TextField
-          label="Contraseña"
-          type={showPassword ? 'text' : 'password'}
-          value={formData.password}
-          onChange={(e) => onInputChange('password', e.target.value)}
-          error={!!fieldErrors.password}
-          helperText={fieldErrors.password}
-          fullWidth
-          required
-          InputProps={{
-            endAdornment: (
-              <InputAdornment position="end">
-                <IconButton
-                  onClick={() => setShowPassword(!showPassword)}
-                  edge="end"
-                >
-                  {showPassword ? <VisibilityOff /> : <Visibility />}
-                </IconButton>
-              </InputAdornment>
-            )
-          }}
-        />
-        
-        {/* Password Strength Indicator */}
-        {formData.password && (
-          <Box sx={{ mt: 1 }}>
-            <LinearProgress
-              variant="determinate"
-              value={getPasswordStrength()}
-              color={getPasswordStrengthColor() as any}
-              sx={{ mb: 1 }}
-            />
-            <Typography variant="caption" color="text.secondary">
-              Fortaleza de la contraseña: {Math.round(getPasswordStrength())}%
-            </Typography>
-          </Box>
-        )}
-        
-        {/* Password Requirements */}
-        {formData.password && (
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="body2" gutterBottom>
-              Requisitos de la contraseña:
-            </Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-              {[
-                { key: 'minLength', text: 'Al menos 8 caracteres' },
-                { key: 'hasUppercase', text: 'Al menos una mayúscula' },
-                { key: 'hasLowercase', text: 'Al menos una minúscula' },
-                { key: 'hasNumbers', text: 'Al menos un número' },
-                { key: 'hasSpecialChars', text: 'Al menos un carácter especial' }
-              ].map(({ key, text }) => (
-                <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  {passwordValidation[key as keyof typeof passwordValidation] ? (
-                    <CheckCircle color="success" fontSize="small" />
-                  ) : (
-                    <Cancel color="error" fontSize="small" />
-                  )}
-                  <Typography
-                    variant="body2"
-                    color={passwordValidation[key as keyof typeof passwordValidation] ? 'success.main' : 'error.main'}
-                  >
-                    {text}
-                  </Typography>
-                </Box>
-              ))}
-            </Box>
-          </Box>
-        )}
-      </Box>
-      
-      {/* Confirm Password Field */}
       <TextField
+        fullWidth
+        margin="normal"
+        label="Contraseña"
+        type={showPassword ? 'text' : 'password'}
+        value={password}
+        onChange={(e) => onPasswordChange(e.target.value)}
+        required
+        InputProps={{
+          endAdornment: (
+            <InputAdornment position="end">
+              <IconButton
+                onClick={() => setShowPassword(!showPassword)}
+                edge="end"
+              >
+                {showPassword ? <VisibilityOff /> : <Visibility />}
+              </IconButton>
+            </InputAdornment>
+          ),
+        }}
+      />
+
+      {password && (
+        <Box sx={{ mt: 2 }}>
+          <Typography variant="body2" gutterBottom>
+            Fortaleza de la contraseña:
+          </Typography>
+          <LinearProgress
+            variant="determinate"
+            value={(passwordStrength / 5) * 100}
+            sx={{
+              height: 8,
+              borderRadius: 4,
+              backgroundColor: 'grey.300',
+              '& .MuiLinearProgress-bar': {
+                backgroundColor: passwordStrength < 3 ? 'error.main' : 
+                                passwordStrength < 4 ? 'warning.main' : 'success.main'
+              }
+            }}
+          />
+          <Box sx={{ mt: 1 }}>
+            {Object.entries({
+              'Al menos 8 caracteres': passwordValidation.minLength,
+              'Una letra mayúscula': passwordValidation.hasUppercase,
+              'Una letra minúscula': passwordValidation.hasLowercase,
+              'Un número': passwordValidation.hasNumbers,
+              'Un carácter especial': passwordValidation.hasSpecialChars
+            }).map(([criterion, met]) => (
+              <Box key={criterion} sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
+                {met ? (
+                  <CheckCircle sx={{ color: 'success.main', fontSize: 16, mr: 1 }} />
+                ) : (
+                  <Cancel sx={{ color: 'error.main', fontSize: 16, mr: 1 }} />
+                )}
+                <Typography variant="caption" color={met ? 'success.main' : 'error.main'}>
+                  {criterion}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+        </Box>
+      )}
+
+      <TextField
+        fullWidth
+        margin="normal"
         label="Confirmar Contraseña"
         type={showConfirmPassword ? 'text' : 'password'}
-        value={formData.confirmPassword}
-        onChange={(e) => onInputChange('confirmPassword', e.target.value)}
-        error={!!fieldErrors.confirmPassword}
-        helperText={fieldErrors.confirmPassword}
-        fullWidth
+        value={confirmPassword}
+        onChange={(e) => onConfirmPasswordChange(e.target.value)}
         required
         InputProps={{
           endAdornment: (
@@ -170,26 +154,9 @@ export const AccountInfoStep: React.FC<AccountInfoStepProps> = ({
                 {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
               </IconButton>
             </InputAdornment>
-          )
+          ),
         }}
       />
-      
-      {/* Password Match Indicator */}
-      {formData.confirmPassword && (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          {formData.password === formData.confirmPassword ? (
-            <CheckCircle color="success" fontSize="small" />
-          ) : (
-            <Cancel color="error" fontSize="small" />
-          )}
-          <Typography
-            variant="body2"
-            color={formData.password === formData.confirmPassword ? 'success.main' : 'error.main'}
-          >
-            {formData.password === formData.confirmPassword ? 'Las contraseñas coinciden' : 'Las contraseñas no coinciden'}
-          </Typography>
-        </Box>
-      )}
     </Box>
   );
 };

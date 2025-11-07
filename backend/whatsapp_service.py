@@ -17,19 +17,36 @@ logger = logging.getLogger(__name__)
 # =============================================================
 def _format_phone_number_generic(phone: str, country_code: Optional[str]) -> str:
     """Formatea número a E.164 simple. Devuelve con prefijo +.
-    - Si phone inicia con +, se respeta
+    - Si phone inicia con +, se respeta y se normaliza
     - Si tiene 10 dígitos y hay country_code, se antepone
     - Remueve espacios, guiones y paréntesis
+    - Corrige formatos comunes incorrectos (ej: +521... -> +52...)
     """
     if not phone:
         return phone
     clean = phone.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+    
+    # Si inicia con +, verificar y corregir formatos comunes incorrectos
     if clean.startswith('+'):
+        # Corregir formato común incorrecto: +521... (México) -> +52...
+        # El código de país de México es 52, no 521
+        # Ejemplo: +5215579449672 -> +525579449672
+        if clean.startswith('+521') and len(clean) >= 13:  # +521 + al menos 10 dígitos
+            # Remover el 1 extra: +5215579449672 -> +525579449672
+            # Extraer los últimos 10 dígitos después de +521
+            digits_after_521 = clean[4:]  # Todo después de '+521'
+            if len(digits_after_521) == 10:
+                corrected = '+52' + digits_after_521  # +52 + 10 dígitos
+                logger.warning(f"⚠️ Corrected phone format: {clean} -> {corrected} (removed extra '1' in country code)")
+                return corrected
         return clean
+    
     if country_code:
         cc = country_code if not country_code.startswith('+') else country_code[1:]
+        # Si el número ya inicia con el código de país, devolverlo con +
         if clean.startswith(cc):
             return f"+{clean}"
+        # Si el número tiene 10 dígitos, agregar código de país
         if len(clean) == 10:
             return f"+{cc}{clean}"
         return f"+{clean}"
@@ -147,16 +164,23 @@ class WhatsAppService:
         # Log detallado para debugging
         
         try:
-            logger.info(f"Sending WhatsApp to {formatted_phone} using template {template_name}")
+            logger.info(f"📤 Sending WhatsApp to {formatted_phone} using template {template_name}")
+            logger.debug(f"📤 Payload: {payload}")
             response = requests.post(url, headers=self._get_headers(), json=payload, timeout=10)
+            
+            logger.info(f"📤 Response status: {response.status_code}")
+            logger.debug(f"📤 Response headers: {dict(response.headers)}")
+            
             response.raise_for_status()
             
             result = response.json()
-            logger.info(f"WhatsApp sent successfully. Message ID: {result.get('messages', [{}])[0].get('id')}")
+            logger.info(f"📤 Response body: {result}")
+            message_id = result.get('messages', [{}])[0].get('id') if result.get('messages') else None
+            logger.info(f"✅ WhatsApp sent successfully. Message ID: {message_id}")
             
             return {
                 'success': True,
-                'message_id': result.get('messages', [{}])[0].get('id'),
+                'message_id': message_id,
                 'response': result
             }
             
@@ -179,8 +203,31 @@ class WhatsAppService:
                 status_code = 401
             elif status_code is None and '403' in str(e):
                 status_code = 403
+            
+            # Check for expired token (Meta/Facebook specific)
+            error_message = str(error_detail)
+            is_token_expired = False
+            if isinstance(error_detail, dict):
+                error_obj = error_detail.get('error', {})
+                error_msg = error_obj.get('message', '')
+                error_subcode = error_obj.get('error_subcode')
+                # Meta returns error_subcode 463 for expired tokens
+                if 'Session has expired' in error_msg or error_subcode == 463 or 'expired' in error_msg.lower():
+                    is_token_expired = True
+                    error_message = f"Token de acceso expirado: {error_msg}"
+            elif 'Session has expired' in error_message or 'expired' in error_message.lower():
+                is_token_expired = True
                 
             logger.error(f"HTTP Error sending WhatsApp: {error_detail}, Status: {status_code}")
+            
+            # Return specific error for expired tokens
+            if is_token_expired:
+                return {
+                    'success': False,
+                    'error': 'Token de acceso de Meta WhatsApp expirado. Por favor, renueva el token en la consola de Meta.',
+                    'error_type': 'token_expired',
+                    'details': error_detail
+                }
             
             # Check for specific error types
             if status_code == 401 or '401' in str(e) or 'Unauthorized' in str(e):
@@ -425,18 +472,22 @@ class WhatsAppService:
         doctor_name: str,
         privacy_notice_url: str,
         consent_id: int,
-        country_code: str = None
+        doctor_title: Optional[str] = None,
+        doctor_full_name: Optional[str] = None,
+        country_code: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Envía aviso de privacidad con UN SOLO botón interactivo "Acepto"
-        Cumple con LFPDPPP - Consentimiento libre e informado
+        Envía aviso de privacidad usando template aprobado o mensaje interactivo
+        Intenta primero usar el template 'aviso_de_privacidad', si falla usa mensaje interactivo
         
         Args:
             patient_name: Nombre del paciente
             patient_phone: Teléfono del paciente
-            doctor_name: Nombre completo del médico
+            doctor_name: Nombre completo del médico (con título, para compatibilidad)
             privacy_notice_url: URL del aviso completo
             consent_id: ID del registro de consentimiento
+            doctor_title: Título del doctor (opcional, se extrae de doctor_name si no se proporciona)
+            doctor_full_name: Nombre completo del doctor sin título (opcional, se extrae de doctor_name si no se proporciona)
             country_code: Código de país
             
         Returns:
@@ -448,8 +499,52 @@ class WhatsAppService:
                 'error': 'WhatsApp not configured. Please set META_WHATSAPP_PHONE_ID and META_WHATSAPP_TOKEN'
             }
         
-        url = f'{self.base_url}/{self.phone_id}/messages'
+        # Separar título y nombre del doctor si no se proporcionaron por separado
+        if doctor_title is None or doctor_full_name is None:
+            if doctor_name.startswith(("Dr. ", "Dra. ", "Dr ", "Dra ")):
+                parts = doctor_name.split(" ", 1)
+                doctor_title = parts[0] + ("." if not parts[0].endswith(".") else "")
+                doctor_full_name = parts[1] if len(parts) > 1 else doctor_name
+            else:
+                # Si no tiene título explícito, usar valores por defecto
+                doctor_title = doctor_title or ""
+                doctor_full_name = doctor_full_name or doctor_name
+        
         formatted_phone = self._format_phone_number(patient_phone, country_code)
+        
+        # Intentar primero usar el template 'aviso_de_privacidad'
+        # El template espera: {{1}} = paciente, {{2}} = titulo, {{3}} = nombre doctor, {{4}} = url
+        template_params = [
+            patient_name,
+            doctor_title,
+            doctor_full_name,
+            privacy_notice_url
+        ]
+        
+        logger.info(f"📤 Attempting to send privacy notice using template 'aviso_de_privacidad'")
+        logger.info(f"📤 Template params: {template_params}")
+        logger.info(f"📤 Formatted phone: {formatted_phone}")
+        template_result = self.send_template_message(
+            to_phone=patient_phone,
+            template_name='aviso_de_privacidad',
+            template_params=template_params,
+            language_code='es',
+            country_code=country_code
+        )
+        
+        logger.info(f"📤 Template result: success={template_result.get('success')}, error={template_result.get('error', 'none')}")
+        
+        if template_result.get('success'):
+            logger.info(f"✅ Privacy notice sent successfully using template")
+            return template_result
+        
+        # Si el template falla, usar mensaje interactivo como fallback
+        logger.warning(f"⚠️ Template failed ({template_result.get('error', 'unknown error')}), falling back to interactive message")
+        
+        # Construir nombre completo para el mensaje
+        doctor_name_display = f"{doctor_title} {doctor_full_name}".strip() if doctor_title else doctor_full_name
+        
+        url = f'{self.base_url}/{self.phone_id}/messages'
         
         # Mensaje con botón interactivo
         payload = {
@@ -465,7 +560,7 @@ class WhatsAppService:
                 },
                 "body": {
                     "text": f"Hola {patient_name},\n\n"
-                            f"Soy {doctor_name} y necesito tu consentimiento para brindarte "
+                            f"Soy {doctor_name_display} y necesito tu consentimiento para brindarte "
                             f"atención médica y manejar tus datos personales de forma segura.\n\n"
                             f"📄 Lee nuestro Aviso de Privacidad completo aquí:\n"
                             f"{privacy_notice_url}\n\n"
@@ -493,6 +588,8 @@ class WhatsAppService:
         }
         
         try:
+            logger.info(f"📤 Sending interactive privacy notice to {formatted_phone}")
+            logger.debug(f"📤 Interactive payload: {payload}")
             response = requests.post(
                 url,
                 headers=self._get_headers(),
@@ -500,14 +597,19 @@ class WhatsAppService:
                 timeout=10
             )
             
+            logger.info(f"📤 Interactive response status: {response.status_code}")
+            logger.debug(f"📤 Interactive response headers: {dict(response.headers)}")
+            
             response.raise_for_status()
             result = response.json()
             
-            logger.info(f"✅ Interactive privacy notice sent to {formatted_phone}")
+            logger.info(f"📤 Interactive response body: {result}")
+            message_id = result.get('messages', [{}])[0].get('id') if result.get('messages') else None
+            logger.info(f"✅ Interactive privacy notice sent to {formatted_phone}, Message ID: {message_id}")
             
             return {
                 'success': True,
-                'message_id': result.get('messages', [{}])[0].get('id'),
+                'message_id': message_id,
                 'phone': formatted_phone,
                 'response': result
             }
@@ -620,12 +722,38 @@ class TwilioWhatsAppService:
         to = f"whatsapp:{to_e164}"
         from_ = self.whatsapp_from if self.whatsapp_from.startswith('whatsapp:') else f"whatsapp:{self.whatsapp_from}"
 
+        # Log detallado para debugging
+        logger.info(f"📤 Phone formatting details:")
+        logger.info(f"   Original: {to_phone}")
+        logger.info(f"   Country code: {country_code}")
+        logger.info(f"   Formatted (E.164): {to_e164}")
+        logger.info(f"   To (Twilio format): {to}")
+        logger.info(f"   From: {from_}")
+
         try:
+            logger.info(f"📤 Sending text message from {from_} to {to}")
             msg = self._client.messages.create(body=message, from_=from_, to=to)
+            logger.info(f"✅ Message sent successfully: {msg.sid}")
             return {'success': True, 'message_sid': msg.sid}
         except Exception as e:
-            logger.error(f"Twilio send error: {e}")
-            return {'success': False, 'error': str(e)}
+            error_msg = str(e)
+            logger.error(f"Twilio send error: {error_msg}")
+            
+            # Detectar errores específicos de configuración
+            if 'could not find a Channel' in error_msg or '63007' in error_msg:
+                return {
+                    'success': False, 
+                    'error': f'WhatsApp number not configured in Twilio Sandbox. Please verify your WhatsApp number ({self.whatsapp_from}) is connected to your Twilio Sandbox.',
+                    'error_code': 'channel_not_found'
+                }
+            elif 'not configured' in error_msg.lower():
+                return {
+                    'success': False,
+                    'error': 'WhatsApp not configured. Please configure your Twilio WhatsApp credentials.',
+                    'error_code': 'not_configured'
+                }
+            
+            return {'success': False, 'error': error_msg}
 
     def send_template_message(
         self,
@@ -643,12 +771,18 @@ class TwilioWhatsAppService:
         from_ = self.whatsapp_from if self.whatsapp_from.startswith('whatsapp:') else f"whatsapp:{self.whatsapp_from}"
 
         try:
-            # Twilio requiere content_variables como JSON string
+            # Twilio requiere content_variables como JSON string con formato específico
+            # Las variables deben estar como un objeto JSON que se serializa a string
             import json
-            content_variables_json = json.dumps(content_variables)
             
             logger.info(f"📤 Sending template message with Content SID: {content_sid}")
-            logger.info(f"📤 Content variables: {content_variables_json}")
+            logger.info(f"📤 Content variables (dict): {content_variables}")
+            
+            # Convertir el diccionario a JSON string
+            # Twilio espera un JSON string que representa un objeto con las variables
+            content_variables_json = json.dumps(content_variables)
+            
+            logger.info(f"📤 Content variables (JSON): {content_variables_json}")
             
             msg = self._client.messages.create(
                 content_sid=content_sid,
@@ -658,8 +792,16 @@ class TwilioWhatsAppService:
             )
             return {'success': True, 'message_sid': msg.sid}
         except Exception as e:
-            logger.error(f"Twilio template send error: {e}")
-            return {'success': False, 'error': str(e)}
+            error_msg = str(e)
+            logger.error(f"Twilio template send error: {error_msg}")
+            
+            # Log detallado del error para debugging
+            if hasattr(e, 'code'):
+                logger.error(f"Twilio error code: {e.code}")
+            if hasattr(e, 'msg'):
+                logger.error(f"Twilio error message: {e.msg}")
+            
+            return {'success': False, 'error': error_msg, 'error_code': 'template_format_error'}
 
     def send_appointment_reminder(
         self,
@@ -735,28 +877,90 @@ class TwilioWhatsAppService:
         doctor_name: str,
         privacy_notice_url: str,
         consent_id: int,
+        doctor_title: Optional[str] = None,
+        doctor_full_name: Optional[str] = None,
         country_code: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Envía aviso de privacidad con template o mensaje interactivo
         Si hay Content SID configurado, usa template aprobado. Si no, usa mensaje de texto con URL.
+        Si el template falla, hace fallback automático a mensaje de texto.
+        
+        Args:
+            patient_name: Nombre del paciente
+            patient_phone: Teléfono del paciente
+            doctor_name: Nombre completo del doctor (con título)
+            privacy_notice_url: URL del aviso de privacidad
+            consent_id: ID del consentimiento
+            doctor_title: Título del doctor (opcional, se extrae de doctor_name si no se proporciona)
+            doctor_full_name: Nombre completo del doctor sin título (opcional, se extrae de doctor_name si no se proporciona)
+            country_code: Código de país
         """
-        # Si hay Content SID configurado, usar template aprobado
+        # Separar título y nombre del doctor si no se proporcionaron por separado
+        if doctor_title is None or doctor_full_name is None:
+            if doctor_name.startswith(("Dr. ", "Dra. ", "Dr ", "Dra ")):
+                parts = doctor_name.split(" ", 1)
+                doctor_title = parts[0] + ("." if not parts[0].endswith(".") else "")
+                doctor_full_name = parts[1] if len(parts) > 1 else doctor_name
+            else:
+                # Si no tiene título explícito, usar valores por defecto
+                doctor_title = doctor_title or ""
+                doctor_full_name = doctor_full_name or doctor_name
+        
+        # Si hay Content SID configurado, intentar usar template aprobado
         if self.content_sid_privacy_notice:
-            # Variables para el template (ajusta según tu template en Twilio)
-            # Template espera: {1} paciente, {2} doctor, {3} URL privacidad, {4} consent_id
-            content_variables = {
-                '1': patient_name,
-                '2': doctor_name,
-                '3': privacy_notice_url,
-                '4': str(consent_id)
+            # Variables para el template según el template en Twilio:
+            # {{1}} = paciente (nombre del paciente)
+            # {{2}} = titulo (título del doctor: "Dr.", "Dra.", etc.)
+            # {{3}} = nombre doctor (nombre completo del doctor)
+            # {{4}} = url privacidad (URL del aviso de privacidad)
+            
+            content_variables_num = {
+                '1': patient_name,          # {{1}} = paciente
+                '2': doctor_title,          # {{2}} = titulo (Dr., Dra., etc.)
+                '3': doctor_full_name,      # {{3}} = nombre doctor
+                '4': privacy_notice_url     # {{4}} = url privacidad
             }
-            return self.send_template_message(
+            
+            # Formato 2: Variables con nombres ({{patient_name}}, etc.) - alternativo
+            content_variables_named = {
+                'patient_name': patient_name,
+                'doctor_title': doctor_title,
+                'doctor_name': doctor_full_name,
+                'privacy_url': privacy_notice_url,
+                'consent_id': str(consent_id)
+            }
+            
+            # Intentar primero con variables numéricas
+            logger.info(f"📤 Attempting template with numeric variables: {content_variables_num}")
+            result = self.send_template_message(
                 to_phone=patient_phone,
                 content_sid=self.content_sid_privacy_notice,
-                content_variables=content_variables,
+                content_variables=content_variables_num,
                 country_code=country_code
             )
+            
+            if result.get('success'):
+                return result
+            
+            # Si falla, intentar con variables nombradas
+            error_msg = result.get('error', 'unknown error')
+            if 'Content Variables' in error_msg or '21656' in error_msg:
+                logger.warning(f"⚠️ Numeric variables failed, trying named variables...")
+                logger.info(f"📤 Attempting template with named variables: {content_variables_named}")
+                result = self.send_template_message(
+                    to_phone=patient_phone,
+                    content_sid=self.content_sid_privacy_notice,
+                    content_variables=content_variables_named,
+                    country_code=country_code
+                )
+                
+                if result.get('success'):
+                    return result
+            
+            # Si ambos formatos fallan, hacer fallback a mensaje de texto
+            logger.warning(f"⚠️ Template failed with both formats ({error_msg}), falling back to text message")
+            # Continuar al fallback de texto
         
         # Fallback a mensaje de texto con URL (solo funciona dentro de ventana de 24h)
         body = (

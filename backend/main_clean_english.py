@@ -290,6 +290,22 @@ app.include_router(patients_router)
 
 # Include appointment management routes
 from routes.appointments import router as appointments_router
+
+# IMPORTANT: Define specific routes BEFORE including the router with dynamic routes
+# This ensures FastAPI matches /api/appointments/available-times before /api/appointments/{appointment_id}
+# Import get_current_user here to ensure it's available for the route definition
+from dependencies import get_current_user
+
+@app.get("/api/appointments/available-times")
+async def get_available_times_for_booking_endpoint(
+    date: str = Query(..., description="Date in YYYY-MM-DD format"),
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Get available appointment times for booking on a specific date - Defined in main to avoid route conflicts"""
+    from routes.appointments import get_available_times_for_booking as get_available_times_impl
+    return await get_available_times_impl(date, db, current_user)
+
 app.include_router(appointments_router)
 
 # Include clinical studies management routes
@@ -315,13 +331,6 @@ app.include_router(privacy_router)
 # Include consultations routes
 from routes.consultations import router as consultations_router
 app.include_router(consultations_router)
-
-# ============================================================================
-# AUTHENTICATION DEPENDENCY
-# ============================================================================
-
-# get_current_user moved to dependencies.py to avoid circular imports
-from dependencies import get_current_user
 
 # ============================================================================
 # HEALTH CHECK
@@ -659,6 +668,10 @@ async def process_whatsapp_message(message: dict, db: Session):
             elif button_payload == "Cancelar" or button_text == "Cancelar":
                 print(f"🔄 Generic cancel button clicked, processing as text cancellation")
                 await process_text_cancellation_request("cancelar", from_phone, db)
+            # Manejar consentimiento de privacidad cuando viene como "Acepto" (formato antiguo)
+            elif button_payload == "Acepto" or button_text == "Acepto":
+                print(f"✅ Privacy consent accepted via old button format (payload: {button_payload})")
+                await process_privacy_consent_by_phone(from_phone, db)
         
         # Procesar mensaje de texto
         elif message_type == "text":
@@ -672,6 +685,133 @@ async def process_whatsapp_message(message: dict, db: Session):
         
     except Exception as e:
         print(f"❌ Error processing WhatsApp message: {e}")
+
+async def process_privacy_consent_by_phone(from_phone: str, db: Session):
+    """
+    Procesar consentimiento de privacidad cuando solo tenemos el teléfono (formato antiguo de botón)
+    Busca el consentimiento pendiente más reciente del paciente con ese teléfono
+    """
+    try:
+        print(f"🔐 Processing privacy consent by phone: {from_phone}")
+        
+        # Normalizar el número de teléfono
+        whatsapp = get_whatsapp_service()
+        normalized_from_phone = whatsapp._format_phone_number(from_phone)
+        
+        # Normalizar el número entrante para búsqueda
+        # El formato puede ser: 5215579449672, +5215579449672, 525579449672, +525579449672, etc.
+        # Necesitamos extraer solo los últimos 10 dígitos para comparar
+        def extract_digits(phone_str):
+            """Extrae solo los dígitos de un número de teléfono"""
+            return ''.join(filter(str.isdigit, str(phone_str)))
+        
+        from_digits = extract_digits(from_phone)
+        # Los últimos 10 dígitos son el número local en México
+        from_local_digits = from_digits[-10:] if len(from_digits) >= 10 else from_digits
+        
+        print(f"🔍 Searching for patient with phone ending in: {from_local_digits}")
+        
+        # Buscar pacientes cuyo teléfono termine en los mismos últimos 10 dígitos
+        all_patients = db.query(Person).filter(
+            Person.person_type == 'patient',
+            Person.primary_phone.isnot(None)
+        ).all()
+        
+        matching_patient = None
+        for patient in all_patients:
+            if not patient.primary_phone:
+                continue
+            
+            patient_digits = extract_digits(patient.primary_phone)
+            patient_local_digits = patient_digits[-10:] if len(patient_digits) >= 10 else patient_digits
+            
+            # También normalizar con el servicio de WhatsApp para comparación exacta
+            normalized_patient_phone = whatsapp._format_phone_number(patient.primary_phone)
+            
+            print(f"🔍 Comparing: patient={patient.primary_phone} (digits: {patient_local_digits}) vs from={from_phone} (digits: {from_local_digits})")
+            
+            # Comparar por últimos 10 dígitos o por formato normalizado
+            if (patient_local_digits == from_local_digits or 
+                normalized_patient_phone == normalized_from_phone or
+                normalized_patient_phone.endswith(from_local_digits) or
+                normalized_from_phone.endswith(patient_local_digits)):
+                matching_patient = patient
+                print(f"✅ Found matching patient: {patient.id} ({patient.first_name} {patient.paternal_surname})")
+                break
+        
+        if not matching_patient:
+            print(f"❌ No patient found with phone {from_phone} (normalized: {normalized_from_phone})")
+            return
+        
+        # Buscar el consentimiento pendiente más reciente del paciente
+        consent = db.query(PrivacyConsent).filter(
+            PrivacyConsent.patient_id == matching_patient.id,
+            PrivacyConsent.consent_given == False  # Solo pendientes
+        ).order_by(PrivacyConsent.created_at.desc()).first()
+        
+        if not consent:
+            print(f"⚠️ No pending consent found for patient {matching_patient.id}")
+            # Buscar si ya tiene un consentimiento aceptado
+            accepted_consent = db.query(PrivacyConsent).filter(
+                PrivacyConsent.patient_id == matching_patient.id,
+                PrivacyConsent.consent_given == True
+            ).order_by(PrivacyConsent.created_at.desc()).first()
+            
+            if accepted_consent:
+                print(f"ℹ️ Patient {matching_patient.id} already has an accepted consent (ID: {accepted_consent.id})")
+                return
+            
+            # Si no hay ningún consentimiento, crear uno nuevo automáticamente
+            print(f"📝 Creating new consent for patient {matching_patient.id} (no existing consent found)")
+            
+            # Obtener aviso de privacidad activo
+            privacy_notice = db.query(PrivacyNotice).filter(
+                PrivacyNotice.is_active == True
+            ).order_by(PrivacyNotice.effective_date.desc()).first()
+            
+            if not privacy_notice:
+                print(f"❌ No active privacy notice found, cannot create consent")
+                return
+            
+            # Crear nuevo consentimiento
+            consent = PrivacyConsent(
+                patient_id=matching_patient.id,
+                notice_id=privacy_notice.id,
+                consent_given=False,  # Se establecerá a True abajo
+                consent_date=datetime.utcnow()
+            )
+            db.add(consent)
+            db.flush()  # Para obtener el ID sin hacer commit todavía
+            print(f"✅ Created new consent record (ID: {consent.id}) for patient {matching_patient.id}")
+        
+        # Actualizar el consentimiento
+        consent.consent_given = True
+        consent.consent_date = datetime.utcnow()
+        # Nota: consent_method no existe en la tabla, se elimina esa asignación
+        
+        db.commit()
+        
+        print(f"🔍 Database commit successful for consent {consent.id}")
+        print(f"✅ Privacy consent updated for patient {matching_patient.id} (consent {consent.id})")
+        
+        # Enviar mensaje de confirmación
+        try:
+            # Usar la instancia de whatsapp que ya creamos al principio
+            whatsapp.send_text_message(
+                to_phone=from_phone,
+                message=f"✅ Gracias {matching_patient.first_name}, tu consentimiento ha sido registrado correctamente.\n\n"
+                        f"Ahora podemos brindarte atención médica cumpliendo con la Ley de Protección de Datos.\n\n"
+                        f"Recuerda que puedes revocar tu consentimiento en cualquier momento contactando al consultorio.\n\n"
+                        f"Tus derechos ARCO (Acceso, Rectificación, Cancelación, Oposición) están garantizados."
+            )
+        except Exception as e:
+            print(f"⚠️ Could not send confirmation message: {e}")
+        
+    except Exception as e:
+        print(f"❌ Error processing privacy consent by phone: {e}")
+        import traceback
+        traceback.print_exc()
+        db.rollback()
 
 async def process_privacy_consent(button_id: str, from_phone: str, db: Session):
     """
@@ -723,9 +863,11 @@ async def process_privacy_consent(button_id: str, from_phone: str, db: Session):
         # Actualizar el consentimiento
         consent.consent_given = True
         consent.consent_date = datetime.utcnow()
+        # Nota: consent_method no existe en la tabla, se elimina esa asignación
         
         db.commit()
         
+        print(f"🔍 Database commit successful for consent {consent_id}")
         print(f"✅ Privacy consent updated for patient {consent.patient_id} (consent {consent_id})")
         
         # Opcional: Enviar mensaje de confirmación
@@ -733,6 +875,8 @@ async def process_privacy_consent(button_id: str, from_phone: str, db: Session):
         
     except Exception as e:
         print(f"❌ Error processing privacy consent: {e}")
+        import traceback
+        traceback.print_exc()
         db.rollback()
 
 async def cancel_appointment_via_whatsapp(appointment_id: int, patient_phone: str, db: Session):
@@ -924,308 +1068,292 @@ async def process_text_cancellation_request(text: str, patient_phone: str, db: S
 # DEBUGGING ENDPOINTS
 # ============================================================================
 # NOTE: These endpoints are for development only. In production, they should be disabled.
-# Consider using environment variable check: if os.getenv('ENABLE_DEBUG_ENDPOINTS') == 'true'
-
-# Debug endpoints disabled by default - uncomment if needed for development
+# Debug endpoints are disabled by default for security reasons.
 # To enable debug endpoints, uncomment the block below and set ENABLE_DEBUG_ENDPOINTS=true
 # if os.getenv('ENABLE_DEBUG_ENDPOINTS') == 'true':
 #     @app.get("/api/debug/office-system")
-async def debug_office_system(
-    current_user: Person = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Debug office system status"""
-    try:
-        # Check offices
-        offices = db.query(Office).all()
-        office_data = []
-        
-        for office in offices:
-            office_info = {
-                'id': office.id,
-                'name': office.name,
-                'doctor_id': office.doctor_id,
-                'address': office.address,
-                'city': office.city,
-                'state_id': office.state_id,
-                'country_id': office.country_id,
-                'phone': office.phone,
-                'timezone': office.timezone,
-                'is_active': office.is_active,
-                'created_at': office.created_at.isoformat() if office.created_at else None
-            }
-            office_data.append(office_info)
-        
-        # Check doctors without offices
-        doctors_without_offices = db.query(Person).filter(
-            Person.person_type == 'doctor',
-            Person.is_active == True
-        ).all()
-        
-        doctors_without_offices_data = []
-        for doctor in doctors_without_offices:
-            has_office = db.query(Office).filter(
-                Office.doctor_id == doctor.id,
-                Office.is_active == True
-            ).first() is not None
-            
-            if not has_office:
-                doctors_without_offices_data.append({
-                    'id': doctor.id,
-                    'name': f"{doctor.first_name} {doctor.paternal_surname}",
-                    'email': doctor.email
-                })
-        
-        return {
-            'status': 'success',
-            'total_offices': len(offices),
-            'offices': office_data,
-            'doctors_without_offices': len(doctors_without_offices_data),
-            'doctors_without_offices_data': doctors_without_offices_data,
-            'timestamp': datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        return {
-            'status': 'error',
-            'error': str(e),
-            'timestamp': datetime.now().isoformat()
-        }
-
-@app.get("/api/debug/appointment-system")
-async def debug_appointment_system(
-    current_user: Person = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Debug appointment system status"""
-    try:
-        # Check appointments
-        appointments = db.query(Appointment).all()
-        appointment_data = []
-        
-        for appointment in appointments:
-            appointment_info = {
-                'id': appointment.id,
-                'patient_id': appointment.patient_id,
-                'doctor_id': appointment.doctor_id,
-                'appointment_date': appointment.appointment_date.isoformat() if appointment.appointment_date else None,
-                'appointment_type_id': appointment.appointment_type_id,
-                'office_id': appointment.office_id,
-                'status': appointment.status,
-                'reason': appointment.reason
-            }
-            appointment_data.append(appointment_info)
-        
-        # Check appointment types
-        appointment_types = db.query(AppointmentType).all()
-        appointment_types_data = []
-        
-        for apt_type in appointment_types:
-            apt_type_info = {
-                'id': apt_type.id,
-                'name': apt_type.name,
-                'active': apt_type.active
-            }
-            appointment_types_data.append(apt_type_info)
-        
-        # Check appointments without office_id
-        appointments_without_office = db.query(Appointment).filter(
-            Appointment.office_id.is_(None)
-        ).count()
-        
-        # Check appointments without appointment_type_id
-        appointments_without_type = db.query(Appointment).filter(
-            Appointment.appointment_type_id.is_(None)
-        ).count()
-        
-        return {
-            'status': 'success',
-            'total_appointments': len(appointments),
-            'appointments': appointment_data,
-            'appointment_types': appointment_types_data,
-            'appointments_without_office': appointments_without_office,
-            'appointments_without_type': appointments_without_type,
-            'timestamp': datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        return {
-            'status': 'error',
-            'error': str(e),
-            'timestamp': datetime.now().isoformat()
-        }
-
-@app.get("/api/debug/consultation-system")
-async def debug_consultation_system(
-    current_user: Person = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Debug consultation system status"""
-    try:
-        # Check medical records
-        medical_records = db.query(MedicalRecord).all()
-        medical_records_data = []
-        
-        for record in medical_records:
-            record_info = {
-                'id': record.id,
-                'patient_id': record.patient_id,
-                'doctor_id': record.doctor_id,
-                'consultation_date': record.consultation_date.isoformat() if record.consultation_date else None,
-                # appointment_type_id and office_id columns don't exist in medical_records table
-                'appointment_type_id': None,
-                'office_id': None,
-                'chief_complaint': record.chief_complaint[:100] + '...' if record.chief_complaint and len(record.chief_complaint) > 100 else record.chief_complaint
-            }
-            medical_records_data.append(record_info)
-        
-        # Check medical records without office_id
-        records_without_office = db.query(MedicalRecord).filter(
-            # office_id column doesn't exist in medical_records table - removed filter
-            False
-        ).count()
-        
-        # Check medical records without appointment_type_id
-        records_without_type = db.query(MedicalRecord).filter(
-            # appointment_type_id column doesn't exist in medical_records table - removed filter
-            False
-        ).count()
-        
-        return {
-            'status': 'success',
-            'total_medical_records': len(medical_records),
-            'medical_records': medical_records_data,
-            'records_without_office': records_without_office,
-            'records_without_type': records_without_type,
-            'timestamp': datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        return {
-            'status': 'error',
-            'error': str(e),
-            'timestamp': datetime.now().isoformat()
-        }
-
-@app.get("/api/debug/whatsapp-system")
-async def debug_whatsapp_system(
-    current_user: Person = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Debug WhatsApp system status"""
-    try:
-        # Check WhatsApp configuration
-        whatsapp_config = {
-            'phone_id': os.getenv('META_WHATSAPP_PHONE_ID'),
-            'access_token': '***' + os.getenv('META_WHATSAPP_TOKEN', '')[-4:] if os.getenv('META_WHATSAPP_TOKEN') else None,
-            'api_version': os.getenv('META_WHATSAPP_API_VERSION', 'v18.0')
-        }
-        
-        # Check appointments with WhatsApp data
-        appointments_with_whatsapp = db.query(Appointment).filter(
-            Appointment.patient_id.isnot(None)
-        ).all()
-        
-        whatsapp_data = []
-        for appointment in appointments_with_whatsapp:
-            patient = db.query(Person).filter(Person.id == appointment.patient_id).first()
-            if patient and patient.primary_phone:
-                whatsapp_info = {
-                    'appointment_id': appointment.id,
-                    'patient_phone': patient.primary_phone,
-                    'appointment_date': appointment.appointment_date.isoformat() if appointment.appointment_date else None,
-                    'office_id': appointment.office_id,
-                    'appointment_type_id': appointment.appointment_type_id
-                }
-                whatsapp_data.append(whatsapp_info)
-        
-        return {
-            'status': 'success',
-            'whatsapp_config': whatsapp_config,
-            'appointments_with_whatsapp': len(whatsapp_data),
-            'whatsapp_data': whatsapp_data,
-            'timestamp': datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        return {
-            'status': 'error',
-            'error': str(e),
-            'timestamp': datetime.now().isoformat()
-        }
-
-@app.get("/api/debug/pdf-system")
-async def debug_pdf_system(
-    current_user: Person = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Debug PDF system status"""
-    try:
-        # Check PDF generation requirements
-        doctors_with_offices = db.query(Person).filter(
-            Person.person_type == 'doctor',
-            Person.is_active == True
-        ).all()
-        
-        pdf_data = []
-        for doctor in doctors_with_offices:
-            offices = db.query(Office).filter(
-                Office.doctor_id == doctor.id,
-                Office.is_active == True
-            ).all()
-            
-            doctor_info = {
-                'id': doctor.id,
-                'name': f"{doctor.first_name} {doctor.paternal_surname}",
-                'offices_count': len(offices),
-                'offices': [{'id': o.id, 'name': o.name, 'address': o.address} for o in offices]
-            }
-            pdf_data.append(doctor_info)
-        
-        return {
-            'status': 'success',
-            'doctors_with_offices': len(pdf_data),
-            'pdf_data': pdf_data,
-            'timestamp': datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        return {
-            'status': 'error',
-            'error': str(e),
-            'timestamp': datetime.now().isoformat()
-        }
-
-@app.get("/api/debug/full-system")
-async def debug_full_system(
-    current_user: Person = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Debug complete multi-office system"""
-    try:
-        # Get all debug information
-        office_debug = await debug_office_system(current_user, db)
-        appointment_debug = await debug_appointment_system(current_user, db)
-        consultation_debug = await debug_consultation_system(current_user, db)
-        whatsapp_debug = await debug_whatsapp_system(current_user, db)
-        pdf_debug = await debug_pdf_system(current_user, db)
-        
-        return {
-            'status': 'success',
-            'timestamp': datetime.now().isoformat(),
-            'office_system': office_debug,
-            'appointment_system': appointment_debug,
-            'consultation_system': consultation_debug,
-            'whatsapp_system': whatsapp_debug,
-            'pdf_system': pdf_debug
-        }
-        
-    except Exception as e:
-        return {
-            'status': 'error',
-            'error': str(e),
-            'timestamp': datetime.now().isoformat()
-        }
+#     async def debug_office_system(
+#         current_user: Person = Depends(get_current_user),
+#         db: Session = Depends(get_db)
+#     ):
+#         """Debug office system status"""
+#         try:
+#             # Check offices
+#             offices = db.query(Office).all()
+#             office_data = []
+#             
+#             for office in offices:
+#                 office_info = {
+#                     'id': office.id,
+#                     'name': office.name,
+#                     'doctor_id': office.doctor_id,
+#                     'address': office.address,
+#                     'city': office.city,
+#                     'state_id': office.state_id,
+#                     'country_id': office.country_id,
+#                     'phone': office.phone,
+#                     'timezone': office.timezone,
+#                     'is_active': office.is_active,
+#                     'created_at': office.created_at.isoformat() if office.created_at else None
+#                 }
+#                 office_data.append(office_info)
+#             
+#             # Check doctors without offices
+#             doctors_without_offices = db.query(Person).filter(
+#                 Person.person_type == 'doctor',
+#                 Person.is_active == True
+#             ).all()
+#             
+#             doctors_without_offices_data = []
+#             for doctor in doctors_without_offices:
+#                 has_office = db.query(Office).filter(
+#                     Office.doctor_id == doctor.id,
+#                     Office.is_active == True
+#                 ).first() is not None
+#                 
+#                 if not has_office:
+#                     doctors_without_offices_data.append({
+#                         'id': doctor.id,
+#                         'name': f"{doctor.first_name} {doctor.paternal_surname}",
+#                         'email': doctor.email
+#                     })
+#             
+#             return {
+#                 'status': 'success',
+#                 'total_offices': len(offices),
+#                 'offices': office_data,
+#                 'doctors_without_offices': len(doctors_without_offices_data),
+#                 'doctors_without_offices_data': doctors_without_offices_data,
+#                 'timestamp': datetime.now().isoformat()
+#             }
+#             
+#         except Exception as e:
+#             return {
+#                 'status': 'error',
+#                 'error': str(e),
+#                 'timestamp': datetime.now().isoformat()
+#             }
+# 
+#     @app.get("/api/debug/appointment-system")
+#     async def debug_appointment_system(
+#         current_user: Person = Depends(get_current_user),
+#         db: Session = Depends(get_db)
+#     ):
+#         """Debug appointment system status"""
+#         try:
+#             # Check appointments
+#             appointments = db.query(Appointment).all()
+#             appointment_data = []
+#             
+#             for appointment in appointments:
+#                 appointment_info = {
+#                     'id': appointment.id,
+#                     'patient_id': appointment.patient_id,
+#                     'doctor_id': appointment.doctor_id,
+#                     'appointment_date': appointment.appointment_date.isoformat() if appointment.appointment_date else None,
+#                     'appointment_type_id': appointment.appointment_type_id,
+#                     'office_id': appointment.office_id,
+#                     'status': appointment.status,
+#                     'reason': appointment.reason
+#                 }
+#                 appointment_data.append(appointment_info)
+#             
+#             # Check appointment types
+#             appointment_types = db.query(AppointmentType).all()
+#             appointment_types_data = []
+#             
+#             for apt_type in appointment_types:
+#                 apt_type_info = {
+#                     'id': apt_type.id,
+#                     'name': apt_type.name,
+#                     'active': apt_type.active
+#                 }
+#                 appointment_types_data.append(apt_type_info)
+#             
+#             # Check appointments without office_id
+#             appointments_without_office = db.query(Appointment).filter(
+#                 Appointment.office_id.is_(None)
+#             ).count()
+#             
+#             # Check appointments without appointment_type_id
+#             appointments_without_type = db.query(Appointment).filter(
+#                 Appointment.appointment_type_id.is_(None)
+#             ).count()
+#             
+#             return {
+#                 'status': 'success',
+#                 'total_appointments': len(appointments),
+#                 'appointments': appointment_data,
+#                 'appointment_types': appointment_types_data,
+#                 'appointments_without_office': appointments_without_office,
+#                 'appointments_without_type': appointments_without_type,
+#                 'timestamp': datetime.now().isoformat()
+#             }
+#             
+#         except Exception as e:
+#             return {
+#                 'status': 'error',
+#                 'error': str(e),
+#                 'timestamp': datetime.now().isoformat()
+#             }
+# 
+#     @app.get("/api/debug/consultation-system")
+#     async def debug_consultation_system(
+#         current_user: Person = Depends(get_current_user),
+#         db: Session = Depends(get_db)
+#     ):
+#         """Debug consultation system status"""
+#         try:
+#             # Check medical records
+#             medical_records = db.query(MedicalRecord).all()
+#             medical_records_data = []
+#             
+#             for record in medical_records:
+#                 record_info = {
+#                     'id': record.id,
+#                     'patient_id': record.patient_id,
+#                     'doctor_id': record.doctor_id,
+#                     'consultation_date': record.consultation_date.isoformat() if record.consultation_date else None,
+#                     'appointment_type_id': None,
+#                     'office_id': None,
+#                     'chief_complaint': record.chief_complaint[:100] + '...' if record.chief_complaint and len(record.chief_complaint) > 100 else record.chief_complaint
+#                 }
+#                 medical_records_data.append(record_info)
+#             
+#             records_without_office = 0
+#             records_without_type = 0
+#             
+#             return {
+#                 'status': 'success',
+#                 'total_medical_records': len(medical_records),
+#                 'medical_records': medical_records_data,
+#                 'records_without_office': records_without_office,
+#                 'records_without_type': records_without_type,
+#                 'timestamp': datetime.now().isoformat()
+#             }
+#             
+#         except Exception as e:
+#             return {
+#                 'status': 'error',
+#                 'error': str(e),
+#                 'timestamp': datetime.now().isoformat()
+#             }
+# 
+#     @app.get("/api/debug/whatsapp-system")
+#     async def debug_whatsapp_system(
+#         current_user: Person = Depends(get_current_user),
+#         db: Session = Depends(get_db)
+#     ):
+#         """Debug WhatsApp system status"""
+#         try:
+#             whatsapp_config = {
+#                 'phone_id': os.getenv('META_WHATSAPP_PHONE_ID'),
+#                 'access_token': '***' + os.getenv('META_WHATSAPP_TOKEN', '')[-4:] if os.getenv('META_WHATSAPP_TOKEN') else None,
+#                 'api_version': os.getenv('META_WHATSAPP_API_VERSION', 'v18.0')
+#             }
+#             
+#             appointments_with_whatsapp = db.query(Appointment).filter(
+#                 Appointment.patient_id.isnot(None)
+#             ).all()
+#             
+#             whatsapp_data = []
+#             for appointment in appointments_with_whatsapp:
+#                 patient = db.query(Person).filter(Person.id == appointment.patient_id).first()
+#                 if patient and patient.primary_phone:
+#                     whatsapp_info = {
+#                         'appointment_id': appointment.id,
+#                         'patient_phone': patient.primary_phone,
+#                         'appointment_date': appointment.appointment_date.isoformat() if appointment.appointment_date else None,
+#                         'office_id': appointment.office_id,
+#                         'appointment_type_id': appointment.appointment_type_id
+#                     }
+#                     whatsapp_data.append(whatsapp_info)
+#             
+#             return {
+#                 'status': 'success',
+#                 'whatsapp_config': whatsapp_config,
+#                 'appointments_with_whatsapp': len(whatsapp_data),
+#                 'whatsapp_data': whatsapp_data,
+#                 'timestamp': datetime.now().isoformat()
+#             }
+#             
+#         except Exception as e:
+#             return {
+#                 'status': 'error',
+#                 'error': str(e),
+#                 'timestamp': datetime.now().isoformat()
+#             }
+# 
+#     @app.get("/api/debug/pdf-system")
+#     async def debug_pdf_system(
+#         current_user: Person = Depends(get_current_user),
+#         db: Session = Depends(get_db)
+#     ):
+#         """Debug PDF system status"""
+#         try:
+#             doctors_with_offices = db.query(Person).filter(
+#                 Person.person_type == 'doctor',
+#                 Person.is_active == True
+#             ).all()
+#             
+#             pdf_data = []
+#             for doctor in doctors_with_offices:
+#                 offices = db.query(Office).filter(
+#                     Office.doctor_id == doctor.id,
+#                     Office.is_active == True
+#                 ).all()
+#                 
+#                 doctor_info = {
+#                     'id': doctor.id,
+#                     'name': f"{doctor.first_name} {doctor.paternal_surname}",
+#                     'offices_count': len(offices),
+#                     'offices': [{'id': o.id, 'name': o.name, 'address': o.address} for o in offices]
+#                 }
+#                 pdf_data.append(doctor_info)
+#             
+#             return {
+#                 'status': 'success',
+#                 'doctors_with_offices': len(pdf_data),
+#                 'pdf_data': pdf_data,
+#                 'timestamp': datetime.now().isoformat()
+#             }
+#             
+#         except Exception as e:
+#             return {
+#                 'status': 'error',
+#                 'error': str(e),
+#                 'timestamp': datetime.now().isoformat()
+#             }
+# 
+#     @app.get("/api/debug/full-system")
+#     async def debug_full_system(
+#         current_user: Person = Depends(get_current_user),
+#         db: Session = Depends(get_db)
+#     ):
+#         """Debug complete multi-office system"""
+#         try:
+#             office_debug = await debug_office_system(current_user, db)
+#             appointment_debug = await debug_appointment_system(current_user, db)
+#             consultation_debug = await debug_consultation_system(current_user, db)
+#             whatsapp_debug = await debug_whatsapp_system(current_user, db)
+#             pdf_debug = await debug_pdf_system(current_user, db)
+#             
+#             return {
+#                 'status': 'success',
+#                 'timestamp': datetime.now().isoformat(),
+#                 'office_system': office_debug,
+#                 'appointment_system': appointment_debug,
+#                 'consultation_system': consultation_debug,
+#                 'whatsapp_system': whatsapp_debug,
+#                 'pdf_system': pdf_debug
+#             }
+#             
+#         except Exception as e:
+#             return {
+#                 'status': 'error',
+#                 'error': str(e),
+#                 'timestamp': datetime.now().isoformat()
+#             }
 
 # MIGRADO a routes/catalogs.py
 
@@ -1310,7 +1438,7 @@ async def get_audit_logs(
                 "error_message": log.error_message
             })
         
-        return {
+            return {
             "total": total,
             "skip": skip,
             "limit": limit,
@@ -1834,6 +1962,20 @@ async def send_whatsapp_privacy_notice(
                 detail="El paciente no tiene teléfono registrado"
             )
         
+        # Desencriptar el teléfono del paciente si está encriptado
+        from encryption import EncryptionService
+        encryption_service = EncryptionService()
+        try:
+            patient_phone_decrypted = encryption_service.decrypt_sensitive_data(patient.primary_phone)
+            api_logger.debug(f"Phone decrypted: {patient_phone_decrypted[:15]}...")
+        except Exception as e:
+            # Si falla la desencriptación, usar el número tal cual (puede no estar encriptado)
+            api_logger.warning(f"Could not decrypt phone, using as-is: {str(e)}")
+            patient_phone_decrypted = patient.primary_phone
+        
+        # Log del número que se va a usar
+        api_logger.info(f"📞 Sending WhatsApp to patient phone: {patient_phone_decrypted}")
+        
         # Verificar si ya tiene un consentimiento
         existing_consent = db.query(PrivacyConsent).filter(
             PrivacyConsent.patient_id == request_data.patient_id,
@@ -1854,7 +1996,7 @@ async def send_whatsapp_privacy_notice(
         ).order_by(PrivacyNotice.effective_date.desc()).first()
         
         if not privacy_notice:
-            raise HTTPException(status_code=500, detail="No hay aviso de privacidad activo")
+            raise HTTPException(status_code=404, detail="No hay aviso de privacidad activo. Por favor, contacta al administrador del sistema.")
         
         # Generar token único para la URL
         privacy_token = str(uuid.uuid4())
@@ -1876,24 +2018,51 @@ async def send_whatsapp_privacy_notice(
         from whatsapp_service import get_whatsapp_service
         whatsapp = get_whatsapp_service()
         
-        doctor_name = f"{current_user.title or 'Dr.'} {current_user.first_name} {current_user.paternal_surname}"
+        # Construir nombre del doctor con título separado para el template
+        doctor_title = current_user.title or 'Dr.'
+        doctor_full_name = f"{current_user.first_name} {current_user.paternal_surname}"
+        doctor_name = f"{doctor_title} {doctor_full_name}"
         
         result = whatsapp.send_interactive_privacy_notice(
             patient_name=patient.first_name,
-            patient_phone=patient.primary_phone,
+            patient_phone=patient_phone_decrypted,
             doctor_name=doctor_name,
+            doctor_title=doctor_title,  # Título separado para el template
+            doctor_full_name=doctor_full_name,  # Nombre completo sin título
             privacy_notice_url=privacy_url,
             consent_id=consent.id
         )
         
+        api_logger.debug(f"WhatsApp result: {result}")
+        
         if not result.get('success'):
+            error_msg = result.get('error', 'Error desconocido')
+            api_logger.warning(f"WhatsApp send failed: {error_msg}")
+            
             # Si falla el envío, eliminar el consentimiento
             db.delete(consent)
             db.commit()
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error al enviar WhatsApp: {result.get('error')}"
-            )
+            
+            # Detectar tipo de error y devolver código HTTP apropiado
+            error_lower = str(error_msg).lower()
+            if 'not configured' in error_lower or 'not configured' in error_msg:
+                api_logger.info("Detected WhatsApp not configured error, returning 503")
+                raise HTTPException(
+                    status_code=503,
+                    detail="Servicio de WhatsApp no configurado. Por favor, contacta al administrador del sistema para configurar las credenciales."
+                )
+            elif 'could not find a channel' in error_lower or 'channel_not_found' in error_lower or '63007' in error_msg:
+                api_logger.warning("Detected WhatsApp channel not found error, returning 503")
+                raise HTTPException(
+                    status_code=503,
+                    detail="El número de WhatsApp no está configurado en el Sandbox de Twilio. Por favor, conecta tu número de WhatsApp al Sandbox desde la consola de Twilio (Console > Messaging > WhatsApp Sandbox)."
+                )
+            else:
+                api_logger.error(f"WhatsApp error (not configuration): {error_msg}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Error al enviar WhatsApp: {error_msg}"
+                )
         
         # Actualizar con message_id
         # WhatsApp message tracking removed - simplified schema
@@ -1929,7 +2098,11 @@ async def send_whatsapp_privacy_notice(
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
         print(f"❌ Error sending privacy notice: {str(e)}")
+        print(f"❌ Traceback: {error_traceback}")
+        api_logger.error(f"Error sending privacy notice: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Error al enviar aviso de privacidad: {str(e)}"
@@ -2465,12 +2638,11 @@ async def get_public_privacy_notice(db: Session = Depends(get_db)):
             "version": notice.version,
             "title": notice.title,
             "content": notice.content,
-            "summary": notice.summary,
+            "short_summary": notice.short_summary,
             "effective_date": notice.effective_date.isoformat(),
-            "expiration_date": notice.expiration_date.isoformat() if notice.expiration_date else None,
+            # expiration_date removed - not needed, expiration is calculated from consent_date + 365 days
             "is_active": notice.is_active,
-            "created_at": notice.created_at.isoformat(),
-            "updated_at": notice.updated_at.isoformat()
+            "created_at": notice.created_at.isoformat()  # updated_at removed - column doesn't exist in database table
         }
         
     except HTTPException:

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { apiService } from '../services/api';
+import { apiService } from '../services';
 import { useAuth } from '../contexts/AuthContext';
 import { useCatalogs } from './useCatalogs';
 import { useScrollToError } from './useScrollToError';
@@ -413,7 +413,7 @@ export const useRegisterForm = (): UseRegisterFormReturn => {
     setError('');
     
     try {
-      await apiService.registerDoctor(formData);
+      await apiService.auth.register(formData);
       // Auto-login after successful registration
       await login(formData.email, formData.password);
     } catch (error: any) {

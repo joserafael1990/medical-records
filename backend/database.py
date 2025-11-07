@@ -11,17 +11,12 @@ from sqlalchemy import create_engine
 from datetime import datetime
 import os
 
-# Import schedule models early to avoid circular import issues
-try:
-    from models.schedule import ScheduleTemplate
-    print("✅ Schedule models imported successfully")
-except ImportError as e:
-    print(f"⚠️ Warning: Could not import schedule models: {e}")
-    ScheduleTemplate = None
-    # ScheduleException removed - table deleted
-
-# Base para modelos
+# Base para modelos (must be defined before importing models that use it)
 Base = declarative_base()
+
+# Note: ScheduleTemplate is defined in models/schedule.py and imports Base from here
+# Do not import ScheduleTemplate here to avoid circular import issues
+# Import it only where needed (e.g., in routes/schedule.py)
 
 # ============================================================================
 # GEOGRAPHIC CATALOGS
@@ -390,7 +385,7 @@ class Appointment(Base):
     # SYSTEM
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    created_by = Column(Integer, ForeignKey("persons.id"))
+    # created_by removed - not used, doctor_id already identifies the doctor
     
     # RELATIONSHIPS
     patient = relationship("Person", foreign_keys=[patient_id], back_populates="appointments_as_patient")
@@ -460,7 +455,6 @@ class StudyCategory(Base):
     name = Column(String(100), nullable=False)
     active = Column('active', Boolean, default=True)  # Database column is 'active', not 'is_active'
     created_at = Column(DateTime, default=datetime.utcnow)
-    # Note: updated_at column does not exist in study_categories table
     
     # Alias for backward compatibility
     @property
@@ -497,6 +491,8 @@ class StudyCatalog(Base):
 # This import is moved to the top to avoid circular import issues
 
 # Database URL from environment variable or default
+# DATABASE_URL para conexiones desde dentro de Docker (usa postgres-db:5432)
+# Para conexiones desde fuera de Docker, usa localhost:5433
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://historias_user:historias_pass@postgres-db:5432/historias_clinicas")
 
 # SQLAlchemy setup
@@ -571,7 +567,6 @@ class ConsultationPrescription(Base):
     quantity = Column(Integer)
     via_administracion = Column(String(100))
     created_at = Column(DateTime, default=datetime.utcnow)
-    # updated_at column does not exist in consultation_prescriptions table - removed
     
     # Relationships
     consultation = relationship("MedicalRecord")
@@ -650,10 +645,9 @@ class PrivacyNotice(Base):
     content = Column(Text, nullable=False)
     short_summary = Column(Text)
     effective_date = Column(Date, nullable=False)
-    expiry_date = Column(Date)
+    # expiry_date removed - not used, expiration is calculated from consent_date + 365 days
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
     consents = relationship("PrivacyConsent", back_populates="privacy_notice")

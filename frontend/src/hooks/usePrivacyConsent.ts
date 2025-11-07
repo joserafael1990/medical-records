@@ -3,8 +3,8 @@
  * Handles WhatsApp consent flow, status tracking, and consent management
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { apiService } from '../services/api';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { apiService } from '../services';
 import type { PrivacyConsent, SendPrivacyNoticeRequest } from '../types';
 
 interface UsePrivacyConsentReturn {
@@ -32,16 +32,23 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
   const [consent, setConsent] = useState<PrivacyConsent | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fetchingRef = useRef<boolean>(false);
 
   /**
    * Fetch consent status for a patient
    */
   const fetchConsentStatus = useCallback(async (patientId: number) => {
+    // Prevent multiple simultaneous requests
+    if (fetchingRef.current) {
+      return;
+    }
+    
+    fetchingRef.current = true;
     setIsLoading(true);
     setError(null);
 
     try {
-      const response = await apiService.get(`/api/privacy/consent-status/${patientId}`);
+      const response = await apiService.patients.api.get(`/api/privacy/consent-status/${patientId}`);
       
       if (response.has_consent) {
         setConsent(response.consent);
@@ -54,6 +61,7 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
       setConsent(null);
     } finally {
       setIsLoading(false);
+      fetchingRef.current = false;
     }
   }, []);
 
@@ -71,7 +79,7 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
         method: 'whatsapp_button'
       };
 
-      const response = await apiService.post('/api/privacy/send-whatsapp-notice', payload);
+      const response = await apiService.patients.api.post('/api/privacy/send-whatsapp-notice', payload);
       console.log('✅ WhatsApp notice sent:', response);
       
       // Update consent state with the newly created consent
@@ -103,7 +111,7 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
         revocation_reason: reason
       };
 
-      const response = await apiService.post('/api/privacy/revoke', payload);
+      const response = await apiService.patients.api.post('/api/privacy/revoke', payload);
       console.log('✅ Consent revoked:', response);
       
       // Update consent state

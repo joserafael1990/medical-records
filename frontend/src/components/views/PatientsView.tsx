@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -55,20 +55,63 @@ const PatientsView: React.FC<PatientsViewProps> = ({
   handleNewPatient,
   handleEditPatient
 }) => {
-  // Helper function to get the latest consultation reason for a patient
-  const getLatestConsultationReason = (patientId: string): string => {
-    if (!consultations || !Array.isArray(consultations)) return 'Sin consultas';
-    
-    const patientConsultations = consultations.filter(c => c.patient_id === patientId);
-    if (patientConsultations.length === 0) return 'Sin consultas';
-    
-    // Sort by date (most recent first)
-    const sortedConsultations = patientConsultations.sort((a, b) => 
-      new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
-    
-    return sortedConsultations[0].chief_complaint || 'No especificado';
-  };
+  const patientConsultationSummary = useMemo(() => {
+    const summary = new Map<number, { lastTimestamp: number; reason: string }>();
+    if (!Array.isArray(consultations)) {
+      return summary;
+    }
+
+    consultations.forEach((consultation) => {
+      const rawPatientId = (consultation as any)?.patient_id;
+      const patientId = Number(rawPatientId);
+      if (!patientId) {
+        return;
+      }
+
+      const dateSource = consultation?.date || (consultation as any)?.created_at;
+      if (!dateSource) {
+        return;
+      }
+
+      const timestamp = new Date(dateSource).getTime();
+      if (Number.isNaN(timestamp)) {
+        return;
+      }
+
+      const previous = summary.get(patientId);
+      if (!previous || timestamp > previous.lastTimestamp) {
+        summary.set(patientId, {
+          lastTimestamp: timestamp,
+          reason: consultation?.chief_complaint || 'No especificado'
+        });
+      }
+    });
+
+    return summary;
+  }, [consultations]);
+
+  const getLatestConsultationReason = useCallback((patientId: number): string => {
+    const record = patientConsultationSummary.get(Number(patientId));
+    return record?.reason || 'Sin consultas';
+  }, [patientConsultationSummary]);
+
+  const getFormattedLastVisit = useCallback((patientId: number): string | null => {
+    const record = patientConsultationSummary.get(Number(patientId));
+    if (!record?.lastTimestamp) {
+      return null;
+    }
+
+    const date = new Date(record.lastTimestamp);
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+
+    return date.toLocaleDateString('es-MX', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  }, [patientConsultationSummary]);
 
   // Memoized search for better performance
   const filteredPatients = useMemoizedSearch(patients || [], patientSearchTerm || '', {
@@ -166,13 +209,17 @@ const PatientsView: React.FC<PatientsViewProps> = ({
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredPatients && Array.isArray(filteredPatients) && filteredPatients.map((patient) => (
-                <TableRow 
-                  key={patient.id} 
-                  hover
-                  onClick={() => handleEditPatient(patient)}
-                  sx={{ cursor: 'pointer' }}
-                >
+              {filteredPatients && Array.isArray(filteredPatients) && filteredPatients.map((patient) => {
+                const lastVisit = getFormattedLastVisit(patient.id);
+                const latestReason = getLatestConsultationReason(patient.id);
+
+                return (
+                  <TableRow 
+                    key={patient.id}
+                    hover
+                    onClick={() => handleEditPatient(patient)}
+                    sx={{ cursor: 'pointer' }}
+                  >
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                       <Avatar sx={{ bgcolor: 'primary.main' }}>
@@ -203,9 +250,9 @@ const PatientsView: React.FC<PatientsViewProps> = ({
                     </Box>
                   </TableCell>
                   <TableCell>
-                    {patient.last_visit ? (
+                    {lastVisit ? (
                       <Typography variant="body2">
-                        {new Date(patient.last_visit).toLocaleDateString('es-MX')}
+                        {lastVisit}
                       </Typography>
                     ) : (
                       <Typography variant="body2" color="text.secondary">
@@ -222,9 +269,9 @@ const PatientsView: React.FC<PatientsViewProps> = ({
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap'
                       }}
-                      title={getLatestConsultationReason(patient.id)}
+                      title={latestReason}
                     >
-                      {getLatestConsultationReason(patient.id)}
+                      {latestReason}
                     </Typography>
                   </TableCell>
                   <TableCell>
@@ -234,8 +281,9 @@ const PatientsView: React.FC<PatientsViewProps> = ({
                       color={patient.is_active ? 'success' : 'default'}
                     />
                   </TableCell>
-                </TableRow>
-              ))}
+                  </TableRow>
+                );
+              })}
               {(!filteredPatients || !Array.isArray(filteredPatients) || filteredPatients.length === 0) && (
                 <TableRow>
                   <TableCell colSpan={4} align="center" sx={{ py: 4 }}>

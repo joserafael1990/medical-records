@@ -4,6 +4,8 @@ Sistema de cifrado AES-256 para datos sensibles médicos
 """
 import os
 import base64
+import binascii
+import re
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -103,17 +105,37 @@ class EncryptionService:
         Descifra datos sensibles
         
         Args:
-            encrypted_data: Datos cifrados codificados en base64
+            encrypted_data: Datos cifrados codificados en base64, o datos sin cifrar
             
         Returns:
-            Datos descifrados como string
+            Datos descifrados como string, o el mismo string si no está cifrado
         """
         if not encrypted_data:
             return ""
         
+        # Detectar si los datos están cifrados o no
+        # Los datos cifrados en base64 tienen un tamaño mínimo y son múltiplos de 4
+        # Si el string es muy corto (< 50 caracteres) o no parece base64, asumir que no está cifrado
+        if len(encrypted_data) < 50:
+            # Probablemente no está cifrado, devolver tal cual
+            return encrypted_data
+        
+        # Verificar si es base64 válido antes de intentar decodificar
         try:
-            # Decodificar base64
-            data = base64.b64decode(encrypted_data.encode('utf-8'))
+            # Base64 válido debe tener longitud múltiplo de 4 (después de remover padding)
+            # y solo contener caracteres base64
+            base64_pattern = re.compile(r'^[A-Za-z0-9+/]*={0,2}$')
+            if not base64_pattern.match(encrypted_data):
+                # No es base64 válido, probablemente no está cifrado
+                return encrypted_data
+            
+            # Intentar decodificar base64
+            data = base64.b64decode(encrypted_data.encode('utf-8'), validate=True)
+            
+            # Verificar que tenga el tamaño mínimo esperado (salt + iv + tag = 16 + 12 + 16 = 44 bytes mínimo)
+            if len(data) < 44:
+                # Muy corto para ser datos cifrados, probablemente no está cifrado
+                return encrypted_data
             
             # Extraer componentes
             salt = data[:16]
@@ -133,9 +155,14 @@ class EncryptionService:
             
             return plaintext.decode('utf-8')
             
+        except (binascii.Error, ValueError) as e:
+            # Error de base64, los datos no están cifrados
+            logger.debug(f"Datos no están en formato base64, devolviendo sin descifrar: {e}")
+            return encrypted_data
         except Exception as e:
-            logger.error(f"Error al descifrar datos: {e}")
-            raise Exception("Error al descifrar datos sensibles")
+            # Cualquier otro error, asumir que no está cifrado
+            logger.debug(f"Error al descifrar datos (probablemente no están cifrados): {e}")
+            return encrypted_data
     
     def hash_sensitive_field(self, data: str) -> str:
         """

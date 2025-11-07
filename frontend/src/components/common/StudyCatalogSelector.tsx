@@ -353,16 +353,19 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
                     }}
                   />
                 )}
-                renderOption={(props, option) => (
-                  <Box component="li" {...props}>
-                    <Box>
-                      <Typography variant="body2">{option.name}</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {option.code}
-                      </Typography>
+                renderOption={(props, option) => {
+                  const { key, ...otherProps } = props;
+                  return (
+                    <Box component="li" key={option.id || option.code} {...otherProps}>
+                      <Box>
+                        <Typography variant="body2">{option.name}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {option.code}
+                        </Typography>
+                      </Box>
                     </Box>
-                  </Box>
-                )}
+                  );
+                }}
                 sx={{ 
                   mb: 1,
                   minWidth: '180px'

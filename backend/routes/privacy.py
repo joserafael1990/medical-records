@@ -93,6 +93,20 @@ async def send_whatsapp_privacy_notice(
                 detail="El paciente no tiene teléfono registrado"
             )
         
+        # Desencriptar el teléfono del paciente si está encriptado
+        from encryption import EncryptionService
+        encryption_service = EncryptionService()
+        try:
+            patient_phone_decrypted = encryption_service.decrypt_sensitive_data(patient.primary_phone)
+            api_logger.debug(f"Phone decrypted: {patient_phone_decrypted[:15]}...")
+        except Exception as e:
+            # Si falla la desencriptación, usar el número tal cual (puede no estar encriptado)
+            api_logger.warning(f"Could not decrypt phone, using as-is: {str(e)}")
+            patient_phone_decrypted = patient.primary_phone
+        
+        # Log del número que se va a usar
+        api_logger.info(f"📞 Sending WhatsApp to patient phone: {patient_phone_decrypted}")
+        
         # Verificar si ya tiene un consentimiento
         existing_consent = db.query(PrivacyConsent).filter(
             PrivacyConsent.patient_id == request_data.patient_id,
@@ -113,7 +127,7 @@ async def send_whatsapp_privacy_notice(
         ).order_by(PrivacyNotice.effective_date.desc()).first()
         
         if not privacy_notice:
-            raise HTTPException(status_code=500, detail="No hay aviso de privacidad activo")
+            raise HTTPException(status_code=404, detail="No hay aviso de privacidad activo. Por favor, contacta al administrador del sistema.")
         
         # Generar token único para la URL
         privacy_token = str(uuid.uuid4())
@@ -135,24 +149,51 @@ async def send_whatsapp_privacy_notice(
         from whatsapp_service import get_whatsapp_service
         whatsapp = get_whatsapp_service()
         
-        doctor_name = f"{current_user.title or 'Dr.'} {current_user.first_name} {current_user.paternal_surname}"
+        # Construir nombre del doctor con título separado para el template
+        doctor_title = current_user.title or 'Dr.'
+        doctor_full_name = f"{current_user.first_name} {current_user.paternal_surname}"
+        doctor_name = f"{doctor_title} {doctor_full_name}"
         
         result = whatsapp.send_interactive_privacy_notice(
             patient_name=patient.first_name,
-            patient_phone=patient.primary_phone,
+            patient_phone=patient_phone_decrypted,
             doctor_name=doctor_name,
+            doctor_title=doctor_title,  # Título separado para el template
+            doctor_full_name=doctor_full_name,  # Nombre completo sin título
             privacy_notice_url=privacy_url,
             consent_id=consent.id
         )
         
+        api_logger.debug(f"WhatsApp result: {result}")
+        
         if not result.get('success'):
+            error_msg = result.get('error', 'Error desconocido')
+            api_logger.warning(f"WhatsApp send failed: {error_msg}")
+            
             # Si falla el envío, eliminar el consentimiento
             db.delete(consent)
             db.commit()
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error al enviar WhatsApp: {result.get('error')}"
-            )
+            
+            # Detectar tipo de error y devolver código HTTP apropiado
+            error_lower = str(error_msg).lower()
+            if 'not configured' in error_lower or 'not configured' in error_msg:
+                api_logger.info("Detected WhatsApp not configured error, returning 503")
+                raise HTTPException(
+                    status_code=503,
+                    detail="Servicio de WhatsApp no configurado. Por favor, contacta al administrador del sistema para configurar las credenciales."
+                )
+            elif 'could not find a channel' in error_lower or 'channel_not_found' in error_lower or '63007' in error_msg:
+                api_logger.warning("Detected WhatsApp channel not found error, returning 503")
+                raise HTTPException(
+                    status_code=503,
+                    detail="El número de WhatsApp no está configurado en el Sandbox de Twilio. Por favor, conecta tu número de WhatsApp al Sandbox desde la consola de Twilio (Console > Messaging > WhatsApp Sandbox)."
+                )
+            else:
+                api_logger.error(f"WhatsApp error (not configuration): {error_msg}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Error al enviar WhatsApp: {error_msg}"
+                )
         
         # Actualizar con message_id
         # WhatsApp message tracking removed - simplified schema
@@ -188,7 +229,11 @@ async def send_whatsapp_privacy_notice(
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
         print(f"❌ Error sending privacy notice: {str(e)}")
+        print(f"❌ Traceback: {error_traceback}")
+        api_logger.error(f"Error sending privacy notice: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Error al enviar aviso de privacidad: {str(e)}"
@@ -577,12 +622,11 @@ async def get_public_privacy_notice(db: Session = Depends(get_db)):
             "version": notice.version,
             "title": notice.title,
             "content": notice.content,
-            "summary": notice.summary,
+            "short_summary": notice.short_summary,
             "effective_date": notice.effective_date.isoformat(),
-            "expiration_date": notice.expiration_date.isoformat() if notice.expiration_date else None,
+            # expiration_date removed - not needed, expiration is calculated from consent_date + 365 days
             "is_active": notice.is_active,
-            "created_at": notice.created_at.isoformat(),
-            "updated_at": notice.updated_at.isoformat()
+            "created_at": notice.created_at.isoformat()  # updated_at removed - column doesn't exist in database table
         }
         
     except HTTPException:

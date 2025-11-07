@@ -406,9 +406,9 @@ export const PatientDataSection: React.FC<PatientDataSectionProps> = ({
                     'data-1p-ignore': 'true',
                     'data-bwignore': 'true',
                     'data-autofill': 'off',
-                    'autocapitalize': 'off',
-                    'autocorrect': 'off',
-                    'spellcheck': 'false',
+                    autoCapitalize: 'off',
+                    autoCorrect: 'off',
+                    spellCheck: false,
                     'name': 'medical_insurance_code',
                     'id': 'medical_insurance_code',
                     'type': 'text',
@@ -424,4 +424,5 @@ export const PatientDataSection: React.FC<PatientDataSectionProps> = ({
     </Box>
   );
 };
+
 

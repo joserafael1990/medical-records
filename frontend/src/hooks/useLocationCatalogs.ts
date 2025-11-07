@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { apiService } from '../services/api';
+import { apiService } from '../services';
+import { logger } from '../utils/logger';
 
 export interface Country {
   id: number;
@@ -21,50 +22,39 @@ export const useLocationCatalogs = () => {
 
   const fetchCountries = useCallback(async () => {
     try {
-      console.log('🌍 Fetching countries...');
-      const response = await apiService.getCountries();
-      console.log('🌍 Countries response:', response);
-      console.log('🌍 Countries response type:', typeof response);
-      console.log('🌍 Countries response keys:', response ? Object.keys(response) : 'null');
-      const countriesData = response.data || response;
-      console.log('🌍 Countries data:', countriesData);
-      console.log('🌍 Countries data length:', countriesData ? countriesData.length : 'null');
+      logger.debug('Fetching countries', undefined, 'api');
+      const countriesData = await apiService.catalogs.getCountries();
+      logger.debug('Countries fetched successfully', { count: countriesData?.length }, 'api');
       setCountries(countriesData || []);
     } catch (err: any) {
-      console.error('❌ Error fetching countries:', err);
-      console.error('❌ Error details:', err.response?.data);
-      console.error('❌ Error status:', err.response?.status);
+      logger.error('Error fetching countries', err, 'api');
       setError('Error al cargar países');
     }
   }, []);
 
   const fetchStates = useCallback(async (countryId?: number) => {
     try {
-      console.log('🏛️ Fetching states for country:', countryId);
-      const response = await apiService.getStates(countryId);
-      console.log('🏛️ States response:', response);
-      const statesData = response.data || response;
-      console.log('🏛️ States data:', statesData);
+      logger.debug('Fetching states', { countryId }, 'api');
+      const statesData = await apiService.catalogs.getStates(countryId);
+      logger.debug('States fetched successfully', { count: statesData?.length }, 'api');
       setStates(statesData || []);
     } catch (err: any) {
-      console.error('❌ Error fetching states:', err);
+      logger.error('Error fetching states', err, 'api');
       setError('Error al cargar estados');
     }
   }, []);
 
   const loadCatalogs = useCallback(async () => {
-    console.log('🌍🏛️ loadCatalogs called');
+    logger.debug('Loading catalogs', undefined, 'api');
     setIsLoading(true);
     setError(null);
     try {
-      console.log('🌍🏛️ Starting to load catalogs...');
       await fetchCountries();
-      console.log('🌍🏛️ Countries loaded, now loading states for Mexico...');
       // Load states for Mexico by default (country_id = 1)
       await fetchStates(1);
-      console.log('🌍🏛️ Catalogs loading completed');
+      logger.debug('Catalogs loaded successfully', undefined, 'api');
     } catch (err: any) {
-      console.error('❌ Error loading catalogs:', err);
+      logger.error('Error loading catalogs', err, 'api');
       setError('Error al cargar catálogos');
     } finally {
       setIsLoading(false);

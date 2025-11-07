@@ -20,7 +20,7 @@ import {
   AccessTime as TimeIcon,
   LocationOn as LocationIcon
 } from '@mui/icons-material';
-import { apiService } from '../../services/api';
+import { apiService } from '../../services';
 import { AppointmentFormData, AppointmentType, Office } from '../../types';
 import { useToast } from '../common/ToastNotification';
 import { useAuth } from '../../contexts/AuthContext';
@@ -60,8 +60,8 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
     const loadData = async () => {
       try {
         const [typesData, officesData] = await Promise.all([
-          apiService.getAppointmentTypes(),
-          doctorProfile?.id ? apiService.getOffices(doctorProfile.id) : Promise.resolve([])
+          apiService.appointments.getAppointmentTypes(),
+          doctorProfile?.id ? apiService.offices.getOffices(doctorProfile.id) : Promise.resolve([])
         ]);
         setAppointmentTypes(typesData);
         setOffices(officesData);
@@ -104,7 +104,7 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
       try {
         setLoadingTimes(true);
         const dateOnly = selectedDate.split('T')[0];
-        const response = await apiService.getAvailableTimesForBooking(dateOnly);
+        const response = await apiService.appointments.getAvailableTimesForBooking(dateOnly);
         setAvailableTimes(response.available_times || []);
       } catch (err) {
         console.error('Error loading available times:', err);
@@ -167,10 +167,13 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
         status: 'confirmed',
         priority: 'normal',
         reason: appointmentFormData.reason || 'Consulta de seguimiento',
-        notes: appointmentFormData.notes || ''
+        notes: appointmentFormData.notes || '',
+        // WhatsApp auto reminder fields (include if present in form data)
+        auto_reminder_enabled: appointmentFormData.auto_reminder_enabled || false,
+        auto_reminder_offset_minutes: appointmentFormData.auto_reminder_offset_minutes || 360
       };
       
-      await apiService.createAgendaAppointment(appointmentData);
+      await apiService.appointments.createAgendaAppointment(appointmentData);
       showSuccess('Cita agendada exitosamente');
       
       // Clear form

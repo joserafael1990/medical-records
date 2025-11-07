@@ -6,7 +6,7 @@ import {
 
 interface ConsultationActionsProps {
   onClose: () => void;
-  onSubmit: () => void;
+  onSubmit: () => void | Promise<void>;
   loading: boolean;
   isEditing: boolean;
 }
@@ -32,4 +32,5 @@ export const ConsultationActions: React.FC<ConsultationActionsProps> = ({
     </Box>
   );
 };
+
 

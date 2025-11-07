@@ -17,18 +17,28 @@ services:
       start_period: 40s
     environment:
       - MEDICAL_ENCRYPTION_KEY=17TAemFFyvzzOSCNdm9fISoQjiWzlWAgVJslIOYaGpU=
-      - WHATSAPP_PROVIDER=twilio
-      # Twilio credentials - MUST be set via environment variables or .env file
-      # DO NOT hardcode credentials in this file
-      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
-      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
-      - TWILIO_WHATSAPP_FROM=${TWILIO_WHATSAPP_FROM}
-      # Content SIDs de templates aprobados en Twilio (opcional)
-      - TWILIO_CONTENT_SID_APPOINTMENT_REMINDER=${TWILIO_CONTENT_SID_APPOINTMENT_REMINDER:-}
-      - TWILIO_CONTENT_SID_PRIVACY_NOTICE=${TWILIO_CONTENT_SID_PRIVACY_NOTICE:-}
-
+      # WhatsApp Provider: 'meta' para usar Meta directamente, 'twilio' para usar Twilio
+      - WHATSAPP_PROVIDER=meta
       
-    # env_file: ./backend/.env  # Uncomment if .env file exists
+      # Meta WhatsApp credentials (cuando WHATSAPP_PROVIDER=meta)
+      # Obtén estas credenciales de: https://developers.facebook.com/
+      - META_WHATSAPP_PHONE_ID=883218048200840
+      - META_WHATSAPP_TOKEN=EAAWQZA7pGNZAIBP1FSDSBQbMKut2ZBGgEFO53UxUmj4BPivJs5qMxHqZBCHSqKICPk2iljDXZC43DYjxYlMgbXnyeSm71IpdZBbq6R3wvCw9CLZC42ha1WZCSZBhsWCfUBiHCxZBb7mZASB9bIaKmvh2OTjY8kwbwZCvJWec6We8JVEWXZAXZAEhYdPMEr8BTa5sq4CIQq3hHTXWJaxlaeSHuLDsfIxmZA4LHc03uYDCrjstf3KRiQQvRmlw9LY5YDLR2boY0ZC2xZC5u4t6scuI2PGUELUlcu0t40SKLRpPb
+      - META_WHATSAPP_API_VERSION=v24.0
+      # Opcional:
+      # - META_WHATSAPP_BUSINESS_ID=TU_BUSINESS_ACCOUNT_ID
+      # - META_WHATSAPP_VERIFY_TOKEN=tu_token_verificacion
+      
+              # Twilio credentials (cuando WHATSAPP_PROVIDER=twilio) - COMENTADAS
+              # Descomenta estas líneas si quieres usar Twilio en lugar de Meta:
+              # IMPORTANTE: Reemplaza los valores con tus propias credenciales de Twilio
+              # - TWILIO_ACCOUNT_SID=your_twilio_account_sid_here
+              # - TWILIO_AUTH_TOKEN=your_twilio_auth_token_here
+              # - TWILIO_WHATSAPP_FROM=whatsapp:+1234567890
+              # - TWILIO_CONTENT_SID_APPOINTMENT_REMINDER=your_content_sid_here
+              # - TWILIO_CONTENT_SID_PRIVACY_NOTICE=your_content_sid_here
+
+    # env_file: .env  # Puedes usar un archivo .env para las credenciales en lugar de hardcodearlas
     volumes:
       # Mount backend source code for hot reload (exclude venv)
       - ./backend:/app
@@ -80,7 +90,7 @@ services:
       POSTGRES_PASSWORD: historias_pass
       POSTGRES_DB: historias_clinicas
     ports:
-      - "5432:5432"  # Expose for local dev
+      - "5433:5432"  # Expose on port 5433 to avoid conflict with local PostgreSQL
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

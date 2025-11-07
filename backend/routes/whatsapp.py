@@ -76,20 +76,17 @@ async def send_whatsapp_appointment_reminder(
             except Exception:
                 pass  # Use default locale if Spanish not available
 
-        # Convert UTC time to Mexico City timezone
-        utc_tz = pytz.UTC
+        # Convert appointment date to Mexico City timezone
+        # IMPORTANT: Appointments are stored as naive datetime in CDMX timezone (not UTC)
         mexico_tz = pytz.timezone('America/Mexico_City')
 
-        # Convert appointment date from UTC to Mexico timezone
+        # Handle timezone conversion
         if appointment.appointment_date.tzinfo is None:
-            # If naive datetime, assume it's UTC
-            appointment_utc = utc_tz.localize(appointment.appointment_date)
+            # If naive datetime, assume it's already in CDMX timezone (as per storage convention)
+            appointment_mexico = mexico_tz.localize(appointment.appointment_date)
         else:
-            # If already timezone aware, convert to UTC first
-            appointment_utc = appointment.appointment_date.astimezone(utc_tz)
-
-        # Convert to Mexico timezone
-        appointment_mexico = appointment_utc.astimezone(mexico_tz)
+            # If timezone aware, convert to CDMX timezone
+            appointment_mexico = appointment.appointment_date.astimezone(mexico_tz)
 
         # Format in Mexico timezone
         appointment_date = appointment_mexico.strftime('%d de %B de %Y')
@@ -147,7 +144,6 @@ async def send_whatsapp_appointment_reminder(
             
             # Actualizar appointment: marcar reminder_sent y reminder_sent_at
             from datetime import datetime
-            import pytz
             appointment.reminder_sent = True
             appointment.reminder_sent_at = datetime.utcnow()
             db.commit()
@@ -167,12 +163,19 @@ async def send_whatsapp_appointment_reminder(
                     status_code=400,
                     detail="No es posible enviar el mensaje: ventana de 24 horas expirada."
                 )
-            elif ('401' in str(error_msg) or 'unauthorized' in str(error_msg).lower() or 
-                'invalid' in str(error_msg).lower() and 'token' in str(error_msg).lower() or
-                'authentication' in str(error_msg).lower()):
+            elif ('token_expired' in str(error_msg).lower() or 'token de acceso expirado' in str(error_msg).lower() or
+                  'Session has expired' in str(error_msg)):
                 raise HTTPException(
                     status_code=503,
-                    detail="Credenciales de WhatsApp inválidas o expiradas. Verifique configuración del proveedor."
+                    detail="El token de acceso de Meta WhatsApp ha expirado. Por favor, renueva el token en la consola de Meta (https://developers.facebook.com/) y actualiza META_WHATSAPP_TOKEN en compose.yaml"
+                )
+            elif ('401' in str(error_msg) or 'unauthorized' in str(error_msg).lower() or 
+                'invalid' in str(error_msg).lower() and 'token' in str(error_msg).lower() or
+                'authentication' in str(error_msg).lower() or 
+                'OAuthException' in str(error_msg) or 'error_subcode' in str(error_msg)):
+                raise HTTPException(
+                    status_code=503,
+                    detail="Credenciales de WhatsApp inválidas o expiradas. Verifique la configuración del proveedor en compose.yaml. Si el token expiró, renuévalo en la consola de Meta."
                 )
             elif ('template' in str(error_msg).lower() or 'approval' in str(error_msg).lower() or 'permission' in str(error_msg).lower()):
                 raise HTTPException(
@@ -193,7 +196,16 @@ async def send_whatsapp_appointment_reminder(
     except HTTPException:
         raise
     except Exception as e:
+        error_str = str(e)
         print(f"❌ Error sending WhatsApp reminder: {e}")
-        raise HTTPException(status_code=500, detail=f"Error sending WhatsApp: {str(e)}")
+        
+        # Check if it's a token expiration error
+        if 'token' in error_str.lower() and ('expired' in error_str.lower() or 'Session has expired' in error_str):
+            raise HTTPException(
+                status_code=503,
+                detail="El token de acceso de Meta WhatsApp ha expirado. Por favor, renueva el token en la consola de Meta (https://developers.facebook.com/) y actualiza META_WHATSAPP_TOKEN en compose.yaml"
+            )
+        
+        raise HTTPException(status_code=500, detail=f"Error sending WhatsApp: {error_str}")
 
 

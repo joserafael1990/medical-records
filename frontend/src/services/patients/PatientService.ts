@@ -3,33 +3,36 @@ import { Patient, CompletePatientData, PatientFormData } from '../../types';
 import { logger } from '../../utils/logger';
 
 export class PatientService extends ApiBase {
-  async getPatients(): Promise<Patient[]> {
+  async getPatients(searchTerm?: string): Promise<Patient[]> {
     try {
-      logger.api.info('Fetching patients');
+      logger.debug('Fetching patients', { searchTerm: searchTerm || 'all' }, 'api');
+      
+      // Always fetch all patients from backend
+      // Filtering is done on the frontend (see useMemoizedSearch in PatientsView)
       const response = await this.api.get<Patient[]>('/api/patients');
-      logger.api.success('Patients fetched successfully');
+      logger.debug('Patients fetched successfully', { count: response.data?.length }, 'api');
       return response.data;
     } catch (error: any) {
-      logger.api.error('Failed to fetch patients:', error);
+      logger.error('Failed to fetch patients', error, 'api');
       throw error;
     }
   }
 
   async getPatientById(id: string): Promise<CompletePatientData> {
     try {
-      logger.api.info('Fetching patient by ID:', id);
+      logger.debug('Fetching patient by ID', { id }, 'api');
       const response = await this.api.get<CompletePatientData>(`/api/patients/${id}`);
-      logger.api.success('Patient fetched successfully');
+      logger.debug('Patient fetched successfully', undefined, 'api');
       return response.data;
     } catch (error: any) {
-      logger.api.error('Failed to fetch patient:', error);
+      logger.error('Failed to fetch patient', error, 'api');
       throw error;
     }
   }
 
   async createPatient(patientData: PatientFormData): Promise<Patient> {
     try {
-      logger.api.info('Creating patient:', patientData.first_name);
+      logger.debug('Creating patient', { firstName: patientData.first_name }, 'api');
       
       // Map gender to backend format
       const mappedData = {
@@ -38,17 +41,17 @@ export class PatientService extends ApiBase {
       };
 
       const response = await this.api.post<Patient>('/api/patients', mappedData);
-      logger.api.success('Patient created successfully');
+      logger.debug('Patient created successfully', { id: response.data?.id }, 'api');
       return response.data;
     } catch (error: any) {
-      logger.api.error('Failed to create patient:', error);
+      logger.error('Failed to create patient', error, 'api');
       throw error;
     }
   }
 
   async updatePatient(id: string, patientData: Partial<PatientFormData>): Promise<Patient> {
     try {
-      logger.api.info('Updating patient:', id);
+      logger.debug('Updating patient', { id }, 'api');
       
       // Map gender to backend format if provided
       const mappedData = {
@@ -57,78 +60,78 @@ export class PatientService extends ApiBase {
       };
 
       const response = await this.api.put<Patient>(`/api/patients/${id}`, mappedData);
-      logger.api.success('Patient updated successfully');
+      logger.debug('Patient updated successfully', { id }, 'api');
       return response.data;
     } catch (error: any) {
-      logger.api.error('Failed to update patient:', error);
+      logger.error('Failed to update patient', error, 'api');
       throw error;
     }
   }
 
   async deletePatient(id: string): Promise<void> {
     try {
-      logger.api.info('Deleting patient:', id);
+      logger.debug('Deleting patient', { id }, 'api');
       await this.api.delete(`/api/patients/${id}`);
-      logger.api.success('Patient deleted successfully');
+      logger.debug('Patient deleted successfully', { id }, 'api');
     } catch (error: any) {
-      logger.api.error('Failed to delete patient:', error);
+      logger.error('Failed to delete patient', error, 'api');
       throw error;
     }
   }
 
   async searchPatients(query: string): Promise<Patient[]> {
     try {
-      logger.api.info('Searching patients with query:', query);
+      logger.debug('Searching patients', { query }, 'api');
       const response = await this.api.get<Patient[]>(`/api/patients/search?q=${encodeURIComponent(query)}`);
-      logger.api.success('Patient search completed');
+      logger.debug('Patient search completed', { count: response.data?.length }, 'api');
       return response.data;
     } catch (error: any) {
-      logger.api.error('Failed to search patients:', error);
+      logger.error('Failed to search patients', error, 'api');
       throw error;
     }
   }
 
   async getPatientsByDoctor(doctorId: string): Promise<Patient[]> {
     try {
-      logger.api.info('Fetching patients for doctor:', doctorId);
+      logger.debug('Fetching patients for doctor', { doctorId }, 'api');
       const response = await this.api.get<Patient[]>(`/api/patients/doctor/${doctorId}`);
-      logger.api.success('Patients fetched for doctor');
+      logger.debug('Patients fetched for doctor', { count: response.data?.length }, 'api');
       return response.data;
     } catch (error: any) {
-      logger.api.error('Failed to fetch patients for doctor:', error);
+      logger.error('Failed to fetch patients for doctor', error, 'api');
       throw error;
     }
   }
 
   async getPatientStatistics(): Promise<any> {
     try {
-      logger.api.info('Fetching patient statistics');
+      logger.debug('Fetching patient statistics', undefined, 'api');
       const response = await this.api.get('/api/patients/statistics');
-      logger.api.success('Patient statistics fetched');
+      logger.debug('Patient statistics fetched', undefined, 'api');
       return response.data;
     } catch (error: any) {
-      logger.api.error('Failed to fetch patient statistics:', error);
+      logger.error('Failed to fetch patient statistics', error, 'api');
       throw error;
     }
   }
 
   async exportPatients(format: 'csv' | 'excel' = 'csv'): Promise<Blob> {
     try {
-      logger.api.info('Exporting patients in format:', format);
+      logger.debug('Exporting patients', { format }, 'api');
       const response = await this.api.get(`/api/patients/export?format=${format}`, {
         responseType: 'blob'
       });
-      logger.api.success('Patients exported successfully');
+      logger.debug('Patients exported successfully', undefined, 'api');
       return response.data;
     } catch (error: any) {
-      logger.api.error('Failed to export patients:', error);
+      logger.error('Failed to export patients', error, 'api');
       throw error;
     }
   }
 
   async importPatients(file: File): Promise<{ success: number; errors: any[] }> {
     try {
-      logger.api.info('Importing patients from file:', file.name);
+      logger.debug('Importing patients from file', { fileName: file.name }, 'api');
       
       const formData = new FormData();
       formData.append('file', file);
@@ -139,22 +142,22 @@ export class PatientService extends ApiBase {
         }
       });
       
-      logger.api.success('Patients imported successfully');
+      logger.debug('Patients imported successfully', undefined, 'api');
       return response.data;
     } catch (error: any) {
-      logger.api.error('Failed to import patients:', error);
+      logger.error('Failed to import patients', error, 'api');
       throw error;
     }
   }
 
   async validatePatientData(patientData: PatientFormData): Promise<{ valid: boolean; errors: string[] }> {
     try {
-      console.log('Validating patient data');
+      logger.debug('Validating patient data', undefined, 'api');
       const response = await this.api.post('/api/patients/validate', patientData);
-      console.log('Patient data validation completed');
+      logger.debug('Patient data validation completed', undefined, 'api');
       return response.data;
     } catch (error: any) {
-      logger.api.error('Failed to validate patient data:', error);
+      logger.error('Failed to validate patient data', error, 'api');
       throw error;
     }
   }

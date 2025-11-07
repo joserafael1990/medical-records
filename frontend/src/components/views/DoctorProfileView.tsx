@@ -1,4 +1,4 @@
-import React, { memo, useState, useEffect } from 'react';
+import React, { memo } from 'react';
 import {
   Box,
   Typography,
@@ -42,8 +42,7 @@ import {
 import DoctorProfileDialog from '../dialogs/DoctorProfileDialog';
 import ScheduleConfigDialog from '../dialogs/ScheduleConfigDialog';
 import OfficeDialog from '../dialogs/OfficeDialog';
-import { useOfficeManagement } from '../../hooks/useOfficeManagement';
-import { useScheduleData } from '../../hooks/useScheduleData';
+import { useDoctorProfileView } from '../../hooks/useDoctorProfileView';
 
 interface DoctorProfileViewProps {
   doctorProfile: any;
@@ -80,80 +79,35 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
   isSubmitting,
   fieldErrors
 }) => {
-  const [scheduleConfigDialogOpen, setScheduleConfigDialogOpen] = useState(false);
-  const [officeDialogOpen, setOfficeDialogOpen] = useState(false);
-  const [editingOffice, setEditingOffice] = useState<any>(null);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [officeToDelete, setOfficeToDelete] = useState<any>(null);
+  // Use the custom hook for all view logic
+  const viewHook = useDoctorProfileView({
+    doctorProfileId: doctorProfile?.id
+  });
 
-  // Office management hook
-  const { 
-    offices, 
-    isLoading: officesLoading, 
-    error: officesError, 
-    deleteOffice,
-    fetchOffices,
-    createOffice,
-    updateOffice
-  } = useOfficeManagement(doctorProfile?.id);
-
-  // Schedule data hook
-  const { 
-    scheduleData, 
-    loading: scheduleLoading, 
-    error: scheduleError,
-    refetch: refetchSchedule
-  } = useScheduleData();
-
-  // Office management functions
-  const handleNewOffice = () => {
-    console.log('🏢 Opening new office dialog');
-    setEditingOffice(null);
-    setOfficeDialogOpen(true);
-  };
-
-  const handleEditOffice = (office: any) => {
-    console.log('🏢 Opening edit office dialog for:', office);
-    setEditingOffice(office);
-    setOfficeDialogOpen(true);
-  };
-
-  const handleDeleteOffice = (office: any) => {
-    setOfficeToDelete(office);
-    setDeleteConfirmOpen(true);
-  };
-
-  const confirmDeleteOffice = async () => {
-    if (officeToDelete) {
-      try {
-        await deleteOffice(officeToDelete.id);
-        setDeleteConfirmOpen(false);
-        setOfficeToDelete(null);
-      } catch (error) {
-        console.error('Error deleting office:', error);
-      }
-    }
-  };
-
-  const handleSaveOffice = async (office: any) => {
-    try {
-      console.log('🏢 Saving office:', office);
-      if (editingOffice) {
-        console.log('🏢 Updating existing office:', editingOffice.id);
-        await updateOffice(editingOffice.id, office);
-      } else {
-        console.log('🏢 Creating new office');
-        await createOffice(office);
-      }
-      setOfficeDialogOpen(false);
-      setEditingOffice(null);
-      // Refresh the offices list
-      fetchOffices();
-    } catch (err) {
-      console.error('Error saving office:', err);
-    }
-  };
-  
+  const {
+    scheduleConfigDialogOpen,
+    setScheduleConfigDialogOpen,
+    officeDialogOpen,
+    setOfficeDialogOpen,
+    editingOffice,
+    setEditingOffice,
+    deleteConfirmOpen,
+    setDeleteConfirmOpen,
+    officeToDelete,
+    offices,
+    officesLoading,
+    officesError,
+    handleNewOffice,
+    handleEditOffice,
+    handleDeleteOffice,
+    confirmDeleteOffice,
+    handleSaveOffice,
+    scheduleData,
+    scheduleLoading,
+    scheduleError,
+    refetchSchedule,
+    formatDate
+  } = viewHook;
 
   if (isLoading) {
     return (
@@ -183,15 +137,6 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
       </Box>
     );
   }
-
-  const formatDate = (dateString: string) => {
-    if (!dateString) return 'No especificada';
-    try {
-      return new Date(dateString).toLocaleDateString('es-ES');
-    } catch {
-      return 'Fecha inválida';
-    }
-  };
 
 
   return (

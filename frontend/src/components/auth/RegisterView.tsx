@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { apiService } from '../../services/api';
+import { apiService } from '../../services';
 import {
   Container,
   Paper,
@@ -49,7 +49,13 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useCatalogs } from '../../hooks/useCatalogs';
 import { useScrollToError } from '../../hooks/useScrollToError';
 import { DocumentSelector } from '../common/DocumentSelector';
+import { logger } from '../../utils/logger';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
+import { AccountInfoStep } from './RegisterView/AccountInfoStep';
+import { PersonalInfoStep } from './RegisterView/PersonalInfoStep';
+import { ProfessionalInfoStep } from './RegisterView/ProfessionalInfoStep';
+import { OfficeInfoStep } from './RegisterView/OfficeInfoStep';
+import { ScheduleStep } from './RegisterView/ScheduleStep';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -137,8 +143,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
   const [visitedSteps, setVisitedSteps] = useState<Set<number>>(new Set([0]));
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  // Password visibility state removed - now handled in AccountInfoStep component
   const [specialties, setSpecialties] = useState<any[]>([]);
   const [attemptedContinue, setAttemptedContinue] = useState<Set<number>>(new Set());
   
@@ -153,13 +158,13 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
   useEffect(() => {
     const loadSpecialties = async () => {
       try {
-        const data = await apiService.getSpecialties();
+        const data = await apiService.catalogs.getSpecialties();
         // Asegurar que siempre sea un array
         const specialtiesArray = Array.isArray(data) ? data : (data?.data || data?.results || []);
         setSpecialties(specialtiesArray);
-        console.log('✅ Especialidades cargadas:', specialtiesArray);
+        logger.debug('Especialidades cargadas', { count: specialtiesArray.length }, 'api');
       } catch (error) {
-        console.error('❌ Error loading specialties:', error);
+        logger.error('Error loading specialties', error, 'api');
         // Intentar con el endpoint alternativo
         try {
           const response = await fetch(`${API_CONFIG.BASE_URL}/api/catalogs/specialties`);
@@ -167,9 +172,9 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
           // Asegurar que siempre sea un array
           const specialtiesArray = Array.isArray(data) ? data : (data?.data || data?.results || []);
           setSpecialties(specialtiesArray);
-          console.log('✅ Especialidades cargadas (fallback):', specialtiesArray);
+          logger.debug('Especialidades cargadas (fallback)', { count: specialtiesArray.length }, 'api');
         } catch (fallbackError) {
-          console.error('❌ Error en fallback de especialidades:', fallbackError);
+          logger.error('Error en fallback de especialidades', fallbackError, 'api');
           setSpecialties([]); // Asegurar array vacío en caso de error
         }
       }
@@ -546,7 +551,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
       };
 
       // Register the doctor (creates profile and handles authentication automatically)
-      console.log('📝 Sending registration data:', doctorProfileData);
+      logger.debug('Sending registration data', { doctorProfileData }, 'auth');
       
       const registrationResponse = await apiService.register(doctorProfileData);
       
@@ -564,11 +569,13 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
       }
 
     } catch (error: any) {
-      console.error('❌ Registration error:', error);
-      console.error('❌ Error type:', typeof error);
-      console.error('❌ Error detail:', error.detail);
-      console.error('❌ Error response:', error.response);
-      console.error('❌ Error status:', error.status);
+      logger.error('Registration error', {
+        error,
+        errorType: typeof error,
+        errorDetail: error.detail,
+        errorResponse: error.response,
+        errorStatus: error.status
+      }, 'auth');
       
       // Extract specific error message from API response
       let errorMessage = 'Error durante el registro. Intenta nuevamente.';
@@ -576,27 +583,25 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
       // The API service transforms errors into ApiError format with { detail: string, status: number }
       if (error.detail) {
         // Use the specific error message from the API service
-        console.log('✅ Using error.detail:', error.detail);
+        logger.debug('Using error.detail', { detail: error.detail }, 'auth');
         errorMessage = error.detail;
       } else if (error.response?.data?.detail) {
         // Fallback: Use the raw response if available
-        console.log('✅ Using error.response.data.detail:', error.response.data.detail);
+        logger.debug('Using error.response.data.detail', { detail: error.response.data.detail }, 'auth');
         errorMessage = error.response.data.detail;
       } else if (error.status === 400 || error.response?.status === 400) {
-        console.log('✅ Using 400 error message');
+        logger.debug('Using 400 error message', undefined, 'auth');
         errorMessage = 'Los datos proporcionados no son válidos. Por favor, revise la información.';
       } else if (error.status === 500 || error.response?.status === 500) {
-        console.log('✅ Using 500 error message');
+        logger.debug('Using 500 error message', undefined, 'auth');
         errorMessage = 'Error interno del servidor. Por favor, intente nuevamente más tarde.';
       } else if (error.message) {
-        console.log('✅ Using error.message:', error.message);
+        logger.debug('Using error.message', { message: error.message }, 'auth');
         errorMessage = error.message;
       }
       
-      console.log('✅ Final error message:', errorMessage);
-      console.log('✅ Setting error state with:', errorMessage);
+      logger.debug('Final error message', { errorMessage }, 'auth');
       setError(errorMessage);
-      console.log('✅ Error state set, current error:', error);
     } finally {
       setIsLoading(false);
     }
@@ -634,705 +639,108 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
     switch (step) {
       case 0:
         return (
-          <Box>
-            <TextField
-              fullWidth
-              margin="normal"
-              label="Correo Electrónico"
-              type="email"
-              value={formData.email}
-              onChange={handleInputChange('email')}
-              required
-              autoComplete="email"
-            />
-            
-            <TextField
-              fullWidth
-              margin="normal"
-              label="Contraseña"
-              type={showPassword ? 'text' : 'password'}
-              value={formData.password}
-              onChange={handleInputChange('password')}
-              required
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      onClick={() => setShowPassword(!showPassword)}
-                      edge="end"
-                    >
-                      {showPassword ? <VisibilityOff /> : <Visibility />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-            />
-
-            {formData.password && (
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="body2" gutterBottom>
-                  Fortaleza de la contraseña:
-                </Typography>
-                <LinearProgress
-                  variant="determinate"
-                  value={(passwordStrength / 5) * 100}
-                  sx={{
-                    height: 8,
-                    borderRadius: 4,
-                    backgroundColor: 'grey.300',
-                    '& .MuiLinearProgress-bar': {
-                      backgroundColor: passwordStrength < 3 ? 'error.main' : 
-                                      passwordStrength < 4 ? 'warning.main' : 'success.main'
-                    }
-                  }}
-                />
-                <Box sx={{ mt: 1 }}>
-                  {Object.entries({
-                    'Al menos 8 caracteres': passwordValidation.minLength,
-                    'Una letra mayúscula': passwordValidation.hasUppercase,
-                    'Una letra minúscula': passwordValidation.hasLowercase,
-                    'Un número': passwordValidation.hasNumbers,
-                    'Un carácter especial': passwordValidation.hasSpecialChars
-                  }).map(([criterion, met]) => (
-                    <Box key={criterion} sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
-                      {met ? (
-                        <CheckCircle sx={{ color: 'success.main', fontSize: 16, mr: 1 }} />
-                      ) : (
-                        <Cancel sx={{ color: 'error.main', fontSize: 16, mr: 1 }} />
-                      )}
-                      <Typography variant="caption" color={met ? 'success.main' : 'error.main'}>
-                        {criterion}
-                      </Typography>
-                    </Box>
-                  ))}
-                </Box>
-              </Box>
-            )}
-
-            <TextField
-              fullWidth
-              margin="normal"
-              label="Confirmar Contraseña"
-              type={showConfirmPassword ? 'text' : 'password'}
-              value={formData.confirmPassword}
-              onChange={handleInputChange('confirmPassword')}
-              required
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      edge="end"
-                    >
-                      {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-            />
-          </Box>
+          <AccountInfoStep
+            email={formData.email}
+            password={formData.password}
+            confirmPassword={formData.confirmPassword}
+            onEmailChange={(value) => handleInputChange('email')({ target: { value } })}
+            onPasswordChange={(value) => handleInputChange('password')({ target: { value } })}
+            onConfirmPasswordChange={(value) => handleInputChange('confirmPassword')({ target: { value } })}
+          />
         );
 
       case 1:
         return (
-          <Box>
-            <Typography variant="h6" gutterBottom>
-              Información Personal
-            </Typography>
-            
-            <TextField
-              fullWidth
-              margin="normal"
-              label="Nombre(s)"
-              value={formData.first_name}
-              onChange={handleInputChange('first_name')}
-              required
-            />
-
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <Box sx={{ flex: '1 1 250px' }}>
-                <TextField
-                  fullWidth
-                  margin="normal"
-                  label="Apellido Paterno"
-                  value={formData.paternal_surname}
-                  onChange={handleInputChange('paternal_surname')}
-                  required
-                />
-              </Box>
-              <Box sx={{ flex: '1 1 250px' }}>
-                <TextField
-                  fullWidth
-                  margin="normal"
-                  label="Apellido Materno"
-                  value={formData.maternal_surname}
-                  onChange={handleInputChange('maternal_surname')}
-                />
-              </Box>
-            </Box>
-
-            {/* Documento Personal */}
-            <Box sx={{ mb: 2 }}>
-              <DocumentSelector
-                documentType="personal"
-                value={formData.personal_documents[0]}
-                onChange={(docValue) => {
-                  setFormData(prev => ({
-                    ...prev,
-                    personal_documents: [docValue]
-                  }));
-                }}
-                required
-                error={attemptedContinue.has(1) && (!formData.personal_documents[0]?.document_id || !formData.personal_documents[0]?.document_value)}
-                helperText={attemptedContinue.has(1) ? "Seleccione un documento personal e ingrese su valor" : undefined}
-              />
-            </Box>
-
-            {/* Género y Fecha de Nacimiento en la misma fila */}
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <Box sx={{ flex: '1 1 250px' }}>
-                <FormControl fullWidth margin="normal" required>
-                  <InputLabel required>Género</InputLabel>
-                  <Select
-                    value={formData.gender}
-                    onChange={handleInputChange('gender')}
-                    label="Género"
-                    required
-                  >
-                    <MenuItem value="M">Masculino</MenuItem>
-                    <MenuItem value="F">Femenino</MenuItem>
-                    <MenuItem value="O">Otro</MenuItem>
-                  </Select>
-                </FormControl>
-              </Box>
-              <Box sx={{ flex: '1 1 250px' }}>
-                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
-                  <DatePicker
-                    label="Fecha de Nacimiento *"
-                    value={formData.birth_date ? new Date(formData.birth_date) : null}
-                    maxDate={new Date()}
-                    onChange={(newValue) => {
-                      if (newValue) {
-                        const dateValue = newValue.toISOString().split('T')[0];
-                        setFormData(prev => ({ ...prev, birth_date: dateValue }));
-                      } else {
-                        setFormData(prev => ({ ...prev, birth_date: '' }));
-                      }
-                    }}
-                    slotProps={{
-                      textField: {
-                        fullWidth: true,
-                        margin: 'normal',
-                        required: true
-                      }
-                    }}
-                  />
-                </LocalizationProvider>
-              </Box>
-            </Box>
-
-            {/* Código de país y Teléfono unificado */}
-            <Box sx={{ mt: 2, mb: 1 }}>
-              <PhoneNumberInput
-                countryCode={formData.phone_country_code}
-                phoneNumber={formData.phone_number}
-                onCountryCodeChange={(code) => handleInputChange('phone_country_code')({ target: { value: code } })}
-                onPhoneNumberChange={(number) => {
-                  // Solo permitir números
-                  const value = number.replace(/\D/g, '');
-                  handleInputChange('phone_number')({ target: { value } });
-                }}
-                label="Número telefónico *"
-                required
-                placeholder="Ej: 222 123 4567"
-                fullWidth
-              />
-            </Box>
-          </Box>
+          <PersonalInfoStep
+            firstName={formData.first_name}
+            paternalSurname={formData.paternal_surname}
+            maternalSurname={formData.maternal_surname}
+            personalDocument={formData.personal_documents[0]}
+            gender={formData.gender}
+            birthDate={formData.birth_date}
+            phoneCountryCode={formData.phone_country_code}
+            phoneNumber={formData.phone_number}
+            onFirstNameChange={(value) => handleInputChange('first_name')({ target: { value } })}
+            onPaternalSurnameChange={(value) => handleInputChange('paternal_surname')({ target: { value } })}
+            onMaternalSurnameChange={(value) => handleInputChange('maternal_surname')({ target: { value } })}
+            onPersonalDocumentChange={(docValue) => {
+              setFormData(prev => ({
+                ...prev,
+                personal_documents: [docValue]
+              }));
+            }}
+            onGenderChange={(value) => handleInputChange('gender')({ target: { value } })}
+            onBirthDateChange={(value) => {
+              setFormData(prev => ({ ...prev, birth_date: value }));
+            }}
+            onPhoneCountryCodeChange={(value) => handleInputChange('phone_country_code')({ target: { value } })}
+            onPhoneNumberChange={(value) => handleInputChange('phone_number')({ target: { value } })}
+            hasAttemptedContinue={attemptedContinue.has(1)}
+          />
         );
 
       case 2:
         return (
-          <Box>
-            <Typography variant="h6" gutterBottom>
-              Información Profesional
-            </Typography>
-            
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <Box sx={{ minWidth: '120px', flex: '0 0 auto' }}>
-                <FormControl fullWidth margin="normal" required>
-                  <InputLabel>Título</InputLabel>
-                  <Select
-                    value={formData.title}
-                    onChange={handleInputChange('title')}
-                    label="Título"
-                    required
-                  >
-                    <MenuItem value="Dr.">Dr.</MenuItem>
-                    <MenuItem value="Dra.">Dra.</MenuItem>
-                  </Select>
-                </FormControl>
-              </Box>
-              <Box sx={{ flex: '1 1 300px' }}>
-                <FormControl fullWidth margin="normal" required>
-                  <InputLabel>Especialidad</InputLabel>
-                  <Select
-                    value={formData.specialty}
-                    onChange={handleInputChange('specialty')}
-                    label="Especialidad"
-                    required
-                  >
-                    {Array.isArray(specialties) && specialties.map((specialty) => (
-                      <MenuItem key={specialty.id} value={specialty.id.toString()}>
-                        {specialty.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Box>
-            </Box>
-
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <Box sx={{ flex: '1 1 250px' }}>
-                <TextField
-                  fullWidth
-                  margin="normal"
-                  label="Universidad"
-                  value={formData.university}
-                  onChange={handleInputChange('university')}
-                  required
-                />
-              </Box>
-              <Box sx={{ flex: '1 1 250px' }}>
-            <TextField
-              fullWidth
-              margin="normal"
-              label="Año de Graduación"
-              value={formData.graduation_year}
-              onChange={(e) => {
-                // Solo permitir números
-                const value = e.target.value.replace(/[^0-9]/g, '');
-                handleInputChange('graduation_year')({ target: { value } });
-              }}
-              placeholder="2020"
-              helperText={`Solo números - Año entre 1950 y ${new Date().getFullYear()}`}
-              inputProps={{ maxLength: 4 }}
-              required
-            />
-              </Box>
-            </Box>
-
-            {/* Documento Profesional */}
-            <Box sx={{ mb: 2 }}>
-              <DocumentSelector
-                documentType="professional"
-                value={formData.professional_documents[0]}
-                onChange={(docValue) => {
-                  setFormData(prev => ({
-                    ...prev,
-                    professional_documents: [docValue]
-                  }));
-                }}
-                required
-                error={attemptedContinue.has(2) && (!formData.professional_documents[0]?.document_id || !formData.professional_documents[0]?.document_value)}
-                helperText={attemptedContinue.has(2) ? "Seleccione un documento profesional e ingrese su valor" : undefined}
-              />
-            </Box>
-          </Box>
+          <ProfessionalInfoStep
+            title={formData.title}
+            specialty={formData.specialty}
+            university={formData.university}
+            graduationYear={formData.graduation_year}
+            professionalDocument={formData.professional_documents[0]}
+            specialties={specialties}
+            onTitleChange={(value) => handleInputChange('title')({ target: { value } })}
+            onSpecialtyChange={(value) => handleInputChange('specialty')({ target: { value } })}
+            onUniversityChange={(value) => handleInputChange('university')({ target: { value } })}
+            onGraduationYearChange={(value) => handleInputChange('graduation_year')({ target: { value } })}
+            onProfessionalDocumentChange={(docValue) => {
+              setFormData(prev => ({
+                ...prev,
+                professional_documents: [docValue]
+              }));
+            }}
+            hasAttemptedContinue={attemptedContinue.has(2)}
+          />
         );
 
       case 3:
         return (
-          <Box>
-            <Typography variant="h6" gutterBottom>
-              Datos del Consultorio
-            </Typography>
-            
-            {/* 1. Dirección */}
-            <TextField
-              fullWidth
-              margin="normal"
-              label="Nombre del Consultorio"
-              value={formData.office_name}
-              onChange={handleInputChange('office_name')}
-              placeholder="Consultorio Médico Dr. García"
-              helperText="Nombre que aparecerá en las citas"
-              required
-            />
-
-            <TextField
-              fullWidth
-              margin="normal"
-              label="Dirección"
-              multiline
-              rows={2}
-              value={formData.office_address}
-              onChange={handleInputChange('office_address')}
-              placeholder="Av. Reforma 123, Col. Centro"
-              helperText="Calle, número, colonia"
-              required
-            />
-
-            {/* 2. País y Estado */}
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <Box sx={{ flex: '1 1 250px' }}>
-                <FormControl fullWidth margin="normal" required>
-                  <InputLabel>País</InputLabel>
-                  <Select
-                    value={selectedOfficeCountry}
-                    onChange={(e) => handleOfficeCountryChange(e.target.value)}
-                    label="País"
-                  >
-                    {countries.map((country) => (
-                      <MenuItem key={country.id} value={country.name}>
-                        {country.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Box>
-              <Box sx={{ flex: '1 1 250px' }}>
-                <FormControl fullWidth margin="normal" required>
-                  <InputLabel>Estado</InputLabel>
-                  <Select
-                    value={formData.office_state_id}
-                    onChange={handleInputChange('office_state_id')}
-                    label="Estado"
-                    disabled={!selectedOfficeCountry || filteredOfficeStates.length === 0}
-                  >
-                    {filteredOfficeStates.map((state: {id: number, name: string}) => (
-                      <MenuItem key={state.id} value={String(state.id)}>
-                        {state.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  <FormHelperText>
-                    {!selectedOfficeCountry 
-                      ? "Primero selecciona un país" 
-                      : filteredOfficeStates.length === 0 
-                      ? "No hay estados disponibles"
-                      : "Estado/Provincia"
-                    }
-                  </FormHelperText>
-                </FormControl>
-              </Box>
-            </Box>
-
-            {/* 3. Ciudad y Duración de Consulta */}
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <Box sx={{ flex: '1 1 250px' }}>
-                <TextField
-                  fullWidth
-                  margin="normal"
-                  label="Ciudad"
-                  value={formData.office_city}
-                  onChange={handleInputChange('office_city')}
-                  placeholder="Ciudad de México"
-                  helperText="Ciudad del consultorio"
-                  required
-                />
-              </Box>
-              <Box sx={{ flex: '1 1 250px' }}>
-                <TextField
-                  fullWidth
-                  margin="normal"
-                  label="Duración de Consulta"
-                  value={formData.appointment_duration}
-                  onChange={(e) => {
-                    // Solo permitir números
-                    const value = e.target.value.replace(/[^0-9]/g, '');
-                    handleInputChange('appointment_duration')({ target: { value } });
-                  }}
-                  placeholder="30"
-                  helperText="Tiempo en minutos (ej: 30)"
-                  inputProps={{ maxLength: 3 }}
-                  required
-                  InputProps={{
-                    endAdornment: <InputAdornment position="end">min</InputAdornment>
-                  }}
-                />
-              </Box>
-            </Box>
-
-            {/* 4. Teléfono del Consultorio */}
-            {/* Código de país y Teléfono del Consultorio unificado */}
-            <Box sx={{ mt: 2, mb: 1 }}>
-              <PhoneNumberInput
-                countryCode={formData.office_phone_country_code}
-                phoneNumber={formData.office_phone_number}
-                onCountryCodeChange={(code) => handleInputChange('office_phone_country_code')({ target: { value: code } })}
-                onPhoneNumberChange={(number) => {
-                  // Solo permitir números
-                  const value = number.replace(/\D/g, '');
-                  handleInputChange('office_phone_number')({ target: { value } });
-                }}
-                label="Número telefónico del Consultorio *"
-                required
-                placeholder="Ej: 222 123 4567"
-                fullWidth
-              />
-            </Box>
-
-            {/* 5. URL de Google Maps */}
-            <TextField
-              fullWidth
-              margin="normal"
-              label="URL de Google Maps"
-              value={formData.office_maps_url}
-              onChange={handleInputChange('office_maps_url')}
-              placeholder="https://maps.google.com/..."
-              helperText="Enlace de Google Maps para ubicar el consultorio (opcional)"
-            />
-          </Box>
+          <OfficeInfoStep
+            officeName={formData.office_name}
+            officeAddress={formData.office_address}
+            officeCountry={formData.office_country}
+            officeStateId={formData.office_state_id}
+            officeCity={formData.office_city}
+            officePhoneCountryCode={formData.office_phone_country_code}
+            officePhoneNumber={formData.office_phone_number}
+            officeMapsUrl={formData.office_maps_url}
+            appointmentDuration={formData.appointment_duration}
+            selectedOfficeCountry={selectedOfficeCountry}
+            countries={countries}
+            filteredOfficeStates={filteredOfficeStates}
+            onOfficeNameChange={(value) => handleInputChange('office_name')({ target: { value } })}
+            onOfficeAddressChange={(value) => handleInputChange('office_address')({ target: { value } })}
+            onOfficeCountryChange={(value) => handleInputChange('office_country')({ target: { value } })}
+            onOfficeStateIdChange={(value) => handleInputChange('office_state_id')({ target: { value } })}
+            onOfficeCityChange={(value) => handleInputChange('office_city')({ target: { value } })}
+            onOfficePhoneCountryCodeChange={(value) => handleInputChange('office_phone_country_code')({ target: { value } })}
+            onOfficePhoneNumberChange={(value) => handleInputChange('office_phone_number')({ target: { value } })}
+            onOfficeMapsUrlChange={(value) => handleInputChange('office_maps_url')({ target: { value } })}
+            onAppointmentDurationChange={(value) => handleInputChange('appointment_duration')({ target: { value } })}
+            onSelectedOfficeCountryChange={(value) => handleOfficeCountryChange(value)}
+          />
         );
 
       case 4:
         return (
-          <Box>
-            <Typography variant="h6" gutterBottom>
-              Horarios de Atención
-            </Typography>
-            
-            <Box sx={{ mb: 3 }}>
-              <Alert severity="info" sx={{ mb: 2 }}>
-                <Typography variant="body2">
-                  <strong>¿Cómo funciona?</strong><br />
-                  • Para cada día, haz click en <strong>"Agregar Horarios"</strong> para activarlo<br />
-                  • Puedes tener múltiples horarios por día (ej: mañana y tarde)<br />
-                  • Los pacientes solo podrán agendar en los horarios que configures
-                </Typography>
-              </Alert>
-            </Box>
-
-            <Box>
-              {DAYS_OF_WEEK.map(day => {
-                const dayKey = day.key as keyof WeeklyScheduleData;
-                const schedule = formData.scheduleData[dayKey];
-                const isActive = schedule?.is_active ?? false;
-                const timeBlocks = schedule?.time_blocks || [];
-
-                return (
-                  <Card 
-                    key={day.key} 
-                    sx={{ 
-                      mb: 2,
-                      border: isActive ? '2px solid' : '1px solid',
-                      borderColor: isActive ? 'primary.main' : 'divider',
-                      backgroundColor: isActive ? 'primary.50' : 'background.paper',
-                      transition: 'all 0.2s ease-in-out',
-                      '&:hover': {
-                        boxShadow: 2,
-                        transform: 'translateY(-1px)'
-                      }
-                    }}
-                  >
-                    <CardContent sx={{ pb: 1 }}>
-                      {/* Header del día */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
-                          <Typography variant="h6" sx={{ fontWeight: 600, mr: 2 }}>
-                            {day.label}
-                          </Typography>
-                          
-                          {/* Estado visual más claro */}
-                          {isActive ? (
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Chip
-                                label="Disponible"
-                                color="primary"
-                                size="small"
-                                icon={<AccessTime />}
-                                variant="filled"
-                              />
-                              {timeBlocks.length > 0 && (
-                                <Typography variant="body2" color="text.secondary">
-                                  {timeBlocks.length} horario{timeBlocks.length > 1 ? 's' : ''}
-                                </Typography>
-                              )}
-                            </Box>
-                          ) : (
-                            <Chip
-                              label="No disponible"
-                              color="default"
-                              size="small"
-                              variant="outlined"
-                            />
-                          )}
-                          
-                          {/* Mostrar resumen de horarios */}
-                          {isActive && timeBlocks.length > 0 && (
-                            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', ml: 2 }}>
-                              {timeBlocks.map((block, index) => (
-                                <Chip
-                                  key={index}
-                                  label={`${block.start_time} - ${block.end_time}`}
-                                  variant="outlined"
-                                  size="small"
-                                  sx={{ backgroundColor: 'white' }}
-                                />
-                              ))}
-                            </Box>
-                          )}
-                        </Box>
-                        
-                        {/* Botones de acción más claros */}
-                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                          {!isActive ? (
-                            <Button
-                              variant="contained"
-                              size="small"
-                              startIcon={<AddIcon />}
-                              onClick={() => updateDaySchedule(day.index, true)}
-                              sx={{
-                                borderRadius: '8px',
-                                textTransform: 'none',
-                                fontWeight: 500
-                              }}
-                            >
-                              Agregar Horarios
-                            </Button>
-                          ) : (
-                            <>
-                              <Button
-                                variant="outlined"
-                                size="small"
-                                startIcon={<AddIcon />}
-                                onClick={() => addTimeBlock(day.index)}
-                                sx={{
-                                  borderRadius: '8px',
-                                  textTransform: 'none',
-                                  fontWeight: 500
-                                }}
-                              >
-                                Nuevo Horario
-                              </Button>
-                              <Button
-                                variant="text"
-                                size="small"
-                                color="error"
-                                onClick={() => updateDaySchedule(day.index, false)}
-                                sx={{
-                                  borderRadius: '8px',
-                                  textTransform: 'none',
-                                  fontWeight: 500
-                                }}
-                              >
-                                Desactivar
-                              </Button>
-                            </>
-                          )}
-                        </Box>
-                      </Box>
-
-                      {/* Configuración de horarios (solo si está activo) */}
-                      {isActive && (
-                        <Box sx={{ mt: 2 }}>
-                          {timeBlocks.length === 0 && (
-                            <Alert severity="info" sx={{ mb: 2 }}>
-                              <Typography variant="body2">
-                                <strong>¡Agrega tu primer horario!</strong><br />
-                                Haz click en "Nuevo Horario" para definir cuándo atiendes este día.
-                              </Typography>
-                            </Alert>
-                          )}
-
-                          {timeBlocks.map((block, blockIndex) => (
-                            <Card key={blockIndex} sx={{ mb: 2, border: '1px solid', borderColor: 'divider', backgroundColor: 'background.default' }}>
-                              <CardContent sx={{ py: 2 }}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                                  <Typography variant="subtitle2" color="primary" sx={{ fontWeight: 600 }}>
-                                    Horario {blockIndex + 1}
-                                  </Typography>
-                                  <IconButton
-                                    size="small"
-                                    color="error"
-                                    onClick={() => removeTimeBlock(day.index, blockIndex)}
-                                    disabled={timeBlocks.length === 1}
-                                    sx={{
-                                      '&:hover': {
-                                        backgroundColor: 'error.50'
-                                      }
-                                    }}
-                                  >
-                                    <Cancel />
-                                  </IconButton>
-                                </Box>
-                                
-                                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-                                  <Box>
-                                    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
-                                      <TimePicker
-                                        label="Hora de inicio"
-                                        value={formatTime(block.start_time)}
-                                        onChange={(newValue) => {
-                                          if (newValue) {
-                                            updateTimeBlock(day.index, blockIndex, 'start_time', formatTimeToString(newValue));
-                                          }
-                                        }}
-                                        closeOnSelect={true}
-                                        openTo="hours"
-                                        slotProps={{
-                                          textField: {
-                                            size: "small",
-                                            fullWidth: true
-                                          },
-                                          actionBar: {
-                                            actions: []
-                                          }
-                                        }}
-                                      />
-                                    </LocalizationProvider>
-                                  </Box>
-                                  <Box>
-                                    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
-                                      <TimePicker
-                                        label="Hora de fin"
-                                        value={formatTime(block.end_time)}
-                                        onChange={(newValue) => {
-                                          if (newValue) {
-                                            updateTimeBlock(day.index, blockIndex, 'end_time', formatTimeToString(newValue));
-                                          }
-                                        }}
-                                        closeOnSelect={true}
-                                        openTo="hours"
-                                        slotProps={{
-                                          textField: {
-                                            size: "small",
-                                            fullWidth: true
-                                          },
-                                          actionBar: {
-                                            actions: []
-                                          }
-                                        }}
-                                      />
-                                    </LocalizationProvider>
-                                  </Box>
-                                </Box>
-                              </CardContent>
-                            </Card>
-                          ))}
-                          
-                          {timeBlocks.length > 0 && (
-                            <Alert severity="success" icon={<AccessTime />} sx={{ mt: 2 }}>
-                              <Typography variant="body2">
-                                <strong>Resumen para {day.label}:</strong><br />
-                                Los pacientes podrán agendar citas de {timeBlocks.map((block, index) => (
-                                  <span key={index}>
-                                    {block.start_time} a {block.end_time}
-                                    {index < timeBlocks.length - 1 ? ', ' : ''}
-                                  </span>
-                                ))}
-                              </Typography>
-                            </Alert>
-                          )}
-                        </Box>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </Box>
-          </Box>
+          <ScheduleStep
+            scheduleData={formData.scheduleData}
+            onUpdateDaySchedule={updateDaySchedule}
+            onAddTimeBlock={addTimeBlock}
+            onRemoveTimeBlock={removeTimeBlock}
+            onUpdateTimeBlock={updateTimeBlock}
+            formatTime={formatTime}
+            formatTimeToString={formatTimeToString}
+          />
         );
 
       default:

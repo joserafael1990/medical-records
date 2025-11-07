@@ -12,7 +12,7 @@ import {
 } from '@mui/material';
 import { ArrowBack, Email as EmailIcon } from '@mui/icons-material';
 import CortexLogo from '../common/CortexLogo';
-import { apiService } from '../../services/api';
+import { apiService } from '../../services';
 import { useScrollToError } from '../../hooks/useScrollToError';
 
 const ForgotPasswordView: React.FC = () => {
@@ -43,7 +43,7 @@ const ForgotPasswordView: React.FC = () => {
 
     setIsLoading(true);
     try {
-      await apiService.requestPasswordReset(email);
+      await apiService.auth.requestPasswordReset(email);
       setSuccess(true);
       setError('');
     } catch (error: any) {

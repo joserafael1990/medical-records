@@ -208,20 +208,23 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
                 }}
               />
             )}
-            renderOption={(props, option) => (
-              <Box component="li" {...props} key={option.id}>
-                <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    {option.code} - {option.name}
-                  </Typography>
-                  {option.description && (
-                    <Typography variant="caption" color="text.secondary">
-                      {option.description.length > 80 ? `${option.description.substring(0, 80)}...` : option.description}
+            renderOption={(props, option) => {
+              const { key, ...otherProps } = props;
+              return (
+                <Box component="li" key={option.id} {...otherProps}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {option.code} - {option.name}
                     </Typography>
-                  )}
+                    {option.description && (
+                      <Typography variant="caption" color="text.secondary">
+                        {option.description.length > 80 ? `${option.description.substring(0, 80)}...` : option.description}
+                      </Typography>
+                    )}
+                  </Box>
                 </Box>
-              </Box>
-            )}
+              );
+            }}
             sx={{ mb: 2 }}
           />
         </Box>

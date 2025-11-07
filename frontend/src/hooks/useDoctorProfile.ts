@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { DoctorProfile, DoctorFormData, FieldErrors } from '../types';
 import { API_CONFIG } from '../constants';
-import { apiService } from '../services/api';
+import { apiService } from '../services';
 import { useToast } from '../components/common/ToastNotification';
 import { logger } from '../utils/logger';
 
@@ -231,7 +231,7 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
     setFormErrorMessage('');
     
     try {
-      const data = await apiService.getDoctorProfile();
+      const data = await apiService.doctors.getDoctorProfile();
       setDoctorProfile(data);
     } catch (error: any) {
       // Handle 404 specifically (profile doesn't exist yet)
@@ -278,7 +278,7 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
     if (data.specialty) {
       // Try to find specialty ID from API
       try {
-        const specialties = await apiService.getSpecialties();
+        const specialties = await apiService.catalogs.getSpecialties();
         const specialty = specialties.find((s: any) => s.name === data.specialty);
         if (specialty) {
           specialty_id = specialty.id;
@@ -347,10 +347,10 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
 
     // Use apiService instead of fetch to ensure authentication headers are included
     if (method === 'PUT') {
-      const savedProfile = await apiService.updateDoctorProfile(transformedData);
+      const savedProfile = await apiService.doctors.updateDoctorProfile(transformedData);
       setDoctorProfile(savedProfile);
     } else {
-      const savedProfile = await apiService.createDoctorProfile(transformedData);
+      const savedProfile = await apiService.doctors.createDoctorProfile(transformedData);
       setDoctorProfile(savedProfile);
     }
   };

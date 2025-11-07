@@ -12,7 +12,6 @@ import PatientsView from '../views/PatientsView';
 import { ConsultationDetailView } from '../';
 import { LoadingFallback } from '../';
 import { LazyWrapper } from '../common/LazyWrapper';
-import DebugPanel from '../debug/DebugPanel';
 
 interface ViewRendererProps {
   activeView: string;
@@ -138,13 +137,8 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
                </LazyWrapper>
              )}
 
-      {activeView === 'debug' && (
-        <DebugPanel />
-      )}
-
-
-      {/* WhatsApp and Analytics views not implemented yet */}
-      {(activeView === 'whatsapp' || activeView === 'analytics') && (
+      {/* Analytics view not implemented yet */}
+      {activeView === 'analytics' && (
         <Box sx={{ p: 3, textAlign: 'center' }}>
           <h2>Vista en desarrollo</h2>
           <p>Esta funcionalidad estará disponible próximamente.</p>

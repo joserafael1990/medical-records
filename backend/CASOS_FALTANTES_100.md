@@ -129,3 +129,4 @@ Los tests actuales usan IDs hardcodeados. Para tests más realistas:
 4. Implementar tests de carga/stress
 5. Agregar tests de seguridad
 
+

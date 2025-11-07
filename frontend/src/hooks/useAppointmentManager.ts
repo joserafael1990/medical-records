@@ -1,8 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Appointment, AppointmentFormData } from '../types';
-import { apiService } from '../services/api';
+import { apiService } from '../services';
 import { formatDateTimeForInput, getCurrentCDMXDateTime } from '../constants';
 import { useAuth } from '../contexts/AuthContext';
+import { logger } from '../utils/logger';
 
 export interface UseAppointmentManagerReturn {
   // Appointment state
@@ -78,10 +79,10 @@ export const useAppointmentManager = (
     const loadAppointments = async () => {
       try {
         setIsLoading(true);
-        const appointmentsData = await apiService.getAppointments();
+        const appointmentsData = await apiService.appointments.getAppointments();
         setAppointments(appointmentsData || []);
       } catch (error) {
-        console.error('❌ Error loading appointments (doctorProfile effect):', error);
+        logger.error('Error loading appointments (doctorProfile effect)', error, 'api');
         setAppointments([]);
       } finally {
         setIsLoading(false);
@@ -172,7 +173,7 @@ export const useAppointmentManager = (
           const day = String(dateToFetch.getDate()).padStart(2, '0');
           dateStr = `${year}-${month}-${day}`;
           // console.log('📡 Calling getDailyAgenda for:', dateStr, 'selectedDate was:', selectedDate.toDateString());
-          data = await apiService.getDailyAgenda(dateStr);
+          data = await apiService.appointments.getDailyAgenda(dateStr);
         } else if (agendaView === 'weekly') {
           const start = new Date(dateToFetch);
           const day = start.getDay();
@@ -185,7 +186,7 @@ export const useAppointmentManager = (
           // Fix timezone issue for weekly view
           const startStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
           const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
-          data = await apiService.getWeeklyAgenda(startStr, endStr);
+          data = await apiService.appointments.getWeeklyAgenda(startStr, endStr);
         } else if (agendaView === 'monthly') {
           const start = new Date(dateToFetch.getFullYear(), dateToFetch.getMonth(), 1);
           const end = new Date(dateToFetch.getFullYear(), dateToFetch.getMonth() + 1, 0);
@@ -193,7 +194,7 @@ export const useAppointmentManager = (
           // Fix timezone issue for monthly view
           const startStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
           const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
-          data = await apiService.getMonthlyAgenda(startStr, endStr);
+          data = await apiService.appointments.getMonthlyAgenda(startStr, endStr);
         }
 
         // Only update if not aborted
@@ -213,7 +214,7 @@ export const useAppointmentManager = (
         }
       } catch (error) {
         if (!abortController.signal.aborted) {
-          console.error('Error fetching appointments:', error);
+          logger.error('Error fetching appointments', error, 'api');
           setAppointments([]);
         }
       }
@@ -259,8 +260,8 @@ export const useAppointmentManager = (
     try {
       setIsEditingAppointment(true);
       // Always load fresh data from backend to avoid stale state
-      const latest = await apiService.getAppointment(String(appointment.id));
-      console.log('🟦 Editar cita - datos más recientes del backend:', {
+      const latest = await apiService.appointments.getAppointment(String(appointment.id));
+      logger.debug('Editar cita - datos más recientes del backend', {
         id: (latest as any)?.id,
         appointment_date: (latest as any)?.appointment_date,
         auto_reminder_enabled: (latest as any)?.auto_reminder_enabled,
@@ -386,12 +387,15 @@ export const useAppointmentManager = (
         status: appointmentData.status || 'confirmed',
         priority: appointmentData.priority || 'normal',
         preparation_instructions: appointmentData.preparation_instructions || '',
-        notes: appointmentData.notes || ''
+        notes: appointmentData.notes || '',
+        // WhatsApp auto reminder fields (send what user sees)
+        auto_reminder_enabled: !!appointmentData.auto_reminder_enabled,
+        auto_reminder_offset_minutes: (appointmentData.auto_reminder_offset_minutes ?? 360)
       };
       
       console.log('📤 Backend data being sent:', backendData);
 
-      const response = await apiService.createAgendaAppointment(backendData);
+      const response = await apiService.appointments.createAgendaAppointment(backendData);
       
       // If the appointment was created for a different date, navigate to that date first
       // Validate selectedDate before using
@@ -411,7 +415,7 @@ export const useAppointmentManager = (
           
           if (agendaView === 'daily') {
             const dateStr = validTargetDate.toISOString().split('T')[0];
-            const refreshData = await apiService.getDailyAgenda(dateStr);
+            const refreshData = await apiService.appointments.getDailyAgenda(dateStr);
             setAppointments(refreshData || []);
           } else if (agendaView === 'weekly') {
             const start = new Date(validTargetDate);
@@ -420,7 +424,7 @@ export const useAppointmentManager = (
             start.setDate(start.getDate() + mondayOffset);
             const end = new Date(start);
             end.setDate(start.getDate() + 6);
-            const refreshData = await apiService.getWeeklyAgenda(
+            const refreshData = await apiService.appointments.getWeeklyAgenda(
               start.toISOString().split('T')[0],
               end.toISOString().split('T')[0]
             );
@@ -430,7 +434,7 @@ export const useAppointmentManager = (
             const end = new Date(validTargetDate.getFullYear(), validTargetDate.getMonth() + 1, 0);
             const startStr = start.toISOString().split('T')[0];
             const endStr = end.toISOString().split('T')[0];
-            const refreshData = await apiService.getMonthlyAgenda(startStr, endStr);
+            const refreshData = await apiService.appointments.getMonthlyAgenda(startStr, endStr);
             setAppointments(refreshData || []);
           }
         } catch (error) {
@@ -501,7 +505,7 @@ export const useAppointmentManager = (
           auto_reminder_enabled: updateData.auto_reminder_enabled,
           auto_reminder_offset_minutes: updateData.auto_reminder_offset_minutes
         });
-        const updatedAppointment = await apiService.updateAppointment(String(selectedAppointment.id), updateData);
+        const updatedAppointment = await apiService.appointments.updateAppointment(String(selectedAppointment.id), updateData);
         console.log('🟩 Respuesta backend actualización:', {
           id: (updatedAppointment as any)?.id,
           appointment_date: (updatedAppointment as any)?.appointment_date,
@@ -578,7 +582,7 @@ export const useAppointmentManager = (
                   const d = String(dateToRefresh.getDate()).padStart(2, '0');
                   const dateStr = `${y}-${m}-${d}`;
                   console.log('🔄 Refrescando agenda diaria para:', dateStr);
-                  refreshData = await apiService.getDailyAgenda(dateStr);
+                  refreshData = await apiService.appointments.getDailyAgenda(dateStr);
                 } else if (agendaView === 'weekly') {
                   const start = new Date(dateToRefresh);
                   const day = start.getDay();
@@ -591,7 +595,7 @@ export const useAppointmentManager = (
                   const startStr = start.toISOString().split('T')[0];
                   const endStr = end.toISOString().split('T')[0];
                   console.log('🔄 Refrescando agenda semanal:', { startStr, endStr });
-                  refreshData = await apiService.getWeeklyAgenda(startStr, endStr);
+                  refreshData = await apiService.appointments.getWeeklyAgenda(startStr, endStr);
                 } else if (agendaView === 'monthly') {
                   const start = new Date(dateToRefresh.getFullYear(), dateToRefresh.getMonth(), 1);
                   const end = new Date(dateToRefresh.getFullYear(), dateToRefresh.getMonth() + 1, 0);
@@ -599,7 +603,7 @@ export const useAppointmentManager = (
                   const startStr = start.toISOString().split('T')[0];
                   const endStr = end.toISOString().split('T')[0];
                   console.log('🔄 Refrescando agenda mensual:', { startStr, endStr });
-                  refreshData = await apiService.getMonthlyAgenda(startStr, endStr);
+                  refreshData = await apiService.appointments.getMonthlyAgenda(startStr, endStr);
                 }
                 
                 // Si la cita cambió de día, navegar a ese día
@@ -660,10 +664,13 @@ export const useAppointmentManager = (
           room_number: formDataToUse.room_number || undefined,
           estimated_cost: formDataToUse.estimated_cost ? 
             parseFloat(formDataToUse.estimated_cost) : undefined,
-          insurance_covered: formDataToUse.insurance_covered || false
+          insurance_covered: formDataToUse.insurance_covered || false,
+          // WhatsApp auto reminder fields (send what user sees)
+          auto_reminder_enabled: !!formDataToUse.auto_reminder_enabled,
+          auto_reminder_offset_minutes: (formDataToUse.auto_reminder_offset_minutes ?? 360)
         };
         
-        await apiService.createAgendaAppointment(appointmentData);
+        await apiService.appointments.createAgendaAppointment(appointmentData);
         showSuccessMessage('Cita creada exitosamente');
         
         // Navigate to appointments view after successful creation
@@ -755,7 +762,7 @@ export const useAppointmentManager = (
   // Cancel appointment
   const cancelAppointment = useCallback(async (appointmentId: number) => {
     try {
-      await apiService.cancelAppointment(appointmentId.toString());
+      await apiService.appointments.cancelAppointment(appointmentId.toString());
       showSuccessMessage('Cita cancelada exitosamente');
       
       // Refresh appointments after cancellation
@@ -777,7 +784,7 @@ export const useAppointmentManager = (
           
           if (agendaView === 'daily') {
             const dateStr = dateToRefresh.toISOString().split('T')[0];
-            refreshData = await apiService.getDailyAgenda(dateStr);
+            refreshData = await apiService.appointments.getDailyAgenda(dateStr);
           } else if (agendaView === 'weekly') {
             const start = new Date(dateToRefresh);
             const day = start.getDay();
@@ -789,14 +796,14 @@ export const useAppointmentManager = (
 
             const startStr = start.toISOString().split('T')[0];
             const endStr = end.toISOString().split('T')[0];
-            refreshData = await apiService.getWeeklyAgenda(startStr, endStr);
+            refreshData = await apiService.appointments.getWeeklyAgenda(startStr, endStr);
           } else if (agendaView === 'monthly') {
             const start = new Date(dateToRefresh.getFullYear(), dateToRefresh.getMonth(), 1);
             const end = new Date(dateToRefresh.getFullYear(), dateToRefresh.getMonth() + 1, 0);
             
             const startStr = start.toISOString().split('T')[0];
             const endStr = end.toISOString().split('T')[0];
-            refreshData = await apiService.getMonthlyAgenda(startStr, endStr);
+            refreshData = await apiService.appointments.getMonthlyAgenda(startStr, endStr);
           }
           
           setAppointments(refreshData);
@@ -836,7 +843,7 @@ export const useAppointmentManager = (
         const month = String(dateToRefresh.getMonth() + 1).padStart(2, '0');
         const day = String(dateToRefresh.getDate()).padStart(2, '0');
         const dateStr = `${year}-${month}-${day}`;
-        data = await apiService.getDailyAgenda(dateStr);
+        data = await apiService.appointments.getDailyAgenda(dateStr);
       } else if (agendaView === 'weekly') {
         const start = new Date(dateToRefresh);
         const day = start.getDay();
@@ -849,7 +856,7 @@ export const useAppointmentManager = (
         // Fix timezone issue for weekly view
         const startStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
         const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
-        data = await apiService.getWeeklyAgenda(startStr, endStr);
+        data = await apiService.appointments.getWeeklyAgenda(startStr, endStr);
       } else if (agendaView === 'monthly') {
         const start = new Date(dateToRefresh.getFullYear(), dateToRefresh.getMonth(), 1);
         const end = new Date(dateToRefresh.getFullYear(), dateToRefresh.getMonth() + 1, 0);
@@ -857,7 +864,7 @@ export const useAppointmentManager = (
         // Fix timezone issue for monthly view
         const startStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
         const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
-        data = await apiService.getMonthlyAgenda(startStr, endStr);
+        data = await apiService.appointments.getMonthlyAgenda(startStr, endStr);
       }
 
       

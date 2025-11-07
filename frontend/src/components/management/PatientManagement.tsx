@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Patient, CompletePatientData } from '../../types';
-import { apiService } from '../../services/api';
+import { apiService } from '../../services';
 // Using centralized PatientManagement interfaces from hooks
 import type { PatientManagementState, PatientManagementActions } from '../../hooks/usePatientManagement';
 
@@ -51,7 +51,7 @@ export function usePatientManagementComponent(
     console.log('📋 Cargando lista de pacientes...');
     
     const result = await executeApiCall(
-      () => apiService.getPatients(''),
+      () => apiService.patients.getPatients(''),
       undefined // No mostrar mensaje de éxito para carga inicial
     );
     

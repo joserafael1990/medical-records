@@ -51,18 +51,21 @@ export const CountryCodeSelector: React.FC<CountryCodeSelectorProps> = ({
           }}
         />
       )}
-      renderOption={(props, option) => (
-        <MenuItem {...props} key={`${option.code}-${option.countryCode}`}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-            <Box sx={{ fontSize: '1.5rem', lineHeight: 1 }}>{option.flag}</Box>
-            <ListItemText 
-              primary={option.name}
-              secondary={option.code}
-              primaryTypographyProps={{ style: { fontWeight: 500 } }}
-            />
-          </Box>
-        </MenuItem>
-      )}
+      renderOption={(props, option) => {
+        const { key, ...otherProps } = props;
+        return (
+          <MenuItem key={`${option.code}-${option.countryCode}`} {...otherProps}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+              <Box sx={{ fontSize: '1.5rem', lineHeight: 1 }}>{option.flag}</Box>
+              <ListItemText 
+                primary={option.name}
+                secondary={option.code}
+                primaryTypographyProps={{ style: { fontWeight: 500 } }}
+              />
+            </Box>
+          </MenuItem>
+        );
+      }}
       ListboxProps={{
         style: { maxHeight: 300 }
       }}

@@ -50,19 +50,47 @@ export class AuthService extends ApiBase {
       logger.auth.info('Attempting login for:', credentials.email);
       
       const response = await this.api.post<AuthResponse>('/api/auth/login', {
-        username: credentials.email,
+        email: credentials.email,
         password: credentials.password
       });
 
-      if (response.data.access_token) {
-        localStorage.setItem('token', response.data.access_token);
-        localStorage.setItem('doctor_data', JSON.stringify(response.data.user));
-        logger.auth.success('Login successful for:', credentials.email);
+      // Log response for debugging
+      console.log('🔐 Login response received', { 
+        hasAccessToken: !!response.data?.access_token,
+        hasUser: !!response.data?.user,
+        userId: response.data?.user?.id,
+        responseData: response.data
+      });
+
+      if (!response.data) {
+        throw new Error('No data received from server');
       }
+
+      if (!response.data.access_token) {
+        throw new Error('No access token in response');
+      }
+
+      if (!response.data.user) {
+        throw new Error('No user data in response');
+      }
+
+      localStorage.setItem('token', response.data.access_token);
+      localStorage.setItem('doctor_data', JSON.stringify(response.data.user));
+      logger.auth.info('Login successful for:', credentials.email);
 
       return response.data;
     } catch (error: any) {
-      logger.auth.error('Login failed for:', credentials.email, error);
+      logger.auth.error(`Login failed for: ${credentials.email}`, error);
+      
+      // Re-throw with more context if it's a response processing error
+      if (error.message && (error.message.includes('No data') || error.message.includes('No access token') || error.message.includes('No user data'))) {
+        console.error('🔐 Response processing error', { 
+          response: error.response?.data,
+          status: error.response?.status 
+        });
+        logger.auth.error('Response processing error');
+      }
+      
       throw error;
     }
   }
@@ -76,12 +104,12 @@ export class AuthService extends ApiBase {
       if (response.data.access_token) {
         localStorage.setItem('token', response.data.access_token);
         localStorage.setItem('doctor_data', JSON.stringify(response.data.user));
-        logger.auth.success('Registration successful for:', registerData.email);
+        logger.auth.info('Registration successful for:', registerData.email);
       }
 
       return response.data;
     } catch (error: any) {
-      logger.auth.error('Registration failed for:', registerData.email, error);
+      logger.auth.error(`Registration failed for: ${registerData.email}`, error);
       throw error;
     }
   }
@@ -97,7 +125,7 @@ export class AuthService extends ApiBase {
       // Optionally call backend logout endpoint
       // await this.api.post('/api/auth/logout');
       
-      logger.auth.success('Logout successful');
+      logger.auth.info('Logout successful');
     } catch (error: any) {
       logger.auth.error('Logout error:', error);
       // Even if logout fails, clear local storage
@@ -144,5 +172,33 @@ export class AuthService extends ApiBase {
   getDoctorData(): any | null {
     const doctorData = localStorage.getItem('doctor_data');
     return doctorData ? JSON.parse(doctorData) : null;
+  }
+
+  async requestPasswordReset(email: string): Promise<any> {
+    try {
+      logger.auth.info('Requesting password reset for:', email);
+      const response = await this.api.post('/api/auth/password-reset/request', { email });
+      logger.auth.info('Password reset requested successfully');
+      return response.data;
+    } catch (error: any) {
+      logger.auth.error('Password reset request failed', error);
+      throw error;
+    }
+  }
+
+  async confirmPasswordReset(token: string, newPassword: string, confirmPassword: string): Promise<any> {
+    try {
+      logger.auth.info('Confirming password reset');
+      const response = await this.api.post('/api/auth/password-reset/confirm', {
+        token,
+        new_password: newPassword,
+        confirm_password: confirmPassword
+      });
+      logger.auth.info('Password reset confirmed successfully');
+      return response.data;
+    } catch (error: any) {
+      logger.auth.error('Password reset confirmation failed', error);
+      throw error;
+    }
   }
 }

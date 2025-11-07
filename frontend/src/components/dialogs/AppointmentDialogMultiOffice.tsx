@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -22,31 +22,13 @@ import {
 import { Person as PersonIcon } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
-import { AppointmentFormData, Office, AppointmentType, Patient } from '../../types';
-import { apiService } from '../../services/api';
+import { AppointmentFormData, Patient } from '../../types';
 import { getMediumSelectMenuProps } from '../../utils/selectMenuProps';
 import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
-import { useSimpleToast } from '../common/ToastNotification';
-import { CountryCodeSelector } from '../common/CountryCodeSelector';
 import { PhoneNumberInput } from '../common/PhoneNumberInput';
-import { extractCountryCode } from '../../utils/countryCodes';
-
-// Helper function to calculate age
-const calculateAge = (birthDate: string | Date): number => {
-  const today = new Date();
-  const birth = new Date(birthDate);
-  let age = today.getFullYear() - birth.getFullYear();
-  const monthDiff = today.getMonth() - birth.getMonth();
-  
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-    age--;
-  }
-  
-  return age;
-};
+import { useAppointmentMultiOfficeForm, formatPatientNameWithAge } from '../../hooks/useAppointmentMultiOfficeForm';
 
 interface AppointmentDialogMultiOfficeProps {
   open: boolean;
@@ -79,412 +61,49 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
   onFormDataChange,
   doctorProfile
 }) => {
-  const [formData, setFormData] = useState<AppointmentFormData>({
-    patient_id: 0,
-    doctor_id: 0,
-    appointment_date: '',
-    appointment_type_id: 1, // Default to "Presencial"
-    office_id: 0, // Changed from undefined to 0
-    consultation_type: '', // No default value
-    reason: '',
-    notes: ''
+  const formHook = useAppointmentMultiOfficeForm({
+    open,
+    formData: externalFormData,
+    patients: externalPatients,
+    isEditing,
+    doctorProfile,
+    onFormDataChange,
+    onSubmit,
+    onClose,
+    formErrorMessage,
+    fieldErrors
   });
 
-  // Estados para el flujo de selección de paciente
-  const [isExistingPatient, setIsExistingPatient] = useState<boolean | null>(null);
-  const [newPatientData, setNewPatientData] = useState({
-    first_name: '',
-    paternal_surname: '',
-    maternal_surname: '',
-    birth_date: '',
-    gender: '',
-    phone_country_code: '+52', // Código de país por defecto (México)
-    phone_number: '' // Número telefónico sin código de país
-  });
+  const {
+    formData,
+    setFormData,
+    loading,
+    error,
+    isExistingPatient,
+    setIsExistingPatient,
+    newPatientData,
+    setNewPatientData,
+    appointmentTypes,
+    offices,
+    patients,
+    availableTimes,
+    setAvailableTimes,
+    loadingTimes,
+    selectedDate,
+    selectedTime,
+    handleChange,
+    handleDateChange,
+    handleTimeChange,
+    handleSubmit,
+    currentFormData,
+    currentPatients,
+    currentLoading,
+    currentError
+  } = formHook;
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [appointmentTypes, setAppointmentTypes] = useState<AppointmentType[]>([]);
-  const [offices, setOffices] = useState<Office[]>([]);
-  const [patients, setPatients] = useState<Patient[]>([]);
-  
-  // State for available time slots
-  const [availableTimes, setAvailableTimes] = useState<any[]>([]);
-  const [loadingTimes, setLoadingTimes] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<string>('');
-  const [selectedTime, setSelectedTime] = useState<string>('');
-
-  // Use external data if provided, otherwise use internal state
-  const currentFormData = externalFormData || formData;
-  const currentPatients = externalPatients || patients;
-  const currentLoading = externalLoading || loading;
-  const currentError = formErrorMessage || error;
-
-  // Handle consultation type changes
-  useEffect(() => {
-    if (currentFormData.consultation_type === 'Seguimiento') {
-      setIsExistingPatient(true);
-    } else if (currentFormData.consultation_type === 'Primera vez') {
-      setIsExistingPatient(false);
-    }
-  }, [currentFormData.consultation_type]);
 
   // Hook para scroll automático a errores
   const { errorRef } = useScrollToErrorInDialog(currentError);
-  
-  // Hook para notificaciones de éxito
-  const toast = useSimpleToast();
-
-  useEffect(() => {
-    if (open) {
-      if (isEditing && externalFormData) {
-        // Usar exactamente el valor de BD sin fallback
-        setFormData(externalFormData);
-        // Para edición, determinar si es paciente existente basado en si hay patient_id
-        setIsExistingPatient(externalFormData.patient_id && externalFormData.patient_id > 0 ? true : null);
-        
-        // Extract time from appointment_date for editing
-        if (externalFormData.appointment_date) {
-          const appointmentDate = new Date(externalFormData.appointment_date);
-          const timeString = appointmentDate.toTimeString().slice(0, 5); // HH:MM format
-          setSelectedTime(timeString);
-          setSelectedDate(externalFormData.appointment_date);
-          
-          // Load available times for the appointment date
-          const dateOnly = externalFormData.appointment_date.split('T')[0];
-          loadAvailableTimes(dateOnly);
-        }
-      } else {
-        const defaultData = {
-          patient_id: 0,
-          doctor_id: 0,
-          appointment_date: '',
-          appointment_type_id: 1,
-          office_id: undefined,
-          consultation_type: '',
-          reason: '',
-          notes: ''
-        };
-        setFormData(defaultData);
-        // Para nueva cita, resetear isExistingPatient
-        setIsExistingPatient(null);
-        
-        // Reset time selection for new appointment
-        setSelectedTime('');
-        setAvailableTimes([]);
-        
-        // Don't load times automatically - let the DatePicker handle the date selection
-        // The DatePicker will show today's date by default and trigger onChange when user interacts
-        
-        // Don't call onFormDataChange here to prevent infinite loop
-        // It will be called when user actually changes form data
-      }
-      setError(null);
-    }
-  }, [open, isEditing]);
-
-  // Nota: consultation_type viene de BD y NO se fuerza desde appointment_type_id
-
-  // Load available times for default date when dialog opens
-  useEffect(() => {
-    if (open && !isEditing) {
-      // Get today's date in Mexico timezone
-      const today = new Date();
-      const mexicoTimeString = today.toLocaleString("sv-SE", {timeZone: "America/Mexico_City"});
-      const todayString = mexicoTimeString.split(' ')[0]; // Extract just the date part (YYYY-MM-DD)
-      
-      console.log('🔄 Loading times for default date:', todayString);
-      console.log('🔄 Mexico time string:', mexicoTimeString);
-      
-      // Set both selectedDate and formData.appointment_date to keep them in sync
-      setSelectedDate(todayString);
-      
-      // Update formData with the correct date (create a proper ISO string for the Mexico date)
-      const mexicoDate = new Date(mexicoTimeString);
-      const newFormData = {
-        ...currentFormData,
-        appointment_date: mexicoDate.toISOString()
-      };
-      setFormData(newFormData);
-      if (onFormDataChange) {
-        onFormDataChange(newFormData);
-      }
-      
-      loadAvailableTimes(todayString);
-    }
-  }, [open, isEditing]);
-
-  // Separate useEffect for loading data to prevent infinite loop
-  useEffect(() => {
-    if (open) {
-      loadData();
-    }
-  }, [open]);
-
-  // Limpiar datos del nuevo paciente cuando cambia el tipo de consulta
-  useEffect(() => {
-    if (currentFormData.consultation_type === 'Seguimiento') {
-      // Si es seguimiento, limpiar datos del nuevo paciente
-      setNewPatientData({
-        first_name: '',
-        paternal_surname: '',
-        maternal_surname: '',
-        birth_date: '',
-        gender: '',
-        phone_country_code: '+52',
-        phone_number: ''
-      });
-    }
-  }, [currentFormData.consultation_type]);
-
-  // Limpiar datos del nuevo paciente cuando se cierra el diálogo
-  useEffect(() => {
-    if (!open) {
-      setNewPatientData({
-        first_name: '',
-        paternal_surname: '',
-        maternal_surname: '',
-        birth_date: '',
-        gender: '',
-        phone_country_code: '+52',
-        phone_number: ''
-      });
-    }
-  }, [open]);
-
-  const loadData = async () => {
-    try {
-      // Only load data if not provided externally
-      if (!externalPatients) {
-        const [appointmentTypesData, officesData, patientsData] = await Promise.all([
-          apiService.get<AppointmentType[]>('/api/appointment-types'),
-          apiService.getOffices(doctorProfile?.id),
-          apiService.get<Patient[]>('/api/patients')
-        ]);
-        
-        setAppointmentTypes(appointmentTypesData);
-        setOffices(officesData);
-        setPatients(patientsData);
-      } else {
-        // Load only appointment types and offices if patients are provided externally
-        const [appointmentTypesData, officesData] = await Promise.all([
-          apiService.get<AppointmentType[]>('/api/appointment-types'),
-          apiService.getOffices(doctorProfile?.id)
-        ]);
-        
-        setAppointmentTypes(appointmentTypesData);
-        setOffices(officesData);
-      }
-    } catch (err) {
-      setError('Error al cargar datos');
-      console.error('Error loading data:', err);
-    }
-  };
-
-  // Function to load available times for a specific date
-  const loadAvailableTimes = async (date: string) => {
-    if (!date) return [];
-    
-    try {
-      setLoadingTimes(true);
-      const response = await apiService.getAvailableTimesForBooking(date);
-      const times = response.available_times || [];
-      setAvailableTimes(times);
-      return times;
-    } catch (error) {
-      console.error('❌ Error loading available times:', error);
-      setAvailableTimes([]);
-      return [];
-    } finally {
-      setLoadingTimes(false);
-    }
-  };
-
-  // Handle date change and load available times
-  const handleDateChange = (newDate: string) => {
-    setSelectedDate(newDate);
-    setSelectedTime(''); // Reset selected time when date changes
-    
-    if (newDate) {
-      // Extract date part for API call (YYYY-MM-DD)
-      const dateOnly = newDate.split('T')[0];
-      loadAvailableTimes(dateOnly);
-    } else {
-      setAvailableTimes([]);
-    }
-  };
-
-  // Handle time selection
-  const handleTimeChange = (time: string) => {
-    setSelectedTime(time);
-    
-    if (selectedDate && time) {
-      const newFormData = {
-        ...currentFormData,
-        appointment_date: `${selectedDate.split('T')[0]}T${time}:00`
-      };
-      setFormData(newFormData);
-      if (onFormDataChange) {
-        onFormDataChange(newFormData);
-      }
-    }
-  };
-
-  const handleChange = (field: keyof AppointmentFormData) => (
-    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | any
-  ) => {
-    const value = event.target.value;
-    
-    
-    let newFormData = {
-      ...currentFormData,
-      [field]: value
-    };
-    
-    // Si se selecciona "Primera vez", automáticamente establecer como paciente nuevo
-    if (field === 'consultation_type' && value === 'Primera vez') {
-      setIsExistingPatient(false);
-    }
-    
-    // Si se selecciona un consultorio, determinar automáticamente el tipo de cita
-    if (field === 'office_id' && value && value !== 0) {
-      const selectedOffice = offices.find(office => office.id === parseInt(value));
-      if (selectedOffice) {
-        const appointmentTypeId = selectedOffice.is_virtual ? 2 : 1;
-        newFormData = {
-          ...newFormData,
-          appointment_type_id: appointmentTypeId
-        };
-        // NOTE: isExistingPatient state is preserved - it should NOT be reset when changing office
-      }
-    }
-    
-    
-    setFormData(newFormData);
-    if (onFormDataChange) {
-      onFormDataChange(newFormData);
-    }
-  };
-
-
-  const handleSubmit = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      
-      // Validaciones básicas
-      if (!currentFormData.consultation_type || currentFormData.consultation_type.trim() === '') {
-        setError('Seleccione el tipo de consulta');
-        return;
-      }
-      
-      if (!currentFormData.office_id || currentFormData.office_id === 0) {
-        setError('Seleccione un consultorio');
-        return;
-      }
-      
-      if (!currentFormData.appointment_date) {
-        setError('Seleccione fecha y hora de la cita');
-        return;
-      }
-      
-      // Verificar que el consultorio seleccionado sea válido
-      const selectedOffice = offices.find(office => office.id === currentFormData.office_id);
-      if (!selectedOffice) {
-        setError('Consultorio seleccionado no válido');
-        return;
-      }
-      
-      if (!currentFormData.reason.trim()) {
-        setError('Ingrese el motivo de la cita');
-        return;
-      }
-
-      // Validar datos del paciente
-      let finalPatientId = currentFormData.patient_id;
-      
-      if (isExistingPatient === false) {
-        // Validar datos del nuevo paciente
-        if (!newPatientData.first_name.trim()) {
-          setError('El nombre del paciente es requerido');
-          return;
-        }
-        if (!newPatientData.paternal_surname.trim()) {
-          setError('El apellido paterno del paciente es requerido');
-          return;
-        }
-        if (!newPatientData.phone_number.trim()) {
-          setError('El número telefónico del paciente es requerido');
-          return;
-        }
-        // birth_date y gender NO son requeridos para primera vez
-        
-        // Crear nuevo paciente
-        try {
-          // Concatenar código de país + número telefónico
-          const fullPhoneNumber = `${newPatientData.phone_country_code}${newPatientData.phone_number.trim()}`;
-          
-          const patientData: any = {
-            first_name: newPatientData.first_name,
-            paternal_surname: newPatientData.paternal_surname,
-            // solo enviar si trae valor real
-            ...(newPatientData.maternal_surname && { maternal_surname: newPatientData.maternal_surname }),
-            primary_phone: fullPhoneNumber,
-            person_type: 'patient'
-          };
-          if (newPatientData.birth_date) {
-            patientData.birth_date = newPatientData.birth_date;
-          }
-          if (newPatientData.gender) {
-            patientData.gender = newPatientData.gender;
-          }
-          
-          
-          // Crear el paciente usando la API
-          const newPatient = await apiService.post('/api/patients', patientData);
-          finalPatientId = (newPatient as any).data?.id || (newPatient as any).id;
-          
-          toast.success('Paciente creado exitosamente');
-        } catch (err) {
-          setError('Error al crear el nuevo paciente: ' + (err instanceof Error ? err.message : 'Error desconocido'));
-          return;
-        }
-      } else if (isExistingPatient === true) {
-        if (!currentFormData.patient_id || currentFormData.patient_id === 0) {
-          setError('Seleccione un paciente existente');
-          return;
-        }
-      } else {
-        // Para consultas de seguimiento, asumir paciente existente
-        if (currentFormData.consultation_type === 'Seguimiento') {
-          if (!currentFormData.patient_id) {
-            setError('Seleccione un paciente para la consulta de seguimiento');
-            return;
-          }
-          finalPatientId = currentFormData.patient_id;
-        } else {
-          setError('Seleccione si es un paciente existente o nuevo');
-          return;
-        }
-      }
-
-      // Asegurar que appointment_type_id esté definido
-      const formDataToSubmit = {
-        ...currentFormData,
-        patient_id: finalPatientId,
-        appointment_type_id: currentFormData.appointment_type_id || 1 // Default to 1 if not set
-      };
-      
-      onSubmit(formDataToSubmit);
-      toast.success('Cita creada exitosamente');
-      onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al guardar cita');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <Dialog 
@@ -556,7 +175,6 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
             {/* 2. SELECCIÓN DE PACIENTE - Solo si es "Primera vez" */}
             {!isEditing && currentFormData.consultation_type === 'Primera vez' && (
               <>
-                {/* Automatically show new patient form for "Primera vez" */}
                 <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>
                   Datos del Nuevo Paciente
                 </Typography>
@@ -568,11 +186,9 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
 
             {/* Si es "Seguimiento", automáticamente es paciente existente */}
             {!isEditing && currentFormData.consultation_type === 'Seguimiento' && (
-              <>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Para citas de seguimiento, debe seleccionar un paciente existente
-                </Typography>
-              </>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Para citas de seguimiento, debe seleccionar un paciente existente
+              </Typography>
             )}
 
             {/* 3A. SELECCIÓN DE PACIENTE EXISTENTE */}
@@ -604,15 +220,8 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
                 ) : (
                   <Autocomplete
                     options={currentPatients || []}
-                    getOptionLabel={(option: any) => {
-                      const age = calculateAge(option.birth_date);
-                      const fullName = [
-                        option.first_name,
-                        option.paternal_surname,
-                        option.maternal_surname && option.maternal_surname !== 'null' ? option.maternal_surname : ''
-                      ].filter(part => part && part.trim()).join(' ');
-                      return `${fullName} (${age} años)`;
-                    }}
+                    getOptionLabel={(option: any) => formatPatientNameWithAge(option)}
+                    isOptionEqualToValue={(option, value) => option.id === value.id}
                     value={currentPatients.find(p => p.id === currentFormData.patient_id) || null}
                     onChange={(_: any, newValue: any) => {
                       if (newValue) {
@@ -628,29 +237,28 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
                         helperText={currentError && !currentFormData.patient_id ? 'Campo requerido' : ''}
                       />
                     )}
-                    renderOption={(props: any, option: any) => (
-                      <Box component="li" {...props}>
-                        <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
-                          {option.first_name[0]}{option.paternal_surname[0]}
-                        </Avatar>
-                        <Box>
-                          <Typography variant="body1">
-                            {(() => {
-                              const age = calculateAge(option.birth_date);
-                              const fullName = [
-                                option.first_name,
-                                option.paternal_surname,
-                                option.maternal_surname && option.maternal_surname !== 'null' ? option.maternal_surname : ''
-                              ].filter(part => part && part.trim()).join(' ');
-                              return `${fullName} (${age} años)`;
-                            })()}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {option.primary_phone} • {option.email}
-                          </Typography>
+                    renderOption={(props: any, option: any) => {
+                      const { key, ...otherProps } = props;
+                      return (
+                        <Box 
+                          component="li" 
+                          key={option.id || `patient-${option.first_name}-${option.paternal_surname}`}
+                          {...otherProps}
+                        >
+                          <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
+                            {option.first_name?.[0] || '?'}{option.paternal_surname?.[0] || ''}
+                          </Avatar>
+                          <Box>
+                            <Typography variant="body1">
+                              {formatPatientNameWithAge(option)}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {option.primary_phone} • {option.email}
+                            </Typography>
+                          </Box>
                         </Box>
-                      </Box>
-                    )}
+                      );
+                    }}
                     loading={currentPatients.length === 0}
                     loadingText="Cargando pacientes..."
                     noOptionsText="No se encontraron pacientes"
@@ -698,7 +306,6 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
                   phoneNumber={newPatientData.phone_number}
                   onCountryCodeChange={(code) => setNewPatientData(prev => ({ ...prev, phone_country_code: code }))}
                   onPhoneNumberChange={(number) => {
-                    // Solo permitir números
                     const value = number.replace(/\D/g, '');
                     setNewPatientData(prev => ({ ...prev, phone_number: value }));
                   }}
@@ -707,8 +314,6 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
                   placeholder="Ej: 222 123 4567"
                   fullWidth
                 />
-
-                {/* Campos de fecha de nacimiento y género removidos en nueva cita (no requeridos ni visibles) */}
               </Box>
             )}
 
@@ -752,7 +357,6 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
               </Select>
             </FormControl>
 
-
             {/* 6. FECHA Y HORA */}
             <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
               <DatePicker
@@ -769,11 +373,11 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
                     onFormDataChange(newFormData);
                   }
                   
-                  // Load available times when date changes
                   if (date) {
                     handleDateChange(dateString);
                   } else {
-                    setAvailableTimes([]);
+                    // Clear available times when date is cleared
+                    formHook.setAvailableTimes([]);
                   }
                 }}
                 slotProps={{
@@ -792,7 +396,6 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
                   disabled={loadingTimes}
                   label="Hora de la cita"
                 >
-                  {/* Ensure current time is selectable even if not in availableTimes */}
                   {selectedTime && (
                     <MenuItem value={selectedTime}>
                       {selectedTime} (Horario actual)
@@ -828,7 +431,6 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
                 No hay horarios disponibles para esta fecha. El doctor no tiene horarios configurados para este día.
               </Alert>
             )}
-            
 
             {/* 7. MOTIVO */}
             <TextField
@@ -940,4 +542,3 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
 };
 
 export default AppointmentDialogMultiOffice;
-

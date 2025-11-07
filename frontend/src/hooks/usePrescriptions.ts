@@ -4,7 +4,7 @@
 
 import { useState, useCallback } from 'react';
 import { ConsultationPrescription, CreatePrescriptionData, UpdatePrescriptionData, Medication } from '../types';
-import { apiService } from '../services/api';
+import { apiService } from '../services';
 import { logger } from '../utils/logger';
 
 export interface UsePrescriptionsReturn {
@@ -70,7 +70,7 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
     setError(null);
     
     try {
-      const response = await apiService.get(`/api/consultations/${consultationId}/prescriptions`);
+      const response = await apiService.consultations.api.get(`/api/consultations/${consultationId}/prescriptions`);
       console.log('💊 fetchPrescriptions response:', response);
       const prescriptionsData = response.data || response;
       console.log('💊 fetchPrescriptions data:', prescriptionsData);
@@ -100,7 +100,7 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
         isValidFormat: token ? token.split('.').length === 3 : false
       });
       
-      const response = await apiService.get(url);
+      const response = await apiService.consultations.api.get(url);
       logger.debug('Medications response', { 
         count: response.data?.length || 0,
         dataType: typeof response.data,
@@ -156,7 +156,7 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
     consultationId: string
   ): Promise<ConsultationPrescription> => {
     try {
-      const response = await apiService.post(
+      const response = await apiService.consultations.api.post(
         `/api/consultations/${consultationId}/prescriptions`, 
         prescriptionData
       );
@@ -179,7 +179,7 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
     prescriptionData: UpdatePrescriptionData
   ): Promise<ConsultationPrescription> => {
     try {
-      const response = await apiService.put(
+      const response = await apiService.consultations.api.put(
         `/api/consultations/${consultationId}/prescriptions/${prescriptionId}`, 
         prescriptionData
       );
@@ -207,7 +207,7 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
         setPrescriptions(prev => prev.filter(prescription => prescription.id !== prescriptionId));
       } else {
         // For saved consultations, delete on server
-        await apiService.delete(`/api/consultations/${consultationId}/prescriptions/${prescriptionId}`);
+        await apiService.consultations.api.delete(`/api/consultations/${consultationId}/prescriptions/${prescriptionId}`);
         
         // Remove from local state
         setPrescriptions(prev => prev.filter(prescription => prescription.id !== prescriptionId));
@@ -221,7 +221,7 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
   // Create a new medication
   const createMedication = useCallback(async (medicationName: string): Promise<Medication> => {
     try {
-      const response = await apiService.post('/api/medications', { name: medicationName });
+      const response = await apiService.consultations.api.post('/api/medications', { name: medicationName });
       const newMedication = response.data;
       
       // Add to local medications list (avoid duplicates)

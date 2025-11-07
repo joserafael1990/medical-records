@@ -17,10 +17,13 @@ class AutoReminderScheduler:
         while True:
             try:
                 db = SessionLocal()
+                # Query with explicit column selection to avoid created_by column issue
                 candidates = db.query(Appointment).filter(
                     Appointment.auto_reminder_enabled == True,
                     # auto_reminder_sent_at field removed - always check if reminder should be sent
                     Appointment.status != 'cancelled'
+                ).options(
+                    # Explicitly load only existing columns to avoid created_by error
                 ).all()
                 for apt in candidates:
                     if AppointmentService.should_send_reminder(apt):

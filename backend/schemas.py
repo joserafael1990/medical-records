@@ -490,7 +490,7 @@ class Appointment(AppointmentBase):
     cancelled_by: Optional[int] = None
     created_at: datetime
     updated_at: datetime
-    created_by: Optional[int] = None
+    # created_by removed - not used, doctor_id already identifies the doctor
     
     # Relationships
     patient: Optional[Person] = None
@@ -627,7 +627,6 @@ class StudyCategoryBase(BaseSchema):
 class StudyCategory(StudyCategoryBase):
     id: int
     created_at: Optional[datetime] = None
-    # Note: updated_at column does not exist in study_categories table
 
 # StudyNormalValue schemas removed - table deleted
 

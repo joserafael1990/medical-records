@@ -6,7 +6,8 @@ import {
   FormControl,
   FormHelperText
 } from '@mui/material';
-import { apiService } from '../../services/api';
+import { apiService } from '../../services';
+import { logger } from '../../utils/logger';
 
 interface Document {
   id: number;
@@ -48,7 +49,7 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
     const loadDocuments = async () => {
       setLoading(true);
       try {
-        const docs = await apiService.getDocumentsByType(documentTypeId);
+        const docs = await apiService.documents.getDocumentsByType(documentTypeId);
         setDocuments(docs);
         
         // If value has document_id, find and set the selected document
@@ -59,7 +60,7 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
           }
         }
       } catch (error) {
-        console.error('Error loading documents:', error);
+        logger.error('Error loading documents', error, 'api');
       } finally {
         setLoading(false);
       }

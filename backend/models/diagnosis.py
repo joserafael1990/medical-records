@@ -16,7 +16,6 @@ class DiagnosisCategory(Base):
     # parent_id and level columns do not exist in database - removed
     active = Column('active', Boolean, default=True)  # Database column is 'active', not 'is_active'
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    # updated_at column does not exist in database - removed
     
     # Alias for backward compatibility
     @property

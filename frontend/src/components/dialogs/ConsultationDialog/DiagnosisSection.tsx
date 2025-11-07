@@ -8,7 +8,7 @@ import {
 import {
   MedicalServices as MedicalServicesIcon
 } from '@mui/icons-material';
-import DiagnosisSection as CommonDiagnosisSection from '../../common/DiagnosisSection';
+import CommonDiagnosisSection from '../../common/DiagnosisSection';
 
 interface DiagnosisSectionProps {
   // Primary diagnoses
@@ -109,4 +109,5 @@ export const ConsultationDiagnosisSection: React.FC<DiagnosisSectionProps> = ({
     </Box>
   );
 };
+
 

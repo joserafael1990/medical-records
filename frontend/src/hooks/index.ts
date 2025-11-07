@@ -20,8 +20,26 @@ export { useEmergencyRelationships } from './useEmergencyRelationships';
 export { useConsultationForm, type ConsultationFormData } from './useConsultationForm';
 export { usePatientPreviousStudies } from './usePatientPreviousStudies';
 
-// Appointment form hooks (extracted from AppointmentDialog)
-export { useAppointmentForm } from './useAppointmentForm';
+// Patient form hooks (extracted from PatientDialog)
+export { usePatientForm } from './usePatientForm';
+
+// Appointment multi-office form hooks (extracted from AppointmentDialogMultiOffice)
+export { useAppointmentMultiOfficeForm, formatPatientNameWithAge } from './useAppointmentMultiOfficeForm';
+
+// Schedule config form hooks (extracted from ScheduleConfigDialog)
+export { 
+  useScheduleConfigForm, 
+  DAYS_OF_WEEK,
+  type TimeBlock,
+  type ScheduleTemplate,
+  type WeeklySchedule
+} from './useScheduleConfigForm';
+
+// Doctor profile view hooks (extracted from DoctorProfileView)
+export { useDoctorProfileView } from './useDoctorProfileView';
+
+// Agenda view hooks (extracted from AgendaView)
+export { useAgendaView } from './useAgendaView';
 
 // Enhanced UX Error Handling hooks
 export { useLoadingStates } from './useLoadingStates';

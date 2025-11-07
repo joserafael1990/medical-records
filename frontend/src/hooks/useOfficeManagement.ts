@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { apiService } from '../services/api';
+import { apiService } from '../services';
+import { logger } from '../utils/logger';
 
 export interface Office {
   id: number;
@@ -44,12 +45,12 @@ export const useOfficeManagement = (doctorId?: number) => {
     setIsLoading(true);
     setError(null);
     try {
-      console.log('🏢 Fetching offices for doctor_id:', doctorId);
-      const officesData = await apiService.getOffices(doctorId);
-      console.log('🏢 Offices data:', officesData);
+      logger.debug('Fetching offices', { doctorId }, 'api');
+      const officesData = await apiService.offices.getOffices(doctorId);
+      logger.debug('Offices fetched successfully', { count: officesData?.length }, 'api');
       setOffices(officesData || []);
     } catch (err: any) {
-      console.error('❌ Error fetching offices:', err);
+      logger.error('Error fetching offices', err, 'api');
       setError('Error al cargar los consultorios');
       setOffices([]);
     } finally {
@@ -60,14 +61,13 @@ export const useOfficeManagement = (doctorId?: number) => {
   // Create new office
   const createOffice = useCallback(async (officeData: OfficeFormData) => {
     try {
-      console.log('🏢 Creating office:', officeData);
-      const response = await apiService.post('/api/offices', officeData);
-      console.log('🏢 Create office response:', response);
-      const newOffice = response.data || response;
+      logger.debug('Creating office', { name: officeData.name }, 'api');
+      const newOffice = await apiService.offices.createOffice(officeData);
+      logger.debug('Office created successfully', { id: newOffice.id }, 'api');
       setOffices(prev => [...prev, newOffice]);
       return newOffice;
     } catch (err: any) {
-      console.error('❌ Error creating office:', err);
+      logger.error('Error creating office', err, 'api');
       throw err;
     }
   }, []);
@@ -75,21 +75,15 @@ export const useOfficeManagement = (doctorId?: number) => {
   // Update existing office
   const updateOffice = useCallback(async (officeId: number, officeData: Partial<OfficeFormData>) => {
     try {
-      console.log('🏢 Updating office:', officeId, officeData);
-      console.log('🏢 Office data keys:', Object.keys(officeData));
-      console.log('🏢 Office data values:', Object.values(officeData));
-      console.log('🏢 maps_url value:', officeData.maps_url);
-      const response = await apiService.put(`/api/offices/${officeId}`, officeData);
-      console.log('🏢 Update office response:', response);
-      console.log('🏢 Response data:', response.data);
-      const updatedOffice = response.data || response;
+      logger.debug('Updating office', { officeId, dataKeys: Object.keys(officeData) }, 'api');
+      const updatedOffice = await apiService.offices.updateOffice(officeId, officeData);
+      logger.debug('Office updated successfully', { id: updatedOffice.id }, 'api');
       setOffices(prev => prev.map(office => 
         office.id === officeId ? updatedOffice : office
       ));
       return updatedOffice;
     } catch (err: any) {
-      console.error('❌ Error updating office:', err);
-      console.error('❌ Error details:', err.response?.data);
+      logger.error('Error updating office', err, 'api');
       throw err;
     }
   }, []);
@@ -97,12 +91,12 @@ export const useOfficeManagement = (doctorId?: number) => {
   // Delete office
   const deleteOffice = useCallback(async (officeId: number) => {
     try {
-      console.log('🏢 Deleting office:', officeId);
-      await apiService.delete(`/api/offices/${officeId}`);
-      console.log('🏢 Office deleted successfully');
+      logger.debug('Deleting office', { officeId }, 'api');
+      await apiService.offices.deleteOffice(officeId);
+      logger.debug('Office deleted successfully', { officeId }, 'api');
       setOffices(prev => prev.filter(office => office.id !== officeId));
     } catch (err: any) {
-      console.error('❌ Error deleting office:', err);
+      logger.error('Error deleting office', err, 'api');
       throw err;
     }
   }, []);

@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     # Database Configuration
     DATABASE_URL: str = "postgresql://historias_user:historias_pass@postgres-db:5432/historias_clinicas"
     DB_HOST: str = "localhost"
-    DB_PORT: int = 5432
+    DB_PORT: int = 5433  # Puerto externo (Docker mapea 5433->5432 internamente)
     DB_NAME: str = "historias_clinicas"
     DB_USER: str = "historias_user"
     DB_PASSWORD: str = "historias_pass"

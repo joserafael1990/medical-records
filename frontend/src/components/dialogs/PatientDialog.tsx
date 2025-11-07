@@ -1,6 +1,5 @@
-
 // Cache buster: 2024-10-15-05-10
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -30,29 +29,20 @@ import {
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
-import type { Patient, PatientFormData } from '../../types';
-import { apiService } from '../../services/api';
-import { useToast } from '../common/ToastNotification';
-import { disablePaymentDetection } from '../../utils/disablePaymentDetection';
+import type { Patient } from '../../types';
 import { PrintCertificateButtonPatient } from '../common/PrintCertificateButtonPatient';
 import { PrivacyConsentDialog } from './PrivacyConsentDialog';
 import { ARCORequestDialog } from './ARCORequestDialog';
 import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
-import { CountryCodeSelector } from '../common/CountryCodeSelector';
 import { PhoneNumberInput } from '../common/PhoneNumberInput';
 import { DocumentSelector } from '../common/DocumentSelector';
-import { extractCountryCode } from '../../utils/countryCodes';
-
-interface EmergencyRelationship {
-  code: string;
-  name: string;
-}
+import { usePatientForm } from '../../hooks/usePatientForm';
 
 interface PatientDialogProps {
   open: boolean;
   onClose: () => void;
   patient?: Patient | null;
-  onSubmit: (data: PatientFormData) => Promise<void>;
+  onSubmit: (data: any) => Promise<void>;
   doctorProfile?: any;
 }
 
@@ -63,406 +53,40 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
   onSubmit,
   doctorProfile
 }) => {
-  const isEditing = !!patient;
-  const { showSuccess, showError } = useToast();
-  
-  // Estados separados para código de país y número telefónico
-  const [phoneCountryCode, setPhoneCountryCode] = useState<string>('+52');
-  const [phoneNumber, setPhoneNumber] = useState<string>('');
-  
-  // State for personal documents
-  const [personalDocuments, setPersonalDocuments] = useState<Array<{
-    document_id: number | null;
-    document_value: string;
-    id?: number; // For existing documents
-  }>>([{ document_id: null, document_value: '' }]);
-
-  const [formData, setFormData] = useState<PatientFormData>({
-    first_name: '',
-    paternal_surname: '',
-    maternal_surname: '',
-    birth_date: '',
-    date_of_birth: '',
-    gender: '',
-    email: '',
-    primary_phone: '',
-    phone: '',
-    home_address: '',
-    civil_status: '',
-    address_city: '',
-    city: '',
-    address_state_id: '',
-    state: '',
-    address_postal_code: '',
-    zip_code: '',
-    address_country_id: '',
-    country: '',
-    birth_city: '',
-    birth_state_id: '',
-    birth_country_id: '',
-    emergency_contact_name: '',
-    emergency_contact_phone: '',
-    emergency_contact_relationship: '',
-    medical_history: '',
-    insurance_provider: '',
-    insurance_number: '',
-    active: true,
-    is_active: true
+  const formHook = usePatientForm({
+    open,
+    patient,
+    onSubmit,
+    onClose
   });
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
-  const [privacyConsentDialogOpen, setPrivacyConsentDialogOpen] = useState(false);
-  const [arcoRequestDialogOpen, setArcoRequestDialogOpen] = useState(false);
-  
+  const {
+    formData,
+    loading,
+    error,
+    errors,
+    phoneCountryCode,
+    phoneNumber,
+    personalDocuments,
+    privacyConsentDialogOpen,
+    arcoRequestDialogOpen,
+    emergencyRelationships,
+    countries,
+    states,
+    birthStates,
+    handleChange,
+    handleCountryChange,
+    handlePhoneChange,
+    handleSubmit,
+    handleClose,
+    setPersonalDocuments,
+    setPrivacyConsentDialogOpen,
+    setArcoRequestDialogOpen,
+    isEditing
+  } = formHook;
+
   // Auto-scroll to error when it appears
   const { errorRef } = useScrollToErrorInDialog(error);
-  const [emergencyRelationships, setEmergencyRelationships] = useState<EmergencyRelationship[]>([]);
-  const [countries, setCountries] = useState<Array<{id: number, name: string}>>([]);
-  const [states, setStates] = useState<Array<{id: number, name: string}>>([]);
-  const [birthStates, setBirthStates] = useState<Array<{id: number, name: string}>>([]);
-
-  // Load emergency relationships, countries and states when dialog opens
-  useEffect(() => {
-    const loadData = async () => {
-      if (open) {
-        // Disable payment detection for insurance fields
-        setTimeout(() => {
-          disablePaymentDetection();
-        }, 100);
-        try {
-          const [relationships, countriesData] = await Promise.all([
-            apiService.getEmergencyRelationships(),
-            apiService.getCountries()
-          ]);
-          console.log('🌍 Countries loaded:', countriesData);
-          setEmergencyRelationships(relationships);
-          setCountries(countriesData);
-        } catch (error) {
-          console.error('Error loading data:', error);
-        }
-      }
-    };
-    loadData();
-  }, [open]);
-
-  // Load states when formData has country IDs
-  useEffect(() => {
-    const loadStatesForCountries = async () => {
-      try {
-        // Load states for address country
-        if (formData.address_country_id) {
-          const addressStatesData = await apiService.getStates(parseInt(formData.address_country_id));
-          setStates(addressStatesData);
-        }
-        
-        // Load states for birth country
-        if (formData.birth_country_id) {
-          const birthStatesData = await apiService.getStates(parseInt(formData.birth_country_id));
-          setBirthStates(birthStatesData);
-        }
-      } catch (error) {
-        console.error('Error loading states for countries:', error);
-      }
-    };
-
-    if (formData.address_country_id || formData.birth_country_id) {
-      loadStatesForCountries();
-    }
-  }, [formData.address_country_id, formData.birth_country_id]);
-
-  // Función helper para extraer código de país del número telefónico
-  const extractPhoneData = (phone: string) => {
-    const phoneData = extractCountryCode(phone || '');
-    setPhoneCountryCode(phoneData.countryCode);
-    setPhoneNumber(phoneData.number);
-  };
-
-  useEffect(() => {
-    const loadPatientData = async () => {
-      if (patient && open) {
-        try {
-          // Get decrypted patient data from API
-          const decryptedPatient = await apiService.getPatient(patient.id.toString());
-          extractPhoneData(decryptedPatient.primary_phone || '');
-          
-          // Load person documents
-          const documents = await apiService.getPersonDocuments(patient.id);
-          const personalDocs = documents
-            .filter(doc => doc.document?.document_type_id === 1) // Personal documents
-            .map(doc => ({
-              id: doc.id,
-              document_id: doc.document_id,
-              document_value: doc.document_value
-            }));
-          
-          setPersonalDocuments(personalDocs.length > 0 ? personalDocs : [{ document_id: null, document_value: '' }]);
-          
-          setFormData({
-            first_name: decryptedPatient.first_name || '',
-            paternal_surname: decryptedPatient.paternal_surname || '',
-            maternal_surname: decryptedPatient.maternal_surname || '',
-            birth_date: decryptedPatient.birth_date || '',
-            date_of_birth: decryptedPatient.birth_date || '',
-            gender: decryptedPatient.gender || '',
-            email: decryptedPatient.email || '',
-            primary_phone: decryptedPatient.primary_phone || '',
-            phone: decryptedPatient.primary_phone || '',
-            home_address: decryptedPatient.home_address || '',
-            civil_status: decryptedPatient.civil_status || '',
-            address_city: decryptedPatient.address_city || '',
-            city: decryptedPatient.address_city || '',
-            address_state_id: decryptedPatient.address_state_id?.toString() || '',
-            state: '',
-            address_postal_code: decryptedPatient.address_postal_code || '',
-            zip_code: decryptedPatient.address_postal_code || '',
-            address_country_id: decryptedPatient.address_country_id?.toString() || '',
-            country: '',
-            birth_city: decryptedPatient.birth_city || '',
-            birth_state_id: decryptedPatient.birth_state_id?.toString() || '',
-            birth_country_id: decryptedPatient.birth_country_id?.toString() || '',
-            emergency_contact_name: decryptedPatient.emergency_contact_name || '',
-            emergency_contact_phone: decryptedPatient.emergency_contact_phone || '',
-            emergency_contact_relationship: decryptedPatient.emergency_contact_relationship || '',
-            medical_history: '',
-            insurance_provider: decryptedPatient.insurance_provider || '',
-            insurance_number: decryptedPatient.insurance_number || '',
-            active: true,
-            is_active: true
-          });
-        } catch (error) {
-          console.error('Error loading decrypted patient data:', error);
-          // Fallback to encrypted data if API call fails
-          extractPhoneData(patient.primary_phone || '');
-          
-          // Try to load documents even if patient data fails
-          try {
-            const documents = await apiService.getPersonDocuments(patient.id);
-            const personalDocs = documents
-              .filter(doc => doc.document?.document_type_id === 1)
-              .map(doc => ({
-                id: doc.id,
-                document_id: doc.document_id,
-                document_value: doc.document_value
-              }));
-            setPersonalDocuments(personalDocs.length > 0 ? personalDocs : [{ document_id: null, document_value: '' }]);
-          } catch (docError) {
-            console.error('Error loading documents:', docError);
-            setPersonalDocuments([{ document_id: null, document_value: '' }]);
-          }
-          
-          setFormData({
-            first_name: patient.first_name || '',
-            paternal_surname: patient.paternal_surname || '',
-            maternal_surname: patient.maternal_surname || '',
-            birth_date: patient.birth_date || '',
-            date_of_birth: patient.birth_date || '',
-            gender: patient.gender || '',
-            email: patient.email || '',
-            primary_phone: patient.primary_phone || '',
-            phone: patient.primary_phone || '',
-            home_address: patient.home_address || '',
-            civil_status: patient.civil_status || '',
-            address_city: patient.address_city || '',
-            city: patient.address_city || '',
-            address_state_id: patient.address_state_id?.toString() || '',
-            state: '',
-            address_postal_code: patient.address_postal_code || '',
-            zip_code: patient.address_postal_code || '',
-            address_country_id: patient.address_country_id?.toString() || '',
-            country: '',
-            birth_city: patient.birth_city || '',
-            birth_state_id: patient.birth_state_id?.toString() || '',
-            birth_country_id: patient.birth_country_id?.toString() || '',
-            emergency_contact_name: patient.emergency_contact_name || '',
-            emergency_contact_phone: patient.emergency_contact_phone || '',
-            emergency_contact_relationship: patient.emergency_contact_relationship || '',
-            medical_history: '',
-            insurance_provider: patient.insurance_provider || '',
-            insurance_number: patient.insurance_number || '',
-            active: true,
-            is_active: true
-          });
-        }
-      } else {
-        // Reset form when creating new patient or when dialog closes
-        // Reset estados de teléfono
-        setPhoneCountryCode('+52');
-        setPhoneNumber('');
-        setPersonalDocuments([{ document_id: null, document_value: '' }]);
-        
-        setFormData({
-          first_name: '',
-          paternal_surname: '',
-          maternal_surname: '',
-          birth_date: '',
-          date_of_birth: '',
-          gender: '',
-          email: '',
-          primary_phone: '',
-          phone: '',
-          home_address: '',
-          civil_status: '',
-          address_city: '',
-          city: '',
-          address_state_id: '',
-          state: '',
-          address_postal_code: '',
-          zip_code: '',
-          address_country_id: '',
-          country: '',
-          birth_city: '',
-          birth_state_id: '',
-          birth_country_id: '',
-          emergency_contact_name: '',
-          emergency_contact_phone: '',
-          emergency_contact_relationship: '',
-          medical_history: '',
-          insurance_provider: '',
-          insurance_number: '',
-          active: true,
-          is_active: true
-        });
-        setError('');
-      }
-    };
-
-    loadPatientData();
-  }, [patient, open]);
-
-  const handleChange = (field: keyof PatientFormData) => (
-    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | { name?: string; value: unknown }>
-  ) => {
-    const value = event.target.value;
-    setFormData(prev => ({ ...prev, [field]: value }));
-    
-    // Clear error for this field when user starts typing
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
-    }
-    
-    // Real-time validation for gender
-    if (field === 'gender') {
-      if (!value || value.trim() === '') {
-        setErrors(prev => ({ ...prev, gender: 'El género es obligatorio' }));
-      } else {
-        setErrors(prev => ({ ...prev, gender: '' }));
-      }
-    }
-    
-  };
-
-  const handleCountryChange = async (field: 'address_country_id' | 'birth_country_id', countryId: string) => {
-    setFormData(prev => ({ ...prev, [field]: countryId }));
-    
-    // Load states for selected country
-    if (countryId) {
-      try {
-        const statesData = await apiService.getStates(parseInt(countryId));
-        if (field === 'address_country_id') {
-          setStates(statesData);
-        } else {
-          setBirthStates(statesData);
-        }
-      } catch (error) {
-        console.error('Error loading states:', error);
-      }
-    }
-    
-    // Clear related fields when country changes
-    if (field === 'address_country_id') {
-      setFormData(prev => ({ ...prev, address_state_id: '' }));
-    } else {
-      setFormData(prev => ({ ...prev, birth_state_id: '' }));
-    }
-  };
-
-  const handleSubmit = async () => {
-    setError('');
-    
-    // Basic validation
-    if (!formData.first_name.trim()) {
-      setError('El nombre es requerido');
-      return;
-    }
-    if (!formData.paternal_surname.trim()) {
-      setError('El apellido paterno es requerido');
-      return;
-    }
-    if (!formData.gender || formData.gender.trim() === '') {
-      setError('El género es obligatorio');
-      return;
-    }
-    if (!phoneNumber || phoneNumber.trim() === '') {
-      setError('El número telefónico es obligatorio');
-      return;
-    }
-    // Birth date is optional - no validation needed
-    setLoading(true);
-    try {
-      // Concatenar código de país + número telefónico
-      const fullPhoneNumber = `${phoneCountryCode}${phoneNumber.trim()}`;
-      const formDataToSubmit = {
-        ...formData,
-        primary_phone: fullPhoneNumber,
-        phone: fullPhoneNumber
-      };
-      
-      await onSubmit(formDataToSubmit);
-      
-      // Save/update documents after patient is created/updated
-      const finalPatientId = patient?.id || (await apiService.getPatients()).find(p => 
-        p.first_name === formDataToSubmit.first_name && 
-        p.paternal_surname === formDataToSubmit.paternal_surname
-      )?.id;
-      
-      if (finalPatientId) {
-        const validDocs = personalDocuments.filter(doc => doc.document_id && doc.document_value.trim());
-        for (const doc of validDocs) {
-          try {
-            await apiService.savePersonDocument(finalPatientId, {
-              document_id: doc.document_id!,
-              document_value: doc.document_value.trim()
-            });
-          } catch (docError) {
-            console.error('Error saving document:', docError);
-          }
-        }
-      }
-      
-      // Mostrar notificación de éxito según el tipo de operación
-      if (isEditing) {
-        showSuccess(
-          'Paciente actualizado exitosamente',
-          '¡Edición completada!'
-        );
-      } else {
-        showSuccess(
-          'Paciente creado exitosamente',
-          '¡Creación completada!'
-        );
-      }
-      
-      // Cerrar el diálogo después de un breve delay para que el usuario vea la notificación
-      setTimeout(() => {
-        onClose();
-      }, 1000);
-      
-    } catch (err: any) {
-      setError(err.message || 'Error al guardar paciente');
-      showError(
-        err.message || 'Error al guardar paciente',
-        'Error en la operación'
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleClose = () => {
-    onClose();
-  };
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="lg" fullWidth>
@@ -490,7 +114,7 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
               p: 2, 
               bgcolor: 'error.main', 
               borderRadius: 1,
-              backgroundColor: '#d32f2f !important' // Force red background
+              backgroundColor: '#d32f2f !important'
             }}
           >
             <Typography color="white" sx={{ color: 'white !important' }}>
@@ -507,7 +131,6 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
               Información Básica
             </Typography>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: '1fr 1fr' }, gap: 2 }}>
-
               <TextField
                 label="Nombre - obligatorio"
                 name="first_name"
@@ -591,23 +214,12 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
               Información de Contacto
             </Typography>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-
               <Box sx={{ gridColumn: { xs: '1 / -1', sm: '1' } }}>
                 <PhoneNumberInput
                   countryCode={phoneCountryCode}
                   phoneNumber={phoneNumber}
-                  onCountryCodeChange={(code) => setPhoneCountryCode(code)}
-                  onPhoneNumberChange={(number) => {
-                    // Solo permitir números
-                    const value = number.replace(/\D/g, '');
-                    setPhoneNumber(value);
-                    // Actualizar errores
-                    if (!value || value.trim() === '') {
-                      setErrors(prev => ({ ...prev, primary_phone: 'El número telefónico es obligatorio' }));
-                    } else {
-                      setErrors(prev => ({ ...prev, primary_phone: '' }));
-                    }
-                  }}
+                  onCountryCodeChange={(code) => handlePhoneChange(code, phoneNumber)}
+                  onPhoneNumberChange={(number) => handlePhoneChange(phoneCountryCode, number)}
                   label="Número telefónico *"
                   required
                   placeholder="Ej: 222 123 4567"
@@ -772,6 +384,7 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
               {errors.civil_status && <FormHelperText>{errors.civil_status}</FormHelperText>}
             </FormControl>
           </Box>
+
           {/* Birth Information Section */}
           <Box>
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -907,9 +520,9 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
                   'data-1p-ignore': 'true',
                   'data-bwignore': 'true',
                   'data-autofill': 'off',
-                  'autocapitalize': 'off',
-                  'autocorrect': 'off',
-                  'spellcheck': 'false',
+                  autoCapitalize: 'off',
+                  autoCorrect: 'off',
+                  spellCheck: false,
                   'name': 'medical_insurance_code',
                   'id': 'medical_insurance_code',
                   'type': 'text',
@@ -995,16 +608,16 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
 
         {/* Action buttons */}
         <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', width: '100%' }}>
-        <Button onClick={handleClose} color="inherit" disabled={loading}>
-          Cancelar
-        </Button>
-        <Button
-          variant="contained"
-          onClick={handleSubmit}
-          disabled={loading}
-        >
-          {loading ? 'Guardando...' : (isEditing ? 'Actualizar' : 'Crear Paciente')}
-        </Button>
+          <Button onClick={handleClose} color="inherit" disabled={loading}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSubmit}
+            disabled={loading}
+          >
+            {loading ? 'Guardando...' : (isEditing ? 'Actualizar' : 'Crear Paciente')}
+          </Button>
         </Box>
       </DialogActions>
 

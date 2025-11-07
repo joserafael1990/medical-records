@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React from 'react';
 import {
   Box,
   Typography,
@@ -33,11 +33,10 @@ import {
   WhatsApp as WhatsAppIcon,
   Refresh as RefreshIcon
 } from '@mui/icons-material';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, addDays, addWeeks, addMonths, isSameDay, isSameMonth } from 'date-fns';
-import { formatTime, parseBackendDate } from '../../utils/formatters';
+import { format, isSameDay, isSameMonth } from 'date-fns';
+import { formatTime } from '../../utils/formatters';
 import { es } from 'date-fns/locale';
-import { apiService } from '../../services/api';
-import { useToast } from '../common/ToastNotification';
+import { useAgendaView } from '../../hooks/useAgendaView';
 
 interface AgendaViewProps {
   appointments?: any[];
@@ -64,183 +63,36 @@ const AgendaView: React.FC<AgendaViewProps> = ({
   refreshAppointments,
   forceRefresh
 }) => {
-  const [localSelectedDate, setLocalSelectedDate] = useState(selectedDate || new Date());
-  const { showSuccess, showError } = useToast();
-  const [sendingWhatsApp, setSendingWhatsApp] = useState<number | null>(null);
+  // Use the custom hook for all agenda logic
+  const agendaHook = useAgendaView({
+    appointments,
+    selectedDate,
+    setSelectedDate,
+    agendaView,
+    setAgendaView,
+    forceRefresh
+  });
 
-  // Actualizar fecha local cuando cambie la prop
-  React.useEffect(() => {
-    setLocalSelectedDate(selectedDate);
-  }, [selectedDate]);
-
-  // Asegurar que si la fecha seleccionada es hoy, se muestren las citas de hoy
-  React.useEffect(() => {
-    const today = new Date();
-    const isSelectedDateToday = isSameDay(localSelectedDate, today);
-    
-    if (isSelectedDateToday && agendaView === 'daily' && forceRefresh) {
-      // Solo ejecutar una vez al montar el componente
-      const timeoutId = setTimeout(() => {
-        forceRefresh();
-      }, 100);
-      
-      return () => clearTimeout(timeoutId);
-    }
-  }, []); // Empty dependency array - only run once on mount
-
-  // Función para enviar recordatorio por WhatsApp
-  const handleSendWhatsAppReminder = async (appointment: any) => {
-    if (!appointment.id) {
-      showError('No se puede enviar WhatsApp: Cita sin ID');
-      return;
-    }
-
-    setSendingWhatsApp(appointment.id);
-    try {
-      await apiService.sendWhatsAppAppointmentReminder(appointment.id);
-      showSuccess('Recordatorio enviado por WhatsApp exitosamente');
-    } catch (error: any) {
-      // Error logging removed to prevent console spam
-      
-      // Handle specific error cases
-      const errorDetail = error.detail || error.response?.data?.detail || 'Error al enviar recordatorio por WhatsApp';
-      const statusCode = error.status || error.response?.status;
-      
-      // Check for WhatsApp 24-hour window error
-      if (errorDetail.includes('more than 24 hours') || errorDetail.includes('24 hours have passed')) {
-        showError('No se puede enviar el mensaje porque han pasado más de 24 horas desde la última interacción del paciente con WhatsApp. El paciente debe enviar un mensaje primero para reanudar la conversación.');
-      } else if (statusCode === 503) {
-        // Use setTimeout to ensure the message is shown
-        setTimeout(() => {
-          showError('WhatsApp no está configurado. Contacta al administrador para configurar el servicio de WhatsApp.');
-        }, 100);
-      } else if (statusCode === 400) {
-        showError('No se encontró el número de teléfono del paciente.');
-      } else if (statusCode === 404) {
-        showError('Cita no encontrada o sin acceso.');
-      } else {
-        showError(errorDetail);
-      }
-    } finally {
-      setSendingWhatsApp(null);
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return 'success';
-      case 'cancelled':
-        return 'error';
-      case 'completed':
-        return 'primary';
-      default:
-        return 'default';
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return 'Confirmada';
-      case 'cancelled':
-        return 'Cancelada';
-      case 'completed':
-        return 'Completada';
-      default:
-        return status;
-    }
-  };
-
-  // Función para obtener citas filtradas por vista
-  const getFilteredAppointments = (date: Date, view: 'daily' | 'weekly' | 'monthly') => {
-    switch (view) {
-      case 'daily':
-        const dailyAppointments = appointments.filter(apt => {
-          const aptDate = parseBackendDate(apt.date_time);
-          const isSameDayResult = isSameDay(aptDate, date);
-          return isSameDayResult;
-        });
-        return dailyAppointments;
-      case 'weekly':
-        const weekStart = startOfWeek(date, { weekStartsOn: 1 }); // Lunes
-        const weekEnd = endOfWeek(date, { weekStartsOn: 1 }); // Domingo
-        return appointments.filter(apt => {
-          const aptDate = parseBackendDate(apt.date_time);
-          return aptDate >= weekStart && aptDate <= weekEnd;
-        });
-      case 'monthly':
-        const monthStart = startOfMonth(date);
-        const monthEnd = endOfMonth(date);
-        return appointments.filter(apt => {
-          const aptDate = parseBackendDate(apt.date_time);
-          return aptDate >= monthStart && aptDate <= monthEnd;
-        });
-      default:
-        return appointments;
-    }
-  };
-
-  const currentDate = localSelectedDate && !isNaN(localSelectedDate.getTime()) ? localSelectedDate : new Date();
-  
-  // Detectar si la fecha seleccionada es hoy
-  const isToday = isSameDay(currentDate, new Date());
-  
-  // Obtener citas filtradas
-  const filteredAppointments = getFilteredAppointments(currentDate, agendaView);
-  
-  // Debug logs removed to prevent infinite logging
-
-  // Navegación de fechas
-  const handleDateNavigation = (direction: 'prev' | 'next') => {
-    let newDate: Date;
-    switch (agendaView) {
-      case 'daily':
-        newDate = addDays(currentDate, direction === 'next' ? 1 : -1);
-        break;
-      case 'weekly':
-        newDate = addWeeks(currentDate, direction === 'next' ? 1 : -1);
-        break;
-      case 'monthly':
-        newDate = addMonths(currentDate, direction === 'next' ? 1 : -1);
-        break;
-      default:
-        newDate = currentDate;
-    }
-    setLocalSelectedDate(newDate);
-    setSelectedDate?.(newDate);
-  };
-
-  const goToToday = () => {
-    const today = new Date();
-    setLocalSelectedDate(today);
-    setSelectedDate?.(today);
-  };
-
-  // Obtener rango de fechas para el título
-  const getDateRangeTitle = () => {
-    // Validar que localSelectedDate sea una fecha válida
-    const currentDate = localSelectedDate && !isNaN(localSelectedDate.getTime()) ? localSelectedDate : new Date();
-    
-    switch (agendaView) {
-      case 'daily':
-        return format(currentDate, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es });
-      case 'weekly':
-        const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
-        const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 });
-        return `${format(weekStart, 'd MMM', { locale: es })} - ${format(weekEnd, 'd MMM yyyy', { locale: es })}`;
-      case 'monthly':
-        return format(currentDate, 'MMMM yyyy', { locale: es });
-      default:
-        return format(currentDate, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es });
-    }
-  };
+  const {
+    localSelectedDate,
+    sendingWhatsApp,
+    currentDate,
+    isToday,
+    filteredAppointments,
+    dateRangeTitle,
+    handleSendWhatsAppReminder,
+    handleDateNavigation,
+    goToToday,
+    getStatusColor,
+    getStatusLabel,
+    getWeekDays,
+    getWeeks,
+    getDayAppointments
+  } = agendaHook;
 
   // Renderizar vista semanal
   const renderWeeklyView = () => {
-    const currentDate = localSelectedDate && !isNaN(localSelectedDate.getTime()) ? localSelectedDate : new Date();
-    const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
-    const weekDays = eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) });
+    const weekDays = getWeekDays();
     
     return (
       <TableContainer component={Paper} sx={{ boxShadow: 1 }}>
@@ -264,9 +116,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
           <TableBody>
             <TableRow>
               {weekDays.map(day => {
-                const dayAppointments = appointments.filter(apt => 
-                  isSameDay(parseBackendDate(apt.date_time), day)
-                );
+                const dayAppointments = getDayAppointments(day);
                 
                 return (
                   <TableCell 
@@ -356,17 +206,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
 
   // Renderizar vista mensual
   const renderMonthlyView = () => {
-    const currentDate = localSelectedDate && !isNaN(localSelectedDate.getTime()) ? localSelectedDate : new Date();
-    const monthStart = startOfMonth(currentDate);
-    const monthEnd = endOfMonth(currentDate);
-    const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
-    const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
-    const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
-    
-    const weeks = [];
-    for (let i = 0; i < calendarDays.length; i += 7) {
-      weeks.push(calendarDays.slice(i, i + 7));
-    }
+    const weeks = getWeeks();
 
     return (
       <TableContainer component={Paper} sx={{ boxShadow: 1 }}>
@@ -384,11 +224,9 @@ const AgendaView: React.FC<AgendaViewProps> = ({
             {weeks.map((week, weekIndex) => (
               <TableRow key={weekIndex}>
                 {week.map(day => {
-                  const dayAppointments = appointments.filter(apt => 
-                    isSameDay(parseBackendDate(apt.date_time), day)
-                  );
+                  const dayAppointments = getDayAppointments(day);
                   const isCurrentMonth = isSameMonth(day, currentDate);
-                  const isToday = isSameDay(day, new Date());
+                  const isTodayDate = isSameDay(day, new Date());
                   
                   return (
                     <TableCell 
@@ -397,10 +235,10 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                         verticalAlign: 'top', 
                         minHeight: 100,
                         opacity: isCurrentMonth ? 1 : 0.3,
-                        bgcolor: isToday ? 'primary.light' : 'transparent',
+                        bgcolor: isTodayDate ? 'primary.light' : 'transparent',
                         cursor: dayAppointments.length > 0 ? 'pointer' : 'default',
                         '&:hover': dayAppointments.length > 0 ? {
-                          bgcolor: isToday ? 'primary.main' : 'action.hover'
+                          bgcolor: isTodayDate ? 'primary.main' : 'action.hover'
                         } : {}
                       }}
                       onClick={() => {
@@ -413,8 +251,8 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                       <Typography 
                         variant="body2" 
                         sx={{ 
-                          fontWeight: isToday ? 'bold' : 'normal',
-                          color: isToday ? 'primary.contrastText' : 'text.primary'
+                          fontWeight: isTodayDate ? 'bold' : 'normal',
+                          color: isTodayDate ? 'primary.contrastText' : 'text.primary'
                         }}
                       >
                         {format(day, 'd')}
@@ -615,7 +453,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 300, justifyContent: 'center' }}>
                 <TodayIcon color="primary" />
                 <Typography variant="h6" sx={{ textTransform: 'capitalize' }}>
-                  {getDateRangeTitle()}
+                  {dateRangeTitle}
                 </Typography>
               </Box>
               <IconButton onClick={() => handleDateNavigation('next')} size="small">

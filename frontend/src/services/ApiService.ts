@@ -2,6 +2,13 @@ import { AuthService } from './auth/AuthService';
 import { PatientService } from './patients/PatientService';
 import { AppointmentService } from './appointments/AppointmentService';
 import { ConsultationService } from './consultations/ConsultationService';
+import { CatalogService } from './catalogs/CatalogService';
+import { DocumentService } from './documents/DocumentService';
+import { ClinicalStudyService } from './clinical-studies/ClinicalStudyService';
+import { DoctorService } from './doctors/DoctorService';
+import { OfficeService } from './offices/OfficeService';
+import { WhatsAppService } from './whatsapp/WhatsAppService';
+import { logger } from '../utils/logger';
 
 /**
  * Main API Service that aggregates all domain-specific services
@@ -12,30 +19,36 @@ export class ApiService {
   public patients: PatientService;
   public appointments: AppointmentService;
   public consultations: ConsultationService;
+  public catalogs: CatalogService;
+  public documents: DocumentService;
+  public clinicalStudies: ClinicalStudyService;
+  public doctors: DoctorService;
+  public offices: OfficeService;
+  public whatsapp: WhatsAppService;
 
   constructor() {
     this.auth = new AuthService();
     this.patients = new PatientService();
     this.appointments = new AppointmentService();
     this.consultations = new ConsultationService();
+    this.catalogs = new CatalogService();
+    this.documents = new DocumentService();
+    this.clinicalStudies = new ClinicalStudyService();
+    this.doctors = new DoctorService();
+    this.offices = new OfficeService();
+    this.whatsapp = new WhatsAppService();
   }
 
   // Convenience methods for common operations
   async getDashboardData(): Promise<any> {
     try {
-      const [patients, appointments, consultations] = await Promise.all([
-        this.patients.getPatientStatistics(),
-        this.appointments.getAppointmentStatistics(),
-        this.consultations.getConsultationStatistics()
-      ]);
-
-      return {
-        patients,
-        appointments,
-        consultations
-      };
+      logger.debug('Fetching dashboard data', undefined, 'api');
+      // Use appointments service's api instance (all services share the same base)
+      const response = await this.appointments.api.get<any>('/api/dashboard');
+      logger.debug('Dashboard data fetched successfully', undefined, 'api');
+      return response.data;
     } catch (error) {
-      console.error('Failed to fetch dashboard data:', error);
+      logger.error('Failed to fetch dashboard data', error, 'api');
       throw error;
     }
   }
@@ -95,3 +108,9 @@ export { AuthService } from './auth/AuthService';
 export { PatientService } from './patients/PatientService';
 export { AppointmentService } from './appointments/AppointmentService';
 export { ConsultationService } from './consultations/ConsultationService';
+export { CatalogService } from './catalogs/CatalogService';
+export { DocumentService } from './documents/DocumentService';
+export { ClinicalStudyService } from './clinical-studies/ClinicalStudyService';
+export { DoctorService } from './doctors/DoctorService';
+export { OfficeService } from './offices/OfficeService';
+export { WhatsAppService } from './whatsapp/WhatsAppService';

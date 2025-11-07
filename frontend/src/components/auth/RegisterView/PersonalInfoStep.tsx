@@ -6,207 +6,162 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Typography,
-  Grid,
-  FormHelperText
+  Typography
 } from '@mui/material';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
-import { CountryCodeSelector } from '../../common/CountryCodeSelector';
+import { DocumentSelector } from '../../common/DocumentSelector';
+import { PhoneNumberInput } from '../../common/PhoneNumberInput';
 
 interface PersonalInfoStepProps {
-  formData: {
-    first_name: string;
-    paternal_surname: string;
-    maternal_surname: string;
-    curp: string;
-    gender: string;
-    birth_date: string;
-    phone_country_code: string;
-    phone_number: string;
-  };
-  onInputChange: (field: string, value: string) => void;
-  fieldErrors: Record<string, string>;
+  firstName: string;
+  paternalSurname: string;
+  maternalSurname: string;
+  personalDocument: { document_id: number | null; document_value: string };
+  gender: string;
+  birthDate: string;
+  phoneCountryCode: string;
+  phoneNumber: string;
+  onFirstNameChange: (value: string) => void;
+  onPaternalSurnameChange: (value: string) => void;
+  onMaternalSurnameChange: (value: string) => void;
+  onPersonalDocumentChange: (doc: { document_id: number | null; document_value: string }) => void;
+  onGenderChange: (value: string) => void;
+  onBirthDateChange: (value: string) => void;
+  onPhoneCountryCodeChange: (value: string) => void;
+  onPhoneNumberChange: (value: string) => void;
+  hasAttemptedContinue: boolean;
 }
 
 export const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({
-  formData,
-  onInputChange,
-  fieldErrors
+  firstName,
+  paternalSurname,
+  maternalSurname,
+  personalDocument,
+  gender,
+  birthDate,
+  phoneCountryCode,
+  phoneNumber,
+  onFirstNameChange,
+  onPaternalSurnameChange,
+  onMaternalSurnameChange,
+  onPersonalDocumentChange,
+  onGenderChange,
+  onBirthDateChange,
+  onPhoneCountryCodeChange,
+  onPhoneNumberChange,
+  hasAttemptedContinue
 }) => {
-  const handleDateChange = (date: any) => {
-    if (date) {
-      const dateString = date.toISOString().split('T')[0];
-      onInputChange('birth_date', dateString);
-    }
-  };
-
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+    <Box>
       <Typography variant="h6" gutterBottom>
         Información Personal
       </Typography>
       
-      <Grid container spacing={2}>
-        {/* First Name */}
-        <Grid item xs={12} sm={6}>
+      <TextField
+        fullWidth
+        margin="normal"
+        label="Nombre(s)"
+        value={firstName}
+        onChange={(e) => onFirstNameChange(e.target.value)}
+        required
+      />
+
+      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+        <Box sx={{ flex: '1 1 250px' }}>
           <TextField
-            label="Nombre"
-            value={formData.first_name}
-            onChange={(e) => onInputChange('first_name', e.target.value)}
-            error={!!fieldErrors.first_name}
-            helperText={fieldErrors.first_name}
             fullWidth
-            required
-          />
-        </Grid>
-        
-        {/* Paternal Surname */}
-        <Grid item xs={12} sm={6}>
-          <TextField
+            margin="normal"
             label="Apellido Paterno"
-            value={formData.paternal_surname}
-            onChange={(e) => onInputChange('paternal_surname', e.target.value)}
-            error={!!fieldErrors.paternal_surname}
-            helperText={fieldErrors.paternal_surname}
-            fullWidth
+            value={paternalSurname}
+            onChange={(e) => onPaternalSurnameChange(e.target.value)}
             required
           />
-        </Grid>
-        
-        {/* Maternal Surname */}
-        <Grid item xs={12} sm={6}>
+        </Box>
+        <Box sx={{ flex: '1 1 250px' }}>
           <TextField
+            fullWidth
+            margin="normal"
             label="Apellido Materno"
-            value={formData.maternal_surname}
-            onChange={(e) => onInputChange('maternal_surname', e.target.value)}
-            error={!!fieldErrors.maternal_surname}
-            helperText={fieldErrors.maternal_surname}
-            fullWidth
+            value={maternalSurname}
+            onChange={(e) => onMaternalSurnameChange(e.target.value)}
           />
-        </Grid>
-        
-        {/* CURP */}
-        <Grid item xs={12} sm={6}>
-          <TextField
-            label="CURP"
-            value={formData.curp}
-            onChange={(e) => onInputChange('curp', e.target.value.toUpperCase())}
-            error={!!fieldErrors.curp}
-            helperText={fieldErrors.curp || 'Clave Única de Registro de Población'}
-            fullWidth
-            required
-          />
-        </Grid>
-        
-        {/* Gender and Birth Date in same row */}
-        <Grid item xs={12} sm={6}>
-          <FormControl fullWidth error={!!fieldErrors.gender}>
-            <InputLabel>Género</InputLabel>
+        </Box>
+      </Box>
+
+      {/* Documento Personal */}
+      <Box sx={{ mb: 2 }}>
+        <DocumentSelector
+          documentType="personal"
+          value={personalDocument}
+          onChange={onPersonalDocumentChange}
+          required
+          error={hasAttemptedContinue && (!personalDocument?.document_id || !personalDocument?.document_value)}
+          helperText={hasAttemptedContinue ? "Seleccione un documento personal e ingrese su valor" : undefined}
+        />
+      </Box>
+
+      {/* Género y Fecha de Nacimiento en la misma fila */}
+      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+        <Box sx={{ flex: '1 1 250px' }}>
+          <FormControl fullWidth margin="normal" required>
+            <InputLabel required>Género</InputLabel>
             <Select
-              value={formData.gender}
-              onChange={(e) => onInputChange('gender', e.target.value)}
+              value={gender}
+              onChange={(e) => onGenderChange(e.target.value)}
               label="Género"
+              required
             >
               <MenuItem value="M">Masculino</MenuItem>
               <MenuItem value="F">Femenino</MenuItem>
               <MenuItem value="O">Otro</MenuItem>
             </Select>
-            {fieldErrors.gender && (
-              <FormHelperText>{fieldErrors.gender}</FormHelperText>
-            )}
           </FormControl>
-        </Grid>
-        
-        <Grid item xs={12} sm={6}>
+        </Box>
+        <Box sx={{ flex: '1 1 250px' }}>
           <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
             <DatePicker
-              label="Fecha de Nacimiento"
-              value={formData.birth_date ? new Date(formData.birth_date) : null}
-              onChange={handleDateChange}
+              label="Fecha de Nacimiento *"
+              value={birthDate ? new Date(birthDate) : null}
               maxDate={new Date()}
+              onChange={(newValue) => {
+                if (newValue) {
+                  const dateValue = newValue.toISOString().split('T')[0];
+                  onBirthDateChange(dateValue);
+                } else {
+                  onBirthDateChange('');
+                }
+              }}
               slotProps={{
                 textField: {
                   fullWidth: true,
-                  error: !!fieldErrors.birth_date,
-                  helperText: fieldErrors.birth_date
+                  margin: 'normal',
+                  required: true
                 }
               }}
             />
           </LocalizationProvider>
-        </Grid>
-        
-        {/* Phone */}
-        <Grid item xs={12}>
-          <Box 
-            sx={{ 
-              display: 'flex', 
-              gap: 2,
-              alignItems: 'stretch',
-              flexWrap: { xs: 'wrap', sm: 'nowrap' }
-            }}
-          >
-            <Box sx={{ 
-              flex: { xs: '1 1 100%', sm: '0 0 200px' },
-              width: { xs: '100%', sm: '200px' },
-              display: 'flex',
-              alignItems: 'stretch'
-            }}>
-              <CountryCodeSelector
-                value={formData.phone_country_code}
-                onChange={(code) => onInputChange('phone_country_code', code)}
-                label="Código de país *"
-                error={!!fieldErrors.phone_country_code}
-                helperText={fieldErrors.phone_country_code}
-              />
-            </Box>
-            <Box sx={{ 
-              flex: { xs: '1 1 100%', sm: '1 1 auto' },
-              width: { xs: '100%', sm: 'auto' },
-              display: 'flex',
-              alignItems: 'stretch'
-            }}>
-              <TextField
-                fullWidth
-                placeholder="Número telefónico *"
-                type="tel"
-                value={formData.phone_number}
-                onChange={(e) => {
-                  // Solo permitir números
-                  const value = e.target.value.replace(/\D/g, '');
-                  onInputChange('phone_number', value);
-                }}
-                required
-                error={!!fieldErrors.phone_number}
-                helperText={fieldErrors.phone_number}
-                inputProps={{
-                  autoComplete: 'tel',
-                  'data-form-type': 'other'
-                }}
-                autoComplete="tel"
-                margin="none"
-                sx={{
-                  width: '100%',
-                  '& .MuiFormHelperText-root': {
-                    margin: '3px 14px 0',
-                    lineHeight: '1.66',
-                    minHeight: '1.66em'
-                  },
-                  '& .MuiInputBase-root': {
-                    height: '56px',
-                    marginTop: 0
-                  },
-                  '& .MuiOutlinedInput-root': {
-                    marginTop: 0
-                  }
-                }}
-              />
-            </Box>
-          </Box>
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
+
+      {/* Código de país y Teléfono unificado */}
+      <Box sx={{ mt: 2, mb: 1 }}>
+        <PhoneNumberInput
+          countryCode={phoneCountryCode}
+          phoneNumber={phoneNumber}
+          onCountryCodeChange={onPhoneCountryCodeChange}
+          onPhoneNumberChange={(number) => {
+            // Solo permitir números
+            const value = number.replace(/\D/g, '');
+            onPhoneNumberChange(value);
+          }}
+          label="Número telefónico *"
+          required
+          placeholder="Ej: 222 123 4567"
+          fullWidth
+        />
+      </Box>
     </Box>
   );
 };

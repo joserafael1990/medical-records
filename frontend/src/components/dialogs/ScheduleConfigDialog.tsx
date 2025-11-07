@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -26,48 +26,15 @@ import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
-import { apiService } from '../../services/api';
 import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
+import { useScheduleConfigForm, DAYS_OF_WEEK, type WeeklySchedule, type ScheduleTemplate } from '../../hooks/useScheduleConfigForm';
 
 interface ScheduleConfigDialogProps {
   open: boolean;
   onClose: () => void;
   onSave?: () => void;
-  onScheduleUpdated?: () => void; // Callback para refrescar datos en el componente padre
+  onScheduleUpdated?: () => void;
 }
-
-interface TimeBlock {
-  id?: number;
-  start_time: string;
-  end_time: string;
-}
-
-interface ScheduleTemplate {
-  id?: number;
-  day_of_week: number;
-  time_blocks: TimeBlock[];
-  is_active: boolean;
-}
-
-interface WeeklySchedule {
-  monday?: ScheduleTemplate;
-  tuesday?: ScheduleTemplate;
-  wednesday?: ScheduleTemplate;
-  thursday?: ScheduleTemplate;
-  friday?: ScheduleTemplate;
-  saturday?: ScheduleTemplate;
-  sunday?: ScheduleTemplate;
-}
-
-const DAYS_OF_WEEK = [
-  { key: 'monday', label: 'Lunes', index: 0 },
-  { key: 'tuesday', label: 'Martes', index: 1 },
-  { key: 'wednesday', label: 'Miércoles', index: 2 },
-  { key: 'thursday', label: 'Jueves', index: 3 },
-  { key: 'friday', label: 'Viernes', index: 4 },
-  { key: 'saturday', label: 'Sábado', index: 5 },
-  { key: 'sunday', label: 'Domingo', index: 6 }
-];
 
 const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
   open,
@@ -75,312 +42,52 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
   onSave,
   onScheduleUpdated
 }) => {
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [weeklySchedule, setWeeklySchedule] = useState<WeeklySchedule>({
-    monday: { day_of_week: 0, time_blocks: [], is_active: false },
-    tuesday: { day_of_week: 1, time_blocks: [], is_active: false },
-    wednesday: { day_of_week: 2, time_blocks: [], is_active: false },
-    thursday: { day_of_week: 3, time_blocks: [], is_active: false },
-    friday: { day_of_week: 4, time_blocks: [], is_active: false },
-    saturday: { day_of_week: 5, time_blocks: [], is_active: false },
-    sunday: { day_of_week: 6, time_blocks: [], is_active: false }
+  const formHook = useScheduleConfigForm({
+    open,
+    onScheduleUpdated
   });
-  const [hasExistingSchedule, setHasExistingSchedule] = useState(false);
-  
+
+  const {
+    loading,
+    saving,
+    error,
+    success,
+    weeklySchedule,
+    hasExistingSchedule,
+    loadWeeklySchedule,
+    generateDefaultSchedule,
+    addTimeBlock,
+    removeTimeBlock,
+    updateTimeBlock,
+    saveTimeBlockChanges,
+    toggleDayActive,
+    formatTime,
+    formatTimeToString,
+    handleSave,
+    handleClose
+  } = formHook;
+
   // Auto-scroll to error when it appears
   const { errorRef } = useScrollToErrorInDialog(error);
 
-  useEffect(() => {
-    if (open) {
-      loadWeeklySchedule();
-    }
-  }, [open]);
-
-  const loadWeeklySchedule = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const response = await apiService.get('/api/schedule/templates/weekly');
-      console.log('📅 loadWeeklySchedule response:', response);
-      console.log('📅 response.data:', response.data);
-      console.log('📅 response.data type:', typeof response.data);
-      console.log('📅 response.data keys:', response.data ? Object.keys(response.data) : 'null');
-      
-      // Get the actual data - it might be in response.data or response directly
-      const responseData = response.data || response;
-      console.log('📅 responseData:', responseData);
-      console.log('📅 responseData type:', typeof responseData);
-      console.log('📅 responseData keys:', responseData ? Object.keys(responseData) : 'null');
-      
-      // Merge with default values to ensure all days are present
-      const defaultSchedule = {
-        monday: { day_of_week: 0, time_blocks: [], is_active: false },
-        tuesday: { day_of_week: 1, time_blocks: [], is_active: false },
-        wednesday: { day_of_week: 2, time_blocks: [], is_active: false },
-        thursday: { day_of_week: 3, time_blocks: [], is_active: false },
-        friday: { day_of_week: 4, time_blocks: [], is_active: false },
-        saturday: { day_of_week: 5, time_blocks: [], is_active: false },
-        sunday: { day_of_week: 6, time_blocks: [], is_active: false }
-      };
-      
-      const mergedSchedule = { ...defaultSchedule, ...responseData };
-      console.log('📅 mergedSchedule:', mergedSchedule);
-      console.log('📅 mergedSchedule monday:', mergedSchedule.monday);
-      console.log('📅 mergedSchedule monday time_blocks:', mergedSchedule.monday?.time_blocks);
-      console.log('📅 mergedSchedule monday is_active:', mergedSchedule.monday?.is_active);
-      setWeeklySchedule(mergedSchedule);
-      
-      // Verificar si ya existe algún horario configurado con datos válidos
-      const hasSchedule = Object.values(mergedSchedule).some(schedule => 
-        schedule !== null && 
-        schedule.time_blocks && 
-        schedule.time_blocks.some(block => block.start_time && block.end_time)
-      );
-      setHasExistingSchedule(hasSchedule);
-      
-    } catch (err: any) {
-      console.error('📅 Error loading weekly schedule:', err);
-      setError('Error cargando configuración de horarios');
-    } finally {
-      setLoading(false);
-    }
+  const finalHandleClose = () => {
+    handleClose();
+    onClose();
   };
 
-  const generateDefaultSchedule = async () => {
-    try {
-      setSaving(true);
-      setError(null);
-      
-      const response = await apiService.post('/api/schedule/generate-weekly-template');
-      
-      // Usar directamente la respuesta del servidor
-      setWeeklySchedule(response.data);
-      
-      // Verificar si ya existe algún horario configurado con datos válidos
-      const hasSchedule = Object.values(response.data).some(schedule => 
-        schedule !== null && 
-        schedule.time_blocks && 
-        schedule.time_blocks.some(block => block.start_time && block.end_time)
-      );
-      setHasExistingSchedule(hasSchedule);
-      
-      setSuccess('Horario por defecto generado exitosamente');
-      
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Error generando horario por defecto');
-    } finally {
-      setSaving(false);
+  const finalHandleSave = async () => {
+    await handleSave();
+    if (onSave) {
+      onSave();
     }
-  };
-
-  const updateDaySchedule = async (dayIndex: number, scheduleData: Partial<ScheduleTemplate>, shouldReload: boolean = false) => {
-    try {
-      console.log('📅 updateDaySchedule called:', { dayIndex, scheduleData, shouldReload });
-      setError(null);
-      
-      const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklySchedule;
-      const existingSchedule = weeklySchedule[dayKey];
-      console.log('📅 existingSchedule in updateDaySchedule:', existingSchedule);
-      
-      if (existingSchedule?.id) {
-        console.log('📅 Updating existing schedule with id:', existingSchedule.id);
-        // Actualizar existente
-        const response = await apiService.put(`/api/schedule/templates/${existingSchedule.id}`, scheduleData);
-        
-        // Update local state immediately for fast UI response
-        const responseData = response.data || response;
-        setWeeklySchedule(prev => ({
-          ...prev,
-          [dayKey]: responseData
-        }));
-        
-        // Only reload if explicitly requested (for complex operations like time block changes)
-        if (shouldReload) {
-          await loadWeeklySchedule();
-        }
-      } else {
-        console.log('📅 Creating new schedule for day:', dayIndex);
-        // Crear nuevo con un bloque de tiempo por defecto
-        const newSchedule = {
-          day_of_week: dayIndex,
-          time_blocks: [
-            {
-          start_time: '09:00',
-              end_time: '18:00'
-            }
-          ],
-          is_active: true,
-          ...scheduleData
-        };
-        console.log('📅 newSchedule data:', newSchedule);
-        
-        const response = await apiService.post('/api/schedule/templates', newSchedule);
-        console.log('📅 create schedule response:', response);
-        
-        // Update local state with the response data
-        const responseData = response.data || response;
-        console.log('📅 responseData for local update:', responseData);
-        setWeeklySchedule(prev => ({
-          ...prev,
-          [dayKey]: responseData
-        }));
-        
-        // Don't reload immediately - let the local state update handle the UI
-        // await loadWeeklySchedule();
-      }
-      
-      setSuccess('Horario actualizado exitosamente');
-      
-      // Notificar al componente padre que los horarios se actualizaron
-      if (onScheduleUpdated) {
-        onScheduleUpdated();
-      }
-      
-    } catch (err: any) {
-      setError(err.response?.data?.detail || err.response?.data?.error || 'Error actualizando horario');
-    }
-  };
-
-  const addTimeBlock = async (dayIndex: number) => {
-    try {
-      console.log('📅 addTimeBlock called for dayIndex:', dayIndex);
-      const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklySchedule;
-      const existingSchedule = weeklySchedule[dayKey];
-      console.log('📅 existingSchedule in addTimeBlock:', existingSchedule);
-      
-      if (existingSchedule) {
-        const newTimeBlock: TimeBlock = {
-          start_time: '09:00',
-          end_time: '17:00'
-        };
-        
-        const updatedTimeBlocks = [...(existingSchedule.time_blocks || []), newTimeBlock];
-
-        // Guardar cambios en el servidor primero, NO actualizar estado local aún
-        // updateDaySchedule ya maneja la actualización del estado local con la respuesta del servidor
-        await updateDaySchedule(dayIndex, {
-          day_of_week: dayIndex,
-          time_blocks: updatedTimeBlocks,
-          is_active: existingSchedule.is_active
-        }, false);
-      }
-    } catch (error) {
-      console.error('Error in addTimeBlock:', error);
-      setError('Error al agregar horario. Por favor, intente nuevamente.');
-    }
-  };
-
-  const removeTimeBlock = async (dayIndex: number, blockIndex: number) => {
-    try {
-      const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklySchedule;
-      const existingSchedule = weeklySchedule[dayKey];
-      
-      if (existingSchedule && existingSchedule.time_blocks) {
-        const updatedTimeBlocks = existingSchedule.time_blocks.filter((_, index) => index !== blockIndex);
-
-        // Guardar cambios en el servidor primero, NO actualizar estado local aún
-        // updateDaySchedule ya maneja la actualización del estado local con la respuesta del servidor
-        await updateDaySchedule(dayIndex, {
-          day_of_week: dayIndex,
-          time_blocks: updatedTimeBlocks,
-          is_active: existingSchedule.is_active
-        }, false);
-      }
-    } catch (error) {
-      console.error('Error in removeTimeBlock:', error);
-      setError('Error al eliminar horario. Por favor, intente nuevamente.');
-    }
-  };
-
-  const updateTimeBlock = (dayIndex: number, blockIndex: number, field: 'start_time' | 'end_time', value: string) => {
-    const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklySchedule;
-    const existingSchedule = weeklySchedule[dayKey];
-    
-    if (existingSchedule && existingSchedule.time_blocks) {
-      const updatedTimeBlocks = existingSchedule.time_blocks.map((block, index) => {
-        if (index === blockIndex) {
-          return { ...block, [field]: value };
-        }
-        return block;
-      });
-      
-      const updatedSchedule = {
-        ...existingSchedule,
-        time_blocks: updatedTimeBlocks
-      };
-      
-      // Solo actualizar estado local durante edición (no guardar en servidor aún)
-      setWeeklySchedule(prev => ({
-        ...prev,
-        [dayKey]: updatedSchedule
-      }));
-    }
-  };
-
-  const saveTimeBlockChanges = async (dayIndex: number) => {
-    const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklySchedule;
-    const existingSchedule = weeklySchedule[dayKey];
-    
-    if (existingSchedule) {
-      // Guardar cambios en el servidor
-      await updateDaySchedule(dayIndex, {
-        day_of_week: dayIndex,
-        time_blocks: existingSchedule.time_blocks,
-        is_active: existingSchedule.is_active
-      }, false); // No need to reload since we already have the correct local state
-    }
-  };
-
-  const toggleDayActive = async (dayIndex: number, isActive: boolean) => {
-    try {
-      console.log('📅 toggleDayActive called:', { dayIndex, isActive });
-      const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklySchedule;
-      const existingSchedule = weeklySchedule[dayKey];
-      console.log('📅 existingSchedule:', existingSchedule);
-      
-      await updateDaySchedule(dayIndex, { 
-        is_active: isActive,
-        day_of_week: dayIndex,
-        time_blocks: existingSchedule?.time_blocks || []
-      });
-    } catch (error) {
-      console.error('📅 Error in toggleDayActive:', error);
-      setError('Error al cambiar estado del horario');
-    }
-  };
-
-  const formatTime = (timeString?: string): Date | null => {
-    if (!timeString) return null;
-    
-    try {
-      const [hours, minutes] = timeString.split(':');
-      const date = new Date();
-      date.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-      return date;
-    } catch {
-      return null;
-    }
-  };
-
-  const formatTimeToString = (date: Date | null): string => {
-    if (!date) return '';
-    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+    onClose();
   };
 
   const renderDayConfiguration = (day: typeof DAYS_OF_WEEK[0]) => {
-    console.log('📅 renderDayConfiguration called for day:', day.key);
-    console.log('📅 weeklySchedule:', weeklySchedule);
     const dayKey = day.key as keyof WeeklySchedule;
     const schedule = weeklySchedule[dayKey];
-    console.log('📅 schedule for', dayKey, ':', schedule);
     const isActive = schedule?.is_active ?? false;
     const timeBlocks = schedule?.time_blocks || [];
-    console.log('📅 renderDayConfiguration - isActive:', isActive, 'timeBlocks:', timeBlocks);
-    console.log('📅 renderDayConfiguration - timeBlocks.length:', timeBlocks.length);
 
     return (
       <Card 
@@ -434,7 +141,6 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
               {isActive && timeBlocks.length > 0 && (
                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', ml: 2 }}>
                   {timeBlocks.map((block, index) => {
-                    // Solo mostrar horarios que tengan valores válidos
                     if (block.start_time && block.end_time) {
                       return (
                         <Chip
@@ -543,7 +249,7 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
                             value={formatTime(block.start_time)}
                             onChange={(newValue) => {
                               if (newValue) {
-                                  updateTimeBlock(day.index, blockIndex, 'start_time', formatTimeToString(newValue));
+                                updateTimeBlock(day.index, blockIndex, 'start_time', formatTimeToString(newValue));
                               }
                             }}
                             closeOnSelect={true}
@@ -553,7 +259,6 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
                                 size: "small",
                                 fullWidth: true,
                                 onBlur: () => {
-                                  // Save to server when user finishes editing
                                   saveTimeBlockChanges(day.index);
                                 }
                               },
@@ -571,7 +276,7 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
                             value={formatTime(block.end_time)}
                             onChange={(newValue) => {
                               if (newValue) {
-                                  updateTimeBlock(day.index, blockIndex, 'end_time', formatTimeToString(newValue));
+                                updateTimeBlock(day.index, blockIndex, 'end_time', formatTimeToString(newValue));
                               }
                             }}
                             closeOnSelect={true}
@@ -581,7 +286,6 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
                                 size: "small",
                                 fullWidth: true,
                                 onBlur: () => {
-                                  // Save to server when user finishes editing
                                   saveTimeBlockChanges(day.index);
                                 }
                               },
@@ -619,63 +323,10 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
     );
   };
 
-  const handleClose = () => {
-    setError(null);
-    setSuccess(null);
-    onClose();
-  };
-
-  const handleSave = async () => {
-    try {
-      console.log('📅 handleSave called');
-      setError(null);
-      setSuccess(null);
-      
-      // Save all active schedules to backend
-      const activeSchedules = Object.entries(weeklySchedule).filter(([_, schedule]) => 
-        schedule && schedule.is_active
-      );
-      
-      console.log('📅 Active schedules to save:', activeSchedules);
-      
-      for (const [dayKey, schedule] of activeSchedules) {
-        if (schedule && schedule.id) {
-          console.log(`📅 Saving schedule for ${dayKey}:`, schedule);
-          // The schedule should already be saved, but we can trigger a final sync
-          await updateDaySchedule(schedule.day_of_week, {
-            day_of_week: schedule.day_of_week,
-            time_blocks: schedule.time_blocks || [],
-            is_active: schedule.is_active
-          }, false);
-        }
-      }
-      
-      setSuccess('Horarios guardados exitosamente');
-      
-      // Notificar al componente padre que los horarios se actualizaron
-      if (onScheduleUpdated) {
-        onScheduleUpdated();
-      }
-      
-      if (onSave) {
-        onSave();
-      }
-      
-      // Close after a short delay to show success message
-      setTimeout(() => {
-        handleClose();
-      }, 1000);
-      
-    } catch (error) {
-      console.error('📅 Error in handleSave:', error);
-      setError('Error al guardar los horarios');
-    }
-  };
-
   return (
     <Dialog
       open={open}
-      onClose={handleClose}
+      onClose={finalHandleClose}
       maxWidth="md"
       fullWidth
       PaperProps={{
@@ -689,7 +340,7 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
             Configuración de Horarios
           </Typography>
         </Box>
-        <IconButton onClick={handleClose} size="small">
+        <IconButton onClick={finalHandleClose} size="small">
           <CloseIcon />
         </IconButton>
       </DialogTitle>
@@ -708,47 +359,32 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
         )}
 
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-            <Typography>Cargando configuración...</Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px' }}>
+            <Typography>Cargando horarios...</Typography>
           </Box>
         ) : (
           <>
             {!hasExistingSchedule && (
-              <Card sx={{ mb: 3 }}>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    ¡Configura tu horario de trabajo!
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" paragraph>
-                    Parece que aún no has configurado tus horarios de trabajo. 
-                    Puedes generar un horario por defecto (Lunes a Viernes, 9:00-18:00) 
-                    o configurar manualmente cada día.
-                  </Typography>
-                  <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={generateDefaultSchedule}
-                    disabled={saving}
-                  >
-                    {saving ? 'Generando...' : 'Generar Horario Por Defecto'}
-                  </Button>
-                </CardContent>
-              </Card>
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  <strong>No tienes horarios configurados aún.</strong>
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 2 }}>
+                  Puedes generar un horario por defecto o configurar manualmente cada día de la semana.
+                </Typography>
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={generateDefaultSchedule}
+                  disabled={saving}
+                >
+                  Generar Horario por Defecto
+                </Button>
+              </Alert>
             )}
 
-            <Box sx={{ mb: 3 }}>
-              <Alert severity="info" sx={{ mb: 2 }}>
-                <Typography variant="body2">
-                  <strong>¿Cómo funciona?</strong><br />
-                  • Para cada día, haz click en <strong>"Agregar Horarios"</strong> para activarlo<br />
-                  • Puedes tener múltiples horarios por día (ej: mañana y tarde)<br />
-                  • Los pacientes solo podrán agendar en los horarios que configures
-                </Typography>
-              </Alert>
-            </Box>
-
-            <Box>
-              {DAYS_OF_WEEK.map(renderDayConfiguration)}
+            <Box sx={{ mt: 2 }}>
+              {DAYS_OF_WEEK.map(day => renderDayConfiguration(day))}
             </Box>
           </>
         )}
@@ -765,7 +401,7 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
         <Button
           variant="contained"
           startIcon={<SaveIcon />}
-          onClick={handleSave}
+          onClick={finalHandleSave}
           disabled={loading || saving}
         >
           Guardar y Cerrar

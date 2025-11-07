@@ -89,12 +89,21 @@ export const PrivacyConsentDialog: React.FC<PrivacyConsentDialogProps> = ({
     if (open && patient?.id) {
       fetchConsentStatus(patient.id);
     }
-  }, [open, patient?.id, fetchConsentStatus]);
+  }, [open, patient?.id]); // Removed fetchConsentStatus from dependencies to prevent infinite loops
 
-  // Clear error when dialog closes
+  // Clear error and stop polling when dialog closes
   useEffect(() => {
     if (!open) {
       clearError();
+      // Stop any active polling when dialog closes
+      if ((window as any).consentPollingCleanup) {
+        (window as any).consentPollingCleanup();
+        (window as any).consentPollingCleanup = null;
+      }
+      if ((window as any).consentPollingTimeout) {
+        clearTimeout((window as any).consentPollingTimeout);
+        (window as any).consentPollingTimeout = null;
+      }
     }
   }, [open, clearError]);
 
@@ -110,14 +119,16 @@ export const PrivacyConsentDialog: React.FC<PrivacyConsentDialogProps> = ({
     }
   }, [hasAcceptedConsent]);
 
-  // Cleanup polling when dialog closes
+  // Cleanup polling when component unmounts
   useEffect(() => {
     return () => {
       if ((window as any).consentPollingCleanup) {
         (window as any).consentPollingCleanup();
+        (window as any).consentPollingCleanup = null;
       }
       if ((window as any).consentPollingTimeout) {
         clearTimeout((window as any).consentPollingTimeout);
+        (window as any).consentPollingTimeout = null;
       }
     };
   }, []);

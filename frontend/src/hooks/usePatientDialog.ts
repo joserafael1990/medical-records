@@ -132,8 +132,8 @@ export const usePatientDialog = ({
         }, 100);
         
         const [relationships, countriesData] = await Promise.all([
-          apiService.getEmergencyRelationships(),
-          apiService.getCountries()
+          apiService.catalogs.getEmergencyRelationships(),
+          apiService.catalogs.getCountries()
         ]);
         
         setEmergencyRelationships(relationships);

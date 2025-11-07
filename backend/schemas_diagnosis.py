@@ -53,7 +53,7 @@ class DiagnosisCategoryUpdate(BaseModel):
 class DiagnosisCategory(DiagnosisCategoryBase):
     id: int
     created_at: datetime
-    updated_at: datetime
+    # updated_at removed - column doesn't exist in diagnosis_categories table
     # Removed children and diagnoses to avoid circular references
     # These can be loaded separately if needed
     

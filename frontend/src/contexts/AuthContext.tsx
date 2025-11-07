@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { apiService } from '../services/api';
+import { apiService } from '../services';
 
 // Types for authentication
 interface DoctorInfo {
@@ -91,38 +91,68 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // No loading state - direct processing
     
     try {
-      const data = await apiService.login(email, password);
+      console.log('🔐 AuthContext.login: Starting login for:', email);
+      const data = await apiService.auth.login({ email, password });
+      console.log('🔐 AuthContext.login: Login successful, data received:', { 
+        hasAccessToken: !!data?.access_token,
+        hasUser: !!data?.user,
+        userId: data?.user?.id 
+      });
         
       // Store authentication data
       localStorage.setItem('token', data.access_token);
       localStorage.setItem('doctor_data', JSON.stringify(data.user));
       
+      // Transform user data to match DoctorInfo interface
+      const doctorInfo: DoctorInfo = {
+        id: String(data.user.id),
+        full_name: `${data.user.title || 'Dr.'} ${data.user.first_name} ${data.user.paternal_surname} ${data.user.maternal_surname || ''}`.trim(),
+        title: data.user.title || 'Dr.',
+        first_name: data.user.first_name,
+        paternal_surname: data.user.paternal_surname,
+        maternal_surname: data.user.maternal_surname || '',
+        email: data.user.email,
+        specialty: '', // Will be loaded from profile
+        professional_license: '' // Will be loaded from profile
+      };
+      
+      console.log('🔐 AuthContext.login: Setting user:', doctorInfo);
       setUser({
-        doctor: data.user,
+        doctor: doctorInfo,
         token: data.access_token
       });
       
+      console.log('🔐 AuthContext.login: Login completed successfully');
       return { success: true };
     } catch (error: any) {
+      console.error('🔐 AuthContext.login: Error caught:', error);
+      console.error('🔐 AuthContext.login: Error details:', {
+        message: error?.message,
+        status: error?.status,
+        response: error?.response?.data,
+        stack: error?.stack
+      });
       
       // Handle specific error messages with better UX
+      // The error is already transformed by ApiBase and has message, status, and details
       let errorMessage = 'Error de conexión. Por favor, verifica tu conexión a internet y vuelve a intentar.';
       let errorType = 'connection';
       
-      // Handle custom ApiError format from apiService
-      if (error.status !== undefined && error.detail !== undefined) {
-        const status = error.status;
-        const detail = error.detail;
-        
+      // Extract error information from transformed ApiError format
+      // ApiBase transforms errors to have: message, status, details.detail
+      const status = error?.status || error?.response?.status;
+      const message = error?.message || error?.details?.detail || error?.response?.data?.detail;
+      
+      if (status !== undefined) {
         switch (status) {
           case 401:
-            if (detail === 'Invalid credentials' || detail?.includes('Credenciales') || detail?.includes('credentials')) {
-              errorMessage = 'Correo electrónico o contraseña incorrectos. Por favor, verifica tus datos e inténtalo de nuevo.';
-              errorType = 'credentials';
+            // Use the message from backend if available (e.g., "Credenciales inválidas")
+            if (message && (message.includes('Credenciales') || message.includes('credentials') || message.includes('Invalid'))) {
+              errorMessage = message; // Use backend message directly
             } else {
-              errorMessage = 'Credenciales inválidas. Si olvidaste tu contraseña, contacta al administrador del sistema.';
-              errorType = 'credentials';
+              errorMessage = 'Correo electrónico o contraseña incorrectos. Por favor, verifica tus datos e inténtalo de nuevo.';
             }
+            errorType = 'credentials';
             break;
             
           case 403:
@@ -131,14 +161,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             break;
             
           case 422:
-            if (detail?.includes('email')) {
+            if (message?.includes('email')) {
               errorMessage = 'Por favor, ingresa un correo electrónico válido.';
               errorType = 'validation';
-            } else if (detail?.includes('password')) {
+            } else if (message?.includes('password')) {
               errorMessage = 'La contraseña no cumple con los requisitos mínimos.';
               errorType = 'validation';
             } else {
-              errorMessage = 'Los datos ingresados no son válidos. Por favor, revisa la información.';
+              errorMessage = message || 'Los datos ingresados no son válidos. Por favor, revisa la información.';
               errorType = 'validation';
             }
             break;
@@ -171,8 +201,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             break;
             
           default:
-            if (detail && typeof detail === 'string') {
-              errorMessage = detail;
+            // Use backend message if available, otherwise use generic message
+            if (message && typeof message === 'string') {
+              errorMessage = message;
               errorType = 'custom';
             } else {
               errorMessage = `Error ${status}: No se pudo completar el inicio de sesión. Contacta al soporte técnico si el problema persiste.`;
@@ -181,14 +212,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             break;
         }
       } 
-      // Fallback for legacy Axios error format (if any)
+      // Fallback for legacy Axios error format (if error was not transformed)
       else if (error.response) {
         const status = error.response.status;
         const detail = error.response.data?.detail;
         
         switch (status) {
           case 401:
-            errorMessage = 'Correo electrónico o contraseña incorrectos. Por favor, verifica tus datos e inténtalo de nuevo.';
+            errorMessage = detail || 'Correo electrónico o contraseña incorrectos. Por favor, verifica tus datos e inténtalo de nuevo.';
             errorType = 'credentials';
             break;
           case 403:

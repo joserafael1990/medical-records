@@ -2,7 +2,6 @@ import { lazy } from 'react';
 
 // Lazy load heavy components
 export const ConsultationDialog = lazy(() => import('../dialogs/ConsultationDialog'));
-export const AppointmentDialog = lazy(() => import('../dialogs/AppointmentDialog'));
 export const PatientDialog = lazy(() => import('../dialogs/PatientDialog'));
 export const DigitalSignatureDialog = lazy(() => import('../dialogs/DigitalSignatureDialog'));
 export const ScheduleConfigDialog = lazy(() => import('../dialogs/ScheduleConfigDialog'));

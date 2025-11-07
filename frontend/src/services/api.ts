@@ -20,7 +20,7 @@ import type {
   OfficeUpdate,
   AppointmentType
 } from '../types';
-import type { ConsultationFormData } from '../components/dialogs/ConsultationDialog';
+import type { ConsultationFormData } from '../hooks/useConsultationForm';
 
 // ============================================================================
 // AXIOS INSTANCE CONFIGURATION
@@ -225,7 +225,7 @@ class ApiService {
 
     // For now, just log it (in production you'd send to monitoring service)
     if (!isProduction) {
-      console.error('🔴 Error Report for Monitoring:', errorReport);
+      logger.error('Error Report for Monitoring', errorReport, 'api');
     }
     
     // Example: Sentry.captureException(error, { extra: errorReport });
@@ -282,7 +282,7 @@ class ApiService {
         timestamp: new Date().toISOString() 
       };
     } catch (error: any) {
-      console.error('❌ Backend connectivity test failed:', error);
+      logger.error('Backend connectivity test failed', error, 'api');
       throw new Error(`Connection test failed: ${error.message}`);
     }
   }

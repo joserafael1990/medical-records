@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
-import { apiService } from '../services/api';
-import { API_CONFIG } from '../constants';
+import { apiService } from '../services';
+import { logger } from '../utils/logger';
 
 interface Country {
   id: number;
@@ -26,25 +26,18 @@ export const useCatalogs = () => {
       setError(null);
       
       try {
-        // Fetch all catalogs in parallel
-        const [countriesResponse, statesResponse] = await Promise.all([
-          fetch(`${API_CONFIG.BASE_URL}/api/catalogs/countries`),
-          fetch(`${API_CONFIG.BASE_URL}/api/catalogs/states`)
+        // Fetch all catalogs in parallel using new CatalogService
+        const [countriesData, statesData] = await Promise.all([
+          apiService.catalogs.getCountries(),
+          apiService.catalogs.getStates()
         ]);
 
-        if (countriesResponse.ok) {
-          const countriesData = await countriesResponse.json();
-          setCountries(countriesData);
-        }
-
-        if (statesResponse.ok) {
-          const statesData = await statesResponse.json();
-          setAllStates(statesData);
-        }
+        setCountries(countriesData || []);
+        setAllStates(statesData || []);
 
       } catch (err) {
         setError('Error al cargar catálogos');
-        console.error('Error fetching catalogs:', err);
+        logger.error('Error fetching catalogs', err, 'api');
       } finally {
         setLoading(false);
       }

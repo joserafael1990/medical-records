@@ -1,7 +1,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { StudyCatalog, StudyCategory, StudySearchFilters, StudyRecommendation } from '../types';
-import { apiService } from '../services/api';
+import { apiService } from '../services';
 
 interface UseStudyCatalogReturn {
   // State
@@ -65,7 +65,7 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
       const url = `/api/study-catalog?${params.toString()}`;
       console.log('🌐 Making request to:', url);
       
-      const response = await apiService.get(url);
+      const response = await apiService.clinicalStudies.api.get(url);
       console.log('✅ Studies response:', response);
       console.log('✅ Studies response.data:', response.data);
       console.log('✅ Studies response.data type:', typeof response.data);
@@ -112,7 +112,7 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
       setError(null);
       
       console.log('🔍 Fetching study categories...');
-      const response = await apiService.get('/api/study-categories');
+      const response = await apiService.clinicalStudies.api.get('/api/study-categories');
       console.log('✅ Categories response:', response);
       console.log('✅ Categories response.data:', response.data);
       console.log('✅ Categories response.data type:', typeof response.data);
@@ -170,7 +170,7 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
       const url = `/api/study-catalog?${params.toString()}`;
       console.log('🌐 Making request to:', url);
       
-      const response = await apiService.get(url);
+      const response = await apiService.clinicalStudies.api.get(url);
       console.log('✅ Studies search response:', response);
       console.log('✅ Studies search response.data:', response.data);
       console.log('✅ Studies search response.data type:', typeof response.data);
@@ -231,7 +231,7 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
       if (diagnosis) params.append('diagnosis', diagnosis);
       if (specialty) params.append('specialty', specialty);
       
-      const response = await apiService.get(`/api/study-recommendations?${params.toString()}`);
+      const response = await apiService.clinicalStudies.api.get(`/api/study-recommendations?${params.toString()}`);
       setRecommendations(response.data);
     } catch (err: any) {
       console.error('Error fetching recommendations:', err);
@@ -244,7 +244,7 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
   const getStudyById = useCallback(async (id: number): Promise<StudyCatalog | null> => {
     try {
       setError(null);
-      const response = await apiService.get(`/api/study-catalog/${id}`);
+      const response = await apiService.clinicalStudies.api.get(`/api/study-catalog/${id}`);
       return response.data;
     } catch (err: any) {
       console.error('Error fetching study by ID:', err);
@@ -256,7 +256,7 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
   const getStudyByCode = useCallback(async (code: string): Promise<StudyCatalog | null> => {
     try {
       setError(null);
-      const response = await apiService.get(`/api/study-catalog/code/${code}`);
+      const response = await apiService.clinicalStudies.api.get(`/api/study-catalog/code/${code}`);
       return response.data;
     } catch (err: any) {
       console.error('Error fetching study by code:', err);

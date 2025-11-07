@@ -24,7 +24,7 @@ import {
   Person as PersonIcon,
   Edit as EditIcon
 } from '@mui/icons-material';
-import { apiService } from '../../services/api';
+import { apiService } from '../../services';
 import { CountryCodeSelector } from '../common/CountryCodeSelector';
 import { PhoneNumberInput } from '../common/PhoneNumberInput';
 import { DocumentSelector } from '../common/DocumentSelector';
@@ -100,7 +100,7 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
   useEffect(() => {
     const loadCountries = async () => {
       try {
-        const countriesData = await apiService.getCountries();
+        const countriesData = await apiService.catalogs.getCountries();
         setCountries(countriesData);
       } catch (error) {
         console.error('Error loading countries:', error);
@@ -109,7 +109,7 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
 
     const loadTimezones = async () => {
       try {
-        const timezonesData = await apiService.getTimezones();
+        const timezonesData = await apiService.catalogs.getTimezones();
         setTimezones(timezonesData);
       } catch (error) {
         console.error('Error loading timezones:', error);
@@ -118,7 +118,7 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
 
     const loadSpecialties = async () => {
       try {
-        const specialtiesData = await apiService.getSpecialties();
+        const specialtiesData = await apiService.catalogs.getSpecialties();
         setSpecialties(specialtiesData);
       } catch (error) {
         console.error('Error loading specialties:', error);
@@ -152,7 +152,7 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
   const loadExistingDocuments = async () => {
     try {
       // Obtener perfil completo para acceder a documentos
-      const profile = await apiService.getDoctorProfile();
+      const profile = await apiService.doctors.getDoctorProfile();
       
       // Cargar documentos profesionales
       if (profile.professional_documents && profile.professional_documents.length > 0) {
@@ -174,10 +174,10 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
         });
         
         // Cargar los tipos de documentos para mapear nombres a IDs
-        const docTypes = await apiService.getDocumentTypes();
+        const docTypes = await apiService.documents.getDocumentTypes();
         const personalType = docTypes.find((t: any) => t.name === 'Personal');
         if (personalType) {
-          const allPersonalDocs = await apiService.getDocumentsByType(personalType.id);
+          const allPersonalDocs = await apiService.documents.getDocumentsByType(personalType.id);
           const docsWithIds = personalDocsArray.map(({ name, value }) => {
             const doc = allPersonalDocs.find((d: any) => d.name === name);
             return {
@@ -207,7 +207,7 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
         // Buscar el ID del país seleccionado
         const selectedCountry = countries.find(c => c.name === formData.office_country);
         if (selectedCountry) {
-          const statesData = await apiService.getStates(selectedCountry.id);
+          const statesData = await apiService.catalogs.getStates(selectedCountry.id);
           setStates(statesData);
         } else {
           setStates([]);

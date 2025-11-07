@@ -5,33 +5,33 @@ import { logger } from '../../utils/logger';
 export class ConsultationService extends ApiBase {
   async getConsultations(): Promise<Consultation[]> {
     try {
-      logger.api.info('Fetching consultations');
+      logger.debug('Fetching consultations', undefined, 'api');
       const response = await this.api.get<Consultation[]>('/api/consultations');
-      logger.api.success('Consultations fetched successfully');
+      logger.debug('Consultations fetched successfully', undefined, 'api');
       return response.data;
     } catch (error: any) {
-      logger.api.error('Failed to fetch consultations:', error);
+      logger.error('Failed to fetch consultations', error, 'api');
       throw error;
     }
   }
 
   async getConsultationById(id: string): Promise<Consultation> {
     try {
-      logger.api.info('Fetching consultation by ID:', id);
+      logger.debug('Fetching consultation by ID', { id }, 'api');
       const response = await this.api.get<Consultation>(`/api/consultations/${id}`);
-      logger.api.success('Consultation fetched successfully');
+      logger.debug('Consultation fetched successfully', undefined, 'api');
       return response.data;
     } catch (error: any) {
-      logger.api.error('Failed to fetch consultation:', error);
+      logger.error('Failed to fetch consultation', error, 'api');
       throw error;
     }
   }
 
   async createConsultation(consultationData: ConsultationFormData): Promise<Consultation> {
     try {
-      logger.api.info('Creating consultation for patient:', consultationData.patient_id);
+      logger.debug('Creating consultation for patient', { patientId: consultationData.patient_id }, 'api');
       const response = await this.api.post<Consultation>('/api/consultations', consultationData);
-      logger.api.success('Consultation created successfully');
+      logger.debug('Consultation created successfully', undefined, 'api');
       return response.data;
     } catch (error: any) {
       logger.api.error('Failed to create consultation:', error);
@@ -41,9 +41,9 @@ export class ConsultationService extends ApiBase {
 
   async updateConsultation(id: string, consultationData: Partial<ConsultationFormData>): Promise<Consultation> {
     try {
-      logger.api.info('Updating consultation:', id);
+      logger.debug('Updating consultation', { id }, 'api');
       const response = await this.api.put<Consultation>(`/api/consultations/${id}`, consultationData);
-      logger.api.success('Consultation updated successfully');
+      logger.debug('Consultation updated successfully', undefined, 'api');
       return response.data;
     } catch (error: any) {
       logger.api.error('Failed to update consultation:', error);
@@ -53,9 +53,9 @@ export class ConsultationService extends ApiBase {
 
   async deleteConsultation(id: string): Promise<void> {
     try {
-      logger.api.info('Deleting consultation:', id);
+      logger.debug('Deleting consultation', { id }, 'api');
       await this.api.delete(`/api/consultations/${id}`);
-      logger.api.success('Consultation deleted successfully');
+      logger.debug('Consultation deleted successfully', undefined, 'api');
     } catch (error: any) {
       logger.api.error('Failed to delete consultation:', error);
       throw error;
@@ -64,9 +64,9 @@ export class ConsultationService extends ApiBase {
 
   async getConsultationsByPatient(patientId: string): Promise<Consultation[]> {
     try {
-      logger.api.info('Fetching consultations for patient:', patientId);
+      logger.debug('Fetching consultations for patient', { patientId }, 'api');
       const response = await this.api.get<Consultation[]>(`/api/consultations/patient/${patientId}`);
-      logger.api.success('Consultations fetched for patient');
+      logger.debug('Consultations fetched for patient', undefined, 'api');
       return response.data;
     } catch (error: any) {
       logger.api.error('Failed to fetch consultations for patient:', error);
@@ -76,9 +76,9 @@ export class ConsultationService extends ApiBase {
 
   async getConsultationsByDoctor(doctorId: string): Promise<Consultation[]> {
     try {
-      logger.api.info('Fetching consultations for doctor:', doctorId);
+      logger.debug('Fetching consultations for doctor', { doctorId }, 'api');
       const response = await this.api.get<Consultation[]>(`/api/consultations/doctor/${doctorId}`);
-      logger.api.success('Consultations fetched for doctor');
+      logger.debug('Consultations fetched for doctor', undefined, 'api');
       return response.data;
     } catch (error: any) {
       logger.api.error('Failed to fetch consultations for doctor:', error);
@@ -88,9 +88,9 @@ export class ConsultationService extends ApiBase {
 
   async getConsultationsByDate(date: string): Promise<Consultation[]> {
     try {
-      logger.api.info('Fetching consultations for date:', date);
+      logger.debug('Fetching consultations for date', { date }, 'api');
       const response = await this.api.get<Consultation[]>(`/api/consultations/date/${date}`);
-      logger.api.success('Consultations fetched for date');
+      logger.debug('Consultations fetched for date', undefined, 'api');
       return response.data;
     } catch (error: any) {
       logger.api.error('Failed to fetch consultations for date:', error);
@@ -100,9 +100,9 @@ export class ConsultationService extends ApiBase {
 
   async getConsultationStatistics(): Promise<any> {
     try {
-      logger.api.info('Fetching consultation statistics');
+      logger.debug('Fetching consultation statistics', undefined, 'api');
       const response = await this.api.get('/api/consultations/statistics');
-      logger.api.success('Consultation statistics fetched');
+      logger.debug('Consultation statistics fetched', undefined, 'api');
       return response.data;
     } catch (error: any) {
       logger.api.error('Failed to fetch consultation statistics:', error);
@@ -112,7 +112,7 @@ export class ConsultationService extends ApiBase {
 
   async exportConsultations(format: 'csv' | 'excel' | 'pdf' = 'csv', dateRange?: { start: string; end: string }): Promise<Blob> {
     try {
-      logger.api.info('Exporting consultations in format:', format);
+      logger.debug('Exporting consultations', { format, dateRange }, 'api');
       
       let url = `/api/consultations/export?format=${format}`;
       if (dateRange) {
@@ -123,7 +123,7 @@ export class ConsultationService extends ApiBase {
         responseType: 'blob'
       });
       
-      logger.api.success('Consultations exported successfully');
+      logger.debug('Consultations exported successfully', undefined, 'api');
       return response.data;
     } catch (error: any) {
       logger.api.error('Failed to export consultations:', error);
@@ -133,11 +133,11 @@ export class ConsultationService extends ApiBase {
 
   async generateConsultationReport(consultationId: string): Promise<Blob> {
     try {
-      logger.api.info('Generating consultation report for:', consultationId);
+      logger.debug('Generating consultation report', { consultationId }, 'api');
       const response = await this.api.get(`/api/consultations/${consultationId}/report`, {
         responseType: 'blob'
       });
-      logger.api.success('Consultation report generated successfully');
+      logger.debug('Consultation report generated successfully', undefined, 'api');
       return response.data;
     } catch (error: any) {
       logger.api.error('Failed to generate consultation report:', error);
@@ -147,9 +147,9 @@ export class ConsultationService extends ApiBase {
 
   async searchConsultations(query: string): Promise<Consultation[]> {
     try {
-      logger.api.info('Searching consultations with query:', query);
+      logger.debug('Searching consultations', { query }, 'api');
       const response = await this.api.get<Consultation[]>(`/api/consultations/search?q=${encodeURIComponent(query)}`);
-      logger.api.success('Consultation search completed');
+      logger.debug('Consultation search completed', undefined, 'api');
       return response.data;
     } catch (error: any) {
       logger.api.error('Failed to search consultations:', error);
@@ -159,9 +159,9 @@ export class ConsultationService extends ApiBase {
 
   async getConsultationHistory(patientId: string): Promise<Consultation[]> {
     try {
-      logger.api.info('Fetching consultation history for patient:', patientId);
+      logger.debug('Fetching consultation history for patient', { patientId }, 'api');
       const response = await this.api.get<Consultation[]>(`/api/consultations/history/${patientId}`);
-      logger.api.success('Consultation history fetched');
+      logger.debug('Consultation history fetched', undefined, 'api');
       return response.data;
     } catch (error: any) {
       logger.api.error('Failed to fetch consultation history:', error);

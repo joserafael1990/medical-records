@@ -1,4 +1,4 @@
-import { apiService } from '../services/api';
+import { apiService } from '../services';
 import { logger } from '../utils/logger';
 
 export const submitConsultation = async (params: {
@@ -49,12 +49,12 @@ export const submitConsultation = async (params: {
       // Update existing consultation
       console.log('🔄 Updating existing consultation:', selectedConsultation.id);
       console.log('📊 Sending update data:', formData);
-      result = await apiService.updateConsultation(selectedConsultation.id.toString(), formData);
+      result = await apiService.consultations.updateConsultation(selectedConsultation.id.toString(), formData);
       showSuccessMessage('✅ Consulta actualizada exitosamente');
     } else {
       // Create new consultation
       console.log('🔄 Creating new consultation');
-      result = await apiService.createConsultation(formData.patient_id.toString(), formData);
+      result = await apiService.consultations.createConsultation(formData);
       showSuccessMessage('✅ Consulta creada exitosamente');
     }
 

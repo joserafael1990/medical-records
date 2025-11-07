@@ -6,8 +6,10 @@ Migrated from main_clean_english.py to improve code organization
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
+import psycopg2
+import json
 
 from database import get_db, Person, Appointment
 from dependencies import get_current_user
@@ -117,6 +119,8 @@ async def get_appointments(
                 "estimated_cost": str(getattr(appointment, 'estimated_cost', None)) if getattr(appointment, 'estimated_cost', None) else None,
                 "insurance_covered": getattr(appointment, 'insurance_covered', None),
                 # Auto reminder fields
+                "reminder_sent": getattr(appointment, 'reminder_sent', False),
+                "reminder_sent_at": appointment.reminder_sent_at.isoformat() if getattr(appointment, 'reminder_sent_at', None) else None,
                 "auto_reminder_enabled": getattr(appointment, 'auto_reminder_enabled', None),
                 "auto_reminder_offset_minutes": getattr(appointment, 'auto_reminder_offset_minutes', None),
                 "auto_reminder_sent_at": appointment.auto_reminder_sent_at.isoformat() if getattr(appointment, 'auto_reminder_sent_at', None) else None,
@@ -254,6 +258,8 @@ async def get_calendar_appointments(
                 "status": appointment.status,
                 "priority": appointment.priority,
                 "room_number": getattr(appointment, 'room_number', None),
+                "reminder_sent": getattr(appointment, 'reminder_sent', False),
+                "reminder_sent_at": appointment.reminder_sent_at.isoformat() if getattr(appointment, 'reminder_sent_at', None) else None,
                 # Auto reminder fields included for FE editing
                 "auto_reminder_enabled": getattr(appointment, 'auto_reminder_enabled', None),
                 "auto_reminder_offset_minutes": getattr(appointment, 'auto_reminder_offset_minutes', None),
@@ -267,6 +273,157 @@ async def get_calendar_appointments(
     except Exception as e:
         print(f"Error in get_calendar_appointments: {str(e)}")
         return []
+
+
+# NOTE: This function is exported for use in main_clean_english.py
+# The route is defined in main_clean_english.py before the router is included
+# to ensure FastAPI matches /api/appointments/available-times before /api/appointments/{appointment_id}
+async def get_available_times_for_booking(
+    date: str,
+    db: Session,
+    current_user: Person
+):
+    """Get available appointment times for booking on a specific date"""
+    try:
+        # Parse the date and get day of week (0=Monday, 6=Sunday)
+        target_date = datetime.strptime(date, "%Y-%m-%d").date()
+        day_of_week = target_date.weekday()
+        
+        # Get doctor's schedule for this day
+        conn = psycopg2.connect(
+            host='postgres-db',
+            database='historias_clinicas',
+            user='historias_user',
+            password='historias_pass'
+        )
+        cursor = conn.cursor()
+        
+        # Get schedule template for this day
+        cursor.execute("""
+            SELECT start_time, end_time, time_blocks
+            FROM schedule_templates 
+            WHERE doctor_id = %s AND day_of_week = %s AND is_active = true
+        """, (current_user.id, day_of_week))
+        
+        schedule_result = cursor.fetchone()
+        if not schedule_result:
+            # Log for debugging
+            api_logger.warning(f"No schedule template found for doctor {current_user.id}, day {day_of_week} (date: {date})")
+            # Check if there's a schedule but is_active is false
+            cursor.execute("""
+                SELECT start_time, end_time, time_blocks, is_active
+                FROM schedule_templates 
+                WHERE doctor_id = %s AND day_of_week = %s
+            """, (current_user.id, day_of_week))
+            inactive_schedule = cursor.fetchone()
+            if inactive_schedule:
+                api_logger.warning(f"Schedule exists but is_active={inactive_schedule[3]} for doctor {current_user.id}, day {day_of_week}")
+            else:
+                api_logger.warning(f"No schedule template at all for doctor {current_user.id}, day {day_of_week}")
+            cursor.close()
+            conn.close()
+            return {"available_times": []}
+        
+        # Parse time_blocks
+        time_blocks = []
+        if schedule_result[2]:
+            if isinstance(schedule_result[2], list):
+                time_blocks = schedule_result[2]
+            elif isinstance(schedule_result[2], str):
+                time_blocks = json.loads(schedule_result[2])
+        
+        # Fallback: if no time_blocks, create from start_time/end_time
+        if not time_blocks and schedule_result[0] and schedule_result[1]:
+            time_blocks = [{
+                "start_time": schedule_result[0].strftime("%H:%M"),
+                "end_time": schedule_result[1].strftime("%H:%M")
+            }]
+        
+        # Get doctor's appointment duration
+        cursor.execute("""
+            SELECT appointment_duration 
+            FROM persons 
+            WHERE id = %s
+        """, (current_user.id,))
+        
+        doctor_result = cursor.fetchone()
+        consultation_duration = doctor_result[0] if doctor_result and doctor_result[0] else 30
+        
+        if not time_blocks:
+            api_logger.warning(f"No time_blocks found for doctor {current_user.id}, day {day_of_week} (date: {date}). Schedule result: {schedule_result}")
+            cursor.close()
+            conn.close()
+            return {"available_times": []}
+        
+        # Get existing appointments for this date
+        cursor.execute("""
+            SELECT appointment_date, end_time 
+            FROM appointments 
+            WHERE doctor_id = %s 
+            AND DATE(appointment_date) = %s 
+            AND status IN ('confirmed', 'scheduled')
+        """, (current_user.id, date))
+        
+        existing_appointments = cursor.fetchall()
+        
+        # Convert existing appointments to time ranges
+        booked_slots = []
+        for apt_date, apt_end in existing_appointments:
+            booked_slots.append({
+                'start': apt_date.time(),
+                'end': apt_end.time() if apt_end else apt_date.time()
+            })
+        
+        # Generate available time slots based on schedule
+        available_times = []
+        
+        for block in time_blocks:
+            if not block.get('start_time') or not block.get('end_time'):
+                continue
+                
+            start_time = datetime.strptime(block['start_time'], '%H:%M').time()
+            end_time = datetime.strptime(block['end_time'], '%H:%M').time()
+            
+            # Generate slots within this time block
+            current_time = start_time
+            while current_time < end_time:
+                current_datetime = datetime.combine(target_date, current_time)
+                slot_end_datetime = current_datetime + timedelta(minutes=consultation_duration)
+                slot_end = slot_end_datetime.time()
+                
+                # Check if this slot conflicts with existing appointments
+                is_available = True
+                for booked in booked_slots:
+                    if (current_time < booked['end'] and slot_end > booked['start']):
+                        is_available = False
+                        break
+                
+                if is_available:
+                    available_times.append({
+                        "time": current_time.strftime('%H:%M'),
+                        "display": current_time.strftime('%H:%M'),
+                        "duration_minutes": consultation_duration,
+                        "available": True
+                    })
+                
+                # Move to next slot
+                current_time = (datetime.combine(target_date, current_time) + timedelta(minutes=consultation_duration)).time()
+        
+        cursor.close()
+        conn.close()
+        
+        api_logger.info("Generated available times for booking", 
+                       doctor_id=current_user.id, 
+                       date=date, 
+                       count=len(available_times))
+        
+        return {"available_times": available_times}
+        
+    except Exception as e:
+        api_logger.error(f"Error getting available times for booking: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {"available_times": []}
 
 
 @router.get("/appointments/{appointment_id}")
@@ -313,6 +470,8 @@ async def get_appointment(
             "priority": appointment.priority,
             "estimated_cost": str(getattr(appointment, 'estimated_cost', None)) if getattr(appointment, 'estimated_cost', None) else None,
             "insurance_covered": getattr(appointment, 'insurance_covered', None),
+            "reminder_sent": getattr(appointment, 'reminder_sent', False),
+            "reminder_sent_at": appointment.reminder_sent_at.isoformat() if getattr(appointment, 'reminder_sent_at', None) else None,
             # Campos opcionales (sin preparation_instructions; columna eliminada)
             "auto_reminder_enabled": getattr(appointment, 'auto_reminder_enabled', None),
             "auto_reminder_offset_minutes": getattr(appointment, 'auto_reminder_offset_minutes', None),

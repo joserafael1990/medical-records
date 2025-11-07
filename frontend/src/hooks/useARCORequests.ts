@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { apiService } from '../services/api';
+import { apiService } from '../services';
 import type { ARCORequest, CreateARCORequestData, UpdateARCORequestData } from '../types';
 
 interface UseARCORequestsReturn {
@@ -39,7 +39,7 @@ export const useARCORequests = (): UseARCORequestsReturn => {
     setError(null);
 
     try {
-      const response = await apiService.get(`/api/privacy/arco-requests/${patientId}`);
+      const response = await apiService.patients.api.get(`/api/privacy/arco-requests/${patientId}`);
       console.log('✅ ARCO requests:', response);
       
       setARCORequests(response.arco_requests || []);
@@ -62,7 +62,7 @@ export const useARCORequests = (): UseARCORequestsReturn => {
     setError(null);
 
     try {
-      const response = await apiService.post('/api/privacy/arco-request', data);
+      const response = await apiService.patients.api.post('/api/privacy/arco-request', data);
       console.log('✅ ARCO request created:', response);
       
       // Add to local state
@@ -90,7 +90,7 @@ export const useARCORequests = (): UseARCORequestsReturn => {
     setError(null);
 
     try {
-      const response = await apiService.put(`/api/privacy/arco-request/${requestId}`, data);
+      const response = await apiService.patients.api.put(`/api/privacy/arco-request/${requestId}`, data);
       console.log('✅ ARCO request updated:', response);
       
       // Update in local state

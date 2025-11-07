@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { ConsultationFormData, ClinicalStudy } from '../../types';
-import { apiService } from '../../services/api';
+import { apiService } from '../../services';
 import { submitConsultation } from '../../utils/consultationHelpers';
 // useApiErrorHandler removed - using simplified error handling
 
@@ -104,7 +104,7 @@ export function useConsultationManagement(
     console.log('📋 Cargando lista de consultas...');
     
     const result = await executeApiCall(
-      () => apiService.getConsultations({}),
+      () => apiService.consultations.getConsultations(),
       undefined // No mostrar mensaje de éxito para carga inicial
     );
     
@@ -152,8 +152,7 @@ export function useConsultationManagement(
       setConsultationDialogOpen(true);
       
       // Fetch complete consultation data from backend
-      const response = await apiService.get(`/api/consultations/${consultation.id}`);
-      const fullConsultationData = response.data;
+      const fullConsultationData = await apiService.consultations.getConsultationById(consultation.id);
       
       
       // Update the selectedConsultation with the fresh data so the dialog's useEffect will re-run

@@ -17,7 +17,7 @@ import {
   CircularProgress
 } from '@mui/material';
 import { Office, OfficeCreate, OfficeUpdate } from '../../types';
-import { apiService } from '../../services/api';
+import { apiService } from '../../services';
 import { getSmallSelectMenuProps, getMediumSelectMenuProps, getLargeSelectMenuProps } from '../../utils/selectMenuProps';
 import { useSimpleToast } from '../common/ToastNotification';
 
@@ -103,8 +103,8 @@ const OfficeDialog: React.FC<OfficeDialogProps> = ({
   const loadCatalogs = async () => {
     try {
       const [statesData, countriesData] = await Promise.all([
-        apiService.get('/api/catalogs/states'),
-        apiService.get('/api/catalogs/countries')
+        apiService.catalogs.getStates(),
+        apiService.catalogs.getCountries()
       ]);
       setStates(statesData);
       setCountries(countriesData);

@@ -16,7 +16,7 @@ export interface ApiError {
 }
 
 export class ApiBase {
-  protected api: AxiosInstance;
+  public api: AxiosInstance;
 
   constructor() {
     this.api = axios.create({
@@ -118,8 +118,14 @@ export class ApiBase {
     }
     
     // Handle specific error cases
-    if (error.response?.status === 401 || error.response?.status === 403) {
-      // Handle unauthorized/forbidden - clear auth data
+    // Only treat 401/403 as session expired if NOT an auth endpoint (login/register)
+    // Auth endpoints return 401 for invalid credentials, not expired sessions
+    const isAuthEndpoint = error.config?.url?.includes('/auth/login') || 
+                          error.config?.url?.includes('/auth/register') ||
+                          error.config?.url?.includes('/auth/refresh');
+    
+    if ((error.response?.status === 401 || error.response?.status === 403) && !isAuthEndpoint) {
+      // Handle unauthorized/forbidden - clear auth data (only for non-auth endpoints)
       logger.auth.sessionExpired();
       localStorage.removeItem('token');
       localStorage.removeItem('doctor_data');
@@ -145,8 +151,20 @@ export class ApiBase {
     }
 
     if (status === 401) {
+      // For auth endpoints, use the backend's error message (e.g., "Credenciales inválidas")
+      // For other endpoints, use generic unauthorized message
+      const isAuthEndpoint = error.config?.url?.includes('/auth/login') || 
+                            error.config?.url?.includes('/auth/register') ||
+                            error.config?.url?.includes('/auth/refresh');
+      
+      let message = ERROR_MESSAGES.UNAUTHORIZED;
+      if (isAuthEndpoint && responseData?.detail) {
+        // Use backend's specific error message for auth endpoints
+        message = responseData.detail;
+      }
+      
       return {
-        message: ERROR_MESSAGES.UNAUTHORIZED,
+        message,
         status,
         statusText,
         details: responseData

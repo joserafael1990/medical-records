@@ -68,15 +68,27 @@ const LoginView: React.FC = () => {
       }
     } catch (error: any) {
       // Handle unexpected errors
-      if (error && error.detail) {
-        setError('Error de autenticación: ' + error.detail);
-      } else if (error && error.status === 401) {
-        setError('Credenciales incorrectas. Por favor, verifica tu email y contraseña.');
-      } else {
-        setError('Error inesperado durante el inicio de sesión');
-      }
+      // Error can be transformed by ApiBase (has message property) or raw axios error (has response.data.detail)
+      const errorMessage = error?.message || error?.detail || error?.response?.data?.detail;
+      const errorStatus = error?.status || error?.response?.status;
       
-      setErrorType('unexpected');
+      if (errorStatus === 401) {
+        // Unauthorized - invalid credentials
+        setError(errorMessage || 'Credenciales incorrectas. Por favor, verifica tu email y contraseña.');
+        setErrorType('credentials');
+      } else if (errorStatus === 422) {
+        // Validation error
+        setError(errorMessage || 'Error de validación en los datos de inicio de sesión');
+        setErrorType('validation');
+      } else if (errorMessage) {
+        // Error with message
+        setError('Error de autenticación: ' + errorMessage);
+        setErrorType('unexpected');
+      } else {
+        // Unknown error
+        setError('Error inesperado durante el inicio de sesión. Por favor, intenta de nuevo.');
+        setErrorType('unexpected');
+      }
     }
   };
 

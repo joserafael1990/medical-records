@@ -4,7 +4,8 @@
 
 import { useState, useCallback } from 'react';
 import { ClinicalStudy, CreateClinicalStudyData, UpdateClinicalStudyData } from '../types';
-import { apiService } from '../services/api';
+import { apiService } from '../services';
+import { logger } from '../utils/logger';
 
 export interface UseClinicalStudiesReturn {
   // State
@@ -73,20 +74,16 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
 
   // Fetch studies for a consultation
   const fetchStudies = useCallback(async (consultationId: string) => {
-    console.log('🔬 fetchStudies called with consultationId:', consultationId);
+    logger.debug('Fetching clinical studies for consultation', { consultationId }, 'api');
     setIsLoading(true);
     setError(null);
     
     try {
-      const response = await apiService.get(`/api/clinical-studies/consultation/${consultationId}`);
-      console.log('🔬 fetchStudies response:', response);
-      const studiesData = response.data || response;
-      console.log('🔬 fetchStudies data:', studiesData);
+      const studiesData = await apiService.clinicalStudies.getClinicalStudiesByConsultation(consultationId);
+      logger.debug('Clinical studies fetched successfully', { count: studiesData?.length }, 'api');
       setStudies(studiesData || []);
-    } catch (err) {
-      console.error('❌ Error fetching clinical studies:', err);
-      console.error('❌ Error details:', err.response?.data);
-      console.error('❌ Error status:', err.response?.status);
+    } catch (err: any) {
+      logger.error('Error fetching clinical studies', err, 'api');
       setError('Error al cargar los estudios clínicos');
       setStudies([]);
     } finally {
@@ -97,17 +94,16 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
   // Create a new study
   const createStudy = useCallback(async (studyData: CreateClinicalStudyData): Promise<ClinicalStudy> => {
     try {
-      const response = await apiService.post('/api/clinical-studies', studyData);
-      const newStudy = response.data;
+      logger.debug('Creating clinical study', { studyName: studyData.study_name }, 'api');
+      const newStudy = await apiService.clinicalStudies.createClinicalStudy(studyData);
+      logger.debug('Clinical study created successfully', { id: newStudy.id }, 'api');
       
       // Add to local state
       setStudies(prev => [...prev, newStudy]);
       
       return newStudy;
-    } catch (err) {
-      console.error('❌ Error creating clinical study:', err);
-      console.error('❌ Error details:', err.response?.data);
-      console.error('❌ Error status:', err.response?.status);
+    } catch (err: any) {
+      logger.error('Error creating clinical study', err, 'api');
       throw err;
     }
   }, []);
@@ -115,8 +111,9 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
   // Update an existing study
   const updateStudy = useCallback(async (studyId: string, studyData: UpdateClinicalStudyData): Promise<ClinicalStudy> => {
     try {
-      const response = await apiService.put(`/api/clinical-studies/${studyId}`, studyData);
-      const updatedStudy = response.data;
+      logger.debug('Updating clinical study', { studyId }, 'api');
+      const updatedStudy = await apiService.clinicalStudies.updateClinicalStudy(studyId, studyData);
+      logger.debug('Clinical study updated successfully', { id: updatedStudy.id }, 'api');
       
       // Update local state
       setStudies(prev => prev.map(study => 
@@ -124,8 +121,8 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
       ));
       
       return updatedStudy;
-    } catch (err) {
-      console.error('❌ Error updating clinical study:', err);
+    } catch (err: any) {
+      logger.error('Error updating clinical study', err, 'api');
       throw err;
     }
   }, []);
@@ -135,20 +132,22 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
     try {
       // Check if it's a temporary study (starts with 'temp_')
       if (studyId.startsWith('temp_')) {
-        console.log('🗑️ Deleting temporary clinical study:', studyId);
+        logger.debug('Deleting temporary clinical study', { studyId }, 'api');
         // For temporary studies, just remove from local state
         setStudies(prev => prev.filter(study => study.id !== studyId));
         return;
       }
       
       // For persistent studies, call the API
-      await apiService.delete(`/api/clinical-studies/${studyId}`);
+      logger.debug('Deleting clinical study', { studyId }, 'api');
+      await apiService.clinicalStudies.deleteClinicalStudy(studyId);
+      logger.debug('Clinical study deleted successfully', { studyId }, 'api');
       
       // Remove from local state
       setStudies(prev => prev.filter(study => study.id !== studyId));
       
-    } catch (err) {
-      console.error('❌ Error deleting clinical study:', err);
+    } catch (err: any) {
+      logger.error('Error deleting clinical study', err, 'api');
       throw err;
     }
   }, []);

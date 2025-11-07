@@ -2,27 +2,19 @@ import React from 'react';
 import {
   Box,
   Typography,
+  Alert,
   Card,
   CardContent,
-  Switch,
-  FormControlLabel,
+  Chip,
   Button,
-  Grid,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  IconButton,
-  Chip
+  IconButton
 } from '@mui/material';
 import {
-  Schedule as ScheduleIcon,
+  AccessTime,
   Add as AddIcon,
-  Delete as DeleteIcon,
-  AccessTime as TimeIcon
+  Cancel
 } from '@mui/icons-material';
-import { TimePicker } from '@mui/x-date-pickers/TimePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { TimePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
 
@@ -47,14 +39,6 @@ interface WeeklyScheduleData {
   sunday?: DaySchedule;
 }
 
-interface ScheduleStepProps {
-  scheduleData: WeeklyScheduleData;
-  onScheduleChange: (day: string, schedule: DaySchedule) => void;
-  onTimeBlockChange: (day: string, blockIndex: number, field: string, value: string) => void;
-  onAddTimeBlock: (day: string) => void;
-  onRemoveTimeBlock: (day: string, blockIndex: number) => void;
-}
-
 const DAYS_OF_WEEK = [
   { key: 'monday', label: 'Lunes', index: 0 },
   { key: 'tuesday', label: 'Martes', index: 1 },
@@ -65,174 +49,270 @@ const DAYS_OF_WEEK = [
   { key: 'sunday', label: 'Domingo', index: 6 }
 ];
 
+interface ScheduleStepProps {
+  scheduleData: WeeklyScheduleData;
+  onUpdateDaySchedule: (dayIndex: number, isActive: boolean) => void;
+  onAddTimeBlock: (dayIndex: number) => void;
+  onRemoveTimeBlock: (dayIndex: number, blockIndex: number) => void;
+  onUpdateTimeBlock: (dayIndex: number, blockIndex: number, field: 'start_time' | 'end_time', value: string) => void;
+  formatTime: (timeString?: string) => Date | null;
+  formatTimeToString: (date: Date | null) => string;
+}
+
 export const ScheduleStep: React.FC<ScheduleStepProps> = ({
   scheduleData,
-  onScheduleChange,
-  onTimeBlockChange,
+  onUpdateDaySchedule,
   onAddTimeBlock,
-  onRemoveTimeBlock
+  onRemoveTimeBlock,
+  onUpdateTimeBlock,
+  formatTime,
+  formatTimeToString
 }) => {
-  const getDaySchedule = (day: string): DaySchedule => {
-    return scheduleData[day as keyof WeeklyScheduleData] || {
-      day_of_week: DAYS_OF_WEEK.find(d => d.key === day)?.index || 0,
-      is_active: false,
-      time_blocks: []
-    };
-  };
-
-  const handleDayToggle = (day: string, isActive: boolean) => {
-    const currentSchedule = getDaySchedule(day);
-    onScheduleChange(day, {
-      ...currentSchedule,
-      is_active: isActive,
-      time_blocks: isActive ? currentSchedule.time_blocks : []
-    });
-  };
-
-  const handleTimeChange = (day: string, blockIndex: number, field: string, time: any) => {
-    if (time) {
-      const timeString = time.toFormat('HH:mm');
-      onTimeBlockChange(day, blockIndex, field, timeString);
-    }
-  };
-
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        <ScheduleIcon color="primary" />
-        <Typography variant="h6">
-          Horario de Atención
-        </Typography>
-      </Box>
-      
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Configura tu horario de atención para cada día de la semana. Puedes agregar múltiples bloques de tiempo por día.
+    <Box>
+      <Typography variant="h6" gutterBottom>
+        Horarios de Atención
       </Typography>
       
-      <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
-        <Grid container spacing={2}>
-          {DAYS_OF_WEEK.map(({ key, label }) => {
-            const daySchedule = getDaySchedule(key);
-            
-            return (
-              <Grid xs={12} key={key}>
-                <Card variant="outlined">
-                  <CardContent>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={daySchedule.is_active}
-                            onChange={(e) => handleDayToggle(key, e.target.checked)}
-                          />
-                        }
-                        label={
-                          <Typography variant="h6">
-                            {label}
-                          </Typography>
-                        }
-                      />
-                      
-                      {daySchedule.is_active && (
-                        <Button
-                          size="small"
-                          startIcon={<AddIcon />}
-                          onClick={() => onAddTimeBlock(key)}
-                        >
-                          Agregar Horario
-                        </Button>
-                      )}
-                    </Box>
+      <Box sx={{ mb: 3 }}>
+        <Alert severity="info" sx={{ mb: 2 }}>
+          <Typography variant="body2">
+            <strong>¿Cómo funciona?</strong><br />
+            • Para cada día, haz click en <strong>"Agregar Horarios"</strong> para activarlo<br />
+            • Puedes tener múltiples horarios por día (ej: mañana y tarde)<br />
+            • Los pacientes solo podrán agendar en los horarios que configures
+          </Typography>
+        </Alert>
+      </Box>
+
+      <Box>
+        {DAYS_OF_WEEK.map(day => {
+          const dayKey = day.key as keyof WeeklyScheduleData;
+          const schedule = scheduleData[dayKey];
+          const isActive = schedule?.is_active ?? false;
+          const timeBlocks = schedule?.time_blocks || [];
+
+          return (
+            <Card 
+              key={day.key} 
+              sx={{ 
+                mb: 2,
+                border: isActive ? '2px solid' : '1px solid',
+                borderColor: isActive ? 'primary.main' : 'divider',
+                backgroundColor: isActive ? 'primary.50' : 'background.paper',
+                transition: 'all 0.2s ease-in-out',
+                '&:hover': {
+                  boxShadow: 2,
+                  transform: 'translateY(-1px)'
+                }
+              }}
+            >
+              <CardContent sx={{ pb: 1 }}>
+                {/* Header del día */}
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600, mr: 2 }}>
+                      {day.label}
+                    </Typography>
                     
-                    {daySchedule.is_active ? (
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        {daySchedule.time_blocks.length === 0 ? (
-                          <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
-                            No hay horarios configurados para este día
+                    {/* Estado visual más claro */}
+                    {isActive ? (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Chip
+                          label="Disponible"
+                          color="primary"
+                          size="small"
+                          icon={<AccessTime />}
+                          variant="filled"
+                        />
+                        {timeBlocks.length > 0 && (
+                          <Typography variant="body2" color="text.secondary">
+                            {timeBlocks.length} horario{timeBlocks.length > 1 ? 's' : ''}
                           </Typography>
-                        ) : (
-                          daySchedule.time_blocks.map((block, blockIndex) => (
-                            <Box key={blockIndex} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                              <TimeIcon color="action" />
-                              
-                              <TimePicker
-                                label="Inicio"
-                                value={block.start_time ? new Date(`2000-01-01T${block.start_time}`) : null}
-                                onChange={(time) => handleTimeChange(key, blockIndex, 'start_time', time)}
-                                slotProps={{
-                                  textField: {
-                                    size: 'small',
-                                    sx: { minWidth: 120 }
-                                  }
-                                }}
-                              />
-                              
-                              <Typography variant="body2" color="text.secondary">
-                                hasta
-                              </Typography>
-                              
-                              <TimePicker
-                                label="Fin"
-                                value={block.end_time ? new Date(`2000-01-01T${block.end_time}`) : null}
-                                onChange={(time) => handleTimeChange(key, blockIndex, 'end_time', time)}
-                                slotProps={{
-                                  textField: {
-                                    size: 'small',
-                                    sx: { minWidth: 120 }
-                                  }
-                                }}
-                              />
-                              
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => onRemoveTimeBlock(key, blockIndex)}
-                              >
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            </Box>
-                          ))
                         )}
                       </Box>
                     ) : (
-                      <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
-                        Día no laboral
-                      </Typography>
+                      <Chip
+                        label="No disponible"
+                        color="default"
+                        size="small"
+                        variant="outlined"
+                      />
                     )}
-                  </CardContent>
-                </Card>
-              </Grid>
-            );
-          })}
-        </Grid>
-      </LocalizationProvider>
-      
-      {/* Schedule Summary */}
-      {Object.values(scheduleData).some(day => day?.is_active) && (
-        <Box sx={{ mt: 2, p: 2, bgcolor: 'primary.50', borderRadius: 1 }}>
-          <Typography variant="body2" fontWeight="medium" gutterBottom>
-            Resumen del Horario
-          </Typography>
-          {DAYS_OF_WEEK.map(({ key, label }) => {
-            const daySchedule = getDaySchedule(key);
-            if (!daySchedule.is_active) return null;
-            
-            return (
-              <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <Chip label={label} size="small" color="primary" />
-                <Typography variant="body2" color="text.secondary">
-                  {daySchedule.time_blocks.length === 0
-                    ? 'Sin horarios configurados'
-                    : daySchedule.time_blocks.map(block => 
-                        `${block.start_time} - ${block.end_time}`
-                      ).join(', ')
-                  }
-                </Typography>
-              </Box>
-            );
-          })}
-        </Box>
-      )}
+                    
+                    {/* Mostrar resumen de horarios */}
+                    {isActive && timeBlocks.length > 0 && (
+                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', ml: 2 }}>
+                        {timeBlocks.map((block, index) => (
+                          <Chip
+                            key={index}
+                            label={`${block.start_time} - ${block.end_time}`}
+                            variant="outlined"
+                            size="small"
+                            sx={{ backgroundColor: 'white' }}
+                          />
+                        ))}
+                      </Box>
+                    )}
+                  </Box>
+                  
+                  {/* Botones de acción más claros */}
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                    {!isActive ? (
+                      <Button
+                        variant="contained"
+                        size="small"
+                        startIcon={<AddIcon />}
+                        onClick={() => onUpdateDaySchedule(day.index, true)}
+                        sx={{
+                          borderRadius: '8px',
+                          textTransform: 'none',
+                          fontWeight: 500
+                        }}
+                      >
+                        Agregar Horarios
+                      </Button>
+                    ) : (
+                      <>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          startIcon={<AddIcon />}
+                          onClick={() => onAddTimeBlock(day.index)}
+                          sx={{
+                            borderRadius: '8px',
+                            textTransform: 'none',
+                            fontWeight: 500
+                          }}
+                        >
+                          Nuevo Horario
+                        </Button>
+                        <Button
+                          variant="text"
+                          size="small"
+                          color="error"
+                          onClick={() => onUpdateDaySchedule(day.index, false)}
+                          sx={{
+                            borderRadius: '8px',
+                            textTransform: 'none',
+                            fontWeight: 500
+                          }}
+                        >
+                          Desactivar
+                        </Button>
+                      </>
+                    )}
+                  </Box>
+                </Box>
+
+                {/* Configuración de horarios (solo si está activo) */}
+                {isActive && (
+                  <Box sx={{ mt: 2 }}>
+                    {timeBlocks.length === 0 && (
+                      <Alert severity="info" sx={{ mb: 2 }}>
+                        <Typography variant="body2">
+                          <strong>¡Agrega tu primer horario!</strong><br />
+                          Haz click en "Nuevo Horario" para definir cuándo atiendes este día.
+                        </Typography>
+                      </Alert>
+                    )}
+
+                    {timeBlocks.map((block, blockIndex) => (
+                      <Card key={blockIndex} sx={{ mb: 2, border: '1px solid', borderColor: 'divider', backgroundColor: 'background.default' }}>
+                        <CardContent sx={{ py: 2 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                            <Typography variant="subtitle2" color="primary" sx={{ fontWeight: 600 }}>
+                              Horario {blockIndex + 1}
+                            </Typography>
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => onRemoveTimeBlock(day.index, blockIndex)}
+                              disabled={timeBlocks.length === 1}
+                              sx={{
+                                '&:hover': {
+                                  backgroundColor: 'error.50'
+                                }
+                              }}
+                            >
+                              <Cancel />
+                            </IconButton>
+                          </Box>
+                          
+                          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                            <Box>
+                              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
+                                <TimePicker
+                                  label="Hora de inicio"
+                                  value={formatTime(block.start_time)}
+                                  onChange={(newValue) => {
+                                    if (newValue) {
+                                      onUpdateTimeBlock(day.index, blockIndex, 'start_time', formatTimeToString(newValue));
+                                    }
+                                  }}
+                                  closeOnSelect={true}
+                                  openTo="hours"
+                                  slotProps={{
+                                    textField: {
+                                      size: "small",
+                                      fullWidth: true
+                                    },
+                                    actionBar: {
+                                      actions: []
+                                    }
+                                  }}
+                                />
+                              </LocalizationProvider>
+                            </Box>
+                            <Box>
+                              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
+                                <TimePicker
+                                  label="Hora de fin"
+                                  value={formatTime(block.end_time)}
+                                  onChange={(newValue) => {
+                                    if (newValue) {
+                                      onUpdateTimeBlock(day.index, blockIndex, 'end_time', formatTimeToString(newValue));
+                                    }
+                                  }}
+                                  closeOnSelect={true}
+                                  openTo="hours"
+                                  slotProps={{
+                                    textField: {
+                                      size: "small",
+                                      fullWidth: true
+                                    },
+                                    actionBar: {
+                                      actions: []
+                                    }
+                                  }}
+                                />
+                              </LocalizationProvider>
+                            </Box>
+                          </Box>
+                        </CardContent>
+                      </Card>
+                    ))}
+                    
+                    {timeBlocks.length > 0 && (
+                      <Alert severity="success" icon={<AccessTime />} sx={{ mt: 2 }}>
+                        <Typography variant="body2">
+                          <strong>Resumen para {day.label}:</strong><br />
+                          Los pacientes podrán agendar citas de {timeBlocks.map((block, index) => (
+                            <span key={index}>
+                              {block.start_time} a {block.end_time}
+                              {index < timeBlocks.length - 1 ? ', ' : ''}
+                            </span>
+                          ))}
+                        </Typography>
+                      </Alert>
+                    )}
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+      </Box>
     </Box>
   );
 };
