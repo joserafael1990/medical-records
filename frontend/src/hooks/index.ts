@@ -41,6 +41,9 @@ export { useDoctorProfileView } from './useDoctorProfileView';
 // Agenda view hooks (extracted from AgendaView)
 export { useAgendaView } from './useAgendaView';
 
+// Analytics hooks
+export { useAnalytics } from './useAnalytics';
+
 // Enhanced UX Error Handling hooks
 export { useLoadingStates } from './useLoadingStates';
 export { useRealTimeValidation } from './useRealTimeValidation';

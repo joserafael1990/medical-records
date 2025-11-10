@@ -23,6 +23,7 @@ import {
   Add as AddIcon
 } from '@mui/icons-material';
 import { Medication, CreatePrescriptionData } from '../../types';
+import { preventBackdropClose } from '../../utils/dialogHelpers';
 
 interface PrescriptionDialogProps {
   open: boolean;
@@ -139,7 +140,7 @@ const PrescriptionDialog: React.FC<PrescriptionDialogProps> = ({
   });
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog open={open} onClose={preventBackdropClose(onClose)} maxWidth="md" fullWidth>
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <MedicationIcon color="primary" />

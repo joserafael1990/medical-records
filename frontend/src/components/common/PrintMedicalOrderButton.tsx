@@ -29,8 +29,8 @@ export const PrintMedicalOrderButton: React.FC<PrintMedicalOrderButtonProps> = (
 
   const handlePrintMedicalOrder = async () => {
     console.log('PrintMedicalOrderButton clicked!', {
-      patient: patient?.firstName,
-      doctor: doctor?.firstName,
+      patient: patient?.name,
+      doctor: doctor?.name,
       consultation: consultation?.id,
       studiesCount: studies?.length
     });

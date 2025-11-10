@@ -127,6 +127,21 @@ const getCDMXDateTime = (): string => {
   return cdmxDate.toISOString();
 };
 
+const DEFAULT_PHYSICAL_EXAMINATION = [
+  'Paciente en buenas condiciones generales, alerta, orientada en persona, tiempo y espacio, cooperadora, con marcha y postura normales.',
+  'Cabeza normocéfala, simétrica, sin lesiones ni deformidades.',
+  'Pupilas isocóricas y normorreactivas a la luz.',
+  'Pabellones auriculares sin alteraciones, conductos auditivos limpios y tímpanos íntegros.',
+  'Nariz alineada, mucosa rosada, sin secreción ni congestión.',
+  'Mucosa oral húmeda y rosada, dentadura en buen estado, faringe sin hiperemia ni exudado.',
+  'Cuello simétrico, sin masas ni adenomegalias, tiroides no palpable, pulsos carotídeos presentes y simétricos.',
+  'Tórax simétrico con movimientos respiratorios adecuados; murmullo vesicular bien distribuido, sin ruidos agregados.',
+  'Ruidos cardiacos rítmicos, de buena intensidad, sin soplos ni galope.',
+  'Abdomen plano, blando, depresible, no doloroso a la palpación, sin visceromegalias ni masas palpables, con ruidos peristálticos presentes y normales.',
+  'Extremidades simétricas, sin edema, cianosis ni deformidades; pulsos periféricos palpables y simétricos, fuerza y tono muscular conservados.',
+  'Sistema nervioso íntegro, con fuerza 5/5 en las cuatro extremidades, sensibilidad y reflejos osteotendinosos normales, marcha coordinada.'
+].join('\n\n');
+
 export const useConsultationForm = (props: UseConsultationFormProps): UseConsultationFormReturn => {
   const {
     consultation,
@@ -159,7 +174,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
     perinatal_history: '',
     personal_pathological_history: '',
     personal_non_pathological_history: '',
-    physical_examination: '',
+    physical_examination: DEFAULT_PHYSICAL_EXAMINATION,
     primary_diagnosis: '',
     secondary_diagnoses: '',
     treatment_plan: '',

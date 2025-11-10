@@ -20,6 +20,7 @@ import { Office, OfficeCreate, OfficeUpdate } from '../../types';
 import { apiService } from '../../services';
 import { getSmallSelectMenuProps, getMediumSelectMenuProps, getLargeSelectMenuProps } from '../../utils/selectMenuProps';
 import { useSimpleToast } from '../common/ToastNotification';
+import { preventBackdropClose } from '../../utils/dialogHelpers';
 
 interface OfficeDialogProps {
   open: boolean;
@@ -201,7 +202,7 @@ const OfficeDialog: React.FC<OfficeDialogProps> = ({
   return (
     <Dialog 
       open={open} 
-      onClose={onClose} 
+      onClose={preventBackdropClose(onClose)} 
       maxWidth="sm" 
       fullWidth
       fullScreen={{ xs: true, sm: false }}

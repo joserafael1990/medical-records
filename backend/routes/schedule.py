@@ -585,7 +585,7 @@ async def get_doctor_schedule(
         # In a full implementation, this would query the schedule_templates table
         schedule_data = {
             "doctor_id": current_user.id,
-            "doctor_name": f"{current_user.first_name} {current_user.paternal_surname}",
+            "doctor_name": current_user.name or "Doctor",
             "schedule": {
                 "monday": {"start": "09:00", "end": "17:00", "duration": 30, "active": True},
                 "tuesday": {"start": "09:00", "end": "17:00", "duration": 30, "active": True},
@@ -621,7 +621,7 @@ async def update_doctor_schedule(
         
         updated_schedule = {
             "doctor_id": current_user.id,
-            "doctor_name": f"{current_user.first_name} {current_user.paternal_surname}",
+            "doctor_name": current_user.name or "Doctor",
             "schedule": schedule_data.get("schedule", {}),
             "lunch_break": schedule_data.get("lunch_break", {"start": "13:00", "end": "14:00"}),
             "break_duration": schedule_data.get("break_duration", 10),
@@ -682,7 +682,7 @@ async def get_doctor_availability(
         
         availability_data = {
             "doctor_id": current_user.id,
-            "doctor_name": f"{current_user.first_name} {current_user.paternal_surname}",
+            "doctor_name": current_user.name or "Doctor",
             "date": date,
             "day_of_week": day_of_week,
             "time_slots": time_slots,

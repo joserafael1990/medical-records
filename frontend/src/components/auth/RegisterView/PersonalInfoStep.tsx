@@ -15,17 +15,13 @@ import { DocumentSelector } from '../../common/DocumentSelector';
 import { PhoneNumberInput } from '../../common/PhoneNumberInput';
 
 interface PersonalInfoStepProps {
-  firstName: string;
-  paternalSurname: string;
-  maternalSurname: string;
+  name: string;
   personalDocument: { document_id: number | null; document_value: string };
   gender: string;
   birthDate: string;
   phoneCountryCode: string;
   phoneNumber: string;
-  onFirstNameChange: (value: string) => void;
-  onPaternalSurnameChange: (value: string) => void;
-  onMaternalSurnameChange: (value: string) => void;
+  onNameChange: (value: string) => void;
   onPersonalDocumentChange: (doc: { document_id: number | null; document_value: string }) => void;
   onGenderChange: (value: string) => void;
   onBirthDateChange: (value: string) => void;
@@ -35,17 +31,13 @@ interface PersonalInfoStepProps {
 }
 
 export const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({
-  firstName,
-  paternalSurname,
-  maternalSurname,
+  name,
   personalDocument,
   gender,
   birthDate,
   phoneCountryCode,
   phoneNumber,
-  onFirstNameChange,
-  onPaternalSurnameChange,
-  onMaternalSurnameChange,
+  onNameChange,
   onPersonalDocumentChange,
   onGenderChange,
   onBirthDateChange,
@@ -62,33 +54,12 @@ export const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({
       <TextField
         fullWidth
         margin="normal"
-        label="Nombre(s)"
-        value={firstName}
-        onChange={(e) => onFirstNameChange(e.target.value)}
+        label="Nombre Completo"
+        value={name}
+        onChange={(e) => onNameChange(e.target.value)}
         required
+        helperText="Ingresa tu nombre completo (nombre y apellidos)"
       />
-
-      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-        <Box sx={{ flex: '1 1 250px' }}>
-          <TextField
-            fullWidth
-            margin="normal"
-            label="Apellido Paterno"
-            value={paternalSurname}
-            onChange={(e) => onPaternalSurnameChange(e.target.value)}
-            required
-          />
-        </Box>
-        <Box sx={{ flex: '1 1 250px' }}>
-          <TextField
-            fullWidth
-            margin="normal"
-            label="Apellido Materno"
-            value={maternalSurname}
-            onChange={(e) => onMaternalSurnameChange(e.target.value)}
-          />
-        </Box>
-      </Box>
 
       {/* Documento Personal */}
       <Box sx={{ mb: 2 }}>

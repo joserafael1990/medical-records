@@ -332,6 +332,10 @@ app.include_router(privacy_router)
 from routes.consultations import router as consultations_router
 app.include_router(consultations_router)
 
+# Include analytics routes
+from routes.analytics import router as analytics_router
+app.include_router(analytics_router)
+
 # ============================================================================
 # HEALTH CHECK
 # ============================================================================
@@ -485,9 +489,12 @@ async def send_whatsapp_study_results_notification(
         
         # Send WhatsApp
         whatsapp = get_whatsapp_service()
+        # Get patient first name (first word of full name)
+        patient_first_name = patient.name.split()[0] if patient.name else 'Paciente'
+        
         result = whatsapp.send_lab_results_notification(
             patient_phone=patient.primary_phone,
-            patient_name=patient.first_name,
+            patient_name=patient_first_name,
             study_name=study.study_name,
             secure_link=secure_link
         )
@@ -736,7 +743,7 @@ async def process_privacy_consent_by_phone(from_phone: str, db: Session):
                 normalized_patient_phone.endswith(from_local_digits) or
                 normalized_from_phone.endswith(patient_local_digits)):
                 matching_patient = patient
-                print(f"✅ Found matching patient: {patient.id} ({patient.first_name} {patient.paternal_surname})")
+                print(f"✅ Found matching patient: {patient.id} ({patient.name})")
                 break
         
         if not matching_patient:
@@ -797,9 +804,12 @@ async def process_privacy_consent_by_phone(from_phone: str, db: Session):
         # Enviar mensaje de confirmación
         try:
             # Usar la instancia de whatsapp que ya creamos al principio
+            # Get patient first name
+            patient_first_name = matching_patient.name.split()[0] if matching_patient.name else 'Paciente'
+            
             whatsapp.send_text_message(
                 to_phone=from_phone,
-                message=f"✅ Gracias {matching_patient.first_name}, tu consentimiento ha sido registrado correctamente.\n\n"
+                message=f"✅ Gracias {patient_first_name}, tu consentimiento ha sido registrado correctamente.\n\n"
                         f"Ahora podemos brindarte atención médica cumpliendo con la Ley de Protección de Datos.\n\n"
                         f"Recuerda que puedes revocar tu consentimiento en cualquier momento contactando al consultorio.\n\n"
                         f"Tus derechos ARCO (Acceso, Rectificación, Cancelación, Oposición) están garantizados."
@@ -1825,7 +1835,7 @@ async def get_patient_audit_trail(
         
         return {
             "patient_id": patient_id,
-            "patient_name": f"{patient.first_name} {patient.paternal_surname}",
+            "patient_name": patient.name or "Paciente",
             "total": total,
             "audit_trail": result
         }
@@ -2020,11 +2030,14 @@ async def send_whatsapp_privacy_notice(
         
         # Construir nombre del doctor con título separado para el template
         doctor_title = current_user.title or 'Dr.'
-        doctor_full_name = f"{current_user.first_name} {current_user.paternal_surname}"
+        doctor_full_name = current_user.name or 'Médico'
         doctor_name = f"{doctor_title} {doctor_full_name}"
         
+        # Get patient first name (first word of full name)
+        patient_first_name = patient.name.split()[0] if patient.name else 'Paciente'
+        
         result = whatsapp.send_interactive_privacy_notice(
-            patient_name=patient.first_name,
+            patient_name=patient_first_name,
             patient_phone=patient_phone_decrypted,
             doctor_name=doctor_name,
             doctor_title=doctor_title,  # Título separado para el template
@@ -2076,7 +2089,7 @@ async def send_whatsapp_privacy_notice(
             request=request,
             operation_type="send_privacy_notice_whatsapp",
             affected_patient_id=request_data.patient_id,
-            affected_patient_name=f"{patient.first_name} {patient.paternal_surname}",
+            affected_patient_name=patient.name or "Paciente",
             new_values={
                 "method": "whatsapp_button",
                 "phone": patient.primary_phone,
@@ -2189,16 +2202,19 @@ async def whatsapp_webhook(
                             doctor = db.query(Person).filter(Person.person_type == 'doctor').first()
                             
                             if doctor:
-                                doctor_name = f"{doctor.title or 'Dr.'} {doctor.first_name} {doctor.paternal_surname}"
+                                doctor_name = f"{doctor.title or 'Dr.'} {doctor.name}" if doctor.name else "Doctor"
+                                # Get patient first name
+                                patient_first_name = patient.name.split()[0] if patient.name else 'Paciente'
+                                
                                 whatsapp.send_text_message(
                                     to_phone=from_phone,
-                                    message=f"✅ Gracias {patient.first_name}, tu consentimiento ha sido registrado correctamente.\n\n"
+                                    message=f"✅ Gracias {patient_first_name}, tu consentimiento ha sido registrado correctamente.\n\n"
                                             f"Ahora {doctor_name} puede brindarte atención médica cumpliendo con la Ley de Protección de Datos.\n\n"
                                             f"Recuerda que puedes revocar tu consentimiento en cualquier momento contactando al consultorio.\n\n"
                                             f"Tus derechos ARCO (Acceso, Rectificación, Cancelación, Oposición) están garantizados."
                                 )
                             
-                            print(f"✅ Consent {consent_id} ACCEPTED by patient {patient.id} ({patient.first_name})")
+                            print(f"✅ Consent {consent_id} ACCEPTED by patient {patient.id} ({patient.name})")
                             
                             # Registrar en auditoría
                             audit_service.log_action(
@@ -2208,7 +2224,7 @@ async def whatsapp_webhook(
                                 request=request,
                                 operation_type="whatsapp_button_consent",
                                 affected_patient_id=patient.id,
-                                affected_patient_name=f"{patient.first_name} {patient.paternal_surname}",
+                                affected_patient_name=patient.name or "Paciente",
                                 new_values={
                                     "button_id": button_id,
                                     "button_title": button_title,

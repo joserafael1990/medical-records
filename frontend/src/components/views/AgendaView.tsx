@@ -30,8 +30,7 @@ import {
   LocationOn as LocationOnIcon,
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
-  WhatsApp as WhatsAppIcon,
-  Refresh as RefreshIcon
+  WhatsApp as WhatsAppIcon
 } from '@mui/icons-material';
 import { format, isSameDay, isSameMonth } from 'date-fns';
 import { formatTime } from '../../utils/formatters';
@@ -143,7 +142,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                             {formatTime(appointment.date_time)}
                           </Typography>
                           <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
-                            {appointment.patient?.first_name} {appointment.patient?.paternal_surname}
+                            {appointment.patient?.name}
                           </Typography>
                           {appointment.office && (
                             <Typography variant="caption" sx={{ fontSize: '0.65rem', display: 'block', mt: 0.5 }}>
@@ -341,7 +340,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
               primary={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                   <Typography variant="subtitle1" fontWeight="bold">
-                    {appointment.patient?.first_name} {appointment.patient?.paternal_surname}
+                    {appointment.patient?.name}
                   </Typography>
                   <Chip
                     label={getStatusLabel(appointment.status)}
@@ -351,13 +350,13 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                 </Box>
               }
               secondary={
-                <Box component="div" sx={{ mt: 1 }}>
-                  <Typography variant="body2" color="text.secondary" component="div">
+                <Box component="span" sx={{ mt: 1, display: 'block' }}>
+                  <Typography variant="body2" color="text.secondary" component="span" sx={{ display: 'block' }}>
                     <TimeIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: 'middle' }} />
                     {formatTime(appointment.date_time)}
                   </Typography>
                   {appointment.office && (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }} component="div">
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, display: 'block' }} component="span">
                       <LocationOnIcon sx={{ fontSize: 14, mr: 0.5, verticalAlign: 'middle' }} />
                       {appointment.office.name}
                       {appointment.office.address && ` - ${appointment.office.address}`}
@@ -369,12 +368,13 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                     </Typography>
                   )}
                   {appointment.reason && (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }} component="div">
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, display: 'block' }} component="span">
                       Motivo: {appointment.reason}
                     </Typography>
                   )}
                 </Box>
               }
+              secondaryTypographyProps={{ component: 'div' }}
             />
             <ListItemSecondaryAction>
               <Box sx={{ display: 'flex', gap: 1 }}>
@@ -430,7 +430,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
           }}
         >
           <CalendarIcon sx={{ color: 'text.primary' }} />
-          Agenda Médica
+          Citas
         </Typography>
         <Button
           variant="contained"
@@ -490,17 +490,6 @@ const AgendaView: React.FC<AgendaViewProps> = ({
               >
                 Mes
               </Button>
-              {forceRefresh && (
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<RefreshIcon />}
-                  onClick={forceRefresh}
-                  sx={{ ml: 1 }}
-                >
-                  Actualizar
-                </Button>
-              )}
             </Box>
           </Box>
         </CardContent>

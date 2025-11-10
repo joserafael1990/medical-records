@@ -31,10 +31,10 @@ export const PrintCertificateButton: React.FC<PrintCertificateButtonProps> = ({
 
   const handleOpenDialog = () => {
     // Set a default template for the certificate
-    const patientFullName = `${patient.firstName} ${patient.lastName}${patient.maternalSurname ? ' ' + patient.maternalSurname : ''}`;
-    const doctorFullName = `${doctor.firstName} ${doctor.lastName}${doctor.maternalSurname ? ' ' + doctor.maternalSurname : ''}`;
+    const patientFullName = patient.name || 'Paciente';
+    const doctorFullName = doctor.name || 'Médico';
     
-    const defaultContent = `Por medio de la presente, yo, Dr. ${doctorFullName}, ${doctor.specialty || 'médico cirujano'}, con cédula profesional ${doctor.license || 'N/A'}, hago constar que el/la paciente ${patientFullName} acudió a consulta médica en fecha ${new Date(consultation.date).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}.
+    const defaultContent = `Por medio de la presente, yo, ${doctor.title || 'Dr.'} ${doctorFullName}, ${doctor.specialty || 'médico cirujano'}, con cédula profesional ${doctor.license || 'N/A'}, hago constar que el/la paciente ${patientFullName} acudió a consulta médica en fecha ${new Date(consultation.date).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}.
 
 Bajo mi valoración médica, certifico que el/la paciente [describir el estado de salud, diagnóstico, o motivo de la constancia].
 

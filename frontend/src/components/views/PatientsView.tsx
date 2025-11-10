@@ -223,11 +223,11 @@ const PatientsView: React.FC<PatientsViewProps> = ({
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                       <Avatar sx={{ bgcolor: 'primary.main' }}>
-                        {patient.first_name[0]}{patient.paternal_surname[0]}
+                        {patient.name?.split(' ').slice(0, 2).map(n => n[0]).join('') || 'P'}
                       </Avatar>
                       <Box>
                         <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                          {patient.full_name} ({calculateAge(patient.birth_date)})
+                          {patient.name} ({calculateAge(patient.birth_date)})
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
                           {patient.gender}

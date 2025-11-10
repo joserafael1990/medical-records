@@ -24,17 +24,13 @@ def decrypt_patient_data(patient: Person, decrypt_fn: callable) -> Dict[str, str
     """
     try:
         return decrypt_fn({
-            "first_name": patient.first_name,
-            "paternal_surname": patient.paternal_surname,
-            "maternal_surname": patient.maternal_surname
+            "name": patient.name
         }, "patient")
     except Exception as e:
         print(f"⚠️ Could not decrypt patient data: {str(e)}")
         # Fallback to original values if decryption fails
         return {
-            "first_name": patient.first_name,
-            "paternal_surname": patient.paternal_surname,
-            "maternal_surname": patient.maternal_surname
+            "name": patient.name
         }
 
 
@@ -81,16 +77,14 @@ def format_patient_name(decrypted_data: Dict[str, str]) -> str:
     Format patient name from decrypted data
     
     Args:
-        decrypted_data: Dictionary with first_name, paternal_surname, maternal_surname
+        decrypted_data: Dictionary with name
         
     Returns:
         Formatted patient name
     """
-    first_name = decrypted_data.get("first_name", "")
-    paternal_surname = decrypted_data.get("paternal_surname", "")
-    maternal_surname = decrypted_data.get("maternal_surname", "") or ""
+    name = decrypted_data.get("name", "")
     
-    return f"{first_name} {paternal_surname} {maternal_surname}".strip() or "Paciente No Identificado"
+    return name.strip() or "Paciente No Identificado"
 
 
 def format_doctor_name(doctor: Optional[Person]) -> str:
@@ -105,7 +99,7 @@ def format_doctor_name(doctor: Optional[Person]) -> str:
     """
     if not doctor:
         return "Doctor"
-    return f"{doctor.first_name} {doctor.paternal_surname}".strip()
+    return doctor.name
 
 
 # ============================================================================
@@ -410,7 +404,7 @@ def get_patient_info(db: Session, patient_id: Optional[int]) -> tuple[str, Optio
     ).first()
     
     if patient:
-        patient_name = f"{patient.first_name} {patient.paternal_surname} {patient.maternal_surname or ''}".strip()
+        patient_name = patient.name
         return patient_name, patient
     
     return "Paciente No Identificado", None

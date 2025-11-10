@@ -44,7 +44,7 @@ export const MainNavigation: React.FC<MainNavigationProps> = ({
     },
     {
       id: 'agenda',
-      label: 'Agenda',
+      label: 'Citas',
       icon: <CalendarIcon />
     },
     {

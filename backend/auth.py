@@ -198,12 +198,10 @@ def login_user(db: Session, email: str, password: str) -> Dict[str, Any]:
         "full_name": user.full_name,
         "email": user.email,
         # Campos adicionales de Persona
-        "first_name": user.first_name,
-        "paternal_surname": user.paternal_surname,
-        "maternal_surname": user.maternal_surname,
+        "name": user.name,
+        "title": user.title if hasattr(user, 'title') and user.title else None,  # Doctor title (Dr., Dra., etc.)
         "birth_date": user.birth_date.isoformat() if user.birth_date else None,
         "primary_phone": user.primary_phone,  # ✅ UNIFICADO
-        "title": user.title if hasattr(user, 'title') and user.title else None,  # Doctor title (Dr., Dra., etc.)
     }
     
     # Si es doctor, agregar campos profesionales

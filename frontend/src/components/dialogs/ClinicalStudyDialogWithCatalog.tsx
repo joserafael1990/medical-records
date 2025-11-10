@@ -35,6 +35,7 @@ import {
 import { CreateClinicalStudyData, StudyType, StudyStatus, UrgencyLevel, StudyCatalog } from '../../types';
 import { STUDY_TYPES, STUDY_STATUS_OPTIONS, URGENCY_LEVELS } from '../../constants';
 import { StudyCatalogSelector } from '../common/StudyCatalogSelector';
+import { preventBackdropClose } from '../../utils/dialogHelpers';
 
 interface ClinicalStudyDialogWithCatalogProps {
   open: boolean;
@@ -229,7 +230,7 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
   return (
     <Dialog 
       open={open} 
-      onClose={onClose} 
+      onClose={preventBackdropClose(onClose)} 
       maxWidth="lg" 
       fullWidth
       PaperProps={{

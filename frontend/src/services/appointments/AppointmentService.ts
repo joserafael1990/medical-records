@@ -124,7 +124,7 @@ export class AppointmentService extends ApiBase {
   async cancelAppointment(id: string, reason?: string): Promise<void> {
     try {
       logger.debug('Cancelling appointment:', id);
-      await this.api.post(`/api/appointments/${id}/cancel`, { reason });
+      await this.api.delete(`/api/appointments/${id}`);
       logger.debug('Appointment cancelled successfully');
     } catch (error: any) {
       logger.error('Failed to cancel appointment:', error);

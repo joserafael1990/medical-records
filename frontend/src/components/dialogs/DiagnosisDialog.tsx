@@ -32,6 +32,7 @@ import {
   Check as CheckIcon
 } from '@mui/icons-material';
 import { useDiagnosisCatalog, DiagnosisSearchResult, DiagnosisCatalog } from '../../hooks/useDiagnosisCatalog';
+import { preventBackdropClose } from '../../utils/dialogHelpers';
 
 interface DiagnosisDialogProps {
   open: boolean;
@@ -187,7 +188,7 @@ const DiagnosisDialog: React.FC<DiagnosisDialogProps> = ({
   }, [existingDiagnoses]);
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog open={open} onClose={preventBackdropClose(onClose)} maxWidth="md" fullWidth>
       <DialogTitle>
         <Box display="flex" alignItems="center" gap={1}>
           <MedicalServicesIcon color="primary" />

@@ -151,11 +151,14 @@ async def send_whatsapp_privacy_notice(
         
         # Construir nombre del doctor con título separado para el template
         doctor_title = current_user.title or 'Dr.'
-        doctor_full_name = f"{current_user.first_name} {current_user.paternal_surname}"
+        doctor_full_name = current_user.name or 'Médico'
         doctor_name = f"{doctor_title} {doctor_full_name}"
         
+        # Get patient first name (first word of full name)
+        patient_first_name = patient.name.split()[0] if patient.name else 'Paciente'
+        
         result = whatsapp.send_interactive_privacy_notice(
-            patient_name=patient.first_name,
+            patient_name=patient_first_name,
             patient_phone=patient_phone_decrypted,
             doctor_name=doctor_name,
             doctor_title=doctor_title,  # Título separado para el template
@@ -207,7 +210,7 @@ async def send_whatsapp_privacy_notice(
             request=request,
             operation_type="send_privacy_notice_whatsapp",
             affected_patient_id=request_data.patient_id,
-            affected_patient_name=f"{patient.first_name} {patient.paternal_surname}",
+            affected_patient_name=patient.name or "Paciente",
             new_values={
                 "method": "whatsapp_button",
                 "phone": patient.primary_phone,

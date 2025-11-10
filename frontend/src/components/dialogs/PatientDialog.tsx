@@ -37,6 +37,7 @@ import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
 import { PhoneNumberInput } from '../common/PhoneNumberInput';
 import { DocumentSelector } from '../common/DocumentSelector';
 import { usePatientForm } from '../../hooks/usePatientForm';
+import { preventBackdropClose } from '../../utils/dialogHelpers';
 
 interface PatientDialogProps {
   open: boolean;
@@ -89,7 +90,7 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
   const { errorRef } = useScrollToErrorInDialog(error);
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="lg" fullWidth>
+    <Dialog open={open} onClose={preventBackdropClose(handleClose)} maxWidth="lg" fullWidth>
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <PersonIcon color="primary" />
@@ -132,36 +133,16 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
             </Typography>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: '1fr 1fr' }, gap: 2 }}>
               <TextField
-                label="Nombre - obligatorio"
-                name="first_name"
-                value={formData.first_name}
-                onChange={handleChange('first_name')}
+                label="Nombre Completo"
+                name="name"
+                value={formData.name}
+                onChange={handleChange('name')}
                 size="small"
                 required
-                placeholder="Nombre - obligatorio"
-                error={!!errors.first_name}
-                helperText={errors.first_name}
-              />
-              <TextField
-                label="Apellido Paterno - obligatorio"
-                name="paternal_surname"
-                value={formData.paternal_surname}
-                onChange={handleChange('paternal_surname')}
-                size="small"
-                required
-                placeholder="Apellido Paterno - obligatorio"
-                error={!!errors.paternal_surname}
-                helperText={errors.paternal_surname}
-              />
-              <TextField
-                label="Apellido Materno - opcional"
-                name="maternal_surname"
-                value={formData.maternal_surname}
-                onChange={handleChange('maternal_surname')}
-                size="small"
-                placeholder="Apellido Materno - opcional"
-                error={!!errors.maternal_surname}
-                helperText={errors.maternal_surname}
+                placeholder="Ingresa el nombre completo (nombre y apellidos)"
+                error={!!errors.name}
+                helperText={errors.name || 'Ingresa al menos nombre y apellido'}
+                sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}
               />
 
               <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>

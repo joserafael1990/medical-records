@@ -12,6 +12,8 @@ export { ClinicalStudyService } from './clinical-studies/ClinicalStudyService';
 export { DoctorService } from './doctors/DoctorService';
 export { OfficeService } from './offices/OfficeService';
 export { WhatsAppService } from './whatsapp/WhatsAppService';
+export { AnalyticsService } from './analytics/AnalyticsService';
+export type { DashboardMetrics } from './analytics/AnalyticsService';
 
 // Export base classes and types
 export { ApiBase } from './base/ApiBase';

@@ -20,6 +20,7 @@ import { usePrescriptions } from '../../hooks/usePrescriptions';
 import { useDiagnosisManagement } from '../../hooks/useDiagnosisManagement';
 import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
 import { TEMP_IDS } from '../../utils/vitalSignUtils';
+import { preventBackdropClose } from '../../utils/dialogHelpers';
 import { ConsultationFormHeader } from './ConsultationDialog/ConsultationFormHeader';
 import { ConsultationActions } from './ConsultationDialog/ConsultationActions';
 import { ConsultationFormFields } from './ConsultationDialog/ConsultationFormFields';
@@ -134,7 +135,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="lg" fullWidth>
+    <Dialog open={open} onClose={preventBackdropClose(handleClose)} maxWidth="lg" fullWidth>
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <HospitalIcon color="primary" />

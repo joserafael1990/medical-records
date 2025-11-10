@@ -28,6 +28,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
 import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
 import { useScheduleConfigForm, DAYS_OF_WEEK, type WeeklySchedule, type ScheduleTemplate } from '../../hooks/useScheduleConfigForm';
+import { preventBackdropClose } from '../../utils/dialogHelpers';
 
 interface ScheduleConfigDialogProps {
   open: boolean;
@@ -326,7 +327,7 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
   return (
     <Dialog
       open={open}
-      onClose={finalHandleClose}
+      onClose={preventBackdropClose(finalHandleClose)}
       maxWidth="md"
       fullWidth
       PaperProps={{

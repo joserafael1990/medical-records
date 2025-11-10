@@ -29,18 +29,14 @@ export interface UseAppointmentMultiOfficeFormReturn {
   isExistingPatient: boolean | null;
   setIsExistingPatient: React.Dispatch<React.SetStateAction<boolean | null>>;
   newPatientData: {
-    first_name: string;
-    paternal_surname: string;
-    maternal_surname: string;
+    name: string;
     birth_date: string;
     gender: string;
     phone_country_code: string;
     phone_number: string;
   };
   setNewPatientData: React.Dispatch<React.SetStateAction<{
-    first_name: string;
-    paternal_surname: string;
-    maternal_surname: string;
+    name: string;
     birth_date: string;
     gender: string;
     phone_country_code: string;
@@ -131,9 +127,7 @@ export const useAppointmentMultiOfficeForm = (
   // Estados para el flujo de selección de paciente
   const [isExistingPatient, setIsExistingPatient] = useState<boolean | null>(null);
   const [newPatientData, setNewPatientData] = useState({
-    first_name: '',
-    paternal_surname: '',
-    maternal_surname: '',
+    name: '',
     birth_date: '',
     gender: '',
     phone_country_code: '+52',
@@ -429,12 +423,14 @@ export const useAppointmentMultiOfficeForm = (
       
       if (isExistingPatient === false) {
         // Validar datos del nuevo paciente
-        if (!newPatientData.first_name.trim()) {
-          setError('El nombre del paciente es requerido');
+        if (!newPatientData.name.trim()) {
+          setError('El nombre completo del paciente es requerido');
           return;
         }
-        if (!newPatientData.paternal_surname.trim()) {
-          setError('El apellido paterno del paciente es requerido');
+        // Validar que el nombre tenga al menos dos palabras
+        const nameParts = newPatientData.name.trim().split(/\s+/);
+        if (nameParts.length < 2) {
+          setError('Ingresa al menos nombre y apellido');
           return;
         }
         if (!newPatientData.phone_number.trim()) {
@@ -447,9 +443,7 @@ export const useAppointmentMultiOfficeForm = (
           const fullPhoneNumber = `${newPatientData.phone_country_code}${newPatientData.phone_number.trim()}`;
           
           const patientData: any = {
-            first_name: newPatientData.first_name,
-            paternal_surname: newPatientData.paternal_surname,
-            ...(newPatientData.maternal_surname && { maternal_surname: newPatientData.maternal_surname }),
+            name: newPatientData.name.trim(),
             primary_phone: fullPhoneNumber,
             person_type: 'patient'
           };

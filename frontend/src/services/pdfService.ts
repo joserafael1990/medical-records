@@ -4,9 +4,8 @@ import { apiService } from './api';
 
 export interface PatientInfo {
   id: number;
-  firstName: string;
-  lastName: string;
-  maternalSurname?: string;
+  name: string;
+  title?: string;
   dateOfBirth?: string;
   gender?: string;
   phone?: string;
@@ -19,9 +18,7 @@ export interface PatientInfo {
 
 export interface DoctorInfo {
   id: number;
-  firstName: string;
-  lastName: string;
-  maternalSurname?: string;
+  name: string;
   title?: string;
   specialty?: string;
   license?: string;
@@ -102,75 +99,504 @@ class PDFService {
     }
   }
 
-  private getFullName(firstName: string, lastName: string, maternalSurname?: string): string {
-    const parts = [firstName, lastName];
-    if (maternalSurname && maternalSurname.trim()) {
-      parts.push(maternalSurname);
+  private calculateAge(dateOfBirth: string): string {
+    try {
+      const birthDate = new Date(dateOfBirth);
+      const today = new Date();
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      
+      return `${age} años`;
+    } catch (error) {
+      return 'No especificada';
     }
-    return parts.filter(part => part && part.trim()).join(' ');
   }
 
-  private async loadCortexLogo(): Promise<string | null> {
-    try {
-      // Create SVG logo inline and convert to PNG
-      const svgString = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1e3a8a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"></path>
-          <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"></path>
-          <path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"></path>
-          <path d="M17.599 6.5a3 3 0 0 0 .399-1.375"></path>
-          <path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"></path>
-          <path d="M3.477 10.896a4 4 0 0 1 .585-.396"></path>
-          <path d="M19.938 10.5a4 4 0 0 1 .585.396"></path>
-          <path d="M6 18a4 4 0 0 1-1.967-.516"></path>
-          <path d="M19.967 17.484A4 4 0 0 1 18 18"></path>
-        </svg>
-      `;
-      
-      // Convert SVG to PNG using canvas
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      const img = new Image();
-      
-      return new Promise((resolve) => {
-        img.onload = () => {
-          canvas.width = 64;
-          canvas.height = 64;
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, 64, 64);
-            const dataUrl = canvas.toDataURL('image/png');
-            resolve(dataUrl);
-          } else {
-            resolve(null);
-          }
-        };
-        img.onerror = () => resolve(null);
-        img.src = 'data:image/svg+xml;base64,' + btoa(svgString);
-      });
-    } catch (error) {
-      console.warn('Could not load CORTEX logo:', error);
-      return null;
+  private selectBestOfficeForPDF(offices: OfficeInfo[]): OfficeInfo | null {
+    if (!offices || offices.length === 0) return null;
+    
+    // Prefer non-virtual offices
+    const presentialOffices = offices.filter(office => !office.is_virtual);
+    
+    if (presentialOffices.length > 0) {
+      return presentialOffices[0];
     }
+    
+    // If all offices are virtual, return the first one
+    return offices[0];
+  }
+
+
+  /**
+   * Add minimalist modern header inspired by the provided design
+   */
+  private addModernPrescriptionHeader(
+    doc: jsPDF, 
+    patient: PatientInfo, 
+    doctor: DoctorInfo, 
+    consultation: ConsultationInfo,
+    officeInfo?: OfficeInfo
+  ): number {
+    const pageWidth = doc.internal.pageSize.width;
+    let currentY = 15;
+
+    // === HEADER TOP SECTION ===
+    // Medical icon (left) - Stethoscope
+    doc.setFillColor(37, 99, 235); // Blue-600
+    doc.roundedRect(15, currentY, 15, 15, 3, 3, 'F');
+    
+    // Draw detailed stethoscope icon
+    doc.setDrawColor(255, 255, 255);
+    doc.setFillColor(255, 255, 255);
+    doc.setLineWidth(1.2);
+    
+    // Earpieces (top)
+    doc.circle(19, 17.5, 1.2, 'F');
+    doc.circle(26, 17.5, 1.2, 'F');
+    
+    // Tubes connecting to chest piece
+    doc.line(19, 18.5, 20, 22);
+    doc.line(26, 18.5, 25, 22);
+    
+    // Y-junction
+    doc.line(20, 22, 22.5, 24);
+    doc.line(25, 22, 22.5, 24);
+    
+    // Main tube to chest piece
+    doc.line(22.5, 24, 22.5, 26.5);
+    
+    // Chest piece (diaphragm)
+    doc.circle(22.5, 28, 1.8, 'S');
+    doc.setLineWidth(0.8);
+    doc.circle(22.5, 28, 1.2, 'S');
+    
+    // Doctor information (center-left)
+    const doctorInfoStartX = 35;
+    let doctorY = currentY + 3;
+    
+    // Doctor title and name
+    doc.setFontSize(11);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'bold');
+    const doctorFullName = doctor.name || 'Médico';
+    doc.text(`${doctor.title || 'Dr.'} ${doctorFullName}`, doctorInfoStartX, doctorY);
+    
+    doctorY += 5;
+    
+    // Specialty
+    if (doctor.specialty) {
+      doc.setFontSize(9);
+      doc.setTextColor(75, 85, 99); // Gray-600
+      doc.setFont('helvetica', 'normal');
+      doc.text(doctor.specialty, doctorInfoStartX, doctorY);
+      doctorY += 4;
+    }
+    
+    // Professional license
+    if (doctor.license) {
+      doc.setFontSize(8);
+      doc.setTextColor(107, 114, 128); // Gray-500
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Cédula Profesional: ${doctor.license}`, doctorInfoStartX, doctorY);
+    }
+
+    // === CONTACT INFORMATION (Right side of header) ===
+    const contactIconX = pageWidth - 50;
+    const contactTextX = contactIconX + 5;
+    let headerContactY = currentY + 3;
+    
+    doc.setFontSize(8);
+    doc.setTextColor(107, 114, 128); // Gray-500
+    doc.setFont('helvetica', 'normal');
+    doc.setDrawColor(156, 163, 175); // Gray-400
+    
+    // Phone
+    const phoneNumber = officeInfo?.phone || doctor.phone;
+    if (phoneNumber) {
+      // Phone icon
+      doc.setLineWidth(0.4);
+      doc.circle(contactIconX + 1, headerContactY - 1, 1.2, 'S');
+      doc.line(contactIconX + 0.3, headerContactY - 1.5, contactIconX + 0.8, headerContactY - 0.8);
+      doc.line(contactIconX + 1.2, headerContactY - 0.2, contactIconX + 1.7, headerContactY - 0.5);
+      
+      doc.text(phoneNumber, contactTextX, headerContactY);
+      headerContactY += 4;
+    }
+    
+    // Email
+    if (doctor.email) {
+      // Email icon
+      doc.setLineWidth(0.4);
+      doc.rect(contactIconX - 0.2, headerContactY - 2.5, 3, 2);
+      doc.line(contactIconX - 0.2, headerContactY - 2.5, contactIconX + 1.3, headerContactY - 1);
+      doc.line(contactIconX + 2.8, headerContactY - 2.5, contactIconX + 1.3, headerContactY - 1);
+      
+      const maxEmailWidth = 48;
+      const emailLines = doc.splitTextToSize(doctor.email, maxEmailWidth);
+      doc.text(emailLines[0], contactTextX, headerContactY);
+      if (emailLines.length > 1) {
+        headerContactY += 3.5;
+        doc.text(emailLines[1], contactTextX, headerContactY);
+      }
+      headerContactY += 4;
+    }
+    
+    // Address
+    if (officeInfo) {
+      const addressParts: string[] = [];
+      if (officeInfo.address) addressParts.push(officeInfo.address);
+      if (officeInfo.city) addressParts.push(officeInfo.city);
+      if (officeInfo.state || officeInfo.state_name) addressParts.push(officeInfo.state || officeInfo.state_name);
+      
+      if (addressParts.length > 0) {
+        // Location icon
+        doc.setLineWidth(0.4);
+        doc.circle(contactIconX + 1.3, headerContactY - 1.2, 1.3, 'S');
+        doc.circle(contactIconX + 1.3, headerContactY - 1.2, 0.5, 'F');
+        
+        const addressText = addressParts.join(', ');
+        const maxAddressWidth = 48;
+        const addressLines = doc.splitTextToSize(addressText, maxAddressWidth);
+        doc.text(addressLines[0], contactTextX, headerContactY);
+        if (addressLines.length > 1) {
+          headerContactY += 3.5;
+          doc.text(addressLines[1], contactTextX, headerContactY);
+        }
+        headerContactY += 4;
+      }
+    }
+
+    currentY = Math.max(currentY + 25, headerContactY + 5);
+
+    // === PATIENT INFORMATION SECTION ===
+    const labelColor: [number, number, number] = [37, 99, 235]; // Blue-600
+    const valueColor: [number, number, number] = [0, 0, 0]; // Black
+
+    // Add separator line
+    doc.setDrawColor(229, 231, 235); // Gray-200
+    doc.setLineWidth(0.5);
+    doc.line(15, currentY, pageWidth - 15, currentY);
+    currentY += 8;
+
+    // Patient Name
+    doc.setFontSize(9);
+    doc.setTextColor(labelColor[0], labelColor[1], labelColor[2]);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Nombre del Paciente', 15, currentY);
+    
+    currentY += 5;
+    
+    // Patient name value
+    doc.setFontSize(10);
+    doc.setTextColor(valueColor[0], valueColor[1], valueColor[2]);
+    doc.setFont('helvetica', 'normal');
+    const patientFullName = patient.name || 'Paciente';
+    doc.text(patientFullName, 15, currentY);
+    
+    currentY += 8;
+
+    // Second row: Fecha y Edad
+    const edadX = pageWidth / 2 + 20;
+    
+    // Fecha (left side)
+    doc.setFontSize(9);
+    doc.setTextColor(labelColor[0], labelColor[1], labelColor[2]);
+    doc.text('Fecha', 15, currentY);
+    
+    // Edad (right side)
+    doc.text('Edad', edadX, currentY);
+    
+    currentY += 5;
+    
+    // Date value (left side)
+    doc.setFontSize(10);
+    doc.setTextColor(valueColor[0], valueColor[1], valueColor[2]);
+    const formattedDate = this.formatDateToDDMMYYYY(consultation.date);
+    doc.text(formattedDate, 15, currentY);
+    
+    // Age value (right side)
+    const ageText = patient.dateOfBirth ? this.calculateAge(patient.dateOfBirth) : '';
+    if (ageText) {
+      doc.text(ageText, edadX, currentY);
+    }
+    
+    currentY += 5;
+
+    // === DIAGNOSIS SECTION ===
+    doc.setFontSize(9);
+    doc.setTextColor(labelColor[0], labelColor[1], labelColor[2]);
+    doc.text('Diagnóstico', 15, currentY);
+    
+    currentY += 5;
+    
+    // Diagnosis box
+    doc.setDrawColor(229, 231, 235); // Gray-200
+    doc.setFillColor(249, 250, 251); // Gray-50
+    const diagnosisBoxHeight = 12;
+    doc.roundedRect(15, currentY, pageWidth - 30, diagnosisBoxHeight, 2, 2, 'FD');
+    
+    // Diagnosis text
+    doc.setFontSize(10);
+    doc.setTextColor(valueColor[0], valueColor[1], valueColor[2]);
+    const diagnosis = consultation.diagnosis || 'No especificado';
+    const maxDiagnosisWidth = pageWidth - 50;
+    const diagnosisLines = doc.splitTextToSize(diagnosis, maxDiagnosisWidth);
+    doc.text(diagnosisLines[0], 18, currentY + 7);
+    
+    currentY += diagnosisBoxHeight + 10;
+
+    return currentY;
   }
 
   /**
-   * Helper function to select the best office for PDF header
-   * Always prefers a presential office (is_virtual === false) over a virtual one
+   * Add prescription medications section with Rx icon
    */
-  private selectBestOfficeForPDF(offices: OfficeInfo[]): OfficeInfo | null {
-    if (!offices || offices.length === 0) {
-      return null;
+  private addModernMedicationsSection(
+    doc: jsPDF,
+    medications: MedicationInfo[],
+    startY: number
+  ): number {
+    const pageWidth = doc.internal.pageSize.width;
+    let currentY = startY;
+
+    // === PRESCRIPTION HEADER ===
+    // Rx icon background
+    doc.setFillColor(37, 99, 235); // Blue-600
+    doc.circle(20, currentY + 3, 4, 'F');
+    
+    // Rx text
+    doc.setFontSize(12);
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Rx', 17.5, currentY + 5);
+    
+    // Section title
+    doc.setFontSize(11);
+    doc.setTextColor(75, 85, 99); // Gray-600
+    doc.setFont('helvetica', 'bold');
+    doc.text('PRESCRIPCIÓN MÉDICA', 30, currentY + 5);
+    
+    currentY += 15;
+
+    // === MEDICATIONS LIST ===
+    if (medications && medications.length > 0) {
+      medications.forEach((med, index) => {
+        // Check if we need a new page
+        if (currentY > 250) {
+          doc.addPage();
+          currentY = 20;
+        }
+
+        // Medication card
+        doc.setDrawColor(229, 231, 235); // Gray-200
+        doc.setFillColor(255, 255, 255);
+        const cardHeight = 25;
+        doc.roundedRect(15, currentY, pageWidth - 30, cardHeight, 2, 2, 'FD');
+        
+        // Medication number badge
+        doc.setFillColor(239, 246, 255); // Blue-50
+        doc.setDrawColor(191, 219, 254); // Blue-200
+        doc.circle(20, currentY + 5, 2.5, 'FD');
+        doc.setFontSize(8);
+        doc.setTextColor(37, 99, 235); // Blue-600
+        doc.setFont('helvetica', 'bold');
+        doc.text((index + 1).toString(), 20, currentY + 6, { align: 'center' });
+        
+        // Medication name (bold)
+        doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'bold');
+        doc.text(med.name, 27, currentY + 6);
+        
+        // Dosage, frequency, duration
+        doc.setFontSize(9);
+        doc.setTextColor(75, 85, 99); // Gray-600
+        doc.setFont('helvetica', 'normal');
+        const medInfo = `${med.dosage} - ${med.frequency} - ${med.duration}`;
+        doc.text(medInfo, 27, currentY + 11);
+        
+        // Instructions
+        doc.setFontSize(8);
+        doc.setTextColor(107, 114, 128); // Gray-500
+        let instructions = med.instructions || 'Según indicación médica';
+        if (med.via_administracion) {
+          instructions += ` | Vía: ${med.via_administracion}`;
+        }
+        if (med.quantity) {
+          instructions += ` | Cantidad: ${med.quantity}`;
+        }
+        const maxInstructionsWidth = pageWidth - 55;
+        const instructionsLines = doc.splitTextToSize(instructions, maxInstructionsWidth);
+        doc.text(instructionsLines[0], 27, currentY + 16);
+        if (instructionsLines.length > 1) {
+          doc.text(instructionsLines[1], 27, currentY + 20);
+        }
+        
+        currentY += cardHeight + 5;
+      });
+    } else {
+      doc.setFontSize(9);
+      doc.setTextColor(156, 163, 175); // Gray-400
+      doc.setFont('helvetica', 'italic');
+      doc.text('No se prescribieron medicamentos', 15, currentY);
+      currentY += 10;
     }
 
-    // First, try to find a presential office (is_virtual === false)
-    const presentialOffice = offices.find(office => office.is_virtual === false);
-    if (presentialOffice) {
-      return presentialOffice;
+    return currentY;
+  }
+
+  /**
+   * Add footer with doctor signature and seal
+   */
+  private addModernPrescriptionFooter(
+    doc: jsPDF,
+    doctor: DoctorInfo,
+    consultation: ConsultationInfo,
+    startY: number
+  ): void {
+    const pageHeight = doc.internal.pageSize.height;
+    const pageWidth = doc.internal.pageSize.width;
+    
+    // Position footer at bottom or after content
+    let footerY = Math.max(startY + 20, pageHeight - 70);
+    
+    // === OBSERVATIONS SECTION ===
+    if (consultation.notes) {
+      doc.setFontSize(9);
+      doc.setTextColor(37, 99, 235); // Blue-600
+      doc.setFont('helvetica', 'bold');
+      doc.text('Observaciones', 15, footerY);
+      
+      footerY += 5;
+      
+      doc.setFontSize(9);
+      doc.setTextColor(75, 85, 99); // Gray-600
+      doc.setFont('helvetica', 'normal');
+      const maxWidth = pageWidth - 30;
+      const notesLines = doc.splitTextToSize(consultation.notes, maxWidth);
+      notesLines.slice(0, 3).forEach((line: string) => {
+        doc.text(line, 15, footerY);
+        footerY += 4;
+      });
+      
+      footerY += 10;
     }
 
-    // If no presential office found, return the first available office
-    // This handles cases where is_virtual might be undefined or true
-    return offices[0];
+    // === DOCTOR SIGNATURE SECTION ===
+    footerY = pageHeight - 50;
+    
+    // Signature line
+    const signatureLineY = footerY + 15;
+    doc.setDrawColor(156, 163, 175); // Gray-400
+    doc.setLineWidth(0.5);
+    doc.line(15, signatureLineY, 100, signatureLineY);
+    
+    // Doctor info below signature
+    footerY = signatureLineY + 5;
+    
+    doc.setFontSize(9);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'bold');
+    const doctorNameForFooter = doctor.name || 'Médico';
+    doc.text(`${doctor.title || 'Dr.'} ${doctorNameForFooter}`, 15, footerY);
+    
+    footerY += 4;
+    
+    doc.setFontSize(8);
+    doc.setTextColor(75, 85, 99); // Gray-600
+    doc.setFont('helvetica', 'normal');
+    if (doctor.specialty) {
+      doc.text(doctor.specialty, 15, footerY);
+      footerY += 3.5;
+    }
+    if (doctor.license) {
+      doc.text(`Cédula Profesional: ${doctor.license}`, 15, footerY);
+    }
+
+    // Professional seal (right side)
+    const sealX = pageWidth - 60;
+    const sealY = signatureLineY - 15;
+    
+    doc.setDrawColor(37, 99, 235); // Blue-600
+    doc.setLineWidth(1);
+    doc.circle(sealX + 15, sealY + 10, 12, 'S');
+    
+    doc.setFontSize(7);
+    doc.setTextColor(37, 99, 235);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Sello', sealX + 15, sealY + 9, { align: 'center' });
+    doc.text('Profesional', sealX + 15, sealY + 13, { align: 'center' });
+
+    // === FOOTER LINE ===
+    const bottomY = pageHeight - 20;
+    doc.setDrawColor(229, 231, 235); // Gray-200
+    doc.setLineWidth(0.5);
+    doc.line(15, bottomY, pageWidth - 15, bottomY);
+    
+    // Generation info
+    doc.setFontSize(7);
+    doc.setTextColor(156, 163, 175); // Gray-400
+    doc.setFont('helvetica', 'normal');
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('es-MX');
+    const timeStr = now.toLocaleTimeString('es-MX');
+    doc.text(`Generado el ${dateStr} a las ${timeStr}`, 15, bottomY + 5);
+    doc.text('Página 1', pageWidth - 15, bottomY + 5, { align: 'right' });
+  }
+
+  async generatePrescription(
+    patient: PatientInfo,
+    doctor: DoctorInfo,
+    consultation: ConsultationInfo,
+    medications: MedicationInfo[]
+  ): Promise<void> {
+    console.log('PDFService.generatePrescription (Modern Design) called with:', {
+      patient: patient?.name,
+      doctor: doctor?.name,
+      consultation: consultation?.id,
+      medicationsCount: medications?.length
+    });
+    
+    // Get office information
+    let officeInfo = null;
+    if (!doctor.offices || doctor.offices.length === 0) {
+      try {
+        const offices = await apiService.getOffices();
+        if (offices && offices.length > 0) {
+          officeInfo = this.selectBestOfficeForPDF(offices);
+        }
+      } catch (error) {
+        console.warn('Could not fetch office information:', error);
+      }
+    } else {
+      officeInfo = this.selectBestOfficeForPDF(doctor.offices);
+    }
+    
+    try {
+      const doc = new jsPDF();
+      
+      // Add modern header with patient info
+      let currentY = this.addModernPrescriptionHeader(doc, patient, doctor, consultation, officeInfo);
+      
+      // Add medications section
+      currentY = this.addModernMedicationsSection(doc, medications, currentY);
+      
+      // Add footer with signature
+      this.addModernPrescriptionFooter(doc, doctor, consultation, currentY);
+      
+      // Save the PDF
+      const patientNameForFile = patient.name ? patient.name.replace(/\s+/g, '_') : 'Paciente';
+      const fileName = `Receta_${patientNameForFile}_${consultation.date.replace(/\//g, '-')}.pdf`;
+      doc.save(fileName);
+      console.log('PDF saved successfully:', fileName);
+    } catch (error) {
+      console.error('Error generating prescription PDF:', error);
+      throw error;
+    }
   }
 
   private async addCortexHeader(doc: jsPDF, title: string, doctor: DoctorInfo, officeInfo?: OfficeInfo): Promise<void> {
@@ -178,10 +604,9 @@ class PDFService {
       let currentY = 20;
       
       // Get full doctor name
-      const fullDoctorName = this.getFullName(doctor.firstName, doctor.lastName, doctor.maternalSurname);
-      
       // Build doctor title: Título + Nombre completo + Especialidad
-      const doctorTitle = `${doctor.title || 'Dr.'} ${fullDoctorName}`;
+      const doctorNameForHeader = doctor.name || 'Médico';
+      const doctorTitle = `${doctor.title || 'Dr.'} ${doctorNameForHeader}`;
       const specialtyText = doctor.specialty || 'No especificada';
       
       // Add doctor title and name (centered)
@@ -310,13 +735,10 @@ class PDFService {
     
     let currentY = startY + 8;
     
-    // Get full doctor name
-    const fullDoctorName = this.getFullName(doctor.firstName, doctor.lastName, doctor.maternalSurname);
-    
-    
     // Doctor details table - more compact
+    const doctorNameForTable = doctor.name || 'Médico';
     const doctorData = [
-      ['Médico:', `${doctor.title || 'Dr.'} ${fullDoctorName}`],
+      ['Médico:', `${doctor.title || 'Dr.'} ${doctorNameForTable}`],
       ['Especialidad:', doctor.specialty || 'No especificada'],
       ['Cédula:', doctor.license || 'No especificada'],
       ['Universidad:', doctor.university || 'No especificada'],
@@ -328,67 +750,20 @@ class PDFService {
     
     autoTable(doc, {
       startY: currentY,
-      head: [],
       body: doctorData,
-      theme: 'grid',
-      headStyles: { fillColor: [240, 240, 240] },
-      bodyStyles: { fontSize: 8 },
+      theme: 'plain',
+      styles: { fontSize: 8, cellPadding: 1.5 },
       columnStyles: {
-        0: { cellWidth: 35, fontStyle: 'bold' },
-        1: { cellWidth: 135 }
+        0: { cellWidth: 30, fontStyle: 'bold' },
+        1: { cellWidth: 140 }
       },
-      margin: { left: 20, right: 20 },
-      tableLineWidth: 0.1,
-      tableLineColor: [200, 200, 200]
+      margin: { left: 20 }
     });
     
-    // Calculate approximate height: 6 rows * 10px per row + reduced margin
-    return currentY + (doctorData.length * 10) + 5;
+    return (doc as any).lastAutoTable.finalY + 5;
   }
 
-  private addPatientInfo(doc: jsPDF, patient: PatientInfo, startY: number): number {
-    
-    doc.setFontSize(10);
-    doc.setTextColor(0, 0, 0);
-    doc.setFont('helvetica', 'bold');
-    doc.text('INFORMACIÓN DEL PACIENTE', 20, startY);
-    
-    let currentY = startY + 8;
-    
-    // Get full patient name
-    const fullPatientName = this.getFullName(patient.firstName, patient.lastName, patient.maternalSurname);
-    
-    // Format date of birth
-    const formattedDateOfBirth = patient.dateOfBirth ? this.formatDateToDDMMYYYY(patient.dateOfBirth) : 'No especificada';
-    
-    // Patient details table - only essential information
-    const patientData = [
-      ['Nombre:', fullPatientName],
-      ['Fecha de Nacimiento:', formattedDateOfBirth],
-      ['Género:', patient.gender || 'No especificado']
-    ];
-    
-    autoTable(doc, {
-      startY: currentY,
-      head: [],
-      body: patientData,
-      theme: 'grid',
-      headStyles: { fillColor: [240, 240, 240] },
-      bodyStyles: { fontSize: 8 },
-      columnStyles: {
-        0: { cellWidth: 35, fontStyle: 'bold' },
-        1: { cellWidth: 135 }
-      },
-      margin: { left: 20, right: 20 },
-      tableLineWidth: 0.1,
-      tableLineColor: [200, 200, 200]
-    });
-    
-    // Calculate approximate height: 3 rows * 10px per row + reduced margin
-    return currentY + (patientData.length * 10) + 5;
-  }
-
-  private addConsultationInfo(doc: jsPDF, consultation: ConsultationInfo, patient: PatientInfo, startY: number, includeDiagnosis: boolean = true, forMedicalOrder: boolean = false): number {
+  private addConsultationInfo(doc: jsPDF, consultation: ConsultationInfo, patient: PatientInfo, startY: number, includeDiagnosis: boolean = false, includePatientBirthDate: boolean = false): number {
     doc.setFontSize(10);
     doc.setTextColor(0, 0, 0);
     doc.setFont('helvetica', 'bold');
@@ -396,216 +771,46 @@ class PDFService {
     
     let currentY = startY + 8;
     
-    // Format date to dd-mm-yyyy format
-    const formattedDate = consultation.date ? this.formatDateToDDMMYYYY(consultation.date) : 'No especificada';
-    
     // Get full patient name
-    const fullPatientName = this.getFullName(patient.firstName, patient.lastName, patient.maternalSurname);
+    // Format date for display
+    const formattedDate = this.formatDateToDDMMYYYY(consultation.date);
     
-    // Format birth date
-    const formattedBirthDate = patient.dateOfBirth ? this.formatDateToDDMMYYYY(patient.dateOfBirth) : 'No especificada';
+    // Consultation details - simplified
+    const patientNameForTable = patient.name || 'Paciente';
+    const consultationData = [
+      ['Fecha:', formattedDate],
+      ['Paciente:', patientNameForTable]
+    ];
     
-    // Build consultation data
-    const consultationData: string[][] = [];
+    // Only add birth date if explicitly requested (for medical orders)
+    if (includePatientBirthDate && patient.dateOfBirth) {
+      const formattedBirthDate = this.formatDateToDDMMYYYY(patient.dateOfBirth);
+      consultationData.push(['Fecha de Nacimiento:', formattedBirthDate]);
+    }
     
-    if (forMedicalOrder) {
-      // For medical orders: Date, Patient Name, Birth Date (no diagnosis)
-      consultationData.push(['Fecha de la consulta:', formattedDate]);
-      consultationData.push(['Nombre del paciente:', fullPatientName]);
-      consultationData.push(['Fecha de nacimiento:', formattedBirthDate]);
-    } else {
-      // For prescriptions and other documents: Date, Patient Name, optionally Diagnosis
-      consultationData.push(['Fecha:', formattedDate]);
-      consultationData.push(['Paciente:', fullPatientName]);
-      
-      // Only include diagnosis if requested (for medical orders, not prescriptions)
-      if (includeDiagnosis) {
+    consultationData.push(
+      ['Tipo de Consulta:', consultation.type || 'No especificado'],
+      ['Motivo:', consultation.reason || 'No especificado']
+    );
+    
+    // Add diagnosis only if includeDiagnosis is true (for medical orders and certificates)
+    if (includeDiagnosis && consultation.diagnosis) {
         consultationData.push(['Diagnóstico:', consultation.diagnosis || 'No especificado']);
-      }
     }
     
     autoTable(doc, {
       startY: currentY,
-      head: [],
       body: consultationData,
-      theme: 'grid',
-      headStyles: { fillColor: [240, 240, 240] },
-      bodyStyles: { fontSize: 8 },
+      theme: 'plain',
+      styles: { fontSize: 8, cellPadding: 1.5 },
       columnStyles: {
-        0: { cellWidth: 35, fontStyle: 'bold' },
-        1: { cellWidth: 135 }
+        0: { cellWidth: 40, fontStyle: 'bold' },
+        1: { cellWidth: 130 }
       },
-      margin: { left: 20, right: 20 },
-      tableLineWidth: 0.1,
-      tableLineColor: [200, 200, 200]
+      margin: { left: 20 }
     });
     
-    // Calculate approximate height: rows * 10px per row + reduced margin
-    return currentY + (consultationData.length * 10) + 5;
-  }
-
-  async generatePrescription(
-    patient: PatientInfo,
-    doctor: DoctorInfo,
-    consultation: ConsultationInfo,
-    medications: MedicationInfo[]
-  ): Promise<void> {
-    console.log('PDFService.generatePrescription called with:', {
-      patient: patient?.firstName,
-      doctor: doctor?.firstName,
-      consultation: consultation?.id,
-      medicationsCount: medications?.length
-    });
-    
-    // Get office information - prefer presential office
-    let officeInfo = null;
-    if (!doctor.offices || doctor.offices.length === 0) {
-      try {
-        const offices = await apiService.getOffices();
-        if (offices && offices.length > 0) {
-          officeInfo = this.selectBestOfficeForPDF(offices);
-        }
-      } catch (error) {
-        console.warn('Could not fetch office information:', error);
-      }
-    } else {
-      officeInfo = this.selectBestOfficeForPDF(doctor.offices);
-    }
-    
-    
-    try {
-      const doc = new jsPDF();
-      let currentY = 70; // Increased from 60 to account for new header format
-    
-      // Add header with doctor info
-      await this.addCortexHeader(doc, 'RECETA MÉDICA', doctor, officeInfo);
-      
-      // Add consultation info (without diagnosis for prescriptions) - patient info removed since it's included in consultation info
-      currentY = this.addConsultationInfo(doc, consultation, patient, currentY, false);
-      
-      // Add medications only if there are any
-      if (medications && medications.length > 0) {
-      doc.setFontSize(10);
-      doc.setTextColor(0, 0, 0);
-      doc.setFont('helvetica', 'bold');
-      doc.text('MEDICAMENTOS PRESCRITOS', 20, currentY);
-      currentY += 6; // Reduced from 8 to 6
-      
-      const medicationData = medications.map((med, index) => {
-        // Build comprehensive instructions
-        let fullInstructions = med.instructions || 'Según indicación médica';
-        
-        // Add quantity if available
-        if (med.quantity) {
-          fullInstructions += `. Cantidad: ${med.quantity}`;
-        }
-        
-        // Add via de administración if available
-        if (med.via_administracion) {
-          fullInstructions += `. Vía: ${med.via_administracion}`;
-        }
-        
-        return [
-          index + 1,
-          med.name,
-          med.dosage,
-          med.frequency,
-          med.duration,
-          fullInstructions
-        ];
-      });
-      
-      autoTable(doc, {
-        startY: currentY,
-        head: [['#', 'Medicamento', 'Dosis', 'Frecuencia', 'Duración', 'Instrucciones']],
-        body: medicationData,
-        theme: 'grid',
-        headStyles: { fillColor: [0, 102, 204], textColor: [255, 255, 255], fontSize: 8 },
-        bodyStyles: { fontSize: 7 },
-        columnStyles: {
-          0: { cellWidth: 8 },
-          1: { cellWidth: 40 },
-          2: { cellWidth: 25 },
-          3: { cellWidth: 25 },
-          4: { cellWidth: 20 },
-          5: { cellWidth: 42 }
-        },
-        margin: { left: 20, right: 20, bottom: 35 }, // Add bottom margin to prevent footer overlap
-        tableLineWidth: 0.1,
-        tableLineColor: [200, 200, 200],
-        didDrawPage: (data: any) => {
-          // Add footer on each page
-            this.addCortexFooter(doc, data.pageNumber);
-          }
-        });
-        
-        // Get the final Y position after the medications table
-        const finalY = (doc as any).lastAutoTable.finalY || currentY + (medications.length * 10) + 20;
-        currentY = finalY + 6;
-      } else {
-        // If no medications, just add a small margin
-        currentY += 5;
-      }
-      
-      // Add Treatment Plan section
-      if (consultation.treatment_plan && consultation.treatment_plan.trim()) {
-        doc.setFontSize(10);
-        doc.setTextColor(0, 0, 0);
-        doc.setFont('helvetica', 'bold');
-        doc.text('PLAN DE TRATAMIENTO', 20, currentY);
-        currentY += 6;
-        
-        doc.setFontSize(9);
-        doc.setTextColor(0, 0, 0);
-        doc.setFont('helvetica', 'normal');
-        
-        // Split text to fit page width
-        const pageWidth = doc.internal.pageSize.width;
-        const maxWidth = pageWidth - 40; // 20px margin on each side
-        const treatmentLines = doc.splitTextToSize(consultation.treatment_plan, maxWidth);
-        treatmentLines.forEach((line: string) => {
-          doc.text(line, 20, currentY);
-          currentY += 5;
-        });
-        
-        currentY += 5;
-      }
-      
-      // Follow-up Instructions section removed
-      if (false && false) {
-        doc.setFontSize(10);
-        doc.setTextColor(0, 0, 0);
-        doc.setFont('helvetica', 'bold');
-        doc.text('INSTRUCCIONES DE SEGUIMIENTO', 20, currentY);
-        currentY += 6;
-        
-        doc.setFontSize(9);
-        doc.setTextColor(0, 0, 0);
-        doc.setFont('helvetica', 'normal');
-        
-        // Split text to fit page width
-        const pageWidth = doc.internal.pageSize.width;
-        const maxWidth = pageWidth - 40; // 20px margin on each side
-        const followUpLines = doc.splitTextToSize(consultation.follow_up_instructions, maxWidth);
-        followUpLines.forEach((line: string) => {
-          doc.text(line, 20, currentY);
-          currentY += 5;
-        });
-      }
-      
-      // Add footer if no medications table was added (footer is added via didDrawPage in autoTable)
-      if (!medications || medications.length === 0) {
-        this.addCortexFooter(doc, 1);
-      }
-      
-      // Save the PDF
-      const fileName = `Receta_${patient.firstName}_${patient.lastName}_${consultation.date.replace(/\//g, '-')}.pdf`;
-      doc.save(fileName);
-      console.log('PDF saved successfully:', fileName);
-    } catch (error) {
-      console.error('Error generating prescription PDF:', error);
-      throw error;
-    }
+    return (doc as any).lastAutoTable.finalY + 5; // Reduced spacing from 8 to 5
   }
 
   async generateMedicalOrder(
@@ -629,174 +834,143 @@ class PDFService {
       officeInfo = this.selectBestOfficeForPDF(doctor.offices);
     }
     
-
+    
     const doc = new jsPDF();
-    let currentY = 70; // Increased from 60 to account for new header format
+    const pageWidth = doc.internal.pageSize.width;
     
-    // Add header with doctor info
-    await this.addCortexHeader(doc, 'ORDEN DE ESTUDIOS MÉDICOS', doctor, officeInfo);
+    // Add modern header with patient info
+    let currentY = this.addModernPrescriptionHeader(doc, patient, doctor, consultation, officeInfo);
     
-    // Add consultation info (includes date, patient name, and birth date - patient info removed since it's included here)
-    currentY = this.addConsultationInfo(doc, consultation, patient, currentY, false, true);
+    // Add document title
+    doc.setFontSize(14);
+    doc.setTextColor(37, 99, 235); // Blue-600
+    doc.setFont('helvetica', 'bold');
+    doc.text('ORDEN DE ESTUDIOS MÉDICOS', pageWidth / 2, currentY, { align: 'center' });
+    currentY += 10;
     
-    // Add studies
+    // Add studies section
     doc.setFontSize(10);
     doc.setTextColor(0, 0, 0);
     doc.setFont('helvetica', 'bold');
     doc.text('ESTUDIOS SOLICITADOS', 20, currentY);
-    currentY += 6; // Reduced from 8 to 6
-    
-    const studyData = studies.map((study, index) => [
-      index + 1,
-      study.name,
-      study.instructions || 'Seguir indicaciones del laboratorio'
-    ]);
-    
-    // Calculate table width (page width - margins)
-    const pageWidth = doc.internal.pageSize.width;
-    const tableWidth = pageWidth - 40; // 20px margin on each side
-    
-    autoTable(doc, {
-      startY: currentY,
-      head: [['#', 'Estudio', 'Instrucciones']],
-      body: studyData,
-      theme: 'grid',
-      headStyles: { fillColor: [0, 102, 204], textColor: [255, 255, 255], fontSize: 8 },
-      bodyStyles: { fontSize: 7 },
-      columnStyles: {
-        0: { cellWidth: tableWidth * 0.09 },
-        1: { cellWidth: tableWidth * 0.45 },
-        2: { cellWidth: tableWidth * 0.46 }
-      },
-      margin: { left: 20, right: 20, bottom: 35 }, // Add bottom margin to prevent footer overlap
-      tableLineWidth: 0.1,
-      tableLineColor: [200, 200, 200],
-      didDrawPage: (data: any) => {
-        // Add footer on each page
-        this.addCortexFooter(doc, data.pageNumber);
-      }
-    });
-    
-    // Add notes section if available
-    if (consultation.notes) {
-      const finalY = currentY + 30; // Approximate position after studies table
-      doc.setFontSize(10);
-      doc.setTextColor(0, 0, 0);
-      doc.setFont('helvetica', 'bold');
-      doc.text('NOTAS ADICIONALES', 20, finalY);
+      currentY += 6; // Reduced from 8 to 6
       
-      doc.setFontSize(8);
-      doc.setTextColor(0, 0, 0);
-      doc.setFont('helvetica', 'normal');
-      doc.text(consultation.notes, 20, finalY + 10);
-    }
+    const studyData = studies.map((study, index) => [
+          index + 1,
+      study.name,
+      study.type,
+      study.urgency || 'Normal',
+      study.instructions || 'Ninguna'
+    ]);
+      
+      autoTable(doc, {
+        startY: currentY,
+      head: [['#', 'Estudio', 'Tipo', 'Urgencia', 'Instrucciones']],
+      body: studyData,
+        theme: 'grid',
+        headStyles: { fillColor: [0, 102, 204], textColor: [255, 255, 255], fontSize: 8 },
+      bodyStyles: { fontSize: 8 },
+        columnStyles: {
+        0: { cellWidth: 10 },
+        1: { cellWidth: 60 },
+        2: { cellWidth: 30 },
+          3: { cellWidth: 25 },
+        4: { cellWidth: 45 }
+        },
+        margin: { left: 20, right: 20, bottom: 35 }, // Add bottom margin to prevent footer overlap
+        tableLineWidth: 0.1,
+        tableLineColor: [200, 200, 200],
+        didDrawPage: (data: any) => {
+          // Add footer on each page
+            this.addCortexFooter(doc, data.pageNumber);
+          }
+        });
+        
+    const finalY = (doc as any).lastAutoTable.finalY || currentY + (studies.length * 10) + 20;
+    currentY = finalY + 6; // Reduced from 8 to 6
     
-    // Save the PDF
-    const fileName = `OrdenEstudios_${patient.firstName}_${patient.lastName}_${consultation.date.replace(/\//g, '-')}.pdf`;
-    doc.save(fileName);
+    // Add notes if any
+    if (consultation.notes && consultation.notes.trim()) {
+        doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'bold');
+      doc.text('NOTAS ADICIONALES', 20, currentY);
+        currentY += 6;
+        
+        doc.setFontSize(9);
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'normal');
+        
+        // Split text to fit page width
+        const pageWidth = doc.internal.pageSize.width;
+        const maxWidth = pageWidth - 40; // 20px margin on each side
+      const notesLines = doc.splitTextToSize(consultation.notes, maxWidth);
+      notesLines.forEach((line: string) => {
+          doc.text(line, 20, currentY);
+          currentY += 5;
+        });
+      }
+      
+      // Save the PDF
+      const patientNameForOrderFile = patient.name ? patient.name.replace(/\s+/g, '_') : 'Paciente';
+      const fileName = `Orden-Medica_${patientNameForOrderFile}_${consultation.date.replace(/\//g, '-')}.pdf`;
+      doc.save(fileName);
   }
 
-  async generateCertificate(
+  async generateMedicalCertificate(
     patient: PatientInfo,
     doctor: DoctorInfo,
     consultation: ConsultationInfo,
     certificate: CertificateInfo
   ): Promise<void> {
-    try {
-      // Get office information if not available
-      let officeInfo = null;
-      if (!doctor.offices || doctor.offices.length === 0) {
-        try {
-          const offices = await apiService.getOffices();
-          if (offices && offices.length > 0) {
-            officeInfo = offices[0];
-          }
-        } catch (error) {
-          console.warn('Could not fetch office information:', error);
+    // Get office information - prefer presential office
+    let officeInfo = null;
+    if (!doctor.offices || doctor.offices.length === 0) {
+      try {
+        const offices = await apiService.getOffices();
+        if (offices && offices.length > 0) {
+          officeInfo = this.selectBestOfficeForPDF(offices);
         }
-      } else {
-        officeInfo = doctor.offices[0];
+      } catch (error) {
+        console.warn('Could not fetch office information:', error);
       }
-      
-      const doc = new jsPDF();
-      let currentY = 70; // Increased from 60 to account for new header format
-      
-      // Add header with doctor info
-      await this.addCortexHeader(doc, certificate.title || 'CONSTANCIA MÉDICA', doctor, officeInfo);
-      
-      // Add certificate content directly (no tables)
-      doc.setFontSize(11);
-      doc.setTextColor(0, 0, 0);
-      doc.setFont('helvetica', 'normal');
-      
-      // Split text into lines that fit the page width
-      const pageWidth = doc.internal.pageSize.width;
-      const maxWidth = pageWidth - 40; // 20px margin on each side
-      const lines = doc.splitTextToSize(certificate.content, maxWidth);
-      
-      // Calculate content height
-      const lineHeight = 7;
-      const contentHeight = lines.length * lineHeight;
-      const pageHeight = doc.internal.pageSize.height;
-      
-      // Check if content fits on page, if not, add new page
-      if (currentY + contentHeight > pageHeight - 80) {
-        doc.addPage();
-        currentY = 20;
-      }
-      
-      // Add the text (no border)
-      doc.text(lines, 20, currentY);
-      
-      currentY += contentHeight + 30;
-      
-      // Add signature line
-      if (currentY + 40 > pageHeight - 40) {
-        doc.addPage();
-        currentY = 20;
-      }
-      
-      // Signature section
-      doc.setFontSize(10);
-      doc.setTextColor(0, 0, 0);
-      doc.setFont('helvetica', 'normal');
-      
-      const fullDoctorName = this.getFullName(doctor.firstName, doctor.lastName, doctor.maternalSurname);
-      
-      // Draw signature line
-      const centerX = pageWidth / 2;
-      doc.line(centerX - 40, currentY, centerX + 40, currentY);
-      
-      currentY += 6;
-      
-      // Doctor name
-      doc.setFont('helvetica', 'bold');
-      doc.text(`${doctor.title || 'Dr.'} ${fullDoctorName}`, centerX, currentY, { align: 'center' });
-      
-      currentY += 5;
-      
-      // Specialty and license
-      doc.setFont('helvetica', 'normal');
-      if (doctor.specialty) {
-        doc.text(doctor.specialty, centerX, currentY, { align: 'center' });
-        currentY += 5;
-      }
-      
-      if (doctor.license) {
-        doc.text(`Cédula Profesional: ${doctor.license}`, centerX, currentY, { align: 'center' });
-      }
-      
-      // Add footer
-      this.addCortexFooter(doc, 1);
-      
-      // Save the PDF
-      const fileName = `Constancia_${patient.firstName}_${patient.lastName}_${new Date().toISOString().split('T')[0]}.pdf`;
-      doc.save(fileName);
-      console.log('Certificate PDF saved successfully:', fileName);
-    } catch (error) {
-      console.error('Error generating certificate PDF:', error);
-      throw error;
+    } else {
+      officeInfo = this.selectBestOfficeForPDF(doctor.offices);
     }
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.width;
+    
+    // Add modern header with patient info
+    let currentY = this.addModernPrescriptionHeader(doc, patient, doctor, consultation, officeInfo);
+    
+    // Add document title
+    doc.setFontSize(14);
+    doc.setTextColor(37, 99, 235); // Blue-600
+    doc.setFont('helvetica', 'bold');
+    doc.text(certificate.title || 'CONSTANCIA MÉDICA', pageWidth / 2, currentY, { align: 'center' });
+    currentY += 10;
+    
+    // Add certificate content
+    doc.setFontSize(10);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'normal');
+    
+    // Split certificate content text to fit page width
+    const maxWidth = pageWidth - 40; // 20px margin on each side
+    const certificateLines = doc.splitTextToSize(certificate.content, maxWidth);
+    certificateLines.forEach((line: string) => {
+      doc.text(line, 20, currentY);
+      currentY += 6;
+    });
+    
+    // Add signature section using modern footer
+    this.addModernPrescriptionFooter(doc, doctor, consultation, currentY);
+      
+    // Save the PDF
+    const patientNameForCertFile = patient.name ? patient.name.replace(/\s+/g, '_') : 'Paciente';
+    const fileName = `Constancia_${patientNameForCertFile}_${consultation.date.replace(/\//g, '-')}.pdf`;
+      doc.save(fileName);
   }
 }
 

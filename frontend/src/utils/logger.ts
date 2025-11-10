@@ -93,7 +93,33 @@ class Logger {
     parts.push(`${prefix}${message}`);
     
     if (data !== undefined) {
-      parts.push(data);
+      // Special handling for errors
+      if (data instanceof Error || (data && data.isAxiosError)) {
+        const errorInfo: any = {
+          message: data.message,
+          name: data.name
+        };
+        
+        // For Axios errors
+        if (data.response) {
+          errorInfo.status = data.response.status;
+          errorInfo.statusText = data.response.statusText;
+          errorInfo.data = data.response.data;
+        }
+        
+        if (data.request && !data.response) {
+          errorInfo.request = 'No response received from server';
+        }
+        
+        if (data.config) {
+          errorInfo.url = data.config.url;
+          errorInfo.method = data.config.method;
+        }
+        
+        parts.push(errorInfo);
+      } else {
+        parts.push(data);
+      }
     }
     
     return parts;

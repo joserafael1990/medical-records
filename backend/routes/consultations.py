@@ -279,24 +279,12 @@ async def get_consultation(
         # Get patient name
         patient_name = "Paciente No Identificado"
         if consultation.patient:
-            # Decrypt patient data before constructing name
-            try:
-                decrypted_first_name = consultation.patient.first_name
-                decrypted_paternal_surname = consultation.patient.paternal_surname
-                decrypted_maternal_surname = consultation.patient.maternal_surname
-                if decrypted_maternal_surname:
-                    decrypted_maternal_surname = decrypted_maternal_surname
-                
-                patient_name = f"{decrypted_first_name} {decrypted_paternal_surname} {decrypted_maternal_surname or ''}".strip()
-            except Exception as e:
-                print(f"⚠️ Could not decrypt patient data for consultation {consultation.id}: {str(e)}")
-                # Fallback to encrypted values if decryption fails
-            patient_name = f"{consultation.patient.first_name} {consultation.patient.paternal_surname} {consultation.patient.maternal_surname or ''}".strip()
+            patient_name = consultation.patient.name or "Paciente No Identificado"
         
         # Get doctor name
         doctor_name = "Doctor"
         if consultation.doctor:
-            doctor_name = f"{consultation.doctor.first_name} {consultation.doctor.paternal_surname}".strip()
+            doctor_name = consultation.doctor.name or "Doctor"
         
         # Calculate end_time assuming 30 minutes duration for consultations
         consultation_end_time = consultation.consultation_date + timedelta(minutes=30)
@@ -537,9 +525,9 @@ async def update_consultation(
         # Get patient and doctor names for response
         patient_name = "Paciente No Identificado"
         if consultation.patient:
-            patient_name = f"{consultation.patient.first_name} {consultation.patient.paternal_surname} {consultation.patient.maternal_surname or ''}".strip()
+            patient_name = consultation.patient.name or "Paciente No Identificado"
         
-        doctor_name = f"{current_user.first_name} {current_user.paternal_surname}".strip()
+        doctor_name = current_user.name or "Doctor"
 
         # Calculate end_time assuming 30 minutes duration for consultations
         consultation_end_time = consultation.consultation_date + timedelta(minutes=30)

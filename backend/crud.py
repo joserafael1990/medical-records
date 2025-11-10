@@ -406,9 +406,7 @@ def search_persons(db: Session, search_term: str, person_type: Optional[str] = N
     
     # Search conditions (remove curp since it's now in person_documents)
     search_conditions = [
-        Person.first_name.ilike(f'%{search_term}%'),
-        Person.paternal_surname.ilike(f'%{search_term}%'),
-        Person.maternal_surname.ilike(f'%{search_term}%'),
+        Person.name.ilike(f'%{search_term}%'),
         Person.person_code.ilike(f'%{search_term}%'),
         Person.email.ilike(f'%{search_term}%')
     ]
@@ -833,9 +831,8 @@ def create_user(db: Session, user_data: schemas.UserCreate) -> Person:
         username=user_data.username,
         email=user_data.email,
         hashed_password=hashed_password,
-        first_name=user_data.first_name,
-        paternal_surname=user_data.paternal_surname,
-        maternal_surname=user_data.maternal_surname,
+        name=user_data.name,
+        title=getattr(user_data, 'title', None),
         birth_date=date.today(),  # Default, should be updated
         gender="No especificado"  # Default, should be updated
     )

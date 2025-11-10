@@ -237,83 +237,95 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
         </Alert>
       ) : (
         <Grid container spacing={2}>
-          {diagnoses.map((diagnosis) => (
-            <Grid item xs={12} sm={6} md={4} key={String(diagnosis.id)}>
-              <Card 
-                sx={{ 
-                  height: '100%',
-                  '&:hover': {
-                    boxShadow: 2
-                  }
-                }}
-              >
-                <CardContent sx={{ pb: 1 }}>
-                  <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
-                    <Typography variant="subtitle2" fontWeight="bold" color="primary">
-                      {diagnosis.code}
-                    </Typography>
-                    <Box>
-                      <Tooltip title="Eliminar diagnóstico">
-                        <IconButton 
-                          size="small" 
-                          color="error"
-                          onClick={() => onRemoveDiagnosis(String(diagnosis.id))}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+          {diagnoses.map((diagnosis) => {
+            const rawDescription = typeof diagnosis.description === 'string'
+              ? diagnosis.description.trim()
+              : '';
+            const rawName = typeof diagnosis.name === 'string'
+              ? diagnosis.name.trim()
+              : '';
+            const shouldShowDescription = Boolean(
+              rawDescription && rawDescription.toLowerCase() !== rawName.toLowerCase()
+            );
+
+            return (
+              <Grid item xs={12} sm={6} md={4} key={String(diagnosis.id)}>
+                <Card 
+                  sx={{ 
+                    height: '100%',
+                    '&:hover': {
+                      boxShadow: 2
+                    }
+                  }}
+                >
+                  <CardContent sx={{ pb: 1 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
+                      <Typography variant="subtitle2" fontWeight="bold" color="primary">
+                        {diagnosis.code}
+                      </Typography>
+                      <Box>
+                        <Tooltip title="Eliminar diagnóstico">
+                          <IconButton 
+                            size="small" 
+                            color="error"
+                            onClick={() => onRemoveDiagnosis(String(diagnosis.id))}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
                     </Box>
-                  </Box>
-                  
-                  <Typography variant="body2" sx={{ mb: 1, minHeight: '2.5em' }}>
-                    {diagnosis.name}
-                  </Typography>
-                  
-                  {diagnosis.description && (
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                      {diagnosis.description.length > 100 
-                        ? `${diagnosis.description.substring(0, 100)}...` 
-                        : diagnosis.description
-                      }
+                    
+                    <Typography variant="body2" sx={{ mb: 1, minHeight: '2.5em' }}>
+                      {diagnosis.name}
                     </Typography>
-                  )}
-                  
-                  <Box display="flex" flexWrap="wrap" gap={0.5} sx={{ mt: 1 }}>
-                    {diagnosis.category && (
-                      <Chip 
-                        label={typeof diagnosis.category === 'string' ? diagnosis.category : (diagnosis.category.name || '')} 
-                        size="small" 
-                        variant="outlined"
-                        color="default"
-                      />
+                    
+                    {shouldShowDescription && (
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                        {rawDescription.length > 100 
+                          ? `${rawDescription.substring(0, 100)}...` 
+                          : rawDescription
+                        }
+                      </Typography>
                     )}
-                    {diagnosis.specialty && (
-                      <Chip 
-                        label={diagnosis.specialty} 
-                        size="small" 
-                        variant="outlined"
-                        color="info"
-                      />
-                    )}
-                    {diagnosis.severity_level && (
-                      <Chip 
-                        label={getSeverityLabel(diagnosis.severity_level)} 
-                        size="small" 
-                        color={getSeverityColor(diagnosis.severity_level)}
-                      />
-                    )}
-                    {diagnosis.is_chronic && (
-                      <Chip 
-                        label="Crónico" 
-                        size="small" 
-                        color="warning"
-                      />
-                    )}
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
+                    
+                    <Box display="flex" flexWrap="wrap" gap={0.5} sx={{ mt: 1 }}>
+                      {diagnosis.category && (
+                        <Chip 
+                          label={typeof diagnosis.category === 'string' ? diagnosis.category : (diagnosis.category.name || '')} 
+                          size="small" 
+                          variant="outlined"
+                          color="default"
+                        />
+                      )}
+                      {diagnosis.specialty && (
+                        <Chip 
+                          label={diagnosis.specialty} 
+                          size="small" 
+                          variant="outlined"
+                          color="info"
+                        />
+                      )}
+                      {diagnosis.severity_level && (
+                        <Chip 
+                          label={getSeverityLabel(diagnosis.severity_level)} 
+                          size="small" 
+                          color={getSeverityColor(diagnosis.severity_level)}
+                        />
+                      )}
+                      {diagnosis.is_chronic && (
+                        <Chip 
+                          label="Crónico" 
+                          size="small" 
+                          color="warning"
+                        />
+                      )}
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            );
+          })}
         </Grid>
       )}
 

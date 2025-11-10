@@ -45,14 +45,16 @@ export const PrintButtonsSection: React.FC<PrintButtonsSectionProps> = ({
     return null;
   }
 
+  // Debug: Log the data to see what we're receiving
+  console.log('🔍 PrintButtonsSection - doctorProfile:', doctorProfile);
+  console.log('🔍 PrintButtonsSection - selectedPatient:', selectedPatient);
+
   return (
     <Box sx={{ width: '100%' }}>
       <PrintButtons
         patient={{
           id: selectedPatient?.id || 0,
-          firstName: selectedPatient?.first_name || '',
-          lastName: selectedPatient?.paternal_surname || '',
-          maternalSurname: selectedPatient?.maternal_surname || '',
+          name: selectedPatient?.name || 'Paciente',
           dateOfBirth: selectedPatient?.birth_date || undefined,
           gender: selectedPatient?.gender || undefined,
           phone: selectedPatient?.primary_phone || undefined,
@@ -64,10 +66,8 @@ export const PrintButtonsSection: React.FC<PrintButtonsSectionProps> = ({
         }}
         doctor={{
           id: doctorProfile?.id || 0,
-          firstName: doctorProfile?.first_name || `${doctorProfile?.title || 'Dr.'}`,
-          lastName: doctorProfile?.paternal_surname || 'Usuario',
-          maternalSurname: doctorProfile?.maternal_surname || '',
-          title: doctorProfile?.title || 'Médico',
+          name: doctorProfile?.name || 'Médico',
+          title: doctorProfile?.title || 'Dr.',
           specialty: doctorProfile?.specialty_name || 'No especificada',
           license: doctorProfile?.professional_license || 'No especificada',
           university: doctorProfile?.university || 'No especificada',

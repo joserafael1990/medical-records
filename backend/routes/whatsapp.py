@@ -55,17 +55,13 @@ async def send_whatsapp_appointment_reminder(
         doctor = db.query(Person).filter(Person.id == appointment.doctor_id).first()
         if doctor:
             doctor_title = doctor.title or "Dr"  # Use doctor's title or default to "Dr"
-            doctor_full_name = f"{doctor.first_name} {doctor.paternal_surname}"
-            if doctor.maternal_surname:
-                doctor_full_name += f" {doctor.maternal_surname}"
+            doctor_full_name = doctor.name
         else:
             doctor_title = "Dr"
             doctor_full_name = "Dr. Test"
 
         # Get patient full name
-        patient_full_name = f"{patient.first_name} {patient.paternal_surname}"
-        if patient.maternal_surname:
-            patient_full_name += f" {patient.maternal_surname}"
+        patient_full_name = patient.name
 
         # Format appointment date and time separately
         try:

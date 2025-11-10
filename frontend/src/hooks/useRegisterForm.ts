@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiService } from '../services';
-import { useAuth } from '../contexts/AuthContext';
 import { useCatalogs } from './useCatalogs';
 import { useScrollToError } from './useScrollToError';
 import { MEDICAL_SPECIALTIES, API_CONFIG } from '../constants';
@@ -126,7 +125,6 @@ export interface UseRegisterFormReturn {
 }
 
 export const useRegisterForm = (): UseRegisterFormReturn => {
-  const { login } = useAuth();
   const { countries, getStatesByCountry, loading: catalogsLoading } = useCatalogs();
   
   // Form state
@@ -413,16 +411,40 @@ export const useRegisterForm = (): UseRegisterFormReturn => {
     setError('');
     
     try {
-      await apiService.auth.register(formData);
-      // Auto-login after successful registration
-      await login(formData.email, formData.password);
+      const response = await apiService.auth.register(formData);
+      
+      // Registration already saves the token and user data
+      // No need for separate login call
+      
+      // Verify we have the token
+      if (response.access_token) {
+        console.log('✅ Registration successful, token saved');
+        // Trigger a state update to reflect logged-in status
+        window.location.href = '/'; // Reload to update auth state
+      } else {
+        throw new Error('No se recibió token de autenticación');
+      }
     } catch (error: any) {
-      console.error('Registration error:', error);
-      setError(error.message || 'Error al registrar el doctor');
+      console.error('Registration error:', {
+        message: error?.message,
+        response: error?.response?.data,
+        status: error?.response?.status,
+        error: error
+      });
+      
+      // Extract meaningful error message
+      let errorMessage = 'Error al registrar el doctor';
+      if (error?.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
-  }, [formData, activeStep, validateStep, login]);
+  }, [formData, activeStep, validateStep]);
   
   return {
     formData,

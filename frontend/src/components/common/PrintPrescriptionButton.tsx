@@ -28,12 +28,11 @@ export const PrintPrescriptionButton: React.FC<PrintPrescriptionButtonProps> = (
   const { generatePrescriptionPDF } = usePDFGenerator();
 
   const handlePrintPrescription = async () => {
-    console.log('PrintPrescriptionButton clicked!', {
-      patient: patient?.firstName,
-      doctor: doctor?.firstName,
-      consultation: consultation?.id,
-      medicationsCount: medications?.length
-    });
+    console.log('🖨️ PrintPrescriptionButton clicked!');
+    console.log('🔍 Patient object:', patient);
+    console.log('🔍 Doctor object:', doctor);
+    console.log('🔍 Consultation object:', consultation);
+    console.log('🔍 Medications count:', medications?.length);
     
     const result = await generatePrescriptionPDF(patient, doctor, consultation, medications);
     

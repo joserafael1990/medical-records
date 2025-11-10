@@ -68,7 +68,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({
       case 'dashboard': return 'Dashboard';
       case 'patients': return 'Gestión de Pacientes';
       case 'consultations': return 'Consultas Médicas';
-      case 'agenda': return 'Agenda Médica';
+      case 'agenda': return 'Citas';
       case 'profile': return 'Perfil del Médico';
       default: return 'Historias Clínicas';
     }
@@ -150,7 +150,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({
             <Box sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
               <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
                 {doctorProfile ? 
-                  `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name} ${doctorProfile.paternal_surname}` :
+                  `${doctorProfile.title || 'Dr.'} ${doctorProfile.name}` :
                   'Cargando...'
                 }
               </Typography>
@@ -162,7 +162,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({
             <IconButton onClick={handleProfileMenuOpen}>
               <Avatar sx={{ width: 40, height: 40, bgcolor: 'primary.main' }}>
                 {doctorProfile ? 
-                  `${doctorProfile.first_name?.[0] || ''}${doctorProfile.paternal_surname?.[0] || ''}` :
+                  doctorProfile.name?.split(' ').slice(0, 2).map(n => n[0]).join('') || 'U' :
                   <ProfileIcon />
                 }
               </Avatar>

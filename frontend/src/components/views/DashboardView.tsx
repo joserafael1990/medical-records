@@ -258,7 +258,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             </Box>
           ) : (
             <Box>
-              {todayAppointments.slice(0, 3).map((appointment, index) => (
+              {todayAppointments.map((appointment, index) => (
                 <Box
                   key={appointment.id || index}
                   sx={{
@@ -294,14 +294,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                   />
                 </Box>
               ))}
-              
-              {todayAppointments.length > 3 && (
-                <Box sx={{ textAlign: 'center', mt: 2 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Y {todayAppointments.length - 3} citas más...
-                  </Typography>
-                </Box>
-              )}
             </Box>
           )}
         </CardContent>

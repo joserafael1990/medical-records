@@ -4,9 +4,8 @@
 
 export interface Patient {
   id: number;
-  first_name: string;
-  paternal_surname: string;
-  maternal_surname?: string;
+  name: string;
+  title?: string;
   email?: string;
   primary_phone?: string;
   birth_date?: string;
@@ -20,9 +19,8 @@ export interface Patient {
 }
 
 export interface PatientFormData {
-  first_name: string;
-  paternal_surname: string;
-  maternal_surname?: string;
+  name: string;
+  title?: string;
   email?: string;
   birth_date: string;
   primary_phone?: string;
@@ -536,9 +534,7 @@ export interface DoctorProfile {
   person_code: string;
   person_type: string;
   title?: string;
-  first_name: string;
-  paternal_surname: string;
-  maternal_surname?: string;
+  name: string;
   curp?: string;
   rfc?: string;
   birth_date?: string;

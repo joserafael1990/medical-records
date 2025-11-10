@@ -8,6 +8,7 @@ import { ClinicalStudyService } from './clinical-studies/ClinicalStudyService';
 import { DoctorService } from './doctors/DoctorService';
 import { OfficeService } from './offices/OfficeService';
 import { WhatsAppService } from './whatsapp/WhatsAppService';
+import { AnalyticsService } from './analytics/AnalyticsService';
 import { logger } from '../utils/logger';
 
 /**
@@ -25,6 +26,7 @@ export class ApiService {
   public doctors: DoctorService;
   public offices: OfficeService;
   public whatsapp: WhatsAppService;
+  public analytics: AnalyticsService;
 
   constructor() {
     this.auth = new AuthService();
@@ -37,6 +39,7 @@ export class ApiService {
     this.doctors = new DoctorService();
     this.offices = new OfficeService();
     this.whatsapp = new WhatsAppService();
+    this.analytics = new AnalyticsService();
   }
 
   // Convenience methods for common operations
@@ -114,3 +117,5 @@ export { ClinicalStudyService } from './clinical-studies/ClinicalStudyService';
 export { DoctorService } from './doctors/DoctorService';
 export { OfficeService } from './offices/OfficeService';
 export { WhatsAppService } from './whatsapp/WhatsAppService';
+export { AnalyticsService } from './analytics/AnalyticsService';
+export type { DashboardMetrics } from './analytics/AnalyticsService';

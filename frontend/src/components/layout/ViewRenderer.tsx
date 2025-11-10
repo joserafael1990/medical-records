@@ -12,6 +12,7 @@ import PatientsView from '../views/PatientsView';
 import { ConsultationDetailView } from '../';
 import { LoadingFallback } from '../';
 import { LazyWrapper } from '../common/LazyWrapper';
+import { AnalyticsView } from '../views/AnalyticsView';
 
 interface ViewRendererProps {
   activeView: string;
@@ -137,12 +138,10 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
                </LazyWrapper>
              )}
 
-      {/* Analytics view not implemented yet */}
       {activeView === 'analytics' && (
-        <Box sx={{ p: 3, textAlign: 'center' }}>
-          <h2>Vista en desarrollo</h2>
-          <p>Esta funcionalidad estará disponible próximamente.</p>
-        </Box>
+        <Suspense fallback={<LoadingFallback message="Cargando analíticas..." />}>
+          <AnalyticsView />
+        </Suspense>
       )}
     </Box>
   );

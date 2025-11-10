@@ -19,6 +19,7 @@ import {
 import { Close as CloseIcon } from '@mui/icons-material';
 import { useOfficeManagement, OfficeFormData } from '../../hooks/useOfficeManagement';
 import { useLocationCatalogs } from '../../hooks/useLocationCatalogs';
+import { preventBackdropClose } from '../../utils/dialogHelpers';
 
 interface OfficeManagementDialogProps {
   open: boolean;
@@ -147,7 +148,7 @@ const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
   return (
     <Dialog 
       open={open} 
-      onClose={onClose}
+      onClose={preventBackdropClose(onClose)}
       maxWidth="md"
       fullWidth
       PaperProps={{

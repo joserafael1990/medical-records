@@ -82,14 +82,18 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
               fontSize: '1.2rem'
             }}
           >
-            {(doctorProfile?.first_name?.[0] || user?.person?.first_name?.[0] || 'U').toUpperCase()}
+            {doctorProfile?.name
+              ? doctorProfile.name.split(' ').slice(0, 2).map((n: string) => n[0]).join('').toUpperCase()
+              : user?.person?.name
+                ? user.person.name.split(' ').slice(0, 2).map((n: string) => n[0]).join('').toUpperCase()
+                : 'U'}
           </Avatar>
           <Box>
             <Typography variant="subtitle1" fontWeight={600}>
               {doctorProfile
-                ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name} ${doctorProfile.paternal_surname}`
+                ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.name}`
                 : user?.person
-                  ? `${user.person.first_name} ${user.person.paternal_surname}`
+                  ? user.person.name
                   : 'Usuario'}
             </Typography>
             {(doctorProfile?.specialties?.[0]?.name || user?.person?.specialties?.[0]?.name) && (

@@ -180,13 +180,20 @@ class PersonDocumentResponse(BaseSchema):
 class PersonBase(BaseSchema):
     person_type: Literal['doctor', 'patient', 'admin']
     title: Optional[str] = None
-    first_name: str
-    paternal_surname: str
-    maternal_surname: Optional[str] = None
+    name: str
     birth_date: Optional[date] = None
     gender: str
     civil_status: Optional[str] = None
     birth_city: Optional[str] = None
+    
+    @validator('name')
+    def validate_name(cls, v):
+        if not v or not v.strip():
+            raise ValueError('El nombre completo es requerido')
+        words = v.strip().split()
+        if len(words) < 2:
+            raise ValueError('Ingresa al menos nombre y apellido')
+        return v.strip()
     
     # Birth location
     birth_state_id: Optional[int] = None
@@ -251,9 +258,7 @@ class DoctorCreate(PersonBase):
 class DoctorUpdate(BaseSchema):
     # Personal info (optional for updates) - using correct model field names
     title: Optional[str] = None
-    first_name: Optional[str] = None
-    paternal_surname: Optional[str] = None
-    maternal_surname: Optional[str] = None
+    name: Optional[str] = None
     email: Optional[EmailStr] = None
     primary_phone: Optional[str] = None
     primary_phone_country_code: Optional[str] = None
@@ -309,9 +314,7 @@ class PatientCreate(PersonBase):
 class PersonUpdate(BaseSchema):
     # Personal data
     title: Optional[str] = None
-    first_name: Optional[str] = None
-    paternal_surname: Optional[str] = None
-    maternal_surname: Optional[str] = None
+    name: Optional[str] = None
     birth_date: Optional[date] = None
     gender: Optional[str] = None
     civil_status: Optional[str] = None

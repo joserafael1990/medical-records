@@ -29,6 +29,7 @@ import { CountryCodeSelector } from '../common/CountryCodeSelector';
 import { PhoneNumberInput } from '../common/PhoneNumberInput';
 import { DocumentSelector } from '../common/DocumentSelector';
 import { extractCountryCode } from '../../utils/countryCodes';
+import { preventBackdropClose } from '../../utils/dialogHelpers';
 
 interface DoctorFormData {
   title: string;
@@ -294,7 +295,7 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
   return (
     <Dialog 
       open={open} 
-      onClose={handleClose}
+      onClose={preventBackdropClose(handleClose)}
       maxWidth="md"
       fullWidth
       PaperProps={{

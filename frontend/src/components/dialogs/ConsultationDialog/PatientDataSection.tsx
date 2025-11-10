@@ -88,24 +88,14 @@ export const PatientDataSection: React.FC<PatientDataSectionProps> = ({
           </Typography>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
             <TextField
-              label="Nombre"
-              value={getPatientData('first_name')}
-              onChange={(e: any) => handlePatientDataChangeWrapper('first_name', e.target.value)}
+              label="Nombre Completo"
+              value={getPatientData('name')}
+              onChange={(e: any) => handlePatientDataChangeWrapper('name', e.target.value)}
               size="small"
               required
-            />
-            <TextField
-              label="Apellido Paterno"
-              value={getPatientData('paternal_surname')}
-              onChange={(e: any) => handlePatientDataChangeWrapper('paternal_surname', e.target.value)}
-              size="small"
-              required
-            />
-            <TextField
-              label="Apellido Materno"
-              value={getPatientData('maternal_surname')}
-              onChange={(e: any) => handlePatientDataChangeWrapper('maternal_surname', e.target.value)}
-              size="small"
+              placeholder="Ingresa el nombre completo (nombre y apellidos)"
+              helperText="Ingresa al menos nombre y apellido"
+              sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}
             />
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
               <DatePicker

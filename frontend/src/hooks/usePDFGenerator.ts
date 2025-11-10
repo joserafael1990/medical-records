@@ -39,11 +39,15 @@ export const usePDFGenerator = () => {
     certificate: CertificateInfo
   ) => {
     try {
-      await pdfService.generateCertificate(patient, doctor, consultation, certificate);
+      await pdfService.generateMedicalCertificate(patient, doctor, consultation, certificate);
       return { success: true, message: 'Constancia generada exitosamente' };
-    } catch (error) {
-      console.error('Error generating certificate PDF:', error);
-      return { success: false, message: 'Error al generar la constancia' };
+    } catch (error: any) {
+      console.error('Error generating certificate PDF:', {
+        message: error?.message,
+        stack: error?.stack,
+        error: error
+      });
+      return { success: false, message: error?.message || 'Error al generar la constancia' };
     }
   }, []);
 

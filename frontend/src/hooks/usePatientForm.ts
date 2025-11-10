@@ -88,9 +88,7 @@ export const usePatientForm = (props: UsePatientFormProps): UsePatientFormReturn
   }>>([{ document_id: null, document_value: '' }]);
 
   const [formData, setFormData] = useState<PatientFormData>({
-    first_name: '',
-    paternal_surname: '',
-    maternal_surname: '',
+    name: '',
     birth_date: '',
     date_of_birth: '',
     gender: '',
@@ -209,9 +207,7 @@ export const usePatientForm = (props: UsePatientFormProps): UsePatientFormReturn
           setPersonalDocuments(personalDocs.length > 0 ? personalDocs : [{ document_id: null, document_value: '' }]);
           
           setFormData({
-            first_name: decryptedPatient.first_name || '',
-            paternal_surname: decryptedPatient.paternal_surname || '',
-            maternal_surname: decryptedPatient.maternal_surname || '',
+            name: decryptedPatient.name || '',
             birth_date: decryptedPatient.birth_date || '',
             date_of_birth: decryptedPatient.birth_date || '',
             gender: decryptedPatient.gender || '',
@@ -301,9 +297,7 @@ export const usePatientForm = (props: UsePatientFormProps): UsePatientFormReturn
         setPersonalDocuments([{ document_id: null, document_value: '' }]);
         
         setFormData({
-          first_name: '',
-          paternal_surname: '',
-          maternal_surname: '',
+          name: '',
           birth_date: '',
           date_of_birth: '',
           gender: '',
@@ -448,8 +442,7 @@ export const usePatientForm = (props: UsePatientFormProps): UsePatientFormReturn
       
       // Save/update documents after patient is created/updated
       const finalPatientId = patient?.id || (await apiService.patients.getPatients()).find(p => 
-        p.first_name === formDataToSubmit.first_name && 
-        p.paternal_surname === formDataToSubmit.paternal_surname
+        p.name === formDataToSubmit.name
       )?.id;
       
       if (finalPatientId) {

@@ -185,9 +185,7 @@ class Person(Base):
     
     # PERSONAL DATA (NOM-004)
     title = Column(String(10))
-    first_name = Column(String(100), nullable=False)
-    paternal_surname = Column(String(100), nullable=False)
-    maternal_surname = Column(String(100))
+    name = Column(String(300), nullable=False)
     birth_date = Column(Date, nullable=True)  # Optional field
     gender = Column(String(20), nullable=True)
     civil_status = Column(String(20))
@@ -259,15 +257,10 @@ class Person(Base):
     # PROPERTIES
     @property
     def full_name(self):
-        """Nombre completo de la persona"""
-        parts = []
+        """Nombre completo de la persona con título (si aplica)"""
         if self.title:
-            parts.append(self.title)
-        parts.append(self.first_name)
-        parts.append(self.paternal_surname)
-        if self.maternal_surname:
-            parts.append(self.maternal_surname)
-        return ' '.join(parts)
+            return f"{self.title} {self.name}"
+        return self.name
     
     @property
     def age(self):

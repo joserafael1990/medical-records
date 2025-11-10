@@ -26,13 +26,66 @@ export const PrintCertificateButtonPatient: React.FC<PrintCertificateButtonPatie
   const [certificateTitle, setCertificateTitle] = useState('CONSTANCIA MÉDICA');
   const [certificateContent, setCertificateContent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [patientFullName, setPatientFullName] = useState('');
+  const [doctorFullName, setDoctorFullName] = useState('');
 
-  const handleOpenDialog = () => {
-    // Set a default template for the certificate
-    const patientFullName = `${patient.firstName} ${patient.lastName}${patient.maternalSurname ? ' ' + patient.maternalSurname : ''}`;
-    const doctorFullName = `${doctor.firstName} ${doctor.lastName}${doctor.maternalSurname ? ' ' + doctor.maternalSurname : ''}`;
+  const handleOpenDialog = async () => {
+    // Debug logs
+    console.log('🔍 PrintCertificateButtonPatient - patient:', patient);
+    console.log('🔍 PrintCertificateButtonPatient - doctor:', doctor);
     
-    const defaultContent = `Por medio de la presente, yo, ${doctor.title || 'Dr.'} ${doctorFullName}, ${doctor.specialty || 'médico cirujano'}, con cédula profesional ${doctor.license || 'N/A'}, hago constar que el/la paciente ${patientFullName} se encuentra bajo mi atención médica.
+    // Set a default template for the certificate
+    // Support both old format (firstName, lastName) and new format (name)
+    let patientName = patient.name || 
+      `${(patient as any).firstName || ''} ${(patient as any).lastName || ''} ${(patient as any).maternalSurname || ''}`.trim();
+    
+    // If patient name is still empty, fetch from API
+    if (!patientName && patient.id) {
+      try {
+        const { apiService } = await import('../../services');
+        const patientData = await apiService.patients.getPatientById(patient.id.toString());
+        patientName = patientData.name || 'Paciente';
+      } catch (error) {
+        console.error('Error fetching patient data:', error);
+        patientName = 'Paciente';
+      }
+    }
+    
+    let doctorName = doctor.name || 
+      `${(doctor as any).firstName || ''} ${(doctor as any).lastName || ''} ${(doctor as any).maternalSurname || ''}`.trim();
+    
+    // Check if doctor name looks wrong (contains title in firstName or is just "Usuario")
+    const looksWrong = !doctorName || 
+                       doctorName === doctor.title || 
+                       (doctor as any).firstName === doctor.title ||
+                       doctorName.includes('Usuario') ||
+                       doctorName === 'Médico';
+    
+    // If doctor name is empty, wrong, or suspicious, fetch from API
+    if (looksWrong && doctor.id) {
+      try {
+        const { apiService } = await import('../../services');
+        const doctorData = await apiService.doctors.getDoctorProfile();
+        doctorName = doctorData.name || 'Médico';
+        console.log('🔍 Fetched doctor name from API:', doctorName);
+      } catch (error) {
+        console.error('Error fetching doctor data:', error);
+        doctorName = 'Médico';
+      }
+    }
+    
+    setPatientFullName(patientName || 'Paciente');
+    setDoctorFullName(doctorName || 'Médico');
+    
+    console.log('🔍 PrintCertificateButtonPatient - patientFullName:', patientName);
+    console.log('🔍 PrintCertificateButtonPatient - doctorFullName:', doctorName);
+    
+    // Build the doctor's full name with title (only once)
+    const doctorWithTitle = doctorName.startsWith(doctor.title || '') 
+      ? doctorName 
+      : `${doctor.title || 'Dr.'} ${doctorName}`;
+    
+    const defaultContent = `Por medio de la presente, yo, ${doctorWithTitle}, ${doctor.specialty || 'médico cirujano'}, con cédula profesional ${doctor.license || 'N/A'}, hago constar que el/la paciente ${patientName} se encuentra bajo mi atención médica.
 
 Bajo mi valoración médica, certifico lo siguiente:
 
@@ -75,7 +128,18 @@ Atentamente,`;
       notes: ''
     };
 
-    const result = await generateCertificatePDF(patient, doctor, consultation, certificate);
+    // Create updated patient and doctor objects with correct names
+    const patientWithName = {
+      ...patient,
+      name: patientFullName
+    };
+    
+    const doctorWithName = {
+      ...doctor,
+      name: doctorFullName
+    };
+    
+    const result = await generateCertificatePDF(patientWithName, doctorWithName, consultation, certificate);
     
     setIsGenerating(false);
 

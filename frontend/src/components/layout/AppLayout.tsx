@@ -114,7 +114,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 fontSize: '0.875rem'
               }}
             >
-              {(doctorProfile?.first_name?.[0] || user?.person?.first_name?.[0] || 'U').toUpperCase()}
+              {doctorProfile?.name
+                ? doctorProfile.name.split(' ').slice(0, 2).map((n: string) => n[0]).join('').toUpperCase()
+                : user?.person?.name
+                  ? user.person.name.split(' ').slice(0, 2).map((n: string) => n[0]).join('').toUpperCase()
+                  : 'U'}
             </Avatar>
           </IconButton>
         </Toolbar>

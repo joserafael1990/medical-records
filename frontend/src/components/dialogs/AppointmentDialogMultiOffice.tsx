@@ -29,6 +29,7 @@ import { getMediumSelectMenuProps } from '../../utils/selectMenuProps';
 import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
 import { PhoneNumberInput } from '../common/PhoneNumberInput';
 import { useAppointmentMultiOfficeForm, formatPatientNameWithAge } from '../../hooks/useAppointmentMultiOfficeForm';
+import { preventBackdropClose } from '../../utils/dialogHelpers';
 
 interface AppointmentDialogMultiOfficeProps {
   open: boolean;
@@ -108,7 +109,7 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
   return (
     <Dialog 
       open={open} 
-      onClose={onClose} 
+      onClose={preventBackdropClose(onClose)} 
       maxWidth="sm" 
       fullWidth
       fullScreen={window.innerWidth < 600}
@@ -242,11 +243,11 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
                       return (
                         <Box 
                           component="li" 
-                          key={option.id || `patient-${option.first_name}-${option.paternal_surname}`}
+                          key={option.id || `patient-${option.name}`}
                           {...otherProps}
                         >
                           <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
-                            {option.first_name?.[0] || '?'}{option.paternal_surname?.[0] || ''}
+                            {option.name?.split(' ').slice(0, 2).map((n: string) => n[0]).join('') || 'P'}
                           </Avatar>
                           <Box>
                             <Typography variant="body1">
@@ -274,31 +275,15 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
                   Datos básicos del nuevo paciente
                 </Typography>
                 
-                <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
-                  <TextField
-                    fullWidth
-                    label="Nombre *"
-                    value={newPatientData.first_name}
-                    onChange={(e) => setNewPatientData(prev => ({ ...prev, first_name: e.target.value }))}
-                    required
-                    size="small"
-                  />
-                  <TextField
-                    fullWidth
-                    label="Apellido Paterno *"
-                    value={newPatientData.paternal_surname}
-                    onChange={(e) => setNewPatientData(prev => ({ ...prev, paternal_surname: e.target.value }))}
-                    required
-                    size="small"
-                  />
-                </Box>
-
                 <TextField
                   fullWidth
-                  label="Apellido Materno"
-                  value={newPatientData.maternal_surname}
-                  onChange={(e) => setNewPatientData(prev => ({ ...prev, maternal_surname: e.target.value }))}
+                  label="Nombre Completo *"
+                  value={newPatientData.name}
+                  onChange={(e) => setNewPatientData(prev => ({ ...prev, name: e.target.value }))}
+                  required
                   size="small"
+                  placeholder="Ingresa el nombre completo (nombre y apellidos)"
+                  helperText="Ingresa al menos nombre y apellido"
                 />
 
                 <PhoneNumberInput

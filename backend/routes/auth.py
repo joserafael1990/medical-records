@@ -126,7 +126,7 @@ async def register_doctor(
                 api_logger.info(f"Creating office for doctor {doctor.id}", office_data=office_data)
                 
                 # Create office record
-                office_name = office_data['office_name'] or f"Consultorio de {doctor.title} {doctor.first_name} {doctor.paternal_surname}"
+                office_name = office_data['office_name'] or f"Consultorio de {doctor.full_name}"
                 office = Office(
                     doctor_id=doctor.id,
                     name=office_name,
@@ -243,8 +243,8 @@ async def register_doctor(
             "doctor": {
                 "id": doctor.id,
                 "email": doctor.email,
-                "first_name": doctor.first_name,
-                "paternal_surname": doctor.paternal_surname
+                "name": doctor.name,
+                "title": doctor.title
             },
             **login_response
         }
@@ -371,9 +371,8 @@ async def get_current_user_info(
         "person_type": current_user.person_type,
         "full_name": current_user.full_name,
         "email": current_user.email,
-        "first_name": current_user.first_name,
-        "paternal_surname": current_user.paternal_surname,
-        "maternal_surname": current_user.maternal_surname,
+        "name": current_user.name,
+        "title": current_user.title,
         "birth_date": current_user.birth_date.isoformat() if current_user.birth_date else None,
         "primary_phone": current_user.primary_phone,
     }
@@ -462,7 +461,7 @@ async def request_password_reset(
         reset_link = f"{frontend_url}/reset-password?token={reset_token}"
         
         # Obtener nombre del usuario
-        user_name = user.first_name or user.email.split("@")[0]
+        user_name = user.name or user.email.split("@")[0]
         
         # Enviar email
         from email_service import get_email_service

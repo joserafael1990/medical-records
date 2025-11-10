@@ -99,9 +99,7 @@ interface RegistrationData {
   confirmPassword: string;
   
   // Step 2: Personal Information
-  first_name: string;
-  paternal_surname: string;
-  maternal_surname: string;
+  name: string;
   personal_documents: Array<{ document_id: number | null; document_value: string }>;
   gender: string;
   birth_date: string;
@@ -189,9 +187,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
     confirmPassword: '',
     
     // Step 2
-    first_name: '',
-    paternal_surname: '',
-    maternal_surname: '',
+    name: '',
     personal_documents: [{ document_id: null, document_value: '' }],
     gender: '',
     birth_date: '',
@@ -383,7 +379,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
         return true;
       
       case 1:
-        const requiredFields = ['first_name', 'paternal_surname', 'gender', 'birth_date', 'phone_country_code', 'phone_number'];
+        const requiredFields = ['name', 'gender', 'birth_date', 'phone_country_code', 'phone_number'];
         const missingFields = requiredFields.filter(field => !formData[field as keyof RegistrationData]);
         if (missingFields.length > 0) {
           setError('Por favor, completa todos los campos obligatorios');
@@ -522,9 +518,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
       // Create doctor profile first
       const doctorProfileData = {
         title: formData.title,
-        first_name: formData.first_name,
-        paternal_surname: formData.paternal_surname,
-        maternal_surname: formData.maternal_surname || '',
+        name: formData.name,
         gender: formData.gender,
         birth_date: formData.birth_date, // Ensure YYYY-MM-DD format
         primary_phone: fullPhoneNumber, // Concatenar código de país + número
@@ -547,41 +541,52 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
         // Schedule data
         schedule_data: formData.scheduleData,
         // System fields
-        created_by: `${formData.title} ${formData.first_name} ${formData.paternal_surname}`.trim()
+        created_by: `${formData.title} ${formData.name}`.trim()
       };
 
       // Register the doctor (creates profile and handles authentication automatically)
       logger.debug('Sending registration data', { doctorProfileData }, 'auth');
       
-      const registrationResponse = await apiService.register(doctorProfileData);
+      const registrationResponse = await apiService.auth.register(doctorProfileData);
       
-      // The registration endpoint already handles login, so we just need to update the auth context
-      if (registrationResponse.success) {
-        
-        // Store authentication data from registration response
-        localStorage.setItem('token', registrationResponse.access_token);
-        localStorage.setItem('doctor_data', JSON.stringify(registrationResponse.user));
+      // The registration endpoint already handles login and saves token automatically
+      if (registrationResponse.access_token) {
+        logger.debug('Registration successful, token saved', undefined, 'auth');
         
         // Force reload to trigger authentication state update
         window.location.reload();
       } else {
-        throw new Error('Error en el registro');
+        throw new Error('No se recibió token de autenticación');
       }
 
     } catch (error: any) {
-      logger.error('Registration error', {
-        error,
+      // Comprehensive error logging
+      console.error('Registration error - Full details:', {
+        error: error,
+        errorString: String(error),
+        errorJSON: JSON.stringify(error, Object.getOwnPropertyNames(error)),
         errorType: typeof error,
-        errorDetail: error.detail,
-        errorResponse: error.response,
-        errorStatus: error.status
+        errorConstructor: error?.constructor?.name,
+        errorMessage: error?.message,
+        errorDetail: error?.detail,
+        errorResponse: error?.response,
+        errorResponseData: error?.response?.data,
+        errorStatus: error?.status,
+        errorStack: error?.stack
+      });
+      
+      logger.error('Registration error', {
+        message: error?.message,
+        detail: error?.detail,
+        response: error?.response?.data,
+        status: error?.status || error?.response?.status
       }, 'auth');
       
       // Extract specific error message from API response
       let errorMessage = 'Error durante el registro. Intenta nuevamente.';
       
       // The API service transforms errors into ApiError format with { detail: string, status: number }
-      if (error.detail) {
+      if (error?.detail) {
         // Use the specific error message from the API service
         logger.debug('Using error.detail', { detail: error.detail }, 'auth');
         errorMessage = error.detail;
@@ -652,17 +657,13 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
       case 1:
         return (
           <PersonalInfoStep
-            firstName={formData.first_name}
-            paternalSurname={formData.paternal_surname}
-            maternalSurname={formData.maternal_surname}
+            name={formData.name}
             personalDocument={formData.personal_documents[0]}
             gender={formData.gender}
             birthDate={formData.birth_date}
             phoneCountryCode={formData.phone_country_code}
             phoneNumber={formData.phone_number}
-            onFirstNameChange={(value) => handleInputChange('first_name')({ target: { value } })}
-            onPaternalSurnameChange={(value) => handleInputChange('paternal_surname')({ target: { value } })}
-            onMaternalSurnameChange={(value) => handleInputChange('maternal_surname')({ target: { value } })}
+            onNameChange={(value) => handleInputChange('name')({ target: { value } })}
             onPersonalDocumentChange={(docValue) => {
               setFormData(prev => ({
                 ...prev,

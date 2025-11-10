@@ -59,10 +59,7 @@ const PatientsViewSmart: React.FC<PatientsViewSmartProps> = ({
     const normalizedSearchTerm = normalizeText(debouncedSearchTerm);
     return patients.filter(patient => {
       const searchableFields = [
-        patient.full_name,
-        patient.first_name,
-        patient.paternal_surname,
-        patient.maternal_surname,
+        patient.name,
         patient.primary_phone,
         patient.email,
         patient.id,

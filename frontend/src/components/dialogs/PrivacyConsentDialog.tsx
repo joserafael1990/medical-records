@@ -360,7 +360,7 @@ export const PrivacyConsentDialog: React.FC<PrivacyConsentDialogProps> = ({
                 Paciente
               </Typography>
               <Typography variant="body1" fontWeight={500}>
-                {patient.first_name} {patient.paternal_surname} {patient.maternal_surname || ''}
+                {patient.name}
               </Typography>
               {patient.primary_phone && (
                 <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>

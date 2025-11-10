@@ -84,16 +84,7 @@ async def get_appointments(
             # Safely access patient information
             patient_name = "Paciente no encontrado"
             if appointment.patient:
-                first_name = appointment.patient.first_name or ""
-                paternal_surname = appointment.patient.paternal_surname or ""
-                maternal_surname = appointment.patient.maternal_surname or ""
-                
-                # Build full name
-                name_parts = [first_name, paternal_surname]
-                if maternal_surname and maternal_surname != "null":
-                    name_parts.append(maternal_surname)
-                
-                patient_name = " ".join(filter(None, name_parts)) or "Paciente sin nombre"
+                patient_name = appointment.patient.name or "Paciente sin nombre"
             
             # Since appointments are stored in CDMX timezone (without tzinfo), 
             # we assume they are already in CDMX timezone and just format them
