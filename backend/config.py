@@ -106,7 +106,7 @@ class Settings(BaseSettings):
         return self.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
     
     model_config = {
-        "env_file": ".env",
+        "env_file": None,
         "case_sensitive": True,
         "extra": "ignore"  # Ignorar variables extra en lugar de fallar
     }

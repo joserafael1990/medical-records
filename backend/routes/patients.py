@@ -3,19 +3,21 @@ Patient management endpoints
 Migrated from main_clean_english.py to improve code organization
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from typing import Optional
 
 from database import get_db, Person, PersonDocument, Document
 from dependencies import get_current_user
 from logger import get_logger
+from audit_service import audit_service
 import crud
 import schemas
 from datetime import datetime
+from utils.audit_utils import serialize_instance
 
-api_logger = get_logger("api")
-security_logger = get_logger("security")
+api_logger = get_logger("medical_records.api")
+security_logger = get_logger("medical_records.security")
 
 router = APIRouter(prefix="/api", tags=["patients"])
 
@@ -93,45 +95,69 @@ async def get_patients(
                 try:
                     patient_data['email'] = patient.email
                 except Exception as e:
-                    print(f"⚠️ Could not decrypt email for patient {patient.id}: {str(e)}")
+                    security_logger.warning(
+                        "⚠️ Could not decrypt email for patient",
+                        extra={"patient_id": patient.id, "doctor_id": current_user.id},
+                        exc_info=True
+                    )
                     patient_data['email'] = patient.email
             
             if getattr(patient, 'primary_phone', None):
                 try:
-                    print(f"🔓 Attempting to decrypt phone for patient {patient.id}: {patient.primary_phone[:40]}...")
+                    security_logger.debug(
+                        "🔓 Attempting to decrypt phone for patient",
+                        extra={"patient_id": patient.id, "doctor_id": current_user.id}
+                    )
                     decrypted_phone = patient.primary_phone
                     patient_data['primary_phone'] = decrypted_phone
-                    print(f"✅ Successfully decrypted phone for patient {patient.id}: {decrypted_phone}")
+                    security_logger.debug(
+                        "✅ Successfully decrypted phone for patient",
+                        extra={"patient_id": patient.id, "doctor_id": current_user.id}
+                    )
                 except Exception as e:
-                    print(f"⚠️ Could not decrypt phone for patient {patient.id}: {str(e)}")
+                    security_logger.warning(
+                        "⚠️ Could not decrypt phone for patient",
+                        extra={"patient_id": patient.id, "doctor_id": current_user.id},
+                        exc_info=True
+                    )
                     patient_data['primary_phone'] = patient.primary_phone
             
             if getattr(patient, 'emergency_contact_phone', None):
                 try:
                     patient_data['emergency_contact_phone'] = patient.emergency_contact_phone
                 except Exception as e:
-                    print(f"⚠️ Could not decrypt emergency phone for patient {patient.id}: {str(e)}")
+                    security_logger.warning(
+                        "⚠️ Could not decrypt emergency phone for patient",
+                        extra={"patient_id": patient.id, "doctor_id": current_user.id},
+                        exc_info=True
+                    )
                     patient_data['emergency_contact_phone'] = patient.emergency_contact_phone
-            
-            # RFC is now in person_documents table, not in Person model
-            # Skip direct access to patient.rfc as it no longer exists
             
             if getattr(patient, 'insurance_policy_number', None):
                 try:
                     patient_data['insurance_policy_number'] = patient.insurance_policy_number
                 except Exception as e:
-                    print(f"⚠️ Could not decrypt insurance for patient {patient.id}: {str(e)}")
+                    security_logger.warning(
+                        "⚠️ Could not decrypt insurance policy for patient",
+                        extra={"patient_id": patient.id, "doctor_id": current_user.id},
+                        exc_info=True
+                    )
                     patient_data['insurance_policy_number'] = patient.insurance_policy_number
             
             decrypted_patients.append(patient_data)
         
-        api_logger.info("Patient list retrieved and decrypted", doctor_id=current_user.id, count=len(decrypted_patients))
+        api_logger.info(
+            "Patient list retrieved and decrypted",
+            extra={"doctor_id": current_user.id, "count": len(decrypted_patients)}
+        )
         return decrypted_patients
         
     except Exception as e:
-        print(f"❌ Error in get_patients: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        security_logger.error(
+            "❌ Error in get_patients",
+            extra={"doctor_id": current_user.id},
+            exc_info=True
+        )
         raise HTTPException(status_code=500, detail=f"Error retrieving patients: {str(e)}")
 
 
@@ -161,12 +187,24 @@ async def get_patient(
         
         personal_documents_dict = {}
         professional_documents_dict = {}
+        personal_documents_list = []
+        professional_documents_list = []
         for pd in person_docs:
             doc_name = pd.document.name if pd.document else None
             if pd.document and pd.document.document_type_id == 1:  # Personal
                 personal_documents_dict[doc_name] = pd.document_value
+                personal_documents_list.append({
+                    "document_id": pd.document_id,
+                    "document_value": pd.document_value,
+                    "document_name": doc_name
+                })
             elif pd.document and pd.document.document_type_id == 2:  # Profesional
                 professional_documents_dict[doc_name] = pd.document_value
+                professional_documents_list.append({
+                    "document_id": pd.document_id,
+                    "document_value": pd.document_value,
+                    "document_name": doc_name
+                })
         
         decrypted_curp = personal_documents_dict.get('CURP', None)
         decrypted_rfc = personal_documents_dict.get('RFC', None)
@@ -177,40 +215,59 @@ async def get_patient(
         if patient.email:
             try:
                 decrypted_email = patient.email
-                print(f"🔓 Decrypted email: {patient.email[:40]}... -> {decrypted_email}")
+                security_logger.debug(
+                    "🔓 Email decrypted for patient",
+                    extra={"patient_id": patient.id, "doctor_id": current_user.id}
+                )
             except Exception as e:
-                print(f"⚠️ Could not decrypt email (might be unencrypted): {str(e)}")
+                security_logger.warning(
+                    "⚠️ Could not decrypt email (might be unencrypted)",
+                    extra={"patient_id": patient.id, "doctor_id": current_user.id},
+                    exc_info=True
+                )
                 decrypted_email = patient.email
         
         if patient.primary_phone:
             try:
                 decrypted_phone = patient.primary_phone
-                print(f"🔓 Decrypted phone: {patient.primary_phone[:40]}... -> {decrypted_phone}")
+                security_logger.debug(
+                    "🔓 Phone decrypted for patient",
+                    extra={"patient_id": patient.id, "doctor_id": current_user.id}
+                )
             except Exception as e:
-                print(f"⚠️ Could not decrypt phone (might be unencrypted): {str(e)}")
+                security_logger.warning(
+                    "⚠️ Could not decrypt phone (might be unencrypted)",
+                    extra={"patient_id": patient.id, "doctor_id": current_user.id},
+                    exc_info=True
+                )
                 decrypted_phone = patient.primary_phone
         
         if patient.insurance_number:
             try:
                 decrypted_insurance = patient.insurance_number
-                print(f"🔓 Decrypted insurance: {patient.insurance_number[:40]}... -> {decrypted_insurance}")
+                security_logger.debug(
+                    "🔓 Insurance decrypted for patient",
+                    extra={"patient_id": patient.id, "doctor_id": current_user.id}
+                )
             except Exception as e:
-                print(f"⚠️ Could not decrypt insurance (might be unencrypted): {str(e)}")
+                security_logger.warning(
+                    "⚠️ Could not decrypt insurance (might be unencrypted)",
+                    extra={"patient_id": patient.id, "doctor_id": current_user.id},
+                    exc_info=True
+                )
                 decrypted_insurance = patient.insurance_number
         
         # Return patient data with decrypted sensitive fields
         patient_response = {
             'id': patient.id,
-            'person_code': patient.person_code,
-            'personal_documents': [{'document_name': name, 'document_value': value} for name, value in personal_documents_dict.items()],
-            'professional_documents': [{'document_name': name, 'document_value': value} for name, value in professional_documents_dict.items()],
-            'person_type': patient.person_type,
             'name': patient.name,
-            'title': patient.title,
+            'email': patient.email,
+            'primary_phone': patient.primary_phone,
+            'birth_date': patient.birth_date.isoformat() if patient.birth_date else None,
+            'gender': patient.gender,
             'curp': decrypted_curp,
-            'rfc': decrypted_rfc,  # From person_documents
-            'email': decrypted_email,
-            'primary_phone': decrypted_phone,
+            'rfc': decrypted_rfc,
+            'civil_status': patient.civil_status,
             'home_address': patient.home_address,
             'address_city': patient.address_city,
             'address_state_id': patient.address_state_id,
@@ -219,27 +276,26 @@ async def get_patient(
             'emergency_contact_name': patient.emergency_contact_name,
             'emergency_contact_phone': patient.emergency_contact_phone,
             'emergency_contact_relationship': patient.emergency_contact_relationship,
-            'insurance_number': decrypted_insurance,
-            'insurance_provider': patient.insurance_provider,
-            'birth_date': patient.birth_date.isoformat() if patient.birth_date else None,
-            'birth_city': patient.birth_city,
-            'birth_state_id': patient.birth_state_id,
-            'birth_country_id': patient.birth_country_id,
-            'gender': patient.gender,
-            'civil_status': patient.civil_status,
-            'created_at': patient.created_at.isoformat(),
+            'active': patient.is_active,
+            'created_at': patient.created_at.isoformat() if patient.created_at else None,
             'updated_at': patient.updated_at.isoformat() if patient.updated_at else None,
-            'created_by': patient.created_by,
-            'is_active': patient.is_active,
-            'encrypted': True  # Flag to indicate this patient has encrypted data
+            'personal_documents': personal_documents_list,
+            'professional_documents': professional_documents_list
         }
         
-        security_logger.info("Patient data retrieved and decrypted", patient_id=patient_id, doctor_id=current_user.id)
+        security_logger.info(
+            "Patient data retrieved and decrypted",
+            extra={"patient_id": patient_id, "doctor_id": current_user.id}
+        )
         return patient_response
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error in get_patient: {str(e)}")
+        security_logger.error(
+            "❌ Error in get_patient",
+            extra={"patient_id": patient_id, "doctor_id": current_user.id},
+            exc_info=True
+        )
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
@@ -251,10 +307,10 @@ async def create_patient(
 ):
     """Create new patient with encrypted sensitive data"""
     try:
-        print("=" * 80)
-        print("🚨 CREATE PATIENT FUNCTION CALLED - NEW VERSION WITH ENCRYPTION")
-        print("=" * 80)
-        security_logger.info("Creating patient with encryption", operation="create_patient", doctor_id=current_user.id)
+        security_logger.info(
+            "🚨 CREATE PATIENT FUNCTION CALLED - NEW VERSION WITH ENCRYPTION",
+            extra={"doctor_id": current_user.id}
+        )
         
         # Check if patient already exists by documents (normalized) or email
         # Validate document uniqueness before creating patient
@@ -304,36 +360,41 @@ async def create_patient(
         # NOW encrypt sensitive fields directly in the database model BEFORE commit
         # Note: CURP and other documents are now in person_documents table, not encrypted for now
         if patient.email:
-            original_email = patient.email
-            patient.email = patient.email
-            print(f"🔐 Encrypted email: {original_email} -> {patient.email[:40]}...")
+            security_logger.debug(
+                "🔐 Email encrypted for patient",
+                extra={"patient_id": patient.id, "doctor_id": current_user.id}
+            )
         
         if patient.primary_phone:
-            original_phone = patient.primary_phone
-            patient.primary_phone = patient.primary_phone
-            print(f"🔐 Encrypted phone: {original_phone} -> {patient.primary_phone[:40]}...")
+            security_logger.debug(
+                "🔐 Phone encrypted for patient",
+                extra={"patient_id": patient.id, "doctor_id": current_user.id}
+            )
         
         if patient.insurance_number:
-            original_insurance = patient.insurance_number
-            patient.insurance_number = patient.insurance_number
-            print(f"🔐 Encrypted insurance: {original_insurance} -> {patient.insurance_number[:40]}...")
+            security_logger.debug(
+                "🔐 Insurance encrypted for patient",
+                extra={"patient_id": patient.id, "doctor_id": current_user.id}
+            )
         
         # Commit the transaction to persist the patient
         db.commit()
         db.refresh(patient)
         
-        security_logger.info("Patient created successfully", patient_id=patient.id, doctor_id=current_user.id, encrypted=True)
+        security_logger.info(
+            "Patient created successfully",
+            extra={"patient_id": patient.id, "doctor_id": current_user.id, "encrypted": True}
+        )
         return patient
         
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
-        print("=" * 80)
-        print("❌ ERROR CREATING PATIENT:")
-        print(traceback.format_exc())
-        print("=" * 80)
-        security_logger.error(f"Error creating patient: {str(e)}", doctor_id=current_user.id, error=str(e))
+        security_logger.error(
+            "❌ Error creating patient",
+            extra={"doctor_id": current_user.id},
+            exc_info=True
+        )
         raise HTTPException(
             status_code=500, 
             detail=f"Error interno al crear paciente: {str(e)}"
@@ -344,15 +405,21 @@ async def create_patient(
 async def update_patient(
     patient_id: int,
     patient_data: schemas.PersonUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
     """Update specific patient by ID"""
     # Debug: Check emergency contact data in update request
-    print(f"🔍 UPDATE Patient {patient_id} - Emergency contact data received:")
-    print(f"  - Name: {patient_data.emergency_contact_name}")
-    print(f"  - Phone: {patient_data.emergency_contact_phone}")
-    print(f"  - Relationship: {patient_data.emergency_contact_relationship}")
+    security_logger.info(
+        "🔍 UPDATE Patient - emergency contact data received",
+        extra={
+            "patient_id": patient_id,
+            "doctor_id": current_user.id,
+            "has_name": bool(patient_data.emergency_contact_name),
+            "has_phone": bool(patient_data.emergency_contact_phone)
+        }
+    )
     try:
         patient = db.query(Person).filter(
             Person.id == patient_id,
@@ -363,6 +430,12 @@ async def update_patient(
         if not patient:
             raise HTTPException(status_code=404, detail=f"No se encontró el paciente con ID: {patient_id} o acceso denegado")
         
+        # Capture original state before applying changes (for audit trail)
+        original_data = serialize_instance(
+            patient,
+            exclude={"updated_at"},
+        )
+
         # Check for conflicts with other patients (excluding current patient)
         # Validate document uniqueness before updating patient
         if hasattr(patient_data, 'documents') and patient_data.documents:
@@ -429,19 +502,111 @@ async def update_patient(
                 else:
                     setattr(patient, field, value)
         
+        documents_payload = getattr(patient_data, 'documents', []) or []
+        if documents_payload:
+            security_logger.info(
+                "📄 Processing patient documents in update",
+                extra={
+                    "patient_id": patient_id,
+                    "doctor_id": current_user.id,
+                    "document_count": len(documents_payload)
+                }
+            )
+            for doc in documents_payload:
+                doc_id = getattr(doc, 'document_id', None) if hasattr(doc, 'document_id') else doc.get('document_id') if isinstance(doc, dict) else None
+                doc_value_raw = getattr(doc, 'document_value', None) if hasattr(doc, 'document_value') else doc.get('document_value') if isinstance(doc, dict) else None
+                
+                if not doc_id or not doc_value_raw:
+                    continue
+                
+                doc_value = doc_value_raw.strip()
+                if not doc_value:
+                    continue
+                
+                existing_doc = db.query(PersonDocument).filter(
+                    PersonDocument.person_id == patient.id,
+                    PersonDocument.document_id == doc_id
+                ).first()
+                
+                if existing_doc:
+                    needs_update = existing_doc.document_value != doc_value or not existing_doc.is_active
+                    if needs_update:
+                        existing_doc.document_value = doc_value
+                        existing_doc.is_active = True
+                        existing_doc.updated_at = datetime.utcnow()
+                        security_logger.info(
+                            "📄 Patient document updated",
+                            extra={
+                                "patient_id": patient.id,
+                                "doctor_id": current_user.id,
+                                "document_id": doc_id,
+                                "document_value": doc_value
+                            }
+                        )
+                else:
+                    new_document = PersonDocument(
+                        person_id=patient.id,
+                        document_id=doc_id,
+                        document_value=doc_value,
+                        is_active=True
+                    )
+                    db.add(new_document)
+                    security_logger.info(
+                        "📄 Patient document created",
+                        extra={
+                            "patient_id": patient.id,
+                            "doctor_id": current_user.id,
+                            "document_id": doc_id,
+                            "document_value": doc_value
+                        }
+                    )
+        
         patient.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(patient)
-        
+
+        updated_data = serialize_instance(patient)
+
+        audit_service.log_action(
+            db=db,
+            action="UPDATE",
+            user=current_user,
+            request=request,
+            table_name="persons",
+            record_id=patient.id,
+            old_values=original_data,
+            new_values=updated_data,
+            operation_type="patient_update",
+            affected_patient_id=patient.id,
+            affected_patient_name=patient.name,
+        )
+
         return patient
     except HTTPException:
         db.rollback()
         raise
     except Exception as e:
         db.rollback()
-        print(f"❌ Error in update_patient: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        security_logger.error(
+            "❌ Error in update_patient",
+            extra={"patient_id": patient_id, "doctor_id": current_user.id},
+            exc_info=True
+        )
+        audit_service.log_action(
+            db=db,
+            action="UPDATE",
+            user=current_user,
+            request=request,
+            table_name="persons",
+            record_id=patient_id,
+            old_values=original_data if 'original_data' in locals() else None,
+            new_values=None,
+            operation_type="patient_update",
+            affected_patient_id=patient_id,
+            affected_patient_name=getattr(patient, "name", None) if 'patient' in locals() and patient else None,
+            success=False,
+            error_message=str(e),
+        )
         raise HTTPException(
             status_code=500, 
             detail=f"Error interno al actualizar paciente: {str(e)}"

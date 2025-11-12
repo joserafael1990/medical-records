@@ -15,10 +15,16 @@ interface Document {
   document_type_id: number;
 }
 
+interface SelectedDocumentValue {
+  document_id: number | null;
+  document_value: string;
+  document_name?: string;
+}
+
 interface DocumentSelectorProps {
   documentType: 'personal' | 'professional';
-  value?: { document_id: number | null; document_value: string };
-  onChange: (value: { document_id: number | null; document_value: string }) => void;
+  value?: SelectedDocumentValue;
+  onChange: (value: SelectedDocumentValue) => void;
   disabled?: boolean;
   error?: boolean;
   helperText?: string;
@@ -29,7 +35,7 @@ interface DocumentSelectorProps {
 
 export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
   documentType,
-  value = { document_id: null, document_value: '' },
+  value = { document_id: null, document_value: '', document_name: undefined },
   onChange,
   disabled = false,
   error = false,
@@ -46,6 +52,19 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
   const documentTypeId = documentType === 'personal' ? 1 : 2;
 
   useEffect(() => {
+    logger.debug(
+      'Documento seleccionado en selector',
+      {
+        documentType,
+        document_id: value?.document_id,
+        document_name: value?.document_name,
+        document_value: value?.document_value
+      },
+      'ui'
+    );
+  }, [documentType, value?.document_id, value?.document_name, value?.document_value]);
+
+  useEffect(() => {
     const loadDocuments = async () => {
       setLoading(true);
       try {
@@ -55,9 +74,20 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
         // If value has document_id, find and set the selected document
         if (value?.document_id) {
           const doc = docs.find(d => d.id === value.document_id);
-          if (doc) {
+          if (doc && (selectedDocument?.id !== doc.id)) {
             setSelectedDocument(doc);
           }
+        } else if (value?.document_name) {
+          const placeholder: Document = {
+            id: value.document_id ?? -1,
+            name: value.document_name,
+            document_type_id: documentTypeId
+          };
+          if (!selectedDocument || selectedDocument.id !== placeholder.id || selectedDocument.name !== placeholder.name) {
+            setSelectedDocument(placeholder);
+          }
+        } else if (selectedDocument) {
+          setSelectedDocument(null);
         }
       } catch (error) {
         logger.error('Error loading documents', error, 'api');
@@ -67,7 +97,7 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
     };
 
     loadDocuments();
-  }, [documentTypeId, value?.document_id]);
+  }, [documentTypeId, value?.document_id, value?.document_name]);
 
   const handleDocumentChange = (newDocument: Document | null) => {
     setSelectedDocument(newDocument);
@@ -76,14 +106,16 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
     const shouldClearValue = selectedDocument && newDocument && selectedDocument.id !== newDocument.id;
     onChange({
       document_id: newDocument?.id || null,
-      document_value: shouldClearValue ? '' : (value?.document_value || '')
+      document_value: shouldClearValue ? '' : (value?.document_value || ''),
+      document_name: newDocument?.name
     });
   };
 
   const handleValueChange = (newValue: string) => {
     onChange({
       document_id: selectedDocument?.id || null,
-      document_value: newValue
+      document_value: newValue,
+      document_name: selectedDocument?.name
     });
   };
 
@@ -100,6 +132,7 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
           handleDocumentChange(newValue);
         }}
         options={documents}
+        isOptionEqualToValue={(option, val) => option.id === val.id}
         getOptionLabel={(option) => option.name}
         disabled={disabled || loading}
         loading={loading}
@@ -134,17 +167,11 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
           onChange={(e) => handleValueChange(e.target.value)}
           disabled={disabled}
           error={error && !value?.document_value}
-          helperText={error && !value?.document_value ? 'El valor del documento es requerido' : helperText}
+          helperText={error && !value?.document_value ? 'El valor del documento es requerido' : undefined}
           margin="normal"
           required={required}
           fullWidth={fullWidth}
         />
-      )}
-
-      {error && !selectedDocument && (
-        <FormControl error={true} fullWidth={fullWidth}>
-          <FormHelperText>{helperText || 'Debe seleccionar un documento'}</FormHelperText>
-        </FormControl>
       )}
     </Box>
   );

@@ -1,4 +1,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+const mapPatientDocument = (
+  doc: any | null | undefined,
+  fallbackValue?: string,
+  fallbackName?: string
+): { document_id: number | null; document_value: string; document_name?: string } => ({
+  document_id: doc?.document_id ?? doc?.id ?? null,
+  document_value: fallbackValue ?? doc?.document_value ?? '',
+  document_name: doc?.document_name || doc?.document?.name || fallbackName
+});
 import { Patient, PatientFormData, ClinicalStudy } from '../types';
 import { DiagnosisCatalog } from './useDiagnosisCatalog';
 import { apiService } from '../services';
@@ -10,11 +19,15 @@ import { usePatientPreviousStudies } from './usePatientPreviousStudies';
 // Re-export ConsultationFormData interface from component
 export interface ConsultationFormData {
   patient_id: string;
+  patient_document_id: number | null;
+  patient_document_value: string;
+  patient_document_name?: string;
   date: string;
   chief_complaint: string;
   history_present_illness: string;
   family_history: string;
   perinatal_history: string;
+  gynecological_and_obstetric_history: string;
   personal_pathological_history: string;
   personal_non_pathological_history: string;
   physical_examination: string;
@@ -61,12 +74,13 @@ export interface UseConsultationFormReturn {
   loading: boolean;
   error: string | null;
   setError: (error: string | null) => void;
+  currentConsultationId: number | null;
   
   // Patient state
   selectedPatient: Patient | null;
   patientEditData: PatientFormData | null;
   personalDocument: { document_id: number | null; document_value: string };
-  setPersonalDocument: (doc: { document_id: number | null; document_value: string }) => void;
+  setPersonalDocument: (doc: { document_id: number | null; document_value: string; document_name?: string }) => void;
   showAdvancedPatientData: boolean;
   setShowAdvancedPatientData: (show: boolean) => void;
   
@@ -167,11 +181,14 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
   // Memoize initialFormData
   const initialFormData: ConsultationFormData = useMemo(() => ({
     patient_id: '',
+    patient_document_id: null,
+    patient_document_value: '',
     date: getCDMXDateTime(),
     chief_complaint: '',
     history_present_illness: '',
     family_history: '',
     perinatal_history: '',
+    gynecological_and_obstetric_history: '',
     personal_pathological_history: '',
     personal_non_pathological_history: '',
     physical_examination: DEFAULT_PHYSICAL_EXAMINATION,
@@ -193,14 +210,23 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
   }), [doctorProfile?.first_name, doctorProfile?.last_name, doctorProfile?.title, doctorProfile?.professional_license, doctorProfile?.specialty]);
 
   const [formData, setFormData] = useState<ConsultationFormData>(initialFormData);
+  const [currentConsultationId, setCurrentConsultationId] = useState<number | null>(consultation?.id ?? null);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<any | null>(null);
   const [appointmentOffice, setAppointmentOffice] = useState<any | null>(null);
   const [patientEditData, setPatientEditData] = useState<PatientFormData | null>(null);
-  const [personalDocument, setPersonalDocument] = useState<{ document_id: number | null; document_value: string }>({ 
-    document_id: null, 
-    document_value: '' 
-  });
+  const [personalDocument, setPersonalDocument] = useState<{ document_id: number | null; document_value: string; document_name?: string }>(
+    mapPatientDocument(null)
+  );
+  
+  useEffect(() => {
+    setFormData(prev => ({
+      ...prev,
+      patient_document_id: personalDocument.document_id ?? null,
+      patient_document_value: personalDocument.document_value || '',
+      patient_document_name: personalDocument.document_name
+    }));
+  }, [personalDocument]);
   const [countries, setCountries] = useState<any[]>([]);
   const [states, setStates] = useState<any[]>([]);
   const [birthStates, setBirthStates] = useState<any[]>([]);
@@ -241,6 +267,13 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
     if (open && consultation) {
       const consultationId = consultation.id;
       if (!consultationId) return;
+      setCurrentConsultationId(consultationId);
+      logger.debug('Editing consultation loaded', {
+        consultationId,
+        patient_document_id: consultation.patient_document_id,
+        patient_document_value: consultation.patient_document_value,
+        patient_document_name: consultation.patient_document_name
+      }, 'ui');
       
       if (loadedConsultationIdRef.current === consultationId) {
         return;
@@ -252,11 +285,15 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
       setFormData({
         ...initialFormData,
         patient_id: consultation.patient_id || '',
+        patient_document_id: consultation.patient_document_id ?? null,
+        patient_document_value: consultation.patient_document_value || '',
+        patient_document_name: consultation.patient_document_name,
         date: consultation.date ? consultation.date : getCDMXDateTime(),
         chief_complaint: consultation.chief_complaint || '',
         history_present_illness: consultation.history_present_illness || '',
         family_history: consultation.family_history || '',
         perinatal_history: consultation.perinatal_history || '',
+        gynecological_and_obstetric_history: consultation.gynecological_and_obstetric_history || '',
         personal_pathological_history: consultation.personal_pathological_history || '',
         personal_non_pathological_history: consultation.personal_non_pathological_history || '',
         physical_examination: consultation.physical_examination || '',
@@ -279,10 +316,50 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
             const patientData = await apiService.patients.getPatientById(consultation.patient_id);
             setSelectedPatient(patientData);
             setPatientEditData(patientData);
-            if (patientData.personal_documents && patientData.personal_documents.length > 0) {
-              setPersonalDocument(patientData.personal_documents[0]);
+            logger.debug('Patient data for consultation', {
+              consultationId,
+              personal_documents: patientData.personal_documents
+            }, 'ui');
+            if (consultation?.patient_document_id) {
+              const matchingDocument = (patientData.personal_documents || []).find(
+                (doc: any) => doc.document_id === consultation.patient_document_id
+              );
+              if (matchingDocument) {
+                setPersonalDocument(
+                  mapPatientDocument(
+                    {
+                      document_id: matchingDocument.document_id,
+                      document_value: matchingDocument.document_value,
+                      document_name: matchingDocument.document_name || matchingDocument.document?.name
+                    },
+                    consultation.patient_document_value || '',
+                    consultation.patient_document_name
+                  )
+                );
+              } else {
+                setPersonalDocument(
+                  mapPatientDocument(
+                    {
+                      document_id: consultation.patient_document_id,
+                      document_value: consultation.patient_document_value,
+                      document_name: consultation.patient_document_name
+                    },
+                    consultation.patient_document_value || '',
+                    consultation.patient_document_name
+                  )
+                );
+              }
+            } else if (patientData.personal_documents && patientData.personal_documents.length > 0) {
+              const fallbackDocument = patientData.personal_documents[0];
+              setPersonalDocument(
+                mapPatientDocument(
+                  fallbackDocument,
+                  fallbackDocument.document_value || '',
+                  fallbackDocument.document_name || fallbackDocument.document?.name
+                )
+              );
             } else {
-              setPersonalDocument({ document_id: null, document_value: '' });
+              setPersonalDocument(mapPatientDocument(null));
             }
           } catch (error) {
             logger.error('Error loading patient data', error, 'api');
@@ -360,24 +437,24 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
   // Initialize new consultation
   useEffect(() => {
     const currentConsultationId = consultation?.id;
-    
+
     if (!open) {
       hasInitializedRef.current = false;
       lastConsultationIdRef.current = undefined;
       return;
     }
-    
+
     if (open && !consultation && !hasInitializedRef.current) {
       logger.debug('Setting up NEW consultation - clearing temporary prescriptions', undefined, 'ui');
       setFormData(initialFormData);
       setSelectedAppointment(null);
       setSelectedPatient(null);
       setShowAdvancedPatientData(false);
-      
+
       clinicalStudiesHook.clearTemporaryStudies();
       vitalSignsHook.clearTemporaryVitalSigns();
       prescriptionsHook.clearTemporaryPrescriptions();
-      
+
       hasInitializedRef.current = true;
     } else if (open && currentConsultationId) {
       if (currentConsultationId !== lastConsultationIdRef.current) {
@@ -520,9 +597,16 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
         const fullPatientData = await apiService.patients.getPatientById(patient.id);
         setPatientEditData(fullPatientData);
         if (fullPatientData.personal_documents && fullPatientData.personal_documents.length > 0) {
-          setPersonalDocument(fullPatientData.personal_documents[0]);
+          const primaryDocument = fullPatientData.personal_documents[0];
+          setPersonalDocument(
+            mapPatientDocument(
+              primaryDocument,
+              primaryDocument.document_value || '',
+              primaryDocument.document_name || primaryDocument.document?.name
+            )
+          );
         } else {
-          setPersonalDocument({ document_id: null, document_value: '' });
+          setPersonalDocument(mapPatientDocument(null));
         }
         
         await Promise.all([
@@ -532,11 +616,11 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
       } catch (error) {
         logger.error('Error loading patient data', error, 'api');
         setPatientEditData(null);
-        setPersonalDocument({ document_id: null, document_value: '' });
+        setPersonalDocument(mapPatientDocument(null));
       }
     } else {
       setPatientEditData(null);
-      setPersonalDocument({ document_id: null, document_value: '' });
+      setPersonalDocument(mapPatientDocument(null));
       previousStudiesHook.loadPatientPreviousStudies(0).catch(() => {}); // Clear studies
     }
     
@@ -575,9 +659,16 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
           const fullPatientData = await apiService.patients.getPatientById(patient.id);
           setPatientEditData(fullPatientData);
           if (fullPatientData.personal_documents && fullPatientData.personal_documents.length > 0) {
-            setPersonalDocument(fullPatientData.personal_documents[0]);
+            const primaryDocument = fullPatientData.personal_documents[0];
+            setPersonalDocument(
+              mapPatientDocument(
+                primaryDocument,
+                primaryDocument.document_value || '',
+                primaryDocument.document_name || primaryDocument.document?.name
+              )
+            );
           } else {
-            setPersonalDocument({ document_id: null, document_value: '' });
+            setPersonalDocument(mapPatientDocument(null));
           }
           setSelectedPatient(fullPatientData);
           
@@ -589,12 +680,12 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
         } catch (error) {
           logger.error('Error loading decrypted patient data', error, 'api');
           setPatientEditData(null);
-          setPersonalDocument({ document_id: null, document_value: '' });
+          setPersonalDocument(mapPatientDocument(null));
         }
       } else {
         setSelectedPatient(null);
         setPatientEditData(null);
-        setPersonalDocument({ document_id: null, document_value: '' });
+        setPersonalDocument(mapPatientDocument(null));
         setAppointmentOffice(null);
       }
     } else {
@@ -786,13 +877,61 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
       return;
     }
 
+    if (!personalDocument.document_id || !personalDocument.document_value.trim()) {
+      setError('El documento de identificación del paciente es obligatorio');
+      return;
+    }
+
     if (patientEditData && selectedPatient) {
       try {
+        const { personal_documents: _ignoredPersonalDocs, professional_documents: _ignoredProfessionalDocs, ...patientBaseData } = patientEditData || {};
         const patientDataWithDocument = {
-          ...patientEditData,
-          personal_documents: personalDocument.document_id ? [personalDocument] : undefined
+          ...patientBaseData,
+          documents: personalDocument.document_id
+            ? [{
+                document_id: personalDocument.document_id,
+                document_value: personalDocument.document_value.trim()
+              }]
+            : []
         };
         await apiService.patients.updatePatient(selectedPatient.id.toString(), patientDataWithDocument);
+
+        setSelectedPatient(prev => {
+          if (!prev) return prev;
+          const existingDocuments = Array.isArray(prev.personal_documents) ? [...prev.personal_documents] : [];
+          if (personalDocument.document_id) {
+            const docIndex = existingDocuments.findIndex((doc: any) => doc.document_id === personalDocument.document_id);
+            if (docIndex >= 0) {
+              existingDocuments[docIndex] = {
+                ...existingDocuments[docIndex],
+                document_value: personalDocument.document_value.trim()
+              };
+            } else {
+              existingDocuments.push({
+                document_id: personalDocument.document_id,
+                document_value: personalDocument.document_value.trim(),
+                document_name: personalDocument.document_name || consultation?.patient_document_name
+              });
+            }
+          }
+          return {
+            ...prev,
+            personal_documents: existingDocuments
+          };
+        });
+        setPatientEditData(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            personal_documents: personalDocument.document_id
+              ? [{
+                  document_id: personalDocument.document_id,
+                  document_value: personalDocument.document_value.trim(),
+                  document_name: personalDocument.document_name || consultation?.patient_document_name
+                }]
+              : []
+          };
+        });
       } catch (error) {
         logger.error('Error updating patient data', error, 'api');
         setError('Error al actualizar los datos del paciente');
@@ -812,6 +951,8 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
       const finalFormData = {
         ...formData,
         patient_id: finalPatientId?.toString() || '',
+        patient_document_id: personalDocument.document_id,
+        patient_document_value: personalDocument.document_value.trim(),
         consultation_type: consultationType,
         primary_diagnoses: formData.primary_diagnoses,
         secondary_diagnoses_list: formData.secondary_diagnoses_list
@@ -819,6 +960,10 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
       
       const createdConsultation = await onSubmit(finalFormData);
       
+      if (createdConsultation?.id) {
+        setCurrentConsultationId(createdConsultation.id);
+      }
+
       if ((clinicalStudiesHook.studies || []).length > 0 && createdConsultation?.id) {
         const temporaryStudies = (clinicalStudiesHook.studies || []).filter(study => 
           study.id.toString().startsWith('temp_')
@@ -933,16 +1078,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
       return true;
     }
     
-    const shouldShow = isExistingPatientSelected && previousStudiesHook.patientHasPreviousConsultations;
-    
-    logger.debug('Checking if previous consultations button should show', {
-      isFollowUpAppointment,
-      isExistingPatientSelected,
-      patientHasPreviousConsultations: previousStudiesHook.patientHasPreviousConsultations,
-      shouldShow
-    }, 'ui');
-    
-    return shouldShow;
+    return Boolean(isExistingPatientSelected && previousStudiesHook.patientHasPreviousConsultations);
   }, [selectedAppointment, selectedPatient, previousStudiesHook.patientHasPreviousConsultations]);
 
   const shouldShowOnlyBasicPatientData = useCallback((): boolean => {
@@ -957,6 +1093,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
     loading,
     error,
     setError,
+    currentConsultationId,
     
     // Patient state
     selectedPatient,
