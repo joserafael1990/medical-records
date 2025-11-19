@@ -320,17 +320,23 @@ class WhatsAppService:
         country_code: str = None,
         appointment_type: str = "presencial",
         online_consultation_url: str = None,
-        maps_url: Optional[str] = None
+        maps_url: Optional[str] = None,
+        appointment_status: str = "por_confirmar",
+        appointment_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Enviar recordatorio de cita médica usando plantilla aprobada
         
-        Usa la plantilla 'appointment_reminder' aprobada en Meta Business Manager
+        Selecciona la plantilla según el estado de la cita:
+        - Si status es 'por_confirmar': usa 'appointment_reminder_no_confirmed' (botones: Confirmar, Cancelar)
+        - Si status es 'confirmada': usa 'appointment_reminder_confirmed' (botón: Cancelar)
         
         Args:
             country_code: Código de país del consultorio. Si es None, usa '52' (México) como fallback
             appointment_type: "presencial" o "online"
             online_consultation_url: URL para citas online (parámetro 7)
+            appointment_status: Estado de la cita ('por_confirmar' o 'confirmada')
+            appointment_id: ID de la cita para incluir en los botones
         """
         # Preparar parámetros para la plantilla según el formato exacto:
         # ¡Hola *{{1}}*, 🗓️
@@ -363,13 +369,21 @@ class WhatsAppService:
         print(f"🗺️ Maps URL: {maps_url_final}")
         
         
-        # Get template name and language from environment or use defaults
-        # Note: Template name in Meta is 'appointment_remainder' (not 'appointment_reminder')
-        template_name = os.getenv('WHATSAPP_TEMPLATE_APPOINTMENT_REMINDER', 'appointment_remainder')
+        # Select template based on appointment status
+        if appointment_status == 'por_confirmar':
+            # Template for unconfirmed appointments: has "Confirmar" and "Cancelar" buttons
+            template_name = os.getenv('WHATSAPP_TEMPLATE_APPOINTMENT_REMINDER_NO_CONFIRMED', 'appointment_reminder_no_confirmed')
+        elif appointment_status == 'confirmada':
+            # Template for confirmed appointments: has only "Cancelar" button
+            template_name = os.getenv('WHATSAPP_TEMPLATE_APPOINTMENT_REMINDER_CONFIRMED', 'appointment_reminder_confirmed')
+        else:
+            # Fallback to no_confirmed template for other statuses
+            template_name = os.getenv('WHATSAPP_TEMPLATE_APPOINTMENT_REMINDER_NO_CONFIRMED', 'appointment_reminder_no_confirmed')
+        
         template_language = os.getenv('WHATSAPP_TEMPLATE_LANGUAGE', 'es')  # Default to 'es' (Spanish)
         
         # Log what we're trying to send
-        logger.info(f"📤 Attempting to send '{template_name}' template with language: '{template_language}'")
+        logger.info(f"📤 Attempting to send '{template_name}' template with language: '{template_language}' for appointment status: '{appointment_status}'")
         
         result = self.send_template_message(
             to_phone=patient_phone,

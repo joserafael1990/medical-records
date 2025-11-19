@@ -161,7 +161,12 @@ export class ApiBase {
   private transformError(error: AxiosError): ApiError {
     const status = error.response?.status;
     const statusText = error.response?.statusText;
-    const responseData = error.response?.data;
+    const responseData = error.response?.data as any; // Type assertion for error response data
+
+    // Type guard helper
+    const isErrorResponse = (data: unknown): data is { detail?: string | any[]; message?: string } => {
+      return typeof data === 'object' && data !== null;
+    };
 
     // Handle different error types
     if (!error.response) {
@@ -180,7 +185,7 @@ export class ApiBase {
                             error.config?.url?.includes('/auth/refresh');
       
       let message = ERROR_MESSAGES.UNAUTHORIZED;
-      if (isAuthEndpoint && responseData?.detail) {
+      if (isAuthEndpoint && isErrorResponse(responseData) && typeof responseData.detail === 'string') {
         // Use backend's specific error message for auth endpoints
         message = responseData.detail;
       }
@@ -213,10 +218,10 @@ export class ApiBase {
 
     if (status === 422) {
       // Handle validation errors
-      if (Array.isArray(responseData?.detail)) {
-        const firstError = responseData.detail[0];
-        const fieldName = firstError.loc?.[1] || firstError.loc?.[0] || 'campo';
-        const errorMessage = firstError.msg || 'Error de validación';
+      if (isErrorResponse(responseData) && Array.isArray(responseData.detail)) {
+        const firstError = responseData.detail[0] as any;
+        const fieldName = firstError?.loc?.[1] || firstError?.loc?.[0] || 'campo';
+        const errorMessage = firstError?.msg || 'Error de validación';
         return {
           message: `${fieldName}: ${errorMessage}`,
           status,
@@ -242,8 +247,17 @@ export class ApiBase {
     }
 
     // Default error handling
+    let errorMessage = ERROR_MESSAGES.UNKNOWN_ERROR;
+    if (isErrorResponse(responseData)) {
+      if (typeof responseData.detail === 'string') {
+        errorMessage = responseData.detail;
+      } else if (typeof responseData.message === 'string') {
+        errorMessage = responseData.message;
+      }
+    }
+    
     return {
-      message: responseData?.detail || responseData?.message || ERROR_MESSAGES.UNKNOWN_ERROR,
+      message: errorMessage,
       status,
       statusText,
       details: responseData

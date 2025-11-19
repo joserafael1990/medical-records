@@ -575,10 +575,11 @@ class AppointmentService:
             )
             return False
         
-        # Check appointment status
-        if appointment.status != 'por_confirmar':
+        # Check appointment status - allow reminders for both 'por_confirmar' and 'confirmada'
+        # Only skip if appointment is cancelled
+        if appointment.status == 'cancelled':
             api_logger.info(
-                "⚠️ Appointment not eligible for reminder (status mismatch)",
+                "⚠️ Appointment is cancelled, skipping reminder",
                 extra={"reminder_id": reminder_id, "appointment_id": appointment.id, "status": appointment.status}
             )
             # Rollback the sent flag
@@ -620,7 +621,9 @@ class AppointmentService:
                 office_address=office_address_val,
                 country_code=country_code_val,
                 appointment_type=appointment_type,
-                maps_url=maps_url_val
+                maps_url=maps_url_val,
+                appointment_status=appointment.status,
+                appointment_id=appointment.id
             )
             
             # Log the response for debugging
@@ -732,9 +735,11 @@ class AppointmentService:
         if not apt:
             return False
         
-        if apt.status != 'por_confirmar':
+        # Check appointment status - allow reminders for both 'por_confirmar' and 'confirmada'
+        # Only skip if appointment is cancelled
+        if apt.status == 'cancelled':
             api_logger.info(
-                "⚠️ Appointment not eligible for reminder (status mismatch)",
+                "⚠️ Appointment is cancelled, skipping reminder",
                 extra={"appointment_id": appointment_id, "status": apt.status}
             )
             db.execute(
@@ -777,7 +782,9 @@ class AppointmentService:
                 office_address=office_address_val,
                 country_code=country_code_val,
                 appointment_type=appointment_type,
-                maps_url=maps_url_val
+                maps_url=maps_url_val,
+                appointment_status=apt.status,
+                appointment_id=apt.id
             )
             if resp and resp.get('success'):
                 api_logger.info(

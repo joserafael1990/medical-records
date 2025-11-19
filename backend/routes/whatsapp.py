@@ -164,7 +164,9 @@ async def send_whatsapp_appointment_reminder(
             office_address=office_address,
             country_code=country_code,
             appointment_type=appointment_type,
-            maps_url=maps_url
+            maps_url=maps_url,
+            appointment_status=appointment.status,
+            appointment_id=appointment.id
         )
 
         if result['success']:
