@@ -336,7 +336,6 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
         // Check if this is a temporary consultation
         if (consultationId === 'temp_consultation') {
           // For temporary consultations, update locally only
-          logger.debug('Actualizando prescripción temporal local', selectedPrescription, 'api');
           
           // Find medication name from medications list
           const medication = medications.find(m => m.id === prescriptionFormData.medication_id);

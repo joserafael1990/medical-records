@@ -100,10 +100,6 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
     setIsLoading(true);
     setFormErrorMessage('');
     
-    if (process.env.NODE_ENV === 'development') {
-      logger.debug('Fetching doctor profile', { forceRefresh }, 'api');
-    }
-    
     try {
       const data = await apiService.doctors.getDoctorProfile();
       

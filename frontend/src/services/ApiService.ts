@@ -48,10 +48,8 @@ export class ApiService {
   // Convenience methods for common operations
   async getDashboardData(): Promise<any> {
     try {
-      logger.debug('Fetching dashboard data', undefined, 'api');
       // Use appointments service's api instance (all services share the same base)
       const response = await this.appointments.api.get<any>('/api/dashboard');
-      logger.debug('Dashboard data fetched successfully', undefined, 'api');
       return response.data;
     } catch (error) {
       logger.error('Failed to fetch dashboard data', error, 'api');

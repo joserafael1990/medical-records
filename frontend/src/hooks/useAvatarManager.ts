@@ -99,7 +99,6 @@ export const useAvatarManager = (
       }
       const response = await apiService.avatars.selectAvatar(payload);
       setCurrent(response.current ?? null);
-      logger.debug('Avatar selected successfully', { mode, avatar_url: response.current?.avatar_url }, 'api');
       return true;
     } catch (err: any) {
       logger.error('useAvatarManager.selectAvatar error', err, 'api');

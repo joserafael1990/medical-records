@@ -488,7 +488,6 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
 
       await Promise.all([loadPatientData(), loadStructuredDiagnoses()]);
 
-      logger.debug('Fetching prescriptions for consultation', { consultationId: finalConsultationId }, 'api');
       clinicalStudiesHook.fetchStudies(String(finalConsultationId));
       vitalSignsHook.fetchConsultationVitalSigns(String(finalConsultationId));
       prescriptionsHook.fetchPrescriptions(String(finalConsultationId));

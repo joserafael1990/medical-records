@@ -14,8 +14,6 @@ export const submitConsultation = async (params: {
   showSuccessMessage: (message: string) => void;
   onSuccess: () => Promise<void>;
 }) => {
-  logger.debug('Submitting consultation', { isEditing: params.isEditing, consultationId: params.selectedConsultation?.id }, 'api');
-  
   try {
     const {
       isEditing,
@@ -46,12 +44,10 @@ export const submitConsultation = async (params: {
     
     if (isEditing && selectedConsultation) {
       // Update existing consultation
-      logger.debug('Updating existing consultation', { consultationId: selectedConsultation.id }, 'api');
       result = await apiService.consultations.updateConsultation(selectedConsultation.id.toString(), formData);
       showSuccessMessage('✅ Consulta actualizada exitosamente');
     } else {
       // Create new consultation
-      logger.debug('Creating new consultation', undefined, 'api');
       result = await apiService.consultations.createConsultation(formData);
       showSuccessMessage('✅ Consulta creada exitosamente');
     }

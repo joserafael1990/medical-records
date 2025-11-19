@@ -70,12 +70,6 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
   // Update ref whenever reminders change - this ensures ref is always in sync
   useEffect(() => {
     remindersRef.current = reminders;
-    logger.debug('Reminders state updated', {
-      reminders_count: reminders.length,
-      reminders: reminders,
-      ref_updated: true,
-      ref_current_count: remindersRef.current.length
-    }, 'ui');
   }, [reminders]);
 
   // Create a wrapper for onSubmit that always includes reminders

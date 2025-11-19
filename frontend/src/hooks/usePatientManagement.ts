@@ -83,7 +83,6 @@ export const usePatientManagement = (onNavigate?: (view: string) => void): Patie
     isLoadingRef.current = true;
     setIsLoading(true);
     try {
-      debugLog('🔍 Fetching patients from API...');
       const data = await apiService.patients.getPatients(); // Get all patients
       
       // Clean and normalize patient data
@@ -106,7 +105,6 @@ export const usePatientManagement = (onNavigate?: (view: string) => void): Patie
           : patient.ciudad_residencia || ''
       }));
       
-      debugLog(`✅ Fetched ${cleanedData.length} patients`);
       setPatients(cleanedData);
     } catch (error: any) {
       console.error('❌ Error fetching patients:', {

@@ -45,9 +45,7 @@ export const useOfficeManagement = (doctorId?: number) => {
     setIsLoading(true);
     setError(null);
     try {
-      logger.debug('Fetching offices', { doctorId }, 'api');
       const officesData = await apiService.offices.getOffices(doctorId);
-      logger.debug('Offices fetched successfully', { count: officesData?.length }, 'api');
       setOffices(officesData || []);
     } catch (err: any) {
       logger.error('Error fetching offices', err, 'api');
@@ -61,9 +59,7 @@ export const useOfficeManagement = (doctorId?: number) => {
   // Create new office
   const createOffice = useCallback(async (officeData: OfficeFormData) => {
     try {
-      logger.debug('Creating office', { name: officeData.name }, 'api');
       const newOffice = await apiService.offices.createOffice(officeData);
-      logger.debug('Office created successfully', { id: newOffice.id }, 'api');
       setOffices(prev => [...prev, newOffice]);
       return newOffice;
     } catch (err: any) {
@@ -75,9 +71,7 @@ export const useOfficeManagement = (doctorId?: number) => {
   // Update existing office
   const updateOffice = useCallback(async (officeId: number, officeData: Partial<OfficeFormData>) => {
     try {
-      logger.debug('Updating office', { officeId, dataKeys: Object.keys(officeData) }, 'api');
       const updatedOffice = await apiService.offices.updateOffice(officeId, officeData);
-      logger.debug('Office updated successfully', { id: updatedOffice.id }, 'api');
       setOffices(prev => prev.map(office => 
         office.id === officeId ? updatedOffice : office
       ));
@@ -91,9 +85,7 @@ export const useOfficeManagement = (doctorId?: number) => {
   // Delete office
   const deleteOffice = useCallback(async (officeId: number) => {
     try {
-      logger.debug('Deleting office', { officeId }, 'api');
       await apiService.offices.deleteOffice(officeId);
-      logger.debug('Office deleted successfully', { officeId }, 'api');
       setOffices(prev => prev.filter(office => office.id !== officeId));
     } catch (err: any) {
       logger.error('Error deleting office', err, 'api');

@@ -74,13 +74,11 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
 
   // Fetch studies for a consultation
   const fetchStudies = useCallback(async (consultationId: string) => {
-    logger.debug('Fetching clinical studies for consultation', { consultationId }, 'api');
     setIsLoading(true);
     setError(null);
     
     try {
       const studiesData = await apiService.clinicalStudies.getClinicalStudiesByConsultation(consultationId);
-      logger.debug('Clinical studies fetched successfully', { count: studiesData?.length }, 'api');
       setStudies(studiesData || []);
     } catch (err: any) {
       logger.error('Error fetching clinical studies', err, 'api');

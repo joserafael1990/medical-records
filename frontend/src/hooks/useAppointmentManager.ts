@@ -255,12 +255,6 @@ export const useAppointmentManager = (
       setIsEditingAppointment(true);
       // Always load fresh data from backend to avoid stale state
       const latest = await apiService.appointments.getAppointment(String(appointment.id));
-      logger.debug('Editar cita - datos más recientes del backend', {
-        id: (latest as any)?.id,
-        appointment_date: (latest as any)?.appointment_date,
-        auto_reminder_enabled: (latest as any)?.auto_reminder_enabled,
-        auto_reminder_offset_minutes: (latest as any)?.auto_reminder_offset_minutes
-      });
       setSelectedAppointment(latest as unknown as Appointment);
       const formattedDateTime = formatDateTimeForInput((latest as any).appointment_date || (latest as any).date_time);
       const formData = {

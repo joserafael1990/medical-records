@@ -22,9 +22,7 @@ export const useLocationCatalogs = () => {
 
   const fetchCountries = useCallback(async () => {
     try {
-      logger.debug('Fetching countries', undefined, 'api');
       const countriesData = await apiService.catalogs.getCountries();
-      logger.debug('Countries fetched successfully', { count: countriesData?.length }, 'api');
       setCountries(countriesData || []);
     } catch (err: any) {
       logger.error('Error fetching countries', err, 'api');
@@ -34,9 +32,7 @@ export const useLocationCatalogs = () => {
 
   const fetchStates = useCallback(async (countryId?: number) => {
     try {
-      logger.debug('Fetching states', { countryId }, 'api');
       const statesData = await apiService.catalogs.getStates(countryId);
-      logger.debug('States fetched successfully', { count: statesData?.length }, 'api');
       setStates(statesData || []);
     } catch (err: any) {
       logger.error('Error fetching states', err, 'api');
@@ -45,14 +41,12 @@ export const useLocationCatalogs = () => {
   }, []);
 
   const loadCatalogs = useCallback(async () => {
-    logger.debug('Loading catalogs', undefined, 'api');
     setIsLoading(true);
     setError(null);
     try {
       await fetchCountries();
       // Load states for Mexico by default (country_id = 1)
       await fetchStates(1);
-      logger.debug('Catalogs loaded successfully', undefined, 'api');
     } catch (err: any) {
       logger.error('Error loading catalogs', err, 'api');
       setError('Error al cargar catálogos');

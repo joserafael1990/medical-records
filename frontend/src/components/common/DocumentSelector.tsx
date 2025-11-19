@@ -52,19 +52,6 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
   const documentTypeId = documentType === 'personal' ? 1 : 2;
 
   useEffect(() => {
-    logger.debug(
-      'Documento seleccionado en selector',
-      {
-        documentType,
-        document_id: value?.document_id,
-        document_name: value?.document_name,
-        document_value: value?.document_value
-      },
-      'ui'
-    );
-  }, [documentType, value?.document_id, value?.document_name, value?.document_value]);
-
-  useEffect(() => {
     const loadDocuments = async () => {
       setLoading(true);
       try {

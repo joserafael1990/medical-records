@@ -218,7 +218,7 @@ export const STUDY_TYPES = [
 // Feature Flags
 export const FEATURE_FLAGS = {
   ENABLE_NOTIFICATIONS: true,
-  ENABLE_ANALYTICS: false,
+  ENABLE_ANALYTICS: true, // Analytics interno habilitado
   ENABLE_BETA_FEATURES: false,
   ENABLE_DEBUG_MODE: process.env.NODE_ENV === 'development'
 };

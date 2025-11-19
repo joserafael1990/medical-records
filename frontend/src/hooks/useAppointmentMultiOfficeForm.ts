@@ -171,11 +171,8 @@ export const useAppointmentMultiOfficeForm = (
     
     try {
       setLoadingTimes(true);
-      logger.debug('Loading available times for date', { date }, 'api');
       const response = await apiService.appointments.getAvailableTimesForBooking(date);
-      logger.debug('Response from getAvailableTimesForBooking', { response, hasAvailableTimes: !!response?.available_times }, 'api');
       const times = response?.available_times || [];
-      logger.debug(`Found ${times.length} available times`, { count: times.length, times: times.slice(0, 5) }, 'api');
       
       setAvailableTimes(times);
       

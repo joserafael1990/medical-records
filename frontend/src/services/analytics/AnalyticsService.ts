@@ -77,8 +77,6 @@ export class AnalyticsService extends ApiBase {
     dateTo?: string
   ): Promise<DashboardMetrics> {
     try {
-      logger.debug('Fetching dashboard metrics', { dateFrom, dateTo }, 'api');
-      
       const params: Record<string, string> = {};
       if (dateFrom) params.date_from = dateFrom;
       if (dateTo) params.date_to = dateTo;
@@ -88,7 +86,6 @@ export class AnalyticsService extends ApiBase {
         { params }
       );
       
-      logger.debug('Dashboard metrics fetched successfully', undefined, 'api');
       return response.data;
     } catch (error: any) {
       logger.error('Failed to fetch dashboard metrics', error, 'api');

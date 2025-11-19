@@ -30,10 +30,8 @@ export const useAnalytics = (
       setError(null);
 
       try {
-        logger.debug('Fetching dashboard metrics', { from, to }, 'api');
         const data = await apiService.analytics.getDashboardMetrics(from, to);
         setMetrics(data);
-        logger.debug('Dashboard metrics loaded successfully', undefined, 'api');
       } catch (err: any) {
         const errorMsg =
           err?.detail || err?.message || 'Error al cargar las métricas del dashboard';
