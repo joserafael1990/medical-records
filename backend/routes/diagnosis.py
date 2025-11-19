@@ -3,76 +3,46 @@ Diagnosis catalog API routes based on CIE-10 (ICD-10)
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_, text
 from typing import List, Optional, Dict, Any
 import logging
 
-from database import get_db, StudyCatalog
-from models.diagnosis import DiagnosisCategory, DiagnosisCatalog
+from database import get_db, StudyCatalog, Person
+from models.diagnosis import DiagnosisCatalog
 from schemas_diagnosis import (
-    DiagnosisCategory as DiagnosisCategorySchema,
     DiagnosisCatalog as DiagnosisCatalogSchema,
+    DiagnosisCatalogCreate,
+    # DiagnosisCategory removed - not required by law
     # DiagnosisRecommendation and DiagnosisDifferential schemas removed - tables deleted
-    SimpleDiagnosisCategory,
-    SimpleDiagnosisCatalog,
     DiagnosisSearchRequest,
     DiagnosisSearchResult,
     # DiagnosisRecommendationResult and DiagnosisDifferentialResult removed - tables deleted
-    DiagnosisStats,
-    SeverityLevel,
-    AgeGroup,
-    GenderSpecific,
-    RecommendationType,
-    PriorityLevel
+    DiagnosisStats
 )
-# Temporary authentication bypass for development
-def get_current_user():
-    """Temporary function to bypass authentication during development"""
-    return None
+from dependencies import get_current_user
 
 router = APIRouter(prefix="/api/diagnosis", tags=["diagnosis"])
 logger = logging.getLogger(__name__)
 
-@router.get("/categories")
-async def get_diagnosis_categories(
-    is_active: bool = Query(True, description="Filter by active status"),
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
-):
-    """Get diagnosis categories with optional filtering"""
-    try:
-        # Use raw SQL - only select columns that exist in DB
-        # Note: diagnosis_categories table doesn't have 'code' column, only id, name, active, created_at
-        sql = """
-        SELECT id, name, active, created_at
-        FROM diagnosis_categories 
-        WHERE active = :active
-        ORDER BY id
-        """
-        params = {"active": is_active}
-        
-        result = db.execute(text(sql), params).fetchall()
-        
-        # Convert to simple dict format
-        categories = []
-        for row in result:
-            categories.append({
-                "id": row.id,
-                "name": row.name,
-                "is_active": row.active,  # Map 'active' to 'is_active' for API
-                "created_at": row.created_at.isoformat() if row.created_at else None
-                # parent_id, level, code, description, and updated_at don't exist in DB
-            })
-        
-        return categories
-    
-    except Exception as e:
-        logger.error(f"Error getting diagnosis categories: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error retrieving diagnosis categories"
+# Diagnosis categories endpoints removed - diagnosis_categories table eliminated (not required by law)
+# Only code and name are required for CIE-10 catalog compliance (NOM-004-SSA3-2012, NOM-024-SSA3-2012)
+
+def filter_diagnoses_by_creator(query, current_user: Optional[Person] = None):
+    """
+    Filter diagnoses to show system diagnoses (created_by=0) and doctor's own diagnoses (created_by=doctor_id)
+    If current_user is None or not a doctor, show all diagnoses
+    """
+    if current_user and current_user.person_type == 'doctor':
+        # Show system diagnoses (created_by=0) OR doctor's own diagnoses (created_by=doctor_id)
+        query = query.filter(
+            or_(
+                DiagnosisCatalog.created_by == 0,
+                DiagnosisCatalog.created_by == current_user.id
+            )
         )
+    # If current_user is None or not a doctor, show all diagnoses (no filter)
+    return query
 
 # Add a simple test endpoint
 @router.get("/test")
@@ -80,121 +50,30 @@ async def test_diagnosis_api():
     """Simple test endpoint to verify the API is working"""
     return {"message": "Diagnosis API is working", "status": "ok"}
 
-@router.get("/categories/{category_id}", response_model=DiagnosisCategorySchema)
-async def get_diagnosis_category(
-    category_id: int,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
-):
-    """Get a specific diagnosis category by ID"""
-    try:
-        category = db.query(DiagnosisCategory).filter(
-            DiagnosisCategory.id == category_id,
-            DiagnosisCategory.active == True
-        ).first()
-        
-        if not category:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Diagnosis category not found"
-            )
-        
-        return category
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting diagnosis category {category_id}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error retrieving diagnosis category"
-        )
-
 @router.get("/catalog", response_model=List[DiagnosisCatalogSchema])
 async def get_diagnosis_catalog(
-    category_id: Optional[int] = Query(None, description="Filter by category ID"),
-    specialty: Optional[str] = Query(None, description="Filter by medical specialty"),
-    severity_level: Optional[SeverityLevel] = Query(None, description="Filter by severity level"),
-    is_chronic: Optional[bool] = Query(None, description="Filter by chronic conditions"),
-    is_contagious: Optional[bool] = Query(None, description="Filter by contagious conditions"),
-    age_group: Optional[AgeGroup] = Query(None, description="Filter by age group"),
-    gender_specific: Optional[GenderSpecific] = Query(None, description="Filter by gender specificity"),
     limit: int = Query(100, ge=1, le=500, description="Maximum number of results"),
     offset: int = Query(0, ge=0, description="Number of results to skip"),
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user: Person = Depends(get_current_user)
 ):
-    """Get diagnosis catalog with optional filtering"""
+    """Get diagnosis catalog
+    Compliance: NOM-004-SSA3-2012, NOM-024-SSA3-2012 - CIE-10 catalog
+    Shows system diagnoses (created_by=0) and doctor's own diagnoses (created_by=doctor_id)
+    Only code and name are required by law
+    """
     try:
-        query = db.query(DiagnosisCatalog).join(DiagnosisCategory).filter(
-            DiagnosisCatalog.active == True
+        query = db.query(DiagnosisCatalog).filter(
+            DiagnosisCatalog.is_active == True
         )
         
-        if category_id is not None:
-            query = query.filter(DiagnosisCatalog.category_id == category_id)
+        # Filter by creator: system (created_by=0) OR doctor's own (created_by=doctor_id)
+        query = filter_diagnoses_by_creator(query, current_user)
         
-        if specialty is not None:
-            query = query.filter(DiagnosisCatalog.specialty.ilike(f"%{specialty}%"))
+        diagnoses = query.order_by(DiagnosisCatalog.code).offset(offset).limit(limit).all()
         
-        if severity_level is not None:
-            query = query.filter(DiagnosisCatalog.severity_level == severity_level)
-        
-        if is_chronic is not None:
-            query = query.filter(DiagnosisCatalog.is_chronic == is_chronic)
-        
-        if is_contagious is not None:
-            query = query.filter(DiagnosisCatalog.is_contagious == is_contagious)
-        
-        if age_group is not None:
-            query = query.filter(
-                or_(
-                    DiagnosisCatalog.age_group == age_group,
-                    DiagnosisCatalog.age_group == "all"
-                )
-            )
-        
-        if gender_specific is not None:
-            query = query.filter(
-                or_(
-                    DiagnosisCatalog.gender_specific == gender_specific,
-                    DiagnosisCatalog.gender_specific == "both"
-                )
-            )
-        
-        diagnoses = query.options(
-            joinedload(DiagnosisCatalog.category)
-        ).order_by(DiagnosisCatalog.code).offset(offset).limit(limit).all()
-        
-        # Convert to response format with proper category serialization
-        result = []
-        for diagnosis in diagnoses:
-            diagnosis_dict = {
-                "id": diagnosis.id,
-                "code": diagnosis.code,
-                "name": diagnosis.name,
-                "category_id": diagnosis.category_id,
-                "description": diagnosis.description,
-                "synonyms": getattr(diagnosis, 'synonyms', None) or [],
-                "severity_level": diagnosis.severity_level,
-                "is_chronic": diagnosis.is_chronic,
-                "is_contagious": diagnosis.is_contagious,
-                "age_group": diagnosis.age_group,
-                "gender_specific": diagnosis.gender_specific,
-                "specialty": diagnosis.specialty,
-                "is_active": diagnosis.is_active,
-                "created_at": diagnosis.created_at,
-                "updated_at": diagnosis.updated_at,
-                "category": {
-                    "id": diagnosis.category.id,
-                    "name": diagnosis.category.name,
-                    "is_active": diagnosis.category.is_active,
-                    "created_at": diagnosis.category.created_at
-                    # parent_id, level, and updated_at columns don't exist in DB
-                } if diagnosis.category else None
-            }
-            result.append(diagnosis_dict)
-        
-        return result
+        # Return diagnoses directly - schema will handle serialization
+        return diagnoses
     
     except Exception as e:
         logger.error(f"Error getting diagnosis catalog: {str(e)}")
@@ -207,22 +86,27 @@ async def get_diagnosis_catalog(
 async def get_diagnosis(
     diagnosis_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user: Person = Depends(get_current_user)
 ):
-    """Get a specific diagnosis by ID"""
+    """Get a specific diagnosis by ID
+    Compliance: NOM-004-SSA3-2012, NOM-024-SSA3-2012 - CIE-10 catalog
+    Doctors can only access system diagnoses (created_by=0) or their own diagnoses (created_by=doctor_id)
+    """
     try:
-        diagnosis = db.query(DiagnosisCatalog).options(
-            joinedload(DiagnosisCatalog.category),
-            # DiagnosisRecommendation and DiagnosisDifferential relationships removed - tables deleted
-        ).filter(
+        query = db.query(DiagnosisCatalog).filter(
             DiagnosisCatalog.id == diagnosis_id,
-            DiagnosisCatalog.active == True
-        ).first()
+            DiagnosisCatalog.is_active == True
+        )
+        
+        # Filter by creator: system (created_by=0) OR doctor's own (created_by=doctor_id)
+        query = filter_diagnoses_by_creator(query, current_user)
+        
+        diagnosis = query.first()
         
         if not diagnosis:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Diagnosis not found"
+                detail="Diagnosis not found or access denied"
             )
         
         return diagnosis
@@ -240,64 +124,37 @@ async def get_diagnosis(
 async def search_diagnoses(
     search_request: DiagnosisSearchRequest,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user: Person = Depends(get_current_user)
 ):
-    """Search diagnoses using full-text search"""
+    """Search diagnoses using full-text search
+    Compliance: NOM-004-SSA3-2012, NOM-024-SSA3-2012 - CIE-10 catalog
+    Shows system diagnoses (created_by=0) and doctor's own diagnoses (created_by=doctor_id)
+    """
     try:
         logger.info(f"🔍 Searching diagnoses with query: {search_request.query}")
         
-        # Build base query - use LEFT JOIN to avoid filtering out diagnoses without categories
-        query = db.query(DiagnosisCatalog).outerjoin(DiagnosisCategory).filter(
-            DiagnosisCatalog.active == True
+        # Build base query
+        query = db.query(DiagnosisCatalog).filter(
+            DiagnosisCatalog.is_active == True
         )
         
-        # Add text search (synonyms column doesn't exist in DB, so we only search name, description, and code)
+        # Filter by creator: system (created_by=0) OR doctor's own (created_by=doctor_id)
+        query = filter_diagnoses_by_creator(query, current_user)
+        
+        # Add text search (only search name and code)
         if search_request.query:
             search_term = f"%{search_request.query}%"
             logger.info(f"🔍 Using search term: {search_term}")
             query = query.filter(
                 or_(
                     DiagnosisCatalog.name.ilike(search_term),
-                    DiagnosisCatalog.description.ilike(search_term),
                     DiagnosisCatalog.code.ilike(search_term)
-                )
-            )
-        
-        # Add filters
-        if search_request.specialty:
-            query = query.filter(DiagnosisCatalog.specialty.ilike(f"%{search_request.specialty}%"))
-        
-        # category_code filter removed - DiagnosisCategory.code field no longer exists
-        # if search_request.category_code:
-        #     query = query.filter(DiagnosisCategory.code == search_request.category_code)
-        
-        if search_request.severity_level:
-            query = query.filter(DiagnosisCatalog.severity_level == search_request.severity_level)
-        
-        if search_request.is_chronic is not None:
-            query = query.filter(DiagnosisCatalog.is_chronic == search_request.is_chronic)
-        
-        if search_request.age_group:
-            query = query.filter(
-                or_(
-                    DiagnosisCatalog.age_group == search_request.age_group,
-                    DiagnosisCatalog.age_group == "all"
-                )
-            )
-        
-        if search_request.gender_specific:
-            query = query.filter(
-                or_(
-                    DiagnosisCatalog.gender_specific == search_request.gender_specific,
-                    DiagnosisCatalog.gender_specific == "both"
                 )
             )
         
         # Execute query
         logger.info(f"🔍 Executing search query with limit: {search_request.limit}, offset: {search_request.offset}")
-        results = query.options(
-            joinedload(DiagnosisCatalog.category)
-        ).order_by(DiagnosisCatalog.name).offset(
+        results = query.order_by(DiagnosisCatalog.name).offset(
             search_request.offset
         ).limit(search_request.limit).all()
         
@@ -306,24 +163,11 @@ async def search_diagnoses(
         # Convert to search results
         search_results = []
         for diagnosis in results:
-            # Handle case where category might be None (if LEFT JOIN didn't find a match)
-            category_name = diagnosis.category.name if diagnosis.category else None
-            category_id = diagnosis.category_id if diagnosis.category_id else None
-            
             search_results.append(DiagnosisSearchResult(
                 id=diagnosis.id,
                 code=diagnosis.code,
                 name=diagnosis.name,
-                description=diagnosis.description,
-                category_name=category_name,
-                category_id=category_id,  # Use category_id instead of category_code
-                specialty=diagnosis.specialty,
-                severity_level=diagnosis.severity_level,
-                is_chronic=diagnosis.is_chronic,
-                is_contagious=diagnosis.is_contagious,
-                age_group=diagnosis.age_group,
-                gender_specific=diagnosis.gender_specific,
-                synonyms=getattr(diagnosis, 'synonyms', None) or []
+                created_by=diagnosis.created_by
             ))
         
         logger.info(f"🔍 Returning {len(search_results)} search results")
@@ -338,57 +182,100 @@ async def search_diagnoses(
 
 # Diagnosis recommendations and differentials endpoints removed - tables deleted
 
+@router.post("/catalog", response_model=DiagnosisCatalogSchema, status_code=status.HTTP_201_CREATED)
+async def create_diagnosis(
+    diagnosis_data: DiagnosisCatalogCreate,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Create a new diagnosis
+    Compliance: NOM-004-SSA3-2012, NOM-024-SSA3-2012 - CIE-10 catalog
+    Only doctors can create diagnoses. The created_by field is set automatically to the doctor's ID.
+    """
+    try:
+        # Verify user is a doctor
+        if current_user.person_type != 'doctor':
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only doctors can create diagnoses"
+            )
+        
+        # Check if diagnosis code already exists (only if code is not empty)
+        if diagnosis_data.code and diagnosis_data.code.strip():
+            existing_diagnosis = db.query(DiagnosisCatalog).filter(
+                DiagnosisCatalog.code == diagnosis_data.code
+            ).first()
+            
+            if existing_diagnosis:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Diagnosis with code '{diagnosis_data.code}' already exists"
+                )
+        
+        # For custom diagnoses without code, check if name already exists for this doctor
+        if not diagnosis_data.code or not diagnosis_data.code.strip():
+            existing_by_name = db.query(DiagnosisCatalog).filter(
+                DiagnosisCatalog.name.ilike(diagnosis_data.name.strip()),
+                DiagnosisCatalog.created_by == current_user.id
+            ).first()
+            
+            if existing_by_name:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Ya tienes un diagnóstico con el nombre '{diagnosis_data.name}'"
+                )
+        
+        # Create new diagnosis
+        # Use empty string for code if not provided
+        diagnosis_code = (diagnosis_data.code or "").strip()
+        new_diagnosis = DiagnosisCatalog(
+            code=diagnosis_code,
+            name=diagnosis_data.name.strip(),
+            is_active=diagnosis_data.is_active,
+            created_by=current_user.id  # Set created_by to doctor's ID
+        )
+        
+        db.add(new_diagnosis)
+        db.commit()
+        db.refresh(new_diagnosis)
+        
+        logger.info(f"✅ Created new diagnosis: {new_diagnosis.code} - {new_diagnosis.name} (created_by={new_diagnosis.created_by})")
+        
+        return new_diagnosis
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating diagnosis: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error creating diagnosis"
+        )
+
 @router.get("/stats", response_model=DiagnosisStats)
 async def get_diagnosis_stats(
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user: Person = Depends(get_current_user)
 ):
-    """Get diagnosis catalog statistics"""
+    """Get diagnosis catalog statistics
+    Compliance: NOM-004-SSA3-2012, NOM-024-SSA3-2012 - CIE-10 catalog
+    Shows statistics for system diagnoses (created_by=0) and doctor's own diagnoses (created_by=doctor_id)
+    """
     try:
-        # Total counts (using 'active' column name from database)
-        total_diagnoses = db.query(DiagnosisCatalog).filter(DiagnosisCatalog.active == True).count()
-        total_categories = db.query(DiagnosisCategory).filter(DiagnosisCategory.active == True).count()
+        # Build base query
+        query = db.query(DiagnosisCatalog).filter(
+            DiagnosisCatalog.is_active == True
+        )
         
-        # Diagnoses by specialty
-        specialty_stats = db.query(
-            DiagnosisCatalog.specialty,
-            func.count(DiagnosisCatalog.id).label('count')
-        ).filter(
-            DiagnosisCatalog.active == True,
-            DiagnosisCatalog.specialty.isnot(None)
-        ).group_by(DiagnosisCatalog.specialty).all()
+        # Filter by creator: system (created_by=0) OR doctor's own (created_by=doctor_id)
+        query = filter_diagnoses_by_creator(query, current_user)
         
-        diagnoses_by_specialty = {stat.specialty: stat.count for stat in specialty_stats}
-        
-        # Diagnoses by severity
-        severity_stats = db.query(
-            DiagnosisCatalog.severity_level,
-            func.count(DiagnosisCatalog.id).label('count')
-        ).filter(
-            DiagnosisCatalog.active == True,
-            DiagnosisCatalog.severity_level.isnot(None)
-        ).group_by(DiagnosisCatalog.severity_level).all()
-        
-        diagnoses_by_severity = {stat.severity_level: stat.count for stat in severity_stats}
-        
-        # Chronic and contagious conditions
-        chronic_conditions = db.query(DiagnosisCatalog).filter(
-            DiagnosisCatalog.active == True,
-            DiagnosisCatalog.is_chronic == True
-        ).count()
-        
-        contagious_conditions = db.query(DiagnosisCatalog).filter(
-            DiagnosisCatalog.active == True,
-            DiagnosisCatalog.is_contagious == True
-        ).count()
+        # Total counts
+        total_diagnoses = query.count()
         
         return DiagnosisStats(
-            total_diagnoses=total_diagnoses,
-            total_categories=total_categories,
-            diagnoses_by_specialty=diagnoses_by_specialty,
-            diagnoses_by_severity=diagnoses_by_severity,
-            chronic_conditions=chronic_conditions,
-            contagious_conditions=contagious_conditions
+            total_diagnoses=total_diagnoses
         )
     
     except Exception as e:
@@ -398,23 +285,70 @@ async def get_diagnosis_stats(
             detail="Error retrieving diagnosis statistics"
         )
 
-@router.get("/specialties", response_model=List[str])
-async def get_diagnosis_specialties(
+@router.get("/catalog-status")
+async def get_catalog_status(
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user: Person = Depends(get_current_user)
 ):
-    """Get list of all medical specialties in the diagnosis catalog"""
+    """
+    Get CIE-10 catalog status and compliance information
+    Compliance: NOM-004-SSA3-2012 - Verify catalog version and status
+    Shows status for system diagnoses (created_by=0) and doctor's own diagnoses (created_by=doctor_id)
+    """
     try:
-        specialties = db.query(DiagnosisCatalog.specialty).filter(
-            DiagnosisCatalog.active == True,
-            DiagnosisCatalog.specialty.isnot(None)
-        ).distinct().order_by(DiagnosisCatalog.specialty).all()
+        from catalog_metadata import get_catalog_version, CATALOG_METADATA
         
-        return [specialty[0] for specialty in specialties]
+        # Get catalog metadata
+        catalog_info = CATALOG_METADATA.get("diagnosis_catalog", {})
+        catalog_version = catalog_info.get("version", "Unknown")
+        
+        # Build base query
+        query = db.query(DiagnosisCatalog).filter(
+            DiagnosisCatalog.is_active == True
+        )
+        
+        # Filter by creator: system (created_by=0) OR doctor's own (created_by=doctor_id)
+        query = filter_diagnoses_by_creator(query, current_user)
+        
+        # Get catalog statistics
+        total_diagnoses = query.count()
+        diagnoses_with_code = query.filter(
+            DiagnosisCatalog.code.isnot(None),
+            DiagnosisCatalog.code != ''
+        ).count()
+        diagnoses_with_name = query.filter(
+            DiagnosisCatalog.name.isnot(None),
+            DiagnosisCatalog.name != ''
+        ).count()
+        
+        # Calculate compliance percentage
+        compliance_percentage = 100.0 if total_diagnoses > 0 and diagnoses_with_code == total_diagnoses and diagnoses_with_name == total_diagnoses else 0.0
+        
+        # Check if catalog meets minimum requirements
+        min_records = catalog_info.get("min_records", 0)
+        meets_minimum = total_diagnoses >= min_records
+        
+        return {
+            "catalog_name": catalog_info.get("name", "CIE-10 Diagnósticos"),
+            "version": catalog_version,
+            "official_source": catalog_info.get("official_source", "Unknown"),
+            "norm_reference": catalog_info.get("norm_reference", "NOM-004-SSA3-2012, NOM-024-SSA3-2012"),
+            "status": "active" if meets_minimum and compliance_percentage == 100.0 else "needs_attention",
+            "total_diagnoses": total_diagnoses,
+            "diagnoses_with_code": diagnoses_with_code,
+            "diagnoses_with_name": diagnoses_with_name,
+            "compliance_percentage": compliance_percentage,
+            "meets_minimum_requirements": meets_minimum,
+            "min_records_required": min_records,
+            "compliance_required": catalog_info.get("compliance_required", True),
+            "validation_enabled": catalog_info.get("validation_enabled", True),
+            "compliance_note": "Catalog complies with NOM-004-SSA3-2012 requirements" if compliance_percentage == 100.0 and meets_minimum else "Catalog needs attention to meet NOM-004-SSA3-2012 requirements",
+            "note": catalog_info.get("note", "")
+        }
     
     except Exception as e:
-        logger.error(f"Error getting diagnosis specialties: {str(e)}")
+        logger.error(f"Error getting catalog status: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error retrieving diagnosis specialties"
+            detail="Error retrieving catalog status"
         )

@@ -13,12 +13,25 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import AuthContainer from './components/auth/AuthContainer';
 import { ToastProvider } from './components/common/ToastNotification';
 import { twitterTheme } from './themes/twitterTheme';
+import { PublicPrivacyNotice } from './components/public/PublicPrivacyNotice';
+import { LandingPage } from './components/public/LandingPage';
 
 // Use Twitter-inspired theme consistently
 const theme = twitterTheme;
 
 const AppWithAuth: React.FC = () => {
   const { logout, isAuthenticated } = useAuth();
+  const currentPath = window.location.pathname;
+  
+  // Check if we're on a public privacy notice page
+  const isPrivacyNoticePage = currentPath.startsWith('/privacy-notice') || 
+                               currentPath === '/privacy' ||
+                               currentPath === '/aviso-privacidad';
+  
+  // If public privacy notice page, show it regardless of auth status
+  if (isPrivacyNoticePage) {
+    return <PublicPrivacyNotice />;
+  }
   
   // If not authenticated, show auth container (login, register, forgot password, reset password)
   if (!isAuthenticated) {
@@ -30,7 +43,7 @@ const AppWithAuth: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  console.log('🚀 CORTEX App iniciando con React + Material-UI');
+  // App initialization - no logging needed
   
   return (
     <ErrorBoundary>

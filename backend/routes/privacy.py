@@ -234,8 +234,7 @@ async def send_whatsapp_privacy_notice(
     except Exception as e:
         import traceback
         error_traceback = traceback.format_exc()
-        print(f"❌ Error sending privacy notice: {str(e)}")
-        print(f"❌ Traceback: {error_traceback}")
+        api_logger.error("Error sending privacy notice", error=str(e), exc_info=True)
         api_logger.error(f"Error sending privacy notice: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
@@ -251,17 +250,45 @@ async def get_patient_consent_status(
 ):
     """
     Obtiene el estado del consentimiento de privacidad de un paciente
+    Permite acceso si el paciente existe (no requiere consulta previa para pacientes nuevos)
     """
     try:
-        # Verificar acceso
+        api_logger.debug(
+            f"🔍 Getting consent status for patient {patient_id}",
+            extra={"patient_id": patient_id, "doctor_id": current_user.id if current_user else None}
+        )
+        
+        # Verificar que el paciente existe
+        patient = db.query(Person).filter(
+            Person.id == patient_id,
+            Person.person_type == 'patient'
+        ).first()
+        
+        if not patient:
+            api_logger.warning(
+                f"⚠️ Patient {patient_id} not found",
+                extra={"patient_id": patient_id, "doctor_id": current_user.id if current_user else None}
+            )
+            raise HTTPException(status_code=404, detail="Paciente no encontrado")
+        
+        # Para doctores, permitir acceso sin requerir consulta previa
+        # Esto permite crear consultas nuevas para pacientes nuevos
         if current_user.person_type == 'doctor':
-            consultation = db.query(MedicalRecord).filter(
-                MedicalRecord.patient_id == patient_id,
-                MedicalRecord.doctor_id == current_user.id
-            ).first()
-            
-            if not consultation:
-                raise HTTPException(status_code=403, detail="Access denied")
+            # Verificar que el paciente existe y está activo (acceso básico)
+            # No requerir consulta previa para permitir creación de consultas nuevas
+            if not patient.is_active:
+                api_logger.warning(
+                    f"⚠️ Patient {patient_id} is not active",
+                    extra={"patient_id": patient_id, "doctor_id": current_user.id}
+                )
+                raise HTTPException(status_code=403, detail="El paciente no está activo")
+        else:
+            # Solo doctores pueden acceder
+            api_logger.warning(
+                f"⚠️ Non-doctor user trying to access consent status",
+                extra={"patient_id": patient_id, "user_id": current_user.id, "user_type": current_user.person_type}
+            )
+            raise HTTPException(status_code=403, detail="Solo doctores pueden acceder al estado de consentimiento")
         
         # Buscar consentimiento más reciente
         consent = db.query(PrivacyConsent).filter(
@@ -269,6 +296,10 @@ async def get_patient_consent_status(
         ).order_by(PrivacyConsent.created_at.desc()).first()
         
         if not consent:
+            api_logger.debug(
+                f"ℹ️ No consent found for patient {patient_id}",
+                extra={"patient_id": patient_id, "doctor_id": current_user.id}
+            )
             return {
                 "has_consent": False,
                 "status": "none",
@@ -276,6 +307,11 @@ async def get_patient_consent_status(
             }
         
         has_consent = consent.consent_given == True
+        
+        api_logger.debug(
+            f"✅ Consent status retrieved for patient {patient_id}",
+            extra={"patient_id": patient_id, "has_consent": has_consent, "doctor_id": current_user.id}
+        )
         
         return {
             "has_consent": has_consent,
@@ -294,6 +330,11 @@ async def get_patient_consent_status(
     except HTTPException:
         raise
     except Exception as e:
+        api_logger.error(
+            f"❌ Error getting consent status for patient {patient_id}",
+            extra={"patient_id": patient_id, "error": str(e)},
+            exc_info=True
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -408,12 +449,10 @@ async def create_arco_request(
         arco_request = ARCORequest(
             patient_id=patient_id,
             request_type=request_type,
-            description=description,
+            request_description=description,  # Field name in model
             status='pending',
-            contact_email=contact_email,
-            contact_phone=contact_phone,
-            requested_by=current_user.id,
-            requested_at=datetime.utcnow(),
+            request_date=datetime.utcnow(),
+            assigned_to=current_user.id,  # Use assigned_to instead of requested_by
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
@@ -450,9 +489,9 @@ async def create_arco_request(
                 "id": arco_request.id,
                 "patient_id": arco_request.patient_id,
                 "request_type": arco_request.request_type,
-                "description": arco_request.description,
+                "description": arco_request.request_description,
                 "status": arco_request.status,
-                "requested_at": arco_request.requested_at.isoformat(),
+                "requested_at": arco_request.request_date.isoformat() if arco_request.request_date else None,
                 "created_at": arco_request.created_at.isoformat()
             }
         }
@@ -495,13 +534,13 @@ async def get_arco_requests(
                     "id": req.id,
                     "patient_id": req.patient_id,
                     "request_type": req.request_type,
-                    "description": req.description,
+                    "description": getattr(req, 'request_description', None),
                     "status": req.status,
-                    "contact_email": req.contact_email,
-                    "contact_phone": req.contact_phone,
-                    "requested_at": req.requested_at.isoformat() if req.requested_at else None,
-                    "resolved_at": req.resolved_at.isoformat() if req.resolved_at else None,
-                    "resolution_notes": req.resolution_notes,
+                    "contact_email": getattr(req, 'contact_email', None),  # Field may not exist in model
+                    "contact_phone": getattr(req, 'contact_phone', None),  # Field may not exist in model
+                    "requested_at": req.request_date.isoformat() if req.request_date else None,
+                    "resolved_at": getattr(req, 'resolved_at', None),  # Field may not exist in model
+                    "resolution_notes": getattr(req, 'resolution_notes', None),  # Field may not exist in model
                     "created_at": req.created_at.isoformat(),
                     "updated_at": req.updated_at.isoformat()
                 }
@@ -559,9 +598,9 @@ async def update_arco_request(
         old_status = arco_request.status
         arco_request.status = status
         if resolution_notes:
-            arco_request.resolution_notes = resolution_notes
-        if status == 'resolved':
-            arco_request.resolved_at = datetime.utcnow()
+            arco_request.response_description = resolution_notes  # Use response_description instead
+        if status == 'completed':  # Model uses 'completed', not 'resolved'
+            arco_request.response_date = datetime.utcnow()  # Use response_date instead
         arco_request.updated_at = datetime.utcnow()
         
         db.commit()
@@ -592,8 +631,8 @@ async def update_arco_request(
             "arco_request": {
                 "id": arco_request.id,
                 "status": arco_request.status,
-                "resolution_notes": arco_request.resolution_notes,
-                "resolved_at": arco_request.resolved_at.isoformat() if arco_request.resolved_at else None,
+                "resolution_notes": arco_request.response_description,  # Use response_description instead
+                "resolved_at": arco_request.response_date.isoformat() if arco_request.response_date else None,  # Use response_date instead
                 "updated_at": arco_request.updated_at.isoformat()
             }
         }

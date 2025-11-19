@@ -115,8 +115,10 @@ export const useAgendaView = (
 
   const getStatusColor = useCallback((status: string): 'success' | 'error' | 'primary' | 'default' => {
     switch (status) {
-      case 'confirmed':
+      case 'confirmada':
         return 'success';
+      case 'por_confirmar':
+        return 'primary';
       case 'cancelled':
         return 'error';
       case 'completed':
@@ -128,8 +130,10 @@ export const useAgendaView = (
 
   const getStatusLabel = useCallback((status: string): string => {
     switch (status) {
-      case 'confirmed':
+      case 'confirmada':
         return 'Confirmada';
+      case 'por_confirmar':
+        return 'Por confirmar';
       case 'cancelled':
         return 'Cancelada';
       case 'completed':

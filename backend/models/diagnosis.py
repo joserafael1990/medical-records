@@ -3,73 +3,37 @@ Diagnosis catalog models based on CIE-10 (ICD-10)
 International Classification of Diseases, 10th Revision
 """
 
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, ARRAY, DECIMAL, Index
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Index
 from sqlalchemy.sql import func
 from database import Base
 
-class DiagnosisCategory(Base):
-    __tablename__ = "diagnosis_categories"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(200), nullable=False)
-    # parent_id and level columns do not exist in database - removed
-    active = Column('active', Boolean, default=True)  # Database column is 'active', not 'is_active'
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    # Alias for backward compatibility
-    @property
-    def is_active(self):
-        return self.active
-    
-    @is_active.setter
-    def is_active(self, value):
-        self.active = value
-    
-    # Relationships
-    # parent relationship removed - parent_id column doesn't exist
-    diagnoses = relationship("DiagnosisCatalog", back_populates="category")
-    
-    def __repr__(self):
-        return f"<DiagnosisCategory(id={self.id}, name='{self.name}')>"
+# DiagnosisCategory removed - not required by law (NOM-004-SSA3-2012, NOM-024-SSA3-2012)
+# Only code and name are required for CIE-10 catalog compliance
 
 class DiagnosisCatalog(Base):
+    """
+    CIE-10 Diagnosis Catalog
+    Compliance: NOM-004-SSA3-2012, NOM-024-SSA3-2012
+    Required fields by law: code (CIE-10 code), name (description)
+    created_by: 0 = system, doctor_id = doctor who created it
+    """
     __tablename__ = "diagnosis_catalog"
     
     id = Column(Integer, primary_key=True, index=True)
-    code = Column(String(10), unique=True, nullable=False, index=True)
-    name = Column(String(500), nullable=False)
-    category_id = Column(Integer, ForeignKey("diagnosis_categories.id"), nullable=False)
-    description = Column(Text)
-    # synonyms field removed - column does not exist in database
-    # To add synonyms in the future, add column to DB first: ALTER TABLE diagnosis_catalog ADD COLUMN synonyms TEXT[];
-    # synonyms = Column(ARRAY(String), nullable=True)  # Disabled - column doesn't exist
-    severity_level = Column(String(20))  # mild, moderate, severe, critical
-    is_chronic = Column(Boolean, default=False)
-    is_contagious = Column(Boolean, default=False)
-    age_group = Column(String(50))  # pediatric, adult, geriatric, all
-    gender_specific = Column(String(10))  # male, female, both
-    specialty = Column(String(100), index=True)  # Medical specialty
-    active = Column('active', Boolean, default=True)  # Database column is 'active', not 'is_active'
+    code = Column(String(10), unique=True, nullable=False, index=True)  # CIE-10 code (required by law)
+    name = Column(String(500), nullable=False)  # Diagnosis description (required by law)
+    is_active = Column(Boolean, default=True)
+    created_by = Column(Integer, nullable=False, default=0, index=True)  # 0 = system, doctor_id = creator
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
-    # Alias for backward compatibility
-    @property
-    def is_active(self):
-        return self.active
-    
-    @is_active.setter
-    def is_active(self, value):
-        self.active = value
-    
     # Relationships
-    category = relationship("DiagnosisCategory", back_populates="diagnoses")
-    # recommendations relationship removed - table deleted
-    # primary_differentials relationship removed - table deleted
-    # differential_diagnoses relationship removed - table deleted
+    # Note: created_by references persons(id), but created_by = 0 (system) doesn't have a valid FK
+    # We handle this at application level, not with a strict FK constraint
+    # For created_by > 0, we can query the Person directly using created_by
     
     def __repr__(self):
-        return f"<DiagnosisCatalog(code='{self.code}', name='{self.name}')>"
+        return f"<DiagnosisCatalog(code='{self.code}', name='{self.name}', created_by={self.created_by})>"
 
+# DiagnosisCategory removed - not required by law
 # DiagnosisRecommendation and DiagnosisDifferential models removed - tables deleted

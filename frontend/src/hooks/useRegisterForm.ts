@@ -35,7 +35,6 @@ export interface RegistrationData {
   first_name: string;
   paternal_surname: string;
   maternal_surname: string;
-  curp: string;
   gender: string;
   birth_date: string;
   phone: string;
@@ -117,7 +116,6 @@ export interface UseRegisterFormReturn {
   handleSubmit: () => Promise<void>;
   validateStep: (step: number) => boolean;
   validatePassword: (password: string) => PasswordValidation;
-  validateCURP: (curp: string) => boolean;
   validateEmail: (email: string) => boolean;
   
   // Error refs
@@ -135,7 +133,6 @@ export const useRegisterForm = (): UseRegisterFormReturn => {
     first_name: '',
     paternal_surname: '',
     maternal_surname: '',
-    curp: '',
     gender: '',
     birth_date: '',
     phone: '',
@@ -319,12 +316,6 @@ export const useRegisterForm = (): UseRegisterFormReturn => {
     };
   }, []);
   
-  // Validate CURP
-  const validateCURP = useCallback((curp: string): boolean => {
-    const curpRegex = /^[A-Z]{4}[0-9]{6}[HM][A-Z]{5}[A-Z0-9]{2}$/;
-    return curpRegex.test(curp);
-  }, []);
-  
   // Validate email
   const validateEmail = useCallback((email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -359,8 +350,6 @@ export const useRegisterForm = (): UseRegisterFormReturn => {
       case 1: // Personal Information
         if (!formData.first_name) errors.first_name = 'El nombre es obligatorio';
         if (!formData.paternal_surname) errors.paternal_surname = 'El apellido paterno es obligatorio';
-        if (!formData.curp) errors.curp = 'El CURP es obligatorio';
-        else if (!validateCURP(formData.curp)) errors.curp = 'El CURP no es válido';
         if (!formData.gender) errors.gender = 'El género es obligatorio';
         if (!formData.birth_date) errors.birth_date = 'La fecha de nacimiento es obligatoria';
         if (!formData.phone) errors.phone = 'El teléfono es obligatorio';
@@ -388,7 +377,7 @@ export const useRegisterForm = (): UseRegisterFormReturn => {
     
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [formData, validateEmail, validatePassword, validateCURP]);
+  }, [formData, validateEmail, validatePassword]);
   
   // Handle next step
   const handleNext = useCallback(() => {
@@ -481,7 +470,6 @@ export const useRegisterForm = (): UseRegisterFormReturn => {
     handleSubmit,
     validateStep,
     validatePassword,
-    validateCURP,
     validateEmail,
     errorRef
   };

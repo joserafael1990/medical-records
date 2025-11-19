@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -43,6 +43,7 @@ import DoctorProfileDialog from '../dialogs/DoctorProfileDialog';
 import ScheduleConfigDialog from '../dialogs/ScheduleConfigDialog';
 import OfficeDialog from '../dialogs/OfficeDialog';
 import { useDoctorProfileView } from '../../hooks/useDoctorProfileView';
+import { API_CONFIG } from '../../constants';
 
 interface DoctorProfileViewProps {
   doctorProfile: any;
@@ -83,6 +84,38 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
   const viewHook = useDoctorProfileView({
     doctorProfileId: doctorProfile?.id
   });
+  const avatarUrl =
+    doctorProfile?.avatar?.avatar_url ||
+    doctorProfile?.avatar?.url ||
+    doctorProfile?.avatar_url ||
+    doctorProfile?.avatarUrl;
+  const resolvedAvatarUrl = useMemo(() => {
+    if (!avatarUrl) return undefined;
+    let url = avatarUrl;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      const normalized = url.startsWith('/') ? url : `/${url}`;
+      url = `${API_CONFIG.BASE_URL}${normalized}`;
+    }
+    // Add cache busting parameter based on avatar metadata to force reload when avatar changes
+    const cacheKey = doctorProfile?.avatar_file_path || doctorProfile?.avatar_template_key || doctorProfile?.updated_at;
+    if (cacheKey) {
+      const separator = url.includes('?') ? '&' : '?';
+      url = `${url}${separator}_t=${typeof cacheKey === 'string' ? cacheKey : cacheKey?.toString() || Date.now()}`;
+    }
+    return url;
+  }, [avatarUrl, doctorProfile?.avatar_file_path, doctorProfile?.avatar_template_key, doctorProfile?.updated_at]);
+
+  const avatarInitials = useMemo(() => {
+    if (!doctorProfile?.name) return 'DR';
+    return doctorProfile.name
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((n: string) => n[0])
+      .join('')
+      .toUpperCase();
+  }, [doctorProfile?.name]);
+
 
   const {
     scheduleConfigDialogOpen,
@@ -153,18 +186,19 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
         }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Avatar 
+              src={resolvedAvatarUrl}
               sx={{ 
                 width: 80, 
                 height: 80, 
-                bgcolor: 'primary.main',
+                bgcolor: resolvedAvatarUrl ? 'transparent' : 'primary.main',
                 fontSize: '2rem'
               }}
             >
-              {doctorProfile.first_name?.[0]}{doctorProfile.paternal_surname?.[0]}
+              {avatarInitials}
             </Avatar>
         <Box>
               <Typography variant="h4" component="h1" gutterBottom>
-                {doctorProfile.full_name || `${doctorProfile.title || ''} ${doctorProfile.first_name} ${doctorProfile.paternal_surname}`.trim()}
+                {doctorProfile.title && doctorProfile.name ? `${doctorProfile.title} ${doctorProfile.name}` : doctorProfile.name || 'Usuario'}
           </Typography>
               <Typography variant="h6" color="text.secondary" gutterBottom>
                 {doctorProfile.specialty_name || 'Especialidad no especificada'}
@@ -236,7 +270,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                               </ListItemIcon>
                               <ListItemText 
                     primary="Nombre Completo" 
-                    secondary={doctorProfile.full_name || `${doctorProfile.title || ''} ${doctorProfile.first_name} ${doctorProfile.paternal_surname}`.trim()} 
+                    secondary={doctorProfile.name || 'No especificado'} 
                             />
                           </ListItem>
                           <ListItem sx={{ px: 0 }}>

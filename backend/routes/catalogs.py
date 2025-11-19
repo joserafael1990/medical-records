@@ -23,7 +23,7 @@ async def get_specialties(db: Session = Depends(get_db)):
             {
                 "id": spec.id,
                 "name": spec.name,
-                "active": spec.active,
+                "is_active": spec.is_active,
                 "created_at": spec.created_at.isoformat() if spec.created_at else None
             }
             for spec in specialties

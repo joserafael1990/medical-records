@@ -12,20 +12,24 @@ import {
   Divider,
   Autocomplete,
   TextField,
-  CircularProgress
+  CircularProgress,
+  Button
 } from '@mui/material';
 import {
   MedicalServices as MedicalServicesIcon,
   Delete as DeleteIcon,
-  Search as SearchIcon
+  Search as SearchIcon,
+  Add as AddIcon
 } from '@mui/icons-material';
 import { DiagnosisCatalog, useDiagnosisCatalog, DiagnosisSearchResult } from '../../hooks/useDiagnosisCatalog';
+import { logger } from '../../utils/logger';
 
 interface DiagnosisSectionProps {
   diagnoses: DiagnosisCatalog[];
   onAddDiagnosis: (diagnosis: DiagnosisCatalog) => void;
   onRemoveDiagnosis: (diagnosisId: string) => void;
   onEditDiagnosis?: (diagnosis: DiagnosisCatalog) => void;
+  onCreateDiagnosis?: (name: string) => Promise<DiagnosisCatalog>;
   title?: string;
   maxSelections?: number;
   showAddButton?: boolean;
@@ -38,6 +42,7 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
   onAddDiagnosis,
   onRemoveDiagnosis,
   onEditDiagnosis,
+  onCreateDiagnosis,
   title = "Diagnósticos",
   maxSelections = 999,
   showAddButton = true,
@@ -49,6 +54,7 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
   const [searchResults, setSearchResults] = useState<DiagnosisSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [selectedDiagnosis, setSelectedDiagnosis] = useState<DiagnosisSearchResult | null>(null);
+  const [isCreatingDiagnosis, setIsCreatingDiagnosis] = useState(false);
 
   // Debounced search
   // Use useRef to store the searchDiagnoses method to avoid dependency issues
@@ -75,7 +81,7 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
         });
         setSearchResults(results || []);
       } catch (err) {
-        console.error('Error searching diagnoses:', err);
+        logger.error('Error searching diagnoses', err, 'api');
         setSearchResults([]);
       } finally {
         setSearchLoading(false);
@@ -85,11 +91,62 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
     return () => clearTimeout(timeoutId);
   }, [searchTerm]); // Only depend on searchTerm - method is accessed via ref
 
-  const handleDiagnosisSelect = useCallback((diagnosis: DiagnosisSearchResult | null) => {
-    if (!diagnosis) return;
+  // Check if diagnosis name already exists in search results
+  const diagnosisExists = searchResults.some(
+    (diagnosis) => diagnosis.name?.toLowerCase().trim() === searchTerm.toLowerCase().trim()
+  );
 
-    // Check if already selected
-    const isAlreadySelected = diagnoses.some(d => d.code === diagnosis.code);
+  const handleDiagnosisChange = (
+    _event: any,
+    newValue: DiagnosisSearchResult | string | null
+  ) => {
+    if (typeof newValue === 'string') {
+      setSearchTerm(newValue);
+      setSelectedDiagnosis(null);
+    } else if (newValue && newValue.id) {
+      handleDiagnosisSelect(newValue);
+    } else {
+      setSelectedDiagnosis(null);
+    }
+  };
+
+  const handleCreateDiagnosis = async () => {
+    if (!onCreateDiagnosis || !searchTerm.trim() || diagnosisExists) {
+      return;
+    }
+
+    try {
+      setIsCreatingDiagnosis(true);
+      const newDiagnosis = await onCreateDiagnosis(searchTerm.trim());
+      
+      // Convert to DiagnosisCatalog format and add
+      const diagnosisToAdd: DiagnosisCatalog = {
+        id: newDiagnosis.id,
+        code: newDiagnosis.code || '',
+        name: newDiagnosis.name,
+        is_active: newDiagnosis.is_active,
+        created_by: newDiagnosis.created_by,
+        created_at: newDiagnosis.created_at,
+        updated_at: newDiagnosis.updated_at
+      };
+
+      onAddDiagnosis(diagnosisToAdd);
+      setSelectedDiagnosis(null);
+      setSearchTerm('');
+      setSearchResults([]);
+    } catch (error) {
+      logger.error('Error creating diagnosis', error, 'api');
+    } finally {
+      setIsCreatingDiagnosis(false);
+    }
+  };
+
+  const handleDiagnosisSelect = useCallback((diagnosis: DiagnosisSearchResult) => {
+    // Check if already selected (by code or by name if code is empty)
+    const isAlreadySelected = diagnoses.some(d => 
+      d.code === diagnosis.code || 
+      (d.code === '' && d.name.toLowerCase().trim() === diagnosis.name.toLowerCase().trim())
+    );
     if (isAlreadySelected) {
       setSelectedDiagnosis(null);
       setSearchTerm('');
@@ -104,26 +161,12 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
     // Convert to DiagnosisCatalog format
     const diagnosisToAdd: DiagnosisCatalog = {
       id: diagnosis.id,
-      code: diagnosis.code,
+      code: diagnosis.code || '',
       name: diagnosis.name,
-      specialty: diagnosis.specialty,
-      severity_level: diagnosis.severity_level,
-      is_chronic: diagnosis.is_chronic,
-      description: diagnosis.description,
       is_active: true,
-      created_at: '',
-      updated_at: '',
-      category_id: 0,
-      is_contagious: diagnosis.is_contagious,
-      category: {
-        id: diagnosis.category_id || 0,
-        code: '',  // category_code field removed
-        name: diagnosis.category_name || '',
-        level: 1,
-        is_active: true,
-        created_at: '',
-        updated_at: ''
-      }
+      created_by: diagnosis.created_by || 0,  // 0 = system, doctor_id = doctor who created it
+      created_at: diagnosis.created_at || '',
+      updated_at: diagnosis.updated_at || ''
     };
 
     onAddDiagnosis(diagnosisToAdd);
@@ -132,25 +175,6 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
     setSearchResults([]);
   }, [diagnoses, maxSelections, onAddDiagnosis]);
 
-  const getSeverityColor = (severity?: string) => {
-    switch (severity) {
-      case 'critical': return 'error';
-      case 'severe': return 'warning';
-      case 'moderate': return 'info';
-      case 'mild': return 'success';
-      default: return 'default';
-    }
-  };
-
-  const getSeverityLabel = (severity?: string) => {
-    switch (severity) {
-      case 'critical': return 'Crítica';
-      case 'severe': return 'Severa';
-      case 'moderate': return 'Moderada';
-      case 'mild': return 'Leve';
-      default: return severity;
-    }
-  };
 
   return (
     <Box>
@@ -174,60 +198,82 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
         </Alert>
       )}
 
-      {/* Add Diagnosis - Inline Autocomplete */}
+      {/* Add Diagnosis - Inline Autocomplete with Save Button */}
       {showAddButton && diagnoses.length < maxSelections && (
-        <Box sx={{ mb: 2 }}>
-          <Autocomplete
-            options={searchResults}
-            getOptionLabel={(option) => `${option.code} - ${option.name}`}
-            loading={searchLoading}
-            value={selectedDiagnosis}
-            onChange={(event, newValue) => {
-              if (newValue) {
-                handleDiagnosisSelect(newValue);
-              }
-            }}
-            onInputChange={(event, newInputValue) => {
-              setSearchTerm(newInputValue);
-            }}
-            filterOptions={(x) => x} // Disable default filtering, we do it server-side
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                placeholder="Buscar diagnóstico (CIE-10)..."
-                size="small"
-                InputProps={{
-                  ...params.InputProps,
-                  startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
-                  endAdornment: (
-                    <>
-                      {searchLoading ? <CircularProgress size={20} /> : null}
-                      {params.InputProps.endAdornment}
-                    </>
-                  )
-                }}
-              />
-            )}
-            renderOption={(props, option) => {
-              const { key, ...otherProps } = props;
-              return (
-                <Box component="li" key={option.id} {...otherProps}>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {option.code} - {option.name}
-                    </Typography>
-                    {option.description && (
-                      <Typography variant="caption" color="text.secondary">
-                        {option.description.length > 80 ? `${option.description.substring(0, 80)}...` : option.description}
-                      </Typography>
-                    )}
-                  </Box>
-                </Box>
-              );
-            }}
-            sx={{ mb: 2 }}
-          />
-        </Box>
+        <Card sx={{ mb: 2, border: '1px dashed', borderColor: 'grey.300', backgroundColor: '#fafafa' }}>
+          <CardContent sx={{ p: 2 }}>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'stretch', flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Autocomplete
+                  freeSolo
+                  options={searchResults}
+                  getOptionLabel={(option) => {
+                    if (typeof option === 'string') {
+                      return option;
+                    }
+                    return option.code ? `${option.code} - ${option.name}` : option.name;
+                  }}
+                  loading={searchLoading}
+                  value={selectedDiagnosis}
+                  onChange={handleDiagnosisChange}
+                  onInputChange={(event, newInputValue) => {
+                    setSearchTerm(newInputValue);
+                  }}
+                  filterOptions={(x) => x} // Disable default filtering, we do it server-side
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      placeholder="Buscar diagnóstico (CIE-10)..."
+                      size="small"
+                      fullWidth
+                      InputProps={{
+                        ...params.InputProps,
+                        startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                        endAdornment: (
+                          <>
+                            {searchLoading ? <CircularProgress size={20} /> : null}
+                            {params.InputProps.endAdornment}
+                          </>
+                        )
+                      }}
+                    />
+                  )}
+                  renderOption={(props, option) => {
+                    const { key, ...otherProps } = props;
+                    if (typeof option === 'string') {
+                      return null;
+                    }
+                    return (
+                      <Box component="li" key={option.id} {...otherProps}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            {option.code ? `${option.code} - ${option.name}` : option.name}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    );
+                  }}
+                />
+              </Box>
+              {onCreateDiagnosis && (
+                <Button
+                  variant="outlined"
+                  startIcon={<AddIcon />}
+                  onClick={handleCreateDiagnosis}
+                  disabled={
+                    isCreatingDiagnosis ||
+                    !searchTerm.trim() ||
+                    diagnosisExists ||
+                    !onCreateDiagnosis
+                  }
+                  sx={{ flexShrink: 0, whiteSpace: 'nowrap', minHeight: 40 }}
+                >
+                  {isCreatingDiagnosis ? 'Guardando...' : 'Guardar'}
+                </Button>
+              )}
+            </Box>
+          </CardContent>
+        </Card>
       )}
 
       {/* Diagnoses List */}
@@ -238,16 +284,6 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
       ) : (
         <Grid container spacing={2}>
           {diagnoses.map((diagnosis) => {
-            const rawDescription = typeof diagnosis.description === 'string'
-              ? diagnosis.description.trim()
-              : '';
-            const rawName = typeof diagnosis.name === 'string'
-              ? diagnosis.name.trim()
-              : '';
-            const shouldShowDescription = Boolean(
-              rawDescription && rawDescription.toLowerCase() !== rawName.toLowerCase()
-            );
-
             return (
               <Grid item xs={12} sm={6} md={4} key={String(diagnosis.id)}>
                 <Card 
@@ -279,48 +315,6 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
                     <Typography variant="body2" sx={{ mb: 1, minHeight: '2.5em' }}>
                       {diagnosis.name}
                     </Typography>
-                    
-                    {shouldShowDescription && (
-                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                        {rawDescription.length > 100 
-                          ? `${rawDescription.substring(0, 100)}...` 
-                          : rawDescription
-                        }
-                      </Typography>
-                    )}
-                    
-                    <Box display="flex" flexWrap="wrap" gap={0.5} sx={{ mt: 1 }}>
-                      {diagnosis.category && (
-                        <Chip 
-                          label={typeof diagnosis.category === 'string' ? diagnosis.category : (diagnosis.category.name || '')} 
-                          size="small" 
-                          variant="outlined"
-                          color="default"
-                        />
-                      )}
-                      {diagnosis.specialty && (
-                        <Chip 
-                          label={diagnosis.specialty} 
-                          size="small" 
-                          variant="outlined"
-                          color="info"
-                        />
-                      )}
-                      {diagnosis.severity_level && (
-                        <Chip 
-                          label={getSeverityLabel(diagnosis.severity_level)} 
-                          size="small" 
-                          color={getSeverityColor(diagnosis.severity_level)}
-                        />
-                      )}
-                      {diagnosis.is_chronic && (
-                        <Chip 
-                          label="Crónico" 
-                          size="small" 
-                          color="warning"
-                        />
-                      )}
-                    </Box>
                   </CardContent>
                 </Card>
               </Grid>

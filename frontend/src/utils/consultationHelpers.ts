@@ -14,7 +14,7 @@ export const submitConsultation = async (params: {
   showSuccessMessage: (message: string) => void;
   onSuccess: () => Promise<void>;
 }) => {
-  console.log('Submitting consultation:', params);
+  logger.debug('Submitting consultation', { isEditing: params.isEditing, consultationId: params.selectedConsultation?.id }, 'api');
   
   try {
     const {
@@ -33,7 +33,6 @@ export const submitConsultation = async (params: {
 
     // Validate required fields
     const validationResult = validateConsultation(formData);
-    console.log('📋 Validation result:', validationResult);
     
     if (!validationResult.isValid) {
       setFieldErrors(validationResult.errors);
@@ -47,13 +46,12 @@ export const submitConsultation = async (params: {
     
     if (isEditing && selectedConsultation) {
       // Update existing consultation
-      console.log('🔄 Updating existing consultation:', selectedConsultation.id);
-      console.log('📊 Sending update data:', formData);
+      logger.debug('Updating existing consultation', { consultationId: selectedConsultation.id }, 'api');
       result = await apiService.consultations.updateConsultation(selectedConsultation.id.toString(), formData);
       showSuccessMessage('✅ Consulta actualizada exitosamente');
     } else {
       // Create new consultation
-      console.log('🔄 Creating new consultation');
+      logger.debug('Creating new consultation', undefined, 'api');
       result = await apiService.consultations.createConsultation(formData);
       showSuccessMessage('✅ Consulta creada exitosamente');
     }
@@ -62,7 +60,6 @@ export const submitConsultation = async (params: {
     setTempClinicalStudies([]);
     
     // Call success callback
-    console.log('🔄 Calling onSuccess callback to refresh consultations list...');
     await onSuccess();
     
     // Reset loading state
@@ -71,7 +68,7 @@ export const submitConsultation = async (params: {
     return result;
     
   } catch (error: any) {
-    console.error('❌ Error in submitConsultation:', error);
+    logger.error('Error in submitConsultation', error, 'api');
     
     const {
       setFormErrorMessage,
@@ -107,6 +104,14 @@ export const validateConsultation = (data: any) => {
   
   if (!data.patient_id) {
     errors.patient_id = 'Paciente requerido';
+  }
+  
+  if (!data.patient_document_id) {
+    errors.patient_document_id = 'Documento personal requerido';
+  }
+
+  if (!data.patient_document_value || data.patient_document_value.trim() === '') {
+    errors.patient_document_value = 'El valor del documento personal es requerido';
   }
   
   if (!data.chief_complaint || data.chief_complaint.trim() === '') {

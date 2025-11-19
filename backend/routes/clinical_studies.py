@@ -3,7 +3,7 @@ Clinical studies management endpoints
 Migrated from main_clean_english.py to improve code organization
 """
 
-from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Query
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Query, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -15,10 +15,13 @@ import pytz
 from database import get_db, Person, ClinicalStudy, MedicalRecord
 from dependencies import get_current_user
 from logger import get_logger
+from audit_service import audit_service
 import crud
 import schemas
+from utils.audit_utils import serialize_instance
 
-api_logger = get_logger("api")
+api_logger = get_logger("medical_records.api")
+security_logger = get_logger("medical_records.security")
 
 # CDMX timezone configuration
 SYSTEM_TIMEZONE = pytz.timezone('America/Mexico_City')
@@ -37,7 +40,7 @@ async def get_clinical_studies_by_patient(
     current_user: Person = Depends(get_current_user)
 ):
     """Get all clinical studies for a specific patient"""
-    print(f"🔬 Getting clinical studies for patient: {patient_id}")
+    api_logger.debug("Getting clinical studies for patient", patient_id=patient_id, doctor_id=current_user.id)
     
     try:
         # Verify patient exists and user has access
@@ -48,7 +51,7 @@ async def get_clinical_studies_by_patient(
         ).first()
         
         if not patient:
-            print(f"🔬 Patient {patient_id} not found or no access")
+            api_logger.warning("Patient not found or no access", patient_id=patient_id, doctor_id=current_user.id)
             return []
 
         # Get clinical studies for this patient
@@ -83,11 +86,11 @@ async def get_clinical_studies_by_patient(
             }
             studies_data.append(study_data)
         
-        print(f"🔬 Found {len(studies_data)} clinical studies for patient {patient_id}")
+        api_logger.info("Found clinical studies for patient", patient_id=patient_id, count=len(studies_data))
         return studies_data
         
     except Exception as e:
-        print(f"❌ Error getting clinical studies for patient {patient_id}: {e}")
+        api_logger.error("Error getting clinical studies for patient", patient_id=patient_id, error=str(e), exc_info=True)
         return []
 
 
@@ -98,8 +101,7 @@ async def get_clinical_studies_by_consultation(
     current_user: Person = Depends(get_current_user)
 ):
     """Get clinical studies for a specific consultation"""
-    print(f"🔬 Getting clinical studies for consultation: {consultation_id}")
-    print(f"🔬 Current user ID: {current_user.id}")
+    api_logger.debug("Getting clinical studies for consultation", consultation_id=consultation_id, doctor_id=current_user.id)
     
     try:
         # Verify consultation exists and user has access
@@ -109,31 +111,14 @@ async def get_clinical_studies_by_consultation(
     ).first()
     
         if not consultation:
-            print(f"🔬 Consultation {consultation_id} not found or no access for user {current_user.id}")
+            api_logger.warning("Consultation not found or no access", consultation_id=consultation_id, doctor_id=current_user.id)
             return []
-    
-        print(f"🔬 Consultation found: {consultation.id}")
     
         # Get clinical studies for this consultation
         studies = db.query(ClinicalStudy).filter(
             ClinicalStudy.consultation_id == consultation_id,
             ClinicalStudy.created_by == current_user.id  # Only show studies created by current user
         ).order_by(ClinicalStudy.created_at.asc()).all()
-        
-        print(f"🔬 Found {len(studies)} studies for consultation {consultation_id}")
-        for study in studies:
-            print(f"🔬 Study {study.id}: consultation_id={study.consultation_id}, created_by={study.created_by}")
-        
-        if len(studies) == 0:
-            print(f"🔬 No studies found - checking if consultation exists and user has access")
-            print(f"🔬 Consultation ID: {consultation_id}, User ID: {current_user.id}")
-            # Check if there are any studies for this consultation at all
-            all_studies = db.query(ClinicalStudy).filter(
-                ClinicalStudy.consultation_id == consultation_id
-            ).all()
-            print(f"🔬 Total studies for consultation {consultation_id} (any user): {len(all_studies)}")
-            for study in all_studies:
-                print(f"🔬 Study {study.id}: created_by={study.created_by}")
         
         # Convert to response format
         studies_data = []
@@ -161,11 +146,11 @@ async def get_clinical_studies_by_consultation(
             }
             studies_data.append(study_data)
         
-        print(f"🔬 Found {len(studies_data)} clinical studies for consultation {consultation_id}")
+        api_logger.info("Found clinical studies for consultation", consultation_id=consultation_id, count=len(studies_data))
         return studies_data
         
     except Exception as e:
-        print(f"❌ Error getting clinical studies for consultation {consultation_id}: {e}")
+        api_logger.error("Error getting clinical studies for consultation", consultation_id=consultation_id, error=str(e), exc_info=True)
         return []
 
 
@@ -176,7 +161,7 @@ async def create_clinical_study(
     current_user: Person = Depends(get_current_user)
 ):
     """Create a new clinical study"""
-    print(f"🔬 Creating clinical study with data: {study_data}")
+    api_logger.debug("Creating clinical study", consultation_id=study_data.get('consultation_id'), doctor_id=current_user.id)
     
     try:
         # Validate required fields (clinical_indication can be empty string)
@@ -258,13 +243,13 @@ async def create_clinical_study(
             "updated_at": new_study.updated_at.isoformat() if new_study.updated_at else None
         }
         
-        print(f"✅ Clinical study created successfully: {new_study.id}")
+        api_logger.info("Clinical study created successfully", study_id=new_study.id, consultation_id=study_data.get('consultation_id'))
         return response_data
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error creating clinical study: {e}")
+        api_logger.error("Error creating clinical study", error=str(e), exc_info=True)
         db.rollback()
         raise HTTPException(status_code=500, detail="Error creating clinical study")
 
@@ -273,11 +258,12 @@ async def create_clinical_study(
 async def update_clinical_study(
     study_id: int,
     study_data: dict,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
     """Update a clinical study"""
-    print(f"🔬 Updating clinical study {study_id} with data: {study_data}")
+    api_logger.debug("Updating clinical study", study_id=study_id, doctor_id=current_user.id)
     
     try:
         # Find the study and verify access
@@ -288,6 +274,11 @@ async def update_clinical_study(
         
         if not study:
             raise HTTPException(status_code=404, detail="Clinical study not found or no access")
+        
+        original_data = serialize_instance(
+            study,
+            exclude={"updated_at"},
+        )
         
         # Update fields
         updateable_fields = [
@@ -316,6 +307,26 @@ async def update_clinical_study(
         
         db.commit()
         db.refresh(study)
+        db.refresh(study, ['consultation'])
+
+        updated_data = serialize_instance(study)
+
+        audit_service.log_action(
+            db=db,
+            action="UPDATE",
+            user=current_user,
+            request=request,
+            table_name="clinical_studies",
+            record_id=study.id,
+            old_values=original_data,
+            new_values=updated_data,
+            operation_type="clinical_study_update",
+            affected_patient_id=study.patient_id,
+            affected_patient_name=study.consultation.patient.name if study.consultation and study.consultation.patient else None,
+            metadata={
+                "consultation_id": study.consultation_id,
+            },
+        )
         
         # Return updated study
         response_data = {
@@ -340,25 +351,43 @@ async def update_clinical_study(
             "updated_at": study.updated_at.isoformat() if study.updated_at else None
         }
         
-        print(f"✅ Clinical study updated successfully: {study.id}")
+        api_logger.info("Clinical study updated successfully", study_id=study.id)
         return response_data
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error updating clinical study {study_id}: {e}")
+        api_logger.error("Error updating clinical study", study_id=study_id, error=str(e), exc_info=True)
         db.rollback()
+        audit_service.log_action(
+            db=db,
+            action="UPDATE",
+            user=current_user,
+            request=request,
+            table_name="clinical_studies",
+            record_id=study_id,
+            old_values=original_data if 'original_data' in locals() else None,
+            new_values=None,
+            operation_type="clinical_study_update",
+            affected_patient_id=getattr(study, "patient_id", None) if 'study' in locals() and study else None,
+            success=False,
+            error_message=str(e),
+            metadata={
+                "consultation_id": getattr(study, "consultation_id", None) if 'study' in locals() and study else None,
+            },
+        )
         raise HTTPException(status_code=500, detail="Error updating clinical study")
 
 
 @router.delete("/clinical-studies/{study_id}")
 async def delete_clinical_study(
     study_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
     """Delete a clinical study"""
-    print(f"🔬 Deleting clinical study: {study_id}")
+    api_logger.debug("Deleting clinical study", study_id=study_id, doctor_id=current_user.id)
     
     try:
         # Find the study and verify access
@@ -370,18 +399,52 @@ async def delete_clinical_study(
         if not study:
             raise HTTPException(status_code=404, detail="Clinical study not found or no access")
         
+        original_data = serialize_instance(study)
+
+        db.refresh(study, ['consultation'])
+
         # Delete the study
         db.delete(study)
         db.commit()
+
+        audit_service.log_action(
+            db=db,
+            action="DELETE",
+            user=current_user,
+            request=request,
+            table_name="clinical_studies",
+            record_id=study_id,
+            old_values=original_data,
+            new_values=None,
+            operation_type="clinical_study_delete",
+            affected_patient_id=study.patient_id,
+            affected_patient_name=study.consultation.patient.name if study.consultation and study.consultation.patient else None,
+            metadata={
+                "consultation_id": study.consultation_id,
+            },
+        )
         
-        print(f"✅ Clinical study deleted successfully: {study_id}")
+        api_logger.info("Clinical study deleted successfully", study_id=study_id)
         return {"message": "Clinical study deleted successfully", "id": study_id}
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error deleting clinical study {study_id}: {e}")
+        api_logger.error("Error deleting clinical study", study_id=study_id, error=str(e), exc_info=True)
         db.rollback()
+        audit_service.log_action(
+            db=db,
+            action="DELETE",
+            user=current_user,
+            request=request,
+            table_name="clinical_studies",
+            record_id=study_id,
+            old_values=original_data if 'original_data' in locals() else None,
+            new_values=None,
+            operation_type="clinical_study_delete",
+            success=False,
+            error_message=str(e),
+        )
         raise HTTPException(status_code=500, detail="Error deleting clinical study")
 
 
@@ -393,7 +456,11 @@ async def upload_clinical_study_file(
     current_user: Person = Depends(get_current_user)
 ):
     """Upload a file for a clinical study"""
-    print(f"📤 Uploading file for clinical study: {study_id}")
+    api_logger.info(
+        "Uploading file for clinical study",
+        study_id=study_id,
+        doctor_id=current_user.id
+    )
     
     try:
         # Security: Ultra-restrictive file format validation (PDF + Images only)
@@ -419,7 +486,7 @@ async def upload_clinical_study_file(
         filename_lower = file.filename.lower()
         for pattern in DANGEROUS_PATTERNS:
             if pattern in filename_lower:
-                print(f"🚨 Security: Blocked dangerous file pattern: {pattern}")
+                security_logger.warning("Blocked dangerous file pattern", pattern=pattern, filename=file.filename, doctor_id=current_user.id)
                 raise HTTPException(
                     status_code=400, 
                     detail="Tipo de archivo no permitido por seguridad"
@@ -433,32 +500,25 @@ async def upload_clinical_study_file(
             for i in range(len(parts) - 1):  # Check all parts except the last (real extension)
                 potential_extension = '.' + parts[i]
                 if potential_extension in DANGEROUS_PATTERNS:
-                    print(f"🚨 Security: Blocked file with dangerous hidden extension: {file.filename}")
+                    security_logger.warning("Blocked file with dangerous hidden extension", filename=file.filename, doctor_id=current_user.id)
                     raise HTTPException(
                         status_code=400, 
                         detail="Archivo con extensión oculta peligrosa no permitido"
                     )
-            
-            # If it has multiple dots but no dangerous extensions, just warn but allow
-            print(f"⚠️ File has multiple dots but no dangerous extensions: {file.filename}")
         
         file_extension = os.path.splitext(file.filename)[1].lower()
-        print(f"📁 File extension: {file_extension}")
-        print(f"📁 Allowed extensions: {ALLOWED_EXTENSIONS}")
         if file_extension not in ALLOWED_EXTENSIONS:
             valid_formats = ', '.join(sorted(ALLOWED_EXTENSIONS))
             error_message = f"Formato de archivo no permitido. Solo se aceptan: {valid_formats}"
-            print(f"❌ File format error: {error_message}")
+            api_logger.warning("File format error", extension=file_extension, filename=file.filename, doctor_id=current_user.id)
             raise HTTPException(
                 status_code=400, 
                 detail=error_message
             )
         
-        print(f"📁 File content type: {file.content_type}")
-        print(f"📁 Allowed MIME types: {ALLOWED_MIME_TYPES}")
         if file.content_type and file.content_type not in ALLOWED_MIME_TYPES:
             error_message = f"Tipo de archivo no permitido. Solo se aceptan: PDF, JPG, PNG"
-            print(f"❌ MIME type error: {error_message}")
+            api_logger.warning("MIME type error", content_type=file.content_type, filename=file.filename, doctor_id=current_user.id)
             raise HTTPException(
                 status_code=400, 
                 detail=error_message
@@ -485,7 +545,7 @@ async def upload_clinical_study_file(
         # Security: Check file size before processing
         content = await file.read()
         if len(content) > MAX_FILE_SIZE:
-            print(f"🚨 Security: File too large: {len(content)} bytes (max: {MAX_FILE_SIZE})")
+            security_logger.warning("File too large", size=len(content), max_size=MAX_FILE_SIZE, filename=file.filename, doctor_id=current_user.id)
             raise HTTPException(
                 status_code=400, 
                 detail=f"Archivo demasiado grande. Tamaño máximo permitido: {MAX_FILE_SIZE // (1024*1024)}MB"
@@ -515,8 +575,7 @@ async def upload_clinical_study_file(
         db.commit()
         db.refresh(study)
         
-        print(f"✅ File uploaded successfully for study {study_id}: {file.filename}")
-        # print(f"📅 Study results_date after commit: removed - column does not exist")
+        api_logger.info("File uploaded successfully for study", study_id=study_id, filename=file.filename, size=len(content))
         
         return {
             "message": "File uploaded successfully",
@@ -528,7 +587,7 @@ async def upload_clinical_study_file(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error uploading file for study {study_id}: {e}")
+        api_logger.error("Error uploading file for study", study_id=study_id, error=str(e), exc_info=True)
         db.rollback()
         raise HTTPException(status_code=500, detail="Error uploading file")
 
@@ -540,7 +599,7 @@ async def get_clinical_study_file(
     current_user: Person = Depends(get_current_user)
 ):
     """Download/view a clinical study file"""
-    print(f"📥 Getting file for clinical study: {study_id}")
+    api_logger.debug("Getting file for clinical study", study_id=study_id, doctor_id=current_user.id)
     
     try:
         # Find the study and verify access
@@ -559,7 +618,12 @@ async def get_clinical_study_file(
         if not os.path.exists(study.file_path):
             raise HTTPException(status_code=404, detail="File not found on server")
         
-        print(f"✅ Serving file for study {study_id}: {study.file_name}")
+        api_logger.info(
+            "Serving clinical study file",
+            study_id=study_id,
+            doctor_id=current_user.id,
+            file_name=study.file_name
+        )
         
         # Return file with appropriate headers
         return FileResponse(
@@ -571,7 +635,7 @@ async def get_clinical_study_file(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error getting file for study {study_id}: {e}")
+        api_logger.error("Error getting file for study", study_id=study_id, error=str(e), exc_info=True)
         raise HTTPException(status_code=500, detail="Error retrieving file")
 
 
@@ -586,7 +650,7 @@ async def get_study_categories(
         categories = crud.get_study_categories(db, skip=skip, limit=limit)
         return [schemas.StudyCategory.model_validate(category) for category in categories]
     except Exception as e:
-        print(f"❌ Error in get_study_categories: {str(e)}")
+        api_logger.error("Error in get_study_categories", error=str(e), exc_info=True)
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
@@ -609,6 +673,6 @@ async def get_study_catalog(
         )
         return [schemas.StudyCatalog.model_validate(study) for study in studies]
     except Exception as e:
-        print(f"❌ Error in get_study_catalog: {str(e)}")
+        api_logger.error("Error in get_study_catalog", error=str(e), exc_info=True)
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 

@@ -8,11 +8,14 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List
 from datetime import datetime
 
+from logger import get_logger
+
 from database import get_db, Person, Office, State, Country, Appointment, AppointmentType
 from dependencies import get_current_user
 import schemas
 
 router = APIRouter(prefix="/api", tags=["offices"])
+api_logger = get_logger("medical_records.api")
 
 
 @router.post("/offices", response_model=schemas.Office)
@@ -23,11 +26,14 @@ async def create_office(
 ):
     """Create a new office for the current doctor"""
     try:
-        # Debug logging
-        print(f"🔍 [CREATE OFFICE] Request received at {datetime.now()}")
-        print(f"🔍 [CREATE OFFICE] Office data: {office.dict()}")
-        print(f"🔍 [CREATE OFFICE] Doctor ID: {current_user.id}")
-        print(f"🔍 [CREATE OFFICE] Office name: '{office.name}' (type: {type(office.name)})")
+        api_logger.info(
+            "🔍 Creating office request received",
+            extra={
+                "doctor_id": current_user.id,
+                "office_name": office.name,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
         
         # Validate that the user is a doctor
         if current_user.person_type != 'doctor':
@@ -58,12 +64,18 @@ async def create_office(
             joinedload(Office.country)
         ).filter(Office.id == new_office.id).first()
         
-        print(f"✅ [CREATE OFFICE] Office created successfully with ID: {new_office.id}")
-        print(f"✅ [CREATE OFFICE] Office name: '{new_office.name}'")
+        api_logger.info(
+            "✅ Office created successfully",
+            extra={"doctor_id": current_user.id, "office_id": new_office.id, "office_name": new_office.name}
+        )
         return office_with_relations
         
     except Exception as e:
-        print(f"❌ Error creating office: {e}")
+        api_logger.error(
+            "❌ Error creating office",
+            extra={"doctor_id": current_user.id, "office_name": office.name},
+            exc_info=True
+        )
         db.rollback()
         raise HTTPException(status_code=500, detail="Error creating office")
 
@@ -99,7 +111,11 @@ async def get_doctor_offices(
         return offices
         
     except Exception as e:
-        print(f"❌ Error getting offices: {e}")
+        api_logger.error(
+            "❌ Error getting doctor offices",
+            extra={"doctor_id": current_user.id},
+            exc_info=True
+        )
         raise HTTPException(status_code=500, detail="Error getting offices")
 
 
@@ -137,7 +153,11 @@ async def get_office(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error getting office {office_id}: {e}")
+        api_logger.error(
+            "❌ Error getting office detail",
+            extra={"doctor_id": current_user.id, "office_id": office_id},
+            exc_info=True
+        )
         raise HTTPException(status_code=500, detail="Error getting office")
 
 
@@ -176,7 +196,11 @@ async def update_office(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error updating office: {e}")
+        api_logger.error(
+            "❌ Error updating office",
+            extra={"doctor_id": current_user.id, "office_id": office_id},
+            exc_info=True
+        )
         db.rollback()
         raise HTTPException(status_code=500, detail="Error updating office")
 
@@ -224,7 +248,11 @@ async def delete_office(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error deleting office: {e}")
+        api_logger.error(
+            "❌ Error deleting office",
+            extra={"doctor_id": current_user.id, "office_id": office_id},
+            exc_info=True
+        )
         db.rollback()
         raise HTTPException(status_code=500, detail="Error deleting office")
 
@@ -233,8 +261,8 @@ async def delete_office(
 async def get_appointment_types(db: Session = Depends(get_db)):
     """Get all active appointment types"""
     try:
-        types = db.query(AppointmentType).filter(AppointmentType.active == True).all()
+        types = db.query(AppointmentType).filter(AppointmentType.is_active == True).all()
         return [{"id": t.id, "name": t.name} for t in types]
     except Exception as e:
-        print(f"❌ Error getting appointment types: {e}")
+        api_logger.error("❌ Error getting appointment types", exc_info=True)
         raise HTTPException(status_code=500, detail="Error getting appointment types")

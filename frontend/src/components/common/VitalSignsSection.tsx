@@ -56,7 +56,7 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
   // Get priority order for vital signs
   const getVitalSignPriority = (name: string): number => {
     const nameLower = name.toLowerCase();
-    if (nameLower.includes('altura') || nameLower.includes('estatura')) return 1;
+    if (nameLower.includes('altura') || nameLower.includes('estatura') || nameLower.includes('talla')) return 1;
     if (nameLower.includes('peso')) return 2;
     if (nameLower.includes('imc') || nameLower.includes('índice de masa corporal') || nameLower.includes('bmi')) return 3;
     return 999; // All others come after
@@ -124,12 +124,13 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
     // Auto-calculate BMI if weight or height changed
     if (vitalSignName) {
       const name = vitalSignName.toLowerCase();
-      if (name.includes('peso') || name.includes('estatura') || name.includes('altura')) {
+      if (name.includes('peso') || name.includes('estatura') || name.includes('altura') || name.includes('talla')) {
         const allSigns = getAllVitalSigns();
         const weightSign = allSigns.find(vs => vs.name.toLowerCase().includes('peso'));
         const heightSign = allSigns.find(vs => 
           vs.name.toLowerCase().includes('estatura') || 
-          vs.name.toLowerCase().includes('altura')
+          vs.name.toLowerCase().includes('altura') ||
+          vs.name.toLowerCase().includes('talla')
         );
         const bmiSign = availableVitalSigns.find(vs => 
           vs.name.toLowerCase().includes('imc') || 
@@ -139,7 +140,7 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
 
         if (weightSign && heightSign && bmiSign) {
           const weight = parseFloat(name.includes('peso') ? value : weightSign.value);
-          const height = parseFloat((name.includes('estatura') || name.includes('altura')) ? value : heightSign.value);
+          const height = parseFloat((name.includes('estatura') || name.includes('altura') || name.includes('talla')) ? value : heightSign.value);
           
           if (!isNaN(weight) && !isNaN(height) && height > 0) {
             const heightInMeters = height / 100;
@@ -234,22 +235,40 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
   // Clear saved vital signs when they appear in the actual vitalSigns list
   useEffect(() => {
     const existingIds = new Set(vitalSigns.map(vs => vs.vital_sign_id));
+
     setSavedVitalSigns(prev => {
-      const updated = new Set<number>();
+      if (prev.size === 0) {
+        return prev;
+      }
+
+      const idsToRemove: number[] = [];
+      const next = new Set<number>();
+
       prev.forEach(id => {
         if (existingIds.has(id)) {
-          // Remove from savedVitalSigns since it's now in vitalSigns
-          // Also clear from vitalSignValues
-          setVitalSignValues(prevValues => {
-            const updatedValues = { ...prevValues };
-            delete updatedValues[id];
-            return updatedValues;
-          });
+          idsToRemove.push(id);
         } else {
-          updated.add(id);
+          next.add(id);
         }
       });
-      return updated;
+
+      if (idsToRemove.length === 0) {
+        return prev;
+      }
+
+      setVitalSignValues(prevValues => {
+        const shouldUpdate = idsToRemove.some(id => id in prevValues);
+        if (!shouldUpdate) {
+          return prevValues;
+        }
+        const updatedValues = { ...prevValues };
+        idsToRemove.forEach(id => {
+          delete updatedValues[id];
+      });
+        return updatedValues;
+      });
+
+      return next;
     });
   }, [vitalSigns]);
 

@@ -94,7 +94,7 @@ ALTER TABLE persons ADD CONSTRAINT chk_person_type
 CHECK (person_type IN ('doctor', 'patient', 'admin'));
 
 ALTER TABLE appointments ADD CONSTRAINT chk_appointment_status 
-CHECK (status IN ('scheduled', 'confirmed', 'cancelled', 'completed', 'no_show'));
+CHECK (status IN ('por_confirmar', 'confirmada', 'cancelled', 'completed'));
 
 ALTER TABLE clinical_studies ADD CONSTRAINT chk_study_status 
 CHECK (status IN ('ordered', 'in_progress', 'completed', 'cancelled', 'failed'));

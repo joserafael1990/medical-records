@@ -146,15 +146,26 @@ export const EnhancedErrorDisplay: React.FC<EnhancedErrorDisplayProps> = ({
     }
   }, [error, medicalContext, userRole, patientPresent, isUrgent, humanizedMessage]);
 
-  // Auto-navigate to first error
+  // Auto-navigate to first error and scroll to top
   useEffect(() => {
+    // Si hay un error general, siempre hacer scroll al inicio de la página
+    if (error) {
+      setTimeout(() => {
+        window.scrollTo({
+          top: 0,
+          behavior: 'smooth'
+        });
+      }, 200);
+    }
+    
+    // Navegar al primer error de campo si está habilitado
     if (autoNavigateToError && (Object.keys(fieldErrors).length > 0 || Object.keys(validationErrors).length > 0)) {
       const navigated = scrollToFirstError(fieldErrors, validationErrors);
       if (!navigated) {
         console.warn('Could not navigate to first error');
       }
     }
-  }, [fieldErrors, validationErrors, autoNavigateToError, scrollToFirstError]);
+  }, [error, fieldErrors, validationErrors, autoNavigateToError, scrollToFirstError]);
 
   // Get error summary
   const errorSummary = getErrorSummary(fieldErrors, validationErrors);

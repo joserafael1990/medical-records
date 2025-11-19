@@ -29,15 +29,12 @@ interface UseDoctorProfileReturn {
 
 const initialFormData: DoctorFormData = {
   title: '',
-  first_name: '',
-  paternal_surname: '',
-  maternal_surname: '',
+  name: '',
   email: '',
+  primary_phone: '',
   phone: '',
   birth_date: '',
   gender: '',
-  curp: '',
-  rfc: '',
   professional_license: '',
   specialty: '',
   specialty_license: '',
@@ -82,13 +79,19 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
   
   const fetchCalledRef = useRef(false);
 
-  const fetchProfile = useCallback(async () => {
-    // Prevent multiple simultaneous requests
-    if (cache.isLoading || isLoading) return;
+  const fetchProfile = useCallback(async (forceRefresh: boolean = false) => {
+    // If force refresh, invalidate cache first
+    if (forceRefresh) {
+      cache.data = null;
+      cache.timestamp = 0;
+    }
     
-    // Check cache first
+    // Prevent multiple simultaneous requests (unless forcing refresh)
+    if (!forceRefresh && (cache.isLoading || isLoading)) return;
+    
+    // Check cache first (unless force refresh)
     const now = Date.now();
-    if (cache.data && (now - cache.timestamp) < cache.CACHE_DURATION) {
+    if (!forceRefresh && cache.data && (now - cache.timestamp) < cache.CACHE_DURATION) {
       setDoctorProfile(cache.data);
       return;
     }
@@ -98,7 +101,7 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
     setFormErrorMessage('');
     
     if (process.env.NODE_ENV === 'development') {
-      logger.debug('Token in localStorage', { present: !!localStorage.getItem('token') }, 'auth');
+      logger.debug('Fetching doctor profile', { forceRefresh }, 'api');
     }
     
     try {
@@ -114,7 +117,11 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
       setDoctorProfile(data);
       
       if (process.env.NODE_ENV === 'development') {
-        logger.debug('Profile state updated', { specialty: data.specialty_name }, 'api');
+        logger.debug('Profile state updated', { 
+          specialty: data.specialty_name,
+          avatar_type: data.avatar_type,
+          avatar_url: data.avatar_url 
+        }, 'api');
       }
     } catch (error: any) {
       if (process.env.NODE_ENV === 'development') {
@@ -139,7 +146,7 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
       cache.isLoading = false;
       setIsLoading(false);
     }
-  }, []);
+  }, [isLoading]);
 
   const clearMessages = useCallback(() => {
     setFormErrorMessage('');
@@ -153,15 +160,12 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
       // Map backend fields to form fields
       const mappedData = {
         title: doctorProfile.title || '',
-        first_name: doctorProfile.first_name || '',
-        paternal_surname: doctorProfile.paternal_surname || '',
-        maternal_surname: doctorProfile.maternal_surname || '',
+        name: doctorProfile.name || '',
         email: doctorProfile.email || '',
         primary_phone: doctorProfile.primary_phone || '',
+        phone: doctorProfile.primary_phone || '',
         birth_date: doctorProfile.birth_date || '',
         gender: (doctorProfile as any).gender || '',
-        curp: doctorProfile.curp || '',
-        rfc: doctorProfile.rfc || '',
         professional_license: doctorProfile.professional_license || '',
         specialty: doctorProfile.specialty_name || '',
         specialty_license: doctorProfile.specialty_license || '',
@@ -222,14 +226,10 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
     // Transform frontend field names to backend field names
     const transformedData: any = {
       title: data.title,
-      first_name: data.first_name,
-      paternal_surname: data.paternal_surname,
-      maternal_surname: data.maternal_surname,
+      name: data.name,
       email: data.email,
-      primary_phone: data.phone, // Frontend uses 'phone', backend expects 'primary_phone'
+      primary_phone: data.phone || data.primary_phone, // Frontend can use either 'phone' or 'primary_phone'
       birth_date: formatDateForBackend(data.birth_date),
-      curp: data.curp,
-      rfc: data.rfc,
       professional_license: data.professional_license,
       specialty_id: specialtyId, // Convert specialty name to ID
       specialty_license: data.specialty_license,

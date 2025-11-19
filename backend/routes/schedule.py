@@ -16,7 +16,7 @@ from dependencies import get_current_user
 from logger import get_logger
 import pytz
 
-api_logger = get_logger("api")
+api_logger = get_logger("medical_records.api")
 
 # CDMX timezone helper
 SYSTEM_TIMEZONE = pytz.timezone('America/Mexico_City')
@@ -445,17 +445,19 @@ async def get_available_times(
         
         # Parse time_blocks from JSONB or fallback to start_time/end_time
         time_blocks = []
-        print(f"📅 Schedule result: {schedule_result}")
-        print(f"📅 time_blocks raw: {schedule_result[2]}")
-        print(f"📅 time_blocks type: {type(schedule_result[2])}")
+        api_logger.debug("Schedule result", doctor_id=current_user.id, date=date)
         
         if schedule_result[2]:  # time_blocks column
             if isinstance(schedule_result[2], list):
                 time_blocks = schedule_result[2]
-                print(f"📅 Using time_blocks from list: {time_blocks}")
+                api_logger.debug(
+                    "Using time blocks from list",
+                    doctor_id=current_user.id,
+                    blocks=len(time_blocks)
+                )
             elif isinstance(schedule_result[2], str):
                 time_blocks = json.loads(schedule_result[2])
-                print(f"📅 Using time_blocks from JSON string: {time_blocks}")
+                api_logger.debug("Using time_blocks from JSON string", doctor_id=current_user.id)
         
         # Fallback: if no time_blocks, create from start_time/end_time
         if not time_blocks and schedule_result[0] and schedule_result[1]:
@@ -463,9 +465,9 @@ async def get_available_times(
                 "start_time": schedule_result[0].strftime("%H:%M"),
                 "end_time": schedule_result[1].strftime("%H:%M")
             }]
-            print(f"📅 Using fallback time_blocks: {time_blocks}")
+            api_logger.debug("Using fallback time_blocks", doctor_id=current_user.id)
         
-        print(f"📅 Final time_blocks: {time_blocks}")
+        api_logger.debug("Final time_blocks", doctor_id=current_user.id, count=len(time_blocks) if time_blocks else 0)
         
         # Get doctor's appointment duration (from persons table)
         cursor.execute("""
@@ -500,7 +502,7 @@ async def get_available_times(
             FROM appointments 
             WHERE doctor_id = %s 
             AND DATE(appointment_date) = %s 
-            AND status IN ('confirmed', 'scheduled')
+            AND status IN ('confirmada', 'por_confirmar')
         """, (doctor_id, date))
         
         existing_appointments = cursor.fetchall()
@@ -555,9 +557,17 @@ async def get_available_times(
         cursor.close()
         conn.close()
         
-        print(f"📅 Generated {len(available_times)} available times:")
-        for time_slot in available_times:
-            print(f"📅   - {time_slot['time']} ({time_slot['duration_minutes']} min)")
+        preview_slots = [
+            {"time": slot["time"], "duration": slot["duration_minutes"]}
+            for slot in available_times[:5]
+        ]
+        api_logger.debug(
+            "Generated available time slots",
+            doctor_id=doctor_id,
+            date=date,
+            slot_count=len(available_times),
+            preview=preview_slots
+        )
         
         api_logger.info("Generated available times", 
                        doctor_id=doctor_id, 
@@ -654,7 +664,7 @@ async def get_doctor_availability(
         existing_appointments = db.query(Appointment).filter(
             Appointment.doctor_id == current_user.id,
             func.date(Appointment.appointment_date) == target_date,
-            Appointment.status.in_(['confirmed', 'pending'])
+            Appointment.status.in_(['confirmada', 'por_confirmar'])
         ).all()
         
         # Generate time slots based on doctor's schedule

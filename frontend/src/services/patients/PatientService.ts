@@ -32,7 +32,7 @@ export class PatientService extends ApiBase {
 
   async createPatient(patientData: PatientFormData): Promise<Patient> {
     try {
-      logger.debug('Creating patient', { firstName: patientData.first_name }, 'api');
+      logger.debug('Creating patient', { name: patientData.name }, 'api');
       
       // Map gender to backend format
       const mappedData = {
@@ -51,7 +51,7 @@ export class PatientService extends ApiBase {
 
   async updatePatient(id: string, patientData: Partial<PatientFormData>): Promise<Patient> {
     try {
-      logger.debug('Updating patient', { id }, 'api');
+      logger.debug('Updating patient', { id, documents: (patientData as any)?.documents }, 'api');
       
       // Map gender to backend format if provided
       const mappedData = {

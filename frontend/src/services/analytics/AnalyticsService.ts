@@ -19,7 +19,7 @@ export interface DashboardMetrics {
     thisWeek: number;
     completed: number;
     cancelled: number;
-    noShow: number;
+    pending: number;
     attendanceRate: number;
     byStatus: Array<{ status: string; count: number }>;
   };
@@ -33,12 +33,12 @@ export interface DashboardMetrics {
     completedConsultations: number;
     cancelledByDoctor: number;
     cancelledByPatient: number;
-    noShowOrPending: number;
+    pending: number;
     percentages: {
       completed: number;
       cancelledByDoctor: number;
       cancelledByPatient: number;
-      noShowOrPending: number;
+      pending: number;
     };
     sankeyData: {
       nodes: Array<{ id: string; label: string }>;

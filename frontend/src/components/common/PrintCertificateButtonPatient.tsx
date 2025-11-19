@@ -30,10 +30,6 @@ export const PrintCertificateButtonPatient: React.FC<PrintCertificateButtonPatie
   const [doctorFullName, setDoctorFullName] = useState('');
 
   const handleOpenDialog = async () => {
-    // Debug logs
-    console.log('🔍 PrintCertificateButtonPatient - patient:', patient);
-    console.log('🔍 PrintCertificateButtonPatient - doctor:', doctor);
-    
     // Set a default template for the certificate
     // Support both old format (firstName, lastName) and new format (name)
     let patientName = patient.name || 
@@ -46,7 +42,7 @@ export const PrintCertificateButtonPatient: React.FC<PrintCertificateButtonPatie
         const patientData = await apiService.patients.getPatientById(patient.id.toString());
         patientName = patientData.name || 'Paciente';
       } catch (error) {
-        console.error('Error fetching patient data:', error);
+        // Silently fallback to default name
         patientName = 'Paciente';
       }
     }
@@ -67,18 +63,14 @@ export const PrintCertificateButtonPatient: React.FC<PrintCertificateButtonPatie
         const { apiService } = await import('../../services');
         const doctorData = await apiService.doctors.getDoctorProfile();
         doctorName = doctorData.name || 'Médico';
-        console.log('🔍 Fetched doctor name from API:', doctorName);
       } catch (error) {
-        console.error('Error fetching doctor data:', error);
+        // Silently fallback to default name
         doctorName = 'Médico';
       }
     }
     
     setPatientFullName(patientName || 'Paciente');
     setDoctorFullName(doctorName || 'Médico');
-    
-    console.log('🔍 PrintCertificateButtonPatient - patientFullName:', patientName);
-    console.log('🔍 PrintCertificateButtonPatient - doctorFullName:', doctorName);
     
     // Build the doctor's full name with title (only once)
     const doctorWithTitle = doctorName.startsWith(doctor.title || '') 
@@ -144,13 +136,11 @@ Atentamente,`;
     setIsGenerating(false);
 
     if (result.success) {
-      console.log(result.message);
       handleCloseDialog();
       // Reset fields
       setCertificateTitle('CONSTANCIA MÉDICA');
       setCertificateContent('');
     } else {
-      console.error(result.message);
       alert('Error al generar la constancia. Por favor, intente de nuevo.');
     }
   };

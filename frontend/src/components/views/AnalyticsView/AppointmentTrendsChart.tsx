@@ -65,3 +65,4 @@ export const AppointmentTrendsChart: React.FC<AppointmentTrendsChartProps> = ({ 
 
 
 
+

@@ -71,28 +71,37 @@ export interface UseAppointmentMultiOfficeFormReturn {
 }
 
 // Helper function to calculate age
-const calculateAge = (birthDate: string | Date): number => {
-  const today = new Date();
+const calculateAge = (birthDate?: string | Date | null): number | null => {
+  if (!birthDate) {
+    return null;
+  }
+
   const birth = new Date(birthDate);
+  if (Number.isNaN(birth.getTime())) {
+    return null;
+  }
+
+  const today = new Date();
   let age = today.getFullYear() - birth.getFullYear();
   const monthDiff = today.getMonth() - birth.getMonth();
-  
+
   if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
     age--;
   }
-  
+
   return age;
 };
 
 // Function to format patient name with age
 const formatPatientNameWithAge = (patient: Patient): string => {
-  const age = calculateAge(patient.birth_date || '');
-  const fullName = [
-    patient.first_name,
-    patient.paternal_surname,
-    patient.maternal_surname && patient.maternal_surname !== 'null' ? patient.maternal_surname : ''
-  ].filter(part => part && part.trim()).join(' ');
-  return `${fullName} (${age} años)`;
+  const baseName = (patient.name && patient.name.trim().length > 0)
+    ? patient.name.trim()
+    : '';
+
+  const safeName = baseName || 'Paciente sin nombre';
+  const age = calculateAge(patient.birth_date);
+
+  return age !== null ? `${safeName} (${age} años)` : safeName;
 };
 
 export const useAppointmentMultiOfficeForm = (
@@ -119,9 +128,7 @@ export const useAppointmentMultiOfficeForm = (
     appointment_date: '',
     appointment_type_id: 1,
     office_id: 0,
-    consultation_type: '',
-    reason: '',
-    notes: ''
+    consultation_type: ''
   });
 
   // Estados para el flujo de selección de paciente
@@ -147,6 +154,7 @@ export const useAppointmentMultiOfficeForm = (
   const [selectedTime, setSelectedTime] = useState<string>('');
   const isInitializingRef = useRef(false);
   const hasInitializedRef = useRef(false);
+  const hasLoadedDefaultTimesRef = useRef(false);
 
   // Use external data if provided, otherwise use internal state
   const currentFormData = externalFormData || formData;
@@ -186,24 +194,25 @@ export const useAppointmentMultiOfficeForm = (
     const loadData = async () => {
       if (open) {
         try {
-          // Only load data if not provided externally
+          const appointmentTypesPromise = apiService.appointments.getAppointmentTypes();
+          const officesPromise = apiService.offices.getOffices(doctorProfile?.id);
+
           if (!externalPatients) {
             const [appointmentTypesData, officesData, patientsData] = await Promise.all([
-              apiService.catalogs.getAppointmentTypes?.() || Promise.resolve([]),
-              apiService.offices.getOffices(doctorProfile?.id),
+              appointmentTypesPromise,
+              officesPromise,
               apiService.patients.getPatients()
             ]);
-            
+
             setAppointmentTypes(appointmentTypesData || []);
             setOffices(officesData || []);
             setPatients(patientsData || []);
           } else {
-            // Load only appointment types and offices if patients are provided externally
             const [appointmentTypesData, officesData] = await Promise.all([
-              apiService.catalogs.getAppointmentTypes?.() || Promise.resolve([]),
-              apiService.offices.getOffices(doctorProfile?.id)
+              appointmentTypesPromise,
+              officesPromise
             ]);
-            
+
             setAppointmentTypes(appointmentTypesData || []);
             setOffices(officesData || []);
           }
@@ -248,9 +257,7 @@ export const useAppointmentMultiOfficeForm = (
           appointment_date: '',
           appointment_type_id: 1,
           office_id: 0,
-          consultation_type: '',
-          reason: '',
-          notes: ''
+          consultation_type: ''
         };
         setFormData(defaultData);
         setIsExistingPatient(null);
@@ -267,7 +274,9 @@ export const useAppointmentMultiOfficeForm = (
 
   // Load available times for default date when dialog opens
   useEffect(() => {
-    if (open && !isEditing) {
+    if (open && !isEditing && !hasLoadedDefaultTimesRef.current) {
+      hasLoadedDefaultTimesRef.current = true;
+      
       const today = new Date();
       const mexicoTimeString = today.toLocaleString("sv-SE", {timeZone: "America/Mexico_City"});
       const todayString = mexicoTimeString.split(' ')[0];
@@ -296,6 +305,9 @@ export const useAppointmentMultiOfficeForm = (
       return () => {
         clearTimeout(timeoutId);
       };
+    } else if (!open) {
+      // Reset when dialog closes
+      hasLoadedDefaultTimesRef.current = false;
     }
   }, [open, isEditing]); // Removed loadAvailableTimes to prevent re-execution
 
@@ -312,9 +324,7 @@ export const useAppointmentMultiOfficeForm = (
   useEffect(() => {
     if (currentFormData.consultation_type === 'Seguimiento') {
       setNewPatientData({
-        first_name: '',
-        paternal_surname: '',
-        maternal_surname: '',
+        name: '',
         birth_date: '',
         gender: '',
         phone_country_code: '+52',
@@ -327,9 +337,7 @@ export const useAppointmentMultiOfficeForm = (
   useEffect(() => {
     if (!open) {
       setNewPatientData({
-        first_name: '',
-        paternal_surname: '',
-        maternal_surname: '',
+        name: '',
         birth_date: '',
         gender: '',
         phone_country_code: '+52',
@@ -412,12 +420,6 @@ export const useAppointmentMultiOfficeForm = (
         return;
       }
 
-      // Validar motivo
-      if (!currentFormData.reason || currentFormData.reason.trim() === '') {
-        setError('Ingrese el motivo de la cita');
-        return;
-      }
-
       // Validar datos del paciente
       let finalPatientId = currentFormData.patient_id;
       
@@ -481,12 +483,40 @@ export const useAppointmentMultiOfficeForm = (
         }
       }
 
-      // Asegurar que appointment_type_id esté definido
-      const formDataToSubmit = {
-        ...currentFormData,
+      // Asegurar que appointment_type_id esté definido y que reminders esté incluido
+      // Check both currentFormData and formData for reminders
+      // Priority: formData.reminders > currentFormData.reminders
+      const remindersToInclude = (formData.reminders && formData.reminders.length > 0) 
+        ? formData.reminders 
+        : (currentFormData.reminders && currentFormData.reminders.length > 0)
+          ? currentFormData.reminders
+          : undefined;
+      
+      // Build formDataToSubmit - remove reminders from currentFormData first to avoid undefined
+      const { reminders: _, ...currentFormDataWithoutReminders } = currentFormData as any;
+      const formDataToSubmit: any = {
+        ...currentFormDataWithoutReminders,
         patient_id: finalPatientId,
         appointment_type_id: currentFormData.appointment_type_id || 1
       };
+      
+      // Only add reminders property if there are actual reminders
+      // This prevents undefined from being serialized to null
+      if (remindersToInclude && remindersToInclude.length > 0) {
+        formDataToSubmit.reminders = remindersToInclude;
+      }
+      // If no reminders, don't include the property at all (not even as undefined)
+      
+      // Log for debugging
+      logger.debug('Submitting appointment', {
+        reminders_count: remindersToInclude?.length || 0,
+        reminders: remindersToInclude,
+        currentFormData_reminders: currentFormData.reminders,
+        formData_reminders: formData.reminders,
+        formDataToSubmit_reminders: formDataToSubmit.reminders,
+        formDataToSubmit_keys: Object.keys(formDataToSubmit),
+        has_reminders_property: 'reminders' in formDataToSubmit
+      }, 'ui');
       
       onSubmit(formDataToSubmit);
       showSuccess('Cita creada exitosamente');

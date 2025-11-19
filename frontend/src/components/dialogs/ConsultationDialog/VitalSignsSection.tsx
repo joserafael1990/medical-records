@@ -101,12 +101,12 @@ export const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
           
           <Grid item xs={12} sm={6} md={3}>
             <TextField
-              label="Peso (kg)"
+              label="Estatura (cm)"
               type="number"
-              value={vitalSigns.weight || ''}
-              onChange={(e) => onVitalSignsChange('weight', Number(e.target.value))}
-              error={!!errors.weight}
-              helperText={errors.weight}
+              value={vitalSigns.height || ''}
+              onChange={(e) => onVitalSignsChange('height', Number(e.target.value))}
+              error={!!errors.height}
+              helperText={errors.height}
               fullWidth
               size="small"
             />
@@ -114,12 +114,12 @@ export const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
           
           <Grid item xs={12} sm={6} md={3}>
             <TextField
-              label="Estatura (cm)"
+              label="Peso (kg)"
               type="number"
-              value={vitalSigns.height || ''}
-              onChange={(e) => onVitalSignsChange('height', Number(e.target.value))}
-              error={!!errors.height}
-              helperText={errors.height}
+              value={vitalSigns.weight || ''}
+              onChange={(e) => onVitalSignsChange('weight', Number(e.target.value))}
+              error={!!errors.weight}
+              helperText={errors.weight}
               fullWidth
               size="small"
             />

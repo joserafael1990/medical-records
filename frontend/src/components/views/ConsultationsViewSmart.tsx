@@ -48,16 +48,6 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
   handleNewConsultation,
   handleEditConsultation
 }) => {
-  // Debug logging
-  React.useEffect(() => {
-    console.log('🔍 ConsultationsViewSmart - consultations prop received:', consultations);
-    console.log('🔍 ConsultationsViewSmart - consultations length:', consultations?.length);
-    console.log('🔍 ConsultationsViewSmart - consultations type:', Array.isArray(consultations) ? 'Array' : typeof consultations);
-    if (Array.isArray(consultations) && consultations.length > 0) {
-      console.log('🔍 ConsultationsViewSmart - first consultation:', consultations[0]);
-    }
-  }, [consultations]);
-  
   // Estados para filtros de búsqueda
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -235,16 +225,63 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
   }, [consultations, debouncedSearchTerm, dateFrom, dateTo, consultationType, selectedPatient]);
 
   const totalConsultations = consultations.length;
-  
-  // Calculate today's appointments that can be converted to consultations
-  const todayAppointments = appointments.filter(appointment => {
-    const appointmentDate = new Date(appointment.appointment_date || appointment.date_time);
-    const today = new Date();
-    return appointmentDate.toDateString() === today.toDateString() && 
-           appointment.status === 'confirmed';
-  });
-  
-  const todayConsultations = todayAppointments.length;
+
+  const consultationsToday = useMemo(() => {
+    const todayString = new Date().toDateString();
+
+    return consultations.filter(consultation => {
+      const consultationDateValue = consultation.date || consultation.consultation_date;
+
+      if (!consultationDateValue) {
+        return false;
+      }
+
+      const consultationDate = new Date(consultationDateValue);
+
+      if (Number.isNaN(consultationDate.getTime())) {
+        return false;
+      }
+
+      return consultationDate.toDateString() === todayString;
+    }).length;
+  }, [consultations]);
+
+  const { scheduledAppointmentsCount, confirmedAppointmentsCount } = useMemo(() => {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const { scheduled, confirmed } = appointments.reduce(
+      (acc, appointment) => {
+        const appointmentDateValue = appointment.appointment_date || appointment.date_time;
+
+        if (!appointmentDateValue) {
+          return acc;
+        }
+
+        const appointmentDate = new Date(appointmentDateValue);
+
+        if (Number.isNaN(appointmentDate.getTime()) || appointmentDate < startOfToday) {
+          return acc;
+        }
+
+        if (appointment.status === 'confirmada' || appointment.status === 'por_confirmar') {
+          acc.scheduled += 1;
+
+          if (appointment.status === 'confirmada') {
+            acc.confirmed += 1;
+          }
+        }
+
+        return acc;
+      },
+      { scheduled: 0, confirmed: 0 }
+    );
+
+    return {
+      scheduledAppointmentsCount: scheduled,
+      confirmedAppointmentsCount: confirmed
+    };
+  }, [appointments]);
 
   // Handle row click to edit consultation
   const handleRowClick = (consultation: any) => {
@@ -305,10 +342,10 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
           <Card sx={{ boxShadow: 1, height: '100%' }}>
             <CardContent sx={{ textAlign: 'center' }}>
               <Typography variant="h6" gutterBottom>
-                Total Consultas
+                Consultas hoy
               </Typography>
               <Typography variant="h3" color="primary">
-                {totalConsultations}
+                {consultationsToday}
               </Typography>
             </CardContent>
           </Card>
@@ -317,10 +354,10 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
           <Card sx={{ boxShadow: 1, height: '100%' }}>
             <CardContent sx={{ textAlign: 'center' }}>
               <Typography variant="h6" gutterBottom>
-                Citas de Hoy
+                Citas programadas
               </Typography>
-              <Typography variant="h3" color="success.main">
-                {todayConsultations}
+              <Typography variant="h3" color="info.main">
+                {scheduledAppointmentsCount}
               </Typography>
             </CardContent>
           </Card>
@@ -329,10 +366,10 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
           <Card sx={{ boxShadow: 1, height: '100%' }}>
             <CardContent sx={{ textAlign: 'center' }}>
               <Typography variant="h6" gutterBottom>
-                Resultados
+                Citas confirmadas
               </Typography>
-              <Typography variant="h3" color="info.main">
-                {filteredConsultations.length}
+              <Typography variant="h3" color="success.main">
+                {confirmedAppointmentsCount}
               </Typography>
             </CardContent>
           </Card>

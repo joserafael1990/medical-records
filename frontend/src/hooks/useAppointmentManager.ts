@@ -103,10 +103,7 @@ export const useAppointmentManager = (
     doctor_id: currentDoctorProfile?.id || '',
     date_time: '',
     appointment_type: 'consultation',
-    reason: '',
-    notes: '',
-    status: 'confirmed',
-    priority: 'normal',
+    status: 'por_confirmar',
     preparation_instructions: '',
     confirmation_required: false,
     estimated_cost: '',
@@ -238,10 +235,7 @@ export const useAppointmentManager = (
       appointment_type_id: 1, // Default to "Presencial"
       office_id: undefined,
       consultation_type: '', // No default value
-      reason: '',
-      notes: '',
-      status: 'confirmed',
-      priority: 'normal',
+      status: 'por_confirmar',
       preparation_instructions: '',
       confirmation_required: false,
       estimated_cost: '',
@@ -279,10 +273,7 @@ export const useAppointmentManager = (
         appointment_type: ((latest as any).appointment_type_id || 1) === 1 ? 'primera vez' : 'seguimiento',
         office_id: (latest as any).office_id,
         consultation_type: (latest as any).consultation_type,
-        reason: (latest as any).reason,
-        notes: (latest as any).notes || '',
         status: (latest as any).status,
-        priority: (latest as any).priority || 'normal',
         preparation_instructions: (latest as any).preparation_instructions || '',
         confirmation_required: (latest as any).confirmation_required || false,
         estimated_cost: (latest as any).estimated_cost || '',
@@ -291,14 +282,16 @@ export const useAppointmentManager = (
         equipment_needed: (latest as any).equipment_needed || '',
         cancelled_reason: (latest as any).cancelled_reason || '',
         auto_reminder_enabled: (latest as any).auto_reminder_enabled ?? false,
-        auto_reminder_offset_minutes: (latest as any).auto_reminder_offset_minutes ?? 360
+        auto_reminder_offset_minutes: (latest as any).auto_reminder_offset_minutes ?? 360,
+        // Include reminders if they exist
+        reminders: (latest as any).reminders && Array.isArray((latest as any).reminders) 
+          ? (latest as any).reminders.map((r: any) => ({
+              reminder_number: r.reminder_number,
+              offset_minutes: r.offset_minutes,
+              enabled: r.enabled
+            }))
+          : undefined
       } as any;
-      console.log('🟦 FormData al abrir edición (calculado):', {
-        id: formData.id,
-        appointment_date: formData.appointment_date,
-        auto_reminder_enabled: formData.auto_reminder_enabled,
-        auto_reminder_offset_minutes: formData.auto_reminder_offset_minutes
-      });
       setAppointmentFormData(formData);
       setFieldErrors({});
       setFormErrorMessage('');
@@ -317,10 +310,7 @@ export const useAppointmentManager = (
         appointment_type: (appointment.appointment_type_id || 1) === 1 ? 'primera vez' : 'seguimiento',
         office_id: appointment.office_id,
         consultation_type: (appointment as any).consultation_type,
-        reason: appointment.reason,
-        notes: appointment.notes || '',
         status: appointment.status,
-        priority: appointment.priority || 'normal',
         preparation_instructions: (appointment as any).preparation_instructions || '',
         confirmation_required: (appointment as any).confirmation_required || false,
         estimated_cost: (appointment as any).estimated_cost || '',
@@ -329,14 +319,16 @@ export const useAppointmentManager = (
         equipment_needed: (appointment as any).equipment_needed || '',
         cancelled_reason: (appointment as any).cancelled_reason || '',
         auto_reminder_enabled: (appointment as any).auto_reminder_enabled ?? false,
-        auto_reminder_offset_minutes: (appointment as any).auto_reminder_offset_minutes ?? 360
+        auto_reminder_offset_minutes: (appointment as any).auto_reminder_offset_minutes ?? 360,
+        // Include reminders if they exist
+        reminders: (appointment as any).reminders && Array.isArray((appointment as any).reminders)
+          ? (appointment as any).reminders.map((r: any) => ({
+              reminder_number: r.reminder_number,
+              offset_minutes: r.offset_minutes,
+              enabled: r.enabled
+            }))
+          : undefined
       } as any;
-      console.log('🟨 Fallback FormData al abrir edición (sin backend):', {
-        id: formData.id,
-        appointment_date: formData.appointment_date,
-        auto_reminder_enabled: formData.auto_reminder_enabled,
-        auto_reminder_offset_minutes: formData.auto_reminder_offset_minutes
-      });
       setAppointmentFormData(formData);
       setAppointmentDialogOpen(true);
     }
@@ -371,29 +363,18 @@ export const useAppointmentManager = (
       const cdmxDateISO = mexicoTimeString.replace(' ', 'T') + '-06:00';
       const cdmxEndDateISO = mexicoEndTimeString.replace(' ', 'T') + '-06:00';
       
-      console.log('🔍 Frontend Debug - Appointment Creation:');
-      console.log('📅 Original appointmentData.date_time:', appointmentData.date_time);
-      console.log('📅 Parsed appointmentDate:', appointmentDate);
-      console.log('📅 Mexico time string (sv-SE):', mexicoTimeString);
-      console.log('📅 CDMX Date ISO string:', cdmxDateISO);
-      
       const backendData = {
         patient_id: appointmentData.patient_id,
         doctor_id: user?.doctor?.id || doctorProfile?.id || 0,
         appointment_date: cdmxDateISO,
         end_time: cdmxEndDateISO,
-        reason: appointmentData.reason,
         appointment_type: appointmentData.appointment_type, // Keep the original value without fallback
-        status: appointmentData.status || 'confirmed',
-        priority: appointmentData.priority || 'normal',
+        status: appointmentData.status || 'por_confirmar',
         preparation_instructions: appointmentData.preparation_instructions || '',
-        notes: appointmentData.notes || '',
         // WhatsApp auto reminder fields (send what user sees)
         auto_reminder_enabled: !!appointmentData.auto_reminder_enabled,
         auto_reminder_offset_minutes: (appointmentData.auto_reminder_offset_minutes ?? 360)
       };
-      
-      console.log('📤 Backend data being sent:', backendData);
 
       const response = await apiService.appointments.createAgendaAppointment(backendData);
       
@@ -476,42 +457,31 @@ export const useAppointmentManager = (
         const endTime = new Date(appointmentDate.getTime() + doctorDuration * 60000);
 
         // Enviar fecha/hora en ISO (UTC) para que backend compute correctamente
-        const updateData = {
+        const updateData: any = {
           patient_id: formDataToUse.patient_id,
           appointment_date: appointmentDate.toISOString(),
           end_time: endTime.toISOString(),
           appointment_type_id: formDataToUse.appointment_type_id || 1,
           office_id: formDataToUse.office_id || null,
           consultation_type: formDataToUse.consultation_type || '',
-          status: formDataToUse.status || 'confirmed',
-          priority: formDataToUse.priority || 'normal',
-          reason: formDataToUse.reason || '',
-          notes: formDataToUse.notes || '',
+          status: formDataToUse.status || 'por_confirmar',
           preparation_instructions: formDataToUse.preparation_instructions || undefined,
           follow_up_required: formDataToUse.confirmation_required || false,
           room_number: formDataToUse.room_number || undefined,
           estimated_cost: formDataToUse.estimated_cost ? 
             parseFloat(formDataToUse.estimated_cost) : undefined,
           insurance_covered: formDataToUse.insurance_covered || false,
-          // WhatsApp auto reminder fields (enviar siempre lo que el usuario ve)
+          // WhatsApp auto reminder fields (enviar siempre lo que el usuario ve) - DEPRECATED, use reminders array instead
           auto_reminder_enabled: !!formDataToUse.auto_reminder_enabled,
           auto_reminder_offset_minutes: (formDataToUse.auto_reminder_offset_minutes ?? 360)
         };
         
-        console.log('🟧 Enviando actualización de cita:', {
-          id: selectedAppointment.id,
-          appointment_date_form_value: formDataToUse.appointment_date,
-          appointment_date_iso: appointmentDate.toISOString(),
-          auto_reminder_enabled: updateData.auto_reminder_enabled,
-          auto_reminder_offset_minutes: updateData.auto_reminder_offset_minutes
-        });
+        // Include reminders if present (new multiple reminders system)
+        if (formDataToUse.reminders && Array.isArray(formDataToUse.reminders) && formDataToUse.reminders.length > 0) {
+          updateData.reminders = formDataToUse.reminders;
+        }
+        
         const updatedAppointment = await apiService.appointments.updateAppointment(String(selectedAppointment.id), updateData);
-        console.log('🟩 Respuesta backend actualización:', {
-          id: (updatedAppointment as any)?.id,
-          appointment_date: (updatedAppointment as any)?.appointment_date,
-          auto_reminder_enabled: (updatedAppointment as any)?.auto_reminder_enabled,
-          auto_reminder_offset_minutes: (updatedAppointment as any)?.auto_reminder_offset_minutes
-        });
 
         // Mover la vista al día de la cita editada antes de refrescar
         try {
@@ -581,7 +551,6 @@ export const useAppointmentManager = (
                   const m = String(dateToRefresh.getMonth() + 1).padStart(2, '0');
                   const d = String(dateToRefresh.getDate()).padStart(2, '0');
                   const dateStr = `${y}-${m}-${d}`;
-                  console.log('🔄 Refrescando agenda diaria para:', dateStr);
                   refreshData = await apiService.appointments.getDailyAgenda(dateStr);
                 } else if (agendaView === 'weekly') {
                   const start = new Date(dateToRefresh);
@@ -594,7 +563,6 @@ export const useAppointmentManager = (
 
                   const startStr = start.toISOString().split('T')[0];
                   const endStr = end.toISOString().split('T')[0];
-                  console.log('🔄 Refrescando agenda semanal:', { startStr, endStr });
                   refreshData = await apiService.appointments.getWeeklyAgenda(startStr, endStr);
                 } else if (agendaView === 'monthly') {
                   const start = new Date(dateToRefresh.getFullYear(), dateToRefresh.getMonth(), 1);
@@ -602,7 +570,6 @@ export const useAppointmentManager = (
                   
                   const startStr = start.toISOString().split('T')[0];
                   const endStr = end.toISOString().split('T')[0];
-                  console.log('🔄 Refrescando agenda mensual:', { startStr, endStr });
                   refreshData = await apiService.appointments.getMonthlyAgenda(startStr, endStr);
                 }
                 
@@ -614,7 +581,6 @@ export const useAppointmentManager = (
                     if (!isNaN(newDate.getTime())) {
                       const oldDay = new Date(selectedDate);
                       if (newDate.toDateString() !== oldDay.toDateString()) {
-                        console.log('📅 Cambiando a nuevo día de la cita:', newDate.toDateString());
                         setSelectedDate(newDate);
                       }
                     }
@@ -622,7 +588,6 @@ export const useAppointmentManager = (
                 } catch {}
 
                 // Reemplazar lista siempre para reflejar cambios
-                console.log('📋 Citas refrescadas:', Array.isArray(refreshData) ? refreshData.length : 'N/A');
                 setAppointments(refreshData || []);
               } catch (error) {
                 console.error('❌ Error refreshing appointments:', error);
@@ -647,7 +612,7 @@ export const useAppointmentManager = (
         const doctorDuration = user?.doctor?.appointment_duration || doctorProfile?.appointment_duration || 30;
         const endTime = new Date(appointmentDate.getTime() + doctorDuration * 60000);
 
-        const appointmentData = {
+        const appointmentData: any = {
           patient_id: formDataToUse.patient_id,
           doctor_id: user?.doctor?.id || doctorProfile?.id || 0, // Use current logged-in doctor
           appointment_date: appointmentDate.toISOString(),
@@ -655,20 +620,22 @@ export const useAppointmentManager = (
           appointment_type_id: formDataToUse.appointment_type_id || 1, // Use appointment_type_id instead of appointment_type
           office_id: formDataToUse.office_id || null, // Include office_id
           consultation_type: formDataToUse.consultation_type || '',
-          status: formDataToUse.status || 'confirmed',
-          priority: formDataToUse.priority || 'normal',
-          reason: formDataToUse.reason || '',
-          notes: formDataToUse.notes || '',
+          status: formDataToUse.status || 'por_confirmar',
           preparation_instructions: formDataToUse.preparation_instructions || undefined,
           follow_up_required: formDataToUse.confirmation_required || false,
           room_number: formDataToUse.room_number || undefined,
           estimated_cost: formDataToUse.estimated_cost ? 
             parseFloat(formDataToUse.estimated_cost) : undefined,
           insurance_covered: formDataToUse.insurance_covered || false,
-          // WhatsApp auto reminder fields (send what user sees)
+          // WhatsApp auto reminder fields (send what user sees) - DEPRECATED, use reminders array instead
           auto_reminder_enabled: !!formDataToUse.auto_reminder_enabled,
           auto_reminder_offset_minutes: (formDataToUse.auto_reminder_offset_minutes ?? 360)
         };
+        
+        // Include reminders if present (new multiple reminders system)
+        if (formDataToUse.reminders && Array.isArray(formDataToUse.reminders) && formDataToUse.reminders.length > 0) {
+          appointmentData.reminders = formDataToUse.reminders;
+        }
         
         await apiService.appointments.createAgendaAppointment(appointmentData);
         showSuccessMessage('Cita creada exitosamente');

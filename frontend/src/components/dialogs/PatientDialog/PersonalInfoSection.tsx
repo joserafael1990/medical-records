@@ -164,7 +164,7 @@ export const PersonalInfoSection: React.FC<PersonalInfoSectionProps> = ({
           </FormControl>
         </Grid>
         
-        {/* CURP - LEGACY: Este componente parece no estar en uso, manteniendo por compatibilidad */}
+        {/* CURP - Usado para búsquedas y visualización de pacientes */}
         <Grid item xs={12} sm={6}>
           <TextField
             label="CURP"
@@ -177,7 +177,7 @@ export const PersonalInfoSection: React.FC<PersonalInfoSectionProps> = ({
           />
         </Grid>
         
-        {/* RFC - LEGACY: Este componente parece no estar en uso, manteniendo por compatibilidad */}
+        {/* RFC - Usado para búsquedas y visualización de pacientes */}
         <Grid item xs={12} sm={6}>
           <TextField
             label="RFC"

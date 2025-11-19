@@ -99,6 +99,9 @@ export const createMockConsultation = (overrides = {}) => ({
   id: 'CONS001',
   patient_id: 'PAT001',
   patient_name: 'Juan Pérez García',
+  patient_document_id: 1,
+  patient_document_value: 'GOPM850515HDFNTR09',
+  patient_document_name: 'CURP',
   date: '2024-01-01T10:00:00Z',
   chief_complaint: 'Dolor de cabeza',
   history_present_illness: 'Dolor de 2 días de evolución',
@@ -120,7 +123,7 @@ export const createMockAppointment = (overrides = {}) => ({
   date_time: '2024-01-01T10:00:00Z',
   appointment_type: 'consultation' as const,
   reason: 'Consulta de rutina',
-  status: 'confirmed' as const,
+  status: 'confirmada' as const,
   created_at: '2024-01-01T09:00:00Z',
   updated_at: '2024-01-01T09:00:00Z',
   ...overrides

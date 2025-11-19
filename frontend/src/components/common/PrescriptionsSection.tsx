@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -12,15 +12,18 @@ import {
   Chip,
   Autocomplete,
   TextField,
-  CircularProgress
+  CircularProgress,
+  Button
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
   Medication as MedicationIcon,
   LocalPharmacy as PharmacyIcon,
-  Search as SearchIcon
+  Search as SearchIcon,
+  Add as AddIcon
 } from '@mui/icons-material';
 import { ConsultationPrescription, Medication, CreatePrescriptionData } from '../../types';
+import { logger } from '../../utils/logger';
 
 interface PrescriptionsSectionProps {
   consultationId: string;
@@ -47,6 +50,7 @@ const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
 }) => {
   const [selectedMedication, setSelectedMedication] = useState<Medication | null>(null);
   const [medicationSearch, setMedicationSearch] = useState('');
+  const [isCreatingMedication, setIsCreatingMedication] = useState(false);
   const [formData, setFormData] = useState<CreatePrescriptionData>({
     medication_id: 0,
     dosage: '',
@@ -72,8 +76,48 @@ const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
   useEffect(() => {
     if (selectedMedication) {
       setFormData(prev => ({ ...prev, medication_id: selectedMedication.id }));
+      setMedicationSearch(selectedMedication.name);
     }
   }, [selectedMedication]);
+
+  const medicationExists = medications.some(
+    (medication) => medication.name?.toLowerCase().trim() === medicationSearch.toLowerCase().trim()
+  );
+
+  const handleMedicationChange = (
+    _event: any,
+    newValue: Medication | string | null
+  ) => {
+    if (typeof newValue === 'string') {
+      setMedicationSearch(newValue);
+      setSelectedMedication(null);
+      setFormData(prev => ({ ...prev, medication_id: 0 }));
+    } else if (newValue && newValue.id) {
+      setSelectedMedication(newValue);
+      setMedicationSearch(newValue.name);
+      setFormData(prev => ({ ...prev, medication_id: newValue.id }));
+    } else {
+      setSelectedMedication(null);
+      setFormData(prev => ({ ...prev, medication_id: 0 }));
+    }
+  };
+
+  const handleCreateMedication = async () => {
+    if (!onCreateMedication || !medicationSearch.trim() || medicationExists) {
+      return;
+    }
+
+    try {
+      setIsCreatingMedication(true);
+      const newMedication = await onCreateMedication(medicationSearch.trim());
+      setSelectedMedication(newMedication);
+      setFormData(prev => ({ ...prev, medication_id: newMedication.id }));
+    } catch (error) {
+      logger.error('Error creating medication', error, 'api');
+    } finally {
+      setIsCreatingMedication(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!formData.medication_id || !formData.dosage || !formData.frequency || !formData.duration) {
@@ -96,7 +140,7 @@ const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
         via_administracion: ''
       });
     } catch (error) {
-      console.error('Error saving prescription:', error);
+      logger.error('Error saving prescription', error, 'api');
     } finally {
       setIsSubmitting(false);
     }
@@ -127,25 +171,23 @@ const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
       <Card sx={{ mb: 3, border: '1px dashed', borderColor: 'grey.300', backgroundColor: '#fafafa' }}>
         <CardContent sx={{ p: 2 }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {/* First row: Autocomplete (largest) and Dosis, Frecuencia, Duración (half size each) */}
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
-              {/* Autocomplete - Largest field (flex: 2 = double the size of smaller fields) */}
-              <Box sx={{ flex: { xs: '1 1 100%', sm: '2 2 0%' }, minWidth: 0 }}>
+            {/* Primera fila: nombre del medicamento y botón guardar */}
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'stretch', flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Autocomplete
+                  freeSolo
                   options={medications}
                   getOptionLabel={(option) => option.name || ''}
                   value={selectedMedication}
-                  onChange={(event, newValue) => {
-                    setSelectedMedication(newValue);
-                  }}
-                  onInputChange={(event, newInputValue) => {
+                  onChange={handleMedicationChange}
+                  onInputChange={(_event, newInputValue) => {
                     setMedicationSearch(newInputValue);
                   }}
                   filterOptions={(x) => x}
                   renderInput={(params) => (
                     <TextField
                       {...params}
-                      placeholder="Buscar medicamento..."
+                      placeholder="Nombre del medicamento"
                       size="small"
                       fullWidth
                       InputProps={{
@@ -156,8 +198,24 @@ const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
                   )}
                 />
               </Box>
-              {/* Dosis - Half the size of autocomplete (flex: 1) */}
-              <Box sx={{ flex: { xs: '1 1 calc(50% - 8px)', sm: '1 1 0%' }, minWidth: { xs: 'calc(50% - 8px)', sm: '80px' } }}>
+              <Button
+                variant="outlined"
+                startIcon={<AddIcon />}
+                onClick={handleCreateMedication}
+                disabled={
+                  isCreatingMedication ||
+                  !medicationSearch.trim() ||
+                  medicationExists ||
+                  !onCreateMedication
+                }
+                sx={{ flexShrink: 0, whiteSpace: 'nowrap', minHeight: 40 }}
+              >
+                {isCreatingMedication ? 'Guardando...' : 'Guardar'}
+              </Button>
+            </Box>
+            {/* Segunda fila: Dosis, Frecuencia, Duración */}
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+              <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 0%' }, minWidth: { xs: '100%', sm: '160px' } }}>
                 <TextField
                   placeholder="Dosis"
                   value={formData.dosage}
@@ -166,8 +224,7 @@ const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
                   fullWidth
                 />
               </Box>
-              {/* Frecuencia - Half the size of autocomplete (flex: 1) */}
-              <Box sx={{ flex: { xs: '1 1 calc(50% - 8px)', sm: '1 1 0%' }, minWidth: { xs: 'calc(50% - 8px)', sm: '80px' } }}>
+              <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 0%' }, minWidth: { xs: '100%', sm: '160px' } }}>
                 <TextField
                   placeholder="Frecuencia"
                   value={formData.frequency}
@@ -176,8 +233,7 @@ const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
                   fullWidth
                 />
               </Box>
-              {/* Duración - Half the size of autocomplete (flex: 1) */}
-              <Box sx={{ flex: { xs: '1 1 calc(50% - 8px)', sm: '1 1 0%' }, minWidth: { xs: 'calc(50% - 8px)', sm: '80px' } }}>
+              <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 0%' }, minWidth: { xs: '100%', sm: '160px' } }}>
                 <TextField
                   placeholder="Duración"
                   value={formData.duration}
@@ -187,7 +243,7 @@ const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
                 />
               </Box>
             </Box>
-            {/* Second row: Quantity, Via de administracion */}
+            {/* Tercera fila: Cantidad y Vía de administración */}
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
               {/* Cantidad a surtir - Half size */}
               <Box sx={{ flex: { xs: '1 1 calc(50% - 8px)', sm: '1 1 0%' }, minWidth: { xs: 'calc(50% - 8px)', sm: '120px' } }}>
@@ -223,13 +279,14 @@ const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
                 sx={{ flex: 1 }}
               />
               <Box sx={{ flexShrink: 0 }}>
-                <IconButton
-                  color="primary"
+                <Button
+                  variant="contained"
+                  startIcon={isSubmitting ? undefined : <MedicationIcon />}
                   onClick={handleSave}
                   disabled={isSubmitting || !formData.medication_id || !formData.dosage || !formData.frequency || !formData.duration}
                 >
-                  {isSubmitting ? <CircularProgress size={20} /> : <MedicationIcon />}
-                </IconButton>
+                  {isSubmitting ? <CircularProgress size={20} /> : 'Agregar a la receta'}
+                </Button>
               </Box>
             </Box>
           </Box>
@@ -237,15 +294,6 @@ const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
       </Card>
 
       {/* Prescriptions List */}
-      {(() => {
-        console.log('💊 PrescriptionsSection render:', { 
-          prescriptionsCount: prescriptions.length, 
-          prescriptions: prescriptions,
-          consultationId,
-          isLoading 
-        });
-        return null;
-      })()}
       {prescriptions.length === 0 ? (
         <Card sx={{ p: 3, textAlign: 'center', backgroundColor: '#fafafa' }}>
           <MedicationIcon sx={{ fontSize: 48, color: '#ccc', mb: 1 }} />

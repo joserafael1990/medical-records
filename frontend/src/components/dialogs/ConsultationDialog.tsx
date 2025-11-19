@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -31,7 +31,11 @@ import { ConsultationDiagnosisSection } from './ConsultationDialog/DiagnosisSect
 import { PrintButtonsSection } from './ConsultationDialog/PrintButtonsSection';
 import { VitalSignsDialogs } from './ConsultationDialog/VitalSignsDialogs';
 import { ConsultationSections } from './ConsultationDialog/ConsultationSections';
+import { PrivacyConsentStatusSection } from './ConsultationDialog/PrivacyConsentStatusSection';
 import { useConsultationForm, ConsultationFormData } from '../../hooks/useConsultationForm';
+import { apiService } from '../../services';
+import { logger } from '../../utils/logger';
+import { useDiagnosisCatalog } from '../../hooks/useDiagnosisCatalog';
 
 export interface ConsultationDialogProps {
   open: boolean;
@@ -56,6 +60,28 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   onNewAppointment,
   appointments = []
 }: ConsultationDialogProps) => {
+  const [followUpAppointments, setFollowUpAppointments] = useState<any[]>([]);
+  const nextAppointmentDate = useMemo(() => {
+    if (!followUpAppointments || followUpAppointments.length === 0) {
+      return null;
+    }
+    const withDates = followUpAppointments.filter((appointment) => appointment?.appointment_date);
+    if (withDates.length === 0) {
+      return null;
+    }
+    withDates.sort((a, b) => new Date(a.appointment_date).getTime() - new Date(b.appointment_date).getTime());
+    return withDates[0].appointment_date;
+  }, [followUpAppointments]);
+
+  const lastFetchedPatientRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      lastFetchedPatientRef.current = null;
+      setFollowUpAppointments([]);
+    }
+  }, [open]);
+
   // Section hooks
   const clinicalStudiesHook = useClinicalStudies();
   const vitalSignsHook = useVitalSigns();
@@ -63,7 +89,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   const primaryDiagnosesHook = useDiagnosisManagement();
   const secondaryDiagnosesHook = useDiagnosisManagement();
 
-  // Main form hook
   const formHook = useConsultationForm({
     consultation,
     onSubmit,
@@ -78,6 +103,66 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     vitalSignsHook,
     prescriptionsHook
   });
+
+  // Get diagnosis catalog hook for creating new diagnoses
+  const diagnosisCatalog = useDiagnosisCatalog();
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadFollowUpAppointments = async () => {
+      if (!open) {
+        return;
+      }
+
+      const selectedId = formHook.selectedPatient?.id;
+      const patientIdFromForm = formHook.formData.patient_id ? parseInt(formHook.formData.patient_id, 10) : null;
+      const patientId = selectedId || (!Number.isNaN(patientIdFromForm || NaN) ? patientIdFromForm : null);
+
+      if (!patientId) {
+        lastFetchedPatientRef.current = null;
+        setFollowUpAppointments(prev => (prev.length > 0 ? [] : prev));
+        return;
+      }
+
+      if (lastFetchedPatientRef.current === patientId) {
+        return;
+      }
+
+      lastFetchedPatientRef.current = patientId;
+
+      try {
+        const appointmentsByPatient = await apiService.appointments.getAppointmentsByPatient(String(patientId));
+        if (!isMounted) {
+          return;
+        }
+        const filteredAppointments = (appointmentsByPatient || []).filter((appointment: any) =>
+          appointment && ['confirmada', 'por_confirmar'].includes(appointment.status)
+        );
+        setFollowUpAppointments(prev => {
+          const sameLength = prev.length === filteredAppointments.length;
+          const sameItems = sameLength && prev.every((item, index) => item.id === filteredAppointments[index]?.id);
+          return sameItems ? prev : filteredAppointments;
+        });
+      } catch (error: any) {
+        if (!isMounted) {
+          return;
+        }
+        if (error?.status === 404 || error?.response?.status === 404) {
+          setFollowUpAppointments(prev => (prev.length > 0 ? [] : prev));
+          return;
+        }
+        logger.error('Error fetching follow-up appointments', error, 'api');
+        setFollowUpAppointments(prev => (prev.length > 0 ? [] : prev));
+      }
+    };
+
+    loadFollowUpAppointments();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [open, formHook.selectedPatient?.id, formHook.formData.patient_id]);
 
   // Auto-scroll to error when it appears
   const { errorRef } = useScrollToErrorInDialog(formHook.error);
@@ -219,6 +304,15 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             onChange={formHook.handleDateChange}
           />
 
+          {/* Privacy Consent Status Section - Show only for first-time consultations */}
+          {formHook.selectedPatient && (
+            <PrivacyConsentStatusSection
+              patientId={formHook.selectedPatient.id || null}
+              consultationType={formHook.formData.consultation_type || ''}
+              isFirstTime={formHook.shouldShowFirstTimeFields()}
+            />
+          )}
+
           {/* Consultation Form Fields */}
           <ConsultationFormFields
             formData={formHook.formData}
@@ -242,11 +336,13 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             primaryDiagnoses={primaryDiagnosesHook.diagnoses}
             onAddPrimaryDiagnosis={formHook.handleAddPrimaryDiagnosis}
             onRemovePrimaryDiagnosis={formHook.handleRemovePrimaryDiagnosis}
+            onCreatePrimaryDiagnosis={diagnosisCatalog.createDiagnosis}
             primaryDiagnosisText={formHook.formData.primary_diagnosis}
             onPrimaryDiagnosisTextChange={formHook.handleChange}
             secondaryDiagnoses={secondaryDiagnosesHook.diagnoses}
             onAddSecondaryDiagnosis={formHook.handleAddSecondaryDiagnosis}
             onRemoveSecondaryDiagnosis={formHook.handleRemoveSecondaryDiagnosis}
+            onCreateSecondaryDiagnosis={diagnosisCatalog.createDiagnosis}
             secondaryDiagnosesText={formHook.formData.secondary_diagnoses}
             onSecondaryDiagnosesTextChange={formHook.handleChange}
             loading={formHook.loading}
@@ -257,14 +353,15 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           {/* Consultation Sections (Vital Signs, Prescriptions, Studies, Schedule) */}
           <ConsultationSections
             isEditing={formHook.isEditing}
-            consultationId={consultation?.id || null}
+            consultationId={formHook.currentConsultationId || consultation?.id || null}
             selectedPatientId={formHook.selectedPatient?.id || null}
             formDataPatientId={formHook.formData.patient_id}
             vitalSigns={vitalSignsHook.getAllVitalSigns() || []}
             availableVitalSigns={vitalSignsHook.availableVitalSigns || []}
             vitalSignsLoading={vitalSignsHook.isLoading}
             onAddVitalSign={async (vitalSignData) => {
-              const consultationIdStr = formHook.isEditing && consultation?.id ? String(consultation.id) : TEMP_IDS.CONSULTATION;
+              const resolvedId = formHook.currentConsultationId || consultation?.id;
+              const consultationIdStr = resolvedId ? String(resolvedId) : TEMP_IDS.CONSULTATION;
               
               if (consultationIdStr === TEMP_IDS.CONSULTATION) {
                 const vitalSign = vitalSignsHook.availableVitalSigns.find(vs => vs.id === vitalSignData.vital_sign_id);
@@ -280,18 +377,21 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               }
             }}
             onEditVitalSign={(vitalSign, vitalSignData) => {
-              const consultationIdStr = formHook.isEditing && consultation?.id ? String(consultation.id) : TEMP_IDS.CONSULTATION;
+              const resolvedId = formHook.currentConsultationId || consultation?.id;
+              const consultationIdStr = resolvedId ? String(resolvedId) : TEMP_IDS.CONSULTATION;
               vitalSignsHook.updateVitalSign(consultationIdStr, vitalSign.id, vitalSignData);
             }}
             onDeleteVitalSign={(vitalSignId) => {
-              const consultationIdStr = formHook.isEditing && consultation?.id ? String(consultation.id) : TEMP_IDS.CONSULTATION;
+              const resolvedId = formHook.currentConsultationId || consultation?.id;
+              const consultationIdStr = resolvedId ? String(resolvedId) : TEMP_IDS.CONSULTATION;
               vitalSignsHook.deleteVitalSign(consultationIdStr, vitalSignId);
             }}
             prescriptions={prescriptionsHook.prescriptions}
             prescriptionsLoading={prescriptionsHook.isLoading}
             medications={prescriptionsHook.medications}
             onAddPrescription={async (prescriptionData) => {
-              const consultationIdStr = formHook.isEditing && consultation?.id ? String(consultation.id) : TEMP_IDS.CONSULTATION;
+              const resolvedId = formHook.currentConsultationId || consultation?.id;
+              const consultationIdStr = resolvedId ? String(resolvedId) : TEMP_IDS.CONSULTATION;
               if (consultationIdStr === TEMP_IDS.CONSULTATION) {
                 prescriptionsHook.addTemporaryPrescription(prescriptionData);
               } else {
@@ -300,14 +400,19 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               }
             }}
             onDeletePrescription={(prescriptionId) => {
-              if (formHook.isEditing && consultation?.id) {
-                prescriptionsHook.deletePrescription(prescriptionId, String(consultation.id));
+              const resolvedId = formHook.currentConsultationId || consultation?.id;
+              if (resolvedId) {
+                prescriptionsHook.deletePrescription(prescriptionId, String(resolvedId));
               } else {
                 prescriptionsHook.deletePrescription(prescriptionId, "temp_consultation");
               }
             }}
             onFetchMedications={prescriptionsHook.fetchMedications}
             onCreateMedication={prescriptionsHook.createMedication}
+            treatmentPlan={formHook.formData.treatment_plan}
+            onTreatmentPlanChange={formHook.handleChange}
+            followUpInstructions={formHook.formData.follow_up_instructions || ''}
+            onFollowUpInstructionsChange={formHook.handleChange}
             studies={clinicalStudiesHook.studies}
             studiesLoading={clinicalStudiesHook.isLoading}
             onAddStudy={handleAddStudy}
@@ -317,6 +422,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             doctorName={doctorProfile?.full_name || `${doctorProfile?.title || 'Dr.'} ${doctorProfile?.first_name || 'Usuario'} ${doctorProfile?.last_name || 'Sistema'}`.trim()}
             patientId={formHook.selectedPatient?.id || parseInt(formHook.formData.patient_id) || 0}
             doctorProfile={doctorProfile}
+            onAppointmentsChange={setFollowUpAppointments}
+            initialAppointments={followUpAppointments}
           />
         </Box>
       </DialogContent>
@@ -332,9 +439,13 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           doctorProfile={doctorProfile}
           appointmentOffice={formHook.appointmentOffice}
           consultation={consultation}
+          consultationId={formHook.currentConsultationId || consultation?.id || null}
           formData={formHook.formData}
+          personalDocument={formHook.personalDocument}
           prescriptions={prescriptionsHook.prescriptions || []}
           studies={clinicalStudiesHook.studies || []}
+          vitalSigns={vitalSignsHook.getAllVitalSigns()}
+          nextAppointmentDate={nextAppointmentDate}
         />
         
         {/* Action buttons */}

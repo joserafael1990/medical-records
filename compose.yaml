@@ -16,41 +16,45 @@ services:
       retries: 3
       start_period: 40s
     environment:
-      - MEDICAL_ENCRYPTION_KEY=17TAemFFyvzzOSCNdm9fISoQjiWzlWAgVJslIOYaGpU=
+      - SECRET_KEY=${SECRET_KEY:-}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
+      - SENTRY_DSN_BACKEND=${SENTRY_DSN_BACKEND}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-development}
+      - ENABLE_ENCRYPTION=${ENABLE_ENCRYPTION:-false}
+      - SECURITY_HEADERS_ENABLED=${SECURITY_HEADERS_ENABLED:-true}
+      - CONTENT_SECURITY_POLICY=${CONTENT_SECURITY_POLICY}
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
+      - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-120}
+      - RATE_LIMIT_WINDOW_SECONDS=${RATE_LIMIT_WINDOW_SECONDS:-60}
+      - MEDICAL_ENCRYPTION_KEY=${MEDICAL_ENCRYPTION_KEY}
       # WhatsApp Provider: 'meta' para usar Meta directamente, 'twilio' para usar Twilio
-      - WHATSAPP_PROVIDER=meta
-      
+      - WHATSAPP_PROVIDER=${WHATSAPP_PROVIDER:-meta}
+
       # Meta WhatsApp credentials (cuando WHATSAPP_PROVIDER=meta)
       # Obtén estas credenciales de: https://developers.facebook.com/
-      - META_WHATSAPP_PHONE_ID=883218048200840
-      - META_WHATSAPP_TOKEN=EAAWQZA7pGNZAIBP1FSDSBQbMKut2ZBGgEFO53UxUmj4BPivJs5qMxHqZBCHSqKICPk2iljDXZC43DYjxYlMgbXnyeSm71IpdZBbq6R3wvCw9CLZC42ha1WZCSZBhsWCfUBiHCxZBb7mZASB9bIaKmvh2OTjY8kwbwZCvJWec6We8JVEWXZAXZAEhYdPMEr8BTa5sq4CIQq3hHTXWJaxlaeSHuLDsfIxmZA4LHc03uYDCrjstf3KRiQQvRmlw9LY5YDLR2boY0ZC2xZC5u4t6scuI2PGUELUlcu0t40SKLRpPb
-      - META_WHATSAPP_API_VERSION=v24.0
+      - META_WHATSAPP_PHONE_ID=${META_WHATSAPP_PHONE_ID}
+      - META_WHATSAPP_TOKEN=${META_WHATSAPP_TOKEN}
+      - META_WHATSAPP_API_VERSION=${META_WHATSAPP_API_VERSION:-v24.0}
       # Opcional:
-      # - META_WHATSAPP_BUSINESS_ID=TU_BUSINESS_ACCOUNT_ID
-      # - META_WHATSAPP_VERIFY_TOKEN=tu_token_verificacion
-      
-              # Twilio credentials (cuando WHATSAPP_PROVIDER=twilio) - COMENTADAS
-              # Descomenta estas líneas si quieres usar Twilio en lugar de Meta:
-              # IMPORTANTE: Reemplaza los valores con tus propias credenciales de Twilio
-              # - TWILIO_ACCOUNT_SID=your_twilio_account_sid_here
-              # - TWILIO_AUTH_TOKEN=your_twilio_auth_token_here
-              # - TWILIO_WHATSAPP_FROM=whatsapp:+1234567890
-              # - TWILIO_CONTENT_SID_APPOINTMENT_REMINDER=your_content_sid_here
-              # - TWILIO_CONTENT_SID_PRIVACY_NOTICE=your_content_sid_here
+      # - META_WHATSAPP_BUSINESS_ID=${META_WHATSAPP_BUSINESS_ID}
+      # - META_WHATSAPP_VERIFY_TOKEN=${META_WHATSAPP_VERIFY_TOKEN}
+
+    env_file:
+      - .env
 
     # env_file: .env  # Puedes usar un archivo .env para las credenciales en lugar de hardcodearlas
     volumes:
       # Mount backend source code for hot reload (exclude venv)
+      # Note: entrypoint.sh will restore .venv if it gets overwritten by volume mount
       - ./backend:/app
       - /app/__pycache__  # Exclude Python cache
-      - backend_venv:/app/.venv  # Use named volume for virtual environment
     depends_on:
       - postgres-db  # Ensure DB is up before backend starts
 
   typescript-frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile.dev  # Use development Dockerfile
+      dockerfile: Dockerfile.dev  # Desarrollo con hot reload
     restart: unless-stopped
     init: true
     ports:
@@ -60,6 +64,8 @@ services:
     environment:
       - NODE_OPTIONS=--max-old-space-size=8192  # 8GB memory limit
       - GENERATE_SOURCEMAP=false
+      - REACT_APP_SENTRY_DSN=${REACT_APP_SENTRY_DSN}
+      - REACT_APP_SENTRY_ENVIRONMENT=${REACT_APP_SENTRY_ENVIRONMENT:-development}
       - TSC_COMPILE_ON_ERROR=true
       - ESLINT_NO_DEV_ERRORS=true
       - SKIP_PREFLIGHT_CHECK=true
@@ -106,5 +112,3 @@ networks:
 volumes:
   postgres_data:
     # Persistent storage for PostgreSQL
-  backend_venv:
-    # Virtual environment for backend (to avoid conflicts with volume mounts)

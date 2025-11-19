@@ -9,7 +9,8 @@ import {
   MedicalServices as MedicalServicesIcon,
   LocalHospital as HospitalIcon,
   Favorite as HeartIcon,
-  Person as PersonIcon
+  Person as PersonIcon,
+  PregnantWoman as PregnantWomanIcon
 } from '@mui/icons-material';
 
 interface ConsultationFormFieldsProps {
@@ -18,6 +19,7 @@ interface ConsultationFormFieldsProps {
     history_present_illness: string;
     family_history: string;
     perinatal_history: string;
+    gynecological_and_obstetric_history: string;
     personal_pathological_history: string;
     personal_non_pathological_history: string;
     physical_examination: string;
@@ -120,6 +122,25 @@ export const ConsultationFormFields: React.FC<ConsultationFormFieldsProps> = ({
             />
           </Box>
 
+          {/* Gynecological and Obstetric History */}
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <PregnantWomanIcon sx={{ fontSize: 20 }} />
+              Antecedentes Gineco-Obstétricos
+            </Typography>
+            <TextField
+              name="gynecological_and_obstetric_history"
+              label="Antecedentes gineco-obstétricos"
+              value={formData.gynecological_and_obstetric_history}
+              onChange={onChange}
+              size="small"
+              fullWidth
+              multiline
+              rows={3}
+              placeholder="Registre menarca, ciclos, gestas, partos, abortos, complicaciones u otros antecedentes relevantes..."
+            />
+          </Box>
+
           {/* Personal Pathological History */}
           <Box>
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -195,24 +216,6 @@ export const ConsultationFormFields: React.FC<ConsultationFormFieldsProps> = ({
           rows={3}
           placeholder="Registre los resultados de análisis de laboratorio que el paciente trajo para la consulta..."
           sx={{ mb: 2 }}
-        />
-      </Box>
-
-      {/* Treatment Plan */}
-      <Box>
-        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-          <NotesIcon sx={{ fontSize: 20 }} />
-          Plan de Tratamiento
-        </Typography>
-        <TextField
-          name="treatment_plan"
-          label="Plan de tratamiento"
-          value={formData.treatment_plan}
-          onChange={onChange}
-          size="small"
-          fullWidth
-          multiline
-          rows={3}
         />
       </Box>
     </>

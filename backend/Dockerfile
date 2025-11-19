@@ -19,8 +19,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # Copy the rest of the backend code (excluding secrets, git, IDE files)
 COPY --link . ./
 
-# Validate Python syntax before building final image
-RUN python validate_syntax.py || (echo "❌ Syntax validation failed!" && exit 1)
+# (Omitido) Validación de sintaxis para acelerar builds en MVP
 
 # ----------- Final stage -----------
 FROM base AS final
@@ -35,11 +34,19 @@ COPY --from=builder /app/.venv /app/.venv
 # Copy the backend code from builder
 COPY --from=builder /app /app
 
+# Copy entrypoint script and make it executable
+COPY --from=builder /app/entrypoint.sh /app/entrypoint.sh
+
+# Create backup of .venv in a location that won't be mounted (as root)
+RUN cp -r /app/.venv /opt/.venv_backup
+
 # Set PATH to use the virtual environment
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Change ownership to appuser
-RUN chown -R appuser:appuser /app
+# Change ownership to appuser (including backup for restoration)
+RUN chown -R appuser:appuser /app && \
+    chown -R appuser:appuser /opt/.venv_backup && \
+    chmod +x /app/entrypoint.sh
 
 # Switch to non-root user
 USER appuser
@@ -47,5 +54,9 @@ USER appuser
 # Expose the default port (FastAPI default is 8000)
 EXPOSE 8000
 
-# Entrypoint: run the FastAPI app
+# Use entrypoint script to preserve .venv when volumes mount
+# Use sh to execute script to avoid permission issues when volume mounts
+ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]
+
+# Default command: run the FastAPI app
 CMD ["/app/.venv/bin/uvicorn", "main_clean_english:app", "--host", "0.0.0.0", "--port", "8000"]

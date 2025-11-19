@@ -62,18 +62,6 @@ describe('useRegisterForm', () => {
     expect(result.current.validateEmail('@example.com')).toBe(false);
   });
 
-  it('should validate CURP correctly', () => {
-    const { result } = renderHook(() => useRegisterForm());
-
-    // Valid CURP format
-    expect(result.current.validateCURP('ABCD123456HDFGHG01')).toBe(true);
-    
-    // Invalid CURP formats
-    expect(result.current.validateCURP('ABCD123456')).toBe(false);
-    expect(result.current.validateCURP('abcd123456hdfghg01')).toBe(false);
-    expect(result.current.validateCURP('ABCD123456HDFGHG')).toBe(false);
-  });
-
   it('should validate step 0 (Account Info)', () => {
     const { result } = renderHook(() => useRegisterForm());
 
@@ -106,7 +94,6 @@ describe('useRegisterForm', () => {
     act(() => {
       result.current.handleInputChange('first_name', 'Juan');
       result.current.handleInputChange('paternal_surname', 'Pérez');
-      result.current.handleInputChange('curp', 'ABCD123456HDFGHG01');
       result.current.handleInputChange('gender', 'M');
       result.current.handleInputChange('birth_date', '1990-01-01');
       result.current.handleInputChange('phone', '555-1234');

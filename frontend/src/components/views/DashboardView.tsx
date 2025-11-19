@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -21,6 +21,8 @@ import {
 import { format } from 'date-fns';
 import { formatTime } from '../../utils/formatters';
 import { es } from 'date-fns/locale';
+import { API_CONFIG } from '../../constants';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface DashboardViewProps {
   dashboardData?: any;
@@ -41,6 +43,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   onNewPatient,
   doctorProfile
 }) => {
+  const { user } = useAuth();
+
   // Debug: Log props when component renders
   //   onNewAppointment: !!onNewAppointment,
   //   onNewConsultation: !!onNewConsultation,
@@ -54,12 +58,59 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     return aptDate.toDateString() === today.toDateString();
   });
 
-  const confirmedAppointments = todayAppointments.filter(apt => apt.status === 'confirmed');
+  const confirmedAppointments = todayAppointments.filter(apt => apt.status === 'confirmada');
   
   // Calcular consultas completadas - total de consultas (no solo las de hoy)
   const completedConsultations = consultations.length;
 
-  const doctorName = doctorProfile?.full_name || 'Doctor';
+  const doctorName = doctorProfile?.full_name || doctorProfile?.name || 'Doctor';
+
+  // Resolver URL del avatar
+  const rawAvatarUrl = useMemo(() => {
+    const candidates = [
+      doctorProfile?.avatar?.avatar_url,
+      doctorProfile?.avatar?.url,
+      doctorProfile?.avatar_url,
+      doctorProfile?.avatarUrl,
+      user?.person?.avatar?.avatar_url,
+      user?.person?.avatar?.url,
+      user?.person?.avatar_url,
+      user?.person?.avatarUrl
+    ];
+    return candidates.find((value) => typeof value === 'string' && value.length > 0);
+  }, [doctorProfile, user]);
+
+  const resolvedAvatarUrl = useMemo(() => {
+    if (!rawAvatarUrl) return undefined;
+    let url = rawAvatarUrl;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      const normalized = url.startsWith('/') ? url : `/${url}`;
+      url = `${API_CONFIG.BASE_URL}${normalized}`;
+    }
+    // Add cache busting parameter based on avatar metadata to force reload when avatar changes
+    const cacheKey = doctorProfile?.avatar_file_path || doctorProfile?.avatar_template_key || doctorProfile?.updated_at;
+    if (cacheKey) {
+      const separator = url.includes('?') ? '&' : '?';
+      url = `${url}${separator}_t=${typeof cacheKey === 'string' ? cacheKey : cacheKey?.toString() || Date.now()}`;
+    }
+    return url;
+  }, [rawAvatarUrl, doctorProfile?.avatar_file_path, doctorProfile?.avatar_template_key, doctorProfile?.updated_at]);
+
+  // Calcular iniciales del médico
+  const avatarInitials = useMemo(() => {
+    const nameSource = doctorProfile?.name || user?.person?.name || '';
+    if (!nameSource) return 'D';
+    return nameSource
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((n: string) => n[0])
+      .join('')
+      .toUpperCase();
+  }, [doctorProfile?.name, user?.person?.name]);
+
+  // Determinar si debe mostrar avatar o iniciales
+  const shouldShowInitials = !resolvedAvatarUrl || doctorProfile?.avatar_type === 'initials';
 
   const quickActions = [
     
@@ -106,15 +157,17 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         <Box sx={{ position: 'relative', zIndex: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
             <Avatar
+              src={shouldShowInitials ? undefined : resolvedAvatarUrl}
               sx={{
                 width: 64,
                 height: 64,
-                bgcolor: 'rgba(255,255,255,0.15)',
+                bgcolor: shouldShowInitials ? 'rgba(255,255,255,0.15)' : 'transparent',
                 fontSize: '1.5rem',
-                color: 'primary.contrastText'
+                color: 'primary.contrastText',
+                fontWeight: 600
               }}
             >
-              {doctorName.charAt(3) || 'D'}
+              {shouldShowInitials ? avatarInitials : undefined}
             </Avatar>
             <Box>
               <Typography variant="h3" sx={{ mb: 1 }}>
@@ -284,12 +337,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                       {appointment.patient?.first_name} {appointment.patient?.last_name}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      {formatTime(appointment.date_time)} - {appointment.reason || 'Consulta general'}
+                      {formatTime(appointment.date_time)} - {appointment.appointment_type_name || 'Cita'}
                     </Typography>
                   </Box>
                   <Chip
-                    label={appointment.status === 'confirmed' ? 'Confirmada' : appointment.status}
-                    color={appointment.status === 'confirmed' ? 'success' : 'default'}
+                    label={appointment.status === 'confirmada' ? 'Confirmada' : appointment.status === 'por_confirmar' ? 'Por confirmar' : appointment.status}
+                    color={appointment.status === 'confirmada' ? 'success' : appointment.status === 'por_confirmar' ? 'primary' : 'default'}
                     size="small"
                   />
                 </Box>

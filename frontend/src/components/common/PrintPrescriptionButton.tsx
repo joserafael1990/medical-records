@@ -3,6 +3,7 @@ import { Button, Tooltip } from '@mui/material';
 import { Print as PrintIcon } from '@mui/icons-material';
 import { usePDFGenerator } from '../../hooks/usePDFGenerator';
 import { PatientInfo, DoctorInfo, ConsultationInfo, MedicationInfo } from '../../services/pdfService';
+import { useToast } from './ToastNotification';
 
 interface PrintPrescriptionButtonProps {
   patient: PatientInfo;
@@ -26,21 +27,25 @@ export const PrintPrescriptionButton: React.FC<PrintPrescriptionButtonProps> = (
   fullWidth = false
 }) => {
   const { generatePrescriptionPDF } = usePDFGenerator();
+  const { showSuccess, showError } = useToast();
 
   const handlePrintPrescription = async () => {
-    console.log('🖨️ PrintPrescriptionButton clicked!');
-    console.log('🔍 Patient object:', patient);
-    console.log('🔍 Doctor object:', doctor);
-    console.log('🔍 Consultation object:', consultation);
-    console.log('🔍 Medications count:', medications?.length);
-    
-    const result = await generatePrescriptionPDF(patient, doctor, consultation, medications);
+    if (!consultation?.id) {
+      showError('Guarda la consulta para generar un folio antes de imprimir la receta');
+      return;
+    }
+
+    const result = await generatePrescriptionPDF(
+      patient,
+      doctor,
+      consultation,
+      medications,
+      consultation?.nextAppointmentDate
+    );
     
     if (result.success) {
-      // You can add a success notification here
-      console.log(result.message);
+      showSuccess('Receta generada exitosamente');
     } else {
-      // You can add an error notification here
       console.error(result.message);
     }
   };

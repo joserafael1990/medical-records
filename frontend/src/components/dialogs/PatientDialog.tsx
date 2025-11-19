@@ -551,33 +551,25 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
               <PrintCertificateButtonPatient
                 patient={{
                   id: patient.id,
-                  firstName: patient.first_name || '',
-                  lastName: patient.paternal_surname || '',
-                  maternalSurname: patient.maternal_surname || '',
+                  name: patient.name || 'Paciente',
                   dateOfBirth: patient.birth_date || '',
                   gender: patient.gender || '',
                   phone: patient.primary_phone || '',
                   email: patient.email || '',
-                  address: patient.home_address || '',
-                  city: patient.address_city || '',
-                  state: patient.state || '',
-                  country: patient.country || ''
+                  address: formHook.formData?.home_address || '',
+                  city: formHook.formData?.address_city || '',
+                  state: '', // State name not directly available in Patient type
+                  country: '' // Country name not directly available in Patient type
                 }}
                 doctor={{
                   id: doctorProfile?.id || 0,
-                  firstName: doctorProfile?.first_name || `${doctorProfile?.title || 'Dr.'}`,
-                  lastName: doctorProfile?.paternal_surname || 'Usuario',
-                  maternalSurname: doctorProfile?.maternal_surname || '',
+                  name: doctorProfile?.name || `${doctorProfile?.title || 'Dr.'} Usuario`,
                   title: doctorProfile?.title || 'Médico',
                   specialty: doctorProfile?.specialty_name || 'No especificada',
                   license: doctorProfile?.professional_license || 'No especificada',
                   university: doctorProfile?.university || 'No especificada',
                   phone: doctorProfile?.office_phone || doctorProfile?.phone || 'No especificado',
-                  email: doctorProfile?.email || 'No especificado',
-                  address: doctorProfile?.office_address || 'No especificado',
-                  city: doctorProfile?.office_city || 'No especificado',
-                  state: doctorProfile?.office_state_name || 'No especificado',
-                  country: doctorProfile?.office_country_name || 'No especificado'
+                  email: doctorProfile?.email || 'No especificado'
                 }}
                 variant="outlined"
                 size="medium"

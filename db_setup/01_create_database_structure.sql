@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS countries (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     phone_code VARCHAR(5),
-    active BOOLEAN DEFAULT TRUE,
+    is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS states (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     country_id INTEGER REFERENCES countries(id) ON DELETE CASCADE,
-    active BOOLEAN DEFAULT TRUE,
+    is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS states (
 CREATE TABLE IF NOT EXISTS emergency_relationships (
     code VARCHAR(20) PRIMARY KEY,
     name VARCHAR(50) NOT NULL,
-    active BOOLEAN DEFAULT TRUE,
+    is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS emergency_relationships (
 CREATE TABLE IF NOT EXISTS medical_specialties (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    active BOOLEAN DEFAULT TRUE,
+    is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS documents (
 CREATE TABLE IF NOT EXISTS study_categories (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    active BOOLEAN DEFAULT TRUE,
+    is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -107,7 +107,7 @@ CREATE TABLE IF NOT EXISTS medications (
 CREATE TABLE IF NOT EXISTS diagnosis_categories (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    active BOOLEAN DEFAULT TRUE,
+    is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -124,7 +124,7 @@ CREATE TABLE IF NOT EXISTS diagnosis_catalog (
     is_contagious BOOLEAN DEFAULT FALSE,
     age_group VARCHAR(50),
     gender_specific VARCHAR(50),
-    active BOOLEAN DEFAULT TRUE,
+    is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -277,6 +277,7 @@ CREATE TABLE IF NOT EXISTS medical_records (
     history_present_illness TEXT NOT NULL,
     family_history TEXT NOT NULL,
     perinatal_history TEXT NOT NULL,
+    gynecological_and_obstetric_history TEXT NOT NULL,
     personal_pathological_history TEXT NOT NULL,
     personal_non_pathological_history TEXT NOT NULL,
     physical_examination TEXT NOT NULL,
@@ -302,7 +303,7 @@ CREATE TABLE IF NOT EXISTS medical_records (
 CREATE TABLE IF NOT EXISTS appointment_types (
     id SERIAL PRIMARY KEY,
     name VARCHAR(50) NOT NULL UNIQUE,
-    active BOOLEAN DEFAULT TRUE,
+    is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -320,13 +321,9 @@ CREATE TABLE IF NOT EXISTS appointments (
     appointment_type_id INTEGER REFERENCES appointment_types(id) NOT NULL,
     office_id INTEGER REFERENCES offices(id),
     consultation_type VARCHAR(50) DEFAULT 'Seguimiento',  -- 'Primera vez' or 'Seguimiento'
-    status VARCHAR(20) DEFAULT 'confirmed',
-    priority VARCHAR(20) DEFAULT 'normal',
+    status VARCHAR(20) DEFAULT 'por_confirmar',
     
     -- CLINICAL INFORMATION
-    reason TEXT NOT NULL,
-    notes TEXT,
-    
     -- ADMINISTRATIVE
     reminder_sent BOOLEAN DEFAULT FALSE,
     reminder_sent_at TIMESTAMP,

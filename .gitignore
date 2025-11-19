@@ -1,3 +1,6 @@
+# Documentation files (all markdown)
+*.md
+
 # Dependencies
 node_modules/
 */node_modules/
@@ -21,6 +24,7 @@ pip-delete-this-directory.txt
 *.swp
 *.swo
 *~
+.cursor/
 
 # OS generated files
 .DS_Store
@@ -67,6 +71,17 @@ temp/
 **/*.pem
 .git/config
 
+# User data and uploads
+backend/uploads/
+backend/certificates/
+
+# Development tools
+ngrok*
+ngrok.zip
+
+# Test cache
+backend/.pytest_cache/
+
 # Additional exclusions
 frontend/node_modules/
 backend/__pycache__/
@@ -83,13 +98,3 @@ archive/
 *_legacy_*.py
 *_complete.py
 crud_backup.py
-DEUDA_TECNICA.md
-ANALISIS_RIESGOS.md
-DEUDA_TECNICA.md
-DEUDA_TECNICA.md
-CLOUD_RECOMMENDATIONS.md
-.gitignore
-MVP_EVALUATION.md
-PRIORIZACION_DEUDA_TECNICA.md
-WEB_CONTENT_GUIDE.md
-backend/CASOS_FALTANTES_100.md

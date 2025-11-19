@@ -8,6 +8,7 @@ No legacy code - completely fresh implementation
 from fastapi import FastAPI, Depends, HTTPException, status, Query, File, UploadFile, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import text, bindparam
@@ -20,6 +21,10 @@ from psycopg2.extras import Json
 import os
 import json
 import uuid
+import asyncio
+import time
+from collections import defaultdict, deque
+from pathlib import Path
 import crud
 import schemas
 import auth
@@ -51,6 +56,26 @@ from digital_signature import get_digital_signature_service, get_medical_documen
 from whatsapp_service import get_whatsapp_service
 from logger import get_logger, setup_logging
 from error_middleware import ErrorHandlingMiddleware
+from config import settings
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
+
+try:
+    from starlette.middleware.security import SecurityMiddleware
+    SECURITY_MIDDLEWARE_AVAILABLE = True
+except ImportError:
+    # Fallback for newer versions of starlette
+    try:
+        from starlette.middleware import SecurityMiddleware
+        SECURITY_MIDDLEWARE_AVAILABLE = True
+    except ImportError:
+        # If SecurityMiddleware is not available, create a dummy class
+        SECURITY_MIDDLEWARE_AVAILABLE = False
+        class SecurityMiddleware(BaseHTTPMiddleware):
+            def __init__(self, app, *args, **kwargs):
+                super().__init__(app)
 
 # ============================================================================
 # GLOBAL TIMEZONE CONFIGURATION
@@ -121,13 +146,66 @@ logger = get_logger("medical_records")
 api_logger = get_logger("medical_records.api")
 security_logger = get_logger("medical_records.security")
 
+# ============================================================================
+# SECURITY & RATE LIMIT MIDDLEWARE
+# ============================================================================
+
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """Simple in-memory rate limiter per client IP."""
+
+    def __init__(self, app, max_requests: int, window_seconds: int):
+        super().__init__(app)
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self._hits = defaultdict(deque)
+        self._lock = asyncio.Lock()
+
+    async def dispatch(self, request, call_next):
+        if self.max_requests <= 0 or self.window_seconds <= 0:
+            return await call_next(request)
+
+        # Skip rate limiting for OPTIONS requests (CORS preflight)
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
+        client_ip = request.client.host if request.client else "anonymous"
+        now = time.monotonic()
+
+        async with self._lock:
+            bucket = self._hits[client_ip]
+            while bucket and now - bucket[0] > self.window_seconds:
+                bucket.popleft()
+
+            if len(bucket) >= self.max_requests:
+                retry_after = max(1, int(self.window_seconds - (now - bucket[0])))
+                return JSONResponse(
+                    status_code=429,
+                    content={"detail": "Too many requests. Please try again later."},
+                    headers={
+                        "Retry-After": str(retry_after),
+                        "X-RateLimit-Limit": str(self.max_requests),
+                        "X-RateLimit-Remaining": "0",
+                        "X-RateLimit-Window": str(self.window_seconds)
+                    }
+                )
+
+            bucket.append(now)
+            remaining = max(self.max_requests - len(bucket), 0)
+
+        response = await call_next(request)
+        response.headers["X-RateLimit-Limit"] = str(self.max_requests)
+        response.headers["X-RateLimit-Remaining"] = str(remaining)
+        response.headers["X-RateLimit-Window"] = str(self.window_seconds)
+        return response
+
 def encrypt_sensitive_data(data: dict, data_type: str = "patient") -> dict:
     """Encrypt sensitive fields in data based on type"""
     if not data:
         return data
     
     # DEVELOPMENT MODE: Skip encryption - return data as-is
-    print(f"🔐 DEVELOPMENT MODE: Skipping encryption for {data_type}")
+    api_logger.debug(f"🔐 DEVELOPMENT MODE: Skipping encryption for {data_type}")
     return data
 
 def decrypt_sensitive_data(data: dict, data_type: str = "patient") -> dict:
@@ -136,13 +214,16 @@ def decrypt_sensitive_data(data: dict, data_type: str = "patient") -> dict:
         return data
     
     # DEVELOPMENT MODE: Skip decryption - return data as-is
-    print(f"🔓 DEVELOPMENT MODE: Skipping decryption for {data_type}")
+    api_logger.debug(f"🔓 DEVELOPMENT MODE: Skipping decryption for {data_type}")
     return data
 
 def sign_medical_document(document_data: dict, doctor_id: int, document_type: str = "consultation") -> dict:
     """Sign medical document with digital signature"""
     try:
-        print(f"🔏 Signing {document_type} document for doctor {doctor_id}")
+        api_logger.info(
+            f"🔏 Signing {document_type} document for doctor {doctor_id}",
+            extra={"doctor_id": doctor_id, "document_type": document_type}
+        )
         
         # Add document metadata
         document_data["id"] = str(document_data.get("id", "unknown"))
@@ -174,11 +255,22 @@ def sign_medical_document(document_data: dict, doctor_id: int, document_type: st
                 document_data, private_key, certificate
             )
         
-        print(f"✅ Document signed successfully - Signature ID: {signature_result['signatures'][0]['signature_id']}")
+        api_logger.info(
+            "✅ Document signed successfully",
+            extra={
+                "doctor_id": doctor_id,
+                "document_type": document_type,
+                "signature_id": signature_result["signatures"][0]["signature_id"]
+            }
+        )
         return signature_result
         
     except Exception as e:
-        print(f"⚠️ Failed to sign document: {str(e)}")
+        api_logger.error(
+            f"⚠️ Failed to sign document: {str(e)}",
+            extra={"doctor_id": doctor_id, "document_type": document_type},
+            exc_info=True
+        )
         # Return a placeholder signature for demonstration
         return {
             "document_id": str(document_data.get("id", "unknown")),
@@ -201,12 +293,72 @@ def sign_medical_document(document_data: dict, doctor_id: int, document_type: st
 # FASTAPI APP SETUP
 # ============================================================================
 
+# Sentry initialization (backend)
+# Solo se activa si SENTRY_DSN_BACKEND está definido (solo en producción)
+sentry_dsn = os.getenv("SENTRY_DSN_BACKEND")
+if sentry_dsn:
+    sentry_sdk.init(
+        dsn=sentry_dsn,
+        integrations=[FastApiIntegration()],
+        environment=os.getenv("SENTRY_ENVIRONMENT", "development"),
+        traces_sample_rate=0.1,
+        enable_tracing=True,
+        send_default_pii=False,
+    )
+
 app = FastAPI(
     title="Medical Records API",
     description="Clean English API for Medical Records System",
     version="3.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
+)
+
+BASE_DIR = Path(__file__).resolve().parent
+STATIC_FILES_DIR = BASE_DIR / "static"
+UPLOADS_DIR = BASE_DIR / "uploads"
+
+def _get_cors_origins():
+    configured = [origin for origin in settings.CORS_ORIGINS or [] if origin not in {"*", "null"}]
+    if not configured:
+        # Sensible default for local development
+        return ["http://localhost:3000"]
+    return configured
+
+# Middleware to add CORS headers to static file responses
+# This must be added BEFORE mounting static files
+class StaticFilesCORSMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        
+        # Add CORS headers to static file responses
+        if request.url.path.startswith(("/static/", "/uploads/")):
+            origin = request.headers.get("origin")
+            allowed_origins = _get_cors_origins()
+            
+            if origin and (origin in allowed_origins or "*" in allowed_origins):
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+                response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+                response.headers["Access-Control-Allow-Headers"] = "*"
+            elif not origin and "*" in allowed_origins:
+                # Allow requests without origin header (e.g., from fetch in PDF generation)
+                response.headers["Access-Control-Allow-Origin"] = "*"
+        
+        return response
+
+# Add static files CORS middleware FIRST (will execute last due to reverse order)
+app.add_middleware(StaticFilesCORSMiddleware)
+
+app.mount(
+    "/static",
+    StaticFiles(directory=str(STATIC_FILES_DIR), check_dir=False),
+    name="static"
+)
+app.mount(
+    "/uploads",
+    StaticFiles(directory=str(UPLOADS_DIR), check_dir=False),
+    name="uploads"
 )
 
 # ============================================================================
@@ -218,24 +370,23 @@ from services.scheduler import start_auto_reminder_scheduler
 async def start_background_tasks():
     start_auto_reminder_scheduler(app)
 
-# CORS - Enhanced configuration for development
+if settings.SECURITY_HEADERS_ENABLED and SECURITY_MIDDLEWARE_AVAILABLE:
+    app.add_middleware(
+        SecurityMiddleware,
+        allowed_hosts=settings.ALLOWED_HOSTS,
+        ssl_redirect=settings.is_production,
+        sts_seconds=63072000,
+        sts_include_subdomains=True,
+        sts_preload=True,
+        content_security_policy=settings.CONTENT_SECURITY_POLICY,
+        referrer_policy="strict-origin-when-cross-origin",
+        permissions_policy="camera=(), microphone=(), geolocation=()"
+    )
+
+# CORS - locked down to explicit origins to prevent credential leakage
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://localhost:3002",
-        "http://localhost:3003",
-        "http://localhost:3004",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:3001",
-        "http://127.0.0.1:3002",
-        "http://127.0.0.1:3003",
-        "http://127.0.0.1:3004",
-        # Allow all origins in development (less secure but works)
-        "*",
-        "null"  # For local file:// access
-    ],
+    allow_origins=_get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -244,6 +395,13 @@ app.add_middleware(
 
 # Add enhanced error handling middleware
 app.add_middleware(ErrorHandlingMiddleware, debug=True)
+
+if settings.RATE_LIMIT_ENABLED and settings.RATE_LIMIT_MAX_REQUESTS > 0:
+    app.add_middleware(
+        RateLimitMiddleware,
+        max_requests=settings.RATE_LIMIT_MAX_REQUESTS,
+        window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS
+    )
 
 # Debugging middleware removed
 
@@ -268,6 +426,10 @@ app.include_router(catalogs_router)
 from routes.documents import router as documents_router
 app.include_router(documents_router)
 
+# Include avatar management routes
+from routes.avatars import router as avatars_router
+app.include_router(avatars_router)
+
 # Include office management routes
 from routes.offices import router as offices_router
 app.include_router(offices_router)
@@ -283,6 +445,21 @@ app.include_router(schedule_router)
 # Include doctor management routes
 from routes.doctors import router as doctors_router
 app.include_router(doctors_router)
+
+# ============================================================================
+# DEBUG/DIAGNOSTICS
+# ============================================================================
+@app.get("/debug-sentry")
+async def debug_sentry():
+    # Endpoint de prueba para verificar Sentry en backend
+    # Solo funciona si SENTRY_DSN_BACKEND está configurado
+    sentry_dsn = os.getenv("SENTRY_DSN_BACKEND")
+    if not sentry_dsn:
+        return {
+            "message": "Sentry no está configurado (SENTRY_DSN_BACKEND no definido)",
+            "sentry_enabled": False
+        }
+    raise RuntimeError("Sentry backend test")
 
 # Include patient management routes
 from routes.patients import router as patients_router
@@ -335,6 +512,14 @@ app.include_router(consultations_router)
 # Include analytics routes
 from routes.analytics import router as analytics_router
 app.include_router(analytics_router)
+
+# Include admin routes (encryption status, catalog status, system status)
+from routes.admin import router as admin_router
+app.include_router(admin_router)
+
+# Include compliance routes (compliance reports)
+from routes.compliance import router as compliance_router
+app.include_router(compliance_router)
 
 # ============================================================================
 # HEALTH CHECK
@@ -442,20 +627,26 @@ async def whatsapp_webhook_verify(request: Request):
         token = request.query_params.get('hub.verify_token')
         challenge = request.query_params.get('hub.challenge')
         
-        print(f"🔍 WhatsApp webhook verification: mode={mode}, token={token}")
+        api_logger.debug(
+            "🔍 WhatsApp webhook verification",
+            extra={"mode": mode, "token": token}
+        )
         
         # Verificar token (debe coincidir con el configurado en Meta)
         verify_token = "whatsapp_verify_token"  # Debe coincidir con el configurado en Meta
         
         if mode == 'subscribe' and token == verify_token:
-            print("✅ WhatsApp webhook verified successfully")
+            api_logger.info("✅ WhatsApp webhook verified successfully")
             return int(challenge)  # Meta espera el challenge como número
         else:
-            print(f"❌ WhatsApp webhook verification failed: mode={mode}, token={token}")
+            api_logger.warning(
+                "❌ WhatsApp webhook verification failed",
+                extra={"mode": mode, "token": token}
+            )
             raise HTTPException(status_code=403, detail="Verification failed")
             
     except Exception as e:
-        print(f"❌ Error in webhook verification: {e}")
+        api_logger.error("❌ Error in webhook verification", exc_info=True)
         raise HTTPException(status_code=500, detail="Verification error")
 
 
@@ -466,7 +657,10 @@ async def send_whatsapp_study_results_notification(
     current_user: Person = Depends(get_current_user)
 ):
     """Notificar por WhatsApp que los resultados de un estudio están disponibles"""
-    print(f"📱 Sending WhatsApp notification for study results: {study_id}")
+    api_logger.info(
+        "📱 Sending WhatsApp notification for study results",
+        extra={"study_id": study_id, "doctor_id": current_user.id}
+    )
     
     try:
         # Get study
@@ -500,14 +694,29 @@ async def send_whatsapp_study_results_notification(
         )
         
         if result['success']:
-            print(f"✅ WhatsApp sent successfully to {patient.primary_phone}")
+            api_logger.info(
+                "✅ WhatsApp notification sent successfully",
+                extra={
+                    "study_id": study.id,
+                    "patient_id": patient.id,
+                    "phone": patient.primary_phone
+                }
+            )
             return {
                 "message": "WhatsApp notification sent successfully",
                 "message_id": result.get('message_id'),
                 "phone": patient.primary_phone
             }
         else:
-            print(f"❌ Failed to send WhatsApp: {result.get('error')}")
+            api_logger.error(
+                "❌ Failed to send WhatsApp notification",
+                extra={
+                    "study_id": study.id,
+                    "patient_id": patient.id,
+                    "phone": patient.primary_phone,
+                    "error": result.get('error')
+                }
+            )
             raise HTTPException(
                 status_code=500,
                 detail=f"Failed to send WhatsApp: {result.get('error')}"
@@ -516,7 +725,11 @@ async def send_whatsapp_study_results_notification(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error sending WhatsApp notification: {e}")
+        api_logger.error(
+            "❌ Error sending WhatsApp notification",
+            extra={"study_id": study_id, "doctor_id": current_user.id},
+            exc_info=True
+        )
         raise HTTPException(status_code=500, detail=f"Error sending WhatsApp: {str(e)}")
 
 @app.post("/api/whatsapp/test")
@@ -529,7 +742,10 @@ async def test_whatsapp_service(
     Endpoint de prueba para WhatsApp (agnóstico del proveedor)
     Envía un mensaje de prueba de texto simple
     """
-    print(f"📱 Testing WhatsApp service to {phone}")
+    api_logger.info(
+        "📱 Testing WhatsApp service",
+        extra={"phone": phone, "doctor_id": current_user.id}
+    )
     
     try:
         whatsapp = get_whatsapp_service()
@@ -553,7 +769,11 @@ async def test_whatsapp_service(
             }
             
     except Exception as e:
-        print(f"❌ Error testing WhatsApp: {e}")
+        api_logger.error(
+            "❌ Error testing WhatsApp",
+            extra={"phone": phone, "doctor_id": current_user.id},
+            exc_info=True
+        )
         return {
             "message": "Error testing WhatsApp",
             "error": str(e)
@@ -578,10 +798,13 @@ async def verify_whatsapp_webhook(request: Request):
     verify_token = os.getenv('META_WHATSAPP_VERIFY_TOKEN', 'mi_token_secreto_123')
     
     if mode == "subscribe" and token == verify_token:
-        print("✅ WhatsApp webhook verified successfully")
+        api_logger.info("✅ WhatsApp webhook verified successfully")
         return int(challenge)
     else:
-        print("❌ WhatsApp webhook verification failed")
+        api_logger.warning(
+            "❌ WhatsApp webhook verification failed",
+            extra={"mode": mode, "token": token}
+        )
         raise HTTPException(status_code=403, detail="Verification failed")
 
 @app.post("/api/whatsapp/webhook")
@@ -595,9 +818,13 @@ async def receive_whatsapp_message(
     """
     try:
         body = await request.json()
-        print(f"📱 Received WhatsApp webhook: {body}")
-        print(f"📱 Webhook body type: {type(body)}")
-        print(f"📱 Webhook body keys: {body.keys() if isinstance(body, dict) else 'Not a dict'}")
+        api_logger.debug(
+            "📱 Received WhatsApp webhook",
+            extra={
+                "body_type": type(body).__name__,
+                "body_keys": list(body.keys()) if isinstance(body, dict) else None
+            }
+        )
         
         # Verificar que es una notificación de WhatsApp
         if body.get("object") != "whatsapp_business_account":
@@ -608,24 +835,35 @@ async def receive_whatsapp_message(
             for change in entry.get("changes", []):
                 value = change.get("value", {})
                 
-                print(f"🔍 Processing change: {change}")
-                print(f"🔍 Processing value: {value}")
+                api_logger.debug(
+                    "🔍 Processing WhatsApp change",
+                    extra={"change": change, "value_keys": list(value.keys())}
+                )
                 
                 # Verificar si hay mensajes
                 if "messages" in value:
-                    print(f"📩 Found {len(value['messages'])} messages")
+                    api_logger.debug(
+                        "📩 Found messages in webhook",
+                        extra={"count": len(value["messages"])}
+                    )
                     for message in value["messages"]:
-                        print(f"📩 Processing message: {message}")
+                        api_logger.debug(
+                            "📩 Processing WhatsApp message",
+                            extra={"message_type": message.get("type")}
+                        )
                         await process_whatsapp_message(message, db)
                 
                 # Verificar si hay respuestas a botones
                 if "statuses" in value:
-                    print(f"📊 Message status update: {value['statuses']}")
+                    api_logger.debug(
+                        "📊 Message status update",
+                        extra={"statuses": value["statuses"]}
+                    )
         
         return {"status": "success"}
         
     except Exception as e:
-        print(f"❌ Error processing WhatsApp webhook: {e}")
+        api_logger.error("❌ Error processing WhatsApp webhook", exc_info=True)
         # Siempre devolver 200 para no causar reintentos de Meta
         return {"status": "error", "message": str(e)}
 
@@ -638,7 +876,10 @@ async def process_whatsapp_message(message: dict, db: Session):
         message_type = message.get("type")
         from_phone = message.get("from")
         
-        print(f"📩 Processing message type: {message_type} from {from_phone}")
+        api_logger.info(
+            "📩 Processing WhatsApp message",
+            extra={"message_type": message_type, "from_phone": from_phone}
+        )
         
         # Procesar respuesta a botón interactivo (nuevo formato de WhatsApp)
         if message_type == "interactive":
@@ -648,24 +889,46 @@ async def process_whatsapp_message(message: dict, db: Session):
                 button_id = button_reply.get("id")
                 button_title = button_reply.get("title")
                 
-                print(f"🔘 Interactive button clicked: {button_title} (id: {button_id})")
+                api_logger.info(
+                    "🔘 Interactive button clicked",
+                    extra={"button_id": button_id, "button_title": button_title, "from_phone": from_phone}
+                )
                 
                 # Procesar botones de consentimiento de privacidad
                 if button_id and button_id.startswith("accept_privacy_"):
-                    print(f"✅ Privacy consent accepted: {button_id}")
+                    security_logger.info(
+                        "✅ Privacy consent accepted via interactive button",
+                        extra={"button_id": button_id, "from_phone": from_phone}
+                    )
                     await process_privacy_consent(button_id, from_phone, db)
                 
                 # Procesar botones de cancelación de cita
                 elif button_id and button_id.startswith("cancel_appointment_"):
                     appointment_id = int(button_id.replace("cancel_appointment_", ""))
                     await cancel_appointment_via_whatsapp(appointment_id, from_phone, db)
+                elif button_id and button_id.startswith("confirm_appointment_"):
+                    appointment_id = int(button_id.replace("confirm_appointment_", ""))
+                    api_logger.info(
+                        "🔘 Confirm appointment button clicked with ID",
+                        extra={"button_id": button_id, "appointment_id": appointment_id, "from_phone": from_phone}
+                    )
+                    await confirm_appointment_via_whatsapp(appointment_id, from_phone, db)
+                elif button_title and button_title.lower() == "confirmar":
+                    api_logger.info(
+                        "🔘 Confirm appointment button clicked by title",
+                        extra={"button_title": button_title, "from_phone": from_phone}
+                    )
+                    await confirm_appointment_via_whatsapp(None, from_phone, db)
         
         # Procesar respuesta a botón (formato anterior)
         elif message_type == "button":
             button_payload = message.get("button", {}).get("payload")
             button_text = message.get("button", {}).get("text")
             
-            print(f"🔘 Button clicked: {button_text} (payload: {button_payload})")
+            api_logger.info(
+                "🔘 Button clicked (legacy)",
+                extra={"payload": button_payload, "text": button_text, "from_phone": from_phone}
+            )
             
             # Si es una cancelación de cita
             if button_payload and button_payload.startswith("cancel_appointment_"):
@@ -673,25 +936,62 @@ async def process_whatsapp_message(message: dict, db: Session):
                 await cancel_appointment_via_whatsapp(appointment_id, from_phone, db)
             # Manejar payload "Cancelar" genérico
             elif button_payload == "Cancelar" or button_text == "Cancelar":
-                print(f"🔄 Generic cancel button clicked, processing as text cancellation")
+                api_logger.info(
+                    "🔄 Generic cancel button clicked, processing as cancellation request",
+                    extra={"from_phone": from_phone}
+                )
                 await process_text_cancellation_request("cancelar", from_phone, db)
+            elif (button_payload and button_payload.startswith("confirm_appointment_")):
+                appointment_id = int(button_payload.replace("confirm_appointment_", ""))
+                api_logger.info(
+                    "🔘 Confirm appointment button clicked (legacy) with payload",
+                    extra={"button_payload": button_payload, "appointment_id": appointment_id, "from_phone": from_phone}
+                )
+                await confirm_appointment_via_whatsapp(appointment_id, from_phone, db)
+            elif (button_payload == "Confirmar" or button_text == "Confirmar"):
+                api_logger.info(
+                    "🔘 Confirm appointment button clicked (legacy) by text",
+                    extra={"button_payload": button_payload, "button_text": button_text, "from_phone": from_phone}
+                )
+                await confirm_appointment_via_whatsapp(None, from_phone, db)
             # Manejar consentimiento de privacidad cuando viene como "Acepto" (formato antiguo)
             elif button_payload == "Acepto" or button_text == "Acepto":
-                print(f"✅ Privacy consent accepted via old button format (payload: {button_payload})")
+                security_logger.info(
+                    "✅ Privacy consent accepted via legacy button format",
+                    extra={"payload": button_payload, "from_phone": from_phone}
+                )
                 await process_privacy_consent_by_phone(from_phone, db)
         
         # Procesar mensaje de texto
         elif message_type == "text":
             text = message.get("text", {}).get("body", "").lower().strip()
-            print(f"💬 Text message received: {text}")
+            api_logger.info(
+                "💬 Text message received",
+                extra={"from_phone": from_phone, "text": text}
+            )
+            
+            if any(keyword in text for keyword in ["confirmar", "confirmación", "confirm"]):
+                api_logger.info(
+                    "✅ Detected confirmation request in text",
+                    extra={"from_phone": from_phone}
+                )
+                await confirm_appointment_via_whatsapp(None, from_phone, db)
+                return
             
             # Procesar mensajes de cancelación
             if any(keyword in text for keyword in ["cancelar", "cancel", "cancelar cita", "cancel appointment"]):
-                print(f"🔄 Detected cancellation request in text: {text}")
+                api_logger.info(
+                    "🔄 Detected cancellation request in text",
+                    extra={"from_phone": from_phone}
+                )
                 await process_text_cancellation_request(text, from_phone, db)
         
     except Exception as e:
-        print(f"❌ Error processing WhatsApp message: {e}")
+        api_logger.error(
+            "❌ Error processing WhatsApp message",
+            extra={"from_phone": message.get("from")},
+            exc_info=True
+        )
 
 async def process_privacy_consent_by_phone(from_phone: str, db: Session):
     """
@@ -699,7 +999,10 @@ async def process_privacy_consent_by_phone(from_phone: str, db: Session):
     Busca el consentimiento pendiente más reciente del paciente con ese teléfono
     """
     try:
-        print(f"🔐 Processing privacy consent by phone: {from_phone}")
+        security_logger.info(
+            "🔐 Processing privacy consent by phone",
+            extra={"from_phone": from_phone}
+        )
         
         # Normalizar el número de teléfono
         whatsapp = get_whatsapp_service()
@@ -716,7 +1019,10 @@ async def process_privacy_consent_by_phone(from_phone: str, db: Session):
         # Los últimos 10 dígitos son el número local en México
         from_local_digits = from_digits[-10:] if len(from_digits) >= 10 else from_digits
         
-        print(f"🔍 Searching for patient with phone ending in: {from_local_digits}")
+        security_logger.debug(
+            "🔍 Searching for patient by phone digits",
+            extra={"from_phone": from_phone, "from_local_digits": from_local_digits}
+        )
         
         # Buscar pacientes cuyo teléfono termine en los mismos últimos 10 dígitos
         all_patients = db.query(Person).filter(
@@ -735,7 +1041,15 @@ async def process_privacy_consent_by_phone(from_phone: str, db: Session):
             # También normalizar con el servicio de WhatsApp para comparación exacta
             normalized_patient_phone = whatsapp._format_phone_number(patient.primary_phone)
             
-            print(f"🔍 Comparing: patient={patient.primary_phone} (digits: {patient_local_digits}) vs from={from_phone} (digits: {from_local_digits})")
+            security_logger.debug(
+                "🔍 Comparing patient phone",
+                extra={
+                    "patient_id": patient.id,
+                    "patient_phone": patient.primary_phone,
+                    "patient_digits": patient_local_digits,
+                    "incoming_digits": from_local_digits
+                }
+            )
             
             # Comparar por últimos 10 dígitos o por formato normalizado
             if (patient_local_digits == from_local_digits or 
@@ -743,11 +1057,17 @@ async def process_privacy_consent_by_phone(from_phone: str, db: Session):
                 normalized_patient_phone.endswith(from_local_digits) or
                 normalized_from_phone.endswith(patient_local_digits)):
                 matching_patient = patient
-                print(f"✅ Found matching patient: {patient.id} ({patient.name})")
+                security_logger.info(
+                    "✅ Found matching patient by phone",
+                    extra={"patient_id": patient.id, "from_phone": from_phone}
+                )
                 break
         
         if not matching_patient:
-            print(f"❌ No patient found with phone {from_phone} (normalized: {normalized_from_phone})")
+            security_logger.warning(
+                "❌ No patient found matching phone",
+                extra={"from_phone": from_phone, "normalized_from_phone": normalized_from_phone}
+            )
             return
         
         # Buscar el consentimiento pendiente más reciente del paciente
@@ -757,7 +1077,10 @@ async def process_privacy_consent_by_phone(from_phone: str, db: Session):
         ).order_by(PrivacyConsent.created_at.desc()).first()
         
         if not consent:
-            print(f"⚠️ No pending consent found for patient {matching_patient.id}")
+            security_logger.info(
+                "⚠️ No pending consent found for patient",
+                extra={"patient_id": matching_patient.id}
+            )
             # Buscar si ya tiene un consentimiento aceptado
             accepted_consent = db.query(PrivacyConsent).filter(
                 PrivacyConsent.patient_id == matching_patient.id,
@@ -765,11 +1088,17 @@ async def process_privacy_consent_by_phone(from_phone: str, db: Session):
             ).order_by(PrivacyConsent.created_at.desc()).first()
             
             if accepted_consent:
-                print(f"ℹ️ Patient {matching_patient.id} already has an accepted consent (ID: {accepted_consent.id})")
+                security_logger.info(
+                    "ℹ️ Patient already has accepted consent",
+                    extra={"patient_id": matching_patient.id, "consent_id": accepted_consent.id}
+                )
                 return
             
             # Si no hay ningún consentimiento, crear uno nuevo automáticamente
-            print(f"📝 Creating new consent for patient {matching_patient.id} (no existing consent found)")
+            security_logger.info(
+                "📝 Creating new consent record for patient",
+                extra={"patient_id": matching_patient.id}
+            )
             
             # Obtener aviso de privacidad activo
             privacy_notice = db.query(PrivacyNotice).filter(
@@ -777,7 +1106,10 @@ async def process_privacy_consent_by_phone(from_phone: str, db: Session):
             ).order_by(PrivacyNotice.effective_date.desc()).first()
             
             if not privacy_notice:
-                print(f"❌ No active privacy notice found, cannot create consent")
+                security_logger.error(
+                    "❌ No active privacy notice found, cannot create consent",
+                    extra={"patient_id": matching_patient.id}
+                )
                 return
             
             # Crear nuevo consentimiento
@@ -789,7 +1121,10 @@ async def process_privacy_consent_by_phone(from_phone: str, db: Session):
             )
             db.add(consent)
             db.flush()  # Para obtener el ID sin hacer commit todavía
-            print(f"✅ Created new consent record (ID: {consent.id}) for patient {matching_patient.id}")
+            security_logger.info(
+                "✅ Created new consent record",
+                extra={"patient_id": matching_patient.id, "consent_id": consent.id}
+            )
         
         # Actualizar el consentimiento
         consent.consent_given = True
@@ -798,29 +1133,37 @@ async def process_privacy_consent_by_phone(from_phone: str, db: Session):
         
         db.commit()
         
-        print(f"🔍 Database commit successful for consent {consent.id}")
-        print(f"✅ Privacy consent updated for patient {matching_patient.id} (consent {consent.id})")
+        security_logger.info(
+            "✅ Privacy consent updated for patient",
+            extra={"patient_id": matching_patient.id, "consent_id": consent.id}
+        )
         
-        # Enviar mensaje de confirmación
+        # Enviar mensaje de confirmación (best-effort)
         try:
             # Usar la instancia de whatsapp que ya creamos al principio
-            # Get patient first name
             patient_first_name = matching_patient.name.split()[0] if matching_patient.name else 'Paciente'
-            
             whatsapp.send_text_message(
                 to_phone=from_phone,
-                message=f"✅ Gracias {patient_first_name}, tu consentimiento ha sido registrado correctamente.\n\n"
-                        f"Ahora podemos brindarte atención médica cumpliendo con la Ley de Protección de Datos.\n\n"
-                        f"Recuerda que puedes revocar tu consentimiento en cualquier momento contactando al consultorio.\n\n"
-                        f"Tus derechos ARCO (Acceso, Rectificación, Cancelación, Oposición) están garantizados."
+                message=(
+                    f"✅ Gracias {patient_first_name}, tu consentimiento ha sido registrado correctamente.\n\n"
+                    f"Ahora podemos brindarte atención médica cumpliendo con la Ley de Protección de Datos.\n\n"
+                    f"Recuerda que puedes revocar tu consentimiento en cualquier momento contactando al consultorio.\n\n"
+                    f"Tus derechos ARCO (Acceso, Rectificación, Cancelación, Oposición) están garantizados."
+                ),
             )
-        except Exception as e:
-            print(f"⚠️ Could not send confirmation message: {e}")
+        except Exception:
+            security_logger.warning(
+                "⚠️ Could not send consent confirmation message",
+                extra={"patient_id": matching_patient.id, "from_phone": from_phone},
+                exc_info=True,
+            )
         
     except Exception as e:
-        print(f"❌ Error processing privacy consent by phone: {e}")
-        import traceback
-        traceback.print_exc()
+        security_logger.error(
+            "❌ Error processing privacy consent by phone",
+            extra={"from_phone": from_phone},
+            exc_info=True
+        )
         db.rollback()
 
 async def process_privacy_consent(button_id: str, from_phone: str, db: Session):
@@ -828,7 +1171,10 @@ async def process_privacy_consent(button_id: str, from_phone: str, db: Session):
     Procesar consentimiento de privacidad recibido vía WhatsApp
     """
     try:
-        print(f"🔐 Processing privacy consent: {button_id} from {from_phone}")
+        security_logger.info(
+            "🔐 Processing privacy consent by button",
+            extra={"button_id": button_id, "from_phone": from_phone}
+        )
         
         # Extraer el ID del consentimiento del button_id (ej: accept_privacy_8)
         consent_id = int(button_id.replace("accept_privacy_", ""))
@@ -839,7 +1185,10 @@ async def process_privacy_consent(button_id: str, from_phone: str, db: Session):
         ).first()
         
         if not consent:
-            print(f"❌ Privacy consent record {consent_id} not found")
+            security_logger.warning(
+                "❌ Privacy consent record not found",
+                extra={"consent_id": consent_id}
+            )
             return
         
         # Buscar el paciente
@@ -849,7 +1198,10 @@ async def process_privacy_consent(button_id: str, from_phone: str, db: Session):
         ).first()
         
         if not patient:
-            print(f"❌ Patient {consent.patient_id} not found for consent {consent_id}")
+            security_logger.error(
+                "❌ Patient not found for consent",
+                extra={"consent_id": consent_id, "patient_id": consent.patient_id}
+            )
             return
         
         # Verificar que el teléfono corresponde al paciente
@@ -861,13 +1213,26 @@ async def process_privacy_consent(button_id: str, from_phone: str, db: Session):
         # También probar con formato internacional (521...)
         patient_phone_international = f"521{patient.primary_phone}"
         
-        print(f"🔍 Comparing phones:")
-        print(f"  - Patient phone (formatted): {normalized_patient_phone}")
-        print(f"  - Patient phone (international): {patient_phone_international}")
-        print(f"  - WhatsApp phone: {normalized_from_phone}")
+        security_logger.debug(
+            "🔍 Comparing phones for consent",
+            extra={
+                "patient_id": patient.id,
+                "patient_phone_formatted": normalized_patient_phone,
+                "patient_phone_international": patient_phone_international,
+                "incoming_phone_formatted": normalized_from_phone
+            }
+        )
         
         if normalized_patient_phone != normalized_from_phone and patient_phone_international != normalized_from_phone:
-            print(f"❌ Phone mismatch: {normalized_patient_phone} != {normalized_from_phone} and {patient_phone_international} != {normalized_from_phone}")
+            security_logger.warning(
+                "❌ Phone mismatch while processing consent",
+                extra={
+                    "patient_id": patient.id,
+                    "consent_id": consent.id,
+                    "patient_phone_formatted": normalized_patient_phone,
+                    "incoming_phone_formatted": normalized_from_phone
+                }
+            )
             return
         
         # Actualizar el consentimiento
@@ -877,16 +1242,20 @@ async def process_privacy_consent(button_id: str, from_phone: str, db: Session):
         
         db.commit()
         
-        print(f"🔍 Database commit successful for consent {consent_id}")
-        print(f"✅ Privacy consent updated for patient {consent.patient_id} (consent {consent_id})")
+        security_logger.info(
+            "✅ Privacy consent updated for patient",
+            extra={"patient_id": consent.patient_id, "consent_id": consent_id}
+        )
         
         # Opcional: Enviar mensaje de confirmación
         # (Esto requeriría una plantilla adicional aprobada)
         
     except Exception as e:
-        print(f"❌ Error processing privacy consent: {e}")
-        import traceback
-        traceback.print_exc()
+        security_logger.error(
+            "❌ Error processing privacy consent",
+            extra={"button_id": button_id, "from_phone": from_phone},
+            exc_info=True
+        )
         db.rollback()
 
 async def cancel_appointment_via_whatsapp(appointment_id: int, patient_phone: str, db: Session):
@@ -894,7 +1263,10 @@ async def cancel_appointment_via_whatsapp(appointment_id: int, patient_phone: st
     Cancelar una cita cuando el paciente responde vía WhatsApp
     """
     try:
-        print(f"🔄 Canceling appointment {appointment_id} via WhatsApp from {patient_phone}")
+        api_logger.info(
+            "🔄 Canceling appointment via WhatsApp",
+            extra={"appointment_id": appointment_id, "patient_phone": patient_phone}
+        )
         
         # Buscar la cita
         appointment = db.query(Appointment).filter(
@@ -902,14 +1274,20 @@ async def cancel_appointment_via_whatsapp(appointment_id: int, patient_phone: st
         ).first()
         
         if not appointment:
-            print(f"❌ Appointment {appointment_id} not found")
+            api_logger.warning(
+                "❌ Appointment not found when cancelling via WhatsApp",
+                extra={"appointment_id": appointment_id}
+            )
             return
         
         # Verificar que el teléfono corresponde al paciente
         patient = db.query(Person).filter(Person.id == appointment.patient_id).first()
         
         if not patient:
-            print(f"❌ Patient not found for appointment {appointment_id}")
+            api_logger.error(
+                "❌ Patient not found for appointment when cancelling via WhatsApp",
+                extra={"appointment_id": appointment_id}
+            )
             return
         
         # Normalizar números para comparación
@@ -918,23 +1296,181 @@ async def cancel_appointment_via_whatsapp(appointment_id: int, patient_phone: st
         normalized_from_phone = whatsapp._format_phone_number(patient_phone)
         
         if normalized_patient_phone != normalized_from_phone:
-            print(f"❌ Phone mismatch: {normalized_patient_phone} != {normalized_from_phone}")
+            api_logger.warning(
+                "❌ Phone mismatch during WhatsApp cancellation",
+                extra={
+                    "appointment_id": appointment_id,
+                    "patient_phone": normalized_patient_phone,
+                    "incoming_phone": normalized_from_phone
+                }
+            )
             return
         
         # Cancelar la cita
         appointment.status = 'cancelled'
-        appointment.cancellation_reason = 'Cancelada por el paciente vía WhatsApp'
+        appointment.cancelled_reason = 'Cancelada por el paciente vía WhatsApp'
         appointment.updated_at = datetime.utcnow()
         
         db.commit()
         
-        print(f"✅ Appointment {appointment_id} cancelled successfully via WhatsApp")
+        api_logger.info(
+            "✅ Appointment cancelled successfully via WhatsApp",
+            extra={"appointment_id": appointment_id}
+        )
         
         # Opcional: Enviar mensaje de confirmación al paciente
         # (Esto requeriría una plantilla adicional aprobada)
         
     except Exception as e:
         db.rollback()
+        api_logger.error(
+            "❌ Error cancelling appointment via WhatsApp",
+            extra={"appointment_id": appointment_id},
+            exc_info=True
+        )
+
+async def confirm_appointment_via_whatsapp(appointment_id: Optional[int], patient_phone: str, db: Session):
+    """
+    Confirmar una cita cuando el paciente responde vía WhatsApp
+    """
+    try:
+        api_logger.info(
+            "✅ Confirming appointment via WhatsApp",
+            extra={"appointment_id": appointment_id, "patient_phone": patient_phone}
+        )
+        
+        # Log entrada completa para debugging
+        api_logger.debug(
+            "🔍 confirm_appointment_via_whatsapp called",
+            extra={
+                "appointment_id": appointment_id,
+                "patient_phone": patient_phone,
+                "appointment_id_type": type(appointment_id).__name__
+            }
+        )
+        
+        whatsapp = get_whatsapp_service()
+        normalized_from_phone = whatsapp._format_phone_number(patient_phone)
+        
+        appointment = None
+        patient = None
+        
+        if appointment_id is not None:
+            appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+            if not appointment:
+                api_logger.warning(
+                    "❌ Appointment not found for confirmation via WhatsApp",
+                    extra={"appointment_id": appointment_id}
+                )
+                return
+            
+            patient = db.query(Person).filter(Person.id == appointment.patient_id).first()
+            if not patient or not patient.primary_phone:
+                api_logger.error(
+                    "❌ Patient not found or missing phone for appointment confirmation",
+                    extra={"appointment_id": appointment_id}
+                )
+                return
+            
+            normalized_patient_phone = whatsapp._format_phone_number(patient.primary_phone)
+            if normalized_patient_phone != normalized_from_phone:
+                api_logger.warning(
+                    "❌ Phone mismatch during WhatsApp confirmation",
+                    extra={
+                        "appointment_id": appointment_id,
+                        "patient_phone": normalized_patient_phone,
+                        "incoming_phone": normalized_from_phone
+                    }
+                )
+                return
+        else:
+            patients = db.query(Person).filter(
+                Person.person_type == 'patient',
+                Person.primary_phone.isnot(None)
+            ).all()
+            
+            for candidate in patients:
+                normalized_candidate_phone = whatsapp._format_phone_number(candidate.primary_phone)
+                
+                alternate_candidate_phone = normalized_candidate_phone.replace("521", "52") if normalized_candidate_phone.startswith("521") else normalized_candidate_phone
+                alternate_from_phone = normalized_from_phone.replace("521", "52") if normalized_from_phone.startswith("521") else normalized_from_phone
+                
+                if (normalized_candidate_phone == normalized_from_phone or
+                    normalized_candidate_phone == alternate_from_phone or
+                    alternate_candidate_phone == normalized_from_phone):
+                    appointment = db.query(Appointment).filter(
+                        Appointment.patient_id == candidate.id,
+                        Appointment.status == 'por_confirmar'
+                    ).order_by(Appointment.appointment_date.asc()).first()
+                    if appointment:
+                        patient = candidate
+                        break
+                
+            if not appointment:
+                api_logger.info(
+                    "❌ No matching pending appointment found for confirmation",
+                    extra={"patient_phone": patient_phone}
+                )
+                return
+        
+        if appointment.status == 'cancelled':
+            api_logger.info(
+                "⚠️ Appointment already cancelled, skipping confirmation",
+                extra={"appointment_id": appointment.id}
+            )
+            return
+        
+        if appointment.status == 'confirmada':
+            api_logger.info(
+                "⚠️ Appointment already confirmed, skipping",
+                extra={"appointment_id": appointment.id}
+            )
+            return
+        
+        # Log estado antes del cambio
+        api_logger.info(
+            "🔄 Updating appointment status",
+            extra={
+                "appointment_id": appointment.id,
+                "old_status": appointment.status,
+                "new_status": "confirmada"
+            }
+        )
+        
+        appointment.status = 'confirmada'
+        # Note: Appointment model doesn't have confirmed_at field
+        appointment.updated_at = datetime.utcnow()
+        appointment.cancelled_reason = None
+        
+        # Log antes del commit
+        api_logger.debug(
+            "💾 Committing appointment status change",
+            extra={
+                "appointment_id": appointment.id,
+                "status": appointment.status,
+                "updated_at": appointment.updated_at.isoformat() if appointment.updated_at else None
+            }
+        )
+        
+        db.commit()
+        
+        # Verificar que el cambio se guardó
+        db.refresh(appointment)
+        api_logger.info(
+            "✅ Appointment confirmed successfully via WhatsApp",
+            extra={
+                "appointment_id": appointment.id,
+                "final_status": appointment.status,
+                "updated_at": appointment.updated_at.isoformat() if appointment.updated_at else None
+            }
+        )
+    except Exception as e:
+        db.rollback()
+        api_logger.error(
+            "❌ Error confirming appointment via WhatsApp",
+            extra={"appointment_id": appointment_id},
+            exc_info=True
+        )
 
 async def process_text_cancellation_request(text: str, patient_phone: str, db: Session):
     """
@@ -953,7 +1489,7 @@ async def process_text_cancellation_request(text: str, patient_phone: str, db: S
         ).filter(
             Person.person_type == 'patient',
             Person.primary_phone.isnot(None),
-            Appointment.status.in_(['confirmed', 'scheduled'])
+            Appointment.status.in_(['confirmada', 'por_confirmar'])
         ).all()
         
         
@@ -1017,7 +1553,7 @@ async def process_text_cancellation_request(text: str, patient_phone: str, db: S
         # Primero buscar citas confirmadas futuras
         next_appointment = db.query(Appointment).filter(
             Appointment.patient_id == matching_patient.id,
-            Appointment.status == 'confirmed',
+            Appointment.status == 'confirmada',
             Appointment.appointment_date >= datetime.now()
         ).order_by(Appointment.appointment_date.asc()).first()
         
@@ -1176,7 +1712,7 @@ async def process_text_cancellation_request(text: str, patient_phone: str, db: S
 #                 apt_type_info = {
 #                     'id': apt_type.id,
 #                     'name': apt_type.name,
-#                     'active': apt_type.active
+#                     'is_active': apt_type.is_active
 #                 }
 #                 appointment_types_data.append(apt_type_info)
 #             
@@ -1448,14 +1984,14 @@ async def get_audit_logs(
                 "error_message": log.error_message
             })
         
-            return {
+        return {
             "total": total,
             "skip": skip,
             "limit": limit,
             "logs": result
         }
     except Exception as e:
-        print(f"❌ Error in get_audit_logs: {str(e)}")
+        api_logger.error("❌ Error in get_audit_logs", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error fetching audit logs: {str(e)}")
 
 # ============================================================================
@@ -1701,7 +2237,7 @@ async def get_study_recommendations(
         studies = crud.get_study_recommendations(db, diagnosis=diagnosis, specialty=specialty)
         return [schemas.StudyCatalog.model_validate(study) for study in studies]
     except Exception as e:
-        print(f"❌ Error in get_study_recommendations: {str(e)}")
+        api_logger.error("❌ Error in get_study_recommendations", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @app.get("/api/study-search")
@@ -1724,7 +2260,7 @@ async def search_studies(
         )
         return [schemas.StudyCatalog.model_validate(study) for study in studies]
     except Exception as e:
-        print(f"❌ Error in search_studies: {str(e)}")
+        api_logger.error("❌ Error in search_studies", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 # ============================================================================
@@ -1776,7 +2312,7 @@ async def get_critical_audit_events(
             "critical_events": result
         }
     except Exception as e:
-        print(f"❌ Error in get_critical_audit_events: {str(e)}")
+        api_logger.error("❌ Error in get_critical_audit_events", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error fetching critical events: {str(e)}")
 
 @app.get("/api/audit/patient/{patient_id}")
@@ -1842,7 +2378,7 @@ async def get_patient_audit_trail(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error in get_patient_audit_trail: {str(e)}")
+        api_logger.error("❌ Error in get_patient_audit_trail", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error fetching patient audit trail: {str(e)}")
 
 @app.get("/api/audit/stats")
@@ -1885,7 +2421,7 @@ async def get_audit_statistics(
             "success_rate": f"{((query.count() - failed_count) / query.count() * 100):.2f}%" if query.count() > 0 else "N/A"
         }
     except Exception as e:
-        print(f"❌ Error in get_audit_statistics: {str(e)}")
+        api_logger.error("❌ Error in get_audit_statistics", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error fetching audit statistics: {str(e)}")
 
 # ============================================================================
@@ -1957,17 +2493,17 @@ async def send_whatsapp_privacy_notice(
         consultation = db.query(MedicalRecord).filter(
             MedicalRecord.patient_id == request_data.patient_id,
             MedicalRecord.doctor_id == current_user.id
-        ).first()
+            ).first()
         
         if not consultation and current_user.person_type != 'admin':
-            raise HTTPException(
+                raise HTTPException(
                 status_code=403,
                 detail="No tienes permiso para enviar avisos a este paciente"
             )
         
         # Verificar que el paciente tiene teléfono
         if not patient.primary_phone:
-            raise HTTPException(
+                raise HTTPException(
                 status_code=400,
                 detail="El paciente no tiene teléfono registrado"
             )
@@ -2111,11 +2647,7 @@ async def send_whatsapp_privacy_notice(
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
-        error_traceback = traceback.format_exc()
-        print(f"❌ Error sending privacy notice: {str(e)}")
-        print(f"❌ Traceback: {error_traceback}")
-        api_logger.error(f"Error sending privacy notice: {str(e)}", exc_info=True)
+        api_logger.error("❌ Error sending privacy notice", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Error al enviar aviso de privacidad: {str(e)}"
@@ -2157,15 +2689,29 @@ async def whatsapp_webhook(
                         button_id = button_reply.get('id', '')
                         button_title = button_reply.get('title', '')
                         
-                        print(f"📱 Button pressed: {button_id} ({button_title}) from {from_phone}")
+                        security_logger.info(
+                            "📱 WhatsApp consent button pressed",
+                            extra={
+                                "button_id": button_id,
+                                "button_title": button_title,
+                                "from_phone": from_phone,
+                                "timestamp": timestamp
+                            }
+                        )
                         
                         # Extraer consent_id del button_id
                         # Formato: "accept_privacy_123"
                         parts = button_id.split('_')
-                        print(f"🔍 Parsing button_id: {button_id}, parts: {parts}")
+                        security_logger.debug(
+                            "🔍 Parsing consent button_id",
+                            extra={"button_id": button_id, "parts": parts}
+                        )
                         if len(parts) >= 3 and parts[0] == 'accept' and parts[1] == 'privacy':
                             consent_id = int(parts[2])
-                            print(f"🔍 Extracted consent_id: {consent_id}")
+                            security_logger.debug(
+                                "🔍 Extracted consent_id from button",
+                                extra={"consent_id": consent_id}
+                            )
                             
                             # Buscar el consentimiento
                             consent = db.query(PrivacyConsent).filter(
@@ -2173,10 +2719,16 @@ async def whatsapp_webhook(
                             ).first()
                             
                             if not consent:
-                                print(f"⚠️ Consent {consent_id} not found")
+                                security_logger.warning(
+                                    "⚠️ Consent not found for button press",
+                                    extra={"consent_id": consent_id}
+                                )
                                 # Listar todos los consentimientos para debug
                                 all_consents = db.query(PrivacyConsent).all()
-                                print(f"🔍 All consents in DB: {[c.id for c in all_consents]}")
+                                security_logger.debug(
+                                    "🔍 Existing consents in DB",
+                                    extra={"consent_ids": [c.id for c in all_consents]}
+                                )
                                 continue
                             
                             # Obtener paciente
@@ -2185,7 +2737,10 @@ async def whatsapp_webhook(
                             ).first()
                             
                             if not patient:
-                                print(f"⚠️ Patient {consent.patient_id} not found")
+                                security_logger.error(
+                                    "⚠️ Patient not found while processing consent",
+                                    extra={"consent_id": consent_id, "patient_id": consent.patient_id}
+                                )
                                 continue
                             
                             # ACEPTADO
@@ -2214,7 +2769,14 @@ async def whatsapp_webhook(
                                             f"Tus derechos ARCO (Acceso, Rectificación, Cancelación, Oposición) están garantizados."
                                 )
                             
-                            print(f"✅ Consent {consent_id} ACCEPTED by patient {patient.id} ({patient.name})")
+                            security_logger.info(
+                                "✅ Consent accepted via WhatsApp button",
+                                extra={
+                                    "consent_id": consent_id,
+                                    "patient_id": patient.id,
+                                    "patient_name": patient.name
+                                }
+                            )
                             
                             # Registrar en auditoría
                             audit_service.log_action(
@@ -2247,14 +2809,18 @@ async def whatsapp_webhook(
                         # WhatsApp status tracking removed - simplified schema
                         # No action needed for delivered/read status
                         db.commit()
-                        print(f"📊 Consent {consent.id} status updated: {status_type}")
+                        security_logger.debug(
+                            "📊 Consent status update received",
+                            extra={"consent_id": consent.id, "status": status_type, "message_id": message_id}
+                        )
         
         return {"status": "ok"}
         
     except Exception as e:
-        print(f"❌ Error processing WhatsApp webhook: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        security_logger.error(
+            "❌ Error processing WhatsApp webhook",
+            exc_info=True
+        )
         return {"status": "error", "message": str(e)}
 
 @app.get("/api/webhooks/whatsapp")
@@ -2271,10 +2837,13 @@ async def whatsapp_webhook_verification(
     verify_token = os.getenv('META_WHATSAPP_VERIFY_TOKEN', 'mi_token_secreto_123')
     
     if mode == 'subscribe' and token == verify_token:
-        print(f"✅ WhatsApp webhook verified successfully")
+        api_logger.info("✅ WhatsApp webhook verified successfully")
         return int(challenge)
     
-    print(f"❌ WhatsApp webhook verification failed")
+    api_logger.warning(
+        "❌ WhatsApp webhook verification failed",
+        extra={"mode": mode, "token": token}
+    )
     return {"status": "error", "message": "Verification failed"}
 
 @app.get("/api/privacy/consent-status/{patient_id}")
@@ -2292,8 +2861,8 @@ async def get_patient_consent_status(
             consultation = db.query(MedicalRecord).filter(
                 MedicalRecord.patient_id == patient_id,
                 MedicalRecord.doctor_id == current_user.id
-            ).first()
-            
+        ).first()
+        
             if not consultation:
                 raise HTTPException(status_code=403, detail="Access denied")
         
@@ -2348,10 +2917,10 @@ async def revoke_consent(
         if current_user.person_type == 'doctor':
             consultation = db.query(MedicalRecord).filter(
                 MedicalRecord.patient_id == patient_id,
-                MedicalRecord.doctor_id == current_user.id
-            ).first()
-            
-            if not consultation:
+            MedicalRecord.doctor_id == current_user.id
+        ).first()
+        
+        if not consultation:
                 raise HTTPException(status_code=403, detail="No tiene acceso a este paciente")
         
         # Buscar consentimiento activo
@@ -2440,12 +3009,10 @@ async def create_arco_request(
         arco_request = ARCORequest(
             patient_id=patient_id,
             request_type=request_type,
-            description=description,
+            request_description=description,  # Field name in model
             status='pending',
-            contact_email=contact_email,
-            contact_phone=contact_phone,
-            requested_by=current_user.id,
-            requested_at=datetime.utcnow(),
+            request_date=datetime.utcnow(),
+            assigned_to=current_user.id,  # Use assigned_to instead of requested_by
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
@@ -2482,9 +3049,9 @@ async def create_arco_request(
                 "id": arco_request.id,
                 "patient_id": arco_request.patient_id,
                 "request_type": arco_request.request_type,
-                "description": arco_request.description,
+                "description": arco_request.request_description,
                 "status": arco_request.status,
-                "requested_at": arco_request.requested_at.isoformat(),
+                "requested_at": arco_request.request_date.isoformat() if arco_request.request_date else None,
                 "created_at": arco_request.created_at.isoformat()
             }
         }
@@ -2526,13 +3093,13 @@ async def get_arco_requests(
                     "id": req.id,
                     "patient_id": req.patient_id,
                     "request_type": req.request_type,
-                    "description": req.description,
+                    "description": getattr(req, 'request_description', None),
                     "status": req.status,
-                    "contact_email": req.contact_email,
-                    "contact_phone": req.contact_phone,
-                    "requested_at": req.requested_at.isoformat() if req.requested_at else None,
-                    "resolved_at": req.resolved_at.isoformat() if req.resolved_at else None,
-                    "resolution_notes": req.resolution_notes,
+                    "contact_email": getattr(req, 'contact_email', None),  # Field may not exist in model
+                    "contact_phone": getattr(req, 'contact_phone', None),  # Field may not exist in model
+                    "requested_at": req.request_date.isoformat() if req.request_date else None,
+                    "resolved_at": getattr(req, 'response_date', None),  # Use response_date instead
+                    "resolution_notes": getattr(req, 'response_description', None),  # Use response_description instead
                     "created_at": req.created_at.isoformat(),
                     "updated_at": req.updated_at.isoformat()
                 }
@@ -2581,7 +3148,7 @@ async def update_arco_request(
                 MedicalRecord.patient_id == arco_request.patient_id,
                 MedicalRecord.doctor_id == current_user.id
             ).first()
-            
+        
             if not consultation:
                 raise HTTPException(status_code=403, detail="No tiene acceso a este paciente")
         
@@ -2589,9 +3156,9 @@ async def update_arco_request(
         old_status = arco_request.status
         arco_request.status = status
         if resolution_notes:
-            arco_request.resolution_notes = resolution_notes
-        if status == 'resolved':
-            arco_request.resolved_at = datetime.utcnow()
+            arco_request.response_description = resolution_notes  # Use response_description instead
+        if status == 'completed':  # Model uses 'completed', not 'resolved'
+            arco_request.response_date = datetime.utcnow()  # Use response_date instead
         arco_request.updated_at = datetime.utcnow()
         
         db.commit()
@@ -2622,8 +3189,8 @@ async def update_arco_request(
             "arco_request": {
                 "id": arco_request.id,
                 "status": arco_request.status,
-                "resolution_notes": arco_request.resolution_notes,
-                "resolved_at": arco_request.resolved_at.isoformat() if arco_request.resolved_at else None,
+                "resolution_notes": arco_request.response_description,  # Use response_description instead
+                "resolved_at": arco_request.response_date.isoformat() if arco_request.response_date else None,  # Use response_date instead
                 "updated_at": arco_request.updated_at.isoformat()
             }
         }
@@ -3033,7 +3600,7 @@ async def get_retention_logs_endpoint(
 
 if __name__ == "__main__":
     import uvicorn
-    print("🚀 Starting clean English API server...")
+    api_logger.info("🚀 Starting clean English API server...")
     uvicorn.run(
         "main_clean_english:app",
         host="127.0.0.1",

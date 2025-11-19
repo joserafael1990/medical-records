@@ -217,10 +217,8 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
 
   // Add temporary study (for new consultations before saving)
   const addTemporaryStudy = useCallback((study: ClinicalStudy) => {
-    console.log('🔬 Adding temp study:', study);
     setStudies(prev => {
       const newStudies = [...prev, study];
-      console.log('🔬 Updated studies list:', newStudies);
       return newStudies;
     });
   }, []);
@@ -237,23 +235,16 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
     // Use provided studyData or fall back to internal form data
     const dataToSubmit = studyData || clinicalStudyFormData;
     
-    console.log('🔬 submitForm called with data:', dataToSubmit);
-    console.log('🔬 consultation_id:', dataToSubmit.consultation_id);
-    console.log('🔬 isEditingClinicalStudy:', isEditingClinicalStudy);
-    
     try {
       if (isEditingClinicalStudy && selectedClinicalStudy) {
         await updateStudy(selectedClinicalStudy.id, dataToSubmit);
         // Refresh studies after update
         if (dataToSubmit.consultation_id && dataToSubmit.consultation_id !== 'temp_consultation') {
-          console.log('🔬 Refreshing studies after update');
           await fetchStudies(dataToSubmit.consultation_id);
         }
       } else {
         // For new consultations, add to temporary studies list
         if (dataToSubmit.consultation_id === 'temp_consultation') {
-          console.log('🔬 Adding temporary study to local state');
-          
           // Generate unique ID with timestamp and random component
           const uniqueId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           
@@ -284,27 +275,18 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
             updated_at: new Date().toISOString()
           };
           
-          console.log('🔬 Adding temp study:', tempStudy);
-          setStudies(prev => {
-            const newStudies = [...prev, tempStudy];
-            console.log('🔬 Updated studies list:', newStudies);
-            return newStudies;
-          });
+          setStudies(prev => [...prev, tempStudy]);
         } else {
           // For existing consultations, create in database and refresh
-          console.log('🔬 Creating study in database for existing consultation');
           await createStudy(dataToSubmit);
           // Refresh studies from database to ensure we have the latest data
           if (dataToSubmit.consultation_id) {
-            console.log('🔬 Refreshing studies after creation');
             await fetchStudies(dataToSubmit.consultation_id);
           }
         }
       }
-      
-      console.log('🔬 Study submission successful');
     } catch (err) {
-      console.error('❌ Error submitting clinical study form:', err);
+      logger.error('Error submitting clinical study form', err, 'api');
       setError('Error al guardar el estudio clínico');
       throw err; // Re-throw to let the dialog handle it
     } finally {
@@ -322,7 +304,7 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
       link.click();
       document.body.removeChild(link);
     } catch (err) {
-      console.error('❌ Error downloading file:', err);
+      logger.error('Error downloading file', err, 'ui');
     }
   }, []);
 
@@ -330,7 +312,7 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
     try {
       window.open(fileUrl, '_blank');
     } catch (err) {
-      console.error('❌ Error viewing file:', err);
+      logger.error('Error viewing file', err, 'ui');
     }
   }, []);
 

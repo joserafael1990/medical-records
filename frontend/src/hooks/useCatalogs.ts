@@ -5,13 +5,13 @@ import { logger } from '../utils/logger';
 interface Country {
   id: number;
   name: string;
-  active: boolean;
+  is_active: boolean;
 }
 interface State {
   id: number;
   name: string;
   country_id: number;
-  active: boolean;
+  is_active: boolean;
 }
 
 export const useCatalogs = () => {
@@ -54,7 +54,7 @@ export const useCatalogs = () => {
       const country = countries.find(c => c.name === countryName);
       if (!country) return [];
       
-      return allStates.filter(state => state.country_id === country.id && state.active);
+      return allStates.filter(state => state.country_id === country.id && state.is_active);
     };
   }, [allStates, countries]);
 

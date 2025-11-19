@@ -1,10 +1,10 @@
 import React from 'react';
-import { Box, Divider } from '@mui/material';
+import { Box, Divider, Card, CardContent, Typography, TextField } from '@mui/material';
 import VitalSignsSection from '../../common/VitalSignsSection';
 import PrescriptionsSection from '../../common/PrescriptionsSection';
 import ClinicalStudiesSection from '../../common/ClinicalStudiesSection';
 import ScheduleAppointmentSection from '../../common/ScheduleAppointmentSection';
-import { ConsultationVitalSign, VitalSign, Prescription, ClinicalStudy } from '../../../types';
+import { ConsultationVitalSign, VitalSign, Prescription, ClinicalStudy, Medication } from '../../../types';
 import { CreateClinicalStudyData } from '../../../types';
 import { TEMP_IDS } from '../../../utils/vitalSignUtils';
 
@@ -26,11 +26,15 @@ interface ConsultationSectionsProps {
   // Prescriptions
   prescriptions: Prescription[];
   prescriptionsLoading: boolean;
-  medications: any[];
+  medications: Medication[];
   onAddPrescription: (prescriptionData: any) => Promise<void>;
   onDeletePrescription: (prescriptionId: number) => void;
-  onFetchMedications: () => Promise<void>;
-  onCreateMedication: (medicationData: any) => Promise<void>;
+  onFetchMedications: (search?: string) => Promise<void>;
+  onCreateMedication: (name: string) => Promise<Medication>;
+  treatmentPlan: string;
+  onTreatmentPlanChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  followUpInstructions: string;
+  onFollowUpInstructionsChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   
   // Clinical Studies
   studies: ClinicalStudy[];
@@ -44,6 +48,8 @@ interface ConsultationSectionsProps {
   // Schedule Appointment
   patientId: number;
   doctorProfile: any;
+  onAppointmentsChange?: (appointments: any[]) => void;
+  initialAppointments?: any[];
 }
 
 export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
@@ -64,6 +70,10 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
   onDeletePrescription,
   onFetchMedications,
   onCreateMedication,
+  treatmentPlan,
+  onTreatmentPlanChange,
+  followUpInstructions,
+  onFollowUpInstructionsChange,
   studies,
   studiesLoading,
   onAddStudy,
@@ -72,9 +82,11 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
   onDownloadStudyFile,
   doctorName,
   patientId,
-  doctorProfile
+  doctorProfile,
+  onAppointmentsChange,
+  initialAppointments = []
 }) => {
-  const consultationIdStr = isEditing && consultationId ? String(consultationId) : TEMP_IDS.CONSULTATION;
+  const consultationIdStr = consultationId ? String(consultationId) : TEMP_IDS.CONSULTATION;
   const patientIdStr = selectedPatientId?.toString() || formDataPatientId || TEMP_IDS.PATIENT;
 
   return (
@@ -103,6 +115,44 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
         onCreateMedication={onCreateMedication}
       />
 
+      {/* Treatment Plan directly after prescriptions */}
+      <Card sx={{ mb: 3, border: '1px dashed', borderColor: 'grey.300', backgroundColor: '#fafafa' }}>
+        <CardContent sx={{ p: 2 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+            Plan de Tratamiento
+          </Typography>
+          <TextField
+            name="treatment_plan"
+            placeholder="Describa el plan de tratamiento para el paciente..."
+            value={treatmentPlan}
+            onChange={onTreatmentPlanChange}
+            size="small"
+            fullWidth
+            multiline
+            rows={3}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Follow-up Instructions */}
+      <Card sx={{ mb: 3, border: '1px dashed', borderColor: 'grey.300', backgroundColor: '#fafafa' }}>
+        <CardContent sx={{ p: 2 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+            Instrucciones de Seguimiento
+          </Typography>
+          <TextField
+            name="follow_up_instructions"
+            placeholder="Indique las instrucciones específicas para el seguimiento del paciente (citas, estudios, recomendaciones)..."
+            value={followUpInstructions}
+            onChange={onFollowUpInstructionsChange}
+            size="small"
+            fullWidth
+            multiline
+            rows={3}
+          />
+        </CardContent>
+      </Card>
+
       {/* Clinical Studies Section - Always show */}
       <Box sx={{ mt: 3 }}>
         <Divider sx={{ mb: 2 }} />
@@ -125,6 +175,8 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
         <ScheduleAppointmentSection
           patientId={selectedPatientId || patientId || 0}
           doctorProfile={doctorProfile}
+          onAppointmentsChange={onAppointmentsChange}
+          initialAppointments={initialAppointments}
         />
       )}
     </>

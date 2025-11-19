@@ -4,15 +4,19 @@ Database: PostgreSQL with numeric IDs
 Compliance: 100% Mexican NOMs
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Date, Time, Text, Boolean, ForeignKey, DECIMAL, JSON, Numeric, CheckConstraint
+from sqlalchemy import Column, Integer, String, DateTime, Date, Time, Text, Boolean, ForeignKey, DECIMAL, JSON, Numeric, CheckConstraint, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy import create_engine
 from datetime import datetime
 import os
 
+from logger import get_logger
+
 # Base para modelos (must be defined before importing models that use it)
 Base = declarative_base()
+
+db_logger = get_logger("medical_records.database")
 
 # Note: ScheduleTemplate is defined in models/schedule.py and imports Base from here
 # Do not import ScheduleTemplate here to avoid circular import issues
@@ -28,7 +32,7 @@ class Country(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(100), nullable=False)
     phone_code = Column(String(5))  # International dialing code (e.g., +52, +58)
-    active = Column(Boolean, default=True)
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -40,7 +44,7 @@ class State(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(100), nullable=False)
     country_id = Column(Integer, ForeignKey("countries.id"))
-    active = Column(Boolean, default=True)
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -101,7 +105,7 @@ class Specialty(Base):
     
     id = Column(Integer, primary_key=True)
     name = Column(String(100), nullable=False)
-    active = Column(Boolean, default=True)
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -112,7 +116,7 @@ class EmergencyRelationship(Base):
     
     code = Column(String(20), primary_key=True)
     name = Column(String(50), nullable=False)
-    active = Column(Boolean, default=True)
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -123,7 +127,7 @@ class AppointmentType(Base):
     
     id = Column(Integer, primary_key=True)
     name = Column(String(50), nullable=False, unique=True)  # "Presencial", "En línea"
-    active = Column(Boolean, default=True)
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 # ============================================================================
@@ -199,6 +203,11 @@ class Person(Base):
     email = Column(String(100))
     primary_phone = Column(String(20))
     
+    # AVATAR SETTINGS
+    avatar_type = Column(String(20), default='initials')  # initials | preloaded | custom
+    avatar_template_key = Column(String(100))
+    avatar_file_path = Column(String(255))
+    
     # PERSONAL ADDRESS
     home_address = Column(Text)
     address_city = Column(String(100))  # Free text field for city
@@ -211,6 +220,11 @@ class Person(Base):
     specialty_id = Column(Integer, ForeignKey("medical_specialties.id"))
     university = Column(String(200))
     graduation_year = Column(Integer)
+    
+    # AVATAR CONFIGURATION
+    avatar_type = Column(String(20), default='initials')  # initials | preloaded | custom
+    avatar_template_key = Column(String(100))  # Identifier for preloaded avatar
+    avatar_file_path = Column(String(255))  # Relative path for custom avatar file
     
     # MEDICAL DATA (patients only)
     insurance_provider = Column(String(100))
@@ -252,6 +266,8 @@ class Person(Base):
     appointments_as_doctor = relationship("Appointment", foreign_keys="Appointment.doctor_id", back_populates="doctor")
     clinical_studies_as_patient = relationship("ClinicalStudy", foreign_keys="ClinicalStudy.patient_id", back_populates="patient")
     clinical_studies_as_doctor = relationship("ClinicalStudy", foreign_keys="ClinicalStudy.doctor_id", back_populates="doctor")
+    document_folio_sequences = relationship("DocumentFolioSequence", back_populates="doctor", cascade="all, delete-orphan")
+    document_folios = relationship("DocumentFolio", back_populates="doctor", cascade="all, delete-orphan")
     
     
     # PROPERTIES
@@ -301,17 +317,21 @@ class MedicalRecord(Base):
     patient_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
     doctor_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
     consultation_date = Column(DateTime, nullable=False)
+    patient_document_id = Column(Integer, ForeignKey("documents.id"))
+    patient_document_value = Column(String(255))
     
     # NOM-004 REQUIRED FIELDS
     chief_complaint = Column(Text, nullable=False)
     history_present_illness = Column(Text, nullable=False)
     family_history = Column(Text, nullable=False)
     perinatal_history = Column(Text, nullable=False)
+    gynecological_and_obstetric_history = Column(Text, nullable=False)
     personal_pathological_history = Column(Text, nullable=False)
     personal_non_pathological_history = Column(Text, nullable=False)
     physical_examination = Column(Text, nullable=False)
     primary_diagnosis = Column(Text, nullable=False)
     treatment_plan = Column(Text, nullable=False)
+    follow_up_instructions = Column(Text, nullable=False, default="")
     
     # CONSULTATION TYPE
     consultation_type = Column(String(50), default='Seguimiento')
@@ -339,6 +359,8 @@ class MedicalRecord(Base):
     patient = relationship("Person", foreign_keys=[patient_id], back_populates="medical_records_as_patient")
     doctor = relationship("Person", foreign_keys=[doctor_id], back_populates="medical_records_as_doctor")
     # office and appointment_type_rel relationships removed - columns don't exist
+    patient_document = relationship("Document", foreign_keys=[patient_document_id])
+    document_folios = relationship("DocumentFolio", back_populates="consultation", cascade="all, delete-orphan")
 
 class Appointment(Base):
     __tablename__ = "appointments"
@@ -355,12 +377,7 @@ class Appointment(Base):
     appointment_type_id = Column(Integer, ForeignKey("appointment_types.id"), nullable=False)
     office_id = Column(Integer, ForeignKey("offices.id"), nullable=True)
     consultation_type = Column(String(50), default='Seguimiento')  # 'Primera vez' or 'Seguimiento'
-    status = Column(String(20), default='confirmed')
-    priority = Column(String(20), default='normal')
-    
-    # CLINICAL INFORMATION
-    reason = Column(Text, nullable=False)
-    notes = Column(Text)
+    status = Column(String(20), default='por_confirmar')
     
     # ADMINISTRATIVE
     reminder_sent = Column(Boolean, default=False)
@@ -385,6 +402,34 @@ class Appointment(Base):
     doctor = relationship("Person", foreign_keys=[doctor_id], back_populates="appointments_as_doctor")
     office = relationship("Office", back_populates="appointments")
     appointment_type_rel = relationship("AppointmentType")
+    reminders = relationship("AppointmentReminder", back_populates="appointment", cascade="all, delete-orphan")
+
+class AppointmentReminder(Base):
+    """
+    Stores up to 3 automatic reminders per appointment.
+    Each reminder can be enabled/disabled independently and has a custom offset_minutes.
+    """
+    __tablename__ = "appointment_reminders"
+    
+    id = Column(Integer, primary_key=True)
+    appointment_id = Column(Integer, ForeignKey("appointments.id", ondelete="CASCADE"), nullable=False)
+    reminder_number = Column(Integer, nullable=False)  # 1, 2, or 3
+    offset_minutes = Column(Integer, nullable=False)  # Time before appointment in minutes
+    enabled = Column(Boolean, default=True, nullable=False)
+    sent = Column(Boolean, default=False, nullable=False)
+    sent_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # RELATIONSHIPS
+    appointment = relationship("Appointment", back_populates="reminders")
+    
+    # Constraints
+    __table_args__ = (
+        CheckConstraint('reminder_number >= 1 AND reminder_number <= 3', name='check_reminder_number_range'),
+        CheckConstraint('offset_minutes > 0', name='check_offset_minutes_positive'),
+        UniqueConstraint('appointment_id', 'reminder_number', name='unique_appointment_reminder_number'),
+    )
 
 class ClinicalStudy(Base):
     __tablename__ = "clinical_studies"
@@ -446,17 +491,8 @@ class StudyCategory(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
-    active = Column('active', Boolean, default=True)  # Database column is 'active', not 'is_active'
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
-    # Alias for backward compatibility
-    @property
-    def is_active(self):
-        return self.active
-    
-    @is_active.setter
-    def is_active(self, value):
-        self.active = value
     
     # Relationships
     studies = relationship("StudyCatalog", back_populates="category")
@@ -536,13 +572,16 @@ class ConsultationVitalSign(Base):
 
 class Medication(Base):
     __tablename__ = "medications"
+    __table_args__ = (
+        UniqueConstraint("name", "created_by", name="uq_medications_name_created_by"),
+    )
     
     id = Column(Integer, primary_key=True)
-    name = Column(String(255), nullable=False, unique=True)
+    name = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    created_by = Column(Integer, default=0)  # No foreign key - 0 = sistema inicial
+    created_by = Column(Integer, ForeignKey("persons.id"), nullable=False)
     
     # Relationships
     consultation_prescriptions = relationship("ConsultationPrescription", back_populates="medication")
@@ -564,6 +603,36 @@ class ConsultationPrescription(Base):
     # Relationships
     consultation = relationship("MedicalRecord")
     medication = relationship("Medication", back_populates="consultation_prescriptions")
+
+# ============================================================================
+# DOCUMENT FOLIOS (RECETAS Y ÓRDENES DE ESTUDIO)
+# ============================================================================
+
+class DocumentFolioSequence(Base):
+    __tablename__ = "document_folio_sequences"
+
+    id = Column(Integer, primary_key=True)
+    doctor_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
+    document_type = Column(String(50), nullable=False)
+    last_number = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    doctor = relationship("Person", back_populates="document_folio_sequences")
+
+class DocumentFolio(Base):
+    __tablename__ = "document_folios"
+
+    id = Column(Integer, primary_key=True)
+    doctor_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
+    consultation_id = Column(Integer, ForeignKey("medical_records.id"), nullable=False)
+    document_type = Column(String(50), nullable=False)
+    folio_number = Column(Integer, nullable=False)
+    formatted_folio = Column(String(20), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    doctor = relationship("Person", back_populates="document_folios")
+    consultation = relationship("MedicalRecord", back_populates="document_folios")
 
 # ============================================================================
 # AUDIT LOG - Complete Traceability System
@@ -708,13 +777,16 @@ class ARCORequest(Base):
 def init_db():
     """Inicializar base de datos - solo crear tablas que no existen"""
     Base.metadata.create_all(bind=engine)
-    print("✅ Database models initialized")
+    db_logger.info("✅ Database models initialized")
 
 if __name__ == "__main__":
-    print("🔍 Verificando conexión a base de datos...")
+    db_logger.info("🔍 Verificando conexión a base de datos...")
     try:
         engine.connect()
-        print("✅ Conexión exitosa a PostgreSQL")
-        print(f"📊 Tablas disponibles: {list(Base.metadata.tables.keys())}")
+        db_logger.info("✅ Conexión exitosa a PostgreSQL")
+        db_logger.info(
+            "📊 Tablas disponibles",
+            extra={"tables": list(Base.metadata.tables.keys())}
+        )
     except Exception as e:
-        print(f"❌ Error de conexión: {e}")
+        db_logger.error("❌ Error de conexión a base de datos", exc_info=True)

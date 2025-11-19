@@ -9,12 +9,40 @@ from sqlalchemy.orm import Session, joinedload
 from database import get_db, Person, Specialty, DocumentType, Document, PersonDocument, State, Country
 from dependencies import get_current_user
 from logger import get_logger
+from services import avatar_service
 import crud
 import schemas
+from utils.document_validators import (
+    validate_curp_conditional,
+    validate_professional_license_conditional
+)
 
 api_logger = get_logger("api")
 
 router = APIRouter(prefix="/api", tags=["doctors"])
+
+
+def _format_documents_for_validation(documents_payload):
+    """Format documents payload into simple dict list for validation helpers."""
+    formatted = []
+    for doc in documents_payload or []:
+        if doc is None:
+            continue
+        if isinstance(doc, dict):
+            document_id = doc.get('document_id')
+            document_value = doc.get('document_value')
+            document_name = doc.get('document_name')
+        else:
+            document_id = getattr(doc, 'document_id', None)
+            document_value = getattr(doc, 'document_value', None)
+            document_name = getattr(doc, 'document_name', None)
+        if document_id:
+            formatted.append({
+                "document_id": document_id,
+                "document_value": (document_value or "").strip(),
+                "document_name": document_name
+            })
+    return formatted
 
 
 @router.get("/doctors/me/profile")
@@ -30,19 +58,15 @@ async def get_my_profile(
         )
     
     # Load the user with relationships to get state and country names
-    print(f"🔍 [AUTH/ME] Loading user with ID: {current_user.id}")
+    api_logger.debug("Loading user profile", user_id=current_user.id)
     user_with_relations = db.query(Person).options(
         joinedload(Person.offices)
     ).filter(Person.id == current_user.id).first()
     
     if user_with_relations:
-        print(f"🔍 [AUTH/ME] User found: {user_with_relations.full_name}")
-        print(f"🔍 [AUTH/ME] Offices count: {len(user_with_relations.offices) if user_with_relations.offices else 0}")
-        if user_with_relations.offices:
-            for office in user_with_relations.offices:
-                print(f"🔍 [AUTH/ME] Office: {office.name}, State ID: {office.state_id}, Country ID: {office.country_id}")
+        api_logger.debug("User found", user_id=current_user.id, offices_count=len(user_with_relations.offices) if user_with_relations.offices else 0)
     else:
-        print(f"🔍 [AUTH/ME] User not found for ID: {current_user.id}")
+        api_logger.warning("User not found", user_id=current_user.id)
     
     if not user_with_relations:
         raise HTTPException(
@@ -117,6 +141,8 @@ async def get_my_profile(
             "is_active": office.is_active
         })
     
+    avatar_payload = avatar_service.get_current_avatar_payload(user_with_relations)
+
     return {
         "id": user_with_relations.id,
         "person_code": user_with_relations.person_code,
@@ -169,7 +195,14 @@ async def get_my_profile(
         # System
         "is_active": user_with_relations.is_active,
         "created_at": user_with_relations.created_at,
-        "updated_at": user_with_relations.updated_at
+        "updated_at": user_with_relations.updated_at,
+
+        # Avatar metadata
+        "avatar_type": user_with_relations.avatar_type or "initials",
+        "avatar_template_key": user_with_relations.avatar_template_key,
+        "avatar_file_path": user_with_relations.avatar_file_path,
+        "avatar_url": avatar_payload.get("avatar_url"),
+        "avatar": avatar_payload
     }
 
 
@@ -180,6 +213,14 @@ async def create_doctor(
 ):
     """Create new doctor"""
     try:
+        documents_payload = getattr(doctor_data, 'documents', []) or []
+        formatted_documents = _format_documents_for_validation(documents_payload)
+        is_valid_curp, curp_error = validate_curp_conditional(formatted_documents)
+        if not is_valid_curp:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=curp_error)
+        is_valid_license, license_error = validate_professional_license_conditional(formatted_documents)
+        if not is_valid_license:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=license_error)
         return crud.create_doctor_safe(db, doctor_data)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -343,6 +384,21 @@ async def update_my_profile(
             api_logger.info(f"📋 Total {len(documents_to_save)} valid documents to save")
         else:
             api_logger.info(f"⚠️ No valid documents found in request")
+        
+        if documents_to_save:
+            formatted_docs = _format_documents_for_validation(documents_to_save)
+            is_valid_curp, curp_error = validate_curp_conditional(formatted_docs)
+            if not is_valid_curp:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=curp_error
+                )
+            is_valid_license, license_error = validate_professional_license_conditional(formatted_docs)
+            if not is_valid_license:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=license_error
+                )
         
         # Handle specialty conversion from name to ID if needed
         if 'specialty' in doctor_data_dict and doctor_data_dict.get('specialty'):

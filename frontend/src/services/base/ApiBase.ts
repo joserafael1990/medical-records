@@ -40,6 +40,18 @@ export class ApiBase {
           config.headers.Authorization = `Bearer ${token}`;
         }
         
+        // Log request data for appointments endpoint
+        if (config.url?.includes('/api/appointments') && config.method === 'post' && config.data) {
+          logger.debug('📤 Sending appointment data', {
+            url: config.url,
+            data: config.data,
+            reminders: config.data.reminders,
+            reminders_type: typeof config.data.reminders,
+            reminders_length: config.data.reminders?.length || 0,
+            data_keys: Object.keys(config.data)
+          }, 'api');
+        }
+        
         if (FEATURE_FLAGS.ENABLE_DEBUG_LOGS) {
           logger.api.request(config.url || '', config.method?.toUpperCase() || '');
           logger.auth.info(`Token present: ${token ? 'YES' : 'NO'}`);
@@ -72,42 +84,32 @@ export class ApiBase {
 
   private handleError(error: AxiosError): void {
     // Enhanced error logging for debugging connection issues
-    console.group('🚨 API Error Details');
-    console.log('URL:', error.config?.url);
-    console.log('Method:', error.config?.method?.toUpperCase());
-    console.log('Status:', error.response?.status);
-    console.log('Status Text:', error.response?.statusText);
-    console.log('Response Data:', error.response?.data);
-    console.log('Request Headers:', error.config?.headers);
-    console.log('Error Message:', error.message);
-    console.log('Network Error (no response):', !error.response);
+    const errorDetails = {
+      url: error.config?.url,
+      method: error.config?.method?.toUpperCase(),
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      responseData: error.response?.data,
+      message: error.message,
+      networkError: !error.response
+    };
+    
+    logger.error('API Error', error, 'api');
     
     // Detailed error logging for 422 validation errors
     if (error.response?.status === 422) {
-      console.log('🚨 422 Validation Error Details:', error.response.data?.detail);
-      console.log('🚨 Full error response:', error.response.data);
       if (Array.isArray(error.response.data?.detail)) {
         const fieldErrors = error.response.data.detail.map((err: any) => {
           const field = err.loc?.[1] || err.loc?.[0];
           return `${field}: ${err.msg}`;
         }).join(', ');
-        console.log('🚨 Field validation errors:', fieldErrors);
-        
-        // Show user-friendly error message
-        const firstError = error.response.data.detail[0];
-        const fieldName = firstError.loc?.[1] || firstError.loc?.[0] || 'campo';
-        const errorMessage = firstError.msg || 'Error de validación';
-        console.log('🚨 User-friendly error:', `${fieldName}: ${errorMessage}`);
+        logger.debug('422 Validation Error Details', { fieldErrors }, 'api');
       }
     }
+    
     if (!error.response) {
-      console.log('- Backend server is down');
-      console.log('- CORS configuration issue');
-      console.log('- Network connectivity problem');
-      console.log('- Firewall blocking the request');
-      console.log('- Incorrect API URL configuration');
+      logger.warn('Network error - possible causes: backend down, CORS issue, network problem, firewall, o problema de red', undefined, 'api');
     }
-    console.groupEnd();
     
     if (FEATURE_FLAGS.ENABLE_DEBUG_LOGS) {
       logger.api.error(error.config?.url || 'unknown', {
@@ -120,12 +122,32 @@ export class ApiBase {
     // Handle specific error cases
     // Only treat 401/403 as session expired if NOT an auth endpoint (login/register)
     // Auth endpoints return 401 for invalid credentials, not expired sessions
+    // Some endpoints may return 403 for business logic (e.g., patient access, not auth issues)
     const isAuthEndpoint = error.config?.url?.includes('/auth/login') || 
                           error.config?.url?.includes('/auth/register') ||
                           error.config?.url?.includes('/auth/refresh');
     
-    if ((error.response?.status === 401 || error.response?.status === 403) && !isAuthEndpoint) {
-      // Handle unauthorized/forbidden - clear auth data (only for non-auth endpoints)
+    // Endpoints that may return 403 for business reasons, not auth issues
+    // These endpoints can return 403 when:
+    // - Patient doesn't exist (404 converted to 403 by middleware)
+    // - Patient is not active
+    // - User doesn't have permission (business logic, not auth failure)
+    const isBusinessLogic403 = error.config?.url?.includes('/privacy/consent-status') ||
+                               error.config?.url?.includes('/clinical-studies/patient/') ||
+                               (error.config?.url?.includes('/consultations') && error.response?.status === 403) ||
+                               (error.config?.url?.includes('/api/privacy/') && error.response?.status === 403);
+    
+    // Only treat 401/403 as session expired if:
+    // 1. Not an auth endpoint (auth endpoints use 401 for invalid credentials)
+    // 2. Not a business logic 403 (these are expected errors, not auth failures)
+    // 3. Response indicates "Not authenticated" or similar auth-related message
+    const isAuthFailure = error.response?.data?.detail?.toLowerCase().includes('not authenticated') ||
+                         error.response?.data?.detail?.toLowerCase().includes('invalid token') ||
+                         error.response?.data?.detail?.toLowerCase().includes('token') ||
+                         (error.response?.status === 401 && !isAuthEndpoint && !isBusinessLogic403);
+    
+    if (isAuthFailure && !isAuthEndpoint && !isBusinessLogic403) {
+      // Handle unauthorized/forbidden - clear auth data (only for actual auth failures)
       logger.auth.sessionExpired();
       localStorage.removeItem('token');
       localStorage.removeItem('doctor_data');

@@ -43,10 +43,35 @@ export const PublicPrivacyNotice: React.FC = () => {
       // This endpoint doesn't require authentication
       const response = await apiService.patients.api.get('/api/privacy/public-notice');
       console.log('✅ Public privacy notice loaded:', response);
-      setNotice(response);
+      
+      // ApiBase returns AxiosResponse, extract data property
+      const noticeData = response.data;
+      console.log('✅ Extracted notice data:', noticeData);
+      
+      if (!noticeData) {
+        throw new Error('No data received from API');
+      }
+      
+      // Ensure all fields are properly mapped
+      const mappedNotice: PrivacyNotice = {
+        id: noticeData.id,
+        version: noticeData.version || '',
+        title: noticeData.title || '',
+        content: noticeData.content || '',
+        short_summary: noticeData.short_summary || noticeData.summary,
+        effective_date: noticeData.effective_date || '',
+        expiration_date: noticeData.expiration_date,
+        is_active: noticeData.is_active !== undefined ? noticeData.is_active : true,
+        created_at: noticeData.created_at || '',
+        updated_at: noticeData.updated_at
+      };
+      
+      console.log('✅ Mapped notice:', mappedNotice);
+      setNotice(mappedNotice);
     } catch (err: any) {
       const errorMsg = err?.detail || err?.message || 'Error al cargar el aviso de privacidad';
       console.error('❌ Error loading public notice:', errorMsg);
+      console.error('❌ Full error:', err);
       setError(errorMsg);
     } finally {
       setIsLoading(false);
@@ -132,7 +157,7 @@ export const PublicPrivacyNotice: React.FC = () => {
       </Paper>
 
       {/* Summary */}
-      {notice.summary && (
+      {notice.short_summary && (
         <Card variant="outlined" sx={{ mb: 3 }}>
           <CardContent>
             <Box display="flex" alignItems="center" gap={1} mb={2}>
@@ -142,7 +167,7 @@ export const PublicPrivacyNotice: React.FC = () => {
               </Typography>
             </Box>
             <Typography variant="body1" color="text.secondary">
-              {notice.summary}
+              {notice.short_summary}
             </Typography>
           </CardContent>
         </Card>
@@ -193,7 +218,7 @@ export const PublicPrivacyNotice: React.FC = () => {
           en Posesión de Particulares (LFPDPPP) y su Reglamento.
         </Typography>
         <Typography variant="caption" color="text.secondary">
-          Última actualización: {formatDate(notice.updated_at)}
+          Última actualización: {formatDate(notice.created_at)}
         </Typography>
       </Box>
 

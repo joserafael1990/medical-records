@@ -6,6 +6,9 @@ from typing import Dict, List, Optional, Any
 from sqlalchemy.orm import Session
 from database import MedicalRecord, Person, VitalSign, ConsultationVitalSign, ConsultationPrescription, Medication, ClinicalStudy
 from datetime import timedelta
+from logger import get_logger
+
+api_logger = get_logger("medical_records.api")
 
 # ============================================================================
 # DECRYPTION HELPERS
@@ -27,7 +30,7 @@ def decrypt_patient_data(patient: Person, decrypt_fn: callable) -> Dict[str, str
             "name": patient.name
         }, "patient")
     except Exception as e:
-        print(f"⚠️ Could not decrypt patient data: {str(e)}")
+        api_logger.warning("Could not decrypt patient data", error=str(e))
         # Fallback to original values if decryption fails
         return {
             "name": patient.name
@@ -51,6 +54,7 @@ def decrypt_consultation_data(consultation: MedicalRecord, decrypt_fn: callable)
         "family_history": consultation.family_history,
         "perinatal_history": consultation.perinatal_history,
         "personal_pathological_history": consultation.personal_pathological_history,
+        "gynecological_and_obstetric_history": consultation.gynecological_and_obstetric_history,
         "personal_non_pathological_history": consultation.personal_non_pathological_history,
         "physical_examination": consultation.physical_examination,
         "primary_diagnosis": consultation.primary_diagnosis,
@@ -63,7 +67,7 @@ def decrypt_consultation_data(consultation: MedicalRecord, decrypt_fn: callable)
     try:
         return decrypt_fn(fields_to_decrypt, "consultation")
     except Exception as e:
-        print(f"⚠️ Could not decrypt consultation data: {str(e)}")
+        api_logger.warning("Could not decrypt consultation data", error=str(e))
         # Return original encrypted data if decryption fails
         return fields_to_decrypt
 
@@ -127,7 +131,6 @@ def get_consultation_vital_signs(db: Session, consultation_id: int) -> List[Dict
             "vital_sign_id": vs.vital_sign_id,
             "value": vs.value,
             "unit": vs.unit or "",
-            "notes": vs.notes or "",
             "created_at": vs.created_at.isoformat() if vs.created_at else None
         }
         for vs in vital_signs
@@ -233,16 +236,21 @@ def build_consultation_response(
         "patient_id": consultation.patient_id,
         "consultation_date": consultation_date_iso,
         "end_time": consultation_end_time.isoformat(),
+        "patient_document_id": consultation.patient_document_id,
+        "patient_document_value": consultation.patient_document_value,
+        "patient_document_name": consultation.patient_document.name if consultation.patient_document else None,
         "chief_complaint": decrypted_consultation.get("chief_complaint", ""),
         "history_present_illness": decrypted_consultation.get("history_present_illness", ""),
         "family_history": decrypted_consultation.get("family_history", ""),
         "perinatal_history": decrypted_consultation.get("perinatal_history", ""),
+        "gynecological_and_obstetric_history": decrypted_consultation.get("gynecological_and_obstetric_history", ""),
         "personal_pathological_history": decrypted_consultation.get("personal_pathological_history", ""),
         "personal_non_pathological_history": decrypted_consultation.get("personal_non_pathological_history", ""),
         "physical_examination": decrypted_consultation.get("physical_examination", ""),
         "primary_diagnosis": decrypted_consultation.get("primary_diagnosis", ""),
         "secondary_diagnoses": decrypted_consultation.get("secondary_diagnoses", ""),
         "treatment_plan": decrypted_consultation.get("treatment_plan", ""),
+        "follow_up_instructions": decrypted_consultation.get("follow_up_instructions", ""),
         "therapeutic_plan": decrypted_consultation.get("treatment_plan", ""),  # Alias for compatibility
         "laboratory_results": decrypted_consultation.get("laboratory_results", ""),
         "notes": decrypted_consultation.get("notes", ""),
@@ -313,10 +321,13 @@ def create_medical_record_object(
         patient_id=encrypted_data.get("patient_id"),
         doctor_id=doctor_id,
         consultation_date=consultation_date,
+        patient_document_id=encrypted_data.get("patient_document_id"),
+        patient_document_value=encrypted_data.get("patient_document_value"),
         chief_complaint=encrypted_data.get("chief_complaint", ""),
         history_present_illness=encrypted_data.get("history_present_illness", ""),
         family_history=encrypted_data.get("family_history", ""),
         perinatal_history=encrypted_data.get("perinatal_history", ""),
+        gynecological_and_obstetric_history=encrypted_data.get("gynecological_and_obstetric_history", ""),
         personal_pathological_history=encrypted_data.get("personal_pathological_history", ""),
         personal_non_pathological_history=encrypted_data.get("personal_non_pathological_history", ""),
         physical_examination=encrypted_data.get("physical_examination", ""),
@@ -324,6 +335,7 @@ def create_medical_record_object(
         primary_diagnosis=encrypted_data.get("primary_diagnosis", ""),
         prescribed_medications=encrypted_data.get("prescribed_medications", ""),
         treatment_plan=encrypted_data.get("treatment_plan", ""),
+        follow_up_instructions=encrypted_data.get("follow_up_instructions", ""),
         secondary_diagnoses=encrypted_data.get("secondary_diagnoses", ""),
         notes=encrypted_data.get("notes") or encrypted_data.get("interconsultations", ""),
         consultation_type=encrypted_data.get("consultation_type", "Seguimiento"),
@@ -349,7 +361,10 @@ def prepare_consultation_for_signing(medical_record: MedicalRecord) -> Dict[str,
         "consultation_date": medical_record.consultation_date.isoformat(),
         "chief_complaint": medical_record.chief_complaint,
         "primary_diagnosis": medical_record.primary_diagnosis,
-        "treatment_plan": medical_record.treatment_plan
+        "treatment_plan": medical_record.treatment_plan,
+        "follow_up_instructions": medical_record.follow_up_instructions,
+        "patient_document_id": medical_record.patient_document_id,
+        "patient_document_value": medical_record.patient_document_value
     }
 
 
@@ -377,10 +392,10 @@ def mark_appointment_completed(db: Session, appointment_id: Optional[int], docto
             print(f"✅ Appointment {appointment_id} marked as completed")
             return True
         else:
-            print(f"⚠️ Appointment {appointment_id} not found or access denied")
+            api_logger.warning("Appointment not found or access denied", appointment_id=appointment_id)
             return False
     except Exception as e:
-        print(f"❌ Error updating appointment status: {str(e)}")
+        api_logger.error("Error updating appointment status", appointment_id=appointment_id, error=str(e), exc_info=True)
         return False
 
 
@@ -433,18 +448,23 @@ def build_create_consultation_response(
     return {
         "id": medical_record.id,
         "patient_id": medical_record.patient_id,
+        "patient_document_id": medical_record.patient_document_id,
+        "patient_document_value": medical_record.patient_document_value,
+        "patient_document_name": medical_record.patient_document.name if medical_record.patient_document else None,
         "consultation_date": medical_record.consultation_date.isoformat(),
         "end_time": consultation_end_time.isoformat(),
         "chief_complaint": medical_record.chief_complaint,
         "history_present_illness": medical_record.history_present_illness,
         "family_history": medical_record.family_history,
         "perinatal_history": medical_record.perinatal_history,
+        "gynecological_and_obstetric_history": medical_record.gynecological_and_obstetric_history,
         "personal_pathological_history": medical_record.personal_pathological_history,
         "personal_non_pathological_history": medical_record.personal_non_pathological_history,
         "physical_examination": medical_record.physical_examination,
         "primary_diagnosis": medical_record.primary_diagnosis,
         "secondary_diagnoses": medical_record.secondary_diagnoses,
         "treatment_plan": medical_record.treatment_plan,
+        "follow_up_instructions": medical_record.follow_up_instructions,
         "therapeutic_plan": medical_record.treatment_plan,  # Alias for compatibility
         "laboratory_results": medical_record.laboratory_results,
         "imaging_studies": medical_record.laboratory_results,  # Alias for compatibility
@@ -464,4 +484,132 @@ def build_create_consultation_response(
             "signature_timestamp": digital_signature["last_signature_timestamp"]
         }
     }
+
+
+# ============================================================================
+# DIAGNOSIS CATALOG HELPERS - CIE-10 Compliance (Simple Validation)
+# ============================================================================
+
+def format_diagnosis_with_code(diagnosis_code: str, diagnosis_name: str) -> str:
+    """
+    Format diagnosis with CIE-10 code for storage
+    Compliance: NOM-004-SSA3-2012 - Register diagnosis codes and descriptions from official catalog
+    
+    Args:
+        diagnosis_code: CIE-10 code from catalog
+        diagnosis_name: Diagnosis description/name from catalog
+        
+    Returns:
+        Formatted string: "CIE-10: [código] - [descripción]"
+    """
+    if diagnosis_code and diagnosis_name:
+        return f"CIE-10: {diagnosis_code} - {diagnosis_name}"
+    elif diagnosis_name:
+        return diagnosis_name
+    else:
+        return ""
+
+def validate_diagnosis_from_catalog(
+    db: Session,
+    diagnosis_id: Optional[int] = None,
+    diagnosis_code: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """
+    Validate that diagnosis exists in CIE-10 catalog
+    Compliance: NOM-004-SSA3-2012 - Validate diagnosis codes from official catalog
+    
+    Args:
+        db: Database session
+        diagnosis_id: Diagnosis catalog ID
+        diagnosis_code: CIE-10 code
+        
+    Returns:
+        Diagnosis dictionary with code and name if valid, None otherwise
+    """
+    try:
+        from models.diagnosis import DiagnosisCatalog
+        
+        if diagnosis_id:
+            diagnosis = db.query(DiagnosisCatalog).filter(
+                DiagnosisCatalog.id == diagnosis_id,
+                DiagnosisCatalog.is_active == True
+            ).first()
+        elif diagnosis_code:
+            diagnosis = db.query(DiagnosisCatalog).filter(
+                DiagnosisCatalog.code == diagnosis_code,
+                DiagnosisCatalog.is_active == True
+            ).first()
+        else:
+            return None
+        
+        if diagnosis:
+            return {
+                "id": diagnosis.id,
+                "code": diagnosis.code,
+                "name": diagnosis.name,
+                "description": diagnosis.name  # Diagnosis.name contains the description
+            }
+        return None
+    except Exception as e:
+        api_logger.error("Error validating diagnosis", error=str(e), exc_info=True)
+        return None
+
+def format_diagnoses_from_catalog(
+    db: Session,
+    primary_diagnoses: Optional[List[Dict[str, Any]]] = None,
+    secondary_diagnoses: Optional[List[Dict[str, Any]]] = None
+) -> tuple[str, str]:
+    """
+    Format diagnoses from catalog for storage in text fields
+    Compliance: NOM-004-SSA3-2012 - Register diagnosis codes and descriptions from official catalog
+    
+    Args:
+        db: Database session
+        primary_diagnoses: List of primary diagnosis objects from catalog
+        secondary_diagnoses: List of secondary diagnosis objects from catalog
+        
+    Returns:
+        Tuple of (primary_diagnosis_text, secondary_diagnoses_text)
+    """
+    primary_text = ""
+    secondary_text = ""
+    
+    # Format primary diagnosis
+    if primary_diagnoses and len(primary_diagnoses) > 0:
+        primary = primary_diagnoses[0]  # Take first primary diagnosis
+        diagnosis_id = primary.get("id")
+        diagnosis_code = primary.get("code", "")
+        diagnosis_name = primary.get("name", "")
+        
+        # Validate against catalog
+        validated = validate_diagnosis_from_catalog(db, diagnosis_id, diagnosis_code)
+        if validated:
+            primary_text = format_diagnosis_with_code(validated["code"], validated["name"])
+        elif diagnosis_code and diagnosis_name:
+            # Use provided values if validation fails (fallback)
+            primary_text = format_diagnosis_with_code(diagnosis_code, diagnosis_name)
+        elif diagnosis_name:
+            primary_text = diagnosis_name
+    
+    # Format secondary diagnoses
+    if secondary_diagnoses and len(secondary_diagnoses) > 0:
+        secondary_list = []
+        for diagnosis in secondary_diagnoses:
+            diagnosis_id = diagnosis.get("id")
+            diagnosis_code = diagnosis.get("code", "")
+            diagnosis_name = diagnosis.get("name", "")
+            
+            # Validate against catalog
+            validated = validate_diagnosis_from_catalog(db, diagnosis_id, diagnosis_code)
+            if validated:
+                secondary_list.append(format_diagnosis_with_code(validated["code"], validated["name"]))
+            elif diagnosis_code and diagnosis_name:
+                # Use provided values if validation fails (fallback)
+                secondary_list.append(format_diagnosis_with_code(diagnosis_code, diagnosis_name))
+            elif diagnosis_name:
+                secondary_list.append(diagnosis_name)
+        
+        secondary_text = "; ".join(secondary_list)
+    
+    return primary_text, secondary_text
 

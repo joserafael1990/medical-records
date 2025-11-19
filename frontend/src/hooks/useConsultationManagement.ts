@@ -5,7 +5,13 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { apiService } from '../services';
-import type { Consultation, ConsultationFormData, ClinicalStudy } from '../types';
+import { logger } from '../utils/logger';
+import type { ConsultationFormData } from '../hooks/useConsultationForm';
+type Consultation = {
+  id: number | string;
+  [key: string]: any;
+};
+type ClinicalStudy = any;
 import { getCurrentCDMXDateTime } from '../constants';
 import { useAuth } from '../contexts/AuthContext';
 interface ConsultationManagementState {
@@ -97,6 +103,8 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
   // Form data with default values
   const [consultationFormData, setConsultationFormData] = useState<ConsultationFormData>(() => ({
     patient_id: '',
+    patient_document_id: null,
+    patient_document_value: '',
     date: getCurrentCDMXDateTime(),
     chief_complaint: '',
     history_present_illness: '',
@@ -125,7 +133,7 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
       const studies: ClinicalStudy[] = [];
       setConsultationStudies(studies);
     } catch (error: any) {
-      console.error('❌ Error loading clinical studies from backend:', error?.message || 'Unknown error');
+      logger.error('Error loading clinical studies from backend', error, 'api');
       setConsultationStudies([]);
       throw error;
     }
@@ -136,28 +144,24 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
     try {
       // Get appointments available for consultation (only confirmed appointments)
       const consultationAppointments = await apiService.appointments.getAppointments({
-        status: 'confirmed'
+        status: 'confirmada'
       });
       
       setAllAvailableAppointments(consultationAppointments || []);
     } catch (error: any) {
-      console.error('❌ Error loading available appointments:', error?.message || 'Unknown error');
+      logger.error('Error loading available appointments', error, 'api');
       setAllAvailableAppointments([]);
     }
   }, []);
 
   // Load consultations on mount - only if authenticated
   useEffect(() => {
-    console.log('🔄 useConsultationManagement useEffect triggered, isAuthenticated:', isAuthenticated);
     if (!isAuthenticated) {
-      console.log('⚠️ User not authenticated, skipping consultations fetch');
       return;
     }
     
-    console.log('✅ User authenticated, fetching consultations...');
     fetchConsultations().catch(error => {
-      console.warn('⚠️ Could not load consultations on mount:', error.message);
-      console.error('⚠️ Full error:', error);
+      logger.warn('Could not load consultations on mount', error, 'api');
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]); // Only depend on isAuthenticated, fetchConsultations is stable
@@ -167,15 +171,11 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
   // Fetch consultations from API
   const fetchConsultations = useCallback(async () => {
     try {
-      console.log('🔄 Fetching consultations from backend...');
       setIsLoading(true);
       const data = await apiService.consultations.getConsultations();
-      console.log('📊 Raw consultations data from API:', data);
-      console.log('📊 Data type:', Array.isArray(data) ? 'Array' : typeof data);
-      console.log('📊 Data length:', Array.isArray(data) ? data.length : 'N/A');
       
       if (!data || !Array.isArray(data)) {
-        console.warn('⚠️ API returned invalid data format:', data);
+        logger.warn('API returned invalid data format', { data }, 'api');
         setConsultations([]);
         setIsLoading(false);
         return;
@@ -190,12 +190,9 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
         id: consultation.id || consultation.consultation_id
       }));
       
-      console.log(`📈 Total consultations loaded: ${transformedData.length}`);
-      console.log('📊 Transformed consultations:', transformedData);
       setConsultations(transformedData);
     } catch (error: any) {
-      console.error('❌ Error fetching consultations:', error?.message || 'Unknown error');
-      console.error('❌ Full error:', error);
+      logger.error('Error fetching consultations', error, 'api');
       setConsultations([]);
     } finally {
       setIsLoading(false);
@@ -206,6 +203,15 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
   const createConsultation = useCallback(async (data: ConsultationFormData): Promise<Consultation> => {
     setIsSubmitting(true);
     try {
+      logger.debug(
+        'Creating consultation with payload',
+        {
+          patient_id: data.patient_id,
+          patient_document_id: data.patient_document_id,
+          patient_document_value: data.patient_document_value
+        },
+        'api'
+      );
       const newConsultation = await apiService.consultations.createConsultation(data);
       await fetchConsultations(); // Refresh list
       
@@ -256,10 +262,14 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
     const currentDateTime = getCurrentCDMXDateTime();
     setConsultationFormData({
       patient_id: '',
+      patient_document_id: null,
+      patient_document_value: '',
       date: currentDateTime,
       chief_complaint: '',
       history_present_illness: '',
       family_history: '',
+      perinatal_history: '',
+      gynecological_and_obstetric_history: '',
       personal_pathological_history: '',
       personal_non_pathological_history: '',
       physical_examination: '',
@@ -280,7 +290,6 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
 
   // Reset form state and close dialog
   const resetConsultationForm = useCallback(() => {
-    console.log('🔄 resetConsultationForm called - setting selectedConsultation to null');
     setSelectedConsultation(null);
     setIsEditingConsultation(false);
     setConsultationDialogOpen(false);
@@ -292,7 +301,6 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
   // Open consultation dialog for create/edit
   const openConsultationDialog = useCallback((consultation?: Consultation) => {
     if (consultation) {
-      console.log('🔄 openConsultationDialog called with consultation:', consultation.id);
       setSelectedConsultation(consultation);
       setIsEditingConsultation(true);
       // Populate form with consultation data
@@ -302,6 +310,8 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
         chief_complaint: consultation.chief_complaint || '',
         history_present_illness: consultation.history_present_illness || '',
         family_history: consultation.family_history || '',
+        perinatal_history: consultation.perinatal_history || '',
+        gynecological_and_obstetric_history: consultation.gynecological_and_obstetric_history || '',
         personal_pathological_history: consultation.personal_pathological_history || '',
         personal_non_pathological_history: consultation.personal_non_pathological_history || '',
         physical_examination: consultation.physical_examination || '',
@@ -331,21 +341,14 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
 
   // Close consultation dialog
   const closeConsultationDialog = useCallback(() => {
-    console.log('🔄 closeConsultationDialog called - this is causing the consultation prop to become null');
     setConsultationDialogOpen(false);
     setConsultationDetailView(false);
     setSelectedConsultation(null);
     setIsEditingConsultation(false);
   }, []);
 
-  // Add logging for selectedConsultation changes
-  useEffect(() => {
-    console.log('🔄 selectedConsultation changed:', selectedConsultation?.id || 'null');
-  }, [selectedConsultation]);
-
   // Handler functions
   const handleNewConsultation = useCallback(() => {
-    console.log('🆕 handleNewConsultation called - setting selectedConsultation to null');
     setSelectedConsultation(null);
     setIsEditingConsultation(false);
     resetConsultationFormData();
@@ -358,23 +361,17 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
 
   const handleEditConsultation = useCallback(async (consultation: Consultation) => {
     try {
-      console.log('🔄 handleEditConsultation called with consultation:', consultation.id);
       // First set the basic consultation data
       setSelectedConsultation(consultation);
       setIsEditingConsultation(true);
       setConsultationDialogOpen(true);
       
       // Fetch complete consultation data from backend
-      console.log('🔄 Fetching complete consultation data for ID:', consultation.id);
-      console.log('🔄 Making API call to:', `/api/consultations/${consultation.id}`);
       const fullConsultationData = await apiService.consultations.getConsultationById(consultation.id);
-      console.log('🔄 API response received:', fullConsultationData);
-      
-      console.log('🔄 Full consultation data received:', fullConsultationData?.id || 'null/undefined');
       // Update the selectedConsultation with the fresh data so the dialog's useEffect will re-run
       setSelectedConsultation(fullConsultationData);
     } catch (error) {
-      console.error('Error fetching consultation data:', error);
+      logger.error('Error fetching consultation data', error, 'api');
       // Keep the original consultation data if fetch fails
     }
   }, []);
@@ -385,7 +382,6 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
   }, []);
 
   const handleBackFromConsultationDetail = useCallback(() => {
-    console.log('🔄 handleBackFromConsultationDetail called - setting selectedConsultation to null');
     setConsultationDetailView(false);
     setSelectedConsultation(null);
   }, []);

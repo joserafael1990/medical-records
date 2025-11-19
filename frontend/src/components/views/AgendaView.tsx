@@ -156,7 +156,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                               size="small"
                               sx={{ fontSize: '0.65rem', height: 16 }}
                             />
-                            {appointment.status === 'confirmed' && (
+                            {appointment.status === 'por_confirmar' && (
                               <IconButton
                                 size="small"
                                 onClick={(e) => {
@@ -268,7 +268,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                                 flex: 1
                               }}
                             />
-                            {appointment.status === 'confirmed' && (
+                            {appointment.status === 'por_confirmar' && (
                               <IconButton
                                 size="small"
                                 onClick={(e) => {
@@ -367,18 +367,13 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                       )}
                     </Typography>
                   )}
-                  {appointment.reason && (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, display: 'block' }} component="span">
-                      Motivo: {appointment.reason}
-                    </Typography>
-                  )}
                 </Box>
               }
               secondaryTypographyProps={{ component: 'div' }}
             />
             <ListItemSecondaryAction>
               <Box sx={{ display: 'flex', gap: 1 }}>
-                {appointment.status === 'confirmed' && (
+                {appointment.status === 'por_confirmar' && (
                   <Button
                     size="small"
                     variant="outlined"
@@ -393,7 +388,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                     {sendingWhatsApp === appointment.id ? 'Enviando...' : 'WhatsApp'}
                   </Button>
                 )}
-                {appointment.status === 'confirmed' && (
+                {['por_confirmar', 'confirmada'].includes(appointment.status) && (
                   <Button
                     size="small"
                     color="error"
@@ -516,7 +511,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                 Confirmadas
               </Typography>
               <Typography variant="h3" color="success.main">
-                {filteredAppointments.filter(apt => apt.status === 'confirmed').length}
+                        {filteredAppointments.filter(apt => apt.status === 'confirmada').length}
               </Typography>
             </CardContent>
           </Card>

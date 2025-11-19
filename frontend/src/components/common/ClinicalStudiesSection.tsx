@@ -1,4 +1,4 @@
-import React, { memo, useState, useEffect } from 'react';
+import React, { memo, useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -12,11 +12,7 @@ import {
   Alert,
   LinearProgress,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Grid,
+  Button,
   CircularProgress,
   Autocomplete
 } from '@mui/material';
@@ -32,10 +28,11 @@ import {
   Business as BusinessIcon,
   Search as SearchIcon
 } from '@mui/icons-material';
-import { ClinicalStudy, StudyStatus, CreateClinicalStudyData, StudyType, UrgencyLevel, StudyCategory, StudyCatalog } from '../../types';
-import { STUDY_STATUS_OPTIONS, STUDY_TYPES, URGENCY_LEVELS } from '../../constants';
+import { ClinicalStudy, StudyStatus, CreateClinicalStudyData, StudyCatalog } from '../../types';
+import { STUDY_STATUS_OPTIONS, STUDY_TYPES } from '../../constants';
 import { TEMP_IDS } from '../../utils/vitalSignUtils';
 import { useStudyCatalog } from '../../hooks/useStudyCatalog';
+import { logger } from '../../utils/logger';
 
 interface ClinicalStudiesSectionProps {
   consultationId: string;
@@ -64,16 +61,13 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
 }) => {
   const [filteredStudies, setFilteredStudies] = useState<ClinicalStudy[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const { categories, studies: catalogStudies, fetchCategories, fetchStudies, searchStudies, isLoading: isCatalogLoading } = useStudyCatalog();
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number | ''>('');
+  const { studies: catalogStudies, fetchStudies, searchStudies, isLoading: isCatalogLoading } = useStudyCatalog();
   const [studySearchTerm, setStudySearchTerm] = useState('');
   const [selectedStudy, setSelectedStudy] = useState<StudyCatalog | null>(null);
+  const [customStudyOptions, setCustomStudyOptions] = useState<StudyCatalog[]>([]);
   
-  // Load categories and initial studies on mount
-  useEffect(() => {
-    fetchCategories();
-    fetchStudies({ limit: 100 }); // Load initial studies
-  }, [fetchCategories, fetchStudies]);
+  // Note: fetchStudies is automatically called by useStudyCatalog hook
+  // No need to call it again here
   
   // Search studies when user types in the study name field
   useEffect(() => {
@@ -81,19 +75,35 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
       const timeoutId = setTimeout(async () => {
         try {
           await searchStudies(studySearchTerm.trim(), {
-            category_id: selectedCategoryId ? Number(selectedCategoryId) : undefined
           });
         } catch (error) {
-          console.error('Error searching studies:', error);
+          logger.error('Error searching studies', error, 'api');
         }
       }, 300);
       return () => clearTimeout(timeoutId);
     } else if (studySearchTerm.trim().length === 0 && catalogStudies.length === 0) {
-      // If search term is cleared and we have no studies, load initial studies again
-      fetchStudies({ limit: 100 });
+      // If search term is cleared and we have no studies, reload studies
+      // Note: The hook already loads studies on mount, but we can call fetchStudies to refresh
+      fetchStudies();
     }
-  }, [studySearchTerm, selectedCategoryId, searchStudies, fetchStudies, catalogStudies.length]);
+  }, [studySearchTerm, searchStudies, fetchStudies, catalogStudies.length]);
   
+  const combinedStudyOptions = useMemo(() => {
+    const existingIds = new Set((catalogStudies || []).map((study) => study.id));
+    const customFiltered = customStudyOptions.filter((option) => !existingIds.has(option.id));
+    return [...(catalogStudies || []), ...customFiltered];
+  }, [catalogStudies, customStudyOptions]);
+
+  const studyNameExists = useMemo(() => {
+    const trimmed = studySearchTerm.trim().toLowerCase();
+    if (!trimmed) {
+      return false;
+    }
+    return combinedStudyOptions.some(
+      (study) => study.name?.toLowerCase().trim() === trimmed
+    );
+  }, [combinedStudyOptions, studySearchTerm]);
+
   const [formData, setFormData] = useState<CreateClinicalStudyData>({
     consultation_id: consultationId,
     patient_id: patientId,
@@ -113,7 +123,7 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        console.error('No authentication token found');
+        logger.error('No authentication token found', undefined, 'auth');
         alert('No estás autenticado. Por favor, inicia sesión nuevamente.');
         return;
       }
@@ -140,21 +150,12 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
       // Clean up after a delay
       setTimeout(() => window.URL.revokeObjectURL(url), 100);
     } catch (error) {
-      console.error('Error viewing study file:', error);
+      logger.error('Error viewing study file', error, 'ui');
       alert('Error al visualizar el archivo del estudio');
     }
   };
 
   useEffect(() => {
-    console.log('🔬 Filtering studies:', { 
-      studies, 
-      studiesLength: studies?.length || 0,
-      consultationId, 
-      patientId,
-      searchTerm,
-      studiesData: studies?.map(s => ({ id: s.id, consultation_id: s.consultation_id, patient_id: s.patient_id, name: s.study_name }))
-    });
-    
     // First filter by consultation and patient IDs
     let consultationStudies = (studies || []).filter(study => {
       // Normalize IDs to strings for comparison
@@ -208,11 +209,6 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
       });
     }
     
-    console.log('🔬 Filtered studies result:', { 
-      filteredCount: consultationStudies.length, 
-      searchTerm,
-      filteredStudies: consultationStudies.map(s => ({ id: s.id, name: s.study_name }))
-    });
     setFilteredStudies(consultationStudies);
   }, [studies, consultationId, patientId, searchTerm]);
 
@@ -260,7 +256,30 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
       </Box>
     );
   }
-  const handleSave = async () => {
+  const handleCreateCustomStudyOption = () => {
+    const trimmedName = studySearchTerm.trim();
+    if (!trimmedName || studyNameExists) {
+      return;
+    }
+
+    const newStudyOption: StudyCatalog = {
+      id: -(customStudyOptions.length + 1),
+      name: trimmedName,
+      category_id: 0,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    setCustomStudyOptions((prev) => [...prev, newStudyOption]);
+    setSelectedStudy(newStudyOption);
+    setFormData((prev) => ({
+      ...prev,
+      study_name: trimmedName
+    }));
+  };
+
+  const handleAddToOrder = async () => {
     if (!formData.study_name.trim() || !formData.ordered_date) {
       return;
     }
@@ -271,7 +290,9 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
         ...formData,
         consultation_id: consultationId,
         patient_id: patientId,
-        ordering_doctor: doctorName || formData.ordering_doctor
+        ordering_doctor: doctorName || formData.ordering_doctor,
+        ordered_date: formData.ordered_date || new Date().toISOString().split('T')[0],
+        urgency: formData.urgency || 'routine'
       });
       // Clear form
       setSelectedStudy(null);
@@ -289,7 +310,7 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
         clinical_indication: ''
       });
     } catch (error) {
-      console.error('Error saving clinical study:', error);
+      logger.error('Error saving clinical study', error, 'api');
     } finally {
       setIsSubmitting(false);
     }
@@ -314,15 +335,21 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
       <Card sx={{ mb: 3, border: '1px dashed', borderColor: 'grey.300', backgroundColor: '#fafafa' }}>
         <CardContent sx={{ p: 2 }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {/* First row: Autocomplete (widest), Category, Date, Urgency */}
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
-              {/* Autocomplete - Widest field (double size) */}
-              <Box sx={{ flex: { xs: '1 1 100%', sm: '2 2 0%' }, minWidth: 0 }}>
+            {/* First row: Autocomplete, Guardar, Agregar a la orden */}
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'stretch', flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Autocomplete
-                  options={catalogStudies || []}
-                  getOptionLabel={(option) => option.name || ''}
+                  freeSolo
+                  options={combinedStudyOptions || []}
+                  getOptionLabel={(option) => (typeof option === 'string' ? option : option.name || '')}
                   value={selectedStudy}
                   onChange={(event, newValue) => {
+                    if (typeof newValue === 'string') {
+                      setSelectedStudy(null);
+                      setStudySearchTerm(newValue);
+                      setFormData((prev) => ({ ...prev, study_name: newValue }));
+                      return;
+                    }
                     setSelectedStudy(newValue);
                     if (newValue) {
                       setFormData(prev => ({ 
@@ -330,11 +357,9 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
                         study_name: newValue.name,
                         study_description: newValue.description || prev.study_description
                       }));
+                      setStudySearchTerm(newValue.name);
                     } else {
-                      setFormData(prev => ({ 
-                        ...prev, 
-                        study_name: studySearchTerm
-                      }));
+                      setFormData(prev => ({ ...prev, study_name: '' }));
                     }
                   }}
                   onInputChange={(event, newInputValue) => {
@@ -366,15 +391,33 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
                   )}
                   renderOption={(props, option) => {
                     const { key, ...otherProps } = props;
+                    const studyOption: StudyCatalog =
+                      typeof option === 'string'
+                        ? {
+                            id: -Math.abs(Date.now()),
+                            name: option,
+                            category_id: 0,
+                            is_active: true,
+                            created_at: '',
+                            updated_at: ''
+                          }
+                        : option;
+
+                    const uniqueKey =
+                      studyOption.id ??
+                      (studyOption.code
+                        ? `${studyOption.code}-${studyOption.category_id ?? 'cat'}`
+                        : `${studyOption.name}-${studyOption.category_id ?? 'cat'}`);
+
                     return (
-                      <Box component="li" key={option.id} {...otherProps}>
+                      <Box component="li" key={uniqueKey} {...otherProps}>
                         <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                            {option.name}
+                            {studyOption.name}
                           </Typography>
-                          {option.description && (
+                          {studyOption.description && (
                             <Typography variant="caption" color="text.secondary">
-                              {option.description.length > 80 ? `${option.description.substring(0, 80)}...` : option.description}
+                              {studyOption.description.length > 80 ? `${studyOption.description.substring(0, 80)}...` : studyOption.description}
                             </Typography>
                           )}
                         </Box>
@@ -383,91 +426,36 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
                   }}
                 />
               </Box>
-              
-              {/* Category - Half size */}
-              <Box sx={{ flex: { xs: '1 1 calc(50% - 8px)', sm: '1 1 0%' }, minWidth: { xs: 'calc(50% - 8px)', sm: '120px' } }}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Categoría</InputLabel>
-                  <Select
-                    value={selectedCategoryId}
-                    onChange={(e) => {
-                      const categoryId = e.target.value as number | '';
-                      setSelectedCategoryId(categoryId);
-                      // Optionally update formData with category name if needed
-                      if (categoryId) {
-                        const category = categories.find(c => c.id === categoryId);
-                        if (category) {
-                          setFormData(prev => ({ ...prev, study_type: category.name.toLowerCase().replace(/\s+/g, '_') as StudyType }));
-                        }
-                      }
-                    }}
-                    label="Categoría"
-                  >
-                    <MenuItem value="">
-                      <em>Todas</em>
-                    </MenuItem>
-                    {categories.filter(c => c.is_active).map((category) => (
-                      <MenuItem key={category.id} value={category.id}>
-                        {category.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Box>
-              
-              {/* Date - Half size */}
-              <Box sx={{ flex: { xs: '1 1 calc(50% - 8px)', sm: '1 1 0%' }, minWidth: { xs: 'calc(50% - 8px)', sm: '120px' } }}>
-                <TextField
-                  type="date"
-                  label="Fecha"
-                  value={formData.ordered_date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, ordered_date: e.target.value }))}
-                  size="small"
-                  fullWidth
-                  InputLabelProps={{ shrink: true }}
-                />
-              </Box>
-              
-              {/* Urgency - Half size */}
-              <Box sx={{ flex: { xs: '1 1 calc(50% - 8px)', sm: '1 1 0%' }, minWidth: { xs: 'calc(50% - 8px)', sm: '120px' } }}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Urgencia</InputLabel>
-                  <Select
-                    value={formData.urgency || 'routine'}
-                    onChange={(e) => setFormData(prev => ({ ...prev, urgency: e.target.value as UrgencyLevel }))}
-                    label="Urgencia"
-                  >
-                    {URGENCY_LEVELS.map((level) => (
-                      <MenuItem key={level.value} value={level.value}>
-                        {level.label}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Box>
-            </Box>
-            
-            {/* Second row: Clinical indication and Add button */}
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-              {/* Clinical indication - Takes available space */}
-              <TextField
-                placeholder="Indicación clínica (opcional)"
-                value={formData.clinical_indication || ''}
-                onChange={(e) => setFormData(prev => ({ ...prev, clinical_indication: e.target.value }))}
-                size="small"
-                sx={{ flex: 1 }}
-              />
-              
-              {/* Add button - Fixed size */}
-              <IconButton
-                color="primary"
-                onClick={handleSave}
-                disabled={isSubmitting || !formData.study_name.trim() || !formData.ordered_date}
-                sx={{ flexShrink: 0 }}
+              <Button
+                variant="outlined"
+                onClick={handleCreateCustomStudyOption}
+                disabled={
+                  !studySearchTerm.trim() ||
+                  studyNameExists
+                }
+                sx={{ flexShrink: 0, minWidth: { xs: '100%', sm: 140 }, height: 40 }}
               >
-                {isSubmitting ? <CircularProgress size={20} /> : <ScienceIcon />}
-              </IconButton>
-            </Box>
+                Guardar
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<ScienceIcon />}
+                onClick={handleAddToOrder}
+                disabled={isSubmitting || !formData.study_name.trim()}
+                sx={{ flexShrink: 0, minWidth: { xs: '100%', sm: 180 }, height: 40 }}
+              >
+                {isSubmitting ? 'Agregando...' : 'Agregar a la orden'}
+              </Button>
+              </Box>
+
+            {/* Second row: Indicación clínica (opcional) */}
+            <TextField
+              placeholder="Indicación clínica (opcional)"
+              value={formData.clinical_indication || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, clinical_indication: e.target.value }))}
+              size="small"
+              fullWidth
+            />
           </Box>
         </CardContent>
       </Card>

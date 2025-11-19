@@ -11,14 +11,14 @@ import pytz
 import psycopg2
 import json
 
-from database import get_db, Person, Appointment
+from database import get_db, Person, Appointment, AppointmentReminder
 from dependencies import get_current_user
 from logger import get_logger
 from appointment_service import AppointmentService
 import crud
 import schemas
 
-api_logger = get_logger("api")
+api_logger = get_logger("medical_records.api")
 
 # CDMX timezone configuration
 SYSTEM_TIMEZONE = pytz.timezone('America/Mexico_City')
@@ -28,6 +28,57 @@ def now_cdmx():
     return datetime.now(SYSTEM_TIMEZONE)
 
 router = APIRouter(prefix="/api", tags=["appointments"])
+
+
+def serialize_appointment(appointment: Appointment) -> dict:
+    """Serialize Appointment ORM instance to dict for API responses."""
+    patient_name = "Paciente no encontrado"
+    if appointment.patient:
+        patient_name = appointment.patient.name or "Paciente sin nombre"
+
+    appointment_date_str = appointment.appointment_date.strftime('%Y-%m-%dT%H:%M:%S') if appointment.appointment_date else None
+    end_time_str = appointment.end_time.strftime('%Y-%m-%dT%H:%M:%S') if appointment.end_time else None
+
+    return {
+        "id": str(appointment.id),
+        "patient_id": str(appointment.patient_id),
+        "doctor_id": appointment.doctor_id,
+        "appointment_date": appointment_date_str,
+        "date_time": appointment_date_str,
+        "end_time": end_time_str,
+        "appointment_type_id": appointment.appointment_type_id,
+        "appointment_type_name": appointment.appointment_type_rel.name if getattr(appointment, "appointment_type_rel", None) else None,
+        "office_id": appointment.office_id,
+        "office_name": appointment.office.name if getattr(appointment, "office", None) else None,
+        "consultation_type": appointment.consultation_type,
+        "status": appointment.status,
+        "estimated_cost": str(getattr(appointment, 'estimated_cost', None)) if getattr(appointment, 'estimated_cost', None) else None,
+        "insurance_covered": getattr(appointment, 'insurance_covered', None),
+        "reminder_sent": getattr(appointment, 'reminder_sent', False),
+        "reminder_sent_at": appointment.reminder_sent_at.isoformat() if getattr(appointment, 'reminder_sent_at', None) else None,
+        "auto_reminder_enabled": getattr(appointment, 'auto_reminder_enabled', None),
+        "auto_reminder_offset_minutes": getattr(appointment, 'auto_reminder_offset_minutes', None),
+        "auto_reminder_sent_at": appointment.auto_reminder_sent_at.isoformat() if getattr(appointment, 'auto_reminder_sent_at', None) else None,
+        "reminders": [
+            {
+                "id": r.id,
+                "reminder_number": r.reminder_number,
+                "offset_minutes": r.offset_minutes,
+                "enabled": r.enabled,
+                "sent": r.sent,
+                "sent_at": r.sent_at.isoformat() if r.sent_at else None,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "updated_at": r.updated_at.isoformat() if r.updated_at else None
+            }
+            for r in (list(appointment.reminders) if hasattr(appointment, 'reminders') and appointment.reminders is not None else [])
+        ],
+        "cancelled_reason": appointment.cancelled_reason,
+        "cancelled_at": appointment.cancelled_at.isoformat() if appointment.cancelled_at else None,
+        "created_at": appointment.created_at.isoformat() if appointment.created_at else None,
+        "updated_at": appointment.updated_at.isoformat() if appointment.updated_at else None,
+        "patient_name": patient_name,
+        "patient": appointment.patient
+    }
 
 
 @router.get("/appointments")
@@ -79,55 +130,28 @@ async def get_appointments(
             )
         
         # Transform to include patient information
-        result = []
-        for appointment in appointments:
-            # Safely access patient information
-            patient_name = "Paciente no encontrado"
-            if appointment.patient:
-                patient_name = appointment.patient.name or "Paciente sin nombre"
-            
-            # Since appointments are stored in CDMX timezone (without tzinfo), 
-            # we assume they are already in CDMX timezone and just format them
-            appointment_date_str = appointment.appointment_date.strftime('%Y-%m-%dT%H:%M:%S')
-            end_time_str = appointment.end_time.strftime('%Y-%m-%dT%H:%M:%S') if appointment.end_time else None
-            
-            apt_dict = {
-                "id": str(appointment.id),
-                "patient_id": str(appointment.patient_id),
-                "doctor_id": appointment.doctor_id,  # ✅ Agregado doctor_id
-                "appointment_date": appointment_date_str,  # CDMX timezone format without timezone info
-                "date_time": appointment_date_str,  # CDMX timezone format without timezone info
-                "end_time": end_time_str,
-                "appointment_type_id": appointment.appointment_type_id,
-                "appointment_type_name": appointment.appointment_type_rel.name if appointment.appointment_type_rel else None,
-                "office_id": appointment.office_id,
-                "office_name": appointment.office.name if appointment.office else None,
-                "consultation_type": appointment.consultation_type,  # ✅ Agregado
-                "reason": appointment.reason,
-                "notes": appointment.notes,
-                "status": appointment.status,
-                "priority": appointment.priority,
-                "estimated_cost": str(getattr(appointment, 'estimated_cost', None)) if getattr(appointment, 'estimated_cost', None) else None,
-                "insurance_covered": getattr(appointment, 'insurance_covered', None),
-                # Auto reminder fields
-                "reminder_sent": getattr(appointment, 'reminder_sent', False),
-                "reminder_sent_at": appointment.reminder_sent_at.isoformat() if getattr(appointment, 'reminder_sent_at', None) else None,
-                "auto_reminder_enabled": getattr(appointment, 'auto_reminder_enabled', None),
-                "auto_reminder_offset_minutes": getattr(appointment, 'auto_reminder_offset_minutes', None),
-                "auto_reminder_sent_at": appointment.auto_reminder_sent_at.isoformat() if getattr(appointment, 'auto_reminder_sent_at', None) else None,
-                "cancelled_reason": appointment.cancelled_reason,
-                "cancelled_at": appointment.cancelled_at.isoformat() if appointment.cancelled_at else None,
-                "created_at": appointment.created_at.isoformat(),
-                "updated_at": appointment.updated_at.isoformat() if appointment.updated_at else None,
-                "patient_name": patient_name,
-                "patient": appointment.patient  # Include full patient object for frontend
-            }
-            result.append(apt_dict)
-        
-        return result
+        return [serialize_appointment(appointment) for appointment in appointments]
         
     except Exception as e:
         # Return empty list instead of error to prevent frontend crashes
+        return []
+
+
+@router.get("/appointments/patient/{patient_id}")
+async def get_appointments_by_patient(
+    patient_id: int,
+    current_user: Person = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get appointments for a specific patient belonging to the current doctor."""
+    try:
+        appointments = AppointmentService.get_appointments(
+            db=db,
+            doctor_id=current_user.id,
+            patient_id=patient_id
+        )
+        return [serialize_appointment(appointment) for appointment in appointments]
+    except Exception:
         return []
 
 
@@ -152,14 +176,16 @@ async def get_calendar_appointments(
                 joinedload(Appointment.patient),
                 joinedload(Appointment.doctor),
                 joinedload(Appointment.office),
-                joinedload(Appointment.appointment_type_rel)
+                joinedload(Appointment.appointment_type_rel),
+                joinedload(Appointment.reminders)
             ).filter(Appointment.doctor_id == current_user.id)
         except Exception:
             # Fallback if appointment_types table doesn't exist
             query = db.query(Appointment).options(
                 joinedload(Appointment.patient),
                 joinedload(Appointment.doctor),
-                joinedload(Appointment.office)
+                joinedload(Appointment.office),
+                joinedload(Appointment.reminders)
             ).filter(Appointment.doctor_id == current_user.id)
         
         
@@ -181,16 +207,26 @@ async def get_calendar_appointments(
                 Appointment.appointment_date >= utc_start,
                 Appointment.appointment_date <= utc_end
             )
-            print(f"📅 Fetching appointments from {parsed_start} to {parsed_end} (CDMX timezone)")
-            print(f"🌍 UTC range: {utc_start} to {utc_end}")
+            api_logger.debug(
+                "📅 Fetching appointments for range",
+                extra={
+                    "doctor_id": current_user.id,
+                    "start_date": str(parsed_start),
+                    "end_date": str(parsed_end),
+                    "utc_start": utc_start.isoformat(),
+                    "utc_end": utc_end.isoformat()
+                }
+            )
             
         elif effective_target_date:
             # Single date query for daily view
             try:
                 parsed_date = datetime.fromisoformat(effective_target_date).date()
             except ValueError:
-                # Handle invalid date format (e.g., 'NaN-NaN-NaN' from frontend)
-                print(f"⚠️ Invalid date format received: {effective_target_date}, defaulting to today")
+                api_logger.warning(
+                    "⚠️ Invalid target date received, defaulting to today",
+                    extra={"doctor_id": current_user.id, "target_date": effective_target_date}
+                )
                 parsed_date = now_cdmx().date()
             
             # Create naive datetime bounds for the day (assuming appointments are stored in local time)
@@ -244,10 +280,11 @@ async def get_calendar_appointments(
                 "office_id": appointment.office_id,
                 "office_name": appointment.office.name if appointment.office else None,
                 "consultation_type": appointment.consultation_type,
-                "reason": appointment.reason,
-                "notes": appointment.notes,
                 "status": appointment.status,
-                "priority": appointment.priority,
+                "consultation_type": appointment.consultation_type,
+                "status": appointment.status,
+            "consultation_type": appointment.consultation_type,
+            "status": appointment.status,
                 "room_number": getattr(appointment, 'room_number', None),
                 "reminder_sent": getattr(appointment, 'reminder_sent', False),
                 "reminder_sent_at": appointment.reminder_sent_at.isoformat() if getattr(appointment, 'reminder_sent_at', None) else None,
@@ -255,6 +292,19 @@ async def get_calendar_appointments(
                 "auto_reminder_enabled": getattr(appointment, 'auto_reminder_enabled', None),
                 "auto_reminder_offset_minutes": getattr(appointment, 'auto_reminder_offset_minutes', None),
                 "auto_reminder_sent_at": appointment.auto_reminder_sent_at.isoformat() if getattr(appointment, 'auto_reminder_sent_at', None) else None,
+                "reminders": [
+                    {
+                        "id": r.id,
+                        "reminder_number": r.reminder_number,
+                        "offset_minutes": r.offset_minutes,
+                        "enabled": r.enabled,
+                        "sent": r.sent,
+                        "sent_at": r.sent_at.isoformat() if r.sent_at else None,
+                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                        "updated_at": r.updated_at.isoformat() if r.updated_at else None
+                    }
+                    for r in (list(appointment.reminders) if hasattr(appointment, 'reminders') and appointment.reminders is not None else [])
+                ],
                 "patient": appointment.patient,
                 "office": appointment.office
             }
@@ -262,7 +312,11 @@ async def get_calendar_appointments(
         
         return result
     except Exception as e:
-        print(f"Error in get_calendar_appointments: {str(e)}")
+        api_logger.error(
+            "Error in get_calendar_appointments",
+            extra={"doctor_id": current_user.id},
+            exc_info=True
+        )
         return []
 
 
@@ -352,7 +406,7 @@ async def get_available_times_for_booking(
             FROM appointments 
             WHERE doctor_id = %s 
             AND DATE(appointment_date) = %s 
-            AND status IN ('confirmed', 'scheduled')
+            AND status IN ('confirmada', 'por_confirmar')
         """, (current_user.id, date))
         
         existing_appointments = cursor.fetchall()
@@ -403,17 +457,19 @@ async def get_available_times_for_booking(
         cursor.close()
         conn.close()
         
-        api_logger.info("Generated available times for booking", 
-                       doctor_id=current_user.id, 
-                       date=date, 
-                       count=len(available_times))
+        api_logger.info(
+            "Generated available times for booking",
+            extra={"doctor_id": current_user.id, "date": date, "count": len(available_times)}
+        )
         
         return {"available_times": available_times}
         
     except Exception as e:
-        api_logger.error(f"Error getting available times for booking: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        api_logger.error(
+            "Error getting available times for booking",
+            extra={"doctor_id": current_user.id, "date": date},
+            exc_info=True
+        )
         return {"available_times": []}
 
 
@@ -425,15 +481,23 @@ async def get_appointment(
 ):
     """Get specific appointment by ID"""
     try:
-        print(f"🔍 Getting appointment {appointment_id} for doctor {current_user.id}")
+        api_logger.info(
+            "🔍 Fetching appointment detail",
+            extra={"doctor_id": current_user.id, "appointment_id": appointment_id}
+        )
         
-        # Simple query first to debug
-        appointment = db.query(Appointment).filter(
+        # Query appointment with reminders
+        appointment = db.query(Appointment).options(
+            joinedload(Appointment.reminders)
+        ).filter(
             Appointment.id == appointment_id,
             Appointment.doctor_id == current_user.id
         ).first()
         
-        print(f"🔍 Appointment found: {appointment}")
+        api_logger.debug(
+            "🔍 Appointment lookup result",
+            extra={"doctor_id": current_user.id, "appointment_found": bool(appointment), "appointment_id": appointment_id}
+        )
         
         if not appointment:
             raise HTTPException(status_code=404, detail="Appointment not found or access denied")
@@ -455,10 +519,7 @@ async def get_appointment(
             "consultation_type": appointment.consultation_type,
             "office_id": appointment.office_id,
             "office_name": appointment.office.name if appointment.office else None,
-            "reason": appointment.reason,
-            "notes": appointment.notes,
             "status": appointment.status,
-            "priority": appointment.priority,
             "estimated_cost": str(getattr(appointment, 'estimated_cost', None)) if getattr(appointment, 'estimated_cost', None) else None,
             "insurance_covered": getattr(appointment, 'insurance_covered', None),
             "reminder_sent": getattr(appointment, 'reminder_sent', False),
@@ -467,6 +528,19 @@ async def get_appointment(
             "auto_reminder_enabled": getattr(appointment, 'auto_reminder_enabled', None),
             "auto_reminder_offset_minutes": getattr(appointment, 'auto_reminder_offset_minutes', None),
             "auto_reminder_sent_at": appointment.auto_reminder_sent_at.isoformat() if getattr(appointment, 'auto_reminder_sent_at', None) else None,
+            "reminders": [
+                {
+                    "id": r.id,
+                    "reminder_number": r.reminder_number,
+                    "offset_minutes": r.offset_minutes,
+                    "enabled": r.enabled,
+                    "sent": r.sent,
+                    "sent_at": r.sent_at.isoformat() if r.sent_at else None,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                    "updated_at": r.updated_at.isoformat() if r.updated_at else None
+                }
+                for r in (appointment.reminders if hasattr(appointment, 'reminders') and appointment.reminders else [])
+            ],
             "cancelled_reason": appointment.cancelled_reason,
             "cancelled_at": appointment.cancelled_at.isoformat() if appointment.cancelled_at else None,
             "created_at": appointment.created_at.isoformat(),
@@ -475,9 +549,11 @@ async def get_appointment(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error in get_appointment: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        api_logger.error(
+            "❌ Error in get_appointment",
+            extra={"doctor_id": current_user.id, "appointment_id": appointment_id},
+            exc_info=True
+        )
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
@@ -489,17 +565,166 @@ async def create_appointment(
 ):
     """Create new appointment"""
     try:
-        print(f"🔍 Endpoint Debug - Received appointment_data:")
-        print(f"📅 appointment_date: {appointment_data.appointment_date}")
-        print(f"📅 appointment_date type: {type(appointment_data.appointment_date)}")
-        print(f"📅 end_time: {appointment_data.end_time}")
-        print(f"📅 end_time type: {type(appointment_data.end_time)}")
+        # Log the entire appointment_data object as dict to see what Pydantic received
+        appointment_dict = appointment_data.dict() if hasattr(appointment_data, 'dict') else appointment_data.model_dump() if hasattr(appointment_data, 'model_dump') else str(appointment_data)
+        api_logger.debug(
+            "🔍 Received appointment creation payload",
+            extra={
+                "doctor_id": current_user.id,
+                "appointment_date": appointment_data.appointment_date,
+                "end_time": appointment_data.end_time,
+                "full_payload": appointment_dict,
+                "reminders_in_payload": appointment_dict.get('reminders') if isinstance(appointment_dict, dict) else None
+            }
+        )
+        
+        # Extract reminders from appointment_data before creating appointment
+        # Handle None, empty list, or missing attribute
+        reminders_data = []
+        if hasattr(appointment_data, 'reminders'):
+            api_logger.debug(
+                "🔍 Found reminders attribute",
+                extra={
+                    "reminders": appointment_data.reminders,
+                    "reminders_type": str(type(appointment_data.reminders)),
+                    "is_none": appointment_data.reminders is None,
+                    "reminders_repr": repr(appointment_data.reminders) if appointment_data.reminders else None
+                }
+            )
+            if appointment_data.reminders is not None:
+                reminders_data = list(appointment_data.reminders) if appointment_data.reminders else []
+        else:
+            api_logger.debug("⚠️ No reminders attribute found in appointment_data")
+        
+        api_logger.debug(
+            "📋 Processed reminders data",
+            extra={
+                "reminders_count": len(reminders_data),
+                "reminders": [{"reminder_number": r.reminder_number, "offset_minutes": r.offset_minutes, "enabled": r.enabled} for r in reminders_data] if reminders_data else []
+            }
+        )
+        
+        # Validate reminders: maximum 3, unique reminder_number
+        if len(reminders_data) > 3:
+            raise HTTPException(status_code=400, detail="Maximum 3 reminders allowed per appointment")
+        
+        # Only validate if there are reminders
+        if reminders_data:
+            reminder_numbers = [r.reminder_number for r in reminders_data]
+            if len(reminder_numbers) != len(set(reminder_numbers)):
+                raise HTTPException(status_code=400, detail="Reminder numbers must be unique (1, 2, or 3)")
+            
+            for reminder in reminders_data:
+                if reminder.reminder_number < 1 or reminder.reminder_number > 3:
+                    raise HTTPException(status_code=400, detail="Reminder number must be between 1 and 3")
+                if reminder.offset_minutes <= 0:
+                    raise HTTPException(status_code=400, detail="Offset minutes must be greater than 0")
         
         # Create the appointment using CRUD
         appointment = crud.create_appointment(db, appointment_data, current_user.id)
-        return appointment
+        
+        # Create reminders if provided
+        if reminders_data:
+            api_logger.info(
+                "📝 Creating reminders for appointment",
+                extra={
+                    "appointment_id": appointment.id,
+                    "reminder_count": len(reminders_data),
+                    "reminders": [{"reminder_number": r.reminder_number, "offset_minutes": r.offset_minutes, "enabled": r.enabled} for r in reminders_data]
+                }
+            )
+            try:
+                for reminder_data in reminders_data:
+                    reminder = AppointmentReminder(
+                        appointment_id=appointment.id,
+                        reminder_number=reminder_data.reminder_number,
+                        offset_minutes=reminder_data.offset_minutes,
+                        enabled=reminder_data.enabled
+                    )
+                    db.add(reminder)
+                db.commit()
+                api_logger.info(
+                    "✅ Created reminders for appointment",
+                    extra={"appointment_id": appointment.id, "reminder_count": len(reminders_data)}
+                )
+            except Exception as e:
+                db.rollback()
+                api_logger.error(
+                    "❌ Error creating reminders",
+                    extra={"appointment_id": appointment.id, "error": str(e)},
+                    exc_info=True
+                )
+                raise HTTPException(status_code=500, detail=f"Error al crear recordatorios: {str(e)}")
+        else:
+            api_logger.debug(
+                "ℹ️ No reminders to create",
+                extra={"appointment_id": appointment.id}
+            )
+        
+        # 🆕 Enviar aviso de privacidad automáticamente si es primera cita
+        # Compliance: LFPDPPP - Consentimiento previo requerido antes del tratamiento
+        # MEJOR PRÁCTICA: Enviar al agendar (no durante consulta) para que el paciente:
+        # 1. Reciba el aviso ANTES de la consulta
+        # 2. Pueda leerlo y aceptarlo con calma
+        # 3. Llegue al consultorio con consentimiento ya aceptado
+        consultation_type = appointment_data.consultation_type if hasattr(appointment_data, 'consultation_type') else appointment.consultation_type
+        is_first_time = consultation_type and consultation_type.lower() in ['primera vez', 'primera_vez', 'primera']
+        
+        if is_first_time:
+            try:
+                import sys
+                import os
+                sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+                from privacy_service import send_privacy_notice_automatically, check_if_first_appointment
+                
+                # Check if this is truly the first appointment
+                is_first_appointment = check_if_first_appointment(db, appointment.patient_id, current_user.id, appointment.id)
+                
+                if is_first_appointment:
+                    privacy_result = await send_privacy_notice_automatically(
+                        db=db,
+                        patient_id=appointment.patient_id,
+                        doctor=current_user,
+                        consultation_type=consultation_type,
+                        is_first_appointment=True
+                    )
+                    
+                    if privacy_result and privacy_result.get("success"):
+                        api_logger.info(
+                            "✅ Privacy notice sent automatically for first appointment",
+                            extra={
+                                "appointment_id": appointment.id,
+                                "patient_id": appointment.patient_id,
+                                "consent_id": privacy_result.get("consent_id")
+                            }
+                        )
+                    elif privacy_result and privacy_result.get("skipped"):
+                        api_logger.debug(
+                            f"ℹ️ Privacy notice auto-send skipped: {privacy_result.get('message')}",
+                            extra={"patient_id": appointment.patient_id, "appointment_id": appointment.id}
+                        )
+            except Exception as e:
+                # No fallar la creación de cita si falla el envío de aviso
+                api_logger.warning(
+                    f"⚠️ Error sending privacy notice automatically (non-blocking): {str(e)}",
+                    extra={"appointment_id": appointment.id, "patient_id": appointment.patient_id},
+                    exc_info=True
+                )
+        
+        # Reload appointment with reminders for response
+        appointment_with_reminders = db.query(Appointment).options(
+            joinedload(Appointment.patient),
+            joinedload(Appointment.doctor),
+            joinedload(Appointment.reminders)
+        ).filter(Appointment.id == appointment.id).first()
+        
+        return serialize_appointment(appointment_with_reminders) if appointment_with_reminders else appointment
     except Exception as e:
-        print(f"❌ Error in create_appointment: {str(e)}")
+        api_logger.error(
+            "❌ Error in create_appointment",
+            extra={"doctor_id": current_user.id},
+            exc_info=True
+        )
         raise HTTPException(status_code=500, detail=f"Error al crear la cita: {str(e)}")
 
 
@@ -544,21 +769,72 @@ async def update_appointment(
         if data_dict.get('end_time'):
             data_dict['end_time'] = to_cdmx_naive(data_dict['end_time'])
 
+        # Handle reminders update if provided
+        reminders_data = appointment_data.reminders if hasattr(appointment_data, 'reminders') and appointment_data.reminders is not None else None
+        
+        # Remove reminders from data_dict before passing to crud.update_appointment
+        # This prevents SQLAlchemy from trying to assign dict objects to the relationship
+        data_dict.pop('reminders', None)
+        
+        if reminders_data is not None:
+            # Validate reminders: maximum 3, unique reminder_number
+            if len(reminders_data) > 3:
+                raise HTTPException(status_code=400, detail="Maximum 3 reminders allowed per appointment")
+            
+            reminder_numbers = [r.reminder_number for r in reminders_data]
+            if len(reminder_numbers) != len(set(reminder_numbers)):
+                raise HTTPException(status_code=400, detail="Reminder numbers must be unique (1, 2, or 3)")
+            
+            for reminder in reminders_data:
+                if reminder.reminder_number < 1 or reminder.reminder_number > 3:
+                    raise HTTPException(status_code=400, detail="Reminder number must be between 1 and 3")
+                if reminder.offset_minutes <= 0:
+                    raise HTTPException(status_code=400, detail="Offset minutes must be greater than 0")
+            
+            # Delete existing reminders for this appointment
+            db.query(AppointmentReminder).filter(
+                AppointmentReminder.appointment_id == appointment_id
+            ).delete()
+            
+            # Create new reminders
+            for reminder_data in reminders_data:
+                reminder = AppointmentReminder(
+                    appointment_id=appointment_id,
+                    reminder_number=reminder_data.reminder_number,
+                    offset_minutes=reminder_data.offset_minutes,
+                    enabled=reminder_data.enabled
+                )
+                db.add(reminder)
+            
+            db.commit()
+            api_logger.info(
+                "✅ Updated reminders for appointment",
+                extra={"appointment_id": appointment_id, "reminder_count": len(reminders_data)}
+            )
+        
         # Update the appointment using CRUD (with normalized datetimes) pasando dict para evitar revalidación
         updated_appointment = crud.update_appointment(db, appointment_id, data_dict)
         
-        # Reload the appointment with relationships for the response
+        # Reload the appointment with relationships and reminders for the response
         updated_appointment_with_relations = db.query(Appointment).options(
             joinedload(Appointment.patient),
-            joinedload(Appointment.doctor)
+            joinedload(Appointment.doctor),
+            joinedload(Appointment.reminders)
         ).filter(Appointment.id == appointment_id).first()
         
-        print(f"✅ Appointment {appointment_id} updated successfully")
-        return updated_appointment_with_relations
+        api_logger.info(
+            "✅ Appointment updated successfully",
+            extra={"doctor_id": current_user.id, "appointment_id": appointment_id}
+        )
+        return serialize_appointment(updated_appointment_with_relations)
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error in update_appointment: {str(e)}")
+        api_logger.error(
+            "❌ Error in update_appointment",
+            extra={"doctor_id": current_user.id, "appointment_id": appointment_id},
+            exc_info=True
+        )
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
@@ -587,6 +863,10 @@ async def delete_appointment(
         
         db.commit()
         
+        api_logger.info(
+            "Appointment cancelled successfully",
+            extra={"doctor_id": current_user.id, "appointment_id": appointment_id}
+        )
         return {
             "message": "Appointment cancelled successfully",
             "appointment_id": appointment_id,
@@ -597,6 +877,10 @@ async def delete_appointment(
         raise
     except Exception as e:
         db.rollback()
-        print(f"❌ Error in delete_appointment: {str(e)}")
+        api_logger.error(
+            "❌ Error in delete_appointment",
+            extra={"doctor_id": current_user.id, "appointment_id": appointment_id},
+            exc_info=True
+        )
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 

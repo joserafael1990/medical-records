@@ -34,6 +34,7 @@ export interface ConsultationFormData {
   primary_diagnosis: string;
   secondary_diagnoses: string;
   treatment_plan: string;
+  follow_up_instructions: string;
   therapeutic_plan: string;
   laboratory_results: string;
   interconsultations: string;
@@ -195,6 +196,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
     primary_diagnosis: '',
     secondary_diagnoses: '',
     treatment_plan: '',
+    follow_up_instructions: '',
     therapeutic_plan: '',
     laboratory_results: '',
     interconsultations: '',
@@ -219,14 +221,36 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
     mapPatientDocument(null)
   );
   
+  // Track previous personalDocument values to avoid unnecessary updates
+  const prevPersonalDocumentRef = useRef<{ document_id: number | null; document_value: string; document_name?: string }>(personalDocument);
+  
   useEffect(() => {
-    setFormData(prev => ({
-      ...prev,
-      patient_document_id: personalDocument.document_id ?? null,
-      patient_document_value: personalDocument.document_value || '',
-      patient_document_name: personalDocument.document_name
-    }));
-  }, [personalDocument]);
+    // Only update if values actually changed
+    const hasChanged = 
+      prevPersonalDocumentRef.current.document_id !== personalDocument.document_id ||
+      prevPersonalDocumentRef.current.document_value !== personalDocument.document_value ||
+      prevPersonalDocumentRef.current.document_name !== personalDocument.document_name;
+    
+    if (hasChanged) {
+      prevPersonalDocumentRef.current = personalDocument;
+      setFormData(prev => {
+        // Only update if the values are actually different
+        if (
+          prev.patient_document_id === (personalDocument.document_id ?? null) &&
+          prev.patient_document_value === (personalDocument.document_value || '') &&
+          prev.patient_document_name === personalDocument.document_name
+        ) {
+          return prev; // No change needed
+        }
+        return {
+          ...prev,
+          patient_document_id: personalDocument.document_id ?? null,
+          patient_document_value: personalDocument.document_value || '',
+          patient_document_name: personalDocument.document_name
+        };
+      });
+    }
+  }, [personalDocument.document_id, personalDocument.document_value, personalDocument.document_name]);
   const [countries, setCountries] = useState<any[]>([]);
   const [states, setStates] = useState<any[]>([]);
   const [birthStates, setBirthStates] = useState<any[]>([]);
@@ -241,6 +265,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
   const loadedConsultationIdRef = useRef<string | number | undefined>(undefined);
   const hasInitializedRef = useRef(false);
   const lastConsultationIdRef = useRef<string | number | undefined>(undefined);
+  const isHydratingRef = useRef(false);
 
   // Filter appointments
   const availableAppointments = useMemo(() => {
@@ -264,65 +289,111 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
 
   // Load consultation data when editing
   useEffect(() => {
-    if (open && consultation) {
-      const consultationId = consultation.id;
-      if (!consultationId) return;
-      setCurrentConsultationId(consultationId);
-      logger.debug('Editing consultation loaded', {
-        consultationId,
-        patient_document_id: consultation.patient_document_id,
-        patient_document_value: consultation.patient_document_value,
-        patient_document_name: consultation.patient_document_name
-      }, 'ui');
-      
-      if (loadedConsultationIdRef.current === consultationId) {
+    let isMounted = true;
+
+    const hydrateConsultation = async () => {
+      if (!(open && consultation)) {
+        if (!open) {
+          loadedConsultationIdRef.current = undefined;
+          isHydratingRef.current = false;
+        }
         return;
       }
-      
-      loadedConsultationIdRef.current = consultationId;
-      logger.debug('Loading consultation data', { consultationId }, 'system');
 
-      setFormData({
-        ...initialFormData,
-        patient_id: consultation.patient_id || '',
-        patient_document_id: consultation.patient_document_id ?? null,
-        patient_document_value: consultation.patient_document_value || '',
-        patient_document_name: consultation.patient_document_name,
-        date: consultation.date ? consultation.date : getCDMXDateTime(),
-        chief_complaint: consultation.chief_complaint || '',
-        history_present_illness: consultation.history_present_illness || '',
-        family_history: consultation.family_history || '',
-        perinatal_history: consultation.perinatal_history || '',
-        gynecological_and_obstetric_history: consultation.gynecological_and_obstetric_history || '',
-        personal_pathological_history: consultation.personal_pathological_history || '',
-        personal_non_pathological_history: consultation.personal_non_pathological_history || '',
-        physical_examination: consultation.physical_examination || '',
-        primary_diagnosis: consultation.primary_diagnosis || '',
-        secondary_diagnoses: consultation.secondary_diagnoses || '',
-        treatment_plan: consultation.treatment_plan || '',
-        therapeutic_plan: consultation.therapeutic_plan || '',
-        laboratory_results: consultation.laboratory_results || '',
-        interconsultations: consultation.interconsultations || '',
-        doctor_name: consultation.doctor_name || initialFormData.doctor_name,
-        doctor_professional_license: consultation.doctor_professional_license || initialFormData.doctor_professional_license,
-        doctor_specialty: consultation.doctor_specialty || initialFormData.doctor_specialty,
-        primary_diagnoses: consultation.primary_diagnoses || [],
-        secondary_diagnoses_list: consultation.secondary_diagnoses_list || [],
-      });
+      const consultationId = consultation?.id;
+      if (!consultationId) {
+        return;
+      }
+
+      // Prevent multiple simultaneous hydration calls
+      if (isHydratingRef.current || loadedConsultationIdRef.current === consultationId) {
+        return;
+      }
+
+      isHydratingRef.current = true;
+      loadedConsultationIdRef.current = consultationId;
+
+      let resolvedConsultation = consultation;
+
+      if (
+        resolvedConsultation.id &&
+        typeof resolvedConsultation.follow_up_instructions === 'undefined'
+      ) {
+        try {
+          const fullConsultation = await apiService.consultations.getConsultationById(
+            resolvedConsultation.id.toString()
+          );
+          if (!isMounted) return;
+          resolvedConsultation = {
+            ...resolvedConsultation,
+            ...fullConsultation
+          };
+        } catch (error) {
+          logger.error('Error hydrating consultation data', error, 'api');
+        }
+      }
+
+      const finalConsultationId = resolvedConsultation.id;
+      if (!finalConsultationId) {
+        isHydratingRef.current = false;
+        return;
+      }
+      setCurrentConsultationId(finalConsultationId);
+      logger.debug('Editing consultation loaded', {
+        consultationId: finalConsultationId,
+        patient_document_id: resolvedConsultation.patient_document_id,
+        patient_document_value: resolvedConsultation.patient_document_value,
+        patient_document_name: resolvedConsultation.patient_document_name
+      }, 'ui');
+      
+      logger.debug('Loading consultation data', { consultationId: finalConsultationId }, 'system');
+
+      // Use current formData as base to avoid recreating from initialFormData which may change
+      setFormData(prev => ({
+        ...prev,
+        patient_id: resolvedConsultation.patient_id || '',
+        patient_document_id: resolvedConsultation.patient_document_id ?? null,
+        patient_document_value: resolvedConsultation.patient_document_value || '',
+        patient_document_name: resolvedConsultation.patient_document_name,
+        date: resolvedConsultation.date ? resolvedConsultation.date : getCDMXDateTime(),
+        chief_complaint: resolvedConsultation.chief_complaint || '',
+        history_present_illness: resolvedConsultation.history_present_illness || '',
+        family_history: resolvedConsultation.family_history || '',
+        perinatal_history: resolvedConsultation.perinatal_history || '',
+        gynecological_and_obstetric_history: resolvedConsultation.gynecological_and_obstetric_history || '',
+        personal_pathological_history: resolvedConsultation.personal_pathological_history || '',
+        personal_non_pathological_history: resolvedConsultation.personal_non_pathological_history || '',
+        physical_examination: resolvedConsultation.physical_examination || DEFAULT_PHYSICAL_EXAMINATION,
+        primary_diagnosis: resolvedConsultation.primary_diagnosis || '',
+        secondary_diagnoses: resolvedConsultation.secondary_diagnoses || '',
+        treatment_plan: resolvedConsultation.treatment_plan || '',
+        follow_up_instructions: resolvedConsultation.follow_up_instructions || '',
+        therapeutic_plan: resolvedConsultation.therapeutic_plan || '',
+        laboratory_results: resolvedConsultation.laboratory_results || '',
+        interconsultations: resolvedConsultation.interconsultations || '',
+        doctor_name: resolvedConsultation.doctor_name || doctorProfile?.first_name && doctorProfile?.last_name 
+          ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name} ${doctorProfile.last_name}`.trim()
+          : '',
+        doctor_professional_license: resolvedConsultation.doctor_professional_license || doctorProfile?.professional_license || '',
+        doctor_specialty: resolvedConsultation.doctor_specialty || doctorProfile?.specialty || '',
+        primary_diagnoses: resolvedConsultation.primary_diagnoses || [],
+        secondary_diagnoses_list: resolvedConsultation.secondary_diagnoses_list || [],
+      }));
 
       const loadPatientData = async () => {
-        if (consultation.patient_id) {
+        if (resolvedConsultation.patient_id) {
           try {
-            const patientData = await apiService.patients.getPatientById(consultation.patient_id);
+            const patientData = await apiService.patients.getPatientById(resolvedConsultation.patient_id);
+            if (!isMounted) return;
             setSelectedPatient(patientData);
             setPatientEditData(patientData);
             logger.debug('Patient data for consultation', {
-              consultationId,
+              consultationId: finalConsultationId,
               personal_documents: patientData.personal_documents
             }, 'ui');
-            if (consultation?.patient_document_id) {
+            if (resolvedConsultation?.patient_document_id) {
               const matchingDocument = (patientData.personal_documents || []).find(
-                (doc: any) => doc.document_id === consultation.patient_document_id
+                (doc: any) => doc.document_id === resolvedConsultation.patient_document_id
               );
               if (matchingDocument) {
                 setPersonalDocument(
@@ -332,20 +403,20 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
                       document_value: matchingDocument.document_value,
                       document_name: matchingDocument.document_name || matchingDocument.document?.name
                     },
-                    consultation.patient_document_value || '',
-                    consultation.patient_document_name
+                    resolvedConsultation.patient_document_value || '',
+                    resolvedConsultation.patient_document_name
                   )
                 );
               } else {
                 setPersonalDocument(
                   mapPatientDocument(
                     {
-                      document_id: consultation.patient_document_id,
-                      document_value: consultation.patient_document_value,
-                      document_name: consultation.patient_document_name
+                      document_id: resolvedConsultation.patient_document_id,
+                      document_value: resolvedConsultation.patient_document_value,
+                      document_name: resolvedConsultation.patient_document_name
                     },
-                    consultation.patient_document_value || '',
-                    consultation.patient_document_name
+                    resolvedConsultation.patient_document_value || '',
+                    resolvedConsultation.patient_document_name
                   )
                 );
               }
@@ -389,23 +460,23 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
             });
           };
 
-          if (consultation.primary_diagnosis) {
-            if (consultation.primary_diagnoses && Array.isArray(consultation.primary_diagnoses) && consultation.primary_diagnoses.length > 0) {
+          if (resolvedConsultation.primary_diagnosis) {
+            if (resolvedConsultation.primary_diagnoses && Array.isArray(resolvedConsultation.primary_diagnoses) && resolvedConsultation.primary_diagnoses.length > 0) {
               primaryDiagnosesHook.clearDiagnoses();
-              primaryDiagnosesHook.loadDiagnoses(consultation.primary_diagnoses);
+              primaryDiagnosesHook.loadDiagnoses(resolvedConsultation.primary_diagnoses);
             } else {
-              const parsedPrimary = parseDiagnosesFromText(consultation.primary_diagnosis);
+              const parsedPrimary = parseDiagnosesFromText(resolvedConsultation.primary_diagnosis);
               primaryDiagnosesHook.clearDiagnoses();
               primaryDiagnosesHook.loadDiagnoses(parsedPrimary);
             }
           }
 
-          if (consultation.secondary_diagnoses) {
-            if (consultation.secondary_diagnoses_list && Array.isArray(consultation.secondary_diagnoses_list) && consultation.secondary_diagnoses_list.length > 0) {
+          if (resolvedConsultation.secondary_diagnoses) {
+            if (resolvedConsultation.secondary_diagnoses_list && Array.isArray(resolvedConsultation.secondary_diagnoses_list) && resolvedConsultation.secondary_diagnoses_list.length > 0) {
               secondaryDiagnosesHook.clearDiagnoses();
-              secondaryDiagnosesHook.loadDiagnoses(consultation.secondary_diagnoses_list);
+              secondaryDiagnosesHook.loadDiagnoses(resolvedConsultation.secondary_diagnoses_list);
             } else {
-              const parsedSecondary = parseDiagnosesFromText(consultation.secondary_diagnoses);
+              const parsedSecondary = parseDiagnosesFromText(resolvedConsultation.secondary_diagnoses);
               secondaryDiagnosesHook.clearDiagnoses();
               secondaryDiagnosesHook.loadDiagnoses(parsedSecondary);
             }
@@ -415,22 +486,30 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
         }
       };
 
-      loadPatientData();
-      loadStructuredDiagnoses();
+      await Promise.all([loadPatientData(), loadStructuredDiagnoses()]);
 
-      logger.debug('Fetching prescriptions for consultation', { consultationId }, 'api');
-      clinicalStudiesHook.fetchStudies(String(consultation.id));
-      vitalSignsHook.fetchConsultationVitalSigns(String(consultation.id));
-      prescriptionsHook.fetchPrescriptions(String(consultation.id));
+      logger.debug('Fetching prescriptions for consultation', { consultationId: finalConsultationId }, 'api');
+      clinicalStudiesHook.fetchStudies(String(finalConsultationId));
+      vitalSignsHook.fetchConsultationVitalSigns(String(finalConsultationId));
+      prescriptionsHook.fetchPrescriptions(String(finalConsultationId));
       
-      if (consultation.appointment_id) {
-        loadOfficeForConsultation(consultation.appointment_id);
+      if (resolvedConsultation.appointment_id) {
+        loadOfficeForConsultation(resolvedConsultation.appointment_id);
       } else {
         loadDefaultOffice();
       }
-    } else if (!open) {
-      loadedConsultationIdRef.current = undefined;
-    }
+    };
+
+    hydrateConsultation().finally(() => {
+      if (isMounted) {
+        isHydratingRef.current = false;
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      isHydratingRef.current = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, consultation?.id]);
 
@@ -446,10 +525,41 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
 
     if (open && !consultation && !hasInitializedRef.current) {
       logger.debug('Setting up NEW consultation - clearing temporary prescriptions', undefined, 'ui');
-      setFormData(initialFormData);
+      // Reset form data to initial values
+      setFormData({
+        patient_id: '',
+        patient_document_id: null,
+        patient_document_value: '',
+        date: getCDMXDateTime(),
+        chief_complaint: '',
+        history_present_illness: '',
+        family_history: '',
+        perinatal_history: '',
+        gynecological_and_obstetric_history: '',
+        personal_pathological_history: '',
+        personal_non_pathological_history: '',
+        physical_examination: DEFAULT_PHYSICAL_EXAMINATION,
+        primary_diagnosis: '',
+        secondary_diagnoses: '',
+        treatment_plan: '',
+        follow_up_instructions: '',
+        therapeutic_plan: '',
+        laboratory_results: '',
+        interconsultations: '',
+        doctor_name: doctorProfile?.first_name && doctorProfile?.last_name 
+          ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name} ${doctorProfile.last_name}`.trim()
+          : '',
+        doctor_professional_license: doctorProfile?.professional_license || '',
+        doctor_specialty: doctorProfile?.specialty || '',
+        has_appointment: undefined as any,
+        appointment_id: '',
+        primary_diagnoses: [],
+        secondary_diagnoses_list: [],
+      });
       setSelectedAppointment(null);
       setSelectedPatient(null);
       setShowAdvancedPatientData(false);
+      setPersonalDocument(mapPatientDocument(null));
 
       clinicalStudiesHook.clearTemporaryStudies();
       vitalSignsHook.clearTemporaryVitalSigns();
@@ -1152,4 +1262,5 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
     isEditing
   };
 };
+
 

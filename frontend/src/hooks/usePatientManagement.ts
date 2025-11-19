@@ -3,7 +3,7 @@
  * Centralized hook for all patient-related operations extracted from App.tsx
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { apiService } from '../services';
 import { useAuth } from '../contexts/AuthContext';
 import type { Patient, PatientFormData } from '../types';
@@ -65,12 +65,22 @@ export const usePatientManagement = (onNavigate?: (view: string) => void): Patie
   // Authentication state
   const { isAuthenticated } = useAuth();
   
+  // Track if initial data has been loaded to prevent multiple calls
+  const hasLoadedInitialDataRef = useRef(false);
+  const isLoadingRef = useRef(false);
+  
   // Fetch patients from API (without search term - filtering is done on frontend)
   const fetchPatients = useCallback(async () => {
     if (!isAuthenticated) {
       return;
     }
     
+    // Prevent concurrent calls
+    if (isLoadingRef.current) {
+      return;
+    }
+    
+    isLoadingRef.current = true;
     setIsLoading(true);
     try {
       debugLog('🔍 Fetching patients from API...');
@@ -110,16 +120,24 @@ export const usePatientManagement = (onNavigate?: (view: string) => void): Patie
       throw error;
     } finally {
       setIsLoading(false);
+      isLoadingRef.current = false;
     }
   }, [isAuthenticated]);
   
   // Load patients on mount - only if authenticated
   useEffect(() => {
     if (!isAuthenticated) {
+      hasLoadedInitialDataRef.current = false;
       return;
     }
     
+    if (hasLoadedInitialDataRef.current) {
+      return;
+    }
+    
+    hasLoadedInitialDataRef.current = true;
     fetchPatients().catch(error => {
+      hasLoadedInitialDataRef.current = false; // Reset on error to allow retry
       console.warn('⚠️ Could not load patients on mount:', error.message);
     });
   }, [isAuthenticated, fetchPatients]);

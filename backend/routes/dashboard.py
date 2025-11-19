@@ -11,8 +11,10 @@ from datetime import date, timedelta
 from database import get_db, Person, Appointment
 from dependencies import get_current_user
 from appointment_service import AppointmentService
+from logger import get_logger
 
 router = APIRouter(prefix="/api", tags=["dashboard"])
+api_logger = get_logger("medical_records.api")
 
 
 @router.get("/dashboard/stats")
@@ -65,7 +67,7 @@ async def get_dashboard_stats(
             "total_patients": total_patients
         }
     except Exception as e:
-        print(f"❌ Error getting dashboard stats: {e}")
+        api_logger.error("Error getting dashboard stats", doctor_id=current_user.id, error=str(e))
         # Return safe defaults on error
         return {
             "appointments_today": 0,

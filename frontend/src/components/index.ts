@@ -2,7 +2,6 @@
 export { default as DashboardView } from './views/DashboardView';
 export { default as PatientsView } from './views/PatientsView';
 export { default as PatientsViewSmart } from './views/PatientsViewSmart';
-export { default as ConsultationsView } from './views/ConsultationsView';
 export { default as ConsultationsViewSmart } from './views/ConsultationsViewSmart';
 export { default as ConsultationDetailView } from './views/ConsultationDetailView';
 export { default as DoctorProfileView } from './views/DoctorProfileView';

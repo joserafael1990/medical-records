@@ -2,7 +2,7 @@
 // ERROR RIBBON COMPONENT - Componente reutilizable para mostrar errores
 // ============================================================================
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Paper, Box, Typography, IconButton } from '@mui/material';
 import { Warning as WarningIcon, Close as CloseIcon } from '@mui/icons-material';
 
@@ -48,6 +48,18 @@ export const ErrorRibbon: React.FC<ErrorRibbonProps> = ({
 }) => {
   const config = severityConfig[severity];
   const IconComponent = config.icon;
+
+  // Hacer scroll al inicio de la página cuando se muestra un error
+  useEffect(() => {
+    if (message && (severity === 'error' || severity === 'warning')) {
+      setTimeout(() => {
+        window.scrollTo({
+          top: 0,
+          behavior: 'smooth'
+        });
+      }, 200);
+    }
+  }, [message, severity]);
 
   if (!message) return null;
 

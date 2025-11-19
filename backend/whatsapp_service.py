@@ -363,13 +363,77 @@ class WhatsAppService:
         print(f"🗺️ Maps URL: {maps_url_final}")
         
         
-        return self.send_template_message(
+        # Get template name and language from environment or use defaults
+        # Note: Template name in Meta is 'appointment_remainder' (not 'appointment_reminder')
+        template_name = os.getenv('WHATSAPP_TEMPLATE_APPOINTMENT_REMINDER', 'appointment_remainder')
+        template_language = os.getenv('WHATSAPP_TEMPLATE_LANGUAGE', 'es')  # Default to 'es' (Spanish)
+        
+        # Log what we're trying to send
+        logger.info(f"📤 Attempting to send '{template_name}' template with language: '{template_language}'")
+        
+        result = self.send_template_message(
             to_phone=patient_phone,
-            template_name='appointment_reminder',
+            template_name=template_name,
             template_params=template_params,
-            language_code='es',
+            language_code=template_language,
             country_code=country_code
         )
+        
+        # If it fails with template translation error, try other Spanish variants
+        # Check both error message and details for the template translation error
+        error_text = str(result.get('error', '')).lower()
+        details = result.get('details', {})
+        
+        # Extract error message from nested structure if details is a dict
+        details_text = ''
+        if isinstance(details, dict):
+            # Check for nested error.message structure (Meta API format)
+            nested_error = details.get('error', {})
+            if isinstance(nested_error, dict):
+                details_text = str(nested_error.get('message', '')).lower()
+            else:
+                details_text = str(details).lower()
+        elif isinstance(details, str):
+            details_text = details.lower()
+        
+        # Check for template translation error (code 132001 or message contains "template name does not exist")
+        is_template_error = (
+            not result.get('success') and 
+            ('template name does not exist' in error_text or 
+             'template name does not exist' in details_text or
+             '132001' in error_text or
+             '132001' in details_text or
+             (isinstance(details, dict) and 
+              isinstance(details.get('error'), dict) and
+              details.get('error', {}).get('code') == 132001))
+        )
+        
+        if is_template_error:
+            logger.warning(f"⚠️ Template '{template_name}' failed with language '{template_language}', trying other Spanish variants...")
+            logger.debug(f"🔍 Error details: {result.get('error')}, Details: {result.get('details')}")
+            
+            # Try common Spanish language codes (prioritize es_MX, then es, then others)
+            # Remove the one we already tried from the list
+            spanish_variants = ['es_MX', 'es_ES', 'es_AR', 'es_CO', 'es_CL', 'es_PE', 'es_VE']
+            if template_language in spanish_variants:
+                spanish_variants.remove(template_language)
+            
+            for variant in spanish_variants:
+                logger.info(f"📤 Trying language code: '{variant}'")
+                result = self.send_template_message(
+                    to_phone=patient_phone,
+                    template_name=template_name,
+                    template_params=template_params,
+                    language_code=variant,
+                    country_code=country_code
+                )
+                if result.get('success'):
+                    logger.info(f"✅ Success with language code: '{variant}'")
+                    break
+                else:
+                    logger.debug(f"❌ Failed with language code '{variant}': {result.get('error')}")
+        
+        return result
     
     def send_lab_results_notification(
         self,

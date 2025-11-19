@@ -72,14 +72,14 @@ describe('useAgendaView', () => {
       id: 1,
       date_time: '2024-01-15T09:00:00',
       patient: { first_name: 'Juan', paternal_surname: 'Pérez' },
-      status: 'confirmed',
+      status: 'confirmada',
       office: { name: 'Consultorio 1' }
     },
     {
       id: 2,
       date_time: '2024-01-15T14:00:00',
       patient: { first_name: 'María', paternal_surname: 'García' },
-      status: 'confirmed',
+      status: 'por_confirmar',
       office: { name: 'Consultorio 2' }
     },
     {
@@ -297,7 +297,8 @@ describe('useAgendaView', () => {
       expect(result.current.getStatusColor).toBeDefined();
     });
 
-    expect(result.current.getStatusColor('confirmed')).toBe('success');
+    expect(result.current.getStatusColor('confirmada')).toBe('success');
+    expect(result.current.getStatusColor('por_confirmar')).toBe('primary');
     expect(result.current.getStatusColor('cancelled')).toBe('error');
     expect(result.current.getStatusColor('completed')).toBe('primary');
     expect(result.current.getStatusColor('unknown')).toBe('default');
@@ -316,7 +317,8 @@ describe('useAgendaView', () => {
       expect(result.current.getStatusLabel).toBeDefined();
     });
 
-    expect(result.current.getStatusLabel('confirmed')).toBe('Confirmada');
+    expect(result.current.getStatusLabel('confirmada')).toBe('Confirmada');
+    expect(result.current.getStatusLabel('por_confirmar')).toBe('Por confirmar');
     expect(result.current.getStatusLabel('cancelled')).toBe('Cancelada');
     expect(result.current.getStatusLabel('completed')).toBe('Completada');
   });

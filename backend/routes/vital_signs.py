@@ -10,8 +10,10 @@ from datetime import datetime
 
 from database import get_db, Person, VitalSign, ConsultationVitalSign, MedicalRecord
 from dependencies import get_current_user
+from logger import get_logger
 
 router = APIRouter(prefix="/api", tags=["vital-signs"])
+api_logger = get_logger("medical_records.api")
 
 
 @router.get("/vital-signs")
@@ -20,7 +22,7 @@ async def get_vital_signs(
     current_user: Person = Depends(get_current_user)
 ):
     """Get all available vital signs"""
-    print(f"🫀 Getting vital signs for user {current_user.id}")
+    api_logger.info("Getting vital signs catalog", doctor_id=current_user.id)
     
     try:
         vital_signs = db.query(VitalSign).order_by(VitalSign.name).all()
@@ -34,11 +36,11 @@ async def get_vital_signs(
             }
             vital_signs_data.append(vital_sign_data)
         
-        print(f"✅ Found {len(vital_signs_data)} vital signs")
+        api_logger.info("Vital signs fetched", doctor_id=current_user.id, count=len(vital_signs_data))
         return vital_signs_data
         
     except Exception as e:
-        print(f"❌ Error getting vital signs: {e}")
+        api_logger.error("Error getting vital signs", doctor_id=current_user.id, error=str(e))
         raise HTTPException(status_code=500, detail="Error retrieving vital signs")
 
 
@@ -49,7 +51,11 @@ async def get_consultation_vital_signs(
     current_user: Person = Depends(get_current_user)
 ):
     """Get vital signs for a specific consultation"""
-    print(f"🫀 Getting vital signs for consultation: {consultation_id}")
+    api_logger.info(
+        "Getting consultation vital signs",
+        doctor_id=current_user.id,
+        consultation_id=consultation_id
+    )
     
     try:
         # Verify consultation exists and user has access
@@ -59,7 +65,11 @@ async def get_consultation_vital_signs(
         ).first()
         
         if not consultation:
-            print(f"🫀 Consultation {consultation_id} not found or no access for user {current_user.id}")
+            api_logger.warning(
+                "Consultation not found or inaccessible while fetching vital signs",
+                doctor_id=current_user.id,
+                consultation_id=consultation_id
+            )
             return []
 
         # Get vital signs for this consultation
@@ -67,7 +77,12 @@ async def get_consultation_vital_signs(
             ConsultationVitalSign.consultation_id == consultation_id
         ).all()
         
-        print(f"🫀 Found {len(consultation_vital_signs)} vital signs for consultation {consultation_id}")
+        api_logger.info(
+            "Consultation vital signs loaded",
+            doctor_id=current_user.id,
+            consultation_id=consultation_id,
+            count=len(consultation_vital_signs)
+        )
         
         # Convert to response format
         vital_signs_data = []
@@ -87,7 +102,12 @@ async def get_consultation_vital_signs(
         return vital_signs_data
         
     except Exception as e:
-        print(f"❌ Error getting consultation vital signs: {e}")
+        api_logger.error(
+            "Error getting consultation vital signs",
+            doctor_id=current_user.id,
+            consultation_id=consultation_id,
+            error=str(e)
+        )
         raise HTTPException(status_code=500, detail="Error retrieving consultation vital signs")
 
 
@@ -99,14 +119,18 @@ async def create_consultation_vital_sign(
     current_user: Person = Depends(get_current_user)
 ):
     """Create or update a vital sign for a consultation"""
-    print(f"🫀 Creating vital sign for consultation {consultation_id}: {vital_sign_data}")
+    api_logger.info(
+        "Creating/updating consultation vital sign",
+        doctor_id=current_user.id,
+        consultation_id=consultation_id
+    )
     
     try:
         # Handle temp_consultation case (when consultation hasn't been created yet)
         if consultation_id == "temp_consultation":
             # For temp consultations, just return success without saving to DB
             # The vital sign will be saved when the consultation is created
-            print(f"🫀 Temp consultation - returning mock response")
+            api_logger.debug("Temp consultation - returning mock response for vital signs")
             return {
                 "id": 0,
                 "consultation_id": None,
@@ -167,7 +191,12 @@ async def create_consultation_vital_sign(
                 "updated_at": existing_cv_sign.updated_at.isoformat() if existing_cv_sign.updated_at else None
             }
             
-            print(f"✅ Updated vital sign {existing_cv_sign.id}")
+            api_logger.info(
+                "Updated consultation vital sign",
+                doctor_id=current_user.id,
+                consultation_id=consultation_id_int,
+                vital_sign_id=existing_cv_sign.id
+            )
             return response_data
         else:
             # Create new vital sign
@@ -193,13 +222,23 @@ async def create_consultation_vital_sign(
                 "updated_at": new_cv_sign.updated_at.isoformat() if new_cv_sign.updated_at else None
             }
             
-            print(f"✅ Created vital sign {new_cv_sign.id}")
+            api_logger.info(
+                "Created consultation vital sign",
+                doctor_id=current_user.id,
+                consultation_id=consultation_id_int,
+                vital_sign_id=new_cv_sign.id
+            )
             return response_data
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error creating consultation vital sign: {e}")
+        api_logger.error(
+            "Error creating consultation vital sign",
+            doctor_id=current_user.id,
+            consultation_id=consultation_id,
+            error=str(e)
+        )
         raise HTTPException(status_code=500, detail="Error creating consultation vital sign")
 
 
@@ -211,7 +250,12 @@ async def delete_consultation_vital_sign(
     current_user: Person = Depends(get_current_user)
 ):
     """Delete a vital sign from a consultation"""
-    print(f"🫀 Deleting vital sign {vital_sign_id} from consultation {consultation_id}")
+    api_logger.info(
+        "Deleting consultation vital sign",
+        doctor_id=current_user.id,
+        consultation_id=consultation_id,
+        vital_sign_id=vital_sign_id
+    )
     
     try:
         # Verify consultation exists and user has access
@@ -236,13 +280,24 @@ async def delete_consultation_vital_sign(
         db.delete(cv_sign)
         db.commit()
         
-        print(f"✅ Deleted vital sign {vital_sign_id} from consultation {consultation_id}")
+        api_logger.info(
+            "Deleted consultation vital sign",
+            doctor_id=current_user.id,
+            consultation_id=consultation_id,
+            vital_sign_id=vital_sign_id
+        )
         return {"message": "Vital sign deleted successfully", "id": vital_sign_id}
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error deleting consultation vital sign: {e}")
+        api_logger.error(
+            "Error deleting consultation vital sign",
+            doctor_id=current_user.id,
+            consultation_id=consultation_id,
+            vital_sign_id=vital_sign_id,
+            error=str(e)
+        )
         db.rollback()
         raise HTTPException(status_code=500, detail="Error deleting consultation vital sign")
 

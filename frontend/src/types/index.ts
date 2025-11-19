@@ -41,6 +41,10 @@ export interface PatientFormData {
   insurance_number?: string;
   active?: boolean;
   is_active?: boolean;
+  documents?: Array<{
+    document_id: number;
+    document_value: string;
+  }>;
 }
 
 export interface ApiError {
@@ -65,6 +69,7 @@ export interface MedicalRecord {
   history_present_illness: string;
   family_history: string;
   perinatal_history: string;
+  gynecological_and_obstetric_history: string;
   personal_pathological_history: string;
   personal_non_pathological_history: string;
   physical_examination: string;
@@ -88,6 +93,27 @@ export interface MedicalRecord {
   doctor?: any; // Person type will be defined later
 }
 
+export interface Consultation {
+  id: number | string;
+  patient_id: number | string;
+  doctor_id?: number | string;
+  consultation_date?: string;
+  consultation_type?: string;
+  chief_complaint?: string;
+  primary_diagnosis?: string;
+  secondary_diagnoses?: string;
+  treatment_plan?: string;
+  prescribed_medications?: string;
+  laboratory_results?: string;
+  notes?: string;
+  patient_name?: string;
+  doctor_name?: string;
+  patient_document_id?: number | null;
+  patient_document_value?: string;
+  patient_document_name?: string;
+  [key: string]: any;
+}
+
 export interface MedicalRecordFormData {
   patient_id: number;
   consultation_date: string;
@@ -95,6 +121,7 @@ export interface MedicalRecordFormData {
   history_present_illness: string;
   family_history: string;
   perinatal_history: string;
+  gynecological_and_obstetric_history: string;
   personal_pathological_history: string;
   personal_non_pathological_history: string;
   physical_examination: string;
@@ -105,6 +132,31 @@ export interface MedicalRecordFormData {
   prescribed_medications?: string;
   laboratory_results?: string;
   notes?: string;
+}
+
+export interface ConsultationFormData {
+  patient_id: string | number;
+  patient_document_id?: number | null;
+  patient_document_value?: string;
+  date?: string;
+  chief_complaint?: string;
+  history_present_illness?: string;
+  family_history?: string;
+  perinatal_history?: string;
+  gynecological_and_obstetric_history?: string;
+  personal_pathological_history?: string;
+  personal_non_pathological_history?: string;
+  physical_examination?: string;
+  primary_diagnosis?: string;
+  secondary_diagnoses?: string;
+  treatment_plan?: string;
+  follow_up_instructions?: string;
+  therapeutic_plan?: string;
+  laboratory_results?: string;
+  interconsultations?: string;
+  notes?: string;
+  folio?: string;
+  nextAppointmentDate?: string | null;
 }
 
 // ============================================================================
@@ -127,6 +179,12 @@ export interface ClinicalStudy {
   ordering_doctor: string;
   urgency: UrgencyLevel;
   clinical_indication?: string;
+  study_description?: string;
+  institution?: string;
+  performing_doctor?: string;
+  results_text?: string;
+  interpretation?: string;
+  relevant_history?: string;
   file_name?: string;
   file_path?: string;
   file_type?: string;
@@ -146,6 +204,12 @@ export interface CreateClinicalStudyData {
   ordering_doctor: string;
   urgency?: UrgencyLevel;
   clinical_indication?: string;
+  study_description?: string;
+  institution?: string;
+  performing_doctor?: string;
+  results_text?: string;
+  interpretation?: string;
+  relevant_history?: string;
   file?: File;
 }
 
@@ -186,6 +250,7 @@ export interface StudyCatalog {
   created_at: string;
   updated_at: string;
   category?: StudyCategory;
+  description?: string;
 }
 
 // StudyTemplateItem interface removed - table deleted
@@ -207,7 +272,7 @@ export interface StudyTemplate_removed {
   is_default: boolean;
   created_at: string;
   updated_at: string;
-  template_items: StudyTemplateItem[];
+  template_items: StudyTemplateItem_removed[];
 }
 
 // StudyTemplateCreate removed - table deleted
@@ -226,6 +291,7 @@ export interface StudySearchFilters {
   duration_hours?: number;
   // has_normal_values removed - table deleted
   is_active?: boolean;
+  limit?: number;
 }
 
 export interface StudyRecommendation {
@@ -262,7 +328,10 @@ export interface ConsultationVitalSign {
 export interface Medication {
   id: number;
   name: string;
+  created_by: number;
+  is_active: boolean;
   created_at?: string;
+  updated_at?: string;
 }
 
 export interface ConsultationPrescription {
@@ -278,6 +347,15 @@ export interface ConsultationPrescription {
   via_administracion?: string;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface DocumentFolio {
+  consultation_id: number;
+  doctor_id: number;
+  document_type: 'prescription' | 'study_order';
+  folio_number: number;
+  formatted_folio: string;
+  created_at?: string | null;
 }
 
 export interface CreatePrescriptionData {
@@ -317,12 +395,13 @@ export interface PrivacyNotice {
   version: string;
   title: string;
   content: string;
-  summary?: string;
+  short_summary?: string;
+  summary?: string; // Legacy support
   effective_date: string;
   expiration_date?: string;
   is_active: boolean;
   created_at: string;
-  updated_at: string;
+  updated_at?: string; // Optional, may not exist in DB
 }
 
 export interface PrivacyConsent {
@@ -463,6 +542,18 @@ export interface AppointmentType {
   updated_at: string;
 }
 
+export interface AppointmentReminder {
+  id: number;
+  appointment_id: number;
+  reminder_number: number; // 1, 2, or 3
+  offset_minutes: number; // Time before appointment in minutes
+  enabled: boolean;
+  sent: boolean;
+  sent_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Appointment {
   id: number;
   patient_id: number;
@@ -473,17 +564,15 @@ export interface Appointment {
   office_id?: number;
   consultation_type?: string;
   status: string;
-  priority: string;
-  reason: string;
-  notes?: string;
   preparation_instructions?: string;
   estimated_cost?: number;
   insurance_covered: boolean;
   confirmation_required: boolean;
-  reminder_sent: boolean;
-  reminder_sent_at?: string;
-  auto_reminder_enabled?: boolean;
-  auto_reminder_offset_minutes?: number;
+  reminder_sent: boolean; // Deprecated - use reminders array
+  reminder_sent_at?: string; // Deprecated
+  auto_reminder_enabled?: boolean; // Deprecated - use reminders array
+  auto_reminder_offset_minutes?: number; // Deprecated - use reminders array
+  reminders?: AppointmentReminder[]; // Up to 3 reminders
   cancelled_reason?: string;
   cancelled_at?: string;
   cancelled_by?: number;
@@ -502,6 +591,12 @@ export interface Appointment {
 // UPDATED EXISTING TYPES
 // ============================================================================
 
+export interface AppointmentReminderFormData {
+  reminder_number: number; // 1, 2, or 3
+  offset_minutes: number; // Time before appointment in minutes
+  enabled: boolean;
+}
+
 export interface AppointmentFormData {
   patient_id: number;
   doctor_id: number;
@@ -511,18 +606,17 @@ export interface AppointmentFormData {
   office_id?: number;
   consultation_type?: string;
   status?: string;
-  priority?: string;
-  reason: string;
-  notes?: string;
   preparation_instructions?: string;
   estimated_cost?: number;
   insurance_covered?: boolean;
   confirmation_required?: boolean;
-  reminder_sent?: boolean;
-  reminder_sent_at?: string;
-  // Auto reminder fields
+  reminder_sent?: boolean; // Deprecated
+  reminder_sent_at?: string; // Deprecated
+  // Auto reminder fields (deprecated - use reminders array)
   auto_reminder_enabled?: boolean;
   auto_reminder_offset_minutes?: number;
+  // New multiple reminders system
+  reminders?: AppointmentReminderFormData[]; // Up to 3 reminders
   cancelled_reason?: string;
   cancelled_at?: string;
   cancelled_by?: number;
@@ -570,4 +664,40 @@ export interface DoctorProfile {
   created_by?: number;
   offices?: Office[];
   specialty?: string; // Para compatibilidad con componentes que usan specialty directamente
+  avatar_type?: 'initials' | 'preloaded' | 'custom';
+  avatar_template_key?: string | null;
+  avatar_file_path?: string | null;
+  avatar_url?: string | null;
+  avatar?: {
+    avatar_type: 'initials' | 'preloaded' | 'custom';
+    avatar_template_key?: string | null;
+    avatar_file_path?: string | null;
+    url?: string | null;
+    avatar_url?: string | null;
+  };
+}
+
+export interface DoctorFormData {
+  title: string;
+  name: string;
+  email: string;
+  primary_phone: string;
+  birth_date: string;
+  gender: string;
+  professional_license?: string;
+  specialty_license?: string;
+  university?: string;
+  graduation_year?: string;
+  specialty?: string;
+  subspecialty?: string;
+  professional_email?: string;
+  office_phone?: string;
+  phone?: string; // For backward compatibility
+  office_address?: string;
+  office_city?: string;
+  office_state_id?: string;
+  office_country?: string;
+  office_postal_code?: string;
+  office_timezone?: string;
+  appointment_duration?: string;
 }

@@ -18,7 +18,7 @@ import crud
 import schemas
 from audit_service import audit_service
 
-api_logger = get_logger("api")
+api_logger = get_logger("medical_records.api")
 
 router = APIRouter(prefix="/api", tags=["auth"])
 
@@ -30,14 +30,14 @@ async def register_doctor(
 ):
     """Register new doctor with automatic login"""
     try:
-        print(f"📝 Registration attempt for email: {doctor_data.email}")
+        api_logger.info("Registration attempt", email=doctor_data.email)
         db.begin()
         
         # Check if email already exists
         existing_email = db.query(Person).filter(Person.email == doctor_data.email).first()
-        print(f"📝 Email check result: {existing_email is not None}")
+        api_logger.debug("Email existence check completed", email=doctor_data.email, exists=bool(existing_email))
         if existing_email:
-            print(f"❌ Email already exists: {doctor_data.email}")
+            api_logger.warning("Registration blocked - email already exists", email=doctor_data.email)
             db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -263,8 +263,7 @@ async def register_doctor(
             error_type=type(e).__name__,
             traceback=traceback.format_exc()
         )
-        print(f"❌ Registration error: {str(e)}")
-        print(f"❌ Error type: {type(e).__name__}")
+        api_logger.error("Registration error", email=doctor_data.email, error=str(e), error_type=type(e).__name__)
         traceback.print_exc()
         
         # Handle specific database constraint violations
@@ -478,13 +477,17 @@ async def request_password_reset(
             }
         else:
             # Log error pero no exponerlo al usuario
-            print(f"❌ Error sending password reset email: {email_result.get('error')}")
+            api_logger.error(
+                "Error sending password reset email",
+                email=email,
+                error=email_result.get('error')
+            )
             return {
                 "message": "Si el correo existe, recibirás un enlace para restablecer tu contraseña"
             }
             
     except Exception as e:
-        print(f"❌ Error in password reset request: {str(e)}")
+        api_logger.error("Error in password reset request", email=email, error=str(e))
         # Por seguridad, retornar siempre éxito
         return {
             "message": "Si el correo existe, recibirás un enlace para restablecer tu contraseña"
@@ -544,7 +547,7 @@ async def confirm_password_reset(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error in password reset confirm: {str(e)}")
+        api_logger.error("Error in password reset confirmation", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error al restablecer contraseña"

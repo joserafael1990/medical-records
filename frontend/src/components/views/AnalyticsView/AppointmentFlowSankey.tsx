@@ -159,7 +159,7 @@ export const AppointmentFlowSankey: React.FC<AppointmentFlowSankeyProps> = ({
               Pacientes
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {appointmentFlow.noShowOrPending} ({percentages.noShowOrPending}%)
+              {appointmentFlow.pending} ({percentages.pending}%)
             </Typography>
           </Box>
         </Box>

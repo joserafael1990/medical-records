@@ -5,6 +5,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { VitalSign, ConsultationVitalSign, VitalSignFormData } from '../types';
 import { apiService } from '../services';
+import { logger } from '../utils/logger';
 
 export interface UseVitalSignsReturn {
   // State
@@ -84,7 +85,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
       
       setAvailableVitalSigns(vitalSignsData);
     } catch (err: any) {
-      console.error('❌ Error fetching available vital signs:', err);
+      logger.error('Error fetching available vital signs', err, 'api');
       setError(err.message || 'Error fetching available vital signs');
     } finally {
       setIsLoading(false);
@@ -112,7 +113,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
       const vitalSignsData = response.data || response;
       setConsultationVitalSigns(vitalSignsData);
     } catch (err: any) {
-      console.error('❌ Error fetching consultation vital signs:', err);
+      logger.error('Error fetching consultation vital signs', err, 'api');
       setError(err.message || 'Error fetching consultation vital signs');
     } finally {
       setIsLoading(false);
@@ -135,7 +136,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
       
       return newVitalSign;
     } catch (err: any) {
-      console.error('❌ Error creating vital sign:', err);
+      logger.error('Error creating vital sign', err, 'api');
       throw err;
     }
   }, []);
@@ -155,7 +156,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
       
       return updatedVitalSign;
     } catch (err: any) {
-      console.error('❌ Error updating vital sign:', err);
+      logger.error('Error updating vital sign', err, 'api');
       throw err;
     }
   }, []);
@@ -176,7 +177,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
         setConsultationVitalSigns(prev => prev.filter(vs => vs.id !== vitalSignId));
       }
     } catch (err: any) {
-      console.error('❌ Error deleting vital sign:', err);
+      logger.error('Error deleting vital sign', err, 'api');
       throw err;
     }
   }, []);
@@ -272,7 +273,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
         closeDialog();
       }
     } catch (err: any) {
-      console.error('❌ Error submitting vital sign form:', err);
+      logger.error('Error submitting vital sign form', err, 'api');
       setError(err.message || 'Error saving vital sign');
     } finally {
       setIsSubmitting(false);

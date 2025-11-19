@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { StudyCatalog, StudyCategory, StudySearchFilters, StudyRecommendation } from '../types';
 import { apiService } from '../services';
 
@@ -41,14 +41,12 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
 
   const fetchStudies = useCallback(async (filters?: StudySearchFilters) => {
     try {
-      console.log('🔍 Fetching studies with filters:', filters);
       setIsLoading(true);
       setError(null);
       
       // Check authentication
       const token = localStorage.getItem('token');
       if (!token) {
-        console.error('❌ No authentication token found');
         setError('No hay sesión activa');
         return;
       }
@@ -63,43 +61,27 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
       params.append('limit', '500');
       
       const url = `/api/study-catalog?${params.toString()}`;
-      console.log('🌐 Making request to:', url);
       
       const response = await apiService.clinicalStudies.api.get(url);
-      console.log('✅ Studies response:', response);
-      console.log('✅ Studies response.data:', response.data);
-      console.log('✅ Studies response.data type:', typeof response.data);
-      console.log('✅ Studies response.data length:', response.data?.length || 0);
       
       // Handle different response structures (same as medications and diagnoses)
       let studiesArray = [];
       if (Array.isArray(response.data)) {
-        console.log('✅ Using response.data (array)');
         studiesArray = response.data;
       } else if (Array.isArray(response)) {
-        console.log('✅ Using response directly (array)');
         studiesArray = response;
       } else if (response && typeof response === 'object') {
-        console.log('✅ Response is object, checking for array properties');
-        console.log('✅ Response keys:', Object.keys(response));
         // Try to find the array in the response
         for (const key in response) {
           if (Array.isArray(response[key])) {
-            console.log(`✅ Found array in key: ${key}`);
             studiesArray = response[key];
             break;
           }
         }
       }
       
-      console.log('✅ Final studies array:', studiesArray);
-      console.log('✅ Final studies array length:', studiesArray.length);
-      
       setStudies(studiesArray);
     } catch (err: any) {
-      console.error('❌ Error fetching studies:', err);
-      console.error('❌ Error response:', err.response?.data);
-      console.error('❌ Error status:', err.response?.status);
       setError(err.response?.data?.detail || 'Error al cargar estudios');
     } finally {
       setIsLoading(false);
@@ -111,41 +93,26 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
       setIsLoading(true);
       setError(null);
       
-      console.log('🔍 Fetching study categories...');
       const response = await apiService.clinicalStudies.api.get('/api/study-categories');
-      console.log('✅ Categories response:', response);
-      console.log('✅ Categories response.data:', response.data);
-      console.log('✅ Categories response.data type:', typeof response.data);
-      console.log('✅ Categories response.data length:', response.data?.length || 0);
       
       // Handle different response structures (same as studies and medications)
       let categoriesArray = [];
       if (Array.isArray(response.data)) {
-        console.log('✅ Using response.data (array)');
         categoriesArray = response.data;
       } else if (Array.isArray(response)) {
-        console.log('✅ Using response directly (array)');
         categoriesArray = response;
       } else if (response && typeof response === 'object') {
-        console.log('✅ Response is object, checking for array properties');
-        console.log('✅ Response keys:', Object.keys(response));
         // Try to find the array in the response
         for (const key in response) {
           if (Array.isArray(response[key])) {
-            console.log(`✅ Found array in key: ${key}`);
             categoriesArray = response[key];
             break;
           }
         }
       }
       
-      console.log('✅ Final categories array:', categoriesArray);
-      console.log('✅ Final categories array length:', categoriesArray.length);
-      
       setCategories(categoriesArray);
     } catch (err: any) {
-      console.error('❌ Error fetching categories:', err);
-      console.error('❌ Error response:', err.response?.data);
       setError(err.response?.data?.detail || 'Error al cargar categorías');
     } finally {
       setIsLoading(false);
@@ -159,8 +126,6 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
       setIsLoading(true);
       setError(null);
       
-      console.log('🔍 Searching studies with query:', query, 'filters:', filters);
-      
       const params = new URLSearchParams();
       params.append('search', query);
       if (filters?.category_id) params.append('category_id', filters.category_id.toString());
@@ -168,37 +133,24 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
       params.append('limit', '50');
       
       const url = `/api/study-catalog?${params.toString()}`;
-      console.log('🌐 Making request to:', url);
       
       const response = await apiService.clinicalStudies.api.get(url);
-      console.log('✅ Studies search response:', response);
-      console.log('✅ Studies search response.data:', response.data);
-      console.log('✅ Studies search response.data type:', typeof response.data);
-      console.log('✅ Studies search response.data length:', response.data?.length || 0);
       
       // Handle different response structures (same as medications and diagnoses)
       let studiesArray = [];
       if (Array.isArray(response.data)) {
-        console.log('✅ Using response.data (array)');
         studiesArray = response.data;
       } else if (Array.isArray(response)) {
-        console.log('✅ Using response directly (array)');
         studiesArray = response;
       } else if (response && typeof response === 'object') {
-        console.log('✅ Response is object, checking for array properties');
-        console.log('✅ Response keys:', Object.keys(response));
         // Try to find the array in the response
         for (const key in response) {
           if (Array.isArray(response[key])) {
-            console.log(`✅ Found array in key: ${key}`);
             studiesArray = response[key];
             break;
           }
         }
       }
-      
-      console.log('✅ Final studies array:', studiesArray);
-      console.log('✅ Final studies array length:', studiesArray.length);
       
       // Map the response to include description field for StudyCatalog type
       const mappedStudies = studiesArray.map((study: any) => ({
@@ -214,8 +166,6 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
       
       setStudies(mappedStudies);
     } catch (err: any) {
-      console.error('❌ Error searching studies:', err);
-      console.error('❌ Error response:', err.response?.data);
       setError(err.response?.data?.detail || 'Error en la búsqueda');
     } finally {
       setIsLoading(false);
@@ -275,17 +225,25 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
     return studies.filter(study => study.category_id === categoryId);
   }, [studies]);
 
-  // Load initial data
+  // Track if initial data has been loaded to prevent multiple calls
+  const hasLoadedInitialDataRef = useRef(false);
+
+  // Load initial data only once
   useEffect(() => {
+    if (hasLoadedInitialDataRef.current) {
+      return;
+    }
+
     const loadInitialData = async () => {
       try {
+        hasLoadedInitialDataRef.current = true;
         // Load critical data first
         await Promise.all([
           fetchCategories(),
           fetchStudies()
         ]);
       } catch (err) {
-        console.error('❌ Error loading initial study data:', err);
+        hasLoadedInitialDataRef.current = false; // Reset on error to allow retry
         // Don't set error state for non-critical failures
         if (err instanceof Error && !err.message.includes('studies')) {
           setError(err.message);
@@ -295,9 +253,6 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
     
     loadInitialData();
   }, [fetchCategories, fetchStudies]);
-
-  useEffect(() => {
-  }, [studies, categories]);
 
   return {
     // State

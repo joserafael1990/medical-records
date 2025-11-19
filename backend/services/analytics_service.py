@@ -241,28 +241,9 @@ class AnalyticsService:
             func.date(Appointment.appointment_date) <= date_to
         ).scalar() or 0
         
-        # No-show (past appointments without medical_record and not cancelled)
-        # Get appointment IDs that have consultations
-        appointment_ids_with_consultation = db.query(Appointment.id).join(
-            MedicalRecord,
-            and_(
-                MedicalRecord.patient_id == Appointment.patient_id,
-                MedicalRecord.doctor_id == Appointment.doctor_id,
-                func.abs(
-                    extract('epoch', MedicalRecord.consultation_date - Appointment.appointment_date)
-                ) < 3600
-            )
-        ).filter(
+        pending = db.query(func.count(Appointment.id)).filter(
             Appointment.doctor_id == doctor_id,
-            func.date(Appointment.appointment_date) >= date_from,
-            func.date(Appointment.appointment_date) <= date_to
-        ).subquery()
-        
-        no_show = db.query(func.count(Appointment.id)).filter(
-            Appointment.doctor_id == doctor_id,
-            Appointment.status != 'cancelled',
-            Appointment.appointment_date < now,
-            ~Appointment.id.in_(db.query(appointment_ids_with_consultation.c.id)),
+            Appointment.status == 'por_confirmar',
             func.date(Appointment.appointment_date) >= date_from,
             func.date(Appointment.appointment_date) <= date_to
         ).scalar() or 0
@@ -296,7 +277,7 @@ class AnalyticsService:
             "thisWeek": this_week,
             "completed": completed,
             "cancelled": cancelled,
-            "noShow": no_show,
+            "pending": pending,
             "attendanceRate": round(attendance_rate, 2),
             "byStatus": by_status_list
         }
@@ -371,12 +352,12 @@ class AnalyticsService:
                 "completedConsultations": 0,
                 "cancelledByDoctor": 0,
                 "cancelledByPatient": 0,
-                "noShowOrPending": 0,
+                "pending": 0,
                 "percentages": {
                     "completed": 0,
                     "cancelledByDoctor": 0,
                     "cancelledByPatient": 0,
-                    "noShowOrPending": 0
+                    "pending": 0
                 },
                 "sankeyData": {
                     "nodes": [],
@@ -422,27 +403,9 @@ class AnalyticsService:
             func.date(Appointment.appointment_date) <= date_to
         ).scalar() or 0
         
-        # No-show or pending (not cancelled, no medical_record)
-        # Get appointment IDs that have consultations
-        appointments_with_consultation_subq = db.query(Appointment.id).join(
-            MedicalRecord,
-            and_(
-                MedicalRecord.patient_id == Appointment.patient_id,
-                MedicalRecord.doctor_id == Appointment.doctor_id,
-                func.abs(
-                    extract('epoch', MedicalRecord.consultation_date - Appointment.appointment_date)
-                ) < 3600
-            )
-        ).filter(
+        pending = db.query(func.count(Appointment.id)).filter(
             Appointment.doctor_id == doctor_id,
-            func.date(Appointment.appointment_date) >= date_from,
-            func.date(Appointment.appointment_date) <= date_to
-        ).subquery()
-        
-        no_show_or_pending = db.query(func.count(Appointment.id)).filter(
-            Appointment.doctor_id == doctor_id,
-            Appointment.status != 'cancelled',
-            ~Appointment.id.in_(db.query(appointments_with_consultation_subq.c.id)),
+            Appointment.status == 'por_confirmar',
             func.date(Appointment.appointment_date) >= date_from,
             func.date(Appointment.appointment_date) <= date_to
         ).scalar() or 0
@@ -452,7 +415,7 @@ class AnalyticsService:
             "completed": round((completed_consultations / total_scheduled) * 100, 2),
             "cancelledByDoctor": round((cancelled_by_doctor / total_scheduled) * 100, 2),
             "cancelledByPatient": round((cancelled_by_patient / total_scheduled) * 100, 2),
-            "noShowOrPending": round((no_show_or_pending / total_scheduled) * 100, 2)
+            "pending": round((pending / total_scheduled) * 100, 2)
         }
         
         # Build Sankey data structure
@@ -486,12 +449,12 @@ class AnalyticsService:
                 "value": cancelled_by_patient,
                 "percentage": percentages["cancelledByPatient"]
             })
-        if no_show_or_pending > 0:
+        if pending > 0:
             links.append({
                 "source": "Citas Agendadas",
                 "target": "Pacientes",
-                "value": no_show_or_pending,
-                "percentage": percentages["noShowOrPending"]
+                "value": pending,
+                "percentage": percentages["pending"]
             })
         
         return {
@@ -499,7 +462,7 @@ class AnalyticsService:
             "completedConsultations": completed_consultations,
             "cancelledByDoctor": cancelled_by_doctor,
             "cancelledByPatient": cancelled_by_patient,
-            "noShowOrPending": no_show_or_pending,
+            "pending": pending,
             "percentages": percentages,
             "sankeyData": {
                 "nodes": nodes,

@@ -23,13 +23,16 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
 import { DocumentSelector } from '../../common/DocumentSelector';
 
+interface PatientDocumentValue {
+  document_id: number | null;
+  document_value: string;
+  document_name?: string;
+}
+
 interface PatientDataSectionProps {
   // Patient data
   patientEditData: any;
-  personalDocument: {
-    document_id: number | null;
-    document_value: string;
-  };
+  personalDocument: PatientDocumentValue;
   
   // States
   showAdvancedPatientData: boolean;
@@ -46,7 +49,7 @@ interface PatientDataSectionProps {
   handlePatientDataChange: (field: string, value: any) => void;
   handlePatientDataChangeWrapper: (field: string, value: any) => void;
   handleCountryChange: (field: 'address_country_id' | 'birth_country_id', countryId: string) => void;
-  setPersonalDocument: (doc: { document_id: number | null; document_value: string }) => void;
+  setPersonalDocument: (doc: PatientDocumentValue) => void;
   
   // Conditional display
   shouldShowOnlyBasicPatientData: () => boolean;
@@ -133,6 +136,23 @@ export const PatientDataSection: React.FC<PatientDataSectionProps> = ({
               size="small"
               required
             />
+            <Box sx={{ gridColumn: { xs: '1 / -1', sm: '1 / -1' } }}>
+              <DocumentSelector
+                documentType="personal"
+                value={personalDocument}
+                onChange={(newValue) => {
+                  setPersonalDocument(newValue);
+                }}
+                label="Documento de identificación del paciente"
+                required
+                error={!personalDocument.document_id || !personalDocument.document_value?.trim()}
+                helperText={
+                  !personalDocument.document_id || !personalDocument.document_value?.trim()
+                    ? 'Selecciona un documento y captura el valor'
+                    : undefined
+                }
+              />
+            </Box>
           </Box>
         </Box>
 
@@ -252,18 +272,6 @@ export const PatientDataSection: React.FC<PatientDataSectionProps> = ({
                 Información Adicional
               </Typography>
               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-                {/* Documento Personal - Solo uno permitido */}
-                <Box sx={{ gridColumn: { xs: '1 / -1', sm: '1 / -1' } }}>
-                  <DocumentSelector
-                    documentType="personal"
-                    value={personalDocument}
-                    onChange={(newValue) => {
-                      setPersonalDocument(newValue);
-                    }}
-                    label="Documento Personal"
-                    required={false}
-                  />
-                </Box>
                 <FormControl size="small" fullWidth>
                   <InputLabel>Estado Civil</InputLabel>
                   <Select

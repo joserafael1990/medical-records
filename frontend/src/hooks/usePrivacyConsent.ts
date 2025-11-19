@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiService } from '../services';
+import { logger } from '../utils/logger';
 import type { PrivacyConsent, SendPrivacyNoticeRequest } from '../types';
 
 interface UsePrivacyConsentReturn {
@@ -24,6 +25,7 @@ interface UsePrivacyConsentReturn {
   
   // Status helpers
   hasAcceptedConsent: boolean;
+  isPendingConsent: boolean;
   consentStatusText: string;
   consentStatusColor: string;
 }
@@ -50,15 +52,28 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
     try {
       const response = await apiService.patients.api.get(`/api/privacy/consent-status/${patientId}`);
       
-      if (response.has_consent) {
-        setConsent(response.consent);
+      // ApiBase returns AxiosResponse, extract data property
+      const responseData = response.data;
+      
+      if (responseData.has_consent) {
+        setConsent(responseData.consent);
       } else {
         setConsent(null);
       }
     } catch (err: any) {
-      const errorMsg = err?.detail || err?.message || 'Error al obtener el estado del consentimiento';
-      setError(errorMsg);
-      setConsent(null);
+      // Handle 403/404 gracefully - these are expected for new patients without consent
+      const status = err?.response?.status || err?.status;
+      if (status === 403 || status === 404) {
+        // Patient may not exist yet or no consent - this is expected for new patients
+        setConsent(null);
+        setError(null); // Don't show error for expected cases
+        logger.debug('No consent found for patient (expected for new patients)', { patientId }, 'api');
+      } else {
+        // Only show error for unexpected errors
+        const errorMsg = err?.detail || err?.response?.data?.detail || err?.message || 'Error al obtener el estado del consentimiento';
+        setError(errorMsg);
+        setConsent(null);
+      }
     } finally {
       setIsLoading(false);
       fetchingRef.current = false;
@@ -161,8 +176,16 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
 
   /**
    * Check if patient has accepted consent
+   * Support both new format (consent_given) and legacy format (consent_status)
    */
-  const hasAcceptedConsent = consent?.consent_status === 'accepted' && !consent?.is_revoked;
+  const hasAcceptedConsent = consent?.consent_given === true || 
+                             (consent?.consent_status === 'accepted' && !consent?.is_revoked);
+  
+  /**
+   * Check if consent is pending (sent but not accepted)
+   */
+  const isPendingConsent = consent?.consent_given === false || 
+                           consent?.consent_status === 'pending';
 
   /**
    * Get human-readable consent status
@@ -233,6 +256,7 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
     startPolling,
     stopPolling,
     hasAcceptedConsent,
+    isPendingConsent,
     consentStatusText,
     consentStatusColor
   };

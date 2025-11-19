@@ -74,11 +74,8 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
   const [selectedSpecialty, setSelectedSpecialty] = useState(specialty || '');
   const [expandedSection, setExpandedSection] = useState<string | false>('search');
 
-  // Load categories and studies on mount
-  useEffect(() => {
-    fetchCategories();
-    fetchStudies(); // Load all studies initially
-  }, [fetchCategories, fetchStudies]);
+  // Note: fetchCategories and fetchStudies are automatically called by useStudyCatalog hook
+  // No need to call them again here
 
   // State for search results
   const [searchResults, setSearchResults] = useState<StudyCatalog[]>([]);

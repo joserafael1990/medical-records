@@ -11,6 +11,8 @@ from database import AuditLog, Person
 from datetime import datetime
 from fastapi import Request
 from logger import get_logger
+from uuid import uuid4
+from copy import deepcopy
 
 # Create logger for audit service
 audit_logger = get_logger("cortex.audit")
@@ -38,7 +40,8 @@ class AuditService:
         success: bool = True,
         error_message: Optional[str] = None,
         security_level: str = 'INFO',
-        metadata: Optional[Dict] = None
+        metadata: Optional[Dict] = None,
+        change_reason: Optional[str] = None
     ):
         """
         Registra una acción en el log de auditoría
@@ -61,26 +64,89 @@ class AuditService:
             metadata: Metadatos adicionales
         """
         try:
+            # Si la sesión viene de una operación fallida, limpiar estado antes de auditar
+            current_tx = db.get_transaction()
+            if current_tx is not None and not current_tx.is_active:
+                db.rollback()
+
             # Extraer información del request
             ip_address = request.client.host if request.client else None
             user_agent = request.headers.get("user-agent", "")[:500]  # Limit length
+
+            sanitized_old = AuditService._sanitize_values(old_values)
+            sanitized_new = AuditService._sanitize_values(new_values)
             
             # Generar resumen de cambios
-            changes_summary = AuditService._generate_changes_summary(old_values, new_values)
+            changes_summary = AuditService._generate_changes_summary(sanitized_old, sanitized_new)
+
+            metadata_payload = deepcopy(metadata) if metadata else {}
+            metadata_payload.setdefault("change_folio", AuditService._generate_change_folio())
+            if change_reason:
+                metadata_payload["change_reason"] = change_reason
+            
+            # Resolver identidad del actor
+            # Si no hay usuario, es una acción del sistema
+            is_system_action = (user is None) or getattr(user, "person_type", None) == "system"
+            
+            # Inicializar valores con None
+            resolved_user_email = None
+            resolved_user_name = None
+            resolved_user_type = None
+            
+            # Si hay usuario, intentar obtener datos del objeto o de la BD
+            if user and user.id:
+                # Intentar obtener email del objeto
+                user_email = getattr(user, "email", None)
+                user_name = getattr(user, "name", None)
+                user_type = getattr(user, "person_type", None)
+                
+                # Si faltan datos en el objeto, consultar la BD
+                if not user_email or not user_name:
+                    try:
+                        db_user = db.query(Person).filter(Person.id == user.id).first()
+                        if db_user:
+                            user_email = db_user.email if not user_email else user_email
+                            user_name = db_user.name if not user_name else user_name
+                            user_type = db_user.person_type if not user_type else user_type
+                    except Exception:
+                        # Si falla la consulta, continuar con los valores que tengamos
+                        pass
+                
+                # Asignar valores (pueden seguir siendo None si no se encontraron)
+                resolved_user_email = user_email
+                resolved_user_name = user_name
+                resolved_user_type = user_type
+            
+            # Fallback a SYSTEM si cualquier campo está vacío o es None
+            # Verificar None primero antes de usar métodos de string
+            if resolved_user_email is None or (isinstance(resolved_user_email, str) and resolved_user_email.strip() == ''):
+                resolved_user_email = "SYSTEM"
+            if resolved_user_name is None or (isinstance(resolved_user_name, str) and resolved_user_name.strip() == ''):
+                resolved_user_name = "SYSTEM"
+            if resolved_user_type is None or (isinstance(resolved_user_type, str) and resolved_user_type.strip() == ''):
+                resolved_user_type = "system"
+            
+            # Garantía final: nunca dejar None
+            if resolved_user_email is None:
+                resolved_user_email = "SYSTEM"
+            if resolved_user_name is None:
+                resolved_user_name = "SYSTEM"
+            if resolved_user_type is None:
+                resolved_user_type = "system"
             
             # Crear registro de auditoría
             audit_entry = AuditLog(
                 user_id=user.id if user else None,
-                user_email=user.email if user else "SYSTEM",
-                user_name=f"{user.first_name} {user.paternal_surname}" if user else "SYSTEM",
-                user_type=user.person_type if user else "system",
+                user_email=resolved_user_email,
+                user_name=resolved_user_name,
+                user_type=resolved_user_type,
                 
                 action=action,
                 table_name=table_name,
                 record_id=record_id,
                 
-                old_values=old_values,
-                new_values=new_values,
+                old_values=sanitized_old,
+                new_values=sanitized_new,
                 changes_summary=changes_summary,
                 
                 operation_type=operation_type,
@@ -98,7 +164,7 @@ class AuditService:
                 security_level=security_level,
                 
                 timestamp=datetime.utcnow(),
-                metadata_json=metadata
+                metadata_json=metadata_payload
             )
             
             db.add(audit_entry)
@@ -117,6 +183,10 @@ class AuditService:
         except Exception as e:
             # Si falla la auditoría, no queremos romper la operación principal
             # Pero sí lo logueamos
+            try:
+                db.rollback()
+            except Exception:
+                pass
             print(f"❌ Error al registrar auditoría: {str(e)}")
             audit_logger.error(f"Failed to create audit log: {str(e)}")
     
@@ -146,6 +216,42 @@ class AuditService:
         
         summary = "; ".join(changes) if changes else "Sin cambios detectados"
         return summary[:500]  # Limit total length
+
+    @staticmethod
+    def _sanitize_values(values: Optional[Dict]) -> Optional[Dict]:
+        if values is None:
+            return None
+
+        sensitive_keys = {"hashed_password", "access_token", "refresh_token", "token"}
+        sanitized = {}
+        for key, value in values.items():
+            if key in sensitive_keys:
+                sanitized[key] = "***REDACTED***"
+            else:
+                sanitized[key] = AuditService._truncate_value(value)
+        return sanitized
+
+    @staticmethod
+    def _truncate_value(value: Any) -> Any:
+        if isinstance(value, str):
+            return value[:500]
+        if isinstance(value, (int, float, bool)) or value is None:
+            return value
+        if isinstance(value, (list, tuple)):
+            return [AuditService._truncate_value(v) for v in value[:50]]
+        if isinstance(value, dict):
+            truncated = {}
+            for idx, (k, v) in enumerate(value.items()):
+                if idx >= 50:
+                    break
+                truncated[k] = AuditService._truncate_value(v)
+            return truncated
+        return str(value)[:500]
+
+    @staticmethod
+    def _generate_change_folio() -> str:
+        token = uuid4().hex[:12].upper()
+        return f"AL-{token}"
     
     # ========================================================================
     # MÉTODOS DE CONVENIENCIA PARA OPERACIONES COMUNES

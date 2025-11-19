@@ -32,6 +32,9 @@ from database import (
     DocumentType, Document, PersonDocument
 )
 import schemas
+from logger import get_logger
+# Structured logger
+api_logger = get_logger("medical_records.api")
 
 # ============================================================================
 # GENERAL UTILITIES
@@ -90,14 +93,14 @@ def get_countries(db: Session, active: bool = True) -> List[Country]:
     """Get list of countries"""
     query = db.query(Country)
     if active:
-        query = query.filter(Country.active == True)
+        query = query.filter(Country.is_active == True)
     return query.order_by(Country.name).all()
 
 def get_states(db: Session, country_id: Optional[int] = None, active: bool = True) -> List[State]:
     """Get list of states"""
     query = db.query(State)
     if active:
-        query = query.filter(State.active == True)
+        query = query.filter(State.is_active == True)
     if country_id:
         query = query.filter(State.country_id == country_id)
     return query.order_by(State.name).all()
@@ -108,14 +111,14 @@ def get_specialties(db: Session, active: bool = True) -> List[Specialty]:
     """Get list of medical specialties"""
     query = db.query(Specialty)
     if active:
-        query = query.filter(Specialty.active == True)
+        query = query.filter(Specialty.is_active == True)
     return query.order_by(Specialty.name).all()
 
 def get_emergency_relationships(db: Session, active: bool = True) -> List[EmergencyRelationship]:
     """Get list of emergency relationships"""
     query = db.query(EmergencyRelationship)
     if active:
-        query = query.filter(EmergencyRelationship.active == True)
+        query = query.filter(EmergencyRelationship.is_active == True)
     return query.order_by(EmergencyRelationship.code).all()
 
 # ============================================================================
@@ -198,19 +201,39 @@ def update_doctor_profile(db: Session, doctor_id: int, doctor_data: schemas.Doct
                 doctor_data.primary_phone_country_code or '+52',
                 doctor_data.primary_phone_number or ''
             )
-            print(f"📞 [CRUD] Set phone from country_code + number: {db_doctor.primary_phone}")
+            api_logger.debug(
+                "📞 [CRUD] Set phone from country_code + number",
+                extra={"doctor_id": doctor_id, "phone": db_doctor.primary_phone}
+            )
     elif hasattr(doctor_data, 'primary_phone') and doctor_data.primary_phone is not None:
         # If primary_phone is provided directly, use it
         phone_value = doctor_data.primary_phone
         # Handle empty string as None (don't update if empty)
         if phone_value and phone_value.strip():
             db_doctor.primary_phone = phone_value.strip()
-            print(f"📞 [CRUD] Set phone from primary_phone: {db_doctor.primary_phone}")
+            api_logger.debug(
+                "📞 [CRUD] Set phone from primary_phone",
+                extra={"doctor_id": doctor_id, "phone": db_doctor.primary_phone}
+            )
         elif phone_value == '':
-            print(f"📞 [CRUD] Skipping empty primary_phone value")
+            api_logger.debug(
+                "📞 [CRUD] Skipping empty primary_phone value",
+                extra={"doctor_id": doctor_id}
+            )
     
     # Update only provided fields (excluding documents, phone fields)
-    update_data = doctor_data.dict(exclude_unset=True, exclude={'documents', 'primary_phone_country_code', 'primary_phone_number', 'primary_phone'})
+    update_data = doctor_data.dict(
+        exclude_unset=True,
+        exclude={
+            'documents',
+            'primary_phone_country_code',
+            'primary_phone_number',
+            'primary_phone',
+            'avatar_type',
+            'avatar_template_key',
+            'avatar_file_path'
+        }
+    )
     
     for field, value in update_data.items():
         # Verify the field exists in the model
@@ -247,7 +270,7 @@ def create_patient_with_code(db: Session, patient_data: schemas.PatientCreate, p
         'birth_country_id',
         'address_state_id',
         'address_country_id',
-        'city_residence_id',
+        # 'city_residence_id',  # Field doesn't exist in Person model - removed
         'birth_date'  # Date field that should be None if empty
     ]
     
@@ -337,8 +360,8 @@ def get_persons(db: Session, skip: int = 0, limit: int = 100, person_type: Optio
     """Get list of persons"""
     query = db.query(Person).options(
         joinedload(Person.specialty),
-        joinedload(Person.birth_state),
-        joinedload(Person.city_residence)
+        joinedload(Person.birth_state)
+        # Note: city_residence doesn't exist - use address_city field instead
     )
     
     if person_type:
@@ -350,7 +373,7 @@ def get_doctors(db: Session, skip: int = 0, limit: int = 100) -> List[Person]:
     """Get list of doctors"""
     return db.query(Person).options(
         joinedload(Person.specialty),
-        joinedload(Person.nationality)
+        joinedload(Person.birth_country)  # Use birth_country instead of nationality (doesn't exist)
     ).filter(Person.person_type == 'doctor').offset(skip).limit(limit).all()
 
 def get_patients(db: Session, skip: int = 0, limit: int = 100) -> List[Person]:
@@ -605,8 +628,14 @@ def build_phone(country_code: str, number: str) -> str:
 
 def create_medical_record(db: Session, record_data: schemas.MedicalRecordCreate) -> MedicalRecord:
     """Create a new medical record"""
-    print(f"🔬 Creating medical record with data: {record_data.dict()}")
-    print(f"🔬 Laboratory analysis field: {record_data.laboratory_analysis}")
+    api_logger.debug(
+        "🔬 Creating medical record",
+        extra={
+            "patient_id": record_data.patient_id,
+            "doctor_id": record_data.doctor_id,
+            "has_laboratory_analysis": bool(record_data.laboratory_analysis)
+        }
+    )
     
     # Generate record code
     last_record = db.query(MedicalRecord).order_by(desc(MedicalRecord.id)).first()
@@ -716,10 +745,16 @@ def update_appointment(db: Session, appointment_id: int, appointment_data) -> Ap
     else:
         update_data = appointment_data.dict(exclude_unset=True)
     
-    print(f"🔄 CRUD update_appointment - ID: {appointment_id}")
-    print(f"📝 Original appointment_date: {appointment.appointment_date}")
-    print(f"📝 Doctor's appointment_duration: {appointment.doctor.appointment_duration or 30}")
-    print(f"📥 Update data received: {update_data}")
+    api_logger.debug(
+        "🔄 CRUD update_appointment start",
+        extra={
+            "appointment_id": appointment_id,
+            "original_appointment_date": appointment.appointment_date.isoformat() if appointment.appointment_date else None,
+            "doctor_id": appointment.doctor_id,
+            "doctor_duration": appointment.doctor.appointment_duration if appointment.doctor else None,
+            "update_keys": list(update_data.keys())
+        }
+    )
     
     # Handle datetime conversion for appointment_date with CDMX timezone
     if 'appointment_date' in update_data and isinstance(update_data['appointment_date'], str):
@@ -728,7 +763,10 @@ def update_appointment(db: Session, appointment_id: int, appointment_data) -> Ap
         )
         # Convert to UTC for storage
         update_data['appointment_date'] = to_utc_for_storage(update_data['appointment_date'])
-        print(f"🌍 Converted appointment_date to UTC: {update_data['appointment_date']}")
+        api_logger.debug(
+            "🌍 Converted appointment_date to UTC",
+            extra={"appointment_id": appointment_id, "utc_value": update_data['appointment_date'].isoformat()}
+        )
     
     # Recalculate end_time if appointment_date changed (duration comes from doctor's profile)
     if 'appointment_date' in update_data:
@@ -739,31 +777,61 @@ def update_appointment(db: Session, appointment_id: int, appointment_data) -> Ap
         else:
             duration = 30  # Default fallback
         update_data['end_time'] = start_time + timedelta(minutes=duration)
-        print(f"⏰ Recalculated end_time: {update_data['end_time']} (duration: {duration} min)")
+        api_logger.debug(
+            "⏰ Recalculated end_time",
+            extra={
+                "appointment_id": appointment_id,
+                "end_time": update_data['end_time'].isoformat(),
+                "duration_minutes": duration
+            }
+        )
     
     # Handle cancellation
     if update_data.get('status') == 'cancelled' and 'cancelled_reason' in update_data:
         update_data['cancelled_at'] = get_cdmx_now().astimezone(pytz.utc)
     
-    # Handle confirmation
-    if update_data.get('status') == 'confirmed':
-        update_data['confirmed_at'] = get_cdmx_now().astimezone(pytz.utc)
+    # Handle confirmation - Appointment model doesn't have confirmed_at field
+    # Status change to 'confirmada' is handled by the status field itself
     
-    for field, value in update_data.items():
+    # Filter out relationship fields and non-existent fields before assignment
+    # Only assign columns that exist in the Appointment model
+    valid_fields = {
+        'appointment_date', 'end_time', 'appointment_type_id', 'office_id',
+        'consultation_type', 'status', 'reminder_sent', 'reminder_sent_at',
+        'auto_reminder_enabled', 'auto_reminder_offset_minutes',
+        'cancelled_reason', 'cancelled_at', 'cancelled_by'
+    }
+    
+    # Remove relationship fields (patient, doctor, office, appointment_type_rel, reminders)
+    # and fields that don't exist in the model
+    filtered_data = {k: v for k, v in update_data.items() if k in valid_fields}
+    
+    for field, value in filtered_data.items():
         setattr(appointment, field, value)
     
     appointment.updated_at = get_cdmx_now().astimezone(pytz.utc)
     
-    print(f"💾 Final appointment_date before save: {appointment.appointment_date}")
-    print(f"💾 Final end_time before save: {appointment.end_time}")
-    print(f"💾 Doctor's duration: {appointment.doctor.appointment_duration or 30} minutes")
+    api_logger.debug(
+        "💾 Final appointment state before commit",
+        extra={
+            "appointment_id": appointment_id,
+            "stored_appointment_date": appointment.appointment_date.isoformat() if appointment.appointment_date else None,
+            "stored_end_time": appointment.end_time.isoformat() if appointment.end_time else None,
+            "doctor_duration": appointment.doctor.appointment_duration if appointment.doctor else None
+        }
+    )
     
     db.commit()
     db.refresh(appointment)
     
-    print(f"✅ Appointment updated successfully - ID: {appointment_id}")
-    print(f"📅 Final appointment date: {appointment.appointment_date}")
-    print(f"⏱️  Doctor's duration: {appointment.doctor.appointment_duration or 30} minutes")
+    api_logger.info(
+        "✅ Appointment updated successfully",
+        extra={
+            "appointment_id": appointment_id,
+            "doctor_id": appointment.doctor_id,
+            "appointment_date": appointment.appointment_date.isoformat() if appointment.appointment_date else None
+        }
+    )
     
     return appointment
 
@@ -903,7 +971,7 @@ from database import StudyCategory, StudyCatalog
 
 def get_study_categories(db: Session, skip: int = 0, limit: int = 100) -> List[StudyCategory]:
     """Get all study categories"""
-    return db.query(StudyCategory).filter(StudyCategory.active == True).offset(skip).limit(limit).all()
+    return db.query(StudyCategory).filter(StudyCategory.is_active == True).offset(skip).limit(limit).all()
 
 def get_study_category(db: Session, category_id: int) -> Optional[StudyCategory]:
     """Get study category by ID"""

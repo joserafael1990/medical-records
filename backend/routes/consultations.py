@@ -4,6 +4,7 @@ Migrated from main_clean_english.py to improve code organization
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
+from sqlalchemy import or_, text
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 from datetime import datetime, timedelta
@@ -11,12 +12,13 @@ import pytz
 import uuid
 import traceback
 
-from database import get_db, Person, MedicalRecord, ConsultationPrescription, Medication
+from database import get_db, Person, MedicalRecord, ConsultationPrescription, Medication, PersonDocument, Document
 from dependencies import get_current_user
 from logger import get_logger
 from audit_service import audit_service
 import crud
 import schemas
+from utils.audit_utils import serialize_instance
 
 # Import consultation service helpers
 from consultation_service import (
@@ -35,12 +37,16 @@ from consultation_service import (
     prepare_consultation_for_signing,
     mark_appointment_completed,
     get_patient_info,
-    build_create_consultation_response
+    build_create_consultation_response,
+    # Diagnosis catalog helpers
+    format_diagnoses_from_catalog
 )
+from services.document_folio_service import DocumentFolioService
 
 # Import encryption and digital signature services
 from encryption import get_encryption_service, MedicalDataEncryption
 from digital_signature import get_digital_signature_service, get_medical_document_signer
+from config import settings
 
 api_logger = get_logger("medical_records.api")
 security_logger = get_logger("medical_records.security")
@@ -81,27 +87,162 @@ digital_signature_service = get_digital_signature_service()
 medical_document_signer = get_medical_document_signer()
 
 def encrypt_sensitive_data(data: dict, data_type: str = "patient") -> dict:
-    """Encrypt sensitive fields in data based on type"""
+    """
+    Encrypt sensitive fields in data based on type
+    Compliance: NOM-035-SSA3-2012 - Encryption of sensitive medical data
+    
+    Args:
+        data: Dictionary with data to encrypt
+        data_type: Type of data ('patient', 'consultation', 'doctor')
+        
+    Returns:
+        Dictionary with encrypted sensitive fields
+    """
     if not data:
         return data
     
-    # DEVELOPMENT MODE: Skip encryption - return data as-is
-    print(f"🔐 DEVELOPMENT MODE: Skipping encryption for {data_type}")
-    return data
+    # Check if encryption is enabled
+    if not settings.ENABLE_ENCRYPTION:
+        api_logger.debug(
+            "🔐 Encryption disabled - returning data as-is",
+            extra={"data_type": data_type, "encryption_enabled": False}
+        )
+        return data
+    
+    try:
+        # Get encryption service
+        encryption_service = get_encryption_service()
+        
+        # Define sensitive fields based on data type
+        sensitive_fields = []
+        if data_type == "patient":
+            sensitive_fields = ["curp", "primary_phone", "email", "home_address", "emergency_contact_name", "emergency_contact_phone"]
+        elif data_type == "consultation":
+            sensitive_fields = ["chief_complaint", "history_present_illness", "family_history", 
+                               "personal_pathological_history", "personal_non_pathological_history",
+                               "physical_examination", "primary_diagnosis", "secondary_diagnoses",
+                               "treatment_plan", "follow_up_instructions", "prescribed_medications",
+                               "notes", "laboratory_results"]
+        elif data_type == "doctor":
+            sensitive_fields = ["curp", "rfc", "primary_phone", "email", "office_address"]
+        
+        # Encrypt sensitive fields
+        encrypted_data = data.copy()
+        for field in sensitive_fields:
+            if field in encrypted_data and encrypted_data[field]:
+                try:
+                    # Only encrypt if value is a string and not empty
+                    if isinstance(encrypted_data[field], str) and encrypted_data[field].strip():
+                        encrypted_data[field] = encryption_service.encrypt_sensitive_data(encrypted_data[field])
+                        api_logger.debug(
+                            f"🔐 Encrypted field: {field}",
+                            extra={"data_type": data_type, "field": field}
+                        )
+                except Exception as e:
+                    # If encryption fails, log error but don't break the flow
+                    api_logger.error(
+                        f"❌ Failed to encrypt field {field}",
+                        extra={"data_type": data_type, "field": field, "error": str(e)}
+                    )
+                    # Keep original value if encryption fails
+                    continue
+        
+        api_logger.debug(
+            "🔐 Encryption completed",
+            extra={"data_type": data_type, "fields_encrypted": len([f for f in sensitive_fields if f in encrypted_data])}
+        )
+        return encrypted_data
+    
+    except Exception as e:
+        # If encryption service fails, log error and return data as-is
+        api_logger.error(
+            f"❌ Encryption service error - returning data as-is",
+            extra={"data_type": data_type, "error": str(e)}
+        )
+        return data
 
 def decrypt_sensitive_data(data: dict, data_type: str = "patient") -> dict:
-    """Decrypt sensitive fields in data based on type"""
+    """
+    Decrypt sensitive fields in data based on type
+    Compliance: NOM-035-SSA3-2012 - Decryption of sensitive medical data
+    
+    Args:
+        data: Dictionary with data to decrypt
+        data_type: Type of data ('patient', 'consultation', 'doctor')
+        
+    Returns:
+        Dictionary with decrypted sensitive fields
+    """
     if not data:
         return data
     
-    # DEVELOPMENT MODE: Skip decryption - return data as-is
-    print(f"🔓 DEVELOPMENT MODE: Skipping decryption for {data_type}")
-    return data
+    # Check if encryption is enabled
+    if not settings.ENABLE_ENCRYPTION:
+        api_logger.debug(
+            "🔓 Encryption disabled - returning data as-is",
+            extra={"data_type": data_type, "encryption_enabled": False}
+        )
+        return data
+    
+    try:
+        # Get encryption service
+        encryption_service = get_encryption_service()
+        
+        # Define sensitive fields based on data type
+        sensitive_fields = []
+        if data_type == "patient":
+            sensitive_fields = ["curp", "primary_phone", "email", "home_address", "emergency_contact_name", "emergency_contact_phone"]
+        elif data_type == "consultation":
+            sensitive_fields = ["chief_complaint", "history_present_illness", "family_history",
+                               "personal_pathological_history", "personal_non_pathological_history",
+                               "physical_examination", "primary_diagnosis", "secondary_diagnoses",
+                               "treatment_plan", "follow_up_instructions", "prescribed_medications",
+                               "notes", "laboratory_results"]
+        elif data_type == "doctor":
+            sensitive_fields = ["curp", "rfc", "primary_phone", "email", "office_address"]
+        
+        # Decrypt sensitive fields
+        decrypted_data = data.copy()
+        for field in sensitive_fields:
+            if field in decrypted_data and decrypted_data[field]:
+                try:
+                    # Try to decrypt - the service will detect if data is encrypted or not
+                    if isinstance(decrypted_data[field], str):
+                        decrypted_data[field] = encryption_service.decrypt_sensitive_data(decrypted_data[field])
+                        api_logger.debug(
+                            f"🔓 Decrypted field: {field}",
+                            extra={"data_type": data_type, "field": field}
+                        )
+                except Exception as e:
+                    # If decryption fails, assume data is not encrypted and keep original value
+                    api_logger.debug(
+                        f"🔓 Field {field} not encrypted or decryption failed - keeping original",
+                        extra={"data_type": data_type, "field": field, "error": str(e)}
+                    )
+                    # Keep original value if decryption fails (backward compatibility)
+                    continue
+        
+        api_logger.debug(
+            "🔓 Decryption completed",
+            extra={"data_type": data_type}
+        )
+        return decrypted_data
+    
+    except Exception as e:
+        # If decryption service fails, log error and return data as-is (backward compatibility)
+        api_logger.error(
+            f"❌ Decryption service error - returning data as-is",
+            extra={"data_type": data_type, "error": str(e)}
+        )
+        return data
 
 def sign_medical_document(document_data: dict, doctor_id: int, document_type: str = "consultation") -> dict:
     """Sign medical document with digital signature"""
     try:
-        print(f"🔏 Signing {document_type} document for doctor {doctor_id}")
+        api_logger.info(
+            "🔏 Signing medical document",
+            extra={"doctor_id": doctor_id, "document_type": document_type}
+        )
         
         # Add document metadata
         document_data["id"] = str(document_data.get("id", "unknown"))
@@ -133,11 +274,22 @@ def sign_medical_document(document_data: dict, doctor_id: int, document_type: st
                 document_data, private_key, certificate
             )
         
-        print(f"✅ Document signed successfully - Signature ID: {signature_result['signatures'][0]['signature_id']}")
+        api_logger.info(
+            "✅ Document signed successfully",
+            extra={
+                "doctor_id": doctor_id,
+                "document_type": document_type,
+                "signature_id": signature_result["signatures"][0]["signature_id"]
+            }
+        )
         return signature_result
         
     except Exception as e:
-        print(f"⚠️ Failed to sign document: {str(e)}")
+        api_logger.error(
+            "⚠️ Failed to sign medical document",
+            extra={"doctor_id": doctor_id, "document_type": document_type},
+            exc_info=True
+        )
         # Return a placeholder signature for demonstration
         return {
             "document_id": str(document_data.get("id", "unknown")),
@@ -168,7 +320,7 @@ async def get_consultations(
 ):
     """Get list of consultations (REFACTORED - uses consultation_service helpers)"""
     try:
-        print(f"📋 Fetching consultations from database for doctor {current_user.id}")
+        api_logger.debug("Fetching consultations from database", doctor_id=current_user.id, skip=skip, limit=limit)
         
         # Query medical records (consultations) from database
         consultations = db.query(MedicalRecord).options(
@@ -178,7 +330,7 @@ async def get_consultations(
             MedicalRecord.doctor_id == current_user.id
         ).order_by(MedicalRecord.consultation_date.desc()).offset(skip).limit(limit).all()
         
-        print(f"📊 Found {len(consultations)} consultations in database")
+        api_logger.debug("Found consultations in database", doctor_id=current_user.id, count=len(consultations))
         
         # Transform to API format using helper functions
         result = []
@@ -199,19 +351,19 @@ async def get_consultations(
                 try:
                     vital_signs = get_vital_signs_for_consultation(db, consultation.id)
                 except Exception as e:
-                    print(f"⚠️ Error getting vital signs for consultation {consultation.id}: {str(e)}")
+                    api_logger.warning("Error getting vital signs for consultation", consultation_id=consultation.id, error=str(e))
                     vital_signs = []
                 
                 try:
                     prescriptions = get_prescriptions_for_consultation(db, consultation.id)
                 except Exception as e:
-                    print(f"⚠️ Error getting prescriptions for consultation {consultation.id}: {str(e)}")
+                    api_logger.warning("Error getting prescriptions for consultation", consultation_id=consultation.id, error=str(e))
                     prescriptions = []
                 
                 try:
                     clinical_studies = get_clinical_studies_for_consultation(db, consultation.id)
                 except Exception as e:
-                    print(f"⚠️ Error getting clinical studies for consultation {consultation.id}: {str(e)}")
+                    api_logger.warning("Error getting clinical studies for consultation", consultation_id=consultation.id, error=str(e))
                     clinical_studies = []
                 
                 # Build response using helper
@@ -237,18 +389,14 @@ async def get_consultations(
                 
                 result.append(consultation_response)
             except Exception as e:
-                print(f"❌ Error processing consultation {consultation.id}: {str(e)}")
-                print(f"⚠️ Skipping consultation {consultation.id} due to error, continuing with others...")
+                api_logger.error("Error processing consultation", consultation_id=consultation.id, error=str(e), exc_info=True)
                 # Continue processing other consultations instead of failing completely
                 continue
         
-        print(f"✅ Returning {len(result)} consultations for doctor {current_user.id}")
-        if len(result) > 0:
-            print(f"📋 Sample consultation (first): {result[0].get('id', 'N/A')} - Patient: {result[0].get('patient_name', 'N/A')}")
+        api_logger.info("Returning consultations", doctor_id=current_user.id, count=len(result))
         return result
     except Exception as e:
-        print(f"❌ Error in get_consultations: {str(e)}")
-        traceback.print_exc()
+        api_logger.error("Error in get_consultations", doctor_id=current_user.id, error=str(e), exc_info=True)
         # Return empty array instead of failing completely
         return []
 
@@ -261,8 +409,7 @@ async def get_consultation(
 ):
     """Get specific consultation by ID"""
     try:
-        print(f"📋 Fetching consultation {consultation_id} for doctor {current_user.id}")
-        print(f"🔍 Current user ID: {current_user.id}, User type: {current_user.person_type}")
+        api_logger.debug("Fetching consultation", consultation_id=consultation_id, doctor_id=current_user.id, user_type=current_user.person_type)
         
         # Query specific medical record
         consultation = db.query(MedicalRecord).options(
@@ -302,15 +449,17 @@ async def get_consultation(
             "secondary_diagnoses": consultation.secondary_diagnoses,
             "prescribed_medications": consultation.prescribed_medications,
             "treatment_plan": consultation.treatment_plan,
+            "follow_up_instructions": consultation.follow_up_instructions,
             "laboratory_results": consultation.laboratory_results,
             "notes": consultation.notes,
             "family_history": consultation.family_history,
             "perinatal_history": consultation.perinatal_history,
+            "gynecological_and_obstetric_history": consultation.gynecological_and_obstetric_history,
             "personal_pathological_history": consultation.personal_pathological_history,
             "personal_non_pathological_history": consultation.personal_non_pathological_history
             }, "consultation")
         except Exception as e:
-            print(f"⚠️ Could not decrypt consultation data for consultation {consultation.id}: {str(e)}")
+            api_logger.warning("Could not decrypt consultation data", consultation_id=consultation.id, error=str(e))
             # Use original encrypted data if decryption fails
             decrypted_consultation_data = {
                 "chief_complaint": consultation.chief_complaint,
@@ -323,10 +472,12 @@ async def get_consultation(
                 "secondary_diagnoses": consultation.secondary_diagnoses,
                 "prescribed_medications": consultation.prescribed_medications,
                 "treatment_plan": consultation.treatment_plan,
+                "follow_up_instructions": consultation.follow_up_instructions,
                 "laboratory_results": consultation.laboratory_results,
                 "notes": consultation.notes,
                 "family_history": consultation.family_history,
                 "perinatal_history": consultation.perinatal_history,
+                "gynecological_and_obstetric_history": consultation.gynecological_and_obstetric_history,
                 "personal_pathological_history": consultation.personal_pathological_history,
                 "personal_non_pathological_history": consultation.personal_non_pathological_history
             }
@@ -335,11 +486,15 @@ async def get_consultation(
         result = {
             "id": consultation.id,
             "patient_id": consultation.patient_id,
+            "patient_document_id": consultation.patient_document_id,
+            "patient_document_value": consultation.patient_document_value,
+            "patient_document_name": consultation.patient_document.name if consultation.patient_document else None,
             "consultation_date": consultation.consultation_date.isoformat(),
             "end_time": consultation_end_time.isoformat(),
             "chief_complaint": decrypted_consultation_data.get("chief_complaint", ""),
             "history_present_illness": decrypted_consultation_data.get("history_present_illness", ""),
             "family_history": decrypted_consultation_data.get("family_history", ""),
+            "gynecological_and_obstetric_history": decrypted_consultation_data.get("gynecological_and_obstetric_history", ""),
             "personal_pathological_history": decrypted_consultation_data.get("personal_pathological_history", ""),
             "personal_non_pathological_history": decrypted_consultation_data.get("personal_non_pathological_history", ""),
             "physical_examination": decrypted_consultation_data.get("physical_examination", ""),
@@ -348,6 +503,7 @@ async def get_consultation(
             "secondary_diagnoses": decrypted_consultation_data.get("secondary_diagnoses", ""),
             "prescribed_medications": decrypted_consultation_data.get("prescribed_medications", ""),
             "treatment_plan": decrypted_consultation_data.get("treatment_plan", ""),
+            "follow_up_instructions": decrypted_consultation_data.get("follow_up_instructions", ""),
             "therapeutic_plan": decrypted_consultation_data.get("treatment_plan", ""),  # Alias for compatibility
             "laboratory_results": decrypted_consultation_data.get("laboratory_results", ""),
             "imaging_studies": decrypted_consultation_data.get("laboratory_results", ""),  # Alias for compatibility
@@ -355,6 +511,7 @@ async def get_consultation(
             "interconsultations": decrypted_consultation_data.get("notes", ""),
             "consultation_type": getattr(consultation, 'consultation_type', 'Seguimiento'),
             "family_history": decrypted_consultation_data.get("family_history", ""),
+            "gynecological_and_obstetric_history": decrypted_consultation_data.get("gynecological_and_obstetric_history", ""),
             "personal_pathological_history": decrypted_consultation_data.get("personal_pathological_history", ""),
             "personal_non_pathological_history": decrypted_consultation_data.get("personal_non_pathological_history", ""),
             "created_by": consultation.created_by,
@@ -364,14 +521,13 @@ async def get_consultation(
             "date": consultation.consultation_date.isoformat()
         }
         
-        print(f"✅ Returning consultation {consultation_id}")
-        print(f"🔍 Consultation data: {result}")
+        api_logger.info("Returning consultation", consultation_id=consultation_id)
         return result
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error in get_consultation: {str(e)}")
+        api_logger.error("Error in get_consultation", consultation_id=consultation_id, error=str(e), exc_info=True)
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
@@ -387,8 +543,107 @@ async def create_consultation(
         security_logger.info("Creating consultation with encryption", operation="create_consultation", 
                            doctor_id=current_user.id, patient_id=consultation_data.get("patient_id"))
         
+        patient_id = consultation_data.get("patient_id")
+        patient_document_id_raw = consultation_data.get("patient_document_id")
+        patient_document_value = (consultation_data.get("patient_document_value") or "").strip()
+        
+        if not patient_document_id_raw or not patient_document_value:
+            raise HTTPException(
+                status_code=400,
+                detail="El documento de identificación del paciente es obligatorio"
+            )
+        
+        try:
+            patient_document_id = int(patient_document_id_raw)
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail="El documento de identificación del paciente es inválido"
+            )
+        
+        if not patient_id:
+            raise HTTPException(
+                status_code=400,
+                detail="El paciente es obligatorio para crear la consulta"
+            )
+        
+        api_logger.debug(
+            "🔍 Validating patient document for consultation",
+            extra={
+                "patient_id": patient_id,
+                "patient_document_id": patient_document_id_raw,
+                "patient_document_value": patient_document_value
+            }
+        )
+
+        patient_document = db.query(PersonDocument).filter(
+            PersonDocument.person_id == patient_id,
+            PersonDocument.document_id == patient_document_id,
+            PersonDocument.is_active == True
+        ).first()
+        
+        if not patient_document:
+            document = db.query(Document).filter(Document.id == patient_document_id).first()
+            document_name = document.name if document else "documento seleccionado"
+            raise HTTPException(
+                status_code=400,
+                detail=f"El {document_name} no pertenece al paciente o está inactivo"
+            )
+        
+        if patient_document.document_value.strip().upper() != patient_document_value.strip().upper():
+            raise HTTPException(
+                status_code=400,
+                detail="El valor del documento no coincide con el registro del paciente"
+            )
+        
+        # Normalizar valores para el resto del flujo
+        consultation_data["patient_document_id"] = patient_document_id
+        consultation_data["patient_document_value"] = patient_document.document_value
+        api_logger.debug(
+            "✅ Patient document validated for consultation",
+            extra={
+                "patient_id": patient_id,
+                "patient_document_id": consultation_data.get("patient_document_id"),
+                "patient_document_value": consultation_data.get("patient_document_value")
+            }
+        )
+        
+        # 🆕 0.5. Validate and format diagnoses from CIE-10 catalog if provided
+        # Compliance: NOM-004-SSA3-2012 - Register diagnosis codes and descriptions from official catalog
+        primary_diagnoses_from_catalog = consultation_data.get("primary_diagnoses", [])
+        secondary_diagnoses_from_catalog = consultation_data.get("secondary_diagnoses_list", [])
+        
+        if primary_diagnoses_from_catalog or secondary_diagnoses_from_catalog:
+            primary_formatted, secondary_formatted = format_diagnoses_from_catalog(
+                db=db,
+                primary_diagnoses=primary_diagnoses_from_catalog if primary_diagnoses_from_catalog else None,
+                secondary_diagnoses=secondary_diagnoses_from_catalog if secondary_diagnoses_from_catalog else None
+            )
+            
+            # Override text fields with formatted catalog diagnoses (code + description)
+            if primary_formatted:
+                consultation_data["primary_diagnosis"] = primary_formatted
+            if secondary_formatted:
+                consultation_data["secondary_diagnoses"] = secondary_formatted
+            
+            api_logger.debug(
+                "🔍 Diagnoses validated and formatted from CIE-10 catalog",
+                extra={
+                    "primary_diagnosis": consultation_data.get("primary_diagnosis", ""),
+                    "secondary_diagnoses": consultation_data.get("secondary_diagnoses", "")
+                }
+            )
+        
         # 1. Encrypt sensitive consultation fields
         encrypted_consultation_data = encrypt_consultation_fields(consultation_data, encrypt_sensitive_data)
+        api_logger.debug(
+            "🧾 Consultation data prepared for persistence",
+            extra={
+                "patient_id": encrypted_consultation_data.get("patient_id"),
+                "patient_document_id": encrypted_consultation_data.get("patient_document_id"),
+                "patient_document_value": encrypted_consultation_data.get("patient_document_value")
+            }
+        )
         
         # 2. Parse consultation date
         consultation_date_str = encrypted_consultation_data.get("date", encrypted_consultation_data.get("consultation_date"))
@@ -405,6 +660,22 @@ async def create_consultation(
         db.add(new_medical_record)
         db.commit()
         db.refresh(new_medical_record)
+
+        persisted_snapshot = db.execute(
+            text(
+                "SELECT patient_document_id, patient_document_value "
+                "FROM medical_records WHERE id = :record_id"
+            ),
+            {"record_id": new_medical_record.id}
+        ).fetchone()
+        api_logger.debug(
+            "📄 Persisted medical record snapshot after creation",
+            extra={
+                "consultation_id": new_medical_record.id,
+                "patient_document_id": persisted_snapshot.patient_document_id if persisted_snapshot else None,
+                "patient_document_value": persisted_snapshot.patient_document_value if persisted_snapshot else None
+            }
+        )
         
         security_logger.info("Consultation created successfully", consultation_id=new_medical_record.id, 
                            doctor_id=current_user.id, patient_id=new_medical_record.patient_id, encrypted=True)
@@ -434,9 +705,51 @@ async def create_consultation(
             consultation_data={
                 "consultation_date": str(consultation_date),
                 "consultation_type": consultation_data.get("consultation_type", ""),
-                "primary_diagnosis": consultation_data.get("primary_diagnosis", "")
+                "primary_diagnosis": consultation_data.get("primary_diagnosis", ""),
+                "patient_document_id": patient_document_id,
+                "patient_document_value": patient_document.document_value
             }
         )
+        
+        # 🆕 8.5. Enviar aviso de privacidad automáticamente si es primera consulta
+        # Compliance: LFPDPPP - Consentimiento previo requerido para tratamiento de datos
+        consultation_type = consultation_data.get("consultation_type", "").strip()
+        is_first_time = consultation_type and consultation_type.lower() in ['primera vez', 'primera_vez', 'primera']
+        
+        if is_first_time:
+            try:
+                import sys
+                import os
+                sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+                from privacy_service import send_privacy_notice_automatically
+                privacy_result = await send_privacy_notice_automatically(
+                    db=db,
+                    patient_id=new_medical_record.patient_id,
+                    doctor=current_user,
+                    consultation_type=consultation_type
+                )
+                
+                if privacy_result and privacy_result.get("success"):
+                    api_logger.info(
+                        "✅ Privacy notice sent automatically for first consultation",
+                        extra={
+                            "consultation_id": new_medical_record.id,
+                            "patient_id": new_medical_record.patient_id,
+                            "consent_id": privacy_result.get("consent_id")
+                        }
+                    )
+                elif privacy_result and privacy_result.get("skipped"):
+                    api_logger.debug(
+                        f"ℹ️ Privacy notice auto-send skipped: {privacy_result.get('message')}",
+                        extra={"patient_id": new_medical_record.patient_id}
+                    )
+            except Exception as e:
+                # No fallar la creación de consulta si falla el envío de aviso
+                api_logger.warning(
+                    f"⚠️ Error sending privacy notice automatically (non-blocking): {str(e)}",
+                    extra={"consultation_id": new_medical_record.id, "patient_id": new_medical_record.patient_id},
+                    exc_info=True
+                )
         
         # 9. Build response
         result = build_create_consultation_response(
@@ -446,13 +759,13 @@ async def create_consultation(
             digital_signature
         )
         
-        print(f"✅ Medical record created in database: ID={new_medical_record.id}")
+        api_logger.info("Medical record created in database", consultation_id=new_medical_record.id, doctor_id=current_user.id)
         return result
         
     except HTTPException:
         raise  # Re-raise HTTP exceptions as-is
     except Exception as e:
-        print(f"❌ Error in create_consultation: {str(e)}")
+        api_logger.error("Error in create_consultation", doctor_id=current_user.id, error=str(e), exc_info=True)
         # 🆕 Registrar error en auditoría
         audit_service.log_error(
             db=db,
@@ -470,13 +783,13 @@ async def create_consultation(
 async def update_consultation(
     consultation_id: int,
     consultation_data: dict,  # NOTE: Proper schema pending consultations table implementation
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
     """Update specific consultation by ID"""
     try:
-        print(f"📝 Updating consultation {consultation_id} for user {current_user.id}")
-        print(f"📊 Update data received: {consultation_data}")
+        api_logger.debug("Updating consultation", consultation_id=consultation_id, doctor_id=current_user.id)
         
         # Find existing consultation
         consultation = db.query(MedicalRecord).filter(
@@ -486,6 +799,83 @@ async def update_consultation(
         
         if not consultation:
             raise HTTPException(status_code=404, detail="Consultation not found")
+        
+        original_data = serialize_instance(
+            consultation,
+            exclude={"updated_at"},
+        )
+
+        # Determine final patient_id for validation
+        target_patient_id = consultation_data.get("patient_id", consultation.patient_id)
+        try:
+            target_patient_id = int(target_patient_id)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="El paciente especificado es inválido")
+        
+        # Normalize patient document data
+        patient_document_id_raw = consultation_data.get("patient_document_id", consultation.patient_document_id)
+        patient_document_value = (consultation_data.get("patient_document_value", consultation.patient_document_value) or "").strip()
+        
+        if not patient_document_id_raw or not patient_document_value:
+            raise HTTPException(
+                status_code=400,
+                detail="El documento de identificación del paciente es obligatorio"
+            )
+        
+        try:
+            patient_document_id = int(patient_document_id_raw)
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail="El documento de identificación del paciente es inválido"
+            )
+        
+        patient_document = db.query(PersonDocument).filter(
+            PersonDocument.person_id == target_patient_id,
+            PersonDocument.document_id == patient_document_id,
+            PersonDocument.is_active == True
+        ).first()
+        
+        if not patient_document:
+            document = db.query(Document).filter(Document.id == patient_document_id).first()
+            document_name = document.name if document else "documento seleccionado"
+            raise HTTPException(
+                status_code=400,
+                detail=f"El {document_name} no pertenece al paciente o está inactivo"
+            )
+        
+        if patient_document.document_value.strip().upper() != patient_document_value.strip().upper():
+            raise HTTPException(
+                status_code=400,
+                detail="El valor del documento no coincide con el registro del paciente"
+            )
+        
+        # 🆕 Validate and format diagnoses from CIE-10 catalog if provided
+        # Compliance: NOM-004-SSA3-2012 - Register diagnosis codes and descriptions from official catalog
+        primary_diagnoses_from_catalog = consultation_data.get("primary_diagnoses", [])
+        secondary_diagnoses_from_catalog = consultation_data.get("secondary_diagnoses_list", [])
+        
+        if primary_diagnoses_from_catalog or secondary_diagnoses_from_catalog:
+            primary_formatted, secondary_formatted = format_diagnoses_from_catalog(
+                db=db,
+                primary_diagnoses=primary_diagnoses_from_catalog if primary_diagnoses_from_catalog else None,
+                secondary_diagnoses=secondary_diagnoses_from_catalog if secondary_diagnoses_from_catalog else None
+            )
+            
+            # Override text fields with formatted catalog diagnoses (code + description)
+            if primary_formatted:
+                consultation_data["primary_diagnosis"] = primary_formatted
+            if secondary_formatted:
+                consultation_data["secondary_diagnoses"] = secondary_formatted
+            
+            api_logger.debug(
+                "🔍 Diagnoses validated and formatted from CIE-10 catalog (update)",
+                extra={
+                    "consultation_id": consultation_id,
+                    "primary_diagnosis": consultation_data.get("primary_diagnosis", ""),
+                    "secondary_diagnoses": consultation_data.get("secondary_diagnoses", "")
+                }
+            )
         
         # Parse consultation date if provided
         consultation_date = consultation.consultation_date
@@ -497,7 +887,9 @@ async def update_consultation(
             consultation_date = consultation_date_with_tz.replace(tzinfo=None)
         
         # Update fields
-        consultation.patient_id = consultation_data.get("patient_id", consultation.patient_id)
+        consultation.patient_id = target_patient_id
+        consultation.patient_document_id = patient_document_id
+        consultation.patient_document_value = patient_document.document_value
         consultation.consultation_date = consultation_date
         consultation.chief_complaint = consultation_data.get("chief_complaint", consultation.chief_complaint)
         consultation.history_present_illness = consultation_data.get("history_present_illness", consultation.history_present_illness)
@@ -510,17 +902,54 @@ async def update_consultation(
         consultation.secondary_diagnoses = consultation_data.get("secondary_diagnoses", consultation.secondary_diagnoses)
         consultation.prescribed_medications = consultation_data.get("prescribed_medications", consultation.prescribed_medications)
         consultation.treatment_plan = consultation_data.get("treatment_plan", consultation.treatment_plan)
+        consultation.follow_up_instructions = consultation_data.get("follow_up_instructions", consultation.follow_up_instructions)
         consultation.notes = consultation_data.get("notes") or consultation_data.get("interconsultations") or consultation.notes
         consultation.consultation_type = consultation_data.get("consultation_type", consultation.consultation_type)
         # Update first-time consultation fields (using _history fields)
         consultation.family_history = consultation_data.get("family_history", consultation.family_history)
         consultation.perinatal_history = consultation_data.get("perinatal_history", consultation.perinatal_history)
+        consultation.gynecological_and_obstetric_history = consultation_data.get(
+            "gynecological_and_obstetric_history",
+            consultation.gynecological_and_obstetric_history
+        )
         consultation.personal_pathological_history = consultation_data.get("personal_pathological_history", consultation.personal_pathological_history)
         consultation.personal_non_pathological_history = consultation_data.get("personal_non_pathological_history", consultation.personal_non_pathological_history)
         
         # Save changes
         db.commit()
         db.refresh(consultation)
+
+        persisted_snapshot = db.execute(
+            text(
+                "SELECT patient_document_id, patient_document_value "
+                "FROM medical_records WHERE id = :record_id"
+            ),
+            {"record_id": consultation.id}
+        ).fetchone()
+        api_logger.debug(
+            "📄 Persisted medical record snapshot after update",
+            extra={
+                "consultation_id": consultation.id,
+                "patient_document_id": persisted_snapshot.patient_document_id if persisted_snapshot else None,
+                "patient_document_value": persisted_snapshot.patient_document_value if persisted_snapshot else None
+            }
+        )
+
+        updated_data = serialize_instance(consultation)
+
+        audit_service.log_action(
+            db=db,
+            action="UPDATE",
+            user=current_user,
+            request=request,
+            table_name="medical_records",
+            record_id=consultation.id,
+            old_values=original_data,
+            new_values=updated_data,
+            operation_type="consultation_update",
+            affected_patient_id=consultation.patient_id,
+            affected_patient_name=consultation.patient.name if consultation.patient else None,
+        )
         
         # Get patient and doctor names for response
         patient_name = "Paciente No Identificado"
@@ -536,19 +965,24 @@ async def update_consultation(
         result = {
             "id": consultation.id,
             "patient_id": consultation.patient_id,
+            "patient_document_id": consultation.patient_document_id,
+            "patient_document_value": consultation.patient_document_value,
+            "patient_document_name": consultation.patient_document.name if consultation.patient_document else None,
             "consultation_date": consultation.consultation_date.isoformat(),
             "end_time": consultation_end_time.isoformat(),
             "chief_complaint": consultation.chief_complaint,
             "history_present_illness": consultation.history_present_illness,
             "family_history": consultation.family_history,
             "perinatal_history": consultation.perinatal_history,
+            "gynecological_and_obstetric_history": consultation.gynecological_and_obstetric_history,
             "personal_pathological_history": consultation.personal_pathological_history,
             "personal_non_pathological_history": consultation.personal_non_pathological_history,
             "physical_examination": consultation.physical_examination,
             "laboratory_results": consultation.laboratory_results,
             "primary_diagnosis": consultation.primary_diagnosis,
             "secondary_diagnoses": consultation.secondary_diagnoses,
-            "treatment_plan": consultation.treatment_plan,
+        "treatment_plan": consultation.treatment_plan,
+        "follow_up_instructions": consultation.follow_up_instructions,
             "therapeutic_plan": consultation.treatment_plan,  # Alias for compatibility
             "notes": consultation.notes,
             "interconsultations": consultation.notes,  # Map notes to interconsultations for frontend compatibility
@@ -564,19 +998,35 @@ async def update_consultation(
             "date": consultation.consultation_date.isoformat()
         }
         
-        print(f"✅ Consultation {consultation_id} updated successfully")
+        api_logger.info("Consultation updated successfully", consultation_id=consultation_id, doctor_id=current_user.id)
         return result
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error in update_consultation: {str(e)}")
+        api_logger.error("Error in update_consultation", consultation_id=consultation_id, doctor_id=current_user.id, error=str(e), exc_info=True)
+        audit_service.log_action(
+            db=db,
+            action="UPDATE",
+            user=current_user,
+            request=request,
+            table_name="medical_records",
+            record_id=consultation_id,
+            old_values=original_data if 'original_data' in locals() else None,
+            new_values=None,
+            operation_type="consultation_update",
+            affected_patient_id=getattr(consultation, "patient_id", None) if 'consultation' in locals() and consultation else None,
+            affected_patient_name=getattr(consultation.patient, "name", None) if 'consultation' in locals() and consultation and consultation.patient else None,
+            success=False,
+            error_message=str(e),
+        )
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
 @router.delete("/consultations/{consultation_id}")
 async def delete_consultation(
     consultation_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
@@ -591,12 +1041,31 @@ async def delete_consultation(
         if not consultation:
             raise HTTPException(status_code=404, detail="Consultation not found or access denied")
         
+        original_data = serialize_instance(consultation)
+        
         # For medical records, we typically don't delete but mark as inactive
         # However, for this implementation, we'll do a soft delete by updating notes
         consultation.notes = f"[DELETED] {consultation.notes or ''}"
         consultation.updated_at = now_cdmx()
         
         db.commit()
+        db.refresh(consultation)
+
+        updated_data = serialize_instance(consultation)
+
+        audit_service.log_action(
+            db=db,
+            action="DELETE",
+            user=current_user,
+            request=request,
+            table_name="medical_records",
+            record_id=consultation_id,
+            old_values=original_data,
+            new_values=updated_data,
+            operation_type="consultation_delete",
+            affected_patient_id=consultation.patient_id,
+            affected_patient_name=consultation.patient.name if consultation.patient else None,
+        )
         
         return {
             "message": "Consultation deleted successfully",
@@ -607,7 +1076,20 @@ async def delete_consultation(
         raise
     except Exception as e:
         db.rollback()
-        print(f"❌ Error in delete_consultation: {str(e)}")
+        api_logger.error("Error in delete_consultation", consultation_id=consultation_id, doctor_id=current_user.id, error=str(e), exc_info=True)
+        audit_service.log_action(
+            db=db,
+            action="DELETE",
+            user=current_user,
+            request=request,
+            table_name="medical_records",
+            record_id=consultation_id,
+            old_values=original_data if 'original_data' in locals() else None,
+            new_values=None,
+            operation_type="consultation_delete",
+            success=False,
+            error_message=str(e),
+        )
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
@@ -636,7 +1118,7 @@ async def get_medical_records(
             
         return {"data": result, "count": len(result)}
     except Exception as e:
-        print(f"❌ Error in get_medical_records: {str(e)}")
+        api_logger.error("Error in get_medical_records", doctor_id=current_user.id, error=str(e), exc_info=True)
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
@@ -660,7 +1142,7 @@ async def get_medical_record(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error in get_medical_record: {str(e)}")
+        api_logger.error("Error in get_medical_record", record_id=record_id, doctor_id=current_user.id, error=str(e), exc_info=True)
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
@@ -672,7 +1154,7 @@ async def create_medical_record(
 ):
     """Create new medical record"""
     try:
-        print(f"🔬 Received medical record data: {record_data.dict()}")
+        api_logger.debug("Received medical record data", doctor_id=current_user.id)
         
         # Verify patient exists
         patient = crud.get_person(db, record_data.patient_id)
@@ -692,7 +1174,7 @@ async def create_medical_record(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error in create_medical_record: {str(e)}")
+        api_logger.error("Error in create_medical_record", doctor_id=current_user.id, error=str(e), exc_info=True)
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
@@ -723,7 +1205,7 @@ async def update_medical_record(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error in update_medical_record: {str(e)}")
+        api_logger.error("Error in update_medical_record", record_id=record_id, doctor_id=current_user.id, error=str(e), exc_info=True)
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
@@ -753,8 +1235,65 @@ async def delete_medical_record(
         raise
     except Exception as e:
         db.rollback()
-        print(f"❌ Error in delete_medical_record: {str(e)}")
+        api_logger.error("Error in delete_medical_record", record_id=record_id, doctor_id=current_user.id, error=str(e), exc_info=True)
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+# Folios de documentos (recetas y órdenes)
+@router.get("/consultations/{consultation_id}/document-folio")
+async def get_consultation_document_folio(
+    consultation_id: int,
+    document_type: str = Query(..., description="Tipo de documento: prescription | study_order"),
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """
+    Obtener o generar un folio para la consulta según el tipo de documento.
+    El folio es único por doctor, consulta y tipo de documento.
+    """
+    try:
+        normalized_type = DocumentFolioService.normalize_document_type(document_type)
+    except ValueError as exc:
+        api_logger.warning(
+            "Tipo de documento inválido para folio",
+            extra={"document_type": document_type, "user_id": current_user.id}
+        )
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    try:
+        consultation = db.query(MedicalRecord).filter(
+            MedicalRecord.id == consultation_id,
+            MedicalRecord.doctor_id == current_user.id
+        ).first()
+
+        if not consultation:
+            api_logger.warning(
+                "Consulta no encontrada o sin acceso para folio",
+                extra={"consultation_id": consultation_id, "doctor_id": current_user.id}
+            )
+            raise HTTPException(status_code=404, detail="Consulta no encontrada o sin permiso")
+
+        folio = DocumentFolioService.get_or_create_folio(
+            db=db,
+            doctor_id=consultation.doctor_id,
+            consultation_id=consultation.id,
+            document_type=normalized_type
+        )
+
+        return {
+            "consultation_id": consultation.id,
+            "doctor_id": consultation.doctor_id,
+            "document_type": folio.document_type,
+            "folio_number": folio.folio_number,
+            "formatted_folio": folio.formatted_folio,
+            "created_at": folio.created_at.isoformat() if folio.created_at else None
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error(
+            "Error generando folio para consulta",
+            extra={"consultation_id": consultation_id, "document_type": document_type, "error": str(e)}
+        )
+        raise HTTPException(status_code=500, detail="Error generando folio del documento")
 
 
 # ============================================================================
@@ -782,11 +1321,19 @@ async def get_consultation_prescriptions(
             return []
 
         # Get prescriptions for this consultation with medication relationship loaded
-        prescriptions = db.query(ConsultationPrescription).options(
-            joinedload(ConsultationPrescription.medication)
-        ).filter(
-            ConsultationPrescription.consultation_id == consultation_id
-        ).all()
+        prescriptions = (
+            db.query(ConsultationPrescription)
+            .options(joinedload(ConsultationPrescription.medication))
+            .outerjoin(Medication, ConsultationPrescription.medication_id == Medication.id)
+            .filter(
+                ConsultationPrescription.consultation_id == consultation_id,
+                or_(
+                    Medication.created_by == current_user.id,
+                    Medication.id.is_(None)
+                )
+            )
+            .all()
+        )
         
         api_logger.info("Found prescriptions", consultation_id=consultation_id, count=len(prescriptions))
         
@@ -838,9 +1385,14 @@ async def create_consultation_prescription(
             raise HTTPException(status_code=404, detail="Consultation not found or no access")
         
         # Verify medication exists
-        medication = db.query(Medication).filter(
-            Medication.id == prescription_data.get('medication_id')
-        ).first()
+        medication = (
+            db.query(Medication)
+            .filter(
+                Medication.id == prescription_data.get('medication_id'),
+                Medication.created_by == current_user.id
+            )
+            .first()
+        )
         
         if not medication:
             raise HTTPException(status_code=404, detail="Medication not found")
@@ -890,6 +1442,7 @@ async def update_consultation_prescription(
     consultation_id: int,
     prescription_id: int,
     prescription_data: dict,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
@@ -915,6 +1468,11 @@ async def update_consultation_prescription(
         if not prescription:
             raise HTTPException(status_code=404, detail="Prescription not found")
         
+        original_data = serialize_instance(
+            prescription,
+            exclude={"created_at"},
+        )
+        
         # Update fields
         if 'dosage' in prescription_data:
             prescription.dosage = prescription_data['dosage']
@@ -934,6 +1492,25 @@ async def update_consultation_prescription(
         
         # Load medication relationship for response
         db.refresh(prescription, ['medication'])
+        
+        updated_data = serialize_instance(prescription)
+
+        audit_service.log_action(
+            db=db,
+            action="UPDATE",
+            user=current_user,
+            request=request,
+            table_name="consultation_prescriptions",
+            record_id=prescription.id,
+            old_values=original_data,
+            new_values=updated_data,
+            operation_type="prescription_update",
+            affected_patient_id=consultation.patient_id,
+            affected_patient_name=consultation.patient.name if consultation.patient else None,
+            metadata={
+                "consultation_id": consultation_id,
+            },
+        )
         
         response_data = {
             "id": prescription.id,
@@ -957,12 +1534,28 @@ async def update_consultation_prescription(
     except Exception as e:
         api_logger.error("Error updating consultation prescription", prescription_id=prescription_id, error=str(e))
         db.rollback()
+        audit_service.log_action(
+            db=db,
+            action="UPDATE",
+            user=current_user,
+            request=request,
+            table_name="consultation_prescriptions",
+            record_id=prescription_id,
+            old_values=original_data if 'original_data' in locals() else None,
+            new_values=None,
+            operation_type="prescription_update",
+            affected_patient_id=getattr(consultation, "patient_id", None) if 'consultation' in locals() and consultation else None,
+            success=False,
+            error_message=str(e),
+            metadata={"consultation_id": consultation_id},
+        )
         raise HTTPException(status_code=500, detail="Error updating consultation prescription")
 
 @router.delete("/consultations/{consultation_id}/prescriptions/{prescription_id}")
 async def delete_consultation_prescription(
     consultation_id: int,
     prescription_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
@@ -988,8 +1581,25 @@ async def delete_consultation_prescription(
         if not prescription:
             raise HTTPException(status_code=404, detail="Prescription not found")
         
+        original_data = serialize_instance(prescription)
+
         db.delete(prescription)
         db.commit()
+
+        audit_service.log_action(
+            db=db,
+            action="DELETE",
+            user=current_user,
+            request=request,
+            table_name="consultation_prescriptions",
+            record_id=prescription_id,
+            old_values=original_data,
+            new_values=None,
+            operation_type="prescription_delete",
+            affected_patient_id=consultation.patient_id,
+            affected_patient_name=consultation.patient.name if consultation.patient else None,
+            metadata={"consultation_id": consultation_id},
+        )
         
         api_logger.info("Prescription deleted successfully", prescription_id=prescription_id, consultation_id=consultation_id)
         return {"message": "Prescription deleted successfully"}
@@ -999,5 +1609,19 @@ async def delete_consultation_prescription(
     except Exception as e:
         api_logger.error("Error deleting consultation prescription", prescription_id=prescription_id, error=str(e))
         db.rollback()
+        audit_service.log_action(
+            db=db,
+            action="DELETE",
+            user=current_user,
+            request=request,
+            table_name="consultation_prescriptions",
+            record_id=prescription_id,
+            old_values=original_data if 'original_data' in locals() else None,
+            new_values=None,
+            operation_type="prescription_delete",
+            success=False,
+            error_message=str(e),
+            metadata={"consultation_id": consultation_id},
+        )
         raise HTTPException(status_code=500, detail="Error deleting consultation prescription")
 

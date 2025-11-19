@@ -53,6 +53,7 @@
       "history_present_illness",
       "family_history",
       "perinatal_history",
+      "gynecological_and_obstetric_history",
       "personal_pathological_history",
       "personal_non_pathological_history",
       "physical_examination",

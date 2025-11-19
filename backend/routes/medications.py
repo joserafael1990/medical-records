@@ -3,103 +3,139 @@ Medication management endpoints
 Migrated from main_clean_english.py to improve code organization
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import List, Optional
 
 from database import get_db, Person, Medication
 from dependencies import get_current_user
+from logger import get_logger
+import schemas
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 router = APIRouter(prefix="/api", tags=["medications"])
+api_logger = get_logger("medical_records.api")
 
 
-@router.get("/medications")
+@router.get("/medications", response_model=List[schemas.MedicationResponse])
 async def get_medications(
-    search: Optional[str] = Query(None),
+    search: Optional[str] = Query(default=None, description="Filtro por nombre"),
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
-    """Get all medications or search by name (returns unique medications by name)"""
-    print(f"💊 Getting medications. Search term: {search}")
-    
+    """Return medications available for the current doctor."""
+    api_logger.info(
+        "📋 Obteniendo medicamentos",
+        extra={"doctor_id": current_user.id, "search": search}
+    )
+
     try:
-        # Use DISTINCT ON to get unique medications by name (keeping the first one by id)
+        query = db.query(Medication).filter(Medication.created_by == current_user.id)
+
         if search:
-            # For search, get distinct names and return the first medication with each name
-            query = db.query(Medication).filter(Medication.name.ilike(f"%{search}%")).order_by(Medication.name, Medication.id)
-        else:
-            query = db.query(Medication).order_by(Medication.name, Medication.id)
-        
-        medications = query.all()
-        
-        # Filter duplicates by name, keeping only the first occurrence (lowest id)
-        seen_names = {}
-        medications_data = []
-        for medication in medications:
-            name_lower = medication.name.lower().strip()
-            if name_lower not in seen_names:
-                seen_names[name_lower] = True
-            medication_data = {
-                "id": medication.id,
-                "name": medication.name,
-                "created_at": medication.created_at.isoformat() if medication.created_at else None
-            }
-            medications_data.append(medication_data)
-        
-        print(f"✅ Found {len(medications_data)} unique medications (from {len(medications)} total)")
-        return medications_data
-        
-    except Exception as e:
-        print(f"❌ Error getting medications: {e}")
-        raise HTTPException(status_code=500, detail="Error retrieving medications")
+            search_pattern = f"%{search.strip()}%"
+            query = query.filter(Medication.name.ilike(search_pattern))
+
+        medications = query.order_by(Medication.created_by.desc(), Medication.name.asc()).all()
+
+        api_logger.info(
+            "✅ Medicamentos obtenidos",
+            extra={"doctor_id": current_user.id, "count": len(medications)}
+        )
+        return medications
+
+    except Exception as exc:
+        api_logger.error(
+            "❌ Error obteniendo medicamentos",
+            extra={"doctor_id": current_user.id, "error": str(exc)}
+        )
+        raise HTTPException(status_code=500, detail="Error al obtener los medicamentos")
 
 
-@router.post("/medications")
+@router.post("/medications", response_model=schemas.MedicationResponse, status_code=status.HTTP_201_CREATED)
 async def create_medication(
-    medication_data: dict,
+    medication_data: schemas.MedicationCreate,
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
-    """Create a new medication"""
-    print(f"💊 Creating new medication: {medication_data}")
-    
+    """Create a new medication belonging to the current doctor."""
+    api_logger.info(
+        "📋 Creando medicamento",
+        extra={"doctor_id": current_user.id, "name": medication_data.name}
+    )
+
     try:
-        # Check if medication already exists
-        existing_medication = db.query(Medication).filter(
-            Medication.name.ilike(medication_data.get('name'))
-        ).first()
-        
+        normalized_name = medication_data.name.strip()
+
+        existing_medication = (
+            db.query(Medication)
+            .filter(
+                Medication.created_by == current_user.id,
+                Medication.name.ilike(normalized_name)
+            )
+            .first()
+        )
+
         if existing_medication:
-            # Return existing medication instead of creating duplicate
-            return {
-                "id": existing_medication.id,
-                "name": existing_medication.name,
-                "created_at": existing_medication.created_at.isoformat() if existing_medication.created_at else None
-            }
-        
-        # Create new medication with created_by set to current user
+            api_logger.info(
+                "⚠️ Medicamento existente devuelto",
+                extra={"doctor_id": current_user.id, "medication_id": existing_medication.id}
+            )
+            return existing_medication
+
         new_medication = Medication(
-            name=medication_data.get('name'),
+            name=normalized_name,
             created_by=current_user.id,
             is_active=True
         )
-        
+
         db.add(new_medication)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            api_logger.info(
+                "⚠️ Conflicto al crear medicamento, buscando existente",
+                extra={"doctor_id": current_user.id, "name": normalized_name}
+            )
+            existing_medication = (
+                db.query(Medication)
+                .filter(
+                    Medication.created_by == current_user.id,
+                    Medication.name.ilike(normalized_name)
+                )
+                .first()
+            )
+            if existing_medication:
+                return existing_medication
+            raise
+
         db.refresh(new_medication)
-        
-        response_data = {
-            "id": new_medication.id,
-            "name": new_medication.name,
-            "is_active": new_medication.is_active,
-            "created_by": new_medication.created_by,
-            "created_at": new_medication.created_at.isoformat() if new_medication.created_at else None
-        }
-        
-        print(f"✅ Created medication {new_medication.id}")
-        return response_data
-        
-    except Exception as e:
-        print(f"❌ Error creating medication: {e}")
+
+        api_logger.info(
+            "✅ Medicamento creado",
+            extra={"doctor_id": current_user.id, "medication_id": new_medication.id}
+        )
+        return new_medication
+
+    except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(status_code=500, detail="Error creating medication")
+        api_logger.error(
+            "❌ Integridad al crear medicamento",
+            extra={"doctor_id": current_user.id, "name": normalized_name, "error": str(exc)}
+        )
+        raise HTTPException(status_code=400, detail="Ya existe un medicamento con ese nombre")
+    except SQLAlchemyError as exc:
+        db.rollback()
+        api_logger.error(
+            "❌ Error creando medicamento",
+            extra={"doctor_id": current_user.id, "error": str(exc)}
+        )
+        raise HTTPException(status_code=500, detail="Error al crear el medicamento")
+    except Exception as exc:
+        db.rollback()
+        api_logger.error(
+            "❌ Error inesperado creando medicamento",
+            extra={"doctor_id": current_user.id, "error": str(exc)}
+        )
+        raise HTTPException(status_code=500, detail="Error al crear el medicamento")

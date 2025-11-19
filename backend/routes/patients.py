@@ -15,11 +15,35 @@ import crud
 import schemas
 from datetime import datetime
 from utils.audit_utils import serialize_instance
+from utils.document_validators import validate_curp_conditional
 
 api_logger = get_logger("medical_records.api")
 security_logger = get_logger("medical_records.security")
 
 router = APIRouter(prefix="/api", tags=["patients"])
+
+
+def _format_documents_for_validation(documents_payload):
+    """Format documents payload into simple dict list for validation helpers."""
+    formatted = []
+    for doc in documents_payload or []:
+        if doc is None:
+            continue
+        if isinstance(doc, dict):
+            document_id = doc.get('document_id')
+            document_value = doc.get('document_value')
+            document_name = doc.get('document_name')
+        else:
+            document_id = getattr(doc, 'document_id', None)
+            document_value = getattr(doc, 'document_value', None)
+            document_name = getattr(doc, 'document_name', None)
+        if document_id:
+            formatted.append({
+                "document_id": document_id,
+                "document_value": (document_value or "").strip(),
+                "document_name": document_name
+            })
+    return formatted
 
 
 @router.get("/patients")
@@ -312,10 +336,17 @@ async def create_patient(
             extra={"doctor_id": current_user.id}
         )
         
+        # Validate CURP only when CURP document is provided
+        documents_payload = getattr(patient_data, 'documents', []) or []
+        formatted_documents = _format_documents_for_validation(documents_payload)
+        is_valid_curp, curp_error = validate_curp_conditional(formatted_documents)
+        if not is_valid_curp:
+            raise HTTPException(status_code=422, detail=curp_error)
+        
         # Check if patient already exists by documents (normalized) or email
         # Validate document uniqueness before creating patient
-        if hasattr(patient_data, 'documents') and patient_data.documents:
-            for doc in patient_data.documents:
+        if documents_payload:
+            for doc in documents_payload:
                 if doc.document_id and doc.document_value:
                     # Check if this document value already exists for this document type
                     existing_doc = db.query(PersonDocument).join(Person).filter(
@@ -435,11 +466,18 @@ async def update_patient(
             patient,
             exclude={"updated_at"},
         )
-
+        
+        # Validate CURP document only if CURP provided
+        documents_payload = getattr(patient_data, 'documents', []) or []
+        formatted_documents = _format_documents_for_validation(documents_payload)
+        is_valid_curp, curp_error = validate_curp_conditional(formatted_documents)
+        if not is_valid_curp:
+            raise HTTPException(status_code=422, detail=curp_error)
+        
         # Check for conflicts with other patients (excluding current patient)
         # Validate document uniqueness before updating patient
-        if hasattr(patient_data, 'documents') and patient_data.documents:
-            for doc in patient_data.documents:
+        if documents_payload:
+            for doc in documents_payload:
                 if doc.document_id and doc.document_value:
                     # Check if this document value already exists for this document type in another patient
                     existing_doc = db.query(PersonDocument).join(Person).filter(
@@ -487,7 +525,7 @@ async def update_patient(
         foreign_key_fields = [
             'emergency_contact_relationship',
             'birth_state_id',
-            'city_residence_id'
+            # 'city_residence_id'  # Field doesn't exist in Person model - removed
         ]
         
         for field, value in update_data.items():
@@ -502,7 +540,6 @@ async def update_patient(
                 else:
                     setattr(patient, field, value)
         
-        documents_payload = getattr(patient_data, 'documents', []) or []
         if documents_payload:
             security_logger.info(
                 "📄 Processing patient documents in update",
@@ -580,7 +617,7 @@ async def update_patient(
             affected_patient_id=patient.id,
             affected_patient_name=patient.name,
         )
-
+        
         return patient
     except HTTPException:
         db.rollback()

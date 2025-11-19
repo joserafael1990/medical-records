@@ -60,9 +60,7 @@ const PrescriptionDialog: React.FC<PrescriptionDialogProps> = ({
 
   // Load medications on mount
   useEffect(() => {
-    console.log('🔍 PrescriptionDialog useEffect triggered:', { open, onFetchMedications: !!onFetchMedications });
     if (open) {
-      console.log('🔍 Calling onFetchMedications...');
       onFetchMedications();
     }
   }, [open, onFetchMedications]);
@@ -130,15 +128,6 @@ const PrescriptionDialog: React.FC<PrescriptionDialogProps> = ({
     formData.frequency.trim() !== '' &&
     formData.duration.trim() !== '';
 
-  // Debug validation
-  console.log('💊 Form validation:', {
-    medication_id: formData.medication_id,
-    dosage: formData.dosage,
-    frequency: formData.frequency,
-    duration: formData.duration,
-    isFormValid
-  });
-
   return (
     <Dialog open={open} onClose={preventBackdropClose(onClose)} maxWidth="md" fullWidth>
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -164,13 +153,13 @@ const PrescriptionDialog: React.FC<PrescriptionDialogProps> = ({
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 1 }}>
           {/* Medication Selection with Option to Create New */}
-          <Box>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
               Medicamento *
             </Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'stretch' }}>
               <Autocomplete
-                fullWidth
+                sx={{ flexGrow: 1, minWidth: 0 }}
                 options={medications || []}
                 getOptionLabel={(option) => typeof option === 'string' ? option : option.name}
                 value={selectedMedication}
@@ -192,23 +181,26 @@ const PrescriptionDialog: React.FC<PrescriptionDialogProps> = ({
                   />
                 )}
               />
-              {medicationInputValue && !selectedMedication && (
-                <Button
-                  variant="outlined"
-                  startIcon={<AddIcon />}
-                  onClick={handleCreateNewMedication}
-                  disabled={creatingMedication}
-                  sx={{ minWidth: 120, whiteSpace: 'nowrap' }}
-                >
-                  {creatingMedication ? 'Creando...' : 'Crear Nuevo'}
-                </Button>
-              )}
+              <Button
+                variant="outlined"
+                startIcon={<AddIcon />}
+                onClick={handleCreateNewMedication}
+                disabled={
+                  creatingMedication ||
+                  !medicationInputValue.trim() ||
+                  Boolean(
+                    selectedMedication &&
+                    selectedMedication.name?.toLowerCase().trim() === medicationInputValue.toLowerCase().trim()
+                  )
+                }
+                sx={{ minWidth: 140, whiteSpace: 'nowrap' }}
+              >
+                {creatingMedication ? 'Creando...' : 'Guardar medicamento'}
+              </Button>
             </Box>
-            {medicationInputValue && !selectedMedication && (
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                Si no encuentra el medicamento en la lista, puede crear uno nuevo.
-              </Typography>
-            )}
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+              Escriba el nombre completo. Si no encuentra coincidencias, use el botón para guardarlo y reutilizarlo.
+            </Typography>
           </Box>
 
           {/* Dosage, Frequency, Duration */}

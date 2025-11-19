@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { API_CONFIG } from '../constants';
 import { apiService } from './api';
 
 export interface PatientInfo {
@@ -14,6 +15,14 @@ export interface PatientInfo {
   city?: string;
   state?: string;
   country?: string;
+  height?: string;
+  weight?: string;
+  temperature?: string;
+  heartRate?: string;
+  respiratoryRate?: string;
+  bmi?: string;
+  identificationType?: string;
+  identificationValue?: string;
 }
 
 export interface DoctorInfo {
@@ -27,6 +36,18 @@ export interface DoctorInfo {
   email?: string;
   onlineConsultationUrl?: string;
   offices?: OfficeInfo[];
+  avatarType?: 'initials' | 'preloaded' | 'custom';
+  avatarTemplateKey?: string | null;
+  avatarFilePath?: string | null;
+  avatarUrl?: string;
+  avatar_url?: string;
+  avatar?: {
+    type?: 'initials' | 'preloaded' | 'custom';
+    templateKey?: string | null;
+    filePath?: string | null;
+    url?: string;
+    avatar_url?: string;
+  };
 }
 
 export interface OfficeInfo {
@@ -65,13 +86,20 @@ export interface StudyInfo {
 export interface ConsultationInfo {
   id: number;
   date: string;
-  time: string;
-  type: string;
+  time?: string;
+  type?: string;
   reason?: string;
   diagnosis?: string;
   prescribed_medications?: string;
   notes?: string;
   treatment_plan?: string;
+  folio?: string;
+  folioNumber?: number;
+  folioCreatedAt?: string | null;
+  nextAppointmentDate?: string | null;
+  patient_document_id?: number | null;
+  patient_document_value?: string;
+  patient_document_name?: string;
 }
 
 export interface CertificateInfo {
@@ -80,6 +108,8 @@ export interface CertificateInfo {
 }
 
 class PDFService {
+  private avatarCache = new Map<string, string>();
+
   private formatDateToDDMMYYYY(dateString: string): string {
     try {
       const date = new Date(dateString);
@@ -116,6 +146,24 @@ class PDFService {
     }
   }
 
+  private formatDateToLongFormat(dateString: string): string {
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return '';
+      }
+
+      return date.toLocaleDateString('es-MX', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch (error) {
+      console.warn('Error formatting long date:', error);
+      return '';
+    }
+  }
+
   private selectBestOfficeForPDF(offices: OfficeInfo[]): OfficeInfo | null {
     if (!offices || offices.length === 0) return null;
     
@@ -130,49 +178,174 @@ class PDFService {
     return offices[0];
   }
 
+  private getDoctorInitialsForPdf(doctor: DoctorInfo): string {
+    const nameSource = doctor?.name?.trim();
+    if (!nameSource) {
+      return 'DR';
+    }
+
+    const initials = nameSource
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map(word => word.charAt(0))
+      .join('')
+      .toUpperCase();
+
+    return initials || 'DR';
+  }
+
+  private resolveDoctorAvatarUrl(doctor: DoctorInfo): string | undefined {
+    // If avatar type is 'initials', don't try to load an image
+    const avatarType = doctor.avatarType || doctor.avatar?.type || 'initials';
+    if (avatarType === 'initials') {
+      return undefined;
+    }
+
+    // Try to get URL from various possible locations
+    const url =
+      doctor.avatar?.url ||
+      doctor.avatar?.avatar_url ||
+      doctor.avatarUrl ||
+      doctor.avatar_url;
+    
+    if (!url) {
+      return undefined;
+    }
+    
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    
+    const normalizedPath = url.startsWith('/') ? url : `/${url}`;
+    
+    // Convert static file URLs to API endpoints for CORS support
+    // Preloaded avatars: /static/doctor_avatars/preloaded/{filename} -> /api/avatars/preloaded/{filename}
+    if (normalizedPath.startsWith('/static/doctor_avatars/preloaded/')) {
+      const filename = normalizedPath.replace('/static/doctor_avatars/preloaded/', '');
+      return `${API_CONFIG.BASE_URL}/api/avatars/preloaded/${filename}`;
+    }
+    
+    // Custom avatars: /uploads/doctor_avatars/{doctor_id}/{filename} -> /api/avatars/custom/{doctor_id}/{filename}
+    if (normalizedPath.startsWith('/uploads/doctor_avatars/')) {
+      const pathAfterUploads = normalizedPath.replace('/uploads/doctor_avatars/', '');
+      // pathAfterUploads should be like "123/filename.png"
+      return `${API_CONFIG.BASE_URL}/api/avatars/custom/${pathAfterUploads}`;
+    }
+    
+    return `${API_CONFIG.BASE_URL}${normalizedPath}`;
+  }
+
+  private async loadDoctorAvatarDataUrl(doctor: DoctorInfo): Promise<string | null> {
+    const resolvedUrl = this.resolveDoctorAvatarUrl(doctor);
+    if (!resolvedUrl) {
+      return null;
+    }
+
+    if (this.avatarCache.has(resolvedUrl)) {
+      return this.avatarCache.get(resolvedUrl) as string;
+    }
+
+    try {
+      const headers: Record<string, string> = {};
+      const token = localStorage.getItem('token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const response = await fetch(resolvedUrl, {
+        headers,
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        console.warn('No se pudo cargar el avatar para PDF:', {
+          status: response.status,
+          statusText: response.statusText
+        });
+        return null;
+      }
+      const blob = await response.blob();
+      const dataUrl = await this.convertBlobToDataUrl(blob);
+      this.avatarCache.set(resolvedUrl, dataUrl);
+      return dataUrl;
+    } catch (error) {
+      console.warn('Error cargando avatar para PDF:', error);
+      return null;
+    }
+  }
+
+  private convertBlobToDataUrl(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
 
   /**
    * Add minimalist modern header inspired by the provided design
    */
-  private addModernPrescriptionHeader(
+  private async addModernPrescriptionHeader(
     doc: jsPDF, 
     patient: PatientInfo, 
     doctor: DoctorInfo, 
     consultation: ConsultationInfo,
     officeInfo?: OfficeInfo
-  ): number {
+  ): Promise<number> {
     const pageWidth = doc.internal.pageSize.width;
     let currentY = 15;
 
     // === HEADER TOP SECTION ===
-    // Medical icon (left) - Stethoscope
-    doc.setFillColor(37, 99, 235); // Blue-600
-    doc.roundedRect(15, currentY, 15, 15, 3, 3, 'F');
-    
-    // Draw detailed stethoscope icon
-    doc.setDrawColor(255, 255, 255);
-    doc.setFillColor(255, 255, 255);
-    doc.setLineWidth(1.2);
-    
-    // Earpieces (top)
-    doc.circle(19, 17.5, 1.2, 'F');
-    doc.circle(26, 17.5, 1.2, 'F');
-    
-    // Tubes connecting to chest piece
-    doc.line(19, 18.5, 20, 22);
-    doc.line(26, 18.5, 25, 22);
-    
-    // Y-junction
-    doc.line(20, 22, 22.5, 24);
-    doc.line(25, 22, 22.5, 24);
-    
-    // Main tube to chest piece
-    doc.line(22.5, 24, 22.5, 26.5);
-    
-    // Chest piece (diaphragm)
-    doc.circle(22.5, 28, 1.8, 'S');
-    doc.setLineWidth(0.8);
-    doc.circle(22.5, 28, 1.2, 'S');
+    // Doctor avatar (left) - same style as UI avatar
+    const avatarRadius = 7.5;
+    const avatarCenterX = 22.5;
+    const avatarCenterY = currentY + avatarRadius;
+    const doctorInitials = this.getDoctorInitialsForPdf(doctor);
+    const avatarDiameter = avatarRadius * 2;
+    const avatarTopLeftX = avatarCenterX - avatarRadius;
+    const avatarTopLeftY = avatarCenterY - avatarRadius;
+    const avatarDataUrl = await this.loadDoctorAvatarDataUrl(doctor);
+
+    if (avatarDataUrl) {
+      try {
+        doc.addImage(
+          avatarDataUrl,
+          'PNG',
+          avatarTopLeftX,
+          avatarTopLeftY,
+          avatarDiameter,
+          avatarDiameter,
+          undefined,
+          'FAST'
+        );
+        doc.setDrawColor(37, 99, 235);
+        doc.setLineWidth(0.6);
+        doc.circle(avatarCenterX, avatarCenterY, avatarRadius, 'S');
+      } catch (error) {
+        console.warn('Fallo al dibujar avatar en PDF, usando iniciales.', error);
+        doc.setFillColor(37, 99, 235); // Blue-600
+        doc.circle(avatarCenterX, avatarCenterY, avatarRadius, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(doctorInitials.length > 2 ? 8 : 9);
+        doc.text(doctorInitials, avatarCenterX, avatarCenterY + 0.5, {
+          align: 'center',
+          baseline: 'middle'
+        } as any);
+      }
+    } else {
+      doc.setFillColor(37, 99, 235); // Blue-600
+      doc.circle(avatarCenterX, avatarCenterY, avatarRadius, 'F');
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(doctorInitials.length > 2 ? 8 : 9);
+      doc.text(doctorInitials, avatarCenterX, avatarCenterY + 0.5, {
+        align: 'center',
+        baseline: 'middle'
+      } as any);
+    }
     
     // Doctor information (center-left)
     const doctorInfoStartX = 35;
@@ -202,17 +375,32 @@ class PDFService {
       doc.setTextColor(107, 114, 128); // Gray-500
       doc.setFont('helvetica', 'normal');
       doc.text(`Cédula Profesional: ${doctor.license}`, doctorInfoStartX, doctorY);
+      doctorY += 4;
+    }
+
+    // University
+    if (doctor.university) {
+      doc.setFontSize(8);
+      doc.setTextColor(107, 114, 128); // Gray-500
+      doc.setFont('helvetica', 'normal');
+      const maxUniversityWidth = pageWidth - doctorInfoStartX - 40;
+      const universityLines = doc.splitTextToSize(`Universidad: ${doctor.university}`, maxUniversityWidth);
+      universityLines.forEach((line, index) => {
+        doc.text(line, doctorInfoStartX, doctorY + (index * 3.5));
+      });
+      doctorY += universityLines.length * 3.5;
     }
 
     // === CONTACT INFORMATION (Right side of header) ===
-    const contactIconX = pageWidth - 50;
+    const contactIconX = pageWidth - 60;
     const contactTextX = contactIconX + 5;
     let headerContactY = currentY + 3;
     
+    doc.setDrawColor(156, 163, 175); // Gray-400
+
     doc.setFontSize(8);
     doc.setTextColor(107, 114, 128); // Gray-500
     doc.setFont('helvetica', 'normal');
-    doc.setDrawColor(156, 163, 175); // Gray-400
     
     // Phone
     const phoneNumber = officeInfo?.phone || doctor.phone;
@@ -235,7 +423,7 @@ class PDFService {
       doc.line(contactIconX - 0.2, headerContactY - 2.5, contactIconX + 1.3, headerContactY - 1);
       doc.line(contactIconX + 2.8, headerContactY - 2.5, contactIconX + 1.3, headerContactY - 1);
       
-      const maxEmailWidth = 48;
+      const maxEmailWidth = 45;
       const emailLines = doc.splitTextToSize(doctor.email, maxEmailWidth);
       doc.text(emailLines[0], contactTextX, headerContactY);
       if (emailLines.length > 1) {
@@ -259,7 +447,7 @@ class PDFService {
         doc.circle(contactIconX + 1.3, headerContactY - 1.2, 0.5, 'F');
         
         const addressText = addressParts.join(', ');
-        const maxAddressWidth = 48;
+        const maxAddressWidth = 45;
         const addressLines = doc.splitTextToSize(addressText, maxAddressWidth);
         doc.text(addressLines[0], contactTextX, headerContactY);
         if (addressLines.length > 1) {
@@ -297,7 +485,40 @@ class PDFService {
     const patientFullName = patient.name || 'Paciente';
     doc.text(patientFullName, 15, currentY);
     
-    currentY += 8;
+    currentY += 5;
+
+    const identificationType =
+      patient.identificationType ||
+      consultation.patient_document_name ||
+      '';
+    const identificationValue =
+      patient.identificationValue ||
+      consultation.patient_document_value ||
+      '';
+
+    if (identificationValue) {
+      doc.setFontSize(9);
+      doc.setTextColor(labelColor[0], labelColor[1], labelColor[2]);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Identificación', 15, currentY);
+      
+      currentY += 5;
+
+      doc.setFontSize(10);
+      doc.setTextColor(valueColor[0], valueColor[1], valueColor[2]);
+      doc.setFont('helvetica', 'normal');
+      const identificationLine = identificationType
+        ? `${identificationType}: ${identificationValue}`
+        : identificationValue;
+      const maxIdentificationWidth = pageWidth - 30;
+      const identificationLines = doc.splitTextToSize(identificationLine, maxIdentificationWidth);
+      identificationLines.forEach((line: string, index: number) => {
+        doc.text(line, 15, currentY + (index * 4.5));
+      });
+      currentY += identificationLines.length * 4.5;
+    }
+
+    currentY += 3;
 
     // Second row: Fecha y Edad
     const edadX = pageWidth / 2 + 20;
@@ -324,7 +545,55 @@ class PDFService {
       doc.text(ageText, edadX, currentY);
     }
     
+    // Folio next to date if available
+    if (consultation.folio) {
+      const folioX = pageWidth - 60;
+      doc.setFontSize(9);
+      doc.setTextColor(labelColor[0], labelColor[1], labelColor[2]);
+      doc.text('Folio', folioX, currentY - 5);
+      doc.setFontSize(10);
+      doc.setTextColor(valueColor[0], valueColor[1], valueColor[2]);
+      doc.text(consultation.folio, folioX, currentY);
+    }
+    
     currentY += 5;
+
+    const vitalSignsEntries = [
+      { label: 'Estatura', value: patient.height },
+      { label: 'Peso', value: patient.weight },
+      { label: 'Temperatura', value: patient.temperature },
+      { label: 'F.C.', value: patient.heartRate },
+      { label: 'F.R.', value: patient.respiratoryRate },
+      { label: 'IMC', value: patient.bmi }
+    ].filter(entry => entry.value && entry.value.trim() !== '');
+
+    if (vitalSignsEntries.length > 0) {
+      doc.setFontSize(9);
+      doc.setTextColor(labelColor[0], labelColor[1], labelColor[2]);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Signos vitales', 15, currentY);
+
+      currentY += 5;
+
+      doc.setFontSize(10);
+      doc.setTextColor(valueColor[0], valueColor[1], valueColor[2]);
+      doc.setFont('helvetica', 'normal');
+
+      const leftColumnX = 15;
+      const rightColumnX = pageWidth / 2 + 20;
+      const rowHeight = 5;
+
+      vitalSignsEntries.forEach((entry, index) => {
+        const column = index % 2;
+        const row = Math.floor(index / 2);
+        const textX = column === 0 ? leftColumnX : rightColumnX;
+        const textY = currentY + row * rowHeight;
+        doc.text(`${entry.label}: ${entry.value}`, textX, textY);
+      });
+
+      const totalRows = Math.ceil(vitalSignsEntries.length / 2);
+      currentY += totalRows * rowHeight + 5;
+    }
 
     // === DIAGNOSIS SECTION ===
     doc.setFontSize(9);
@@ -456,13 +725,18 @@ class PDFService {
     doc: jsPDF,
     doctor: DoctorInfo,
     consultation: ConsultationInfo,
-    startY: number
+    startY: number,
+    options: { includeTreatmentPlan?: boolean; drawBottomLine?: boolean; includeGenerationInfo?: boolean } = {}
   ): void {
     const pageHeight = doc.internal.pageSize.height;
     const pageWidth = doc.internal.pageSize.width;
+    const includeTreatmentPlan = options.includeTreatmentPlan ?? true;
+    const drawBottomLine = options.drawBottomLine ?? true;
+    const includeGenerationInfo = options.includeGenerationInfo ?? true;
     
-    // Position footer at bottom or after content
-    let footerY = Math.max(startY + 20, pageHeight - 70);
+    // Start position: if there's content above (medications), start immediately after with minimal spacing
+    // Otherwise, position at bottom of page
+    let footerY = startY + 5; // Minimal spacing (5 points) after medications
     
     // === OBSERVATIONS SECTION ===
     if (consultation.notes) {
@@ -483,14 +757,40 @@ class PDFService {
         footerY += 4;
       });
       
-      footerY += 10;
+      footerY += 5; // Reduced spacing after observations
+    }
+
+    if (includeTreatmentPlan) {
+    // === TREATMENT PLAN SECTION ===
+    // Start immediately after medications/observations with minimal spacing
+    doc.setFontSize(9);
+    doc.setTextColor(37, 99, 235); // Blue-600
+    doc.setFont('helvetica', 'bold');
+    doc.text('Plan de tratamiento', 15, footerY);
+
+    footerY += 5;
+
+    doc.setFontSize(9);
+    doc.setTextColor(75, 85, 99); // Gray-600
+    doc.setFont('helvetica', 'normal');
+    const treatmentPlanText = (consultation.treatment_plan || '').trim();
+    const treatmentPlanLines = doc.splitTextToSize(
+      treatmentPlanText !== '' ? treatmentPlanText : '—',
+      pageWidth - 30
+    );
+    treatmentPlanLines.forEach((line: string) => {
+      doc.text(line, 15, footerY);
+      footerY += 4;
+    });
+
+    footerY += 5; // Reduced spacing after treatment plan
     }
 
     // === DOCTOR SIGNATURE SECTION ===
-    footerY = pageHeight - 50;
+    footerY = pageHeight - 80;
     
     // Signature line
-    const signatureLineY = footerY + 15;
+    const signatureLineY = footerY + 18;
     doc.setDrawColor(156, 163, 175); // Gray-400
     doc.setLineWidth(0.5);
     doc.line(15, signatureLineY, 100, signatureLineY);
@@ -531,21 +831,25 @@ class PDFService {
     doc.text('Sello', sealX + 15, sealY + 9, { align: 'center' });
     doc.text('Profesional', sealX + 15, sealY + 13, { align: 'center' });
 
-    // === FOOTER LINE ===
-    const bottomY = pageHeight - 20;
+    if (drawBottomLine) {
+      const bottomMargin = 28;
+      const bottomLineY = pageHeight - bottomMargin;
     doc.setDrawColor(229, 231, 235); // Gray-200
     doc.setLineWidth(0.5);
-    doc.line(15, bottomY, pageWidth - 15, bottomY);
+      doc.line(15, bottomLineY, pageWidth - 15, bottomLineY);
     
-    // Generation info
-    doc.setFontSize(7);
-    doc.setTextColor(156, 163, 175); // Gray-400
+      if (includeGenerationInfo) {
+        doc.setFontSize(8);
+        doc.setTextColor(100, 100, 100);
     doc.setFont('helvetica', 'normal');
+        const infoY = bottomLineY + 4;
     const now = new Date();
     const dateStr = now.toLocaleDateString('es-MX');
     const timeStr = now.toLocaleTimeString('es-MX');
-    doc.text(`Generado el ${dateStr} a las ${timeStr}`, 15, bottomY + 5);
-    doc.text('Página 1', pageWidth - 15, bottomY + 5, { align: 'right' });
+        doc.text(`Generado el ${dateStr} a las ${timeStr}`, 15, infoY);
+        doc.text('Página 1', pageWidth - 15, infoY, { align: 'right' });
+      }
+    }
   }
 
   async generatePrescription(
@@ -580,7 +884,7 @@ class PDFService {
       const doc = new jsPDF();
       
       // Add modern header with patient info
-      let currentY = this.addModernPrescriptionHeader(doc, patient, doctor, consultation, officeInfo);
+      let currentY = await this.addModernPrescriptionHeader(doc, patient, doctor, consultation, officeInfo);
       
       // Add medications section
       currentY = this.addModernMedicationsSection(doc, medications, currentY);
@@ -718,13 +1022,14 @@ class PDFService {
     doc.setFontSize(8);
     doc.setTextColor(100, 100, 100);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Página ${pageNumber}`, 190, pageHeight - 20, { align: 'right' });
     
-    // Add generation date
+    const footerTextY = pageHeight - 20;
     const now = new Date();
     const dateStr = now.toLocaleDateString('es-MX');
     const timeStr = now.toLocaleTimeString('es-MX');
-    doc.text(`Generado el ${dateStr} a las ${timeStr}`, 20, pageHeight - 20);
+    
+    doc.text(`Generado el ${dateStr} a las ${timeStr}`, 20, footerTextY);
+    doc.text(`Página ${pageNumber}`, 190, footerTextY, { align: 'right' });
   }
 
   private addDoctorInfo(doc: jsPDF, doctor: DoctorInfo, startY: number, officeInfo?: any): number {
@@ -781,6 +1086,14 @@ class PDFService {
       ['Fecha:', formattedDate],
       ['Paciente:', patientNameForTable]
     ];
+
+    if (consultation.patient_document_value) {
+      const documentLabel = consultation.patient_document_name || patient.identificationType || 'Documento oficial';
+      consultationData.push([
+        `${documentLabel}:`,
+        consultation.patient_document_value
+      ]);
+    }
     
     // Only add birth date if explicitly requested (for medical orders)
     if (includePatientBirthDate && patient.dateOfBirth) {
@@ -839,7 +1152,7 @@ class PDFService {
     const pageWidth = doc.internal.pageSize.width;
     
     // Add modern header with patient info
-    let currentY = this.addModernPrescriptionHeader(doc, patient, doctor, consultation, officeInfo);
+    let currentY = await this.addModernPrescriptionHeader(doc, patient, doctor, consultation, officeInfo);
     
     // Add document title
     doc.setFontSize(14);
@@ -910,6 +1223,8 @@ class PDFService {
           currentY += 5;
         });
       }
+
+      this.addModernPrescriptionFooter(doc, doctor, consultation, currentY, { includeTreatmentPlan: false, drawBottomLine: false, includeGenerationInfo: false });
       
       // Save the PDF
       const patientNameForOrderFile = patient.name ? patient.name.replace(/\s+/g, '_') : 'Paciente';
@@ -942,7 +1257,7 @@ class PDFService {
     const pageWidth = doc.internal.pageSize.width;
     
     // Add modern header with patient info
-    let currentY = this.addModernPrescriptionHeader(doc, patient, doctor, consultation, officeInfo);
+    let currentY = await this.addModernPrescriptionHeader(doc, patient, doctor, consultation, officeInfo);
     
     // Add document title
     doc.setFontSize(14);
@@ -965,7 +1280,7 @@ class PDFService {
     });
     
     // Add signature section using modern footer
-    this.addModernPrescriptionFooter(doc, doctor, consultation, currentY);
+      this.addModernPrescriptionFooter(doc, doctor, consultation, currentY, { includeTreatmentPlan: false });
       
     // Save the PDF
     const patientNameForCertFile = patient.name ? patient.name.replace(/\s+/g, '_') : 'Paciente';

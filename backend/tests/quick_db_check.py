@@ -27,7 +27,7 @@ def quick_check():
     # Tablas que deben existir
     required_tables = {
         'persons', 'medical_records', 'appointments', 'offices',
-        'medications', 'diagnosis_catalog', 'diagnosis_categories',
+        'medications', 'diagnosis_catalog',  # diagnosis_categories removed - not required by law
         'study_catalog', 'study_categories', 'clinical_studies',
         'consultation_prescriptions', 'consultation_vital_signs',
         'vital_signs', 'medical_specialties', 'document_types',
@@ -38,6 +38,7 @@ def quick_check():
     removed_tables = {
         'study_normal_values', 'study_templates', 'study_template_items',
         'diagnosis_differentials', 'diagnosis_recommendations',
+        'diagnosis_categories',  # Removed - not required by law (NOM-004-SSA3-2012, NOM-024-SSA3-2012)
         'schedule_exceptions', 'specialties'  # specialties fue eliminada
     }
     

@@ -2,6 +2,7 @@
 # FastAPI y servidor
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
+starlette==0.27.0
 
 # Base de datos y ORM
 sqlalchemy==2.0.23
@@ -35,3 +36,4 @@ pytest-asyncio==0.21.1
 # Desarrollo
 python-dotenv==1.0.0
 twilio==8.11.0
+sentry-sdk==1.45.0

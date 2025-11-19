@@ -12,7 +12,6 @@ export interface RegisterData {
   first_name: string;
   paternal_surname: string;
   maternal_surname: string;
-  curp: string;
   gender: string;
   birth_date: string;
   phone: string;
@@ -54,12 +53,10 @@ export class AuthService extends ApiBase {
         password: credentials.password
       });
 
-      // Log response for debugging
-      console.log('🔐 Login response received', { 
-        hasAccessToken: !!response.data?.access_token,
-        hasUser: !!response.data?.user,
-        userId: response.data?.user?.id,
-        responseData: response.data
+      logger.auth.info('Login response received', {
+        hasAccessToken: Boolean(response.data?.access_token),
+        hasUser: Boolean(response.data?.user),
+        userId: response.data?.user?.id
       });
 
       if (!response.data) {
@@ -84,11 +81,10 @@ export class AuthService extends ApiBase {
       
       // Re-throw with more context if it's a response processing error
       if (error.message && (error.message.includes('No data') || error.message.includes('No access token') || error.message.includes('No user data'))) {
-        console.error('🔐 Response processing error', { 
-          response: error.response?.data,
-          status: error.response?.status 
+        logger.auth.error('Response processing error', {
+          status: error.response?.status,
+          endpoint: '/api/auth/login'
         });
-        logger.auth.error('Response processing error');
       }
       
       throw error;

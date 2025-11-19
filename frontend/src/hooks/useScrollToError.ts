@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react';
+import { logger } from '../utils/logger';
 
 /**
  * Hook personalizado para hacer scroll automático hacia los mensajes de error
- * cuando aparecen en formularios o diálogos
+ * cuando aparecen en formularios o páginas
+ * Siempre hace scroll al inicio de la página cuando hay un error
  */
 export const useScrollToError = (error: string | null | undefined, enabled: boolean = true) => {
   const errorRef = useRef<HTMLDivElement>(null);
@@ -21,19 +23,17 @@ export const useScrollToError = (error: string | null | undefined, enabled: bool
       // Hacer scroll solo si no lo hemos hecho aún para este error
       if (!hasScrolled.current) {
         const timeoutId = setTimeout(() => {
-          if (errorRef.current) {
-            console.log('🔝 Scrolling to error:', error.substring(0, 50));
-            
-            // Scroll directo al inicio de la página
-            window.scrollTo({
-              top: 0,
-              behavior: 'smooth'
-            });
-            
-            console.log('✅ Scrolled to top of page');
-            hasScrolled.current = true;
-          }
-        }, 200); // Aumentado el delay para asegurar renderizado
+          logger.debug('🔝 Scrolling to error', { error: error.substring(0, 50) }, 'ui');
+          
+          // Siempre hacer scroll al inicio de la página
+          window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+          });
+          
+          logger.debug('✅ Scrolled to top of page', undefined, 'ui');
+          hasScrolled.current = true;
+        }, 200); // Delay para asegurar renderizado
 
         return () => clearTimeout(timeoutId);
       }
@@ -97,7 +97,8 @@ export const useScrollToFieldError = (
 
 /**
  * Hook para hacer scroll automático en diálogos de Material-UI
- * Maneja el caso especial de DialogContent
+ * Maneja el caso especial de DialogContent y también hace scroll al inicio de la página
+ * Siempre hace scroll tanto al inicio del diálogo como al inicio de la página completa
  */
 export const useScrollToErrorInDialog = (
   error: string | null | undefined,
@@ -120,31 +121,41 @@ export const useScrollToErrorInDialog = (
       if (!hasScrolled.current) {
         const timeoutId = setTimeout(() => {
           if (errorRef.current) {
-            console.log('🔝 Dialog: Scrolling to error:', error.substring(0, 50));
+            logger.debug('🔝 Dialog: Scrolling to error', { error: error.substring(0, 50) }, 'ui');
             
-            // Buscar el DialogContent padre
+            // PRIMERO: Hacer scroll al inicio de la página completa (siempre)
+            window.scrollTo({
+              top: 0,
+              behavior: 'smooth'
+            });
+            logger.debug('✅ Scrolled to top of page', undefined, 'ui');
+            
+            // SEGUNDO: Buscar el DialogContent padre y hacer scroll dentro del diálogo
             const dialogContent = errorRef.current.closest('[role="dialog"]')
               ?.querySelector('.MuiDialogContent-root') as HTMLElement;
             
             if (dialogContent) {
-              // Hacer scroll dentro del DialogContent al inicio
-              dialogContent.scrollTo({
-                top: 0,
-                behavior: 'smooth'
-              });
-              console.log('✅ Scrolled DialogContent to top');
-            } else {
-              // Fallback: scroll directo al inicio de la página
-              window.scrollTo({
-                top: 0,
-                behavior: 'smooth'
-              });
-              console.log('✅ Scrolled to top of page (fallback)');
+              // Hacer scroll dentro del DialogContent al inicio después de un pequeño delay
+              setTimeout(() => {
+                dialogContent.scrollTo({
+                  top: 0,
+                  behavior: 'smooth'
+                });
+                logger.debug('✅ Scrolled DialogContent to top', undefined, 'ui');
+              }, 300);
             }
             
             hasScrolled.current = true;
+          } else {
+            // Si no hay errorRef, igual hacer scroll al inicio de la página
+            window.scrollTo({
+              top: 0,
+              behavior: 'smooth'
+            });
+            logger.debug('✅ Scrolled to top of page (no errorRef)', undefined, 'ui');
+            hasScrolled.current = true;
           }
-        }, 250); // Delay mayor para diálogos
+        }, 250); // Delay para asegurar renderizado
 
         return () => clearTimeout(timeoutId);
       }

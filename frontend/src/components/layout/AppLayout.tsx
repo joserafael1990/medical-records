@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ThemeProvider,
   createTheme,
@@ -11,14 +11,23 @@ import {
   IconButton,
   Avatar,
   Chip,
-  LinearProgress
+  LinearProgress,
+  Drawer,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Divider,
+  useMediaQuery
 } from '@mui/material';
 import { twitterTheme } from '../../themes/twitterTheme';
 import {
   AccountCircle as ProfileIcon,
-  NotificationsNone as NotificationIcon
+  NotificationsNone as NotificationIcon,
+  Menu as MenuIcon
 } from '@mui/icons-material';
-import { MainNavigation } from './MainNavigation';
+import { MainNavigation, MAIN_NAVIGATION_ITEMS } from './MainNavigation';
 import { UserProfileMenu } from './UserProfileMenu';
 import { ViewRenderer } from './ViewRenderer';
 import { useDoctorProfile } from '../../hooks/useDoctorProfile';
@@ -28,6 +37,7 @@ import { useConsultationManagement } from '../../hooks/useConsultationManagement
 import { useAppointmentManager } from '../../hooks/useAppointmentManager';
 import { useAuth } from '../../contexts/AuthContext';
 import CortexBrainLogo from '../common/CortexBrainLogo';
+import { API_CONFIG } from '../../constants';
 // Dialog imports
 import PatientDialog from '../dialogs/PatientDialog'; // ✅ Now implemented!
 import ConsultationDialog from '../dialogs/ConsultationDialog'; // ✅ Now implemented!  
@@ -58,6 +68,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   const appointmentManager = useAppointmentManager(patientManagement.patients, doctorProfileHook.doctorProfile, navigateToView);
   const { doctorProfile, isLoading } = doctorProfileHook;
   const [userMenuAnchorEl, setUserMenuAnchorEl] = useState<null | HTMLElement>(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
          const handleUserMenuClick = (event: React.MouseEvent<HTMLElement>) => {
            setUserMenuAnchorEl(event.currentTarget);
@@ -67,10 +79,96 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     setUserMenuAnchorEl(null);
   };
 
+  const rawHeaderAvatarUrl = useMemo(() => {
+    const candidates = [
+      doctorProfile?.avatar?.avatar_url,
+      doctorProfile?.avatar?.url,
+      doctorProfile?.avatar_url,
+      doctorProfile?.avatarUrl,
+      user?.person?.avatar?.avatar_url,
+      user?.person?.avatar?.url,
+      user?.person?.avatar_url,
+      user?.person?.avatarUrl
+    ];
+    return candidates.find((value) => typeof value === 'string' && value.length > 0);
+  }, [doctorProfile, user]);
+
+  const resolvedHeaderAvatarUrl = useMemo(() => {
+    if (!rawHeaderAvatarUrl) return undefined;
+    let url = rawHeaderAvatarUrl;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      const normalized = url.startsWith('/') ? url : `/${url}`;
+      url = `${API_CONFIG.BASE_URL}${normalized}`;
+    }
+    // Add cache busting parameter based on avatar metadata to force reload when avatar changes
+    const cacheKey = doctorProfile?.avatar_file_path || doctorProfile?.avatar_template_key || doctorProfile?.updated_at;
+    if (cacheKey) {
+      const separator = url.includes('?') ? '&' : '?';
+      url = `${url}${separator}_t=${typeof cacheKey === 'string' ? cacheKey : cacheKey?.toString() || Date.now()}`;
+    }
+    return url;
+  }, [rawHeaderAvatarUrl, doctorProfile?.avatar_file_path, doctorProfile?.avatar_template_key, doctorProfile?.updated_at]);
+
+  const headerAvatarInitials = useMemo(() => {
+    const nameSource = doctorProfile?.name || user?.person?.name || '';
+    if (!nameSource) return 'U';
+    return nameSource
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((n: string) => n[0])
+      .join('')
+      .toUpperCase();
+  }, [doctorProfile?.name, user?.person?.name]);
+
   const handleViewProfile = () => {
     handleUserMenuClose();
     navigateToView('profile');
   };
+
+  const handleToggleMobileNav = () => {
+    setMobileNavOpen(prev => !prev);
+  };
+
+  const handleCloseMobileNav = () => {
+    setMobileNavOpen(false);
+  };
+
+  const renderMobileDrawer = (
+    <Box
+      role="presentation"
+      sx={{ width: 250 }}
+      onClick={handleCloseMobileNav}
+      onKeyDown={handleCloseMobileNav}
+    >
+      <Box sx={{ p: 2 }}>
+        <CortexBrainLogo sx={{ fontSize: 44 }} />
+      </Box>
+      <Divider />
+      <List>
+        {MAIN_NAVIGATION_ITEMS.map((item) => {
+          const handleSelect = () => {
+            navigateToView(item.id);
+            handleCloseMobileNav();
+          };
+
+          return (
+            <ListItem key={item.id} disablePadding>
+              <ListItemButton
+                selected={activeView === item.id}
+                onClick={handleSelect}
+              >
+                <ListItemIcon sx={{ minWidth: 40 }}>
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText primary={item.label} />
+              </ListItemButton>
+            </ListItem>
+          );
+        })}
+      </List>
+    </Box>
+  );
 
   return (
     <ThemeProvider theme={theme}>
@@ -79,6 +177,16 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       {/* Top App Bar */}
       <AppBar position="static" elevation={1}>
         <Toolbar>
+          {isMobile && (
+            <IconButton
+              color="inherit"
+              edge="start"
+              onClick={handleToggleMobileNav}
+              sx={{ mr: 2 }}
+            >
+              <MenuIcon />
+            </IconButton>
+          )}
           <CortexBrainLogo sx={{ flexGrow: 1 }} />
           
           {/* Status indicators */}
@@ -107,18 +215,15 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             color="inherit"
           >
             <Avatar
+              src={resolvedHeaderAvatarUrl}
               sx={{
                 width: 32,
                 height: 32,
-                bgcolor: 'secondary.main',
+                bgcolor: resolvedHeaderAvatarUrl ? 'transparent' : 'secondary.main',
                 fontSize: '0.875rem'
               }}
             >
-              {doctorProfile?.name
-                ? doctorProfile.name.split(' ').slice(0, 2).map((n: string) => n[0]).join('').toUpperCase()
-                : user?.person?.name
-                  ? user.person.name.split(' ').slice(0, 2).map((n: string) => n[0]).join('').toUpperCase()
-                  : 'U'}
+              {headerAvatarInitials}
             </Avatar>
           </IconButton>
         </Toolbar>
@@ -136,16 +241,36 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         onLogout={onLogout}
         doctorProfile={doctorProfile}
         user={user}
+        onAvatarUpdated={async () => {
+          // Small delay to ensure backend has processed the avatar update
+          await new Promise(resolve => setTimeout(resolve, 300));
+          // Force refresh profile to get updated avatar (bypass cache)
+          await doctorProfileHook.fetchProfile(true);
+        }}
       />
 
       {/* Main Content */}
       <Container maxWidth="xl" sx={{ mt: 3, mb: 3 }}>
         <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', md: 'row' } }}>
+          <Drawer
+            anchor="left"
+            open={mobileNavOpen}
+            onClose={handleCloseMobileNav}
+            sx={{
+              display: { xs: 'block', md: 'none' },
+              '& .MuiDrawer-paper': { boxSizing: 'border-box', width: 260 }
+            }}
+          >
+            {renderMobileDrawer}
+          </Drawer>
+
           {/* Sidebar Navigation */}
-          <MainNavigation
-            activeView={activeView}
-            onViewChange={navigateToView}
-          />
+          <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+            <MainNavigation
+              activeView={activeView}
+              onViewChange={navigateToView}
+            />
+          </Box>
 
           {/* Main Content Area */}
           <ViewRenderer
@@ -171,7 +296,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           doctorProfile={doctorProfile}
           onSubmit={async (data) => {
             if (patientManagement.selectedPatient) {
-              await patientManagement.updatePatient(patientManagement.selectedPatient.id, data);
+              await patientManagement.updatePatient(String(patientManagement.selectedPatient.id), data);
             } else {
               await patientManagement.createPatient(data);
             }
@@ -224,8 +349,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           patients={patientManagement.patients}
           isEditing={appointmentManager.isEditingAppointment}
           loading={appointmentManager.isSubmitting}
-          formErrorMessage={appointmentManager.appointmentFormErrorMessage}
-          fieldErrors={appointmentManager.appointmentFieldErrors}
+          formErrorMessage={appointmentManager.formErrorMessage || undefined}
+          fieldErrors={appointmentManager.fieldErrors}
           onFormDataChange={appointmentManager.setAppointmentFormData}
           doctorProfile={doctorProfile}
         />

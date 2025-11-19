@@ -1,6 +1,7 @@
 // API Configuration
 export const API_CONFIG = {
-  BASE_URL: 'http://localhost:8000',
+  BASE_URL: 'http://localhost:8000', // cambio temportal
+  //BASE_URL: 'https://unbrave-thi-interventral.ngrok-free.dev', 
   ENDPOINTS: {
     // Authentication
     LOGIN: '/api/auth/login',
@@ -10,6 +11,10 @@ export const API_CONFIG = {
     // Doctor Profile
     DOCTOR_PROFILE: '/api/doctors/me/profile',
     UPDATE_DOCTOR_PROFILE: '/api/doctors/me/profile',
+    AVATAR_OPTIONS: '/api/avatars/options',
+    AVATAR_UPLOAD: '/api/avatars/upload',
+    AVATAR_SELECT: '/api/avatars/select',
+    AVATAR_DELETE: '/api/avatars/custom',
     
     // Patients
     PATIENTS: '/api/patients',
@@ -88,18 +93,14 @@ export const formatAppointmentTimeRange = (startTime: string, durationMinutes: n
 
 // Appointment Status Labels
 export const APPOINTMENT_STATUS_LABELS = {
-  'confirmed': 'Confirmada',
+  'por_confirmar': 'Por confirmar',
+  'confirmada': 'Confirmada',
   'cancelled': 'Cancelada',
   'canceled': 'Cancelada',
+  'confirmed': 'Confirmada', // Legacy fallback
 } as const;
 
 // Priority Levels
-export const PRIORITY_LEVELS = {
-  'normal': 'Normal',
-  'alta': 'Alta',
-  'urgent': 'Urgente'
-} as const;
-
 // Urgency Levels
 export const URGENCY_LEVELS = [
   { value: 'routine', label: 'Rutina', color: '#4caf50' },
@@ -143,7 +144,7 @@ export const APPOINTMENT_TYPES = {
 
 // Default Values
 export const DEFAULT_APPOINTMENT_DURATION = 30; // minutes
-export const DEFAULT_APPOINTMENT_STATUS = 'confirmed';
+export const DEFAULT_APPOINTMENT_STATUS = 'por_confirmar';
 
 // Validation Rules
 export const VALIDATION_RULES = {

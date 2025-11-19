@@ -17,31 +17,6 @@ export * from './validationHelpers';
 export * from './formatters';
 export * from './consultationHelpers';
 
-// Legacy exports for backward compatibility
-
-const getFieldLabel = (field: string): string => {
-  const labels: { [key: string]: string } = {
-    first_name: 'Nombre',
-    paternal_surname: 'Apellido paterno',
-    maternal_surname: 'Apellido materno',
-    birth_date: 'Fecha de nacimiento',
-    gender: 'Género',
-    address: 'Dirección',
-    family_history: 'Antecedentes familiares',
-    personal_pathological_history: 'Antecedentes patológicos',
-    personal_non_pathological_history: 'Antecedentes no patológicos',
-    patient_id: 'Paciente',
-    chief_complaint: 'Motivo de consulta',
-    history_present_illness: 'Historia de enfermedad actual',
-    physical_examination: 'Exploración física',
-    primary_diagnosis: 'Diagnóstico principal',
-    treatment_plan: 'Plan de tratamiento',
-    follow_up_instructions: 'Indicaciones de seguimiento'
-    // doctor_name, doctor_professional_license: se obtienen automáticamente del perfil
-  };
-  return labels[field] || field;
-};
-
 // ============================================================================
 // STRING UTILITIES
 // ============================================================================
@@ -55,11 +30,8 @@ export const capitalizeWords = (str: string): string => {
 };
 
 export const formatPatientName = (patient: Patient): string => {
-  return [
-    patient.first_name,
-    patient.paternal_surname,
-    patient.maternal_surname && patient.maternal_surname !== 'null' ? patient.maternal_surname : ''
-  ].filter(part => part && part.trim()).join(' ');
+  // Patient type has 'name' field as complete name, not separate fields
+  return patient.name || 'Paciente';
 };
 
 export const getInitials = (name: string): string => {

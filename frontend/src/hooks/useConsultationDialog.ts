@@ -5,14 +5,18 @@ import { usePatientManagement } from './usePatientManagement';
 import { useAppointmentManager } from './useAppointmentManager';
 import { useScrollToError } from './useScrollToError';
 import { useToast } from '../components/common/ToastNotification';
+import { logger } from '../utils/logger';
 
 export interface ConsultationFormData {
   patient_id: string;
   appointment_id?: string;
+  patient_document_id?: string;
+  patient_document_value?: string;
   chief_complaint: string;
   history_present_illness: string;
   family_history: string;
   perinatal_history: string;
+  gynecological_and_obstetric_history: string;
   personal_pathological_history: string;
   personal_non_pathological_history: string;
   physical_examination: string;
@@ -100,10 +104,13 @@ export const useConsultationDialog = (
   const [formData, setFormData] = useState<ConsultationFormData>({
     patient_id: '',
     appointment_id: '',
+    patient_document_id: '',
+    patient_document_value: '',
     chief_complaint: '',
     history_present_illness: '',
     family_history: '',
     perinatal_history: '',
+    gynecological_and_obstetric_history: '',
     personal_pathological_history: '',
     personal_non_pathological_history: '',
     physical_examination: '',
@@ -136,7 +143,7 @@ export const useConsultationDialog = (
           loadStudies(),
         ]);
       } catch (error) {
-        console.error('Error loading data:', error);
+        logger.error('Error loading data', error, 'api');
         showError('Error al cargar los datos');
       } finally {
         setIsLoading(false);
@@ -152,10 +159,13 @@ export const useConsultationDialog = (
       setFormData({
         patient_id: consultation.patient_id || '',
         appointment_id: consultation.appointment_id || '',
+        patient_document_id: consultation.patient_document_id ? String(consultation.patient_document_id) : '',
+        patient_document_value: consultation.patient_document_value || '',
         chief_complaint: consultation.chief_complaint || '',
         history_present_illness: consultation.history_present_illness || '',
         family_history: consultation.family_history || '',
         perinatal_history: consultation.perinatal_history || '',
+        gynecological_and_obstetric_history: consultation.gynecological_and_obstetric_history || '',
         personal_pathological_history: consultation.personal_pathological_history || '',
         personal_non_pathological_history: consultation.personal_non_pathological_history || '',
         physical_examination: consultation.physical_examination || '',
@@ -314,7 +324,7 @@ export const useConsultationDialog = (
       onSuccessCallback?.();
       onSuccess?.();
     } catch (error: any) {
-      console.error('Error saving consultation:', error);
+      logger.error('Error saving consultation', error, 'api');
       showError(error.message || 'Error al guardar la consulta');
     } finally {
       setIsSubmitting(false);
@@ -328,6 +338,8 @@ export const useConsultationDialog = (
       chief_complaint: '',
       history_present_illness: '',
       family_history: '',
+      perinatal_history: '',
+      gynecological_and_obstetric_history: '',
       personal_pathological_history: '',
       personal_non_pathological_history: '',
       physical_examination: '',

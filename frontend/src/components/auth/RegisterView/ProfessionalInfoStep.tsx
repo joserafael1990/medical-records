@@ -57,6 +57,7 @@ export const ProfessionalInfoStep: React.FC<ProfessionalInfoStepProps> = ({
             >
               <MenuItem value="Dr.">Dr.</MenuItem>
               <MenuItem value="Dra.">Dra.</MenuItem>
+              <MenuItem value="Lic.">Lic.</MenuItem>
             </Select>
           </FormControl>
         </Box>

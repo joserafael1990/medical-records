@@ -22,13 +22,14 @@ import hashlib
 # CONFIGURACIÓN DE SEGURIDAD
 # ============================================================================
 
-# Configuración JWT (desde config seguro)
-from config_secure import (
-    JWT_SECRET_KEY as SECRET_KEY,
-    JWT_ALGORITHM as ALGORITHM,
-    JWT_ACCESS_TOKEN_EXPIRE_MINUTES as ACCESS_TOKEN_EXPIRE_MINUTES,
-    JWT_REFRESH_TOKEN_EXPIRE_DAYS as REFRESH_TOKEN_EXPIRE_DAYS
-)
+# Configuración JWT (desde config - evita problemas de filesystem en Docker macOS)
+from config import settings
+import os
+
+SECRET_KEY = settings.JWT_SECRET_KEY or os.getenv("JWT_SECRET_KEY", "")
+ALGORITHM = settings.JWT_ALGORITHM
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"])

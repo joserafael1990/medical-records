@@ -6,6 +6,7 @@ import { useState, useCallback } from 'react';
 import { ConsultationPrescription, CreatePrescriptionData, UpdatePrescriptionData, Medication } from '../types';
 import { apiService } from '../services';
 import { logger } from '../utils/logger';
+import { useToast } from '../components/common/ToastNotification';
 
 export interface UsePrescriptionsReturn {
   // State
@@ -51,6 +52,7 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
   const [isEditingPrescription, setIsEditingPrescription] = useState(false);
   const [selectedPrescription, setSelectedPrescription] = useState<ConsultationPrescription | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { showSuccess, showError } = useToast();
 
   // Form data with default values
   const [prescriptionFormData, setPrescriptionFormData] = useState<CreatePrescriptionData>({
@@ -71,10 +73,23 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
     
     try {
       const response = await apiService.consultations.api.get(`/api/consultations/${consultationId}/prescriptions`);
-      console.log('💊 fetchPrescriptions response:', response);
-      const prescriptionsData = response.data || response;
-      console.log('💊 fetchPrescriptions data:', prescriptionsData);
-      setPrescriptions(prescriptionsData || []);
+      const prescriptionsData: ConsultationPrescription[] = Array.isArray(response.data)
+        ? response.data
+        : Array.isArray(response)
+        ? response
+        : [];
+
+      const uniqueMap = new Map<number | string, ConsultationPrescription>();
+      (prescriptionsData || []).forEach((prescription: ConsultationPrescription) => {
+        const key =
+          prescription.id ??
+          `${prescription.medication_id}-${prescription.dosage}-${prescription.frequency}-${prescription.duration}-${prescription.instructions}-${prescription.quantity}-${prescription.via_administracion}`;
+        if (!uniqueMap.has(key)) {
+          uniqueMap.set(key, prescription);
+        }
+      });
+
+      setPrescriptions(Array.from(uniqueMap.values()));
     } catch (err) {
       logger.error('Error fetching prescriptions', err, 'api');
       setError('Error al cargar las prescripciones');
@@ -87,65 +102,18 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
   // Fetch medications (for autocomplete)
   const fetchMedications = useCallback(async (search?: string) => {
     try {
-      logger.debug('fetchMedications called', { search, functionExists: !!fetchMedications }, 'api');
+      logger.debug('fetchMedications', { search }, 'api');
       const params = search ? `?search=${encodeURIComponent(search)}` : '';
-      const url = `/api/medications${params}`;
-      logger.debug('Making request to medications endpoint', { url }, 'api');
-      
-      // Debug: Check token
-      const token = localStorage.getItem('token');
-      logger.debug('Token check', {
-        exists: !!token,
-        length: token?.length || 0,
-        isValidFormat: token ? token.split('.').length === 3 : false
-      });
-      
-      const response = await apiService.consultations.api.get(url);
-      logger.debug('Medications response', { 
-        count: response.data?.length || 0,
-        dataType: typeof response.data,
-        dataLength: response.data?.length || 0
-      }, 'api');
-      
-      // Handle different response structures (same as diagnoses)
-      let medicationsArray = [];
-      if (Array.isArray(response.data)) {
-        logger.debug('Using response.data (array)', undefined, 'api');
-        medicationsArray = response.data;
-      } else if (Array.isArray(response)) {
-        console.log('✅ Using response directly (array)');
-        medicationsArray = response;
-      } else if (response && typeof response === 'object') {
-        console.log('✅ Response is object, checking for array properties');
-        console.log('✅ Response keys:', Object.keys(response));
-        // Try to find the array in the response
-        for (const key in response) {
-          if (Array.isArray(response[key])) {
-            console.log(`✅ Found array in key: ${key}`);
-            medicationsArray = response[key];
-            break;
-          }
-        }
-      }
-      
-      console.log('✅ Final medications array:', medicationsArray);
-      console.log('✅ Final medications array length:', medicationsArray.length);
-      
-      // Remove duplicates by medication name (case-insensitive)
-      const uniqueMedications = medicationsArray.reduce((acc: Medication[], medication: Medication) => {
-        const nameLower = (medication.name || '').toLowerCase().trim();
-        const exists = acc.some(m => (m.name || '').toLowerCase().trim() === nameLower);
-        if (!exists) {
-          acc.push(medication);
-        }
-        return acc;
-      }, []);
-      
-      console.log('✅ Unique medications count:', uniqueMedications.length);
-      setMedications(uniqueMedications);
-    } catch (err) {
-      console.error('❌ Error fetching medications:', err);
-      console.error('❌ Error response:', err.response?.data);
+      const response = await apiService.consultations.api.get(`/api/medications${params}`);
+      const medicationsArray: Medication[] = Array.isArray(response.data) ? response.data : [];
+
+      const sortedMedications = [...medicationsArray].sort((a, b) =>
+        (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' })
+      );
+
+      setMedications(sortedMedications);
+    } catch (err: any) {
+      logger.error('Error fetching medications', err, 'api');
       setMedications([]);
     }
   }, []);
@@ -162,12 +130,18 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
       );
       const newPrescription = response.data;
       
-      // Add to local state
-      setPrescriptions(prev => [...prev, newPrescription]);
+      // Add to local state avoiding duplicates
+      setPrescriptions(prev => {
+        const exists = prev.some(p => p.id === newPrescription.id);
+        if (exists) {
+          return prev;
+        }
+        return [...prev, newPrescription];
+      });
       
       return newPrescription;
     } catch (err) {
-      console.error('❌ Error creating prescription:', err);
+      logger.error('Error creating prescription', err, 'api');
       throw err;
     }
   }, []);
@@ -192,7 +166,7 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
       
       return updatedPrescription;
     } catch (err) {
-      console.error('❌ Error updating prescription:', err);
+      logger.error('Error updating prescription', err, 'api');
       throw err;
     }
   }, []);
@@ -203,7 +177,6 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
       // Check if this is a temporary consultation
       if (consultationId === 'temp_consultation') {
         // For temporary consultations, delete locally only
-        console.log('💊 Deleting temporary prescription locally');
         setPrescriptions(prev => prev.filter(prescription => prescription.id !== prescriptionId));
       } else {
         // For saved consultations, delete on server
@@ -213,7 +186,7 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
         setPrescriptions(prev => prev.filter(prescription => prescription.id !== prescriptionId));
       }
     } catch (err) {
-      console.error('❌ Error deleting prescription:', err);
+      logger.error('Error deleting prescription', err, 'api');
       throw err;
     }
   }, []);
@@ -221,10 +194,10 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
   // Create a new medication
   const createMedication = useCallback(async (medicationName: string): Promise<Medication> => {
     try {
+      logger.debug('Creando medicamento', { medicationName }, 'api');
       const response = await apiService.consultations.api.post('/api/medications', { name: medicationName });
-      const newMedication = response.data;
-      
-      // Add to local medications list (avoid duplicates)
+      const newMedication = response.data as Medication;
+
       setMedications(prev => {
         const nameLower = (newMedication.name || '').toLowerCase().trim();
         const exists = prev.some(m => (m.name || '').toLowerCase().trim() === nameLower);
@@ -233,10 +206,19 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
         }
         return prev;
       });
-      
+
+      logger.info('Medicamento creado', { medicationId: newMedication.id, name: newMedication.name }, 'api');
+      showSuccess('Medicamento guardado con éxito', 'Se agregó a tu lista personal');
       return newMedication;
-    } catch (err) {
-      console.error('❌ Error creating medication:', err);
+    } catch (err: any) {
+      const isDuplicate = err?.response?.status === 400;
+      if (isDuplicate) {
+        logger.warn('Medicamento duplicado detectado', { medicationName }, 'api');
+        showError('Ya tienes un medicamento con ese nombre');
+      } else {
+        logger.error('Error creating medicamento', err, 'api');
+        showError('No se pudo guardar el medicamento');
+      }
       throw err;
     }
   }, []);
@@ -290,7 +272,11 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
     const medication = medications.find(m => m.id === prescriptionData.medication_id);
     
     if (!medication) {
-      console.error('Medication not found for ID:', prescriptionData.medication_id);
+      logger.error(
+        'No se encontró el medicamento en la lista temporal',
+        { medicationId: prescriptionData.medication_id },
+        'api'
+      );
       return;
     }
     
@@ -312,10 +298,24 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
       updated_at: new Date().toISOString()
     };
     
-    console.log('💊 Adding temp prescription:', tempPrescription);
+    logger.debug('Agregando prescripción temporal local', tempPrescription, 'api');
     setPrescriptions(prev => {
+      const duplicate = prev.some(existing =>
+        existing.medication_id === tempPrescription.medication_id &&
+        existing.dosage === tempPrescription.dosage &&
+        existing.frequency === tempPrescription.frequency &&
+        existing.duration === tempPrescription.duration &&
+        existing.instructions === tempPrescription.instructions &&
+        existing.quantity === tempPrescription.quantity &&
+        existing.via_administracion === tempPrescription.via_administracion
+      );
+
+      if (duplicate) {
+        return prev;
+      }
+
       const newPrescriptions = [...prev, tempPrescription];
-      console.log('💊 Updated prescriptions list:', newPrescriptions);
+      logger.debug('Lista de prescripciones temporales actualizada', newPrescriptions, 'api');
       return newPrescriptions;
     });
   }, [medications]);
@@ -329,15 +329,14 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
     setIsSubmitting(true);
     setError(null);
     
-    console.log('💊 submitForm called with consultation_id:', consultationId);
-    console.log('💊 Form data:', prescriptionFormData);
+    logger.debug('submitForm prescripción', { consultationId, prescriptionFormData }, 'api');
     
     try {
       if (isEditingPrescription && selectedPrescription) {
         // Check if this is a temporary consultation
         if (consultationId === 'temp_consultation') {
           // For temporary consultations, update locally only
-          console.log('💊 Updating temporary prescription locally');
+          logger.debug('Actualizando prescripción temporal local', selectedPrescription, 'api');
           
           // Find medication name from medications list
           const medication = medications.find(m => m.id === prescriptionFormData.medication_id);
@@ -373,7 +372,7 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
       } else {
         // For new consultations, add to temporary prescriptions list
         if (consultationId === 'temp_consultation') {
-          console.log('💊 Adding temporary prescription to local state');
+          logger.debug('Agregando prescripción temporal a la lista local', prescriptionFormData, 'api');
           
           // Find medication name from medications list
           const medication = medications.find(m => m.id === prescriptionFormData.medication_id);
@@ -400,22 +399,36 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
             updated_at: new Date().toISOString()
           };
           
-          console.log('💊 Adding temp prescription:', tempPrescription);
+          logger.debug('Prescripción temporal generada', tempPrescription, 'api');
           setPrescriptions(prev => {
+            const duplicate = prev.some(existing =>
+              existing.medication_id === tempPrescription.medication_id &&
+              existing.dosage === tempPrescription.dosage &&
+              existing.frequency === tempPrescription.frequency &&
+              existing.duration === tempPrescription.duration &&
+              existing.instructions === tempPrescription.instructions &&
+              existing.quantity === tempPrescription.quantity &&
+              existing.via_administracion === tempPrescription.via_administracion
+            );
+
+            if (duplicate) {
+              return prev;
+            }
+
             const newPrescriptions = [...prev, tempPrescription];
-            console.log('💊 Updated prescriptions list:', newPrescriptions);
+            logger.debug('Lista de prescripciones temporales actualizada', newPrescriptions, 'api');
             return newPrescriptions;
           });
         } else {
-          console.log('💊 Creating prescription in database');
+          logger.debug('Creando prescripción en base de datos', prescriptionFormData, 'api');
           await createPrescription(prescriptionFormData, consultationId);
         }
       }
       
-      console.log('💊 Prescription submission successful');
+      logger.info('Prescripción guardada correctamente', undefined, 'api');
       closeDialog();
     } catch (err) {
-      console.error('❌ Error submitting prescription form:', err);
+      logger.error('Error al enviar la prescripción', err, 'api');
       setError('Error al guardar la prescripción');
     } finally {
       setIsSubmitting(false);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -13,38 +13,41 @@ import {
   Button,
   CircularProgress,
   Alert,
-  Divider
+  Divider,
+  Chip
 } from '@mui/material';
 import {
-  CalendarToday as CalendarIcon,
-  AccessTime as TimeIcon,
-  LocationOn as LocationIcon
+  CalendarToday as CalendarIcon
 } from '@mui/icons-material';
 import { apiService } from '../../services';
-import { AppointmentFormData, AppointmentType, Office } from '../../types';
+import { AppointmentFormData, AppointmentType, Office, AppointmentReminderFormData } from '../../types';
 import { useToast } from '../common/ToastNotification';
 import { useAuth } from '../../contexts/AuthContext';
+import { APPOINTMENT_STATUS_LABELS } from '../../constants';
+import { logger } from '../../utils/logger';
+import { RemindersConfig } from './RemindersConfig';
 
 interface ScheduleAppointmentSectionProps {
   patientId: number;
   doctorProfile?: any;
+  onAppointmentsChange?: (appointments: any[]) => void;
+  initialAppointments?: any[];
 }
 
 const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
   patientId,
-  doctorProfile
+  doctorProfile,
+  onAppointmentsChange,
+  initialAppointments = []
 }) => {
   const { showSuccess, showError } = useToast();
   const { user } = useAuth();
   const [appointmentFormData, setAppointmentFormData] = useState<Partial<AppointmentFormData>>({
     appointment_date: '',
-    appointment_type_id: 0,
-    office_id: 0,
-    reason: '',
-    notes: '',
+    appointment_type_id: undefined,
+    office_id: undefined,
     consultation_type: 'Seguimiento',
-    status: 'confirmed',
-    priority: 'normal'
+    status: 'por_confirmar'
   });
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<string>('');
@@ -54,6 +57,91 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
   const [offices, setOffices] = useState<Office[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [scheduledAppointments, setScheduledAppointments] = useState<any[]>(initialAppointments);
+  const [editingAppointmentId, setEditingAppointmentId] = useState<number | null>(null);
+  const [reminders, setReminders] = useState<AppointmentReminderFormData[]>([]);
+  
+  // Use refs to track previous values and prevent infinite loops
+  const prevScheduledAppointmentsRef = useRef<any[]>(scheduledAppointments);
+  const onAppointmentsChangeRef = useRef(onAppointmentsChange);
+  const allowedStatuses = ['confirmada', 'por_confirmar'];
+
+  // Update ref when callback changes
+  useEffect(() => {
+    onAppointmentsChangeRef.current = onAppointmentsChange;
+  }, [onAppointmentsChange]);
+
+  // Notify parent of changes, but only when scheduledAppointments actually changes
+  useEffect(() => {
+    // Only notify if the array reference or content actually changed
+    const hasChanged = 
+      prevScheduledAppointmentsRef.current.length !== scheduledAppointments.length ||
+      prevScheduledAppointmentsRef.current.some((app, index) => {
+        const newApp = scheduledAppointments[index];
+        return !newApp || app.id !== newApp.id || app.status !== newApp.status;
+      });
+    
+    if (hasChanged) {
+      prevScheduledAppointmentsRef.current = scheduledAppointments;
+      onAppointmentsChangeRef.current?.(scheduledAppointments);
+    }
+  }, [scheduledAppointments]);
+
+  // Update scheduled appointments when initialAppointments changes
+  useEffect(() => {
+    const filtered = (initialAppointments || []).filter(app => allowedStatuses.includes(app.status));
+    // Only update if the filtered result is actually different
+    const currentIds = scheduledAppointments.map(app => app.id).sort().join(',');
+    const newIds = filtered.map(app => app.id).sort().join(',');
+    
+    if (currentIds !== newIds) {
+      setScheduledAppointments(filtered);
+    }
+  }, [initialAppointments]);
+
+  const resetForm = (keepSelections = true) => {
+    setAppointmentFormData(prev => ({
+      appointment_date: keepSelections ? prev.appointment_date : '',
+      appointment_type_id: prev.appointment_type_id,
+      office_id: prev.office_id,
+      consultation_type: 'Seguimiento',
+      status: 'por_confirmar'
+    }));
+
+    if (!keepSelections) {
+      setSelectedDate('');
+      setSelectedTime('');
+      setAvailableTimes([]);
+      setReminders([]);
+    }
+  };
+
+  const populateFormFromAppointment = (appointment: any) => {
+    setAppointmentFormData(prev => ({
+      ...prev,
+      appointment_date: appointment.appointment_date,
+      appointment_type_id: appointment.appointment_type_id,
+      office_id: appointment.office_id,
+      consultation_type: appointment.consultation_type,
+      status: appointment.status
+    }));
+
+    setSelectedDate(appointment.appointment_date?.split('T')[0] || '');
+    const timePart = appointment.appointment_date?.split('T')[1]?.substring(0, 5) || '';
+    setSelectedTime(timePart);
+    
+    // Load reminders if they exist
+    if (appointment.reminders && Array.isArray(appointment.reminders) && appointment.reminders.length > 0) {
+      const loadedReminders = appointment.reminders.map((r: any) => ({
+        reminder_number: r.reminder_number,
+        offset_minutes: r.offset_minutes,
+        enabled: r.enabled
+      }));
+      setReminders(loadedReminders);
+    } else {
+      setReminders([]);
+    }
+  };
 
   // Load appointment types and offices on mount
   useEffect(() => {
@@ -80,10 +168,10 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
         
         // Set default office if available
         if (officesData.length > 0 && officesData[0].id) {
-          setAppointmentFormData(prev => ({ ...prev, office_id: officesData[0].id || 0 }));
+          setAppointmentFormData(prev => ({ ...prev, office_id: officesData[0].id || undefined }));
         }
       } catch (err) {
-        console.error('Error loading appointment data:', err);
+        logger.error('Error loading appointment data', err, 'api');
         setError('Error al cargar tipos de cita y oficinas');
       }
     };
@@ -107,7 +195,7 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
         const response = await apiService.appointments.getAvailableTimesForBooking(dateOnly);
         setAvailableTimes(response.available_times || []);
       } catch (err) {
-        console.error('Error loading available times:', err);
+        logger.error('Error loading available times', err, 'api');
         setAvailableTimes([]);
       } finally {
         setLoadingTimes(false);
@@ -128,7 +216,7 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
       return;
     }
     
-    if (!appointmentFormData.appointment_type_id || appointmentFormData.appointment_type_id === 0) {
+    if (!appointmentFormData.appointment_type_id) {
       setError('Debe seleccionar un tipo de cita');
       return;
     }
@@ -164,38 +252,71 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
         appointment_type_id: appointmentFormData.appointment_type_id || 1,
         office_id: appointmentFormData.office_id || undefined,
         consultation_type: 'Seguimiento',
-        status: 'confirmed',
-        priority: 'normal',
-        reason: appointmentFormData.reason || 'Consulta de seguimiento',
-        notes: appointmentFormData.notes || '',
-        // WhatsApp auto reminder fields (include if present in form data)
+        status: 'por_confirmar',
+        // Legacy fields (deprecated)
         auto_reminder_enabled: appointmentFormData.auto_reminder_enabled || false,
-        auto_reminder_offset_minutes: appointmentFormData.auto_reminder_offset_minutes || 360
+        auto_reminder_offset_minutes: appointmentFormData.auto_reminder_offset_minutes || 360,
+        // New multiple reminders system
+        reminders: reminders.length > 0 ? reminders : undefined
       };
       
-      await apiService.appointments.createAgendaAppointment(appointmentData);
-      showSuccess('Cita agendada exitosamente');
-      
-      // Clear form
-      setAppointmentFormData({
-        appointment_date: '',
-        appointment_type_id: appointmentFormData.appointment_type_id, // Keep type
-        office_id: appointmentFormData.office_id, // Keep office
-        reason: '',
-        notes: '',
-        consultation_type: 'Seguimiento',
-        status: 'confirmed',
-        priority: 'normal'
-      });
-      setSelectedDate('');
-      setSelectedTime('');
-      setAvailableTimes([]);
+      if (editingAppointmentId) {
+        const updated = await apiService.appointments.updateAgendaAppointment(
+          String(editingAppointmentId),
+          appointmentData
+        );
+        const normalizedUpdated = {
+          ...updated,
+          appointment_type_name: updated.appointment_type_name || appointmentTypes.find(type => type.id === updated.appointment_type_id)?.name || 'Seguimiento'
+        };
+        if (allowedStatuses.includes(normalizedUpdated.status)) {
+          showSuccess('Cita actualizada exitosamente');
+          setScheduledAppointments(prev => prev.map(item => (item.id === normalizedUpdated.id ? normalizedUpdated : item)));
+        } else {
+          setScheduledAppointments(prev => prev.filter(item => item.id !== normalizedUpdated.id));
+        }
+        setEditingAppointmentId(null);
+        resetForm(false);
+      } else {
+        const created = await apiService.appointments.createAgendaAppointment(appointmentData);
+        const normalizedCreated = {
+          ...created,
+          appointment_type_name: created.appointment_type_name || appointmentTypes.find(type => type.id === created.appointment_type_id)?.name || 'Seguimiento'
+        };
+        if (allowedStatuses.includes(normalizedCreated.status)) {
+          showSuccess('Cita agendada exitosamente');
+          setScheduledAppointments(prev => [...prev, normalizedCreated]);
+        } else {
+          showSuccess('Cita agendada exitosamente');
+        }
+        resetForm(false);
+      }
     } catch (err: any) {
-      console.error('Error creating appointment:', err);
+      logger.error('Error creating appointment', err, 'api');
       setError(err.message || 'Error al agendar la cita');
       showError(err.message || 'Error al agendar la cita');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleEditAppointment = (appointment: any) => {
+    setEditingAppointmentId(appointment.id);
+    populateFormFromAppointment(appointment);
+  };
+
+  const handleDeleteAppointment = async (appointmentId: number) => {
+    try {
+      await apiService.appointments.deleteAgendaAppointment(String(appointmentId));
+      setScheduledAppointments(prev => prev.filter(item => item.id !== appointmentId));
+      if (editingAppointmentId === appointmentId) {
+        setEditingAppointmentId(null);
+        resetForm(false);
+      }
+      showSuccess('Cita eliminada exitosamente');
+    } catch (err: any) {
+      logger.error('Error deleting appointment', err, 'api');
+      showError(err.message || 'Error al eliminar la cita');
     }
   };
 
@@ -231,8 +352,17 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
                 required
               />
             </Grid>
-            <Grid item xs={12} sm={6} md={2}>
-              <FormControl fullWidth size="small">
+            <Grid
+              item
+              xs={12}
+              sm={6}
+              md={3}
+              sx={{
+                flexGrow: 1,
+                minWidth: { xs: '100%', sm: 200, md: 240 }
+              }}
+            >
+              <FormControl fullWidth size="small" sx={{ minWidth: { sm: 200, md: 240 } }}>
                 <InputLabel>Hora</InputLabel>
                 <Select
                   value={selectedTime}
@@ -257,12 +387,18 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={6} md={2}>
-              <FormControl fullWidth size="small">
+            <Grid
+              item
+              xs={12}
+              sm={6}
+              md={offices.length > 0 ? 2 : 3}
+              sx={{ minWidth: { xs: '100%', sm: 200, md: 220 } }}
+            >
+              <FormControl fullWidth size="small" sx={{ minWidth: { sm: 200, md: 220 } }}>
                 <InputLabel>Tipo</InputLabel>
                 <Select
-                  value={appointmentFormData.appointment_type_id || 0}
-                  onChange={(e) => setAppointmentFormData(prev => ({ ...prev, appointment_type_id: e.target.value as number }))}
+                  value={appointmentFormData.appointment_type_id || ''}
+                  onChange={(e) => setAppointmentFormData(prev => ({ ...prev, appointment_type_id: e.target.value ? (e.target.value as number) : undefined }))}
                   label="Tipo"
                   required
                 >
@@ -275,12 +411,18 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
               </FormControl>
             </Grid>
             {offices.length > 0 && (
-              <Grid item xs={12} sm={6} md={2}>
-                <FormControl fullWidth size="small">
+              <Grid
+                item
+                xs={12}
+                sm={6}
+                md={2}
+                sx={{ minWidth: { xs: '100%', sm: 200, md: 220 } }}
+              >
+                <FormControl fullWidth size="small" sx={{ minWidth: { sm: 200, md: 220 } }}>
                   <InputLabel>Oficina</InputLabel>
                   <Select
-                    value={appointmentFormData.office_id || 0}
-                    onChange={(e) => setAppointmentFormData(prev => ({ ...prev, office_id: e.target.value as number }))}
+                    value={appointmentFormData.office_id || ''}
+                    onChange={(e) => setAppointmentFormData(prev => ({ ...prev, office_id: e.target.value ? (e.target.value as number) : undefined }))}
                     label="Oficina"
                   >
                     {offices.map((office) => (
@@ -292,17 +434,28 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
                 </FormControl>
               </Grid>
             )}
-            <Grid item xs={12} sm={6} md={offices.length > 0 ? 3 : 5}>
-              <TextField
-                placeholder="Motivo (opcional)"
-                value={appointmentFormData.reason || ''}
-                onChange={(e) => setAppointmentFormData(prev => ({ ...prev, reason: e.target.value }))}
-                size="small"
-                fullWidth
-              />
-            </Grid>
-            <Grid item xs={12} md={2}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+            
+            {/* Reminders Configuration */}
+            {selectedDate && selectedTime && (
+              <Grid item xs={12}>
+                <RemindersConfig
+                  reminders={reminders}
+                  onChange={setReminders}
+                  appointmentDate={selectedDate && selectedTime ? `${selectedDate}T${selectedTime}` : undefined}
+                  disabled={isSubmitting}
+                />
+              </Grid>
+            )}
+            
+            <Grid item xs={12}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  gap: 1
+                }}
+              >
                 <Button
                   variant="contained"
                   color="primary"
@@ -311,13 +464,71 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
                   disabled={isSubmitting || !selectedDate || !selectedTime || !appointmentFormData.appointment_type_id}
                   sx={{ minWidth: '140px' }}
                 >
-                  {isSubmitting ? <CircularProgress size={20} /> : 'Agendar'}
+                  {isSubmitting ? <CircularProgress size={20} /> : (editingAppointmentId ? 'Actualizar' : 'Agendar')}
                 </Button>
               </Box>
             </Grid>
           </Grid>
         </CardContent>
       </Card>
+      {scheduledAppointments.length > 0 && (
+        <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {scheduledAppointments.map(appointment => {
+            const appointmentDate = new Date(appointment.appointment_date);
+            const formattedDate = appointmentDate.toLocaleDateString('es-MX', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            });
+            const formattedTime = appointmentDate.toLocaleTimeString('es-MX', {
+              hour: '2-digit',
+              minute: '2-digit'
+            });
+            const appointmentTypeName = appointment.appointment_type_name || appointmentTypes.find(type => type.id === appointment.appointment_type_id)?.name || 'Seguimiento';
+            const statusLabel = appointment.status === 'confirmada' ? 'Confirmada' : appointment.status === 'por_confirmar' ? 'Por confirmar' : appointment.status;
+            const statusColor = appointment.status === 'confirmada' ? 'success' : 'primary';
+
+            return (
+              <Card key={appointment.id} sx={{ border: '1px solid', borderColor: 'primary.light' }}>
+                <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                    {formattedDate} · {formattedTime}
+                  </Typography>
+                  <Chip label={statusLabel} color={statusColor as any} size="small" sx={{ alignSelf: 'flex-start' }} />
+                  <Typography variant="body2" color="text.secondary">
+                    Tipo: {appointmentTypeName}
+                  </Typography>
+                  {appointment.office_id && (
+                    <Typography variant="body2" color="text.secondary">
+                      Consultorio: {offices.find(office => office.id === appointment.office_id)?.name}
+                    </Typography>
+                  )}
+                  <Typography variant="body2" color="text.secondary">
+                    Estado: {APPOINTMENT_STATUS_LABELS[appointment.status as keyof typeof APPOINTMENT_STATUS_LABELS] || appointment.status}
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => handleEditAppointment(appointment)}
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      variant="text"
+                      size="small"
+                      color="error"
+                      onClick={() => handleDeleteAppointment(appointment.id)}
+                    >
+                      Eliminar
+                    </Button>
+                  </Box>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </Box>
+      )}
     </Box>
   );
 };

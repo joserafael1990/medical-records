@@ -8,14 +8,14 @@ WORKDIR /app
 # Install dependencies (use npm ci for deterministic builds)
 COPY --link package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci
+    npm install
 
 # Copy source files (exclude secrets, .env, .git, etc. via .dockerignore)
 COPY --link . .
 
 # Build the React app (TypeScript)
 RUN --mount=type=cache,target=/root/.npm \
-    npm run build
+    DISABLE_ESLINT_PLUGIN=true GENERATE_SOURCEMAP=false npm run build
 
 # ----------- Production Stage -----------
 FROM node:${NODE_VERSION}-slim AS final

@@ -31,17 +31,11 @@ interface UseDoctorProfileReturn {
 const initialFormData: DoctorFormData = {
   // Información Personal
   title: 'Dr.',
-  first_name: '',
-  paternal_surname: '',
-  maternal_surname: '',
+  name: '',
   email: '',
   primary_phone: '',
   birth_date: '',
   gender: '',
-  
-  // Identificación Legal
-  curp: '',
-  rfc: '',
   
   // Información Profesional
   professional_license: '',
@@ -116,19 +110,17 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
     // En modo creación, validamos todos los campos requeridos
     
     // Información Personal - Solo validar si está presente o en modo creación
-    if (!isEditMode || data.first_name?.trim()) {
-      if (!data.first_name?.trim()) {
-        errors.first_name = 'El nombre es requerido';
+    if (!isEditMode || data.name?.trim()) {
+      if (!data.name?.trim()) {
+        errors.name = 'El nombre completo es requerido';
+      } else {
+        // Validar que tenga al menos dos palabras
+        const nameParts = data.name.trim().split(/\s+/);
+        if (nameParts.length < 2) {
+          errors.name = 'Ingrese nombre completo (mínimo dos palabras)';
+        }
       }
     }
-    
-    if (!isEditMode || data.paternal_surname?.trim()) {
-      if (!data.paternal_surname?.trim()) {
-        errors.paternal_surname = 'El apellido paterno es requerido';
-      }
-    }
-    
-    // maternal_surname is optional for doctors too
     
     // Email siempre debe ser válido si está presente
     if (data.email?.trim()) {
@@ -370,15 +362,11 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
       // Populate form with existing data
       setFormData({
         title: doctorProfile.title || '',
-        first_name: doctorProfile.first_name || '',
-        paternal_surname: doctorProfile.paternal_surname || '',
-        maternal_surname: doctorProfile.maternal_surname || '',
+        name: doctorProfile.name || '',
         email: doctorProfile.email || '',
         primary_phone: doctorProfile.primary_phone || '',
         birth_date: formatDateForInput(doctorProfile.birth_date || ''),
         gender: (doctorProfile as any).gender || '',
-        curp: doctorProfile.curp || '',
-        rfc: doctorProfile.rfc || '',
         professional_license: doctorProfile.professional_license || '',
         specialty_license: doctorProfile.specialty_license || '',
         university: doctorProfile.university || '',

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -15,21 +15,21 @@ import {
   CircularProgress,
   Typography,
   Autocomplete,
-  Avatar,
-  Switch,
-  FormControlLabel
+  Avatar
 } from '@mui/material';
 import { Person as PersonIcon } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
-import { AppointmentFormData, Patient } from '../../types';
+import { AppointmentFormData, Patient, AppointmentReminderFormData } from '../../types';
 import { getMediumSelectMenuProps } from '../../utils/selectMenuProps';
 import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
 import { PhoneNumberInput } from '../common/PhoneNumberInput';
 import { useAppointmentMultiOfficeForm, formatPatientNameWithAge } from '../../hooks/useAppointmentMultiOfficeForm';
 import { preventBackdropClose } from '../../utils/dialogHelpers';
+import { RemindersConfig } from '../common/RemindersConfig';
+import { logger } from '../../utils/logger';
 
 interface AppointmentDialogMultiOfficeProps {
   open: boolean;
@@ -62,6 +62,76 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
   onFormDataChange,
   doctorProfile
 }) => {
+  // State for reminders - must be defined before onSubmitWithReminders
+  const [reminders, setReminders] = useState<AppointmentReminderFormData[]>([]);
+  // Use ref to always have the latest reminders value
+  const remindersRef = useRef<AppointmentReminderFormData[]>([]);
+  
+  // Update ref whenever reminders change - this ensures ref is always in sync
+  useEffect(() => {
+    remindersRef.current = reminders;
+    logger.debug('Reminders state updated', {
+      reminders_count: reminders.length,
+      reminders: reminders,
+      ref_updated: true,
+      ref_current_count: remindersRef.current.length
+    }, 'ui');
+  }, [reminders]);
+
+  // Create a wrapper for onSubmit that always includes reminders
+  const onSubmitWithReminders = useCallback((formData: AppointmentFormData) => {
+    // ALWAYS use reminders from ref (which is always up-to-date) instead of formData
+    // This ensures we have the latest reminders even if formData is stale
+    const currentReminders = remindersRef.current;
+    
+    // Build formData with reminders - remove reminders from formData first to avoid undefined
+    // Then add it back only if there are actual reminders
+    const { reminders: _, ...formDataWithoutReminders } = formData as any;
+    const formDataWithReminders: any = {
+      ...formDataWithoutReminders
+    };
+    
+    // Only add reminders property if there are actual reminders
+    // This prevents undefined from being serialized to null
+    if (currentReminders.length > 0) {
+      formDataWithReminders.reminders = currentReminders;
+      logger.debug('✅ Added reminders to formDataWithReminders', {
+        reminders_count: currentReminders.length,
+        reminders: currentReminders
+      }, 'ui');
+    } else {
+      logger.debug('⚠️ No reminders to add (currentReminders.length is 0)', {
+        currentReminders_length: currentReminders.length,
+        ref_length: remindersRef.current.length
+      }, 'ui');
+    }
+    // If no reminders, don't include the property at all (not even as undefined)
+    
+    logger.debug('onSubmitWithReminders called', {
+      reminders_count: currentReminders.length,
+      reminders: currentReminders,
+      formData_has_reminders: !!formData.reminders,
+      formData_reminders_count: formData.reminders?.length || 0,
+      ref_reminders_count: remindersRef.current.length,
+      final_reminders_count: formDataWithReminders.reminders?.length || 0,
+      final_reminders: formDataWithReminders.reminders,
+      formDataWithReminders_keys: Object.keys(formDataWithReminders),
+      has_reminders_property: 'reminders' in formDataWithReminders,
+      formDataWithReminders_reminders_direct: formDataWithReminders.reminders
+    }, 'ui');
+    
+    // Log right before calling onSubmit to see what we're passing
+    logger.debug('📤 About to call onSubmit with', {
+      has_reminders: 'reminders' in formDataWithReminders,
+      reminders_value: formDataWithReminders.reminders,
+      reminders_type: typeof formDataWithReminders.reminders,
+      reminders_is_array: Array.isArray(formDataWithReminders.reminders),
+      all_keys: Object.keys(formDataWithReminders)
+    }, 'ui');
+    
+    onSubmit(formDataWithReminders);
+  }, [onSubmit]);
+
   const formHook = useAppointmentMultiOfficeForm({
     open,
     formData: externalFormData,
@@ -69,7 +139,7 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
     isEditing,
     doctorProfile,
     onFormDataChange,
-    onSubmit,
+    onSubmit: onSubmitWithReminders, // Use the wrapper that includes reminders
     onClose,
     formErrorMessage,
     fieldErrors
@@ -102,6 +172,47 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
     currentError
   } = formHook;
 
+  // Track if we've initialized reminders for this dialog session
+  const remindersInitializedRef = useRef(false);
+  const previousExternalFormDataRef = useRef<AppointmentFormData | undefined>(undefined);
+  
+  // Load reminders when dialog opens or when editing
+  useEffect(() => {
+    // Only initialize when dialog opens
+    if (!open) {
+      remindersInitializedRef.current = false;
+      previousExternalFormDataRef.current = undefined;
+      return;
+    }
+    
+    // Check if externalFormData has actually changed (by comparing reminders)
+    const currentReminders = externalFormData?.reminders;
+    const previousReminders = previousExternalFormDataRef.current?.reminders;
+    const remindersChanged = JSON.stringify(currentReminders) !== JSON.stringify(previousReminders);
+    
+    // Update the ref to track current externalFormData
+    previousExternalFormDataRef.current = externalFormData;
+    
+    // Initialize reminders based on editing state
+    if (isEditing && externalFormData?.reminders && Array.isArray(externalFormData.reminders)) {
+      const loadedReminders = externalFormData.reminders.map((r: any) => ({
+        reminder_number: r.reminder_number,
+        offset_minutes: r.offset_minutes,
+        enabled: r.enabled
+      }));
+      // Only update if reminders actually changed or if not yet initialized
+      if (remindersChanged || !remindersInitializedRef.current) {
+        setReminders(loadedReminders);
+        remindersInitializedRef.current = true;
+      }
+    } else if (!isEditing) {
+      // Only reset if we're creating a new appointment (not editing) and not yet initialized
+      if (!remindersInitializedRef.current) {
+        setReminders([]);
+        remindersInitializedRef.current = true;
+      }
+    }
+  }, [open, isEditing, externalFormData?.reminders]);
 
   // Hook para scroll automático a errores
   const { errorRef } = useScrollToErrorInDialog(currentError);
@@ -417,91 +528,28 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
               </Alert>
             )}
 
-            {/* 7. MOTIVO */}
-            <TextField
-              fullWidth
-              label="Motivo de la cita"
-              value={currentFormData.reason}
-              onChange={handleChange('reason')}
-              required
-              multiline
-              rows={2}
-            />
-
-            {/* 8. NOTAS */}
-            <TextField
-              fullWidth
-              label="Notas adicionales"
-              value={currentFormData.notes || ''}
-              onChange={handleChange('notes')}
-              multiline
-              rows={3}
-            />
-
-            {/* 9. RECORDATORIO AUTOMÁTICO POR WHATSAPP */}
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-                Recordatorio automático por WhatsApp
-              </Typography>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={!!currentFormData.auto_reminder_enabled}
-                    onChange={(_, checked) => {
-                      const updated = {
-                        ...currentFormData,
-                        auto_reminder_enabled: checked,
-                        auto_reminder_offset_minutes: checked
-                          ? (currentFormData.auto_reminder_offset_minutes ?? 360)
-                          : currentFormData.auto_reminder_offset_minutes
-                      };
-                      setFormData(updated);
-                      onFormDataChange && onFormDataChange(updated);
-                    }}
-                  />
-                }
-                label="Enviar recordatorio automático"
-              />
-
-              {currentFormData.auto_reminder_enabled && (
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: '160px 160px' }, gap: 2, mt: 1 }}>
-                  <TextField
-                    type="number"
-                    size="small"
-                    label="Horas antes"
-                    inputProps={{ min: 0, max: 168 }}
-                    value={Math.floor(((currentFormData.auto_reminder_offset_minutes ?? 360) / 60))}
-                    onChange={(e) => {
-                      const hours = Math.max(0, Math.min(168, parseInt(e.target.value || '0', 10)));
-                      const minutes = (currentFormData.auto_reminder_offset_minutes ?? 360) % 60;
-                      const updated = {
-                        ...currentFormData,
-                        auto_reminder_offset_minutes: hours * 60 + minutes
-                      };
-                      setFormData(updated);
-                      onFormDataChange && onFormDataChange(updated);
-                    }}
-                  />
-                  <TextField
-                    type="number"
-                    size="small"
-                    label="Minutos antes"
-                    inputProps={{ min: 0, max: 59 }}
-                    value={(currentFormData.auto_reminder_offset_minutes ?? 360) % 60}
-                    onChange={(e) => {
-                      const mins = Math.max(0, Math.min(59, parseInt(e.target.value || '0', 10)));
-                      const hours = Math.floor(((currentFormData.auto_reminder_offset_minutes ?? 360) / 60));
-                      const updated = {
-                        ...currentFormData,
-                        auto_reminder_offset_minutes: hours * 60 + mins
-                      };
-                      setFormData(updated);
-                      onFormDataChange && onFormDataChange(updated);
-                    }}
-                  />
-                </Box>
-              )}
-            </Box>
+            {/* 7. RECORDATORIOS AUTOMÁTICOS POR WHATSAPP */}
+            {selectedDate && selectedTime && (
+              <Box sx={{ mt: 2 }}>
+                <RemindersConfig
+                  reminders={reminders}
+                  onChange={(newReminders) => {
+                    setReminders(newReminders);
+                    // Update formData with reminders
+                    const updated = {
+                      ...currentFormData,
+                      reminders: newReminders.length > 0 ? newReminders : undefined
+                    };
+                    setFormData(updated);
+                    if (onFormDataChange) {
+                      onFormDataChange(updated);
+                    }
+                  }}
+                  appointmentDate={currentFormData.appointment_date || (selectedDate && selectedTime ? `${selectedDate.split('T')[0]}T${selectedTime}:00` : undefined)}
+                  disabled={currentLoading}
+                />
+              </Box>
+            )}
           </Box>
         </LocalizationProvider>
       </DialogContent>

@@ -235,6 +235,11 @@ class DoctorCreate(PersonBase):
     online_consultation_url: Optional[str] = None
     appointment_duration: Optional[int] = None  # Duration in minutes
     
+    # Avatar configuration
+    avatar_type: Literal['initials', 'preloaded', 'custom'] = 'initials'
+    avatar_template_key: Optional[str] = None
+    avatar_file_path: Optional[str] = None
+    
     # Professional data
     specialty_id: Optional[int] = None
     university: Optional[str] = None
@@ -297,6 +302,11 @@ class DoctorUpdate(BaseSchema):
     emergency_contact_name: Optional[str] = None
     emergency_contact_phone: Optional[str] = None
     emergency_contact_relationship: Optional[str] = None
+
+    # Avatar configuration
+    avatar_type: Optional[Literal['initials', 'preloaded', 'custom']] = None
+    avatar_template_key: Optional[str] = None
+    avatar_file_path: Optional[str] = None
 
 # Medical data for patients
 class PatientCreate(PersonBase):
@@ -367,6 +377,11 @@ class Person(PersonBase):
     birth_state: Optional[State] = None
     address_state: Optional[State] = None
     offices: Optional[List[Office]] = None
+    
+    # Avatar configuration
+    avatar_type: Optional[str] = None
+    avatar_template_key: Optional[str] = None
+    avatar_file_path: Optional[str] = None
 
 # ============================================================================
 # MEDICAL RECORDS
@@ -376,17 +391,21 @@ class MedicalRecordBase(BaseSchema):
     patient_id: int
     doctor_id: int
     consultation_date: datetime
+    patient_document_id: Optional[int] = None
+    patient_document_value: Optional[str] = None
     
     # NOM-004 required fields
     chief_complaint: str
     history_present_illness: str
     family_history: str
     perinatal_history: str
+    gynecological_and_obstetric_history: str
     personal_pathological_history: str
     personal_non_pathological_history: str
     physical_examination: str
     primary_diagnosis: str
     treatment_plan: str
+    follow_up_instructions: str
     
     # Appointment type and office
     appointment_type_id: int
@@ -409,13 +428,17 @@ class MedicalRecordCreate(MedicalRecordBase):
     pass
 
 class MedicalRecordUpdate(BaseSchema):
+    patient_document_id: Optional[int] = None
+    patient_document_value: Optional[str] = None
     chief_complaint: Optional[str] = None
     history_present_illness: Optional[str] = None
     family_history: Optional[str] = None
     perinatal_history: Optional[str] = None
+    gynecological_and_obstetric_history: Optional[str] = None
     personal_pathological_history: Optional[str] = None
     personal_non_pathological_history: Optional[str] = None
     physical_examination: Optional[str] = None
+    follow_up_instructions: Optional[str] = None
     primary_diagnosis: Optional[str] = None
     treatment_plan: Optional[str] = None
     
@@ -445,6 +468,35 @@ class MedicalRecord(MedicalRecordBase):
 # APPOINTMENTS
 # ============================================================================
 
+# ============================================================================
+# APPOINTMENT REMINDERS
+# ============================================================================
+
+class AppointmentReminderBase(BaseSchema):
+    reminder_number: int  # 1, 2, or 3
+    offset_minutes: int  # Time before appointment in minutes
+    enabled: bool = True
+
+class AppointmentReminderCreate(AppointmentReminderBase):
+    pass
+
+class AppointmentReminderUpdate(BaseSchema):
+    reminder_number: Optional[int] = None
+    offset_minutes: Optional[int] = None
+    enabled: Optional[bool] = None
+
+class AppointmentReminder(AppointmentReminderBase):
+    id: int
+    appointment_id: int
+    sent: bool = False
+    sent_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+# ============================================================================
+# APPOINTMENTS
+# ============================================================================
+
 class AppointmentBase(BaseSchema):
     patient_id: int
     doctor_id: int
@@ -453,13 +505,13 @@ class AppointmentBase(BaseSchema):
     appointment_type_id: int
     office_id: Optional[int] = None
     consultation_type: str = 'Seguimiento'  # 'Primera vez' or 'Seguimiento'
-    status: str = 'confirmed'
-    priority: str = 'normal'
-    reason: str
-    notes: Optional[str] = None
-    # Auto WhatsApp reminder
+    status: str = 'por_confirmar'
+    reason: Optional[str] = None
+    # Auto WhatsApp reminder (deprecated - use reminders array instead)
     auto_reminder_enabled: bool = False
     auto_reminder_offset_minutes: Optional[int] = 360  # 6 hours by default
+    # New multiple reminders system
+    reminders: Optional[List[AppointmentReminderCreate]] = None  # Up to 3 reminders
 
 class AppointmentCreate(AppointmentBase):
     pass
@@ -472,22 +524,21 @@ class AppointmentUpdate(BaseSchema):
     office_id: Optional[int] = None
     consultation_type: Optional[str] = None
     status: Optional[str] = None
-    priority: Optional[str] = None
-    reason: Optional[str] = None
-    notes: Optional[str] = None
     preparation_instructions: Optional[str] = None
     estimated_cost: Optional[Decimal] = None
     insurance_covered: Optional[bool] = None
     cancelled_reason: Optional[str] = None
-    # Auto WhatsApp reminder
+    # Auto WhatsApp reminder (deprecated - use reminders array instead)
     auto_reminder_enabled: Optional[bool] = None
     auto_reminder_offset_minutes: Optional[int] = None
+    # New multiple reminders system
+    reminders: Optional[List[AppointmentReminderCreate]] = None  # Up to 3 reminders
 
 class Appointment(AppointmentBase):
     id: int
     confirmation_required: bool = False
-    reminder_sent: bool = False
-    reminder_sent_at: Optional[datetime] = None
+    reminder_sent: bool = False  # Deprecated - check reminders array instead
+    reminder_sent_at: Optional[datetime] = None  # Deprecated
     cancelled_reason: Optional[str] = None
     cancelled_at: Optional[datetime] = None
     cancelled_by: Optional[int] = None
@@ -498,6 +549,7 @@ class Appointment(AppointmentBase):
     # Relationships
     patient: Optional[Person] = None
     doctor: Optional[Person] = None
+    reminders: Optional[List[AppointmentReminder]] = None  # Up to 3 reminders
 
 # ============================================================================
 # VITAL SIGNS
@@ -661,3 +713,28 @@ class StudyRecommendation(BaseSchema):
     study: StudyCatalog
     reason: str
     priority: Literal['high', 'medium', 'low'] = 'medium'
+
+# ============================================================================
+# MEDICATIONS
+# ============================================================================
+
+class MedicationBase(BaseSchema):
+    name: str
+
+    @validator('name')
+    def validate_name(cls, value: str) -> str:
+        if not value or not value.strip():
+            raise ValueError("El nombre del medicamento es obligatorio")
+        return value.strip()
+
+
+class MedicationCreate(MedicationBase):
+    pass
+
+
+class MedicationResponse(MedicationBase):
+    id: int
+    created_by: Optional[int] = None
+    is_active: bool = True
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None

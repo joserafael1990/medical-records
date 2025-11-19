@@ -15,6 +15,7 @@ interface DiagnosisSectionProps {
   primaryDiagnoses: any[];
   onAddPrimaryDiagnosis: (diagnosis: any) => void;
   onRemovePrimaryDiagnosis: (diagnosis: any) => void;
+  onCreatePrimaryDiagnosis?: (name: string) => Promise<any>;
   primaryDiagnosisText: string;
   onPrimaryDiagnosisTextChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   
@@ -22,6 +23,7 @@ interface DiagnosisSectionProps {
   secondaryDiagnoses: any[];
   onAddSecondaryDiagnosis: (diagnosis: any) => void;
   onRemoveSecondaryDiagnosis: (diagnosis: any) => void;
+  onCreateSecondaryDiagnosis?: (name: string) => Promise<any>;
   secondaryDiagnosesText: string;
   onSecondaryDiagnosesTextChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   
@@ -35,11 +37,13 @@ export const ConsultationDiagnosisSection: React.FC<DiagnosisSectionProps> = ({
   primaryDiagnoses,
   onAddPrimaryDiagnosis,
   onRemovePrimaryDiagnosis,
+  onCreatePrimaryDiagnosis,
   primaryDiagnosisText,
   onPrimaryDiagnosisTextChange,
   secondaryDiagnoses,
   onAddSecondaryDiagnosis,
   onRemoveSecondaryDiagnosis,
+  onCreateSecondaryDiagnosis,
   secondaryDiagnosesText,
   onSecondaryDiagnosesTextChange,
   loading,
@@ -59,6 +63,7 @@ export const ConsultationDiagnosisSection: React.FC<DiagnosisSectionProps> = ({
           diagnoses={primaryDiagnoses}
           onAddDiagnosis={onAddPrimaryDiagnosis}
           onRemoveDiagnosis={onRemovePrimaryDiagnosis}
+          onCreateDiagnosis={onCreatePrimaryDiagnosis}
           title="Diagnósticos Principales"
           maxSelections={1}
           showAddButton={true}
@@ -88,6 +93,7 @@ export const ConsultationDiagnosisSection: React.FC<DiagnosisSectionProps> = ({
           diagnoses={secondaryDiagnoses}
           onAddDiagnosis={onAddSecondaryDiagnosis}
           onRemoveDiagnosis={onRemoveSecondaryDiagnosis}
+          onCreateDiagnosis={onCreateSecondaryDiagnosis}
           title="Diagnósticos Secundarios"
           showAddButton={true}
           isLoading={loading}

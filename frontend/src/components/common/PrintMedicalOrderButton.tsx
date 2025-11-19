@@ -3,6 +3,7 @@ import { Button, Tooltip } from '@mui/material';
 import { Print as PrintIcon } from '@mui/icons-material';
 import { usePDFGenerator } from '../../hooks/usePDFGenerator';
 import { PatientInfo, DoctorInfo, ConsultationInfo, StudyInfo } from '../../services/pdfService';
+import { useToast } from './ToastNotification';
 
 interface PrintMedicalOrderButtonProps {
   patient: PatientInfo;
@@ -26,22 +27,25 @@ export const PrintMedicalOrderButton: React.FC<PrintMedicalOrderButtonProps> = (
   fullWidth = false
 }) => {
   const { generateMedicalOrderPDF } = usePDFGenerator();
+  const { showSuccess, showError } = useToast();
 
   const handlePrintMedicalOrder = async () => {
-    console.log('PrintMedicalOrderButton clicked!', {
-      patient: patient?.name,
-      doctor: doctor?.name,
-      consultation: consultation?.id,
-      studiesCount: studies?.length
-    });
-    
-    const result = await generateMedicalOrderPDF(patient, doctor, consultation, studies);
+    if (!consultation?.id) {
+      showError('Guarda la consulta para generar un folio antes de imprimir la orden');
+      return;
+    }
+
+    const result = await generateMedicalOrderPDF(
+      patient,
+      doctor,
+      consultation,
+      studies,
+      consultation?.nextAppointmentDate
+    );
     
     if (result.success) {
-      // You can add a success notification here
-      console.log(result.message);
+      showSuccess('Órdenes de estudios generadas exitosamente');
     } else {
-      // You can add an error notification here
       console.error(result.message);
     }
   };
