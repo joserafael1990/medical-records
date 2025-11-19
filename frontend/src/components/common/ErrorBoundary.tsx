@@ -1,5 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Box, Typography, Button, Paper } from '@mui/material';
+import * as Sentry from '@sentry/react';
 import { safeConsoleError } from '../../utils/errorHandling';
 
 interface Props {
@@ -15,7 +16,11 @@ interface State {
 class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null, errorInfo: null };
+    this.state = { 
+      hasError: false, 
+      error: null, 
+      errorInfo: null,
+    };
   }
 
   public static getDerivedStateFromError(error: Error): State {
@@ -36,6 +41,35 @@ class ErrorBoundary extends Component<Props, State> {
       safeConsoleError('React Error Boundary caught an error:', errorDetails);
       console.error('Full error object:', error);
       console.error('Error Info:', errorInfo);
+      
+      // Capturar error en Sentry y mostrar diálogo de feedback en español
+      if (process.env.REACT_APP_SENTRY_DSN) {
+        const eventId = Sentry.captureException(error, {
+          contexts: {
+            react: {
+              componentStack: errorInfo.componentStack,
+            },
+          },
+        });
+        
+        // Mostrar diálogo de feedback con textos en español
+        setTimeout(() => {
+          Sentry.showReportDialog({
+            eventId,
+            title: '¡Oops! Algo salió mal',
+            subtitle: 'Por favor, ayúdanos a mejorar reportando este error.',
+            subtitle2: 'Tu feedback es muy valioso para nosotros.',
+            labelName: 'Nombre',
+            labelEmail: 'Email',
+            labelComments: '¿Qué estabas haciendo cuando ocurrió el error?',
+            labelClose: 'Cerrar',
+            labelSubmit: 'Enviar reporte',
+            errorGeneric: 'Ocurrió un error al enviar el reporte. Por favor, inténtalo de nuevo.',
+            errorFormEntry: 'Algunos campos son inválidos. Por favor, corrígelos e inténtalo de nuevo.',
+            successMessage: '¡Gracias por tu reporte! Nos ayudará a mejorar la aplicación.',
+          });
+        }, 500);
+      }
     } catch (logError) {
       // Fallback if logging fails
       console.error('Error in ErrorBoundary logging:', logError);
@@ -54,7 +88,11 @@ class ErrorBoundary extends Component<Props, State> {
   };
 
   private handleReset = () => {
-    this.setState({ hasError: false, error: null, errorInfo: null });
+    this.setState({ 
+      hasError: false, 
+      error: null, 
+      errorInfo: null,
+    });
   };
 
   public render() {
@@ -127,7 +165,7 @@ class ErrorBoundary extends Component<Props, State> {
               </Box>
             )}
             
-            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
               <Button 
                 variant="contained" 
                 onClick={this.handleReload}
@@ -142,6 +180,35 @@ class ErrorBoundary extends Component<Props, State> {
               >
                 Intentar de nuevo
               </Button>
+              {process.env.REACT_APP_SENTRY_DSN && (
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    // Mostrar diálogo de feedback manualmente con textos en español
+                    const eventId = this.state.error 
+                      ? Sentry.captureException(this.state.error)
+                      : Sentry.captureMessage('User reported error from ErrorBoundary');
+                    
+                    Sentry.showReportDialog({
+                      eventId,
+                      title: 'Reportar error',
+                      subtitle: 'Por favor, ayúdanos a mejorar reportando este error.',
+                      subtitle2: 'Tu feedback es muy valioso para nosotros.',
+                      labelName: 'Nombre',
+                      labelEmail: 'Email',
+                      labelComments: '¿Qué estabas haciendo cuando ocurrió el error?',
+                      labelClose: 'Cerrar',
+                      labelSubmit: 'Enviar reporte',
+                      errorGeneric: 'Ocurrió un error al enviar el reporte. Por favor, inténtalo de nuevo.',
+                      errorFormEntry: 'Algunos campos son inválidos. Por favor, corrígelos e inténtalo de nuevo.',
+                      successMessage: '¡Gracias por tu reporte! Nos ayudará a mejorar la aplicación.',
+                    });
+                  }}
+                  color="info"
+                >
+                  Reportar error
+                </Button>
+              )}
             </Box>
           </Paper>
         </Box>

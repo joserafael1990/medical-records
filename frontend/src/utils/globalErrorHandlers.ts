@@ -1,5 +1,6 @@
 
 import { safeConsoleError } from './errorHandling';
+import * as Sentry from '@sentry/react';
 
 // Store original console.error
 const originalConsoleError = console.error;
@@ -54,6 +55,22 @@ export const initializeGlobalErrorHandlers = () => {
   window.addEventListener('unhandledrejection', (event) => {
     safeConsoleError('Unhandled Promise Rejection:', event.reason);
     
+    // Capturar en Sentry si está habilitado
+    if (process.env.REACT_APP_SENTRY_DSN && event.reason) {
+      const error = event.reason instanceof Error 
+        ? event.reason 
+        : new Error(String(event.reason));
+      
+      // Capturar error en Sentry - el usuario puede usar el botón flotante para reportar
+      Sentry.captureException(error, {
+        contexts: {
+          unhandledRejection: {
+            reason: String(event.reason),
+          },
+        },
+      });
+    }
+    
     // Prevent the default handling (which would log [object Object])
     event.preventDefault();
     
@@ -87,6 +104,22 @@ export const initializeGlobalErrorHandlers = () => {
     // Log the actual error object safely if it exists
     if (event.error) {
       safeConsoleError('Error object:', event.error);
+    }
+    
+    // Capturar en Sentry si está habilitado
+    if (process.env.REACT_APP_SENTRY_DSN) {
+      const error = event.error || new Error(event.message || 'Unknown error');
+      
+      // Capturar error en Sentry - el usuario puede usar el botón flotante para reportar
+      Sentry.captureException(error, {
+        contexts: {
+          uncaughtError: {
+            filename: event.filename,
+            lineno: event.lineno,
+            colno: event.colno,
+          },
+        },
+      });
     }
     
     // Prevent default error reporting
