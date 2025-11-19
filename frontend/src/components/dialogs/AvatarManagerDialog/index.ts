@@ -1,0 +1,2 @@
+export { AvatarManagerDialog } from './AvatarManagerDialog';
+

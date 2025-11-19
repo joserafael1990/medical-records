@@ -74,6 +74,7 @@ temp/
 # User data and uploads
 backend/uploads/
 backend/certificates/
+backend/static/
 
 # Development tools
 ngrok*

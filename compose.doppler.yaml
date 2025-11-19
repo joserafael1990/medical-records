@@ -1,0 +1,104 @@
+# Docker Compose con soporte para Doppler
+# Uso: doppler run --config dev -- docker compose -f compose.doppler.yaml up
+
+services:
+  python-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    ports:
+      - "8000:8000"
+    networks:
+      - appnet
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    environment:
+      # Variables inyectadas por Doppler (no necesitas especificarlas aquí)
+      # Doppler las inyecta automáticamente cuando usas: doppler run --config dev --
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - SENTRY_DSN_BACKEND=${SENTRY_DSN_BACKEND}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-development}
+      - ENABLE_ENCRYPTION=${ENABLE_ENCRYPTION:-false}
+      - SECURITY_HEADERS_ENABLED=${SECURITY_HEADERS_ENABLED:-true}
+      - CONTENT_SECURITY_POLICY=${CONTENT_SECURITY_POLICY}
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
+      - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-120}
+      - RATE_LIMIT_WINDOW_SECONDS=${RATE_LIMIT_WINDOW_SECONDS:-60}
+      - MEDICAL_ENCRYPTION_KEY=${MEDICAL_ENCRYPTION_KEY}
+      - WHATSAPP_PROVIDER=${WHATSAPP_PROVIDER:-meta}
+      - META_WHATSAPP_PHONE_ID=${META_WHATSAPP_PHONE_ID}
+      - META_WHATSAPP_TOKEN=${META_WHATSAPP_TOKEN}
+      - META_WHATSAPP_API_VERSION=${META_WHATSAPP_API_VERSION:-v24.0}
+    # NO usar env_file cuando usas Doppler
+    volumes:
+      - ./backend:/app
+      - /app/__pycache__
+    depends_on:
+      - postgres-db
+
+  typescript-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    init: true
+    ports:
+      - "3000:3000"
+    networks:
+      - appnet
+    environment:
+      - NODE_OPTIONS=--max-old-space-size=8192
+      - GENERATE_SOURCEMAP=false
+      - REACT_APP_SENTRY_DSN=${REACT_APP_SENTRY_DSN}
+      - REACT_APP_SENTRY_ENVIRONMENT=${REACT_APP_SENTRY_ENVIRONMENT:-development}
+      - TSC_COMPILE_ON_ERROR=true
+      - ESLINT_NO_DEV_ERRORS=true
+      - SKIP_PREFLIGHT_CHECK=true
+      - DISABLE_ESLINT_PLUGIN=true
+      - FAST_REFRESH=true
+      - CI=false
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/build
+      - /app/dist
+    depends_on:
+      - python-backend
+    deploy:
+      resources:
+        limits:
+          memory: 10G
+
+  postgres-db:
+    image: postgres:latest
+    restart: unless-stopped
+    networks:
+      - appnet
+    environment:
+      POSTGRES_USER: historias_user
+      POSTGRES_PASSWORD: historias_pass
+      POSTGRES_DB: historias_clinicas
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U historias_user -d historias_clinicas"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  appnet:
+    driver: bridge
+
+volumes:
+  postgres_data:
+
