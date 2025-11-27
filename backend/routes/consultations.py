@@ -52,6 +52,95 @@ security_logger = get_logger("medical_records.security")
 SYSTEM_TIMEZONE = pytz.timezone('America/Mexico_City')
 
 
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def extract_consultation_fields(consultation: MedicalRecord) -> dict:
+    """Extract all consultation fields into a dictionary for encryption/decryption."""
+    return {
+        "chief_complaint": consultation.chief_complaint,
+        "history_present_illness": consultation.history_present_illness,
+        "family_history": consultation.family_history,
+        "personal_pathological_history": consultation.personal_pathological_history,
+        "personal_non_pathological_history": consultation.personal_non_pathological_history,
+        "physical_examination": consultation.physical_examination,
+        "primary_diagnosis": consultation.primary_diagnosis,
+        "secondary_diagnoses": consultation.secondary_diagnoses,
+        "prescribed_medications": consultation.prescribed_medications,
+        "treatment_plan": consultation.treatment_plan,
+        "follow_up_instructions": consultation.follow_up_instructions,
+        "laboratory_results": consultation.laboratory_results,
+        "notes": consultation.notes,
+        "perinatal_history": consultation.perinatal_history,
+        "gynecological_and_obstetric_history": consultation.gynecological_and_obstetric_history
+    }
+
+
+def build_consultation_detail_response(
+    consultation: MedicalRecord,
+    decrypted_data: dict,
+    patient_name: str,
+    doctor_name: str
+) -> dict:
+    """Build a complete consultation detail response with all fields."""
+    consultation_end_time = consultation.consultation_date + timedelta(minutes=30)
+    
+    return {
+        "id": consultation.id,
+        "patient_id": consultation.patient_id,
+        "patient_document_id": consultation.patient_document_id,
+        "patient_document_value": consultation.patient_document_value,
+        "patient_document_name": consultation.patient_document.name if consultation.patient_document else None,
+        "consultation_date": consultation.consultation_date.isoformat(),
+        "end_time": consultation_end_time.isoformat(),
+        "chief_complaint": decrypted_data.get("chief_complaint", ""),
+        "history_present_illness": decrypted_data.get("history_present_illness", ""),
+        "family_history": decrypted_data.get("family_history", ""),
+        "gynecological_and_obstetric_history": decrypted_data.get("gynecological_and_obstetric_history", ""),
+        "personal_pathological_history": decrypted_data.get("personal_pathological_history", ""),
+        "personal_non_pathological_history": decrypted_data.get("personal_non_pathological_history", ""),
+        "physical_examination": decrypted_data.get("physical_examination", ""),
+        "laboratory_results": decrypted_data.get("laboratory_results", ""),
+        "primary_diagnosis": decrypted_data.get("primary_diagnosis", ""),
+        "secondary_diagnoses": decrypted_data.get("secondary_diagnoses", ""),
+        "prescribed_medications": decrypted_data.get("prescribed_medications", ""),
+        "treatment_plan": decrypted_data.get("treatment_plan", ""),
+        "follow_up_instructions": decrypted_data.get("follow_up_instructions", ""),
+        "therapeutic_plan": decrypted_data.get("treatment_plan", ""),  # Alias for compatibility
+        "imaging_studies": decrypted_data.get("laboratory_results", ""),  # Alias for compatibility
+        "notes": decrypted_data.get("notes", ""),
+        "interconsultations": decrypted_data.get("notes", ""),  # Alias for compatibility
+        "consultation_type": getattr(consultation, 'consultation_type', 'Seguimiento'),
+        "perinatal_history": decrypted_data.get("perinatal_history", ""),
+        "created_by": consultation.created_by,
+        "created_at": consultation.created_at.isoformat(),
+        "patient_name": patient_name,
+        "doctor_name": doctor_name,
+        "date": consultation.consultation_date.isoformat()
+    }
+
+
+def decrypt_consultation_fields(consultation: MedicalRecord) -> dict:
+    """Extract and decrypt consultation fields with error handling."""
+    fields = extract_consultation_fields(consultation)
+    
+    try:
+        return decrypt_sensitive_data(fields, "consultation")
+    except Exception as e:
+        api_logger.warning(
+            "Could not decrypt consultation data",
+            consultation_id=consultation.id,
+            error=str(e)
+        )
+        # Return original data if decryption fails
+        return fields
+
+
+# ============================================================================
+# ROUTER ENDPOINTS
+# ============================================================================
+
 
 router = APIRouter(prefix="/api", tags=["consultations"])
 
@@ -154,7 +243,12 @@ async def get_consultation(
 ):
     """Get specific consultation by ID"""
     try:
-        api_logger.debug("Fetching consultation", consultation_id=consultation_id, doctor_id=current_user.id, user_type=current_user.person_type)
+        api_logger.debug(
+            "Fetching consultation",
+            consultation_id=consultation_id,
+            doctor_id=current_user.id,
+            user_type=current_user.person_type
+        )
         
         # Query specific medical record
         consultation = db.query(MedicalRecord).options(
@@ -168,103 +262,20 @@ async def get_consultation(
         if not consultation:
             raise HTTPException(status_code=404, detail="Consultation not found")
         
-        # Get patient name
-        patient_name = "Paciente No Identificado"
-        if consultation.patient:
-            patient_name = consultation.patient.name or "Paciente No Identificado"
+        # Get patient and doctor names
+        patient_name = consultation.patient.name if consultation.patient else "Paciente No Identificado"
+        doctor_name = consultation.doctor.name if consultation.doctor else "Doctor"
         
-        # Get doctor name
-        doctor_name = "Doctor"
-        if consultation.doctor:
-            doctor_name = consultation.doctor.name or "Doctor"
+        # Decrypt consultation data
+        decrypted_data = decrypt_consultation_fields(consultation)
         
-        # Calculate end_time assuming 30 minutes duration for consultations
-        consultation_end_time = consultation.consultation_date + timedelta(minutes=30)
-
-        # Decrypt consultation data with error handling
-        try:
-            decrypted_consultation_data = decrypt_sensitive_data({
-            "chief_complaint": consultation.chief_complaint,
-            "history_present_illness": consultation.history_present_illness,
-            "family_history": consultation.family_history,
-            "personal_pathological_history": consultation.personal_pathological_history,
-            "personal_non_pathological_history": consultation.personal_non_pathological_history,
-            "physical_examination": consultation.physical_examination,
-            "primary_diagnosis": consultation.primary_diagnosis,
-            "secondary_diagnoses": consultation.secondary_diagnoses,
-            "prescribed_medications": consultation.prescribed_medications,
-            "treatment_plan": consultation.treatment_plan,
-            "follow_up_instructions": consultation.follow_up_instructions,
-            "laboratory_results": consultation.laboratory_results,
-            "notes": consultation.notes,
-            "family_history": consultation.family_history,
-            "perinatal_history": consultation.perinatal_history,
-            "gynecological_and_obstetric_history": consultation.gynecological_and_obstetric_history,
-            "personal_pathological_history": consultation.personal_pathological_history,
-            "personal_non_pathological_history": consultation.personal_non_pathological_history
-            }, "consultation")
-        except Exception as e:
-            api_logger.warning("Could not decrypt consultation data", consultation_id=consultation.id, error=str(e))
-            # Use original encrypted data if decryption fails
-            decrypted_consultation_data = {
-                "chief_complaint": consultation.chief_complaint,
-                "history_present_illness": consultation.history_present_illness,
-                "family_history": consultation.family_history,
-                "personal_pathological_history": consultation.personal_pathological_history,
-                "personal_non_pathological_history": consultation.personal_non_pathological_history,
-                "physical_examination": consultation.physical_examination,
-                "primary_diagnosis": consultation.primary_diagnosis,
-                "secondary_diagnoses": consultation.secondary_diagnoses,
-                "prescribed_medications": consultation.prescribed_medications,
-                "treatment_plan": consultation.treatment_plan,
-                "follow_up_instructions": consultation.follow_up_instructions,
-                "laboratory_results": consultation.laboratory_results,
-                "notes": consultation.notes,
-                "family_history": consultation.family_history,
-                "perinatal_history": consultation.perinatal_history,
-                "gynecological_and_obstetric_history": consultation.gynecological_and_obstetric_history,
-                "personal_pathological_history": consultation.personal_pathological_history,
-                "personal_non_pathological_history": consultation.personal_non_pathological_history
-            }
-
-        # Return complete consultation data
-        result = {
-            "id": consultation.id,
-            "patient_id": consultation.patient_id,
-            "patient_document_id": consultation.patient_document_id,
-            "patient_document_value": consultation.patient_document_value,
-            "patient_document_name": consultation.patient_document.name if consultation.patient_document else None,
-            "consultation_date": consultation.consultation_date.isoformat(),
-            "end_time": consultation_end_time.isoformat(),
-            "chief_complaint": decrypted_consultation_data.get("chief_complaint", ""),
-            "history_present_illness": decrypted_consultation_data.get("history_present_illness", ""),
-            "family_history": decrypted_consultation_data.get("family_history", ""),
-            "gynecological_and_obstetric_history": decrypted_consultation_data.get("gynecological_and_obstetric_history", ""),
-            "personal_pathological_history": decrypted_consultation_data.get("personal_pathological_history", ""),
-            "personal_non_pathological_history": decrypted_consultation_data.get("personal_non_pathological_history", ""),
-            "physical_examination": decrypted_consultation_data.get("physical_examination", ""),
-            "laboratory_results": consultation.laboratory_results or "",
-            "primary_diagnosis": decrypted_consultation_data.get("primary_diagnosis", ""),
-            "secondary_diagnoses": decrypted_consultation_data.get("secondary_diagnoses", ""),
-            "prescribed_medications": decrypted_consultation_data.get("prescribed_medications", ""),
-            "treatment_plan": decrypted_consultation_data.get("treatment_plan", ""),
-            "follow_up_instructions": decrypted_consultation_data.get("follow_up_instructions", ""),
-            "therapeutic_plan": decrypted_consultation_data.get("treatment_plan", ""),  # Alias for compatibility
-            "laboratory_results": decrypted_consultation_data.get("laboratory_results", ""),
-            "imaging_studies": decrypted_consultation_data.get("laboratory_results", ""),  # Alias for compatibility
-            "notes": decrypted_consultation_data.get("notes", ""),
-            "interconsultations": decrypted_consultation_data.get("notes", ""),
-            "consultation_type": getattr(consultation, 'consultation_type', 'Seguimiento'),
-            "family_history": decrypted_consultation_data.get("family_history", ""),
-            "gynecological_and_obstetric_history": decrypted_consultation_data.get("gynecological_and_obstetric_history", ""),
-            "personal_pathological_history": decrypted_consultation_data.get("personal_pathological_history", ""),
-            "personal_non_pathological_history": decrypted_consultation_data.get("personal_non_pathological_history", ""),
-            "created_by": consultation.created_by,
-            "created_at": consultation.created_at.isoformat(),
-            "patient_name": patient_name,
-            "doctor_name": doctor_name,
-            "date": consultation.consultation_date.isoformat()
-        }
+        # Build and return response
+        result = build_consultation_detail_response(
+            consultation,
+            decrypted_data,
+            patient_name,
+            doctor_name
+        )
         
         api_logger.info("Returning consultation", consultation_id=consultation_id)
         return result
@@ -272,7 +283,12 @@ async def get_consultation(
     except HTTPException:
         raise
     except Exception as e:
-        api_logger.error("Error in get_consultation", consultation_id=consultation_id, error=str(e), exc_info=True)
+        api_logger.error(
+            "Error in get_consultation",
+            consultation_id=consultation_id,
+            error=str(e),
+            exc_info=True
+        )
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
