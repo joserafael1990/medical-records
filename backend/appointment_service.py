@@ -6,34 +6,13 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_, desc, asc, func, update
 from datetime import datetime, date, time, timedelta
 from typing import List, Optional, Dict
-from utils.datetime_utils import utc_now
 import uuid
 import pytz
 import os
 os.environ['TZ'] = 'America/Mexico_City'
 
-from database import Appointment, Person, AppointmentReminder
-
-# Office helpers (maps URL, address, country code)
-# En algunos entornos de Docker en macOS se ha visto un OSError "Resource deadlock avoided"
-# al intentar leer módulos adicionales durante el arranque. Para evitar que eso
-# tumbe todo el backend, envolvemos el import en un try/except y usamos stubs seguros.
-try:
-    from services.office_helpers import (
-        build_office_address,
-        resolve_maps_url,
-        resolve_country_code,
-    )
-except Exception:
-    # Fallbacks muy simples; solo afectan mensajes de WhatsApp, no la lógica crítica.
-    def build_office_address(office) -> str:
-        return "Consultorio Médico"
-
-    def resolve_maps_url(office, fallback_address: Optional[str]) -> Optional[str]:
-        return None
-
-    def resolve_country_code(office, default_code: str = "52") -> str:
-        return default_code
+from database import Appointment, Person
+from services.office_helpers import build_office_address, resolve_maps_url, resolve_country_code
 from logger import get_logger
 # Structured logger
 api_logger = get_logger("medical_records.api")
@@ -178,31 +157,16 @@ class AppointmentService:
         # Ensure status defaults to 'por_confirmar' and handle confirmation timestamp
         status_value = appointment_data.get('status') or 'por_confirmar'
         appointment_data['status'] = status_value
-        # Note: Appointment model doesn't have confirmed_at field
-        # Status change to 'confirmada' is handled by the status field itself
+        if status_value == 'confirmada':
+            appointment_data['confirmed_at'] = now_in_timezone(doctor_timezone).astimezone(pytz.utc)
         
         # Remove any invalid fields that don't exist in the Appointment model
         # Note: patient and doctor names are available through relationships, not stored fields
-        # Remove 'reminders' field - it's a relationship, not a direct field, and will be created separately
-        appointment_data.pop('reminders', None)
         
         appointment = Appointment(**appointment_data)
         db.add(appointment)
         db.commit()
         db.refresh(appointment)
-        
-        # Sincronizar con Google Calendar si está configurado
-        if doctor_id:
-            try:
-                from services.google_calendar_service import GoogleCalendarService
-                GoogleCalendarService.create_calendar_event(db, doctor_id, appointment)
-            except Exception as e:
-                # No fallar si Google Calendar no está configurado o hay error
-                api_logger.warning("Error al sincronizar con Google Calendar (no crítico)", exc_info=True, extra={
-                    "doctor_id": doctor_id,
-                    "appointment_id": appointment.id
-                })
-        
         return appointment
     
     @staticmethod
@@ -221,8 +185,7 @@ class AppointmentService:
         from sqlalchemy.orm import joinedload
         query = db.query(Appointment).options(
             joinedload(Appointment.patient),
-            joinedload(Appointment.doctor),
-            joinedload(Appointment.reminders)
+            joinedload(Appointment.doctor)
         )
         
         # Date range filter
@@ -232,32 +195,8 @@ class AppointmentService:
             query = query.filter(func.date(Appointment.appointment_date) <= end_date)
         
         # Status filter for available appointments (for consultation dropdown)
-        # Include both confirmed and pending confirmation appointments
-        # Explicitly exclude cancelled appointments and past appointments
         if available_for_consultation:
-            # Only show appointments that are available for consultation (not cancelled and not past)
-            # IMPORTANTE: Las citas del mismo día deben estar disponibles aunque ya haya pasado la hora
-            # Por eso comparamos solo la fecha, no la hora exacta
-            # También incluimos citas "completada" porque pueden necesitar crear una consulta retroactiva
-            today = now_cdmx().replace(tzinfo=None).date()
-            api_logger.info(
-                "🔍 Filtering appointments available for consultation",
-                extra={
-                    "today": today.isoformat(),
-                    "doctor_id": doctor_id,
-                    "filter": "func.date(appointment_date) >= today",
-                    "status_filter": ['confirmada', 'por_confirmar', 'completada']
-                }
-            )
-            # Incluir citas confirmadas, pendientes y completadas del mismo día o futuro
-            # Excluir solo las canceladas
-            query = query.filter(
-                Appointment.status.in_(['confirmada', 'por_confirmar', 'completada']),
-                Appointment.status != 'cancelled',
-                func.date(Appointment.appointment_date) >= today
-            )
-            # Log how many appointments match the filter (before limit and offset)
-            # We'll log after executing the query
+            query = query.filter(Appointment.status.in_(['confirmada']))
         elif status == 'active':
             # Exclude cancelled appointments
             query = query.filter(Appointment.status != 'cancelled')
@@ -268,9 +207,6 @@ class AppointmentService:
             elif status in ('scheduled', 'pending'):
                 normalized_status = 'por_confirmar'
             query = query.filter(Appointment.status == normalized_status)
-        else:
-            # By default, exclude cancelled appointments if no status filter is specified
-            query = query.filter(Appointment.status != 'cancelled')
         
         # Patient filter
         if patient_id:
@@ -288,22 +224,7 @@ class AppointmentService:
         # )
         
         # Order by appointment date
-        appointments = query.order_by(asc(Appointment.appointment_date)).offset(skip).limit(limit).all()
-        
-        # Log results if filtering for consultation
-        if available_for_consultation:
-            api_logger.info(
-                "✅ Appointments found for consultation",
-                extra={
-                    "doctor_id": doctor_id,
-                    "count": len(appointments),
-                    "appointment_ids": [apt.id for apt in appointments],
-                    "appointment_statuses": [apt.status for apt in appointments],
-                    "appointment_dates": [apt.appointment_date.strftime('%Y-%m-%d') if apt.appointment_date else None for apt in appointments]
-                }
-            )
-        
-        return appointments
+        return query.order_by(asc(Appointment.appointment_date)).offset(skip).limit(limit).all()
     
     @staticmethod
     def get_appointment_by_id(db: Session, appointment_id: str) -> Optional[Appointment]:
@@ -350,25 +271,6 @@ class AppointmentService:
         appointment.updated_at = now_cdmx().astimezone(pytz.utc)
         db.commit()
         db.refresh(appointment)
-        
-        # Sincronizar con Google Calendar si está configurado
-        if appointment.doctor_id:
-            try:
-                from services.google_calendar_service import GoogleCalendarService
-                # Si la cita fue cancelada, eliminar el evento de Google Calendar
-                if appointment.status == 'cancelled':
-                    GoogleCalendarService.delete_calendar_event(db, appointment.doctor_id, appointment.id)
-                else:
-                    # Si no está cancelada, actualizar el evento
-                    GoogleCalendarService.update_calendar_event(db, appointment.doctor_id, appointment)
-            except Exception as e:
-                # No fallar si Google Calendar no está configurado o hay error
-                api_logger.warning("Error al sincronizar con Google Calendar (no crítico)", exc_info=True, extra={
-                    "doctor_id": appointment.doctor_id,
-                    "appointment_id": appointment.id,
-                    "status": appointment.status
-                })
-        
         return appointment
     
     @staticmethod
@@ -378,26 +280,11 @@ class AppointmentService:
         if not appointment:
             return False
         
-        doctor_id = appointment.doctor_id
-        
         # Soft delete by setting status to cancelled
         appointment.status = "cancelled"
-        appointment.cancelled_at = utc_now()
-        appointment.updated_at = utc_now()
+        appointment.cancelled_at = datetime.utcnow()
+        appointment.updated_at = datetime.utcnow()
         db.commit()
-        
-        # Sincronizar con Google Calendar si está configurado
-        if doctor_id:
-            try:
-                from services.google_calendar_service import GoogleCalendarService
-                GoogleCalendarService.delete_calendar_event(db, doctor_id, appointment.id)
-            except Exception as e:
-                # No fallar si Google Calendar no está configurado o hay error
-                api_logger.warning("Error al sincronizar eliminación con Google Calendar (no crítico)", exc_info=True, extra={
-                    "doctor_id": doctor_id,
-                    "appointment_id": appointment.id
-                })
-        
         return True
     
     @staticmethod
@@ -466,7 +353,7 @@ class AppointmentService:
         return slots
 
     # ==============================
-    # Auto reminder helpers (NEW: Multiple reminders system)
+    # Auto reminder helpers
     # ==============================
     @staticmethod
     def get_reminder_send_time(appointment_dt: datetime, offset_minutes: int) -> datetime:
@@ -477,18 +364,11 @@ class AppointmentService:
 
     @staticmethod
     def should_send_reminder(appointment) -> bool:
-        """Return True if reminder should be sent now based on flags and timestamps.
-        
-        DEPRECATED: This method works with the old single-reminder system.
-        Use should_send_reminder_by_id() for the new multiple reminders system.
-        """
+        """Return True if reminder should be sent now based on flags and timestamps."""
         try:
             if not getattr(appointment, 'auto_reminder_enabled', False):
                 return False
-            # Allow reminders for 'por_confirmar' and 'confirmada'
-            # Explicitly exclude 'cancelled' - no reminders should be sent for cancelled appointments
-            appointment_status = getattr(appointment, 'status', None)
-            if appointment_status not in ['por_confirmar', 'confirmada'] or appointment_status == 'cancelled':
+            if getattr(appointment, 'status', None) != 'por_confirmar':
                 return False
             # Check if reminder was already sent (avoid duplicates)
             if getattr(appointment, 'reminder_sent', False):
@@ -502,94 +382,8 @@ class AppointmentService:
             # Estrictamente en la hora programada (tolerancia breve para el loop)
             now = now_cdmx().replace(tzinfo=None)
             window_end = send_time + timedelta(minutes=2)
-            
-            # Don't send if appointment time has already passed
-            appointment_time = appointment.appointment_date
-            if now > appointment_time:
-                return False
-            
-            # Don't send if reminder send time window has already passed
-            if now > window_end:
-                return False
-            
             return send_time <= now <= window_end
         except Exception:
-            return False
-
-    @staticmethod
-    def should_send_reminder_by_id(reminder: AppointmentReminder, appointment: Appointment) -> bool:
-        """Return True if a specific reminder should be sent now.
-        
-        Args:
-            reminder: AppointmentReminder object to check
-            appointment: Associated Appointment object
-            
-        Returns:
-            True if reminder should be sent now, False otherwise
-        """
-        try:
-            # Check if reminder is enabled
-            if not reminder.enabled:
-                return False
-            
-            # Check if reminder was already sent
-            if reminder.sent:
-                return False
-            
-            # Check if appointment is in correct status
-            # Allow reminders for 'por_confirmar' and 'confirmada'
-            # Explicitly exclude 'cancelled' - no reminders should be sent for cancelled appointments
-            if appointment.status not in ['por_confirmar', 'confirmada'] or appointment.status == 'cancelled':
-                return False
-            
-            # Calculate when reminder should be sent
-            send_time = AppointmentService.get_reminder_send_time(
-                appointment.appointment_date,
-                reminder.offset_minutes
-            )
-            
-            # Check if current time is within the send window (5 minute tolerance before, 2 minutes after)
-            now = now_cdmx().replace(tzinfo=None)
-            window_start = send_time - timedelta(minutes=5)  # Allow 5 minutes early
-            window_end = send_time + timedelta(minutes=2)  # Allow 2 minutes late
-            
-            # Don't send if appointment time has already passed
-            appointment_time = appointment.appointment_date
-            if now > appointment_time:
-                api_logger.debug(
-                    "⏰ Appointment time has passed, skipping reminder",
-                    extra={
-                        "reminder_id": reminder.id,
-                        "appointment_id": appointment.id,
-                        "appointment_time": appointment_time.isoformat(),
-                        "now": now.isoformat()
-                    }
-                )
-                return False
-            
-            # Don't send if reminder send time window has already passed
-            if now > window_end:
-                api_logger.debug(
-                    "⏰ Reminder send window has passed, skipping reminder",
-                    extra={
-                        "reminder_id": reminder.id,
-                        "appointment_id": appointment.id,
-                        "send_time": send_time.isoformat(),
-                        "window_end": window_end.isoformat(),
-                        "now": now.isoformat()
-                    }
-                )
-                return False
-            
-            should_send = window_start <= now <= window_end
-            # Only log when actually sending (not when checking)
-            return should_send
-        except Exception as e:
-            api_logger.error(
-                "❌ Error checking if reminder should be sent",
-                extra={"reminder_id": reminder.id, "appointment_id": appointment.id},
-                exc_info=True
-            )
             return False
 
     @staticmethod
@@ -605,7 +399,7 @@ class AppointmentService:
                 return
             # Update reminder_sent and reminder_sent_at fields
             apt.reminder_sent = True
-            apt.reminder_sent_at = utc_now()
+            apt.reminder_sent_at = datetime.utcnow()
             db.commit()
             api_logger.info(
                 "✅ Marked reminder as sent",
@@ -622,261 +416,6 @@ class AppointmentService:
             )
             db.rollback()
             raise
-
-    @staticmethod
-    def send_reminder_by_id(db: Session, reminder_id: int) -> bool:
-        """Send a specific reminder by its ID. Returns True on success.
-        
-        Uses atomic update to prevent duplicate reminders.
-        
-        Args:
-            db: Database session
-            reminder_id: ID of the AppointmentReminder to send
-            
-        Returns:
-            True if reminder was sent successfully, False otherwise
-        """
-        from whatsapp_service import get_whatsapp_service
-        
-        # Fetch reminder with appointment and related data
-        reminder = db.query(AppointmentReminder).options(
-            joinedload(AppointmentReminder.appointment).joinedload(Appointment.patient),
-            joinedload(AppointmentReminder.appointment).joinedload(Appointment.doctor),
-            joinedload(AppointmentReminder.appointment).joinedload(Appointment.office),
-            joinedload(AppointmentReminder.appointment).joinedload(Appointment.appointment_type_rel)
-        ).filter(AppointmentReminder.id == reminder_id).first()
-        
-        if not reminder:
-            api_logger.warning(
-                "⚠️ Reminder not found",
-                extra={"reminder_id": reminder_id}
-            )
-            return False
-        
-        appointment = reminder.appointment
-        if not appointment:
-            api_logger.warning(
-                "⚠️ Appointment not found for reminder",
-                extra={"reminder_id": reminder_id}
-            )
-            return False
-        
-        # Atomic update: mark reminder as sent BEFORE sending to prevent duplicates
-        try:
-            result = db.execute(
-                update(AppointmentReminder)
-                .where(AppointmentReminder.id == reminder_id)
-                .where(AppointmentReminder.sent == False)
-                .values(
-                    sent=True,
-                    sent_at=utc_now()
-                )
-            )
-            db.commit()
-            
-            if result.rowcount == 0:
-                api_logger.info(
-                    "⚠️ Reminder already sent, skipping duplicate",
-                    extra={"reminder_id": reminder_id}
-                )
-                return False
-                
-            api_logger.info(
-                "✅ Marked reminder as sent (atomic update)",
-                extra={"reminder_id": reminder_id, "appointment_id": appointment.id}
-            )
-        except Exception as e:
-            db.rollback()
-            api_logger.error(
-                "❌ Error marking reminder as sent (atomic update)",
-                extra={"reminder_id": reminder_id},
-                exc_info=True
-            )
-            return False
-        
-        # Check appointment status - allow reminders for both 'por_confirmar' and 'confirmada'
-        # Only skip if appointment is cancelled
-        if appointment.status == 'cancelled':
-            api_logger.info(
-                "⚠️ Appointment is cancelled, skipping reminder",
-                extra={"reminder_id": reminder_id, "appointment_id": appointment.id, "status": appointment.status}
-            )
-            # Rollback the sent flag
-            db.execute(
-                update(AppointmentReminder)
-                .where(AppointmentReminder.id == reminder_id)
-                .values(
-                    sent=False,
-                    sent_at=None
-                )
-            )
-            db.commit()
-            return False
-        
-        # Don't send if appointment time has already passed
-        now = now_cdmx().replace(tzinfo=None)
-        if now > appointment.appointment_date:
-            api_logger.info(
-                "⚠️ Appointment time has passed, skipping reminder",
-                extra={
-                    "reminder_id": reminder_id,
-                    "appointment_id": appointment.id,
-                    "appointment_time": appointment.appointment_date.isoformat(),
-                    "now": now.isoformat()
-                }
-            )
-            # Rollback the sent flag
-            db.execute(
-                update(AppointmentReminder)
-                .where(AppointmentReminder.id == reminder_id)
-                .values(
-                    sent=False,
-                    sent_at=None
-                )
-            )
-            db.commit()
-            return False
-        
-        # Don't send if reminder send time has already passed
-        send_time = AppointmentService.get_reminder_send_time(
-            appointment.appointment_date,
-            reminder.offset_minutes
-        )
-        window_end = send_time + timedelta(minutes=2)
-        if now > window_end:
-            api_logger.info(
-                "⚠️ Reminder send window has passed, skipping reminder",
-                extra={
-                    "reminder_id": reminder_id,
-                    "appointment_id": appointment.id,
-                    "send_time": send_time.isoformat(),
-                    "window_end": window_end.isoformat(),
-                    "now": now.isoformat()
-                }
-            )
-            # Rollback the sent flag
-            db.execute(
-                update(AppointmentReminder)
-                .where(AppointmentReminder.id == reminder_id)
-                .values(
-                    sent=False,
-                    sent_at=None
-                )
-            )
-            db.commit()
-            return False
-        
-        # Build parameters for WhatsApp message
-        mexico_tz = pytz.timezone('America/Mexico_City')
-        local_dt = mexico_tz.localize(appointment.appointment_date)
-        appointment_date = local_dt.strftime('%d de %B de %Y')
-        appointment_time = local_dt.strftime('%I:%M %p')
-        appointment_type = "presencial"
-        if appointment.appointment_type_rel:
-            appointment_type = "online" if appointment.appointment_type_rel.name == "En línea" else "presencial"
-        
-        service = get_whatsapp_service()
-        try:
-            office_address_val = build_office_address(appointment.office) if getattr(appointment, 'office', None) else "mi consultorio en linea - No especificado"
-            maps_url_val = resolve_maps_url(appointment.office, office_address_val) if getattr(appointment, 'office', None) else None
-            country_code_val = resolve_country_code(appointment.office) if getattr(appointment, 'office', None) else '52'
-            if getattr(appointment, 'office', None) and getattr(appointment.office, 'is_virtual', False) and getattr(appointment.office, 'virtual_url', None):
-                appointment_type = "online"
-            
-            resp = service.send_appointment_reminder(
-                patient_phone=appointment.patient.primary_phone if appointment.patient else None,
-                patient_full_name=appointment.patient.full_name if appointment.patient else "Paciente",
-                appointment_date=appointment_date,
-                appointment_time=appointment_time,
-                doctor_title=(appointment.doctor.title if appointment.doctor else "Dr."),
-                doctor_full_name=(appointment.doctor.full_name if appointment.doctor else "Médico"),
-                office_address=office_address_val,
-                country_code=country_code_val,
-                appointment_type=appointment_type,
-                maps_url=maps_url_val,
-                appointment_status=appointment.status,
-                appointment_id=appointment.id
-            )
-            
-            # Log the response for debugging
-            api_logger.info(
-                "📱 WhatsApp send_appointment_reminder response",
-                extra={
-                    "reminder_id": reminder_id,
-                    "appointment_id": appointment.id,
-                    "success": resp.get('success') if resp else False,
-                    "error": resp.get('error') if resp else None,
-                    "message_id": resp.get('message_id') if resp else None
-                }
-            )
-            
-            if resp and resp.get('success'):
-                # Guardar el message_id de WhatsApp para eliminar ambigüedad
-                whatsapp_message_id = resp.get('message_id')
-                if whatsapp_message_id:
-                    try:
-                        db.execute(
-                            update(AppointmentReminder)
-                            .where(AppointmentReminder.id == reminder_id)
-                            .values(whatsapp_message_id=whatsapp_message_id)
-                        )
-                        db.commit()
-                        api_logger.info(
-                            "✅ Saved WhatsApp message_id to reminder",
-                            extra={
-                                "reminder_id": reminder_id,
-                                "appointment_id": appointment.id,
-                                "whatsapp_message_id": whatsapp_message_id
-                            }
-                        )
-                    except Exception as e:
-                        api_logger.warning(
-                            "⚠️ Failed to save WhatsApp message_id (non-critical)",
-                            extra={"reminder_id": reminder_id, "error": str(e)}
-                        )
-                        # No fallar si no se puede guardar el message_id
-                
-                api_logger.info(
-                    "✅ Reminder sent successfully",
-                    extra={"reminder_id": reminder_id, "appointment_id": appointment.id, "reminder_number": reminder.reminder_number}
-                )
-                return True
-            else:
-                # Rollback the sent flag if sending failed
-                api_logger.warning(
-                    "⚠️ Reminder sending failed, rolling back flag",
-                    extra={"reminder_id": reminder_id, "response": resp}
-                )
-                db.execute(
-                    update(AppointmentReminder)
-                    .where(AppointmentReminder.id == reminder_id)
-                    .values(
-                        sent=False,
-                        sent_at=None
-                    )
-                )
-                db.commit()
-                return False
-        except Exception as e:
-            api_logger.error(
-                "❌ Exception sending reminder",
-                extra={"reminder_id": reminder_id},
-                exc_info=True
-            )
-            # Rollback the sent flag
-            try:
-                db.execute(
-                    update(AppointmentReminder)
-                    .where(AppointmentReminder.id == reminder_id)
-                    .values(
-                        sent=False,
-                        sent_at=None
-                    )
-                )
-                db.commit()
-            except:
-                db.rollback()
-            return False
 
     @staticmethod
     def send_appointment_reminder(db: Session, appointment_id: int) -> bool:
@@ -896,7 +435,7 @@ class AppointmentService:
                 .where(Appointment.reminder_sent == False)  # Only update if not already sent
                 .values(
                     reminder_sent=True,
-                    reminder_sent_at=utc_now()
+                    reminder_sent_at=datetime.utcnow()
                 )
             )
             db.commit()
@@ -932,61 +471,10 @@ class AppointmentService:
         if not apt:
             return False
         
-        # Check appointment status - allow reminders for both 'por_confirmar' and 'confirmada'
-        # Only skip if appointment is cancelled
-        if apt.status == 'cancelled':
+        if apt.status != 'por_confirmar':
             api_logger.info(
-                "⚠️ Appointment is cancelled, skipping reminder",
+                "⚠️ Appointment not eligible for reminder (status mismatch)",
                 extra={"appointment_id": appointment_id, "status": apt.status}
-            )
-            db.execute(
-                update(Appointment)
-                .where(Appointment.id == appointment_id)
-                .values(
-                    reminder_sent=False,
-                    reminder_sent_at=None
-                )
-            )
-            db.commit()
-            return False
-        
-        # Don't send if appointment time has already passed
-        now = now_cdmx().replace(tzinfo=None)
-        if now > apt.appointment_date:
-            api_logger.info(
-                "⚠️ Appointment time has passed, skipping reminder",
-                extra={
-                    "appointment_id": appointment_id,
-                    "appointment_time": apt.appointment_date.isoformat(),
-                    "now": now.isoformat()
-                }
-            )
-            db.execute(
-                update(Appointment)
-                .where(Appointment.id == appointment_id)
-                .values(
-                    reminder_sent=False,
-                    reminder_sent_at=None
-                )
-            )
-            db.commit()
-            return False
-        
-        # Don't send if reminder send time has already passed
-        send_time = AppointmentService.get_reminder_send_time(
-            apt.appointment_date,
-            getattr(apt, 'auto_reminder_offset_minutes', 360)
-        )
-        window_end = send_time + timedelta(minutes=2)
-        if now > window_end:
-            api_logger.info(
-                "⚠️ Reminder send window has passed, skipping reminder",
-                extra={
-                    "appointment_id": appointment_id,
-                    "send_time": send_time.isoformat(),
-                    "window_end": window_end.isoformat(),
-                    "now": now.isoformat()
-                }
             )
             db.execute(
                 update(Appointment)
@@ -1028,9 +516,7 @@ class AppointmentService:
                 office_address=office_address_val,
                 country_code=country_code_val,
                 appointment_type=appointment_type,
-                maps_url=maps_url_val,
-                appointment_status=apt.status,
-                appointment_id=apt.id
+                maps_url=maps_url_val
             )
             if resp and resp.get('success'):
                 api_logger.info(

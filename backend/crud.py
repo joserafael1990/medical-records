@@ -693,7 +693,7 @@ def update_medical_record(db: Session, record_id: int, record_data: schemas.Medi
 
 def create_appointment(db: Session, appointment_data: schemas.AppointmentCreate, doctor_id: int) -> Appointment:
     """Create a new appointment"""
-    from appointment_service import AppointmentService
+    from services.appointment_service import AppointmentService
     
     # Prepare appointment data for the service
     appointment_dict = appointment_data.model_dump()

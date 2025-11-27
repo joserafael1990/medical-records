@@ -7,9 +7,7 @@ node_modules/
 
 # Python virtual environment
 backend/venv/
-backend/.venv/
 */venv/
-*/.venv/
 __pycache__/
 *.pyc
 *.pyo

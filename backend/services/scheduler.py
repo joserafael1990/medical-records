@@ -8,7 +8,8 @@ from sqlalchemy import func
 from datetime import datetime
 
 from database import SessionLocal, Appointment, AppointmentReminder
-from appointment_service import AppointmentService, now_cdmx
+from services.appointment_service import AppointmentService
+from services.consultation_service import now_cdmx
 from logger import get_logger
 
 

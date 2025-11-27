@@ -10,7 +10,7 @@ from datetime import date, timedelta
 
 from database import get_db, Person, Appointment
 from dependencies import get_current_user
-from appointment_service import AppointmentService
+from services.appointment_service import AppointmentService
 from logger import get_logger
 
 router = APIRouter(prefix="/api", tags=["dashboard"])
