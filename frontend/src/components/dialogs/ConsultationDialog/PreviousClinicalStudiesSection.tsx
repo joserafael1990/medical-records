@@ -66,13 +66,15 @@ export const PreviousClinicalStudiesSection: React.FC<PreviousClinicalStudiesSec
                       size="small"
                       label={
                         study.status === 'ordered' ? 'Ordenado' : 
-                        study.status === 'in_progress' ? 'En Proceso' : 
+                        study.status === 'previous' ? 'Previo' : 
                         study.status === 'completed' ? 'Completado' : 
-                        study.status === 'cancelled' ? 'Cancelado' : 
-                        study.status === 'failed' ? 'Fallido' : 
                         study.status
                       }
-                      color={study.status === 'completed' ? 'success' : 'warning'}
+                      color={
+                        study.status === 'completed' ? 'success' : 
+                        study.status === 'previous' ? 'default' : 
+                        'warning'
+                      }
                     />
                   </Box>
                   

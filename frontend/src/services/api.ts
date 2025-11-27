@@ -894,11 +894,6 @@ class ApiService {
     return response.data;
   }
 
-  async getAppointment(appointmentId: number): Promise<Appointment> {
-    const response = await this.api.get<Appointment>(`${API_CONFIG.ENDPOINTS.APPOINTMENTS}/${appointmentId}`);
-    return response.data;
-  }
-
   async getPatientAppointments(patientId: string, status?: string): Promise<Appointment[]> {
     const params = status ? { status } : {};
     const response = await this.api.get<Appointment[]>(
@@ -935,8 +930,8 @@ class ApiService {
       ...appointment,
       date_time: appointment.appointment_date || appointment.date_time, // Map appointment_date to date_time
       patient_name: appointment.patient ? 
-        `${appointment.patient.first_name} ${appointment.patient.paternal_surname}` : 
-        appointment.patient_name
+        `${appointment.patient.first_name || ''} ${appointment.patient.paternal_surname || ''}`.trim() : 
+        (appointment as any).patient_name || ''
     }));
     
     return transformedData;
@@ -956,8 +951,8 @@ class ApiService {
       ...appointment,
       date_time: appointment.appointment_date || appointment.date_time, // Map appointment_date to date_time
       patient_name: appointment.patient ? 
-        `${appointment.patient.first_name} ${appointment.patient.paternal_surname}` : 
-        appointment.patient_name
+        `${appointment.patient.first_name || ''} ${appointment.patient.paternal_surname || ''}`.trim() : 
+        (appointment as any).patient_name || ''
     }));
     
     return transformedData;
@@ -977,8 +972,8 @@ class ApiService {
       ...appointment,
       date_time: appointment.appointment_date || appointment.date_time, // Map appointment_date to date_time
       patient_name: appointment.patient ? 
-        `${appointment.patient.first_name} ${appointment.patient.paternal_surname}` : 
-        appointment.patient_name
+        `${appointment.patient.first_name || ''} ${appointment.patient.paternal_surname || ''}`.trim() : 
+        (appointment as any).patient_name || ''
     }));
     
     return transformedData;
@@ -1011,9 +1006,9 @@ class ApiService {
     return response.data;
   }
 
-  async getAppointment(id: string): Promise<Appointment> {
-    const response = await this.api.get<Appointment>(`/api/appointments/${id}`);
-    return response.data as unknown as Appointment;
+  async getAppointment(id: string | number): Promise<Appointment> {
+    const response = await this.api.get<Appointment>(`${API_CONFIG.ENDPOINTS.APPOINTMENTS}/${id}`);
+    return response.data;
   }
 
   async updateAppointmentStatus(id: string, status: string): Promise<Appointment> {

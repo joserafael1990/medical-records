@@ -1,6 +1,7 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { API_CONFIG, ERROR_MESSAGES, FEATURE_FLAGS } from '../../constants';
 import { logger } from '../../utils/logger';
+import { trackAmplitudeUXError, trackAmplitudeEvent } from '../../utils/amplitudeHelper';
 
 export interface ApiResponse<T = any> {
   data: T;
@@ -21,7 +22,7 @@ export class ApiBase {
   constructor() {
     this.api = axios.create({
       baseURL: API_CONFIG.BASE_URL,
-      timeout: API_CONFIG.TIMEOUT,
+      timeout: 30000, // 30 seconds timeout
       headers: {
         'Content-Type': 'application/json',
       },
@@ -40,25 +41,7 @@ export class ApiBase {
           config.headers.Authorization = `Bearer ${token}`;
         }
         
-        // Log request data for appointments endpoint
-        if (config.url?.includes('/api/appointments') && config.method === 'post' && config.data) {
-          logger.debug('📤 Sending appointment data', {
-            url: config.url,
-            data: config.data,
-            reminders: config.data.reminders,
-            reminders_type: typeof config.data.reminders,
-            reminders_length: config.data.reminders?.length || 0,
-            data_keys: Object.keys(config.data)
-          }, 'api');
-        }
-        
-        if (FEATURE_FLAGS.ENABLE_DEBUG_LOGS) {
-          logger.api.request(config.url || '', config.method?.toUpperCase() || '');
-          logger.auth.info(`Token present: ${token ? 'YES' : 'NO'}`);
-          if (token) {
-            logger.auth.info(`Token preview: ${token.substring(0, 20)}...`);
-          }
-        }
+        // Removed debug logging for performance - only log errors
         return config;
       },
       (error) => {
@@ -70,9 +53,7 @@ export class ApiBase {
     // Response interceptor
     this.api.interceptors.response.use(
       (response) => {
-        if (FEATURE_FLAGS.ENABLE_DEBUG_LOGS) {
-          logger.api.response(response.config.url || '', response.status);
-        }
+        // Removed debug logging for performance - only log errors
         return response;
       },
       (error: AxiosError) => {
@@ -83,6 +64,11 @@ export class ApiBase {
   }
 
   private handleError(error: AxiosError): void {
+    // Type guard helper
+    const isErrorResponse = (data: unknown): data is { detail?: string | any[]; message?: string } => {
+      return typeof data === 'object' && data !== null;
+    };
+
     // Enhanced error logging for debugging connection issues
     const errorDetails = {
       url: error.config?.url,
@@ -94,16 +80,49 @@ export class ApiBase {
       networkError: !error.response
     };
     
-    logger.error('API Error', error, 'api');
+    // Log error safely to avoid [object Object] issues
+    try {
+      logger.error('API Error', error, 'api');
+    } catch (loggingError) {
+      // Fallback if logger fails
+      const responseData = error.response?.data;
+      const detail = (isErrorResponse(responseData) && typeof responseData.detail === 'string') 
+        ? responseData.detail 
+        : 'No detail';
+      console.error('API Error:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        url: error.config?.url,
+        detail
+      });
+    }
     
-    // Detailed error logging for 422 validation errors
+    // Track API errors in Amplitude (if available)
+    const status = error.response?.status;
+    if (status) {
+      trackAmplitudeUXError('api_error', `Status ${status}`, {
+        status_code: status,
+        url: error.config?.url,
+        method: error.config?.method?.toUpperCase()
+      });
+    } else {
+      trackAmplitudeUXError('network_error', 'Network request failed', {
+        url: error.config?.url,
+        method: error.config?.method?.toUpperCase()
+      });
+    }
+    
+    // Track validation errors (without detailed logging for performance)
     if (error.response?.status === 422) {
-      if (Array.isArray(error.response.data?.detail)) {
-        const fieldErrors = error.response.data.detail.map((err: any) => {
-          const field = err.loc?.[1] || err.loc?.[0];
-          return `${field}: ${err.msg}`;
-        }).join(', ');
-        logger.debug('422 Validation Error Details', { fieldErrors }, 'api');
+      const responseData = error.response.data;
+      if (isErrorResponse(responseData) && Array.isArray(responseData.detail)) {
+        // Track validation errors
+        trackAmplitudeEvent('form_validation_error', {
+          form_type: 'api',
+          error_fields: responseData.detail.map((err: any) => err.loc?.[1] || err.loc?.[0]),
+          error_count: responseData.detail.length
+        });
       }
     }
     
@@ -111,7 +130,7 @@ export class ApiBase {
       logger.warn('Network error - possible causes: backend down, CORS issue, network problem, firewall, o problema de red', undefined, 'api');
     }
     
-    if (FEATURE_FLAGS.ENABLE_DEBUG_LOGS) {
+    if (FEATURE_FLAGS.ENABLE_DEBUG_MODE) {
       logger.api.error(error.config?.url || 'unknown', {
         status: error.response?.status,
         statusText: error.response?.statusText,
@@ -141,9 +160,13 @@ export class ApiBase {
     // 1. Not an auth endpoint (auth endpoints use 401 for invalid credentials)
     // 2. Not a business logic 403 (these are expected errors, not auth failures)
     // 3. Response indicates "Not authenticated" or similar auth-related message
-    const isAuthFailure = error.response?.data?.detail?.toLowerCase().includes('not authenticated') ||
-                         error.response?.data?.detail?.toLowerCase().includes('invalid token') ||
-                         error.response?.data?.detail?.toLowerCase().includes('token') ||
+    const responseDataForAuth = error.response?.data;
+    const detailString = (isErrorResponse(responseDataForAuth) && typeof responseDataForAuth.detail === 'string') 
+      ? responseDataForAuth.detail.toLowerCase() 
+      : '';
+    const isAuthFailure = detailString.includes('not authenticated') ||
+                         detailString.includes('invalid token') ||
+                         detailString.includes('token') ||
                          (error.response?.status === 401 && !isAuthEndpoint && !isBusinessLogic403);
     
     if (isAuthFailure && !isAuthEndpoint && !isBusinessLogic403) {
@@ -218,16 +241,28 @@ export class ApiBase {
 
     if (status === 422) {
       // Handle validation errors
-      if (isErrorResponse(responseData) && Array.isArray(responseData.detail)) {
-        const firstError = responseData.detail[0] as any;
-        const fieldName = firstError?.loc?.[1] || firstError?.loc?.[0] || 'campo';
-        const errorMessage = firstError?.msg || 'Error de validación';
-        return {
-          message: `${fieldName}: ${errorMessage}`,
-          status,
-          statusText,
-          details: responseData
-        };
+      if (isErrorResponse(responseData)) {
+        // If detail is a string, use it directly (e.g., CURP validation error)
+        if (typeof responseData.detail === 'string') {
+          return {
+            message: responseData.detail,
+            status,
+            statusText,
+            details: responseData
+          };
+        }
+        // If detail is an array (Pydantic validation errors), format the first error
+        if (Array.isArray(responseData.detail)) {
+          const firstError = responseData.detail[0] as any;
+          const fieldName = firstError?.loc?.[1] || firstError?.loc?.[0] || 'campo';
+          const errorMessage = firstError?.msg || 'Error de validación';
+          return {
+            message: `${fieldName}: ${errorMessage}`,
+            status,
+            statusText,
+            details: responseData
+          };
+        }
       }
       return {
         message: ERROR_MESSAGES.VALIDATION_ERROR,

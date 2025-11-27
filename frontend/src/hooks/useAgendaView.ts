@@ -2,9 +2,6 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, addDays, addWeeks, addMonths, isSameDay, isSameMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { parseBackendDate } from '../utils/formatters';
-import { apiService } from '../services';
-import { useToast } from '../components/common/ToastNotification';
-import { logger } from '../utils/logger';
 
 export interface UseAgendaViewProps {
   appointments?: any[];
@@ -19,14 +16,12 @@ export interface UseAgendaViewReturn {
   // State
   localSelectedDate: Date;
   setLocalSelectedDate: (date: Date) => void;
-  sendingWhatsApp: number | null;
   currentDate: Date;
   isToday: boolean;
   filteredAppointments: any[];
   dateRangeTitle: string;
 
   // Handlers
-  handleSendWhatsAppReminder: (appointment: any) => Promise<void>;
   handleDateNavigation: (direction: 'prev' | 'next') => void;
   goToToday: () => void;
 
@@ -54,8 +49,6 @@ export const useAgendaView = (
   } = props;
 
   const [localSelectedDate, setLocalSelectedDate] = useState(selectedDate || new Date());
-  const { showSuccess, showError } = useToast();
-  const [sendingWhatsApp, setSendingWhatsApp] = useState<number | null>(null);
 
   // Actualizar fecha local cuando cambie la prop
   useEffect(() => {
@@ -77,41 +70,6 @@ export const useAgendaView = (
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty dependency array - only run once on mount
 
-  // Función para enviar recordatorio por WhatsApp
-  const handleSendWhatsAppReminder = useCallback(async (appointment: any) => {
-    if (!appointment.id) {
-      showError('No se puede enviar WhatsApp: Cita sin ID');
-      return;
-    }
-
-    setSendingWhatsApp(appointment.id);
-    try {
-      logger.debug('Sending WhatsApp reminder', { appointmentId: appointment.id }, 'api');
-      await apiService.whatsapp.sendAppointmentReminder(appointment.id);
-      showSuccess('Recordatorio enviado por WhatsApp exitosamente');
-    } catch (error: any) {
-      logger.error('Error sending WhatsApp reminder', error, 'api');
-      
-      const errorDetail = error.detail || error.response?.data?.detail || 'Error al enviar recordatorio por WhatsApp';
-      const statusCode = error.status || error.response?.status;
-      
-      if (errorDetail.includes('more than 24 hours') || errorDetail.includes('24 hours have passed')) {
-        showError('No se puede enviar el mensaje porque han pasado más de 24 horas desde la última interacción del paciente con WhatsApp. El paciente debe enviar un mensaje primero para reanudar la conversación.');
-      } else if (statusCode === 503) {
-        setTimeout(() => {
-          showError('WhatsApp no está configurado. Contacta al administrador para configurar el servicio de WhatsApp.');
-        }, 100);
-      } else if (statusCode === 400) {
-        showError('No se encontró el número de teléfono del paciente.');
-      } else if (statusCode === 404) {
-        showError('Cita no encontrada o sin acceso.');
-      } else {
-        showError(errorDetail);
-      }
-    } finally {
-      setSendingWhatsApp(null);
-    }
-  }, [showSuccess, showError]);
 
   const getStatusColor = useCallback((status: string): 'success' | 'error' | 'primary' | 'default' => {
     switch (status) {
@@ -265,14 +223,12 @@ export const useAgendaView = (
     // State
     localSelectedDate,
     setLocalSelectedDate,
-    sendingWhatsApp,
     currentDate,
     isToday,
     filteredAppointments,
     dateRangeTitle,
 
     // Handlers
-    handleSendWhatsAppReminder,
     handleDateNavigation,
     goToToday,
 

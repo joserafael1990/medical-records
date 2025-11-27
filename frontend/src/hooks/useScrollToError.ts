@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { logger } from '../utils/logger';
+import { trackAmplitudeUXError } from '../utils/amplitudeHelper';
 
 /**
  * Hook personalizado para hacer scroll automático hacia los mensajes de error
@@ -23,7 +24,8 @@ export const useScrollToError = (error: string | null | undefined, enabled: bool
       // Hacer scroll solo si no lo hemos hecho aún para este error
       if (!hasScrolled.current) {
         const timeoutId = setTimeout(() => {
-          logger.debug('🔝 Scrolling to error', { error: error.substring(0, 50) }, 'ui');
+          // Track UX error
+          trackAmplitudeUXError('form_error', error.substring(0, 100));
           
           // Siempre hacer scroll al inicio de la página
           window.scrollTo({
@@ -31,7 +33,6 @@ export const useScrollToError = (error: string | null | undefined, enabled: bool
             behavior: 'smooth'
           });
           
-          logger.debug('✅ Scrolled to top of page', undefined, 'ui');
           hasScrolled.current = true;
         }, 200); // Delay para asegurar renderizado
 
@@ -121,14 +122,11 @@ export const useScrollToErrorInDialog = (
       if (!hasScrolled.current) {
         const timeoutId = setTimeout(() => {
           if (errorRef.current) {
-            logger.debug('🔝 Dialog: Scrolling to error', { error: error.substring(0, 50) }, 'ui');
-            
             // PRIMERO: Hacer scroll al inicio de la página completa (siempre)
             window.scrollTo({
               top: 0,
               behavior: 'smooth'
             });
-            logger.debug('✅ Scrolled to top of page', undefined, 'ui');
             
             // SEGUNDO: Buscar el DialogContent padre y hacer scroll dentro del diálogo
             const dialogContent = errorRef.current.closest('[role="dialog"]')
@@ -141,7 +139,6 @@ export const useScrollToErrorInDialog = (
                   top: 0,
                   behavior: 'smooth'
                 });
-                logger.debug('✅ Scrolled DialogContent to top', undefined, 'ui');
               }, 300);
             }
             
@@ -152,7 +149,6 @@ export const useScrollToErrorInDialog = (
               top: 0,
               behavior: 'smooth'
             });
-            logger.debug('✅ Scrolled to top of page (no errorRef)', undefined, 'ui');
             hasScrolled.current = true;
           }
         }, 250); // Delay para asegurar renderizado

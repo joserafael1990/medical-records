@@ -1,5 +1,6 @@
 import { apiService } from '../services';
 import { logger } from '../utils/logger';
+import { AmplitudeService } from '../services/analytics/AmplitudeService';
 
 export const submitConsultation = async (params: {
   isEditing: boolean;
@@ -45,10 +46,40 @@ export const submitConsultation = async (params: {
     if (isEditing && selectedConsultation) {
       // Update existing consultation
       result = await apiService.consultations.updateConsultation(selectedConsultation.id.toString(), formData);
+      
+      // Track consultation update in Amplitude
+      try {
+        const { trackAmplitudeEvent } = require('./amplitudeHelper');
+        trackAmplitudeEvent('consultation_updated', {
+          has_diagnosis: !!formData.primary_diagnosis,
+          has_prescriptions: !!(formData.prescriptions && formData.prescriptions.length > 0),
+          has_vital_signs: !!(formData.vital_signs && Object.keys(formData.vital_signs).length > 0),
+          has_clinical_studies: !!(consultationStudies && consultationStudies.length > 0),
+          consultation_type: formData.consultation_type || 'unknown'
+        });
+      } catch (error) {
+        // Silently fail
+      }
+      
       showSuccessMessage('✅ Consulta actualizada exitosamente');
     } else {
       // Create new consultation
       result = await apiService.consultations.createConsultation(formData);
+      
+      // Track consultation creation in Amplitude
+      try {
+        const { trackAmplitudeEvent } = require('./amplitudeHelper');
+        trackAmplitudeEvent('consultation_saved', {
+          has_diagnosis: !!formData.primary_diagnosis,
+          has_prescriptions: !!(formData.prescriptions && formData.prescriptions.length > 0),
+          has_vital_signs: !!(formData.vital_signs && Object.keys(formData.vital_signs).length > 0),
+          has_clinical_studies: !!(consultationStudies && consultationStudies.length > 0),
+          consultation_type: formData.consultation_type || 'unknown'
+        });
+      } catch (error) {
+        // Silently fail
+      }
+      
       showSuccessMessage('✅ Consulta creada exitosamente');
     }
 

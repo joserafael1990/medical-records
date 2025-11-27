@@ -112,29 +112,77 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
       // Always update local state
       setDoctorProfile(data);
       
-      if (process.env.NODE_ENV === 'development') {
-        logger.debug('Profile state updated', { 
-          specialty: data.specialty_name,
-          avatar_type: data.avatar_type,
-          avatar_url: data.avatar_url 
-        }, 'api');
-      }
-    } catch (error: any) {
-      if (process.env.NODE_ENV === 'development') {
-        logger.error('Error fetching doctor profile', error, 'api');
-        logger.debug('Error details', { status: error.response?.status, data: error.response?.data }, 'api');
+      // Update Amplitude with user information
+      // Location priority: 1) Browser geolocation, 2) IP geolocation, 3) Office location (fallback)
+      if (data.email) {
+        const { AmplitudeService } = await import('../services/analytics/AmplitudeService');
+        const userInfo: Record<string, any> = {
+          user_type: 'doctor',
+          user_id: String(data.id),
+          specialty: data.specialty_name || (data as any).specialty || 'unknown',
+          title: data.title || 'Dr.',
+          first_name: data.first_name || data.name?.split(' ')[0] || '',
+          last_name: data.paternal_surname || data.name?.split(' ').slice(1).join(' ') || ''
+        };
+        
+        // Agregar información de oficina como último recurso para ubicación
+        if (data.offices && Array.isArray(data.offices) && data.offices.length > 0) {
+          const firstOffice = data.offices[0];
+          if (firstOffice.city) {
+            userInfo.office_city = firstOffice.city;
+          }
+          if (firstOffice.state_name) {
+            userInfo.office_state_name = firstOffice.state_name;
+          }
+          if (firstOffice.state_id) {
+            userInfo.office_state = firstOffice.state_id;
+          }
+          if (firstOffice.country_name) {
+            userInfo.office_country = firstOffice.country_name;
+          }
+          if (firstOffice.timezone) {
+            userInfo.office_timezone = firstOffice.timezone;
+          }
+        }
+        
+        // Fallback a campos de oficina a nivel de perfil si existen
+        if (!userInfo.office_city && (data as any).office_city) {
+          userInfo.office_city = (data as any).office_city;
+        }
+        if (!userInfo.office_state_name && (data as any).office_state_name) {
+          userInfo.office_state_name = (data as any).office_state_name;
+        }
+        if (!userInfo.office_country && (data as any).office_country) {
+          userInfo.office_country = (data as any).office_country;
+        } else if (!userInfo.office_country) {
+          userInfo.office_country = 'México'; // Default para doctores mexicanos
+        }
+        if (!userInfo.office_timezone && (data as any).office_timezone) {
+          userInfo.office_timezone = (data as any).office_timezone;
+        } else if (!userInfo.office_timezone) {
+          userInfo.office_timezone = 'America/Mexico_City'; // Default timezone
+        }
+        
+        try {
+          const { identifyAmplitudeUser } = require('../utils/amplitudeHelper');
+          identifyAmplitudeUser(data.email, userInfo).catch(() => {
+            // Silently fail - Amplitude tracking is non-critical
+          });
+        } catch (error) {
+          // Silently fail
+        }
       }
       
+      // Removed debug logging for performance
+    } catch (error: any) {
       // Handle 404 specifically (profile doesn't exist yet)
       if (error.response?.status === 404) {
         cache.data = null;
         cache.timestamp = now;
         setDoctorProfile(null);
       } else {
-        // Log error for debugging in development
-        if (process.env.NODE_ENV === 'development') {
-          logger.error('Error fetching doctor profile', error, 'api');
-        }
+        // Only log actual errors (not 404s)
+        logger.error('Error fetching doctor profile', error, 'api');
         setFormErrorMessage('Error al cargar el perfil del médico');
         setDoctorProfile(null);
       }
@@ -285,7 +333,13 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
       } else if (error.response?.status >= 500) {
         throw new Error('Error interno del servidor. Intenta más tarde.');
       } else {
-        throw new Error(error.response?.data?.detail || error.message || 'Error al guardar el perfil');
+        // Extract error message from transformed error (ApiBase already handles this)
+        // The error object from ApiBase has a 'message' property with the detailed error
+        const errorMessage = error.message || 
+                            error.response?.data?.detail || 
+                            error.details?.detail ||
+                            'Error al guardar el perfil';
+        throw new Error(errorMessage);
       }
     }
   };
@@ -320,14 +374,7 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
 
   // Load profile when authenticated
   useEffect(() => {
-    logger.debug('useEffect - Load profile when authenticated', {
-      isAuthenticated,
-      fetchCalledRef: fetchCalledRef.current,
-      doctorProfile: doctorProfile ? 'exists' : 'null'
-    });
-    
     if (isAuthenticated && (!fetchCalledRef.current || !doctorProfile)) {
-      // Calling fetchProfile
       fetchCalledRef.current = true;
       fetchProfile();
     }

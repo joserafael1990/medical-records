@@ -544,6 +544,17 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
         created_by: `${formData.title} ${formData.name}`.trim()
       };
 
+      // Track registration started
+      try {
+        const { trackAmplitudeEvent } = require('../../utils/amplitudeHelper');
+        trackAmplitudeEvent('registration_started', {
+          step: currentStep,
+          total_steps: 5
+        });
+      } catch (e) {
+        // Silently fail
+      }
+
       // Register the doctor (creates profile and handles authentication automatically)
       logger.debug('Sending registration data', { doctorProfileData }, 'auth');
       
@@ -553,6 +564,17 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
       if (registrationResponse.access_token) {
         logger.debug('Registration successful, token saved', undefined, 'auth');
         
+        // Track registration completed
+        try {
+          const { trackAmplitudeEvent } = require('../../utils/amplitudeHelper');
+          trackAmplitudeEvent('registration_completed', {
+            has_specialty: !!doctorProfileData.specialty_id,
+            has_office: !!doctorProfileData.office_address
+          });
+        } catch (e) {
+          // Silently fail
+        }
+        
         // Force reload to trigger authentication state update
         window.location.reload();
       } else {
@@ -560,6 +582,18 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
       }
 
     } catch (error: any) {
+      // Track registration failed
+      try {
+        const { trackAmplitudeEvent } = require('../../utils/amplitudeHelper');
+        trackAmplitudeEvent('registration_failed', {
+          error_type: error?.response?.status === 400 ? 'validation_error' : 
+                     error?.response?.status === 409 ? 'duplicate_email' : 
+                     error?.response?.status === 500 ? 'server_error' : 'unknown',
+          step: currentStep
+        });
+      } catch (e) {
+        // Silently fail
+      }
       // Comprehensive error logging
       console.error('Registration error - Full details:', {
         error: error,

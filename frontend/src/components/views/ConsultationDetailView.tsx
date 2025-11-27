@@ -106,10 +106,8 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'ordered': return 'warning';
-      case 'in_progress': return 'info';
+      case 'previous': return 'default';
       case 'completed': return 'success';
-      case 'cancelled': return 'error';
-      case 'failed': return 'error';
       default: return 'default';
     }
   };

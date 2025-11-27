@@ -20,11 +20,11 @@ const getLogConfig = (): LogConfig => {
   
   return {
     enabled: isDevelopment,
-    level: isDevelopment ? 'debug' : 'error',
+    level: isDevelopment ? 'info' : 'error', // Changed from 'debug' to 'info' to reduce logging overhead
     categories: isDevelopment 
-      ? ['api', 'auth', 'validation', 'ui', 'system', 'user']
+      ? ['auth', 'system'] // Reduced categories - only critical ones
       : [],
-    includeTimestamp: isDevelopment,
+    includeTimestamp: false, // Disabled timestamp to reduce overhead
     includeStackTrace: false
   };
 };
@@ -94,29 +94,49 @@ class Logger {
     
     if (data !== undefined) {
       // Special handling for errors
-      if (data instanceof Error || (data && data.isAxiosError)) {
-        const errorInfo: any = {
-          message: data.message,
-          name: data.name
-        };
-        
-        // For Axios errors
-        if (data.response) {
-          errorInfo.status = data.response.status;
-          errorInfo.statusText = data.response.statusText;
-          errorInfo.data = data.response.data;
+      if (data instanceof Error || (data && typeof data === 'object' && (data as any).isAxiosError)) {
+        try {
+          const errorInfo: any = {
+            message: (data as any).message || 'Unknown error',
+            name: (data as any).name || 'Error'
+          };
+          
+          // For Axios errors
+          if ((data as any).response) {
+            errorInfo.status = (data as any).response.status;
+            errorInfo.statusText = (data as any).response.statusText;
+            errorInfo.data = (data as any).response.data;
+          }
+          
+          if ((data as any).request && !(data as any).response) {
+            errorInfo.request = 'No response received from server';
+          }
+          
+          if ((data as any).config) {
+            errorInfo.url = (data as any).config.url;
+            errorInfo.method = (data as any).config.method;
+          }
+          
+          parts.push(errorInfo);
+        } catch (formatError) {
+          // Fallback if error formatting fails
+          parts.push({
+            message: String((data as any).message || 'Error formatting failed'),
+            error: 'Failed to format error object'
+          });
         }
-        
-        if (data.request && !data.response) {
-          errorInfo.request = 'No response received from server';
+      } else if (data && typeof data === 'object') {
+        // Try to safely stringify objects
+        try {
+          parts.push(JSON.parse(JSON.stringify(data)));
+        } catch {
+          // If stringification fails, create a safe representation
+          parts.push({
+            type: typeof data,
+            constructor: data.constructor?.name || 'Object',
+            keys: Object.keys(data).slice(0, 10) // Limit keys to avoid huge objects
+          });
         }
-        
-        if (data.config) {
-          errorInfo.url = data.config.url;
-          errorInfo.method = data.config.method;
-        }
-        
-        parts.push(errorInfo);
       } else {
         parts.push(data);
       }

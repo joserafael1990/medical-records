@@ -130,6 +130,18 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
       );
       const newPrescription = response.data;
       
+      // Track prescription created
+      try {
+        const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
+        trackAmplitudeEvent('prescription_created', {
+          has_dosage: !!prescriptionData.dosage,
+          has_frequency: !!prescriptionData.frequency,
+          has_duration: !!prescriptionData.duration
+        });
+      } catch (e) {
+        // Silently fail
+      }
+      
       // Add to local state avoiding duplicates
       setPrescriptions(prev => {
         const exists = prev.some(p => p.id === newPrescription.id);
@@ -159,6 +171,16 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
       );
       const updatedPrescription = response.data;
       
+      // Track prescription updated
+      try {
+        const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
+        trackAmplitudeEvent('prescription_updated', {
+          prescription_id: prescriptionId
+        });
+      } catch (e) {
+        // Silently fail
+      }
+      
       // Update local state
       setPrescriptions(prev => prev.map(prescription => 
         prescription.id === prescriptionId ? updatedPrescription : prescription
@@ -181,6 +203,16 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
       } else {
         // For saved consultations, delete on server
         await apiService.consultations.api.delete(`/api/consultations/${consultationId}/prescriptions/${prescriptionId}`);
+        
+        // Track prescription deleted
+        try {
+          const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
+          trackAmplitudeEvent('prescription_deleted', {
+            prescription_id: prescriptionId
+          });
+        } catch (e) {
+          // Silently fail
+        }
         
         // Remove from local state
         setPrescriptions(prev => prev.filter(prescription => prescription.id !== prescriptionId));

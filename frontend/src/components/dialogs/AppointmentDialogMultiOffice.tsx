@@ -28,6 +28,7 @@ import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
 import { PhoneNumberInput } from '../common/PhoneNumberInput';
 import { useAppointmentMultiOfficeForm, formatPatientNameWithAge } from '../../hooks/useAppointmentMultiOfficeForm';
 import { preventBackdropClose } from '../../utils/dialogHelpers';
+import { AmplitudeService } from '../../services';
 import { RemindersConfig } from '../common/RemindersConfig';
 import { logger } from '../../utils/logger';
 
@@ -210,6 +211,20 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
 
   // Hook para scroll automático a errores
   const { errorRef } = useScrollToErrorInDialog(currentError);
+
+  // Track appointment form opened
+  React.useEffect(() => {
+    if (open) {
+      try {
+        const { trackAmplitudeEvent } = require('../../utils/amplitudeHelper');
+        trackAmplitudeEvent('appointment_form_opened', {
+          is_editing: isEditing
+        });
+      } catch (error) {
+        // Silently fail
+      }
+    }
+  }, [open, isEditing]);
 
   return (
     <Dialog 
@@ -453,7 +468,45 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
                 label="Fecha de la cita"
                 value={currentFormData.appointment_date ? new Date(currentFormData.appointment_date) : new Date()}
                 onChange={(date) => {
-                  const dateString = date ? date.toISOString() : '';
+                  // Force reload by always calling handleDateChange, even if date appears unchanged
+                  // This ensures times are reloaded when user returns to today after selecting another date
+                  if (!date) {
+                    // Clear available times when date is cleared
+                    formHook.setAvailableTimes([]);
+                    setFormData({
+                      ...currentFormData,
+                      appointment_date: ''
+                    });
+                    if (onFormDataChange) {
+                      onFormDataChange({
+                        ...currentFormData,
+                        appointment_date: ''
+                      });
+                    }
+                    handleDateChange('');
+                    return;
+                  }
+                  
+                  // Always create a date string with just the date part (no time)
+                  // This ensures consistent date comparison
+                  const year = date.getFullYear();
+                  const month = String(date.getMonth() + 1).padStart(2, '0');
+                  const day = String(date.getDate()).padStart(2, '0');
+                  const dateOnlyString = `${year}-${month}-${day}`;
+                  
+                  // Get current selected date for comparison
+                  const currentDate = currentFormData.appointment_date 
+                    ? new Date(currentFormData.appointment_date)
+                    : null;
+                  const currentDateOnly = currentDate
+                    ? `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`
+                    : '';
+                  
+                  // Create ISO string for form data (with time set to start of day in local timezone)
+                  const dateWithTime = new Date(date);
+                  dateWithTime.setHours(0, 0, 0, 0);
+                  const dateString = dateWithTime.toISOString();
+                  
                   const newFormData = {
                     ...currentFormData,
                     appointment_date: dateString
@@ -463,12 +516,10 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
                     onFormDataChange(newFormData);
                   }
                   
-                  if (date) {
-                    handleDateChange(dateString);
-                  } else {
-                    // Clear available times when date is cleared
-                    formHook.setAvailableTimes([]);
-                  }
+                  // Always call handleDateChange with date-only string to ensure times are loaded
+                  // Force reload even if it's the same date to ensure fresh data
+                  // This fixes the issue where returning to today doesn't reload available times
+                  handleDateChange(dateOnlyString);
                 }}
                 slotProps={{
                   textField: {

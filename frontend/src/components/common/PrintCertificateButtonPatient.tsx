@@ -126,6 +126,7 @@ Atentamente,`;
       name: patientFullName
     };
     
+    // Preserve all doctor fields including avatar information
     const doctorWithName = {
       ...doctor,
       name: doctorFullName

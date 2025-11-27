@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { apiService } from '../services';
+import { trackAmplitudeEvent, identifyAmplitudeUser, resetAmplitudeUser } from '../utils/amplitudeHelper';
 
 // Types for authentication
 interface DoctorInfo {
@@ -122,9 +123,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         token: data.access_token
       });
       
+      // Track login in Amplitude
+      trackAmplitudeEvent('login_successful');
+      // Use email as user ID for better identification in Amplitude
+      // Location will be obtained from browser automatically
+      identifyAmplitudeUser(data.user.email, {
+        user_type: 'doctor',
+        user_id: String(data.user.id), // Keep numeric ID as property
+        specialty: data.user.specialty || 'unknown',
+        title: data.user.title || 'Dr.',
+        first_name: data.user.first_name,
+        last_name: data.user.paternal_surname
+      }).catch(() => {
+        // Silently fail - Amplitude tracking is non-critical
+      });
+      
       console.log('🔐 AuthContext.login: Login completed successfully');
       return { success: true };
     } catch (error: any) {
+      // Track failed login attempt
+      trackAmplitudeEvent('login_failed', {
+        error_type: error?.status === 401 ? 'invalid_credentials' : 'connection_error'
+      });
+      
       console.error('🔐 AuthContext.login: Error caught:', error);
       console.error('🔐 AuthContext.login: Error details:', {
         message: error?.message,
@@ -253,6 +274,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = () => {
+    // Track logout in Amplitude
+    trackAmplitudeEvent('logout');
+    resetAmplitudeUser();
     localStorage.removeItem('token'); // Changed from 'auth_token' to 'token'
     localStorage.removeItem('doctor_data');
     setUser(null);

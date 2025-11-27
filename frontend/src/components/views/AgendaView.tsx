@@ -30,10 +30,9 @@ import {
   LocationOn as LocationOnIcon,
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
-  WhatsApp as WhatsAppIcon
 } from '@mui/icons-material';
-import { format, isSameDay, isSameMonth } from 'date-fns';
-import { formatTime } from '../../utils/formatters';
+import { format, isSameDay, isSameMonth, isPast } from 'date-fns';
+import { formatTime, parseBackendDate } from '../../utils/formatters';
 import { es } from 'date-fns/locale';
 import { useAgendaView } from '../../hooks/useAgendaView';
 
@@ -74,12 +73,10 @@ const AgendaView: React.FC<AgendaViewProps> = ({
 
   const {
     localSelectedDate,
-    sendingWhatsApp,
     currentDate,
     isToday,
     filteredAppointments,
     dateRangeTitle,
-    handleSendWhatsAppReminder,
     handleDateNavigation,
     goToToday,
     getStatusColor,
@@ -88,6 +85,17 @@ const AgendaView: React.FC<AgendaViewProps> = ({
     getWeeks,
     getDayAppointments
   } = agendaHook;
+
+  // Helper function to check if appointment time has passed
+  const isAppointmentPast = (appointment: any): boolean => {
+    if (!appointment.date_time) return false;
+    try {
+      const appointmentDate = parseBackendDate(appointment.date_time);
+      return isPast(appointmentDate);
+    } catch (error) {
+      return false;
+    }
+  };
 
   // Renderizar vista semanal
   const renderWeeklyView = () => {
@@ -136,46 +144,41 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                     }}
                   >
                     <Box sx={{ minHeight: 150 }}>
-                      {dayAppointments.map((appointment, index) => (
-                        <Card key={index} sx={{ mb: 1, p: 1, bgcolor: 'primary.light', color: 'primary.contrastText' }}>
-                          <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
-                            {formatTime(appointment.date_time)}
-                          </Typography>
-                          <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
-                            {appointment.patient?.name}
-                          </Typography>
-                          {appointment.office && (
-                            <Typography variant="caption" sx={{ fontSize: '0.65rem', display: 'block', mt: 0.5 }}>
-                              📍 {appointment.office.name}
-                              {appointment.office.is_virtual && ' (Virtual)'}
+                      {dayAppointments.map((appointment, index) => {
+                        const isPast = isAppointmentPast(appointment);
+                        return (
+                          <Card 
+                            key={index} 
+                            sx={{ 
+                              mb: 1, 
+                              p: 1, 
+                              bgcolor: isPast ? 'grey.300' : 'primary.light', 
+                              color: isPast ? 'text.secondary' : 'primary.contrastText',
+                              opacity: isPast ? 0.7 : 1
+                            }}
+                          >
+                            <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
+                              {formatTime(appointment.date_time)}
                             </Typography>
-                          )}
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-                            <Chip
-                              label={getStatusLabel(appointment.status)}
-                              size="small"
-                              sx={{ fontSize: '0.65rem', height: 16 }}
-                            />
-                            {appointment.status === 'por_confirmar' && (
-                              <IconButton
-                                size="small"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSendWhatsAppReminder(appointment);
-                                }}
-                                disabled={sendingWhatsApp === appointment.id}
-                                sx={{ 
-                                  color: 'primary.contrastText',
-                                  p: 0.5,
-                                  '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' }
-                                }}
-                              >
-                                <WhatsAppIcon sx={{ fontSize: 14 }} />
-                              </IconButton>
+                            <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
+                              {appointment.patient?.name}
+                            </Typography>
+                            {appointment.office && (
+                              <Typography variant="caption" sx={{ fontSize: '0.65rem', display: 'block', mt: 0.5 }}>
+                                📍 {appointment.office.name}
+                                {appointment.office.is_virtual && ' (Virtual)'}
+                              </Typography>
                             )}
-                          </Box>
-                        </Card>
-                      ))}
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                              <Chip
+                                label={getStatusLabel(appointment.status)}
+                                size="small"
+                                sx={{ fontSize: '0.65rem', height: 16 }}
+                              />
+                            </Box>
+                          </Card>
+                        );
+                      })}
                       {dayAppointments.length === 0 && (
                         <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 2 }}>
                           Sin citas
@@ -257,35 +260,25 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                         {format(day, 'd')}
                       </Typography>
                       <Box sx={{ mt: 0.5 }}>
-                        {dayAppointments.slice(0, 2).map((appointment, index) => (
-                          <Box key={index} sx={{ mb: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <Chip
-                              label={`${formatTime(appointment.date_time)} ${appointment.patient?.first_name}`}
-                              size="small"
-                              sx={{ 
-                                fontSize: '0.65rem', 
-                                height: 16,
-                                flex: 1
-                              }}
-                            />
-                            {appointment.status === 'por_confirmar' && (
-                              <IconButton
+                        {dayAppointments.slice(0, 2).map((appointment, index) => {
+                          const isPast = isAppointmentPast(appointment);
+                          return (
+                            <Box key={index} sx={{ mb: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <Chip
+                                label={`${formatTime(appointment.date_time)} ${appointment.patient?.first_name}`}
                                 size="small"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSendWhatsAppReminder(appointment);
-                                }}
-                                disabled={sendingWhatsApp === appointment.id}
                                 sx={{ 
-                                  p: 0.25,
-                                  '&:hover': { bgcolor: 'action.hover' }
+                                  fontSize: '0.65rem', 
+                                  height: 16,
+                                  flex: 1,
+                                  bgcolor: isPast ? 'grey.300' : undefined,
+                                  color: isPast ? 'text.secondary' : undefined,
+                                  opacity: isPast ? 0.7 : 1
                                 }}
-                              >
-                                <WhatsAppIcon sx={{ fontSize: 12 }} />
-                              </IconButton>
-                            )}
-                          </Box>
-                        ))}
+                              />
+                            </Box>
+                          );
+                        })}
                         {dayAppointments.length > 2 && (
                           <Typography variant="caption" color="text.secondary">
                             +{dayAppointments.length - 2} más
@@ -318,95 +311,86 @@ const AgendaView: React.FC<AgendaViewProps> = ({
   const renderDailyView = () => {
     return (
       <List>
-        {filteredAppointments.map((appointment, index) => (
-          <ListItem
-            key={appointment.id || index}
-            sx={{
-              border: 1,
-              borderColor: 'grey.200',
-              borderRadius: 2,
-              mb: 1,
-              boxShadow: 1,
-              cursor: 'pointer',
-              '&:hover': {
-                borderColor: 'primary.main',
-                boxShadow: 2,
-                backgroundColor: 'action.hover'
-              }
-            }}
-            onClick={() => handleEditAppointment?.(appointment)}
-          >
-            <ListItemText
-              primary={
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <Typography variant="subtitle1" fontWeight="bold">
-                    {appointment.patient?.name}
-                  </Typography>
-                  <Chip
-                    label={getStatusLabel(appointment.status)}
-                    color={getStatusColor(appointment.status) as any}
-                    size="small"
-                  />
-                </Box>
-              }
-              secondary={
-                <Box component="span" sx={{ mt: 1, display: 'block' }}>
-                  <Typography variant="body2" color="text.secondary" component="span" sx={{ display: 'block' }}>
-                    <TimeIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: 'middle' }} />
-                    {formatTime(appointment.date_time)}
-                  </Typography>
-                  {appointment.office && (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, display: 'block' }} component="span">
-                      <LocationOnIcon sx={{ fontSize: 14, mr: 0.5, verticalAlign: 'middle' }} />
-                      {appointment.office.name}
-                      {appointment.office.address && ` - ${appointment.office.address}`}
-                      {appointment.office.is_virtual && appointment.office.virtual_url && (
-                        <span style={{ color: '#1976d2' }}>
-                          {' '}(Virtual: {appointment.office.virtual_url})
-                        </span>
-                      )}
+        {filteredAppointments.map((appointment, index) => {
+          const isPast = isAppointmentPast(appointment);
+          return (
+            <ListItem
+              key={appointment.id || index}
+              sx={{
+                border: 1,
+                borderColor: isPast ? 'grey.400' : 'grey.200',
+                borderRadius: 2,
+                mb: 1,
+                boxShadow: 1,
+                cursor: 'pointer',
+                bgcolor: isPast ? 'grey.100' : 'transparent',
+                opacity: isPast ? 0.7 : 1,
+                '&:hover': {
+                  borderColor: isPast ? 'grey.400' : 'primary.main',
+                  boxShadow: isPast ? 1 : 2,
+                  backgroundColor: isPast ? 'grey.200' : 'action.hover'
+                }
+              }}
+              onClick={() => handleEditAppointment?.(appointment)}
+            >
+              <ListItemText
+                primary={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Typography variant="subtitle1" fontWeight="bold" sx={{ color: isPast ? 'text.secondary' : 'text.primary' }}>
+                      {appointment.patient?.name}
                     </Typography>
+                    <Chip
+                      label={getStatusLabel(appointment.status)}
+                      color={getStatusColor(appointment.status) as any}
+                      size="small"
+                      sx={{ opacity: isPast ? 0.7 : 1 }}
+                    />
+                  </Box>
+                }
+                secondary={
+                  <Box component="span" sx={{ mt: 1, display: 'block' }}>
+                    <Typography variant="body2" color={isPast ? 'text.secondary' : 'text.secondary'} component="span" sx={{ display: 'block' }}>
+                      <TimeIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: 'middle' }} />
+                      {formatTime(appointment.date_time)}
+                    </Typography>
+                    {appointment.office && (
+                      <Typography variant="body2" color={isPast ? 'text.secondary' : 'text.secondary'} sx={{ mt: 0.5, display: 'block' }} component="span">
+                        <LocationOnIcon sx={{ fontSize: 14, mr: 0.5, verticalAlign: 'middle' }} />
+                        {appointment.office.name}
+                        {appointment.office.address && ` - ${appointment.office.address}`}
+                        {appointment.office.is_virtual && appointment.office.virtual_url && (
+                          <span style={{ color: isPast ? '#757575' : '#1976d2' }}>
+                            {' '}(Virtual: {appointment.office.virtual_url})
+                          </span>
+                        )}
+                      </Typography>
+                    )}
+                  </Box>
+                }
+                secondaryTypographyProps={{ component: 'div' }}
+              />
+              <ListItemSecondaryAction>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  {['por_confirmar', 'confirmada'].includes(appointment.status) && !isAppointmentPast(appointment) && (
+                    <Button
+                      size="small"
+                      color="error"
+                      startIcon={<CancelIcon />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (cancelAppointment && appointment.id) {
+                          cancelAppointment(appointment.id);
+                        }
+                      }}
+                    >
+                      Cancelar
+                    </Button>
                   )}
                 </Box>
-              }
-              secondaryTypographyProps={{ component: 'div' }}
-            />
-            <ListItemSecondaryAction>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                {appointment.status === 'por_confirmar' && (
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    color="success"
-                    startIcon={<WhatsAppIcon />}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleSendWhatsAppReminder(appointment);
-                    }}
-                    disabled={sendingWhatsApp === appointment.id}
-                  >
-                    {sendingWhatsApp === appointment.id ? 'Enviando...' : 'WhatsApp'}
-                  </Button>
-                )}
-                {['por_confirmar', 'confirmada'].includes(appointment.status) && (
-                  <Button
-                    size="small"
-                    color="error"
-                    startIcon={<CancelIcon />}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (cancelAppointment && appointment.id) {
-                        cancelAppointment(appointment.id);
-                      }
-                    }}
-                  >
-                    Cancelar
-                  </Button>
-                )}
-              </Box>
-            </ListItemSecondaryAction>
-          </ListItem>
-        ))}
+              </ListItemSecondaryAction>
+            </ListItem>
+          );
+        })}
       </List>
     );
   };

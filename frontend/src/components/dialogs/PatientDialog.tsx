@@ -38,6 +38,7 @@ import { PhoneNumberInput } from '../common/PhoneNumberInput';
 import { DocumentSelector } from '../common/DocumentSelector';
 import { usePatientForm } from '../../hooks/usePatientForm';
 import { preventBackdropClose } from '../../utils/dialogHelpers';
+import { AmplitudeService } from '../../services/analytics/AmplitudeService';
 
 interface PatientDialogProps {
   open: boolean;
@@ -88,6 +89,36 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
 
   // Auto-scroll to error when it appears
   const { errorRef } = useScrollToErrorInDialog(error);
+
+  // Track form opened
+  React.useEffect(() => {
+    if (open) {
+      try {
+        const { trackAmplitudeEvent } = require('../../utils/amplitudeHelper');
+        trackAmplitudeEvent('patient_form_opened', {
+          is_editing: isEditing
+        });
+      } catch (error) {
+        // Silently fail
+      }
+    }
+  }, [open, isEditing]);
+
+  // Track validation errors
+  React.useEffect(() => {
+    if (errors && Object.keys(errors).length > 0) {
+      try {
+        const { trackAmplitudeEvent } = require('../../utils/amplitudeHelper');
+        trackAmplitudeEvent('form_validation_error', {
+          form_type: 'patient',
+          error_fields: Object.keys(errors),
+          error_count: Object.keys(errors).length
+        });
+      } catch (error) {
+        // Silently fail
+      }
+    }
+  }, [errors]);
 
   return (
     <Dialog open={open} onClose={preventBackdropClose(handleClose)} maxWidth="lg" fullWidth>
@@ -569,7 +600,19 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
                   license: doctorProfile?.professional_license || 'No especificada',
                   university: doctorProfile?.university || 'No especificada',
                   phone: doctorProfile?.office_phone || doctorProfile?.phone || 'No especificado',
-                  email: doctorProfile?.email || 'No especificado'
+                  email: doctorProfile?.email || 'No especificado',
+                  // Avatar fields
+                  avatarType: doctorProfile?.avatar_type || doctorProfile?.avatar?.avatar_type || 'initials',
+                  avatarUrl: doctorProfile?.avatar_url || doctorProfile?.avatar?.avatar_url,
+                  avatarTemplateKey: doctorProfile?.avatar_template_key || doctorProfile?.avatar?.avatar_template_key,
+                  avatarFilePath: doctorProfile?.avatar_file_path || doctorProfile?.avatar?.avatar_file_path,
+                  avatar: doctorProfile?.avatar || {
+                    avatar_type: doctorProfile?.avatar_type || 'initials',
+                    avatar_template_key: doctorProfile?.avatar_template_key,
+                    avatar_file_path: doctorProfile?.avatar_file_path,
+                    avatar_url: doctorProfile?.avatar_url,
+                    url: doctorProfile?.avatar_url
+                  }
                 }}
                 variant="outlined"
                 size="medium"

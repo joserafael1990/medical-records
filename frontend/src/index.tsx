@@ -3,30 +3,38 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { initializeGlobalErrorHandlers } from './utils/globalErrorHandlers';
 import * as Sentry from '@sentry/react';
+// Initialize Amplitude early to ensure it's ready when events are tracked
+import './services/analytics/AmplitudeService';
 
 // Initialize Sentry for error monitoring (frontend)
-// Solo se activa si REACT_APP_SENTRY_DSN está definido (solo en producción)
+// Solo se activa en producción si REACT_APP_SENTRY_DSN está definido
 const sentryDsn = process.env.REACT_APP_SENTRY_DSN;
-const isSentryEnabled = Boolean(sentryDsn);
+const isProduction = 
+  process.env.NODE_ENV === 'production' ||
+  process.env.REACT_APP_ENV === 'production';
+
+// Solo habilitar Sentry en producción
+const isSentryEnabled = Boolean(sentryDsn) && isProduction;
 
 Sentry.init({
   dsn: sentryDsn,
-  environment: process.env.REACT_APP_SENTRY_ENVIRONMENT || 'development',
+  environment: process.env.REACT_APP_SENTRY_ENVIRONMENT || 'production',
   tracesSampleRate: 0.1,
   // Configuración de replays para User Feedback
   // Según la documentación, el feedback puede requerir replays habilitados
   // Configuramos solo replaysOnErrorSampleRate para feedback asociado a errores
   replaysSessionSampleRate: 0.0, // No queremos replays de sesión completa
   replaysOnErrorSampleRate: 0.1, // 10% de replays cuando hay errores (para feedback)
-  enabled: isSentryEnabled, // Solo si hay DSN
-      integrations: isSentryEnabled
-        ? [
-            // User Feedback Widget con textos personalizados en español
-            Sentry.feedbackIntegration({
-              colorScheme: 'system',
-              showBranding: false,
-              // Textos personalizados en español
-              triggerLabel: 'Reportar un problema',
+  enabled: isSentryEnabled, // Solo habilitar en producción
+  integrations: isSentryEnabled
+    ? [
+        // User Feedback Widget con textos personalizados en español
+        // El widget aparece automáticamente como un botón flotante en la esquina inferior derecha
+        Sentry.feedbackIntegration({
+          colorScheme: 'system',
+          showBranding: false,
+          // Textos personalizados en español
+          triggerLabel: 'Reportar un problema',
               triggerAriaLabel: 'Reportar un problema',
               formTitle: 'Reportar un problema',
               submitButtonLabel: 'Enviar reporte',
@@ -93,6 +101,22 @@ Sentry.init({
 
 // Initialize global error handlers to catch unhandled errors
 initializeGlobalErrorHandlers();
+
+// Log Sentry configuration for debugging
+console.log('🔍 Sentry Configuration:', {
+  hasDsn: !!sentryDsn,
+  isProduction,
+  isSentryEnabled,
+  environment: process.env.REACT_APP_SENTRY_ENVIRONMENT || 'production',
+  feedbackWidgetEnabled: isSentryEnabled
+});
+
+if (isSentryEnabled) {
+  console.log('✅ Sentry está habilitado para producción - El widget de feedback debería estar visible');
+  console.log('📍 Busca el botón "Reportar un problema" en la esquina inferior derecha');
+} else {
+  console.log('ℹ️ Sentry está deshabilitado (solo se activa en producción)');
+}
 
 console.log('🚀 Iniciando CORTEX con React + Material-UI...');
 

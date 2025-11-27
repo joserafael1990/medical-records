@@ -142,9 +142,10 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
   // Load all available appointments for consultation dialog
   const loadAllAppointments = useCallback(async () => {
     try {
-      // Get appointments available for consultation (only confirmed appointments)
+      // Get appointments available for consultation (both confirmed and pending confirmation)
+      // These are appointments that can be used to create consultations
       const consultationAppointments = await apiService.appointments.getAppointments({
-        status: 'confirmada'
+        available_for_consultation: true
       });
       
       setAllAvailableAppointments(consultationAppointments || []);

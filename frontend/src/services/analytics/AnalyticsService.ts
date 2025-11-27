@@ -30,15 +30,15 @@ export interface DashboardMetrics {
   };
   appointmentFlow: {
     totalScheduled: number;
+    confirmedAppointments: number;
     completedConsultations: number;
     cancelledByDoctor: number;
     cancelledByPatient: number;
-    pending: number;
     percentages: {
+      confirmed: number;
       completed: number;
       cancelledByDoctor: number;
       cancelledByPatient: number;
-      pending: number;
     };
     sankeyData: {
       nodes: Array<{ id: string; label: string }>;
@@ -62,6 +62,14 @@ export interface DashboardMetrics {
     newPatient: number;
     followUp: number;
     other: number;
+  };
+  appointmentTypeTrends: {
+    data: Array<{
+      month: string;
+      newPatient: number;
+      followUp: number;
+      other: number;
+    }>;
   };
 }
 

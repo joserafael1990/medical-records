@@ -17,6 +17,25 @@ interface AppointmentTrendsChartProps {
 }
 
 export const AppointmentTrendsChart: React.FC<AppointmentTrendsChartProps> = ({ data }) => {
+  // Filtrar meses que tienen al menos un dato (citas agendadas, canceladas o consultas)
+  const filteredData = React.useMemo(() => {
+    if (!data || data.length === 0) return [];
+    
+    // Encontrar el primer mes con datos
+    const firstMonthWithData = data.findIndex(
+      (item) => 
+        (item.scheduled && item.scheduled > 0) ||
+        (item.cancelledByPatient && item.cancelledByPatient > 0) ||
+        (item.consultations && item.consultations > 0)
+    );
+    
+    // Si no hay datos, retornar array vacío
+    if (firstMonthWithData === -1) return [];
+    
+    // Retornar desde el primer mes con datos hasta el final
+    return data.slice(firstMonthWithData);
+  }, [data]);
+
   return (
     <Card sx={{ height: '100%', boxShadow: 2 }}>
       <CardContent>
@@ -24,7 +43,7 @@ export const AppointmentTrendsChart: React.FC<AppointmentTrendsChartProps> = ({ 
           Tendencia Mensual de Citas y Consultas
         </Typography>
         <ResponsiveContainer width="100%" height={360}>
-          <LineChart data={data} margin={{ top: 10, right: 40, left: 10, bottom: 5 }}>
+          <LineChart data={filteredData} margin={{ top: 10, right: 40, left: 10, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="month" />
             <YAxis allowDecimals={false} />

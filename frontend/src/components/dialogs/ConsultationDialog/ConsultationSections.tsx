@@ -1,12 +1,15 @@
-import React from 'react';
-import { Box, Divider, Card, CardContent, Typography, TextField } from '@mui/material';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Box, Divider, Card, CardContent, Typography, TextField, Button } from '@mui/material';
+import { ShowChart as ShowChartIcon } from '@mui/icons-material';
 import VitalSignsSection from '../../common/VitalSignsSection';
 import PrescriptionsSection from '../../common/PrescriptionsSection';
 import ClinicalStudiesSection from '../../common/ClinicalStudiesSection';
 import ScheduleAppointmentSection from '../../common/ScheduleAppointmentSection';
+import VitalSignsEvolutionView from '../../views/VitalSignsEvolutionView';
 import { ConsultationVitalSign, VitalSign, Prescription, ClinicalStudy, Medication } from '../../../types';
 import { CreateClinicalStudyData } from '../../../types';
 import { TEMP_IDS } from '../../../utils/vitalSignUtils';
+import { useVitalSigns } from '../../../hooks/useVitalSigns';
 
 interface ConsultationSectionsProps {
   // Consultation info
@@ -88,6 +91,50 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
 }) => {
   const consultationIdStr = consultationId ? String(consultationId) : TEMP_IDS.CONSULTATION;
   const patientIdStr = selectedPatientId?.toString() || formDataPatientId || TEMP_IDS.PATIENT;
+  const [showEvolutionView, setShowEvolutionView] = useState(false);
+  const [hasPreviousVitalSigns, setHasPreviousVitalSigns] = useState(false);
+  const vitalSignsHook = useVitalSigns();
+
+  // Check if patient has previous vital signs history (from any previous consultation)
+  useEffect(() => {
+    const checkPreviousVitalSigns = async () => {
+      if (!selectedPatientId) {
+        setHasPreviousVitalSigns(false);
+        return;
+      }
+
+      try {
+        const history = await vitalSignsHook.fetchPatientVitalSignsHistory(selectedPatientId);
+        
+        // Check if patient has any vital signs history at all (from previous consultations)
+        // This should show the button even if current consultation doesn't have vital signs yet
+        const hasHistory = history.vital_signs_history.some(vsHistory => 
+          vsHistory.data && vsHistory.data.length > 0
+        );
+        
+        setHasPreviousVitalSigns(hasHistory);
+      } catch (error) {
+        // Silently fail - don't show button if we can't check
+        setHasPreviousVitalSigns(false);
+      }
+    };
+
+    checkPreviousVitalSigns();
+  }, [selectedPatientId, vitalSignsHook]);
+
+  // Show evolution view if enabled
+  if (showEvolutionView && selectedPatientId) {
+    return (
+      <Box sx={{ width: '100%', height: '100%', overflow: 'auto' }}>
+        <VitalSignsEvolutionView
+          patientId={selectedPatientId}
+          patientName=""
+          onBack={() => setShowEvolutionView(false)}
+          fetchHistory={vitalSignsHook.fetchPatientVitalSignsHistory}
+        />
+      </Box>
+    );
+  }
 
   return (
     <>
@@ -102,6 +149,20 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
         onEditVitalSign={onEditVitalSign}
         onDeleteVitalSign={onDeleteVitalSign}
       />
+
+      {/* Evolution Button - Show if there are previous vital signs */}
+      {hasPreviousVitalSigns && selectedPatientId && (
+        <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end' }}>
+          <Button
+            variant="outlined"
+            startIcon={<ShowChartIcon />}
+            onClick={() => setShowEvolutionView(true)}
+            sx={{ borderRadius: '8px' }}
+          >
+            Ver evolución de signos vitales
+          </Button>
+        </Box>
+      )}
 
       {/* Prescribed Medications Section - Inline */}
       <PrescriptionsSection

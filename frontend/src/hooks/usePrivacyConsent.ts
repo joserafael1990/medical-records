@@ -189,11 +189,29 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
 
   /**
    * Get human-readable consent status
+   * Prioriza consent_given sobre consent_status
    */
-  const getConsentStatusText = (status: string | undefined, isRevoked: boolean): string => {
+  const getConsentStatusText = (consentData: any): string => {
+    if (!consentData) return 'Sin consentimiento';
+    
+    // Si tiene consent_given, usar ese valor directamente
+    if (consentData.consent_given === true) {
+      return 'Aceptado';
+    }
+    
+    if (consentData.consent_given === false) {
+      // Si fue revocado (tenía consent_given=true antes y ahora es false)
+      // O si está pendiente (nunca fue aceptado)
+      // Por ahora, si existe un consentimiento con consent_given=false, es pendiente
+      // La revocación se maneja separadamente
+      return 'Pendiente';
+    }
+    
+    // Fallback a consent_status si existe
+    const isRevoked = consentData.is_revoked === true;
     if (isRevoked) return 'Revocado';
     
-    switch (status) {
+    switch (consentData.consent_status) {
       case 'accepted':
         return 'Aceptado';
       case 'rejected':
@@ -213,17 +231,32 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
     }
   };
 
-  const consentStatusText = consent 
-    ? getConsentStatusText(consent.consent_status, consent.is_revoked)
-    : 'Sin consentimiento';
+  const consentStatusText = getConsentStatusText(consent);
 
   /**
    * Get color for consent status
    */
-  const getConsentStatusColor = (status: string | undefined, isRevoked: boolean): string => {
+  /**
+   * Get color for consent status
+   * Prioriza consent_given sobre consent_status
+   */
+  const getConsentStatusColor = (consentData: any): string => {
+    if (!consentData) return 'default';
+    
+    // Si tiene consent_given, usar ese valor directamente
+    if (consentData.consent_given === true) {
+      return 'success';
+    }
+    
+    if (consentData.consent_given === false) {
+      return 'warning'; // Pendiente
+    }
+    
+    // Fallback a consent_status si existe
+    const isRevoked = consentData.is_revoked === true;
     if (isRevoked) return 'error';
     
-    switch (status) {
+    switch (consentData.consent_status) {
       case 'accepted':
         return 'success';
       case 'rejected':
@@ -241,9 +274,7 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
     }
   };
 
-  const consentStatusColor = consent 
-    ? getConsentStatusColor(consent.consent_status, consent.is_revoked)
-    : 'default';
+  const consentStatusColor = getConsentStatusColor(consent);
 
   return {
     consent,

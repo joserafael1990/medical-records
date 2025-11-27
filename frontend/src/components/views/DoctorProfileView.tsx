@@ -42,6 +42,7 @@ import {
 import DoctorProfileDialog from '../dialogs/DoctorProfileDialog';
 import ScheduleConfigDialog from '../dialogs/ScheduleConfigDialog';
 import OfficeDialog from '../dialogs/OfficeDialog';
+import GoogleCalendarSettings from '../settings/GoogleCalendarSettings';
 import { useDoctorProfileView } from '../../hooks/useDoctorProfileView';
 import { API_CONFIG } from '../../constants';
 
@@ -703,6 +704,11 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
             </Box>
           </CardContent>
         </Card>
+
+        {/* Google Calendar Integration */}
+        <Box sx={{ mt: 3 }}>
+          <GoogleCalendarSettings doctorId={doctorProfile?.id} />
+        </Box>
       </Box>
 
       {/* Schedule Configuration Dialog */}

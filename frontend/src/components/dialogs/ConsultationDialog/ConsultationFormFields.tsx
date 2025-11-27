@@ -23,7 +23,6 @@ interface ConsultationFormFieldsProps {
     personal_pathological_history: string;
     personal_non_pathological_history: string;
     physical_examination: string;
-    laboratory_results: string;
     treatment_plan: string;
     therapeutic_plan?: string;
     interconsultations?: string;
@@ -195,27 +194,12 @@ export const ConsultationFormFields: React.FC<ConsultationFormFieldsProps> = ({
           size="small"
           fullWidth
           multiline
-          rows={3}
-        />
-      </Box>
-
-      {/* Laboratory Results */}
-      <Box>
-        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-          <MedicalServicesIcon sx={{ fontSize: 20 }} />
-          Resultados de Laboratorio
-        </Typography>
-        <TextField
-          name="laboratory_results"
-          label="Resultados de laboratorio"
-          value={formData.laboratory_results || ''}
-          onChange={onChange}
-          size="small"
-          fullWidth
-          multiline
-          rows={3}
-          placeholder="Registre los resultados de análisis de laboratorio que el paciente trajo para la consulta..."
-          sx={{ mb: 2 }}
+          rows={8}
+          sx={{
+            '& .MuiInputBase-root': {
+              minHeight: '200px'
+            }
+          }}
         />
       </Box>
     </>

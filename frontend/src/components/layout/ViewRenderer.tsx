@@ -1,5 +1,6 @@
-import React, { Suspense } from 'react';
+import React, { Suspense, useEffect } from 'react';
 import { Box } from '@mui/material';
+import { trackAmplitudePageView, trackAmplitudeEvent } from '../../utils/amplitudeHelper';
 import {
   DashboardView,
   PatientsViewSmart,
@@ -13,6 +14,7 @@ import { ConsultationDetailView } from '../';
 import { LoadingFallback } from '../';
 import { LazyWrapper } from '../common/LazyWrapper';
 import { AnalyticsView } from '../views/AnalyticsView';
+import { LicenseManagement } from '../admin/LicenseManagement';
 
 interface ViewRendererProps {
   activeView: string;
@@ -37,6 +39,14 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
   onSaveProfile,
   doctorProfileHook
 }) => {
+  // Track view navigation
+  useEffect(() => {
+    trackAmplitudePageView(activeView, `View: ${activeView}`);
+    trackAmplitudeEvent('view_navigated', {
+      view_name: activeView
+    });
+  }, [activeView]);
+
   return (
     <Box sx={{ width: { xs: '100%', md: '75%' } }}>
       {activeView === 'dashboard' && (
@@ -141,6 +151,12 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
       {activeView === 'analytics' && (
         <Suspense fallback={<LoadingFallback message="Cargando analíticas..." />}>
           <AnalyticsView />
+        </Suspense>
+      )}
+
+      {activeView === 'licenses' && (
+        <Suspense fallback={<LoadingFallback message="Cargando licencias..." />}>
+          <LicenseManagement />
         </Suspense>
       )}
     </Box>

@@ -114,8 +114,13 @@ export function useConsultationManagement(
   }, [executeApiCall, showSuccessMessage]);
 
   // Handle new consultation
-  const handleNewConsultation = useCallback(() => {
+  const handleNewConsultation = useCallback(async () => {
     console.log('🆕 Iniciando nueva consulta...');
+    
+    // Track consultation create button clicked in Amplitude
+    const { AmplitudeService } = await import('../../services/analytics/AmplitudeService');
+    AmplitudeService.track('consultation_create_button_clicked');
+    
     setSelectedConsultation(null);
     setIsEditingConsultation(false);
     setConsultationFormData({
@@ -176,6 +181,13 @@ export function useConsultationManagement(
       try {
         console.log('🗑️ Eliminando consulta:', consultation.id);
         await apiService.deleteConsultation(consultation.id.toString());
+        
+        // Track consultation deletion in Amplitude
+        const { AmplitudeService } = await import('../../services/analytics/AmplitudeService');
+        AmplitudeService.track('consultation_deleted', {
+          consultation_id: consultation.id
+        });
+        
         setConsultations(prev => prev.filter(c => c.id !== consultation.id));
         showSuccessMessage?.('Consulta eliminada exitosamente');
       } catch (error) {

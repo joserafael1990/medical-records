@@ -58,6 +58,16 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
   // Debounce para la búsqueda
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
+  // Track search
+  React.useEffect(() => {
+    if (debouncedSearchTerm.trim().length > 0) {
+      const { AmplitudeService } = require('../../services/analytics/AmplitudeService');
+      AmplitudeService.track('consultation_search_performed', {
+        search_length: debouncedSearchTerm.length
+      });
+    }
+  }, [debouncedSearchTerm]);
+
   // Effect to detect URL parameters and apply patient filter
   React.useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);

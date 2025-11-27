@@ -35,6 +35,12 @@ export const PrintMedicalOrderButton: React.FC<PrintMedicalOrderButtonProps> = (
       return;
     }
 
+    // Track PDF generate button clicked in Amplitude
+    const { AmplitudeService } = await import('../../services/analytics/AmplitudeService');
+    AmplitudeService.track('pdf_generate_button_clicked', {
+      pdf_type: 'study_order'
+    });
+
     const result = await generateMedicalOrderPDF(
       patient,
       doctor,

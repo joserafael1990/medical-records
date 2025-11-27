@@ -5,6 +5,7 @@ import { useToast } from '../components/common/ToastNotification';
 import { logger } from '../utils/logger';
 import { extractCountryCode } from '../utils/countryCodes';
 import { disablePaymentDetection } from '../utils/disablePaymentDetection';
+import { AmplitudeService } from '../services/analytics/AmplitudeService';
 
 export interface EmergencyRelationship {
   code: string;
@@ -394,6 +395,14 @@ export const usePatientForm = (props: UsePatientFormProps): UsePatientFormReturn
 
   const handleSubmit = useCallback(async () => {
     setError('');
+    
+    // Track form validation attempt
+    try {
+      const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
+      trackAmplitudeEvent('patient_form_validated');
+    } catch (error) {
+      // Silently fail
+    }
     
     // Basic validation (todos los campos son opcionales según modelos actualizados)
     

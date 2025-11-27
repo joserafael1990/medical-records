@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { pdfService, PatientInfo, DoctorInfo, ConsultationInfo, MedicationInfo, StudyInfo, CertificateInfo } from '../services/pdfService';
 import { apiService } from '../services';
+import { AmplitudeService } from '../services/analytics/AmplitudeService';
 import type { DocumentFolio } from '../types';
 
 export const usePDFGenerator = () => {
@@ -54,6 +55,19 @@ export const usePDFGenerator = () => {
       };
 
       await pdfService.generatePrescription(patient, doctor, consultationWithFolio, medications);
+      
+      // Track PDF generation in Amplitude
+      try {
+        const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
+        trackAmplitudeEvent('pdf_generated', {
+          pdf_type: 'prescription',
+          has_medications: medications && medications.length > 0,
+          medication_count: medications?.length || 0
+        });
+      } catch (error) {
+        // Silently fail
+      }
+      
       return { success: true, message: 'Receta generada exitosamente' };
     } catch (error) {
       console.error('Error generating prescription PDF:', error);
@@ -79,6 +93,19 @@ export const usePDFGenerator = () => {
       };
 
       await pdfService.generateMedicalOrder(patient, doctor, consultationWithFolio, studies);
+      
+      // Track PDF generation in Amplitude
+      try {
+        const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
+        trackAmplitudeEvent('pdf_generated', {
+          pdf_type: 'study_order',
+          has_studies: studies && studies.length > 0,
+          study_count: studies?.length || 0
+        });
+      } catch (error) {
+        // Silently fail
+      }
+      
       return { success: true, message: 'Orden de estudios generada exitosamente' };
     } catch (error) {
       console.error('Error generating medical order PDF:', error);
@@ -94,6 +121,18 @@ export const usePDFGenerator = () => {
   ) => {
     try {
       await pdfService.generateMedicalCertificate(patient, doctor, consultation, certificate);
+      
+      // Track PDF generation in Amplitude
+      try {
+        const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
+        trackAmplitudeEvent('pdf_generated', {
+          pdf_type: 'certificate',
+          certificate_type: certificate?.type || 'unknown'
+        });
+      } catch (error) {
+        // Silently fail
+      }
+      
       return { success: true, message: 'Constancia generada exitosamente' };
     } catch (error: any) {
       console.error('Error generating certificate PDF:', {

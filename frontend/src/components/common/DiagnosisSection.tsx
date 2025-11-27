@@ -150,6 +150,7 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
     if (isAlreadySelected) {
       setSelectedDiagnosis(null);
       setSearchTerm('');
+      setSearchResults([]);
       return;
     }
 
@@ -165,11 +166,12 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
       name: diagnosis.name,
       is_active: true,
       created_by: diagnosis.created_by || 0,  // 0 = system, doctor_id = doctor who created it
-      created_at: diagnosis.created_at || '',
-      updated_at: diagnosis.updated_at || ''
+      created_at: (diagnosis as any).created_at || '',
+      updated_at: (diagnosis as any).updated_at || ''
     };
 
     onAddDiagnosis(diagnosisToAdd);
+    // Clear search immediately after adding diagnosis
     setSelectedDiagnosis(null);
     setSearchTerm('');
     setSearchResults([]);
@@ -218,7 +220,12 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
                   onChange={handleDiagnosisChange}
                   onInputChange={(event, newInputValue) => {
                     setSearchTerm(newInputValue);
+                    // Clear selected diagnosis when user types
+                    if (newInputValue !== searchTerm) {
+                      setSelectedDiagnosis(null);
+                    }
                   }}
+                  inputValue={searchTerm}
                   filterOptions={(x) => x} // Disable default filtering, we do it server-side
                   renderInput={(params) => (
                     <TextField

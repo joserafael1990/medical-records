@@ -6,7 +6,6 @@
  * Features:
  * - Display current consent status
  * - Send privacy notice via WhatsApp with interactive button
- * - Track consent timeline (sent, delivered, read, accepted)
  * - LFPDPPP compliance indicators
  */
 
@@ -27,10 +26,6 @@ import {
   Card,
   CardContent,
   CircularProgress,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
   TextField
 } from '@mui/material';
 import {
@@ -242,67 +237,6 @@ export const PrivacyConsentDialog: React.FC<PrivacyConsentDialogProps> = ({
     }
   };
 
-  /**
-   * Render consent timeline
-   */
-  const renderTimeline = () => {
-    if (!consent) return null;
-
-    const events = [
-      {
-        label: 'Enviado',
-        time: consent.whatsapp_sent_at,
-        icon: <SendIcon fontSize="small" />,
-        show: !!consent.whatsapp_sent_at
-      },
-      {
-        label: 'Entregado',
-        time: consent.whatsapp_delivered_at,
-        icon: <DoneAllIcon fontSize="small" />,
-        show: !!consent.whatsapp_delivered_at
-      },
-      {
-        label: 'Leído',
-        time: consent.whatsapp_read_at,
-        icon: <VisibilityIcon fontSize="small" />,
-        show: !!consent.whatsapp_read_at
-      },
-      {
-        label: 'Aceptado',
-        time: consent.whatsapp_response_at,
-        icon: <CheckCircleIcon fontSize="small" />,
-        show: consent.consent_status === 'accepted'
-      }
-    ].filter(event => event.show);
-
-    if (events.length === 0) return null;
-
-    return (
-      <Card variant="outlined" sx={{ mt: 2 }}>
-        <CardContent>
-          <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <ScheduleIcon fontSize="small" />
-            Línea de tiempo del consentimiento
-          </Typography>
-          <List dense>
-            {events.map((event, index) => (
-              <ListItem key={index} sx={{ py: 0.5 }}>
-                <ListItemIcon sx={{ minWidth: 36 }}>
-                  {event.icon}
-                </ListItemIcon>
-                <ListItemText
-                  primary={event.label}
-                  secondary={formatDateTime(event.time)}
-                  primaryTypographyProps={{ variant: 'body2' }}
-                  secondaryTypographyProps={{ variant: 'caption' }}
-                />
-              </ListItem>
-            ))}
-          </List>
-        </CardContent>
-      </Card>
-    );
-  };
 
   return (
     <>
@@ -396,13 +330,9 @@ export const PrivacyConsentDialog: React.FC<PrivacyConsentDialogProps> = ({
 
                 {hasAcceptedConsent && (
                   <>
-                    <Alert severity="success" icon={<CheckCircleIcon />}>
-                      El paciente ha aceptado el aviso de privacidad
-                    </Alert>
-                    
                     {/* Expiration warning */}
                     {(expirationStatus.isExpiring || expirationStatus.isExpired) && (
-                      <Alert severity={expirationStatus.severity} sx={{ mt: 1 }}>
+                      <Alert severity={expirationStatus.severity}>
                         {expirationStatus.expirationMessage}
                       </Alert>
                     )}
@@ -428,9 +358,6 @@ export const PrivacyConsentDialog: React.FC<PrivacyConsentDialogProps> = ({
                 )}
               </CardContent>
             </Card>
-
-            {/* Timeline */}
-            {renderTimeline()}
 
             {/* Consent Details */}
             {consent && (

@@ -155,9 +155,26 @@ export const useAppointmentMultiOfficeForm = (
   const isInitializingRef = useRef(false);
   const hasInitializedRef = useRef(false);
   const hasLoadedDefaultTimesRef = useRef(false);
+  const lastLoadedDateRef = useRef<string>(''); // Track last loaded date to force reload
 
   // Use external data if provided, otherwise use internal state
   const currentFormData = externalFormData || formData;
+  
+  // Notify parent of form data changes after state update (not during render)
+  // This prevents "Cannot update a component while rendering a different component" error
+  const onFormDataChangeRef = useRef(onFormDataChange);
+  
+  // Update ref when callback changes
+  useEffect(() => {
+    onFormDataChangeRef.current = onFormDataChange;
+  }, [onFormDataChange]);
+  
+  // Notify parent of form data changes after state update
+  useEffect(() => {
+    if (onFormDataChangeRef.current) {
+      onFormDataChangeRef.current(formData);
+    }
+  }, [formData]);
   const currentPatients = externalPatients || patients;
   const currentLoading = loading;
   const currentError = formErrorMessage || error;
@@ -166,20 +183,36 @@ export const useAppointmentMultiOfficeForm = (
   const loadAvailableTimes = useCallback(async (date: string) => {
     if (!date) {
       logger.debug('No date provided for loading available times', undefined, 'api');
+      setAvailableTimes([]);
       return [];
     }
     
+    // Normalize date to YYYY-MM-DD format
+    const dateOnly = date.split('T')[0];
+    
     try {
       setLoadingTimes(true);
-      const response = await apiService.appointments.getAvailableTimesForBooking(date);
+      logger.debug('Loading available times for date', { date: dateOnly, originalDate: date }, 'api');
+      
+      const response = await apiService.appointments.getAvailableTimesForBooking(dateOnly);
       const times = response?.available_times || [];
       
+      logger.debug('Available times loaded', { date: dateOnly, count: times.length, times: times.slice(0, 3) }, 'api');
+      
+      // Always update availableTimes, even if empty
       setAvailableTimes(times);
+      
+      // Update lastLoadedDateRef after successful load
+      lastLoadedDateRef.current = dateOnly;
       
       return times;
     } catch (error) {
       logger.error('Error loading available times', error, 'api');
       setAvailableTimes([]);
+      // Reset lastLoadedDateRef on error so it can be retried
+      if (lastLoadedDateRef.current === date.split('T')[0]) {
+        lastLoadedDateRef.current = '';
+      }
       return [];
     } finally {
       setLoadingTimes(false);
@@ -260,6 +293,8 @@ export const useAppointmentMultiOfficeForm = (
         setIsExistingPatient(null);
         setSelectedTime('');
         // Don't clear availableTimes here - let the default date useEffect handle it
+        // Mark initialization as complete so the default date useEffect can run
+        isInitializingRef.current = false;
       }
       setError(null);
     } else if (!open) {
@@ -270,43 +305,59 @@ export const useAppointmentMultiOfficeForm = (
   }, [open, isEditing, externalFormData, loadAvailableTimes]); // Keep dependencies but use ref to prevent re-execution
 
   // Load available times for default date when dialog opens
+  // This runs after the form is initialized
   useEffect(() => {
-    if (open && !isEditing && !hasLoadedDefaultTimesRef.current) {
-      hasLoadedDefaultTimesRef.current = true;
-      
-      const today = new Date();
-      const mexicoTimeString = today.toLocaleString("sv-SE", {timeZone: "America/Mexico_City"});
-      const todayString = mexicoTimeString.split(' ')[0];
-      
-      logger.debug('Loading times for default date', { date: todayString }, 'ui');
-      
-      setSelectedDate(todayString);
-      
-      const mexicoDate = new Date(mexicoTimeString);
-      const newFormData = {
-        ...currentFormData,
+    if (!open || isEditing || hasLoadedDefaultTimesRef.current || !hasInitializedRef.current) {
+      if (!open) {
+        // Reset when dialog closes
+        hasLoadedDefaultTimesRef.current = false;
+        lastLoadedDateRef.current = '';
+      }
+      return;
+    }
+    
+    // Mark as loaded immediately to prevent re-execution
+    hasLoadedDefaultTimesRef.current = true;
+    
+    const today = new Date();
+    const mexicoTimeString = today.toLocaleString("sv-SE", {timeZone: "America/Mexico_City"});
+    const todayString = mexicoTimeString.split(' ')[0];
+    
+    logger.debug('Loading times for default date', { date: todayString, hasInitialized: hasInitializedRef.current }, 'ui');
+    
+    // Set selected date first
+    setSelectedDate(todayString);
+    
+    // Reset lastLoadedDateRef to ensure fresh load
+    lastLoadedDateRef.current = '';
+    
+    const mexicoDate = new Date(mexicoTimeString);
+    
+    // Use functional update to avoid stale closure issues
+    setFormData((prevFormData) => {
+      return {
+        ...prevFormData,
         appointment_date: mexicoDate.toISOString()
       };
-      setFormData(newFormData);
-      if (onFormDataChange) {
-        onFormDataChange(newFormData);
-      }
-      
-      // Load available times - use a small delay to ensure state is ready
-      const timeoutId = setTimeout(() => {
-        loadAvailableTimes(todayString).then(() => {
+    });
+    
+    // Clear available times first to show loading state
+    setAvailableTimes([]);
+    
+    // Load available times - use requestAnimationFrame to ensure DOM is ready
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        logger.debug('Executing default date times load', { date: todayString }, 'ui');
+        loadAvailableTimes(todayString).then((times) => {
+          logger.debug('Default date times loaded successfully', { date: todayString, count: times?.length || 0 }, 'ui');
+          isInitializingRef.current = false;
+        }).catch((error) => {
+          logger.error('Error loading default date times', error, 'api');
           isInitializingRef.current = false;
         });
       }, 100);
-      
-      return () => {
-        clearTimeout(timeoutId);
-      };
-    } else if (!open) {
-      // Reset when dialog closes
-      hasLoadedDefaultTimesRef.current = false;
-    }
-  }, [open, isEditing]); // Removed loadAvailableTimes to prevent re-execution
+    });
+  }, [open, isEditing, onFormDataChange, loadAvailableTimes]);
 
   // Handle consultation type changes
   useEffect(() => {
@@ -345,16 +396,55 @@ export const useAppointmentMultiOfficeForm = (
 
   // Handle date change and load available times
   const handleDateChange = useCallback((newDate: string) => {
-    setSelectedDate(newDate);
+    if (!newDate) {
+      setSelectedDate('');
+      setSelectedTime('');
+      setAvailableTimes([]);
+      lastLoadedDateRef.current = '';
+      return;
+    }
+    
+    // Normalize date to YYYY-MM-DD format (remove time component if present)
+    const dateOnly = newDate.includes('T') ? newDate.split('T')[0] : newDate;
+    
+    // Check if this is the same date that was last loaded
+    const isSameAsLastLoaded = dateOnly === lastLoadedDateRef.current;
+    
+    logger.debug('Date change triggered', { 
+      newDate, 
+      dateOnly, 
+      currentSelectedDate: selectedDate,
+      lastLoadedDate: lastLoadedDateRef.current,
+      isSameAsLastLoaded,
+      willReload: true // Always reload
+    }, 'ui');
+    
+    // Always update selectedDate and clear selectedTime
+    setSelectedDate(dateOnly);
     setSelectedTime('');
     
-    if (newDate) {
-      const dateOnly = newDate.split('T')[0];
-      loadAvailableTimes(dateOnly);
-    } else {
-      setAvailableTimes([]);
-    }
-  }, [loadAvailableTimes]);
+    // Always clear availableTimes first to force UI update
+    // This ensures the loading state is visible even if it's the same date
+    setAvailableTimes([]);
+    
+    // Always load available times for the selected date, even if it's the same date
+    // This ensures times are refreshed when user returns to today after selecting another date
+    // Update the last loaded date ref after starting the load
+    lastLoadedDateRef.current = dateOnly;
+    
+    // Use requestAnimationFrame to ensure state updates are processed before API call
+    requestAnimationFrame(() => {
+      loadAvailableTimes(dateOnly).then((times) => {
+        logger.debug('Times loaded successfully', { date: dateOnly, count: times?.length || 0 }, 'ui');
+      }).catch((error) => {
+        logger.error('Error loading available times in handleDateChange', error, 'api');
+        // Reset last loaded date on error so it can be retried
+        if (lastLoadedDateRef.current === dateOnly) {
+          lastLoadedDateRef.current = '';
+        }
+      });
+    });
+  }, [loadAvailableTimes, selectedDate]);
 
   // Handle time selection
   const handleTimeChange = useCallback((time: string) => {
@@ -366,11 +456,8 @@ export const useAppointmentMultiOfficeForm = (
         appointment_date: `${selectedDate.split('T')[0]}T${time}:00`
       };
       setFormData(newFormData);
-      if (onFormDataChange) {
-        onFormDataChange(newFormData);
-      }
     }
-  }, [selectedDate, currentFormData, onFormDataChange]);
+  }, [selectedDate, currentFormData]);
 
   const handleChange = useCallback((field: keyof AppointmentFormData) => (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | any
@@ -400,10 +487,7 @@ export const useAppointmentMultiOfficeForm = (
     }
     
     setFormData(newFormData);
-    if (onFormDataChange) {
-      onFormDataChange(newFormData);
-    }
-  }, [currentFormData, offices, onFormDataChange]);
+  }, [currentFormData, offices]);
 
   // Submit handler
   const handleSubmit = useCallback(async () => {

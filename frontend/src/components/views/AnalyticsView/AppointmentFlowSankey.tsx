@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Card, CardContent, Typography, Box, TextField } from '@mui/material';
+import React, { useState, useMemo } from 'react';
+import { Card, CardContent, Typography, Box, TextField, FormControlLabel, Checkbox } from '@mui/material';
 import { ResponsiveSankey } from '@nivo/sankey';
 import type { DashboardMetrics } from '../../../services/analytics/AnalyticsService';
 
@@ -14,6 +14,7 @@ export const AppointmentFlowSankey: React.FC<AppointmentFlowSankeyProps> = ({
 }) => {
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
+  const [showPercentages, setShowPercentages] = useState<boolean>(false);
 
   const handleDateFromChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
@@ -31,7 +32,58 @@ export const AppointmentFlowSankey: React.FC<AppointmentFlowSankeyProps> = ({
     }
   };
 
-  const { sankeyData, percentages, totalScheduled } = appointmentFlow;
+  const { sankeyData, percentages, totalScheduled, confirmedAppointments, completedConsultations, cancelledByDoctor, cancelledByPatient } = appointmentFlow;
+  
+  // Calculate total cancelled for display
+  const totalCancelled = cancelledByDoctor + cancelledByPatient;
+
+  // Enhance sankey data with labels that include percentages if enabled
+  // Filter links to only show those with real values (> 0), but keep all nodes
+  const enhancedSankeyData = useMemo(() => {
+    // Filter links: only keep those with meaningful values
+    const activeLinks = sankeyData.links.filter(link => link.value > 0);
+    
+    // Get all node IDs from active links
+    const activeNodeIds = new Set<string>();
+    activeLinks.forEach(link => {
+      activeNodeIds.add(link.source);
+      activeNodeIds.add(link.target);
+    });
+    
+    // Always include starting node
+    activeNodeIds.add('Citas Agendadas');
+    
+    // Filter nodes to only include those that are connected by active links
+    const visibleNodes = sankeyData.nodes.filter(node => activeNodeIds.has(node.id));
+    
+    let processedData = {
+      nodes: visibleNodes,
+      links: activeLinks
+    };
+    
+    if (showPercentages) {
+      processedData = {
+        ...processedData,
+        nodes: visibleNodes.map(node => {
+          // Find links that connect to this node to show percentage
+          const incomingLinks = activeLinks.filter(link => link.target === node.id);
+          
+          let label = node.label;
+          
+          // Add percentage to label if it's a target node (has incoming links)
+          if (incomingLinks.length > 0 && node.id !== 'Citas Agendadas') {
+            const link = incomingLinks[0];
+            label = `${node.label} (${link.percentage.toFixed(1)}%)`;
+          }
+          
+          return { ...node, label };
+        }),
+        links: activeLinks
+      };
+    }
+    
+    return processedData;
+  }, [sankeyData, showPercentages]);
 
   if (totalScheduled === 0) {
     return (
@@ -85,28 +137,70 @@ export const AppointmentFlowSankey: React.FC<AppointmentFlowSankeyProps> = ({
           />
         </Box>
 
-        <Box sx={{ height: { xs: 320, sm: 380, md: 420 } }}>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={showPercentages}
+                onChange={(e) => setShowPercentages(e.target.checked)}
+                size="small"
+              />
+            }
+            label="Mostrar porcentajes"
+          />
+        </Box>
+
+        <Box sx={{ height: { xs: 400, sm: 450, md: 500 } }}>
           <ResponsiveSankey
-            data={sankeyData}
-            margin={{ top: 40, right: 120, bottom: 40, left: 50 }}
+            data={enhancedSankeyData}
+            margin={{ top: 40, right: 160, bottom: 40, left: 80 }}
             align="justify"
             colors={{ scheme: 'category10' }}
             nodeOpacity={1}
             nodeHoverOthersOpacity={0.35}
-            nodeThickness={18}
-            nodeSpacing={36}
+            nodeThickness={20}
+            nodeSpacing={50}
             nodeBorderWidth={0}
             nodeBorderColor={{ from: 'color', modifiers: [['darker', 0.8]] }}
-            linkOpacity={0.5}
+            linkOpacity={0.6}
             linkHoverOthersOpacity={0.1}
-            linkContract={3}
+            linkContract={2}
             enableLinkGradient={true}
             labelPosition="outside"
             labelOrientation="vertical"
-            labelPadding={20}
+            labelPadding={25}
             labelTextColor={{ from: 'color', modifiers: [['darker', 1]] }}
             animate={true}
-            motionConfig="wobbly"
+            motionConfig="gentle"
+            linkTooltip={(link: any) => {
+              // Don't show tooltip for placeholder links or if link data is invalid
+              if (!link || link.value <= 0.01) return null;
+              
+              // Safely get source and target labels
+              const sourceLabel = link.source?.label || link.source?.id || 'Origen';
+              const targetLabel = link.target?.label || link.target?.id || 'Destino';
+              
+              return (
+                <Box
+                  sx={{
+                    bgcolor: 'background.paper',
+                    p: 1.5,
+                    borderRadius: 1,
+                    boxShadow: 3,
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    minWidth: 200
+                  }}
+                >
+                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                    {sourceLabel} → {targetLabel}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {Math.round(link.value)} {showPercentages && link.percentage !== undefined && `(${link.percentage.toFixed(1)}%)`}
+                  </Typography>
+                </Box>
+              );
+            }}
           />
         </Box>
 
@@ -116,7 +210,7 @@ export const AppointmentFlowSankey: React.FC<AppointmentFlowSankeyProps> = ({
             gridTemplateColumns: {
               xs: 'repeat(1, minmax(0, 1fr))',
               sm: 'repeat(2, minmax(0, 1fr))',
-              md: 'repeat(4, minmax(0, 1fr))'
+              md: 'repeat(6, minmax(0, 1fr))'
             },
             gap: 1.5,
             mt: 2
@@ -124,7 +218,7 @@ export const AppointmentFlowSankey: React.FC<AppointmentFlowSankeyProps> = ({
         >
           <Box>
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              Total Agendadas
+              Citas Agendadas
             </Typography>
             <Typography variant="body2" color="text.secondary">
               {totalScheduled}
@@ -132,10 +226,26 @@ export const AppointmentFlowSankey: React.FC<AppointmentFlowSankeyProps> = ({
           </Box>
           <Box>
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              Completadas
+              Citas Confirmadas
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {appointmentFlow.completedConsultations} ({percentages.completed}%)
+              {confirmedAppointments} {showPercentages && `(${percentages.confirmed.toFixed(1)}%)`}
+            </Typography>
+          </Box>
+          <Box>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              Consultas
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {completedConsultations} {showPercentages && `(${percentages.completed.toFixed(1)}%)`}
+            </Typography>
+          </Box>
+          <Box>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              Citas Canceladas
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {totalCancelled} {showPercentages && `(${(totalCancelled / totalScheduled * 100).toFixed(1)}%)`}
             </Typography>
           </Box>
           <Box>
@@ -143,7 +253,7 @@ export const AppointmentFlowSankey: React.FC<AppointmentFlowSankeyProps> = ({
               Canceladas por Médico
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {appointmentFlow.cancelledByDoctor} ({percentages.cancelledByDoctor}%)
+              {cancelledByDoctor} {showPercentages && totalCancelled > 0 && `(${(cancelledByDoctor / totalCancelled * 100).toFixed(1)}%)`}
             </Typography>
           </Box>
           <Box>
@@ -151,15 +261,7 @@ export const AppointmentFlowSankey: React.FC<AppointmentFlowSankeyProps> = ({
               Canceladas por Paciente
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {appointmentFlow.cancelledByPatient} ({percentages.cancelledByPatient}%)
-            </Typography>
-          </Box>
-          <Box>
-            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              Pacientes
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {appointmentFlow.pending} ({percentages.pending}%)
+              {cancelledByPatient} {showPercentages && totalCancelled > 0 && `(${(cancelledByPatient / totalCancelled * 100).toFixed(1)}%)`}
             </Typography>
           </Box>
         </Box>

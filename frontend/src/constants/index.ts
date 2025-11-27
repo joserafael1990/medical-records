@@ -42,6 +42,9 @@ export const API_CONFIG = {
     
     // Health Check
     HEALTH: '/api/health',
+    
+    // Dashboard
+    DASHBOARD: '/api/dashboard',
   }
 };
 
@@ -178,7 +181,8 @@ export const ERROR_MESSAGES = {
   REQUIRED_FIELD: 'Este campo es obligatorio.',
   INVALID_EMAIL: 'Por favor, ingresa un correo electrónico válido.',
   INVALID_PHONE: 'Por favor, ingresa un número de teléfono válido.',
-  PASSWORD_TOO_SHORT: `La contraseña debe tener al menos ${VALIDATION_RULES.MIN_PASSWORD_LENGTH} caracteres.`
+  PASSWORD_TOO_SHORT: `La contraseña debe tener al menos ${VALIDATION_RULES.MIN_PASSWORD_LENGTH} caracteres.`,
+  UNKNOWN_ERROR: 'Ha ocurrido un error inesperado. Por favor, intenta nuevamente.'
 };
 
 // Success Messages
@@ -196,10 +200,8 @@ export const SUCCESS_MESSAGES = {
 // Clinical Studies Constants
 export const STUDY_STATUS_OPTIONS = [
   { value: 'ordered', label: 'Ordenado', color: '#ff9800' },
-  { value: 'in_progress', label: 'En Proceso', color: '#2196f3' },
-  { value: 'completed', label: 'Completado', color: '#4caf50' },
-  { value: 'cancelled', label: 'Cancelado', color: '#f44336' },
-  { value: 'failed', label: 'Fallido', color: '#9e9e9e' }
+  { value: 'previous', label: 'Previo', color: '#9e9e9e' },
+  { value: 'completed', label: 'Completado', color: '#4caf50' }
 ] as const;
 
 export const STUDY_TYPES = [

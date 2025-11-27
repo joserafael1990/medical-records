@@ -43,7 +43,8 @@ class ErrorBoundary extends Component<Props, State> {
       console.error('Error Info:', errorInfo);
       
       // Capturar error en Sentry y mostrar diálogo de feedback en español
-      if (process.env.REACT_APP_SENTRY_DSN) {
+      // Solo si Sentry está habilitado (solo en producción)
+      if (this.isSentryEnabled()) {
         const eventId = Sentry.captureException(error, {
           contexts: {
             react: {
@@ -93,6 +94,13 @@ class ErrorBoundary extends Component<Props, State> {
       error: null, 
       errorInfo: null,
     });
+  };
+
+  private isSentryEnabled = (): boolean => {
+    const isProduction = 
+      process.env.NODE_ENV === 'production' ||
+      process.env.REACT_APP_ENV === 'production';
+    return Boolean(process.env.REACT_APP_SENTRY_DSN) && isProduction;
   };
 
   public render() {
@@ -180,7 +188,7 @@ class ErrorBoundary extends Component<Props, State> {
               >
                 Intentar de nuevo
               </Button>
-              {process.env.REACT_APP_SENTRY_DSN && (
+              {this.isSentryEnabled() && (
                 <Button
                   variant="outlined"
                   onClick={() => {

@@ -419,11 +419,11 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
                 sx={{ minWidth: { xs: '100%', sm: 200, md: 220 } }}
               >
                 <FormControl fullWidth size="small" sx={{ minWidth: { sm: 200, md: 220 } }}>
-                  <InputLabel>Oficina</InputLabel>
+                  <InputLabel>Consultorio</InputLabel>
                   <Select
                     value={appointmentFormData.office_id || ''}
                     onChange={(e) => setAppointmentFormData(prev => ({ ...prev, office_id: e.target.value ? (e.target.value as number) : undefined }))}
-                    label="Oficina"
+                    label="Consultorio"
                   >
                     {offices.map((office) => (
                       <MenuItem key={office.id} value={office.id}>
@@ -443,31 +443,57 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
                   onChange={setReminders}
                   appointmentDate={selectedDate && selectedTime ? `${selectedDate}T${selectedTime}` : undefined}
                   disabled={isSubmitting}
+                  renderActionButton={(addReminderButton) => (
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 1,
+                        mb: 2
+                      }}
+                    >
+                      {addReminderButton}
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<CalendarIcon />}
+                        onClick={handleSave}
+                        disabled={isSubmitting || !selectedDate || !selectedTime || !appointmentFormData.appointment_type_id}
+                        sx={{ minWidth: '140px' }}
+                      >
+                        {isSubmitting ? <CircularProgress size={20} /> : (editingAppointmentId ? 'Actualizar' : 'Agendar')}
+                      </Button>
+                    </Box>
+                  )}
                 />
               </Grid>
             )}
             
-            <Grid item xs={12}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'flex-end',
-                  gap: 1
-                }}
-              >
-                <Button
-                  variant="contained"
-                  color="primary"
-                  startIcon={<CalendarIcon />}
-                  onClick={handleSave}
-                  disabled={isSubmitting || !selectedDate || !selectedTime || !appointmentFormData.appointment_type_id}
-                  sx={{ minWidth: '140px' }}
+            {/* Agendar button when reminders are not shown */}
+            {(!selectedDate || !selectedTime) && (
+              <Grid item xs={12}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'flex-end',
+                    gap: 1
+                  }}
                 >
-                  {isSubmitting ? <CircularProgress size={20} /> : (editingAppointmentId ? 'Actualizar' : 'Agendar')}
-                </Button>
-              </Box>
-            </Grid>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    startIcon={<CalendarIcon />}
+                    onClick={handleSave}
+                    disabled={isSubmitting || !selectedDate || !selectedTime || !appointmentFormData.appointment_type_id}
+                    sx={{ minWidth: '140px' }}
+                  >
+                    {isSubmitting ? <CircularProgress size={20} /> : (editingAppointmentId ? 'Actualizar' : 'Agendar')}
+                  </Button>
+                </Box>
+              </Grid>
+            )}
           </Grid>
         </CardContent>
       </Card>

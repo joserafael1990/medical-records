@@ -87,7 +87,8 @@ export const filterBySearchTerm = <T>(
 // ERROR HANDLING UTILITIES
 // ============================================================================
 // Re-export error handling utilities from errorHandler.ts (consolidated)
-export { ErrorHandler, useErrorHandler, type ParsedError } from './errorHandler';
+import { ErrorHandler, useErrorHandler, type ParsedError } from './errorHandler';
+export { ErrorHandler, useErrorHandler, type ParsedError };
 export { safeConsoleError } from './errorHandling'; // Keep safeConsoleError as it's widely used
 
 // Simple wrapper for backwards compatibility

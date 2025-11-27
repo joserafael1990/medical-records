@@ -56,6 +56,12 @@ Se extiende la presente para los fines que al interesado convengan.`;
 
     setIsGenerating(true);
     
+    // Track PDF generate button clicked in Amplitude
+    const { AmplitudeService } = await import('../../services/analytics/AmplitudeService');
+    AmplitudeService.track('pdf_generate_button_clicked', {
+      pdf_type: 'certificate'
+    });
+    
     const certificate: CertificateInfo = {
       content: certificateContent,
       title: certificateTitle

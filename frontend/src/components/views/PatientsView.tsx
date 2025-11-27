@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useMemo } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import {
   Box,
   Typography,
@@ -19,7 +19,7 @@ import {
 import {
   PersonAdd as PersonAddIcon,
   Search as SearchIcon,
-  Add as AddIcon,
+  FilterList as FilterIcon,
   Check as CheckIcon,
   Close as CloseIcon,
   Phone as PhoneIcon,
@@ -33,6 +33,7 @@ import { ErrorRibbon } from '../common/ErrorRibbon';
 import { useMemoizedSearch } from '../../hooks/useMemoizedSearch';
 import { IntelligentSearch, useIntelligentSearch } from '../common/IntelligentSearch';
 import { SmartLoadingState } from '../common/SmartLoadingState';
+import PatientFiltersDialog, { PatientFilters } from '../dialogs/PatientFiltersDialog';
 
 interface PatientsViewProps {
   patients: Patient[];
@@ -113,11 +114,99 @@ const PatientsView: React.FC<PatientsViewProps> = ({
     });
   }, [patientConsultationSummary]);
 
-  // Memoized search for better performance
-  const filteredPatients = useMemoizedSearch(patients || [], patientSearchTerm || '', {
-    searchFields: ['full_name', 'phone', 'email', 'curp'],
-    caseSensitive: false
+  // Estado para filtros
+  const [filters, setFilters] = useState<PatientFilters>({
+    status: 'all',
+    gender: 'all',
+    createdFrom: undefined,
+    createdTo: undefined
   });
+  const [filtersDialogOpen, setFiltersDialogOpen] = useState(false);
+
+  // Aplicar búsqueda y filtros
+  const filteredPatients = useMemo(() => {
+    let filtered = patients || [];
+
+    // Aplicar búsqueda por texto
+    if (patientSearchTerm && patientSearchTerm.trim()) {
+      const searchTerm = patientSearchTerm.trim().toLowerCase();
+      const normalizedSearchTerm = searchTerm
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, ''); // Remove accents
+
+      filtered = filtered.filter((patient: any) => {
+        const searchableFields = [
+          patient.name,
+          patient.full_name, // Mapped field from backend
+          patient.primary_phone,
+          patient.email,
+          patient.id?.toString()
+        ].filter(Boolean);
+
+        return searchableFields.some(field => {
+          const fieldStr = String(field).toLowerCase();
+          const normalizedField = fieldStr
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '');
+          return normalizedField.includes(normalizedSearchTerm);
+        });
+      });
+    }
+
+    // Aplicar filtro de estado
+    if (filters.status !== 'all') {
+      filtered = filtered.filter((patient: any) => {
+        const isActive = (patient as any).is_active !== false;
+        return filters.status === 'active' ? isActive : !isActive;
+      });
+    }
+
+    // Aplicar filtro de género
+    if (filters.gender !== 'all') {
+      filtered = filtered.filter((patient: any) => patient.gender === filters.gender);
+    }
+
+    // Aplicar filtro de fecha de creación
+    if (filters.createdFrom) {
+      filtered = filtered.filter((patient: any) => {
+        if (!patient.created_at) return false;
+        const createdDate = new Date(patient.created_at);
+        const fromDate = new Date(filters.createdFrom!);
+        return createdDate >= fromDate;
+      });
+    }
+
+    if (filters.createdTo) {
+      filtered = filtered.filter((patient: any) => {
+        if (!patient.created_at) return false;
+        const createdDate = new Date(patient.created_at);
+        const toDate = new Date(filters.createdTo!);
+        toDate.setHours(23, 59, 59, 999); // Incluir todo el día
+        return createdDate <= toDate;
+      });
+    }
+
+    return filtered;
+  }, [patients, patientSearchTerm, filters]);
+
+  const handleFiltersChange = (newFilters: PatientFilters) => {
+    setFilters(newFilters);
+  };
+
+  const handleClearFilters = () => {
+    setFilters({
+      status: 'all',
+      gender: 'all',
+      createdFrom: undefined,
+      createdTo: undefined
+    });
+  };
+
+  const hasActiveFilters = 
+    filters.status !== 'all' ||
+    filters.gender !== 'all' ||
+    filters.createdFrom ||
+    filters.createdTo;
 
   return (
     <Box sx={{ p: 3 }}>
@@ -183,14 +272,42 @@ const PatientsView: React.FC<PatientsViewProps> = ({
           <TextField
             placeholder="Buscar por nombre, teléfono, email, CURP..."
             value={patientSearchTerm}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPatientSearchTerm(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+              setPatientSearchTerm(e.target.value);
+              // Track search
+              if (e.target.value.trim().length > 0) {
+                const { AmplitudeService } = require('../../services/analytics/AmplitudeService');
+                AmplitudeService.track('patient_search_performed', {
+                  search_length: e.target.value.length,
+                  has_results: true // Will be updated when results are filtered
+                });
+              }
+            }}
             InputProps={{
               startAdornment: <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />
             }}
             sx={{ flexGrow: 1 }}
           />
-          <Button variant="outlined" startIcon={<AddIcon />}>
+          <Button 
+            variant="outlined" 
+            startIcon={<FilterIcon />}
+            onClick={() => setFiltersDialogOpen(true)}
+            color={hasActiveFilters ? 'primary' : 'inherit'}
+          >
             Filtros
+            {hasActiveFilters && (
+              <Chip
+                label=""
+                size="small"
+                sx={{
+                  ml: 1,
+                  height: 20,
+                  minWidth: 20,
+                  bgcolor: 'primary.main',
+                  color: 'primary.contrastText'
+                }}
+              />
+            )}
           </Button>
         </Box>
       </Paper>
@@ -276,9 +393,9 @@ const PatientsView: React.FC<PatientsViewProps> = ({
                   </TableCell>
                   <TableCell>
                     <Chip 
-                      label={patient.is_active ? 'Activo' : 'Inactivo'}
+                      label={(patient as any).is_active !== false ? 'Activo' : 'Inactivo'}
                       size="small"
-                      color={patient.is_active ? 'success' : 'default'}
+                      color={(patient as any).is_active !== false ? 'success' : 'default'}
                     />
                   </TableCell>
                   </TableRow>
@@ -286,10 +403,25 @@ const PatientsView: React.FC<PatientsViewProps> = ({
               })}
               {(!filteredPatients || !Array.isArray(filteredPatients) || filteredPatients.length === 0) && (
                 <TableRow>
-                  <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
                     <Typography variant="body1" color="text.secondary">
-                      No hay pacientes registrados
+                      {patientSearchTerm || hasActiveFilters
+                        ? 'No se encontraron pacientes que coincidan con los criterios de búsqueda'
+                        : 'No hay pacientes registrados'}
                     </Typography>
+                    {(patientSearchTerm || hasActiveFilters) && (
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => {
+                          setPatientSearchTerm('');
+                          handleClearFilters();
+                        }}
+                        sx={{ mt: 2 }}
+                      >
+                        Limpiar búsqueda y filtros
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               )}
@@ -297,6 +429,15 @@ const PatientsView: React.FC<PatientsViewProps> = ({
           </Table>
         </TableContainer>
       </Paper>
+
+      {/* Filtros Dialog */}
+      <PatientFiltersDialog
+        open={filtersDialogOpen}
+        onClose={() => setFiltersDialogOpen(false)}
+        filters={filters}
+        onFiltersChange={handleFiltersChange}
+        onClearFilters={handleClearFilters}
+      />
     </Box>
   );
 };

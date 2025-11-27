@@ -26,13 +26,15 @@ interface RemindersConfigProps {
   onChange: (reminders: AppointmentReminderFormData[]) => void;
   appointmentDate?: string; // ISO date string to calculate reminder times
   disabled?: boolean;
+  renderActionButton?: (addReminderButton: React.ReactNode) => React.ReactNode;
 }
 
 export const RemindersConfig: React.FC<RemindersConfigProps> = ({
   reminders,
   onChange,
   appointmentDate,
-  disabled = false
+  disabled = false,
+  renderActionButton
 }) => {
   // Initialize with up to 3 reminder slots
   const [reminderSlots, setReminderSlots] = useState<Array<AppointmentReminderFormData & { id: string }>>(() => {
@@ -268,15 +270,29 @@ export const RemindersConfig: React.FC<RemindersConfigProps> = ({
 
       {enabledReminders.length === 0 ? (
         <Box sx={{ mb: 2 }}>
-          <Button
-            variant="outlined"
-            startIcon={<AddIcon />}
-            onClick={handleAddReminder}
-            disabled={disabled || !canAddMore}
-            size="small"
-          >
-            Agregar recordatorio
-          </Button>
+          {renderActionButton ? (
+            renderActionButton(
+              <Button
+                variant="outlined"
+                startIcon={<AddIcon />}
+                onClick={handleAddReminder}
+                disabled={disabled || !canAddMore}
+                size="small"
+              >
+                Agregar recordatorio
+              </Button>
+            )
+          ) : (
+            <Button
+              variant="outlined"
+              startIcon={<AddIcon />}
+              onClick={handleAddReminder}
+              disabled={disabled || !canAddMore}
+              size="small"
+            >
+              Agregar recordatorio
+            </Button>
+          )}
         </Box>
       ) : (
         <>

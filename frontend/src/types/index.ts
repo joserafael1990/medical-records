@@ -47,6 +47,19 @@ export interface PatientFormData {
   }>;
 }
 
+// Complete patient data includes all patient information plus additional details
+export type CompletePatientData = Patient & {
+  // Additional fields that may come from the complete endpoint
+  documents?: Array<{
+    document_id: number;
+    document_value: string;
+    document_type?: string;
+  }>;
+  consultations?: Consultation[];
+  appointments?: Appointment[];
+  [key: string]: any; // Allow additional fields from API
+};
+
 export interface ApiError {
   message: string;
   status?: number;
@@ -163,13 +176,13 @@ export interface ConsultationFormData {
 // CLINICAL STUDIES TYPES
 // ============================================================================
 
-export type StudyStatus = 'ordered' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
+export type StudyStatus = 'ordered' | 'previous' | 'completed';
 export type StudyType = 'hematologia' | 'bioquimica' | 'microbiologia' | 'radiologia' | 'ecografia' | 'tomografia' | 'resonancia' | 'endoscopia' | 'biopsia' | 'otro';
 export type UrgencyLevel = 'routine' | 'urgent' | 'stat' | 'emergency';
 
 export interface ClinicalStudy {
   id: string;
-  consultation_id: string;
+  consultation_id: string | null;
   patient_id: string;
   study_type: StudyType;
   study_name: string;
@@ -195,7 +208,7 @@ export interface ClinicalStudy {
 }
 
 export interface CreateClinicalStudyData {
-  consultation_id: string;
+  consultation_id?: string | null;
   patient_id: string;
   study_type: StudyType;
   study_name: string;

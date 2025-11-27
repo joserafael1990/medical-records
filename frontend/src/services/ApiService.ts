@@ -10,6 +10,8 @@ import { DoctorService } from './doctors/DoctorService';
 import { OfficeService } from './offices/OfficeService';
 import { WhatsAppService } from './whatsapp/WhatsAppService';
 import { AnalyticsService } from './analytics/AnalyticsService';
+import { GoogleCalendarService } from './google-calendar/GoogleCalendarService';
+import { LicenseService } from './licenses/LicenseService';
 import { logger } from '../utils/logger';
 
 /**
@@ -29,6 +31,8 @@ export class ApiService {
   public whatsapp: WhatsAppService;
   public analytics: AnalyticsService;
   public avatars: AvatarService;
+  public googleCalendar: GoogleCalendarService;
+  public licenses: LicenseService;
 
   constructor() {
     this.auth = new AuthService();
@@ -43,6 +47,8 @@ export class ApiService {
     this.whatsapp = new WhatsAppService();
     this.analytics = new AnalyticsService();
     this.avatars = new AvatarService();
+    this.googleCalendar = new GoogleCalendarService();
+    this.licenses = new LicenseService();
   }
 
   // Convenience methods for common operations

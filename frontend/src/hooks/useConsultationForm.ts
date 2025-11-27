@@ -15,6 +15,7 @@ import { useToast } from '../components/common/ToastNotification';
 import { logger } from '../utils/logger';
 import { disablePaymentDetection } from '../utils/disablePaymentDetection';
 import { usePatientPreviousStudies } from './usePatientPreviousStudies';
+import { parseBackendDate } from '../utils/formatters';
 
 // Re-export ConsultationFormData interface from component
 export interface ConsultationFormData {
@@ -36,7 +37,6 @@ export interface ConsultationFormData {
   treatment_plan: string;
   follow_up_instructions: string;
   therapeutic_plan: string;
-  laboratory_results: string;
   interconsultations: string;
   doctor_name: string;
   doctor_professional_license: string;
@@ -198,7 +198,6 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
     treatment_plan: '',
     follow_up_instructions: '',
     therapeutic_plan: '',
-    laboratory_results: '',
     interconsultations: '',
     doctor_name: doctorProfile?.first_name && doctorProfile?.last_name 
       ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name} ${doctorProfile.last_name}`.trim()
@@ -269,11 +268,44 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
 
   // Filter appointments
   const availableAppointments = useMemo(() => {
-    return (appointments || []).filter((appointment: any) => 
-      appointment.status !== 'cancelled' && 
-      appointment.status !== 'canceled' &&
-      appointment.doctor_id === doctorProfile?.id
-    );
+    // Get current date (without time) for comparison
+    // IMPORTANTE: Las citas del mismo día deben estar disponibles aunque ya haya pasado la hora
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset to start of day
+    
+    return (appointments || []).filter((appointment: any) => {
+      // Exclude cancelled appointments
+      if (appointment.status === 'cancelled' || appointment.status === 'cancelada') {
+        return false;
+      }
+      // Include confirmed, pending confirmation, and completed appointments
+      const validStatus = appointment.status === 'confirmada' || 
+                         appointment.status === 'por_confirmar' || 
+                         appointment.status === 'completada';
+      const correctDoctor = appointment.doctor_id === doctorProfile?.id;
+      
+      // IMPORTANTE: Solo comparar la fecha, no la hora
+      // Las citas del mismo día deben estar disponibles aunque ya haya pasado la hora
+      if (appointment.appointment_date) {
+        try {
+          const appointmentDate = parseBackendDate(appointment.appointment_date);
+          // Reset to start of day for comparison (only compare dates, not times)
+          const appointmentDateOnly = new Date(appointmentDate);
+          appointmentDateOnly.setHours(0, 0, 0, 0);
+          
+          // Only include appointments that are today or in the future (by date, not time)
+          if (appointmentDateOnly < today) {
+            return false;
+          }
+        } catch (error) {
+          // If date parsing fails, exclude the appointment to be safe
+          logger.warn('Failed to parse appointment date', { appointment, error }, 'validation');
+          return false;
+        }
+      }
+      
+      return validStatus && correctDoctor;
+    });
   }, [appointments, doctorProfile?.id]);
 
   // Initialize form when dialog opens
@@ -315,22 +347,42 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
 
       let resolvedConsultation = consultation;
 
+      // Fetch full consultation data when editing to ensure all fields are loaded
+      // Only fetch if we suspect data might be incomplete
       if (
         resolvedConsultation.id &&
-        typeof resolvedConsultation.follow_up_instructions === 'undefined'
+        (typeof resolvedConsultation.follow_up_instructions === 'undefined' ||
+         resolvedConsultation.follow_up_instructions === null ||
+         !resolvedConsultation.patient_id ||
+         !resolvedConsultation.date)
       ) {
         try {
           const fullConsultation = await apiService.consultations.getConsultationById(
             resolvedConsultation.id.toString()
           );
           if (!isMounted) return;
+          // Merge carefully - preserve original data and add missing fields from fetch
           resolvedConsultation = {
             ...resolvedConsultation,
-            ...fullConsultation
+            ...fullConsultation,
+            // Ensure critical fields are preserved from original if fetch doesn't have them
+            id: fullConsultation.id || resolvedConsultation.id,
+            patient_id: fullConsultation.patient_id || resolvedConsultation.patient_id,
+            date: fullConsultation.date || resolvedConsultation.date,
+            // Ensure follow_up_instructions is loaded if it was missing
+            follow_up_instructions: fullConsultation.follow_up_instructions !== undefined 
+              ? fullConsultation.follow_up_instructions 
+              : resolvedConsultation.follow_up_instructions
           };
         } catch (error) {
           logger.error('Error hydrating consultation data', error, 'api');
+          // Continue with original consultation data if fetch fails
         }
+      }
+
+      // Ensure patient_id is available from formData if not in resolvedConsultation
+      if (!resolvedConsultation.patient_id && formData.patient_id) {
+        resolvedConsultation.patient_id = formData.patient_id;
       }
 
       const finalConsultationId = resolvedConsultation.id;
@@ -339,19 +391,25 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
         return;
       }
       setCurrentConsultationId(finalConsultationId);
-      logger.debug('Editing consultation loaded', {
-        consultationId: finalConsultationId,
-        patient_document_id: resolvedConsultation.patient_document_id,
-        patient_document_value: resolvedConsultation.patient_document_value,
-        patient_document_name: resolvedConsultation.patient_document_name
-      }, 'ui');
       
-      logger.debug('Loading consultation data', { consultationId: finalConsultationId }, 'system');
+      // Debug log to check consultation and patient data
+      logger.info('📋 Consultation data loaded', {
+        consultationId: finalConsultationId,
+        patient_id: resolvedConsultation.patient_id,
+        patient_id_from_formData: formData.patient_id,
+        follow_up_instructions: resolvedConsultation.follow_up_instructions,
+        follow_up_instructions_type: typeof resolvedConsultation.follow_up_instructions,
+        follow_up_instructions_length: resolvedConsultation.follow_up_instructions?.length || 0
+      }, 'api');
 
       // Use current formData as base to avoid recreating from initialFormData which may change
+      // Ensure patient_id is set from multiple sources
+      const finalPatientId = resolvedConsultation.patient_id || formData.patient_id || consultation?.patient_id || '';
+      
+      // Update formData first
       setFormData(prev => ({
         ...prev,
-        patient_id: resolvedConsultation.patient_id || '',
+        patient_id: finalPatientId,
         patient_document_id: resolvedConsultation.patient_document_id ?? null,
         patient_document_value: resolvedConsultation.patient_document_value || '',
         patient_document_name: resolvedConsultation.patient_document_name,
@@ -367,7 +425,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
         primary_diagnosis: resolvedConsultation.primary_diagnosis || '',
         secondary_diagnoses: resolvedConsultation.secondary_diagnoses || '',
         treatment_plan: resolvedConsultation.treatment_plan || '',
-        follow_up_instructions: resolvedConsultation.follow_up_instructions || '',
+        follow_up_instructions: resolvedConsultation.follow_up_instructions ?? '',
         therapeutic_plan: resolvedConsultation.therapeutic_plan || '',
         laboratory_results: resolvedConsultation.laboratory_results || '',
         interconsultations: resolvedConsultation.interconsultations || '',
@@ -381,16 +439,51 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
       }));
 
       const loadPatientData = async () => {
-        if (resolvedConsultation.patient_id) {
+        // Use finalPatientId which we just set in formData, or fallback to other sources
+        // Try multiple sources to ensure we get the patient_id
+        const patientId = finalPatientId || 
+                         resolvedConsultation.patient_id || 
+                         consultation?.patient_id ||
+                         formData.patient_id;
+        
+        logger.info('🔍 Loading patient data', {
+          consultationId: finalConsultationId,
+          patient_id_from_resolved: resolvedConsultation.patient_id,
+          patient_id_from_formData: formData.patient_id,
+          patient_id_from_consultation: consultation?.patient_id,
+          finalPatientId: finalPatientId,
+          final_patient_id: patientId
+        }, 'api');
+        
+        if (patientId) {
           try {
-            const patientData = await apiService.patients.getPatientById(resolvedConsultation.patient_id);
+            // Convert to number if it's a string
+            const numericPatientId = typeof patientId === 'string' ? parseInt(patientId, 10) : patientId;
+            if (isNaN(numericPatientId)) {
+              logger.error('❌ Invalid patient_id', {
+                consultationId: finalConsultationId,
+                patientId: patientId,
+                numericPatientId: numericPatientId
+              }, 'api');
+              return;
+            }
+            
+            const patientData = await apiService.patients.getPatientById(numericPatientId);
             if (!isMounted) return;
+            logger.info('✅ Patient data fetched successfully', {
+              consultationId: finalConsultationId,
+              patientId: numericPatientId,
+              patientName: patientData.name,
+              hasPersonalDocuments: !!(patientData.personal_documents && patientData.personal_documents.length > 0)
+            }, 'api');
             setSelectedPatient(patientData);
             setPatientEditData(patientData);
-            logger.debug('Patient data for consultation', {
+            logger.info('✅ Patient state updated', {
               consultationId: finalConsultationId,
-              personal_documents: patientData.personal_documents
-            }, 'ui');
+              selectedPatient_set: true,
+              patientEditData_set: true,
+              patientName: patientData.name
+            }, 'api');
             if (resolvedConsultation?.patient_document_id) {
               const matchingDocument = (patientData.personal_documents || []).find(
                 (doc: any) => doc.document_id === resolvedConsultation.patient_document_id
@@ -433,8 +526,19 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
               setPersonalDocument(mapPatientDocument(null));
             }
           } catch (error) {
-            logger.error('Error loading patient data', error, 'api');
+            logger.error('❌ Error loading patient data', error, 'api');
+            logger.error('Error details', {
+              consultationId: finalConsultationId,
+              patientId: patientId,
+              error_message: error instanceof Error ? error.message : String(error)
+            }, 'api');
           }
+        } else {
+          logger.warning('⚠️ No patient_id available to load patient data', {
+            consultationId: finalConsultationId,
+            resolved_patient_id: resolvedConsultation.patient_id,
+            formData_patient_id: formData.patient_id
+          }, 'api');
         }
       };
 
@@ -511,6 +615,38 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, consultation?.id]);
+
+  // Load patient data if it wasn't loaded during hydration
+  useEffect(() => {
+    if (open && consultation?.id && !selectedPatient && !patientEditData) {
+      const patientId = consultation.patient_id || formData.patient_id;
+      if (patientId) {
+        logger.info('🔄 Loading patient data in fallback useEffect', {
+          consultationId: consultation.id,
+          patientId: patientId
+        }, 'api');
+        const loadPatient = async () => {
+          try {
+            const numericPatientId = typeof patientId === 'string' ? parseInt(patientId, 10) : patientId;
+            if (!isNaN(numericPatientId)) {
+              const patientData = await apiService.patients.getPatientById(numericPatientId);
+              setSelectedPatient(patientData);
+              setPatientEditData(patientData);
+              logger.info('✅ Patient data loaded in fallback useEffect', {
+                consultationId: consultation.id,
+                patientId: numericPatientId,
+                patientName: patientData.name
+              }, 'api');
+            }
+          } catch (error) {
+            logger.error('❌ Error loading patient data in fallback useEffect', error, 'api');
+          }
+        };
+        loadPatient();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, consultation?.id, consultation?.patient_id, formData.patient_id]);
 
   // Initialize new consultation
   useEffect(() => {
@@ -959,24 +1095,68 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
   const handleSubmit = useCallback(async () => {
     setError(null);
     
+    // Track form validation attempt
+    try {
+      const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
+      trackAmplitudeEvent('consultation_form_validated');
+    } catch (error) {
+      // Silently fail
+    }
+    
     if (!consultation) {
       if (!selectedAppointment) {
         setError('Por favor, selecciona una cita para crear la consulta');
+        try {
+          const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
+          trackAmplitudeEvent('form_validation_error', {
+            form_type: 'consultation',
+            error_type: 'missing_appointment'
+          });
+        } catch (error) {
+          // Silently fail
+        }
         return;
       }
       if (!selectedPatient) {
         setError('Por favor, selecciona un paciente');
+        try {
+          const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
+          trackAmplitudeEvent('form_validation_error', {
+            form_type: 'consultation',
+            error_type: 'missing_patient'
+          });
+        } catch (error) {
+          // Silently fail
+        }
         return;
       }
     } else {
       if (!selectedPatient) {
         setError('Por favor, selecciona un paciente existente');
+        try {
+          const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
+          trackAmplitudeEvent('form_validation_error', {
+            form_type: 'consultation',
+            error_type: 'missing_patient'
+          });
+        } catch (error) {
+          // Silently fail
+        }
         return;
       }
     }
 
     if (!formData.chief_complaint.trim()) {
       setError('El motivo de consulta es requerido');
+      try {
+        const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
+        trackAmplitudeEvent('form_validation_error', {
+          form_type: 'consultation',
+          error_type: 'missing_chief_complaint'
+        });
+      } catch (error) {
+        // Silently fail
+      }
       return;
     }
 

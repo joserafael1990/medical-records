@@ -33,6 +33,7 @@ export interface UseAppointmentManagerReturn {
   handleCancelAppointment: () => void;
   cancelAppointment: (appointmentId: number) => Promise<void>;
   refreshAppointments: () => Promise<void>;
+  forceRefresh: () => void;
   
   // Form state
   fieldErrors: { [key: string]: string };
@@ -225,7 +226,10 @@ export const useAppointmentManager = (
   }, [agendaView, selectedDate, user?.doctor?.id]); // Only depend on doctor ID to prevent infinite loops
 
   // Handle new appointment
-  const handleNewAppointment = useCallback(() => {
+  const handleNewAppointment = useCallback(async () => {
+    // Track appointment create button clicked in Amplitude
+    const { AmplitudeService } = await import('../services/analytics/AmplitudeService');
+    AmplitudeService.track('appointment_create_button_clicked');
     setIsEditingAppointment(false);
     const currentDateTime = getCurrentCDMXDateTime();
     setAppointmentFormData({
@@ -372,6 +376,26 @@ export const useAppointmentManager = (
 
       const response = await apiService.appointments.createAgendaAppointment(backendData);
       
+      // Track appointment creation in Amplitude
+      const { AmplitudeService } = await import('../services/analytics/AmplitudeService');
+      AmplitudeService.track('appointment_created', {
+        appointment_type: appointmentData.appointment_type || 'presencial',
+        has_reminders: !!(appointmentData.reminders && appointmentData.reminders.length > 0),
+        reminder_count: appointmentData.reminders?.length || 0,
+        status: appointmentData.status || 'por_confirmar'
+      });
+      
+      // Track reminders configuration if present
+      if (appointmentData.reminders && appointmentData.reminders.length > 0) {
+        const enabledReminders = appointmentData.reminders.filter((r: any) => r.enabled);
+        if (enabledReminders.length > 0) {
+          AmplitudeService.track('appointment_reminders_configured', {
+            total_reminders: enabledReminders.length,
+            reminder_numbers: enabledReminders.map((r: any) => r.reminder_number)
+          });
+        }
+      }
+      
       // If the appointment was created for a different date, navigate to that date first
       // Validate selectedDate before using
       const currentDate = (selectedDate instanceof Date && !isNaN(selectedDate.getTime())) ? selectedDate : new Date();
@@ -476,6 +500,15 @@ export const useAppointmentManager = (
         }
         
         const updatedAppointment = await apiService.appointments.updateAppointment(String(selectedAppointment.id), updateData);
+        
+        // Track appointment update in Amplitude
+        const { AmplitudeService } = await import('../services/analytics/AmplitudeService');
+        AmplitudeService.track('appointment_updated', {
+          appointment_id: selectedAppointment.id,
+          has_reminders: !!(formDataToUse.reminders && formDataToUse.reminders.length > 0),
+          reminder_count: formDataToUse.reminders?.length || 0,
+          status: formDataToUse.status || 'por_confirmar'
+        });
 
         // Mover la vista al día de la cita editada antes de refrescar
         try {
@@ -632,6 +665,28 @@ export const useAppointmentManager = (
         }
         
         await apiService.appointments.createAgendaAppointment(appointmentData);
+        
+        // Track appointment creation in Amplitude
+        const { AmplitudeService } = await import('../services/analytics/AmplitudeService');
+        AmplitudeService.track('appointment_created', {
+          appointment_type_id: appointmentData.appointment_type_id || 1,
+          has_reminders: !!(appointmentData.reminders && appointmentData.reminders.length > 0),
+          reminder_count: appointmentData.reminders?.length || 0,
+          status: appointmentData.status || 'por_confirmar',
+          has_office: !!appointmentData.office_id
+        });
+        
+        // Track reminders configuration if present
+        if (appointmentData.reminders && appointmentData.reminders.length > 0) {
+          const enabledReminders = appointmentData.reminders.filter((r: any) => r.enabled);
+          if (enabledReminders.length > 0) {
+            AmplitudeService.track('appointment_reminders_configured', {
+              total_reminders: enabledReminders.length,
+              reminder_numbers: enabledReminders.map((r: any) => r.reminder_number)
+            });
+          }
+        }
+        
         showSuccessMessage('Cita creada exitosamente');
         
         // Navigate to appointments view after successful creation
@@ -724,6 +779,12 @@ export const useAppointmentManager = (
   const cancelAppointment = useCallback(async (appointmentId: number) => {
     try {
       await apiService.appointments.cancelAppointment(appointmentId.toString());
+      
+      // Track appointment cancellation in Amplitude
+      const { AmplitudeService } = await import('../services/analytics/AmplitudeService');
+      AmplitudeService.track('appointment_cancelled', {
+        appointment_id: appointmentId
+      });
       showSuccessMessage('Cita cancelada exitosamente');
       
       // Refresh appointments after cancellation
@@ -846,8 +907,93 @@ export const useAppointmentManager = (
 
   // This useEffect is removed to prevent duplication with the one above
 
-  // Auto-refresh disabled to prevent infinite loops
-  // TODO: Re-enable auto-refresh with proper dependency management
+  // Real-time updates via Server-Sent Events (SSE) - DISABLED FOR PRODUCTION
+  // SSE is disabled to work like production (polling-based updates)
+  // Connect to SSE endpoint to receive appointment updates when webhooks are processed
+  /*
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      return;
+    }
+
+    // EventSource doesn't support custom headers, so we'll use query parameter
+    // The backend endpoint will extract the token from query params
+    const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+    const eventSource = new EventSource(
+      `${apiUrl}/api/events/appointments?token=${encodeURIComponent(token)}`
+    );
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        logger.debug('SSE event received', { type: data.type, rawData: data }, 'api');
+        
+        if (data.type === 'appointment_confirmed' || data.type === 'appointment_cancelled') {
+          // Parse the nested data field (it's a JSON string)
+          let eventData: any = {};
+          try {
+            eventData = typeof data.data === 'string' ? JSON.parse(data.data) : data.data;
+            logger.info('📱 Appointment status changed via WhatsApp', { 
+              eventType: data.type, 
+              appointmentId: eventData.appointment_id,
+              newStatus: eventData.status || (data.type === 'appointment_confirmed' ? 'confirmada' : 'cancelled')
+            }, 'api');
+          } catch (e) {
+            logger.error('Failed to parse SSE event data', e, 'api');
+            return;
+          }
+          
+          // Update the specific appointment in state immediately
+          if (eventData.appointment_id) {
+            const newStatus = eventData.status || (data.type === 'appointment_confirmed' ? 'confirmada' : 'cancelled');
+            setAppointments(prev => {
+              const updated = prev.map(apt => 
+                apt.id === eventData.appointment_id 
+                  ? { ...apt, status: newStatus }
+                  : apt
+              );
+              logger.debug('Updated appointment in state', { 
+                appointmentId: eventData.appointment_id, 
+                oldStatus: prev.find(a => a.id === eventData.appointment_id)?.status,
+                newStatus 
+              }, 'api');
+              return updated;
+            });
+          }
+          
+          // Also refresh from server to ensure consistency
+          setTimeout(() => {
+            refreshAppointments().catch(() => {});
+          }, 500);
+        } else if (data.type === 'connected') {
+          logger.info('✅ Connected to appointment events stream', undefined, 'api');
+        } else if (data.type === 'heartbeat') {
+          // Heartbeat - connection is alive, no action needed
+        }
+      } catch (error) {
+        logger.error('Error parsing SSE event', error, 'api');
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      logger.error('SSE connection error', error, 'api');
+      // EventSource will automatically reconnect
+    };
+
+    // Also refresh immediately on mount
+    refreshAppointments().catch(() => {});
+
+    return () => {
+      eventSource.close();
+    };
+  }, [refreshAppointments]);
+  */
+  
+  // Refresh appointments on mount (polling-based approach for production)
+  useEffect(() => {
+    refreshAppointments().catch(() => {});
+  }, [refreshAppointments]);
 
   // Refrescar al cerrar el diálogo para asegurar que la vista del día muestre la info actual
   useEffect(() => {

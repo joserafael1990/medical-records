@@ -7,6 +7,21 @@ import { VitalSign, ConsultationVitalSign, VitalSignFormData } from '../types';
 import { apiService } from '../services';
 import { logger } from '../utils/logger';
 
+export interface PatientVitalSignsHistory {
+  patient_id: number;
+  patient_name: string;
+  vital_signs_history: Array<{
+    vital_sign_id: number;
+    vital_sign_name: string;
+    data: Array<{
+      value: number | null;
+      unit: string;
+      date: string | null;
+      consultation_id: number;
+    }>;
+  }>;
+}
+
 export interface UseVitalSignsReturn {
   // State
   availableVitalSigns: VitalSign[];
@@ -23,6 +38,7 @@ export interface UseVitalSignsReturn {
   // Actions
   fetchAvailableVitalSigns: () => Promise<void>;
   fetchConsultationVitalSigns: (consultationId: string) => Promise<void>;
+  fetchPatientVitalSignsHistory: (patientId: number) => Promise<PatientVitalSignsHistory>;
   createVitalSign: (consultationId: string, vitalSignData: VitalSignFormData) => Promise<ConsultationVitalSign>;
   updateVitalSign: (consultationId: string, vitalSignId: number, vitalSignData: VitalSignFormData) => Promise<ConsultationVitalSign>;
   deleteVitalSign: (consultationId: string, vitalSignId: number) => Promise<void>;
@@ -120,6 +136,29 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     }
   }, []);
 
+  // Fetch patient vital signs history
+  const fetchPatientVitalSignsHistory = useCallback(async (patientId: number): Promise<PatientVitalSignsHistory> => {
+    try {
+      const response = await apiService.consultations.api.get(`/api/patients/${patientId}/vital-signs/history`);
+      
+      // Track vital signs viewed
+      try {
+        const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
+        trackAmplitudeEvent('vital_signs_viewed', {
+          patient_id: patientId,
+          has_history: !!(response.data || response)
+        });
+      } catch (e) {
+        // Silently fail
+      }
+      
+      return response.data || response;
+    } catch (err: any) {
+      logger.error('Error fetching patient vital signs history', err, 'api');
+      throw err;
+    }
+  }, []);
+
   // Create a new vital sign
   const createVitalSign = useCallback(async (consultationId: string, vitalSignData: VitalSignFormData): Promise<ConsultationVitalSign> => {
     try {
@@ -130,6 +169,18 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
       
       const response = await apiService.consultations.api.post(`/api/consultations/${consultationId}/vital-signs`, vitalSignData);
       const newVitalSign = response.data;
+      
+      // Track vital signs recorded
+      try {
+        const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
+        trackAmplitudeEvent('vital_signs_recorded', {
+          vital_sign_id: vitalSignData.vital_sign_id,
+          has_value: !!vitalSignData.value,
+          has_unit: !!vitalSignData.unit
+        });
+      } catch (e) {
+        // Silently fail
+      }
       
       // Add to local state
       setConsultationVitalSigns(prev => [...prev, newVitalSign]);
@@ -402,6 +453,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     // Actions
     fetchAvailableVitalSigns,
     fetchConsultationVitalSigns,
+    fetchPatientVitalSignsHistory,
     createVitalSign,
     updateVitalSign,
     deleteVitalSign,

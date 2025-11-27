@@ -896,6 +896,19 @@ class PDFService {
       const patientNameForFile = patient.name ? patient.name.replace(/\s+/g, '_') : 'Paciente';
       const fileName = `Receta_${patientNameForFile}_${consultation.date.replace(/\//g, '-')}.pdf`;
       doc.save(fileName);
+      
+      // Track PDF download in Amplitude
+      try {
+        const { AmplitudeService } = await import('./analytics/AmplitudeService');
+        AmplitudeService.track('pdf_downloaded', {
+          pdf_type: 'prescription',
+          has_medications: medications && medications.length > 0,
+          medication_count: medications?.length || 0
+        });
+      } catch (e) {
+        // Silently fail if Amplitude is not available
+      }
+      
       console.log('PDF saved successfully:', fileName);
     } catch (error) {
       console.error('Error generating prescription PDF:', error);
@@ -1230,6 +1243,18 @@ class PDFService {
       const patientNameForOrderFile = patient.name ? patient.name.replace(/\s+/g, '_') : 'Paciente';
       const fileName = `Orden-Medica_${patientNameForOrderFile}_${consultation.date.replace(/\//g, '-')}.pdf`;
       doc.save(fileName);
+      
+      // Track PDF download in Amplitude
+      try {
+        const { AmplitudeService } = await import('./analytics/AmplitudeService');
+        AmplitudeService.track('pdf_downloaded', {
+          pdf_type: 'study_order',
+          has_studies: studies && studies.length > 0,
+          study_count: studies?.length || 0
+        });
+      } catch (e) {
+        // Silently fail if Amplitude is not available
+      }
   }
 
   async generateMedicalCertificate(
@@ -1286,6 +1311,17 @@ class PDFService {
     const patientNameForCertFile = patient.name ? patient.name.replace(/\s+/g, '_') : 'Paciente';
     const fileName = `Constancia_${patientNameForCertFile}_${consultation.date.replace(/\//g, '-')}.pdf`;
       doc.save(fileName);
+      
+      // Track PDF download in Amplitude
+      try {
+        const { AmplitudeService } = await import('./analytics/AmplitudeService');
+        AmplitudeService.track('pdf_downloaded', {
+          pdf_type: 'certificate',
+          certificate_title: certificate.title || 'CONSTANCIA MÉDICA'
+        });
+      } catch (e) {
+        // Silently fail if Amplitude is not available
+      }
   }
 }
 

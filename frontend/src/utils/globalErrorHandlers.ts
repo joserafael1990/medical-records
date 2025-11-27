@@ -55,8 +55,13 @@ export const initializeGlobalErrorHandlers = () => {
   window.addEventListener('unhandledrejection', (event) => {
     safeConsoleError('Unhandled Promise Rejection:', event.reason);
     
-    // Capturar en Sentry si está habilitado
-    if (process.env.REACT_APP_SENTRY_DSN && event.reason) {
+    // Capturar en Sentry solo en producción
+    const isProduction = 
+      process.env.NODE_ENV === 'production' ||
+      process.env.REACT_APP_ENV === 'production';
+    const isSentryEnabled = Boolean(process.env.REACT_APP_SENTRY_DSN) && isProduction;
+    
+    if (isSentryEnabled && event.reason) {
       const error = event.reason instanceof Error 
         ? event.reason 
         : new Error(String(event.reason));
@@ -106,8 +111,13 @@ export const initializeGlobalErrorHandlers = () => {
       safeConsoleError('Error object:', event.error);
     }
     
-    // Capturar en Sentry si está habilitado
-    if (process.env.REACT_APP_SENTRY_DSN) {
+    // Capturar en Sentry solo en producción
+    const isProduction = 
+      process.env.NODE_ENV === 'production' ||
+      process.env.REACT_APP_ENV === 'production';
+    const isSentryEnabled = Boolean(process.env.REACT_APP_SENTRY_DSN) && isProduction;
+    
+    if (isSentryEnabled) {
       const error = event.error || new Error(event.message || 'Unknown error');
       
       // Capturar error en Sentry - el usuario puede usar el botón flotante para reportar

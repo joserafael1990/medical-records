@@ -55,6 +55,7 @@ interface PatientDataSectionProps {
   shouldShowOnlyBasicPatientData: () => boolean;
   shouldShowPreviousConsultationsButton: () => boolean;
   handleViewPreviousConsultations: () => void;
+  shouldShowFirstTimeFields: () => boolean;
 }
 
 export const PatientDataSection: React.FC<PatientDataSectionProps> = ({
@@ -73,7 +74,8 @@ export const PatientDataSection: React.FC<PatientDataSectionProps> = ({
   setPersonalDocument,
   shouldShowOnlyBasicPatientData,
   shouldShowPreviousConsultationsButton,
-  handleViewPreviousConsultations
+  handleViewPreviousConsultations,
+  shouldShowFirstTimeFields
 }) => {
   return (
     <Box>
@@ -136,23 +138,26 @@ export const PatientDataSection: React.FC<PatientDataSectionProps> = ({
               size="small"
               required
             />
-            <Box sx={{ gridColumn: { xs: '1 / -1', sm: '1 / -1' } }}>
-              <DocumentSelector
-                documentType="personal"
-                value={personalDocument}
-                onChange={(newValue) => {
-                  setPersonalDocument(newValue);
-                }}
-                label="Documento de identificación del paciente"
-                required
-                error={!personalDocument.document_id || !personalDocument.document_value?.trim()}
-                helperText={
-                  !personalDocument.document_id || !personalDocument.document_value?.trim()
-                    ? 'Selecciona un documento y captura el valor'
-                    : undefined
-                }
-              />
-            </Box>
+            {/* Documento de identificación - Solo para consultas de primera vez */}
+            {shouldShowFirstTimeFields() && (
+              <Box sx={{ gridColumn: { xs: '1 / -1', sm: '1 / -1' } }}>
+                <DocumentSelector
+                  documentType="personal"
+                  value={personalDocument}
+                  onChange={(newValue) => {
+                    setPersonalDocument(newValue);
+                  }}
+                  label="Documento de identificación del paciente"
+                  required
+                  error={!personalDocument.document_id || !personalDocument.document_value?.trim()}
+                  helperText={
+                    !personalDocument.document_id || !personalDocument.document_value?.trim()
+                      ? 'Selecciona un documento y captura el valor'
+                      : undefined
+                  }
+                />
+              </Box>
+            )}
           </Box>
         </Box>
 

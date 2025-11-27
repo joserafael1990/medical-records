@@ -25,7 +25,7 @@ import { ConsultationFormHeader } from './ConsultationDialog/ConsultationFormHea
 import { ConsultationActions } from './ConsultationDialog/ConsultationActions';
 import { ConsultationFormFields } from './ConsultationDialog/ConsultationFormFields';
 import { PatientDataSection } from './ConsultationDialog/PatientDataSection';
-import { PreviousClinicalStudiesSection } from './ConsultationDialog/PreviousClinicalStudiesSection';
+import PreviousStudiesSection from './ConsultationDialog/PreviousStudiesSection';
 import { ConsultationDateSection } from './ConsultationDialog/ConsultationDateSection';
 import { ConsultationDiagnosisSection } from './ConsultationDialog/DiagnosisSection';
 import { PrintButtonsSection } from './ConsultationDialog/PrintButtonsSection';
@@ -36,6 +36,7 @@ import { useConsultationForm, ConsultationFormData } from '../../hooks/useConsul
 import { apiService } from '../../services';
 import { logger } from '../../utils/logger';
 import { useDiagnosisCatalog } from '../../hooks/useDiagnosisCatalog';
+import { AmplitudeService } from '../../services/analytics/AmplitudeService';
 
 export interface ConsultationDialogProps {
   open: boolean;
@@ -84,6 +85,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
   // Section hooks
   const clinicalStudiesHook = useClinicalStudies();
+  const previousStudiesHook = useClinicalStudies(); // Separate hook for previous studies
   const vitalSignsHook = useVitalSigns();
   const prescriptionsHook = usePrescriptions();
   const primaryDiagnosesHook = useDiagnosisManagement();
@@ -107,62 +109,46 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   // Get diagnosis catalog hook for creating new diagnoses
   const diagnosisCatalog = useDiagnosisCatalog();
 
+  // Load previous studies when patient is selected or when dialog opens for editing
   useEffect(() => {
-    let isMounted = true;
-
-    const loadFollowUpAppointments = async () => {
-      if (!open) {
-        return;
-      }
-
-      const selectedId = formHook.selectedPatient?.id;
-      const patientIdFromForm = formHook.formData.patient_id ? parseInt(formHook.formData.patient_id, 10) : null;
-      const patientId = selectedId || (!Number.isNaN(patientIdFromForm || NaN) ? patientIdFromForm : null);
-
-      if (!patientId) {
-        lastFetchedPatientRef.current = null;
-        setFollowUpAppointments(prev => (prev.length > 0 ? [] : prev));
-        return;
-      }
-
-      if (lastFetchedPatientRef.current === patientId) {
-        return;
-      }
-
-      lastFetchedPatientRef.current = patientId;
-
-      try {
-        const appointmentsByPatient = await apiService.appointments.getAppointmentsByPatient(String(patientId));
-        if (!isMounted) {
-          return;
-        }
-        const filteredAppointments = (appointmentsByPatient || []).filter((appointment: any) =>
-          appointment && ['confirmada', 'por_confirmar'].includes(appointment.status)
-        );
-        setFollowUpAppointments(prev => {
-          const sameLength = prev.length === filteredAppointments.length;
-          const sameItems = sameLength && prev.every((item, index) => item.id === filteredAppointments[index]?.id);
-          return sameItems ? prev : filteredAppointments;
+    if (open && formHook.selectedPatient?.id) {
+      const patientId = formHook.selectedPatient.id.toString();
+      // Load previous studies for the patient with a small delay to ensure patient data is fully loaded
+      const timeoutId = setTimeout(() => {
+        previousStudiesHook.fetchPatientStudies(patientId).catch((error: any) => {
+          logger.error('Error loading previous studies', error, 'api');
         });
-      } catch (error: any) {
-        if (!isMounted) {
-          return;
-        }
-        if (error?.status === 404 || error?.response?.status === 404) {
-          setFollowUpAppointments(prev => (prev.length > 0 ? [] : prev));
-          return;
-        }
-        logger.error('Error fetching follow-up appointments', error, 'api');
-        setFollowUpAppointments(prev => (prev.length > 0 ? [] : prev));
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    } else if (!open) {
+      previousStudiesHook.clearTemporaryStudies();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, formHook.selectedPatient?.id, consultation?.id]);
+
+  // Track consultation form opened
+  React.useEffect(() => {
+    if (open) {
+      try {
+        const { trackAmplitudeEvent } = require('../../utils/amplitudeHelper');
+        trackAmplitudeEvent('consultation_form_opened', {
+          is_editing: !!consultation
+        });
+      } catch (error) {
+        // Silently fail
       }
-    };
+    }
+  }, [open, consultation]);
 
-    loadFollowUpAppointments();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [open, formHook.selectedPatient?.id, formHook.formData.patient_id]);
+  // Don't load previous appointments - only show appointments scheduled during this consultation
+  // The ScheduleAppointmentSection will manage its own state for appointments created in this session
+  useEffect(() => {
+    if (!open) {
+      // Clear appointments when dialog closes
+      setFollowUpAppointments([]);
+      lastFetchedPatientRef.current = null;
+    }
+  }, [open]);
 
   // Auto-scroll to error when it appears
   const { errorRef } = useScrollToErrorInDialog(formHook.error);
@@ -206,10 +192,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   const handleDeleteStudy = async (studyId: string) => {
     try {
       if (studyId.startsWith('temp_')) {
-        formHook.setFormData(prev => ({
-          ...prev,
-          clinical_studies: (prev.clinical_studies || []).filter(study => study.id !== studyId)
-        }));
         clinicalStudiesHook.deleteStudy(studyId);
       } else {
         await clinicalStudiesHook.deleteStudy(studyId);
@@ -235,7 +217,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
       <Divider />
 
-      <DialogContent>
+      <DialogContent sx={{ maxHeight: '80vh', overflow: 'auto', p: 3 }}>
         {formHook.error && (
           <Box 
             ref={errorRef}
@@ -277,6 +259,20 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           )}
 
           {/* Patient Data Section */}
+          {(() => {
+            // Debug: Log patient data state
+            if (open && consultation) {
+              console.log('🔍 Patient Data Debug:', {
+                hasSelectedPatient: !!formHook.selectedPatient,
+                hasPatientEditData: !!formHook.patientEditData,
+                selectedPatientId: formHook.selectedPatient?.id,
+                patientEditDataId: formHook.patientEditData?.id,
+                formDataPatientId: formHook.formData.patient_id,
+                consultationPatientId: consultation?.patient_id
+              });
+            }
+            return null;
+          })()}
           {formHook.selectedPatient && formHook.patientEditData && (
             <PatientDataSection
               patientEditData={formHook.patientEditData}
@@ -295,6 +291,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               shouldShowOnlyBasicPatientData={formHook.shouldShowOnlyBasicPatientData}
               shouldShowPreviousConsultationsButton={formHook.shouldShowPreviousConsultationsButton}
               handleViewPreviousConsultations={formHook.handleViewPreviousConsultations}
+              shouldShowFirstTimeFields={formHook.shouldShowFirstTimeFields}
             />
           )}
 
@@ -321,15 +318,61 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             error={formHook.error}
           />
 
-          {/* Previous Clinical Studies Section */}
-          <PreviousClinicalStudiesSection
-            selectedPatient={formHook.selectedPatient}
-            patientPreviousStudies={formHook.patientPreviousStudies}
-            loadingPreviousStudies={formHook.loadingPreviousStudies}
-            onUploadStudyFile={(studyId: number, file: File) => formHook.handleUploadStudyFile(studyId.toString(), file)}
-            onUpdateStudyStatus={(studyId: number, status: string) => formHook.handleUpdateStudyStatus(studyId.toString(), status)}
-            onViewStudyFile={(studyId: number) => formHook.handleViewStudyFile(studyId.toString())}
-          />
+          {/* Previous Studies Section */}
+          {formHook.selectedPatient?.id && (
+            <PreviousStudiesSection
+              patientId={formHook.selectedPatient.id.toString()}
+              studies={previousStudiesHook.studies}
+              isLoading={previousStudiesHook.isLoading}
+              isFirstTimeConsultation={formHook.shouldShowFirstTimeFields()}
+              onAddStudy={async (studyData) => {
+                const consultationIdStr = formHook.isEditing && consultation?.id ? String(consultation.id) : null;
+                const patientId = formHook.selectedPatient?.id?.toString() || '';
+                const doctorName = doctorProfile?.full_name || `${doctorProfile?.title || 'Dr.'} ${doctorProfile?.first_name || 'Usuario'} ${doctorProfile?.last_name || 'Sistema'}`.trim();
+                
+                // Create study without consultation_id (or with it if editing existing consultation)
+                const studyToCreate: any = {
+                  ...studyData,
+                  patient_id: patientId,
+                  ordering_doctor: doctorName
+                };
+                // Only include consultation_id if it has a valid value
+                if (consultationIdStr && consultationIdStr !== 'null' && consultationIdStr !== '') {
+                  studyToCreate.consultation_id = consultationIdStr;
+                }
+                // Don't include consultation_id at all if it's null/empty
+                
+                try {
+                  await previousStudiesHook.createStudy(studyToCreate);
+                  // Refresh studies
+                  await previousStudiesHook.fetchPatientStudies(patientId);
+                } catch (error: any) {
+                  logger.error('Error creating previous study', error, 'api');
+                  throw error; // Re-throw to let PreviousStudiesSection handle it
+                }
+              }}
+              onRemoveStudy={async (studyId: string) => {
+                try {
+                  await previousStudiesHook.deleteStudy(studyId);
+                  // Refresh studies
+                  if (formHook.selectedPatient?.id) {
+                    await previousStudiesHook.fetchPatientStudies(formHook.selectedPatient.id.toString());
+                  }
+                } catch (error: any) {
+                  logger.error('Error deleting previous study', error, 'api');
+                  throw error;
+                }
+              }}
+              onRefreshStudies={async () => {
+                // Refresh studies after file upload
+                if (formHook.selectedPatient?.id) {
+                  await previousStudiesHook.fetchPatientStudies(formHook.selectedPatient.id.toString());
+                }
+              }}
+              doctorName={doctorProfile?.full_name || `${doctorProfile?.title || 'Dr.'} ${doctorProfile?.first_name || 'Usuario'} ${doctorProfile?.last_name || 'Sistema'}`.trim()}
+              consultationId={formHook.isEditing && consultation?.id ? String(consultation.id) : null}
+            />
+          )}
 
           {/* Structured Diagnoses */}
           <ConsultationDiagnosisSection
@@ -417,8 +460,18 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             studiesLoading={clinicalStudiesHook.isLoading}
             onAddStudy={handleAddStudy}
             onDeleteStudy={handleDeleteStudy}
-            onViewStudyFile={(studyId: number) => clinicalStudiesHook.viewFile(studyId)}
-            onDownloadStudyFile={(studyId: number) => clinicalStudiesHook.downloadFile(studyId)}
+            onViewStudyFile={(studyId: number) => {
+              const study = clinicalStudiesHook.studies.find(s => String(s.id) === String(studyId));
+              if (study && (study as any).file_url) {
+                clinicalStudiesHook.viewFile((study as any).file_url);
+              }
+            }}
+            onDownloadStudyFile={(studyId: number) => {
+              const study = clinicalStudiesHook.studies.find(s => String(s.id) === String(studyId));
+              if (study && (study as any).file_url) {
+                clinicalStudiesHook.downloadFile((study as any).file_url, (study as any).study_name || 'estudio');
+              }
+            }}
             doctorName={doctorProfile?.full_name || `${doctorProfile?.title || 'Dr.'} ${doctorProfile?.first_name || 'Usuario'} ${doctorProfile?.last_name || 'Sistema'}`.trim()}
             patientId={formHook.selectedPatient?.id || parseInt(formHook.formData.patient_id) || 0}
             doctorProfile={doctorProfile}

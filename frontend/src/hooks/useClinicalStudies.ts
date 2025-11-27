@@ -20,6 +20,7 @@ export interface UseClinicalStudiesReturn {
 
   // Actions
   fetchStudies: (consultationId: string) => Promise<void>;
+  fetchPatientStudies: (patientId: string) => Promise<void>;
   createStudy: (studyData: CreateClinicalStudyData) => Promise<ClinicalStudy>;
   updateStudy: (studyId: string, studyData: UpdateClinicalStudyData) => Promise<ClinicalStudy>;
   deleteStudy: (studyId: string) => Promise<void>;
@@ -89,11 +90,39 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
     }
   }, []);
 
+  // Fetch all studies for a patient (with or without consultation_id)
+  const fetchPatientStudies = useCallback(async (patientId: string) => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const studiesData = await apiService.clinicalStudies.getClinicalStudiesByPatient(patientId);
+      setStudies(studiesData || []);
+    } catch (err: any) {
+      logger.error('Error fetching patient clinical studies', err, 'api');
+      setError('Error al cargar los estudios clínicos del paciente');
+      setStudies([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   // Create a new study
   const createStudy = useCallback(async (studyData: CreateClinicalStudyData): Promise<ClinicalStudy> => {
     try {
-      logger.debug('Creating clinical study', { studyName: studyData.study_name }, 'api');
-      const newStudy = await apiService.clinicalStudies.createClinicalStudy(studyData);
+      logger.debug('Creating clinical study', { studyName: studyData.study_name, consultationId: studyData.consultation_id }, 'api');
+      // Ensure consultation_id is not sent if it's null, undefined, or empty string
+      const dataToSend: any = {
+        ...studyData
+      };
+      // Only include consultation_id if it has a valid value
+      if (studyData.consultation_id && studyData.consultation_id !== 'null' && studyData.consultation_id !== '') {
+        dataToSend.consultation_id = studyData.consultation_id;
+      } else {
+        // Don't include consultation_id at all if it's null/empty
+        delete dataToSend.consultation_id;
+      }
+      const newStudy = await apiService.clinicalStudies.createClinicalStudy(dataToSend);
       logger.debug('Clinical study created successfully', { id: newStudy.id }, 'api');
       
       // Add to local state
@@ -112,6 +141,17 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
       logger.debug('Updating clinical study', { studyId }, 'api');
       const updatedStudy = await apiService.clinicalStudies.updateClinicalStudy(studyId, studyData);
       logger.debug('Clinical study updated successfully', { id: updatedStudy.id }, 'api');
+      
+      // Track clinical study updated
+      try {
+        const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
+        trackAmplitudeEvent('clinical_study_updated', {
+          study_type: studyData.study_type,
+          status: studyData.status || updatedStudy.status
+        });
+      } catch (e) {
+        // Silently fail
+      }
       
       // Update local state
       setStudies(prev => prev.map(study => 
@@ -140,6 +180,16 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
       logger.debug('Deleting clinical study', { studyId }, 'api');
       await apiService.clinicalStudies.deleteClinicalStudy(studyId);
       logger.debug('Clinical study deleted successfully', { studyId }, 'api');
+      
+      // Track clinical study deleted
+      try {
+        const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
+        trackAmplitudeEvent('clinical_study_deleted', {
+          study_id: studyId
+        });
+      } catch (e) {
+        // Silently fail
+      }
       
       // Remove from local state
       setStudies(prev => prev.filter(study => study.id !== studyId));
@@ -301,6 +351,16 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      
+      // Track clinical study downloaded
+      try {
+        const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
+        trackAmplitudeEvent('clinical_study_downloaded', {
+          file_name: fileName
+        });
+      } catch (e) {
+        // Silently fail
+      }
     } catch (err) {
       logger.error('Error downloading file', err, 'ui');
     }
@@ -309,6 +369,16 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
   const viewFile = useCallback((fileUrl: string) => {
     try {
       window.open(fileUrl, '_blank');
+      
+      // Track clinical study viewed
+      try {
+        const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
+        trackAmplitudeEvent('clinical_study_viewed', {
+          has_file: !!fileUrl
+        });
+      } catch (e) {
+        // Silently fail
+      }
     } catch (err) {
       logger.error('Error viewing file', err, 'ui');
     }
@@ -327,6 +397,7 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
 
     // Actions
     fetchStudies,
+    fetchPatientStudies,
     createStudy,
     updateStudy,
     deleteStudy,

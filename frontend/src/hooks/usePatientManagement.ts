@@ -145,6 +145,15 @@ export const usePatientManagement = (onNavigate?: (view: string) => void): Patie
     setIsSubmitting(true);
     try {
       const newPatient = await apiService.patients.createPatient(data);
+      
+      // Track patient creation in Amplitude
+      const { AmplitudeService } = await import('../services/analytics/AmplitudeService');
+      AmplitudeService.track('patient_created', {
+        has_phone: !!data.primary_phone,
+        has_email: !!data.email,
+        has_birth_date: !!data.birth_date
+      });
+      
       await fetchPatients(); // Refresh list
       
       // Navigate to patients view after successful creation
@@ -168,6 +177,15 @@ export const usePatientManagement = (onNavigate?: (view: string) => void): Patie
     setIsSubmitting(true);
     try {
       const updatedPatient = await apiService.patients.updatePatient(id, data);
+      
+      // Track patient update in Amplitude
+      const { AmplitudeService } = await import('../services/analytics/AmplitudeService');
+      AmplitudeService.track('patient_updated', {
+        has_phone: !!data.primary_phone,
+        has_email: !!data.email,
+        has_birth_date: !!data.birth_date
+      });
+      
       await fetchPatients(); // Refresh list
       return updatedPatient;
     } catch (error: any) {
@@ -184,6 +202,13 @@ export const usePatientManagement = (onNavigate?: (view: string) => void): Patie
     try {
       // NOTE: Patient deactivation API endpoint not yet implemented
       console.log('Patient deactivation requested:', patient.id);
+      
+      // Track patient deletion in Amplitude
+      const { AmplitudeService } = await import('../services/analytics/AmplitudeService');
+      AmplitudeService.track('patient_deleted', {
+        patient_id: patient.id
+      });
+      
       // Placeholder: Would call apiService.deactivatePatient(patient.id) when available
       await fetchPatients(); // Refresh list
     } catch (error: any) {
@@ -206,11 +231,15 @@ export const usePatientManagement = (onNavigate?: (view: string) => void): Patie
   }, []);
 
   // Open patient dialog for create/edit
-  const openPatientDialog = useCallback((patient?: Patient) => {
+  const openPatientDialog = useCallback(async (patient?: Patient) => {
     if (patient) {
       setSelectedPatient(patient);
       setIsEditingPatient(true);
     } else {
+      // Track patient create button clicked in Amplitude
+      const { AmplitudeService } = await import('../services/analytics/AmplitudeService');
+      AmplitudeService.track('patient_create_button_clicked');
+      
       setSelectedPatient(null);
       setIsEditingPatient(false);
     }
