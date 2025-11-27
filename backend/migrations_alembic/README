@@ -1,0 +1,4 @@
+Generic single-database configuration with an async focus.
+
+This is a minimal Alembic setup for database migrations.
+
