@@ -5,12 +5,14 @@ Migrated from main_clean_english.py to improve code organization
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from pydantic import BaseModel
 from datetime import datetime
 import uuid
 import os
 
 from database import get_db, Person, PrivacyNotice, PrivacyConsent, ARCORequest, MedicalRecord
+from utils.datetime_utils import utc_now
 from dependencies import get_current_user
 from logger import get_logger
 from audit_service import audit_service
@@ -75,12 +77,18 @@ async def send_whatsapp_privacy_notice(
             raise HTTPException(status_code=404, detail="Paciente no encontrado")
         
         # Verificar que el doctor tiene relación con este paciente
-        consultation = db.query(MedicalRecord).filter(
+        # Permitir si:
+        # 1. El paciente fue creado por este doctor (created_by)
+        # 2. O existe una consulta entre el doctor y el paciente
+        # 3. O el usuario es admin
+        has_consultation = db.query(MedicalRecord).filter(
             MedicalRecord.patient_id == request_data.patient_id,
             MedicalRecord.doctor_id == current_user.id
-        ).first()
+        ).first() is not None
         
-        if not consultation and current_user.person_type != 'admin':
+        is_patient_creator = patient.created_by == current_user.id
+        
+        if not has_consultation and not is_patient_creator and current_user.person_type != 'admin':
             raise HTTPException(
                 status_code=403,
                 detail="No tienes permiso para enviar avisos a este paciente"
@@ -129,16 +137,15 @@ async def send_whatsapp_privacy_notice(
         if not privacy_notice:
             raise HTTPException(status_code=404, detail="No hay aviso de privacidad activo. Por favor, contacta al administrador del sistema.")
         
-        # Generar token único para la URL
-        privacy_token = str(uuid.uuid4())
-        privacy_url = f"https://tudominio.com/privacy-notice/{privacy_token}"
+        # URL del aviso de privacidad público
+        privacy_url = "https://cortexclinico.com/privacy"
         
         # Crear registro de consentimiento PRIMERO (para tener el ID)
         consent = PrivacyConsent(
             patient_id=request_data.patient_id,
             notice_id=privacy_notice.id,
             consent_given=False,  # Pendiente hasta que el paciente responda
-            consent_date=datetime.utcnow()
+            consent_date=utc_now()
         )
         
         db.add(consent)
@@ -308,10 +315,36 @@ async def get_patient_consent_status(
         
         has_consent = consent.consent_given == True
         
+        # Obtener información del aviso de privacidad
+        privacy_notice = None
+        if consent.notice_id:
+            privacy_notice = db.query(PrivacyNotice).filter(
+                PrivacyNotice.id == consent.notice_id
+            ).first()
+        
+        # Convertir fecha a timezone CDMX
+        import pytz
+        cdmx_tz = pytz.timezone('America/Mexico_City')
+        consent_date_cdmx = None
+        if consent.consent_date:
+            # Si la fecha no tiene timezone, asumir UTC y convertir a CDMX
+            if consent.consent_date.tzinfo is None:
+                consent_date_utc = pytz.utc.localize(consent.consent_date)
+            else:
+                consent_date_utc = consent.consent_date
+            consent_date_cdmx = consent_date_utc.astimezone(cdmx_tz)
+        
         api_logger.debug(
             f"✅ Consent status retrieved for patient {patient_id}",
             extra={"patient_id": patient_id, "has_consent": has_consent, "doctor_id": current_user.id}
         )
+        
+        # Determinar el método basado en cómo se envió (si fue por WhatsApp, el método es 'whatsapp_button')
+        # Por defecto, si no hay información específica, asumimos WhatsApp ya que es el método principal
+        consent_method = 'whatsapp_button'  # Default, ya que el sistema principal usa WhatsApp
+        
+        # URL del aviso de privacidad
+        privacy_notice_url = 'https://cortexclinico.com/privacy'
         
         return {
             "has_consent": has_consent,
@@ -321,10 +354,15 @@ async def get_patient_consent_status(
                 "patient_id": consent.patient_id,
                 "notice_id": consent.notice_id,
                 "consent_given": consent.consent_given,
-                "consent_date": consent.consent_date.isoformat() if consent.consent_date else None,
+                "consent_date": consent_date_cdmx.isoformat() if consent_date_cdmx else None,
                 "ip_address": consent.ip_address,
                 "user_agent": consent.user_agent,
-                "created_at": consent.created_at.isoformat() if consent.created_at else None
+                "created_at": consent.created_at.isoformat() if consent.created_at else None,
+                # Campos adicionales para el frontend
+                "consent_method": consent_method,
+                "privacy_notice_version": privacy_notice_url,
+                "is_revoked": not consent.consent_given,  # Para compatibilidad con frontend
+                "consent_status": "accepted" if consent.consent_given else "pending"
             }
         }
     except HTTPException:
@@ -354,28 +392,47 @@ async def revoke_consent(
         
         # Verificar acceso
         if current_user.person_type == 'doctor':
-            consultation = db.query(MedicalRecord).filter(
-                MedicalRecord.patient_id == patient_id,
-                MedicalRecord.doctor_id == current_user.id
+            # Obtener el paciente para verificar created_by
+            patient = db.query(Person).filter(
+                Person.id == patient_id,
+                Person.person_type == 'patient'
             ).first()
             
-            if not consultation:
+            if not patient:
+                raise HTTPException(status_code=404, detail="Paciente no encontrado")
+            
+            # Permitir si:
+            # 1. El paciente fue creado por este doctor (created_by)
+            # 2. O existe una consulta entre el doctor y el paciente
+            # 3. O el usuario es admin
+            has_consultation = db.query(MedicalRecord).filter(
+                MedicalRecord.patient_id == patient_id,
+                MedicalRecord.doctor_id == current_user.id
+            ).first() is not None
+            
+            is_patient_creator = patient.created_by == current_user.id
+            
+            if not has_consultation and not is_patient_creator:
                 raise HTTPException(status_code=403, detail="No tiene acceso a este paciente")
         
-        # Buscar consentimiento activo
+        # Buscar consentimiento más reciente (no revocado, es decir, consent_given puede ser True o False pero debe existir)
         consent = db.query(PrivacyConsent).filter(
-            PrivacyConsent.patient_id == patient_id,
-            PrivacyConsent.is_revoked == False
+            PrivacyConsent.patient_id == patient_id
         ).order_by(PrivacyConsent.created_at.desc()).first()
         
         if not consent:
-            raise HTTPException(status_code=404, detail="No se encontró consentimiento activo para este paciente")
+            raise HTTPException(status_code=404, detail="No se encontró consentimiento para este paciente")
         
-        # Revocar
-        # Revocation: Set consent_given to False
+        # Si ya está revocado (consent_given = False), no hacer nada
+        if not consent.consent_given:
+            raise HTTPException(status_code=400, detail="El consentimiento ya está revocado")
+        
+        # Revocar: Set consent_given to False
+        # Usar timezone CDMX para la fecha
+        import pytz
+        cdmx_tz = pytz.timezone('America/Mexico_City')
         consent.consent_given = False
-        consent.consent_date = datetime.utcnow()
-        consent.updated_at = datetime.utcnow()
+        consent.consent_date = datetime.now(cdmx_tz)
         
         db.commit()
         
@@ -383,14 +440,16 @@ async def revoke_consent(
         audit_service.log_action(
             db=db,
             action='privacy_consent_revoked',
-            entity_type='privacy_consent',
-            entity_id=consent.id,
-            user_id=current_user.id,
-            user_type=current_user.person_type,
-            changes={'revocation_reason': revocation_reason},
-            ip_address=request.client.host,
-            summary=f"Consentimiento revocado para paciente {patient_id}",
-            security_level='WARNING'
+            user=current_user,
+            request=request,
+            table_name='privacy_consents',
+            record_id=consent.id,
+            new_values={'revocation_reason': revocation_reason, 'consent_given': False},
+            operation_type='privacy_consent_revoke',
+            affected_patient_id=patient_id,
+            affected_patient_name=patient.name or "Paciente",
+            security_level='WARNING',
+            change_reason=revocation_reason
         )
         
         api_logger.info(
@@ -437,24 +496,37 @@ async def create_arco_request(
         
         # Verificar acceso
         if current_user.person_type == 'doctor':
-            consultation = db.query(MedicalRecord).filter(
-                MedicalRecord.patient_id == patient_id,
-                MedicalRecord.doctor_id == current_user.id
+            # Obtener el paciente para verificar created_by
+            patient = db.query(Person).filter(
+                Person.id == patient_id,
+                Person.person_type == 'patient'
             ).first()
             
-            if not consultation:
+            if not patient:
+                raise HTTPException(status_code=404, detail="Paciente no encontrado")
+            
+            # Permitir si:
+            # 1. El paciente fue creado por este doctor (created_by)
+            # 2. O existe una consulta entre el doctor y el paciente
+            # 3. O el usuario es admin
+            has_consultation = db.query(MedicalRecord).filter(
+                MedicalRecord.patient_id == patient_id,
+                MedicalRecord.doctor_id == current_user.id
+            ).first() is not None
+            
+            is_patient_creator = patient.created_by == current_user.id
+            
+            if not has_consultation and not is_patient_creator:
                 raise HTTPException(status_code=403, detail="No tiene acceso a este paciente")
         
         # Crear solicitud ARCO
         arco_request = ARCORequest(
             patient_id=patient_id,
             request_type=request_type,
-            request_description=description,  # Field name in model
+            description=description,  # En BD es "description"
             status='pending',
-            request_date=datetime.utcnow(),
-            assigned_to=current_user.id,  # Use assigned_to instead of requested_by
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            processed_by=current_user.id,  # En BD es "processed_by"
+            created_at=utc_now()
         )
         
         db.add(arco_request)
@@ -465,13 +537,13 @@ async def create_arco_request(
         audit_service.log_action(
             db=db,
             action='arco_request_created',
-            entity_type='arco_request',
-            entity_id=arco_request.id,
-            user_id=current_user.id,
-            user_type=current_user.person_type,
-            changes={'request_type': request_type, 'patient_id': patient_id},
-            ip_address=request.client.host,
-            summary=f"Solicitud ARCO ({request_type}) creada para paciente {patient_id}",
+            user=current_user,
+            request=request,
+            table_name='arco_requests',
+            record_id=arco_request.id,
+            new_values={'request_type': request_type, 'patient_id': patient_id},
+            operation_type='arco_request_create',
+            affected_patient_id=patient_id,
             security_level='INFO'
         )
         
@@ -489,9 +561,9 @@ async def create_arco_request(
                 "id": arco_request.id,
                 "patient_id": arco_request.patient_id,
                 "request_type": arco_request.request_type,
-                "description": arco_request.request_description,
+                "description": arco_request.description,
                 "status": arco_request.status,
-                "requested_at": arco_request.request_date.isoformat() if arco_request.request_date else None,
+                "requested_at": arco_request.created_at.isoformat() if arco_request.created_at else None,
                 "created_at": arco_request.created_at.isoformat()
             }
         }
@@ -515,12 +587,27 @@ async def get_arco_requests(
     try:
         # Verificar acceso
         if current_user.person_type == 'doctor':
-            consultation = db.query(MedicalRecord).filter(
-                MedicalRecord.patient_id == patient_id,
-                MedicalRecord.doctor_id == current_user.id
+            # Obtener el paciente para verificar created_by
+            patient = db.query(Person).filter(
+                Person.id == patient_id,
+                Person.person_type == 'patient'
             ).first()
             
-            if not consultation:
+            if not patient:
+                raise HTTPException(status_code=404, detail="Paciente no encontrado")
+            
+            # Permitir si:
+            # 1. El paciente fue creado por este doctor (created_by)
+            # 2. O existe una consulta entre el doctor y el paciente
+            # 3. O el usuario es admin
+            has_consultation = db.query(MedicalRecord).filter(
+                MedicalRecord.patient_id == patient_id,
+                MedicalRecord.doctor_id == current_user.id
+            ).first() is not None
+            
+            is_patient_creator = patient.created_by == current_user.id
+            
+            if not has_consultation and not is_patient_creator:
                 raise HTTPException(status_code=403, detail="No tiene acceso a este paciente")
         
         # Obtener solicitudes ARCO
@@ -534,15 +621,15 @@ async def get_arco_requests(
                     "id": req.id,
                     "patient_id": req.patient_id,
                     "request_type": req.request_type,
-                    "description": getattr(req, 'request_description', None),
+                    "description": getattr(req, 'description', None),  # En BD es "description", no "request_description"
                     "status": req.status,
                     "contact_email": getattr(req, 'contact_email', None),  # Field may not exist in model
                     "contact_phone": getattr(req, 'contact_phone', None),  # Field may not exist in model
-                    "requested_at": req.request_date.isoformat() if req.request_date else None,
-                    "resolved_at": getattr(req, 'resolved_at', None),  # Field may not exist in model
-                    "resolution_notes": getattr(req, 'resolution_notes', None),  # Field may not exist in model
+                    "requested_at": req.created_at.isoformat() if req.created_at else None,  # Usar created_at ya que request_date no existe
+                    "resolved_at": req.processed_at.isoformat() if req.processed_at else None,  # En BD es "processed_at"
+                    "resolution_notes": getattr(req, 'response', None),  # En BD es "response", no "response_description"
                     "created_at": req.created_at.isoformat(),
-                    "updated_at": req.updated_at.isoformat()
+                    "updated_at": req.created_at.isoformat() if req.created_at else None  # No hay updated_at en BD
                 }
                 for req in arco_requests
             ]
@@ -586,22 +673,36 @@ async def update_arco_request(
         
         # Verificar acceso
         if current_user.person_type == 'doctor':
-            consultation = db.query(MedicalRecord).filter(
-                MedicalRecord.patient_id == arco_request.patient_id,
-                MedicalRecord.doctor_id == current_user.id
+            # Obtener el paciente para verificar created_by
+            patient = db.query(Person).filter(
+                Person.id == arco_request.patient_id,
+                Person.person_type == 'patient'
             ).first()
             
-            if not consultation:
+            if not patient:
+                raise HTTPException(status_code=404, detail="Paciente no encontrado")
+            
+            # Permitir si:
+            # 1. El paciente fue creado por este doctor (created_by)
+            # 2. O existe una consulta entre el doctor y el paciente
+            # 3. O el usuario es admin
+            has_consultation = db.query(MedicalRecord).filter(
+                MedicalRecord.patient_id == arco_request.patient_id,
+                MedicalRecord.doctor_id == current_user.id
+            ).first() is not None
+            
+            is_patient_creator = patient.created_by == current_user.id
+            
+            if not has_consultation and not is_patient_creator:
                 raise HTTPException(status_code=403, detail="No tiene acceso a este paciente")
         
         # Actualizar
         old_status = arco_request.status
         arco_request.status = status
         if resolution_notes:
-            arco_request.response_description = resolution_notes  # Use response_description instead
+            arco_request.response = resolution_notes  # En BD es "response"
         if status == 'completed':  # Model uses 'completed', not 'resolved'
-            arco_request.response_date = datetime.utcnow()  # Use response_date instead
-        arco_request.updated_at = datetime.utcnow()
+            arco_request.processed_at = utc_now()  # En BD es "processed_at"
         
         db.commit()
         
@@ -609,13 +710,14 @@ async def update_arco_request(
         audit_service.log_action(
             db=db,
             action='arco_request_updated',
-            entity_type='arco_request',
-            entity_id=arco_request.id,
-            user_id=current_user.id,
-            user_type=current_user.person_type,
-            changes={'old_status': old_status, 'new_status': status},
-            ip_address=request.client.host,
-            summary=f"Solicitud ARCO {request_id} actualizada: {old_status} → {status}",
+            user=current_user,
+            request=request,
+            table_name='arco_requests',
+            record_id=arco_request.id,
+            old_values={'status': old_status},
+            new_values={'status': status, 'resolution_notes': resolution_notes} if resolution_notes else {'status': status},
+            operation_type='arco_request_update',
+            affected_patient_id=arco_request.patient_id,
             security_level='INFO'
         )
         
@@ -631,9 +733,9 @@ async def update_arco_request(
             "arco_request": {
                 "id": arco_request.id,
                 "status": arco_request.status,
-                "resolution_notes": arco_request.response_description,  # Use response_description instead
-                "resolved_at": arco_request.response_date.isoformat() if arco_request.response_date else None,  # Use response_date instead
-                "updated_at": arco_request.updated_at.isoformat()
+                "resolution_notes": arco_request.response,  # En BD es "response"
+                "resolved_at": arco_request.processed_at.isoformat() if arco_request.processed_at else None,  # En BD es "processed_at"
+                "updated_at": arco_request.created_at.isoformat() if arco_request.created_at else None  # No hay updated_at en BD
             }
         }
         

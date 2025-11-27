@@ -10,6 +10,7 @@ import uuid
 import logging
 
 from database import Person, MedicalRecord, PrivacyNotice, PrivacyConsent
+from utils.datetime_utils import utc_now
 from whatsapp_service import get_whatsapp_service
 from encryption import EncryptionService
 from logger import get_logger
@@ -195,17 +196,15 @@ async def send_privacy_notice_automatically(
             api_logger.warning("⚠️ No active privacy notice found, cannot send automatically")
             return None
         
-        # Generate privacy token and URL
-        privacy_token = str(uuid.uuid4())
-        # TODO: Replace with actual domain in production
-        privacy_url = f"https://tudominio.com/privacy-notice/{privacy_token}"
+        # URL del aviso de privacidad público
+        privacy_url = "https://cortexclinico.com/privacy"
         
         # Create consent record
         consent = PrivacyConsent(
             patient_id=patient_id,
             notice_id=privacy_notice.id,
             consent_given=False,  # Pending until patient accepts
-            consent_date=datetime.utcnow()
+            consent_date=utc_now()
         )
         
         db.add(consent)

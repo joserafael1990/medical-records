@@ -7,7 +7,7 @@ import json
 import secrets
 from typing import List, Optional
 from pydantic_settings import BaseSettings
-from pydantic import validator, model_validator
+from pydantic import field_validator, model_validator
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -47,7 +47,14 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "debug"
     
     # CORS Configuration
-    CORS_ORIGINS: List[str] = ["http://localhost:3000"]
+    # In production, CORS_ORIGINS must be set via environment variable
+    # Format: comma-separated list, e.g., "https://sistema.cortexclinico.com"
+    _cors_origins_env = os.getenv("CORS_ORIGINS")
+    if _cors_origins_env:
+        CORS_ORIGINS: List[str] = [origin.strip() for origin in _cors_origins_env.split(",")]
+    else:
+        # Default to localhost only in development
+        CORS_ORIGINS: List[str] = ["http://localhost:3000"] if os.getenv("APP_ENV", "development").lower() == "development" else []
     CORS_ALLOW_CREDENTIALS: bool = True
     
     # Security
@@ -74,7 +81,11 @@ class Settings(BaseSettings):
     MEDICAL_ENCRYPTION_KEY: Optional[str] = os.getenv("MEDICAL_ENCRYPTION_KEY", None)
     
     # Rate limiting
-    RATE_LIMIT_ENABLED: bool = _env_bool("RATE_LIMIT_ENABLED", True)
+    # Enabled by default in production, disabled in development to avoid issues with React double-invoke effects
+    RATE_LIMIT_ENABLED: bool = _env_bool(
+        "RATE_LIMIT_ENABLED",
+        os.getenv("APP_ENV", "development").lower() == "production"
+    )
     RATE_LIMIT_MAX_REQUESTS: int = int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "120"))
     RATE_LIMIT_WINDOW_SECONDS: int = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
     
@@ -89,7 +100,8 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE: int = 10485760  # 10MB
     UPLOAD_DIR: str = "uploads"
     
-    @validator('CORS_ORIGINS', pre=True)
+    @field_validator('CORS_ORIGINS', mode='before')
+    @classmethod
     def parse_cors_origins(cls, v):
         """Parse CORS origins from JSON string if needed"""
         if isinstance(v, str):
@@ -100,7 +112,8 @@ class Settings(BaseSettings):
                 return [v]
         return v
     
-    @validator('ALLOWED_HOSTS', pre=True)
+    @field_validator('ALLOWED_HOSTS', mode='before')
+    @classmethod
     def parse_allowed_hosts(cls, v):
         """Parse allowed hosts from JSON string if needed"""
         if isinstance(v, str):

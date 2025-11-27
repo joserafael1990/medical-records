@@ -5,6 +5,7 @@ Migrated from main_clean_english.py to improve code organization
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func
 from typing import Optional
 from datetime import datetime, timedelta
 import pytz
@@ -105,6 +106,8 @@ async def get_appointments(
         
         # Get appointments using the service (no doctor filter for development)
         # By default, exclude cancelled appointments unless specifically requested
+        # When available_for_consultation is True, it already filters out cancelled
+        # When status is None and available_for_consultation is False, exclude cancelled by default
         if status is None and not available_for_consultation:
             # Exclude cancelled appointments by default
             appointments = AppointmentService.get_appointments(
@@ -115,9 +118,10 @@ async def get_appointments(
                 end_date=end_date_obj,
                 status='active',  # This will filter out cancelled appointments
                 doctor_id=current_user.id,
-                available_for_consultation=available_for_consultation
+                available_for_consultation=False
             )
         else:
+            # If status is explicitly requested, use it; otherwise available_for_consultation handles filtering
             appointments = AppointmentService.get_appointments(
                 db=db,
                 skip=skip,
@@ -127,6 +131,19 @@ async def get_appointments(
                 status=status,
                 doctor_id=current_user.id,
                 available_for_consultation=available_for_consultation
+            )
+        
+        # Log results for debugging
+        if available_for_consultation:
+            api_logger.info(
+                "📋 Appointments returned for consultation",
+                extra={
+                    "doctor_id": current_user.id,
+                    "count": len(appointments),
+                    "appointment_ids": [apt.id for apt in appointments],
+                    "appointment_statuses": [apt.status for apt in appointments],
+                    "appointment_dates": [apt.appointment_date.isoformat() if apt.appointment_date else None for apt in appointments]
+                }
             )
         
         # Transform to include patient information
@@ -229,13 +246,23 @@ async def get_calendar_appointments(
                 )
                 parsed_date = now_cdmx().date()
             
-            # Create naive datetime bounds for the day (assuming appointments are stored in local time)
+            # Create naive datetime bounds for the day (appointments are stored as naive datetime in CDMX timezone)
             day_start = datetime.combine(parsed_date, datetime.min.time())
             day_end = datetime.combine(parsed_date, datetime.max.time())
             
+            # Use func.date() to compare dates properly, handling both naive and timezone-aware datetimes
             query = query.filter(
-                Appointment.appointment_date >= day_start,
-                Appointment.appointment_date <= day_end
+                func.date(Appointment.appointment_date) == parsed_date
+            )
+            
+            api_logger.debug(
+                "📅 Fetching appointments for single date",
+                extra={
+                    "doctor_id": current_user.id,
+                    "target_date": str(parsed_date),
+                    "day_start": day_start.isoformat(),
+                    "day_end": day_end.isoformat()
+                }
             )
             
         else:
@@ -254,6 +281,16 @@ async def get_calendar_appointments(
         
         # Execute query and return results
         appointments = query.order_by(Appointment.appointment_date).all()
+        
+        api_logger.info(
+            "📅 Fetched appointments from database",
+            extra={
+                "doctor_id": current_user.id,
+                "count": len(appointments),
+                "statuses": [apt.status for apt in appointments],
+                "appointment_ids": [apt.id for apt in appointments]
+            }
+        )
         
         # Since appointments are stored in CDMX timezone (without tzinfo), 
         # we need to assume they are already in CDMX timezone for proper display
@@ -566,7 +603,7 @@ async def create_appointment(
     """Create new appointment"""
     try:
         # Log the entire appointment_data object as dict to see what Pydantic received
-        appointment_dict = appointment_data.dict() if hasattr(appointment_data, 'dict') else appointment_data.model_dump() if hasattr(appointment_data, 'model_dump') else str(appointment_data)
+        appointment_dict = appointment_data.model_dump() if hasattr(appointment_data, 'model_dump') else (appointment_data.dict() if hasattr(appointment_data, 'dict') else str(appointment_data))
         api_logger.debug(
             "🔍 Received appointment creation payload",
             extra={
@@ -763,7 +800,7 @@ async def update_appointment(
             local_dt = dt.astimezone(cdmx_tz)
             return local_dt.replace(tzinfo=None)
 
-        data_dict = appointment_data.dict()
+        data_dict = appointment_data.model_dump() if hasattr(appointment_data, 'model_dump') else appointment_data.dict()
         if data_dict.get('appointment_date'):
             data_dict['appointment_date'] = to_cdmx_naive(data_dict['appointment_date'])
         if data_dict.get('end_time'):
@@ -822,6 +859,35 @@ async def update_appointment(
             joinedload(Appointment.reminders)
         ).filter(Appointment.id == appointment_id).first()
         
+        # Sincronizar con Google Calendar si está configurado
+        if updated_appointment_with_relations and updated_appointment_with_relations.doctor_id:
+            try:
+                from services.google_calendar_service import GoogleCalendarService
+                # Si la cita fue cancelada, eliminar el evento de Google Calendar
+                if updated_appointment_with_relations.status == 'cancelled':
+                    api_logger.info("🔄 Intentando eliminar evento de Google Calendar (vía PUT)", extra={
+                        "doctor_id": updated_appointment_with_relations.doctor_id,
+                        "appointment_id": appointment_id,
+                        "status": updated_appointment_with_relations.status
+                    })
+                    result = GoogleCalendarService.delete_calendar_event(db, updated_appointment_with_relations.doctor_id, appointment_id)
+                    api_logger.info(f"✅ Resultado de delete_calendar_event (vía PUT): {result}", extra={
+                        "doctor_id": updated_appointment_with_relations.doctor_id,
+                        "appointment_id": appointment_id,
+                        "result": result
+                    })
+                else:
+                    # Si no está cancelada, actualizar el evento
+                    GoogleCalendarService.update_calendar_event(db, updated_appointment_with_relations.doctor_id, updated_appointment_with_relations)
+            except Exception as e:
+                # No fallar si Google Calendar no está configurado o hay error
+                api_logger.error("❌ Error al sincronizar con Google Calendar (no crítico)", exc_info=True, extra={
+                    "doctor_id": updated_appointment_with_relations.doctor_id if updated_appointment_with_relations else None,
+                    "appointment_id": appointment_id,
+                    "status": updated_appointment_with_relations.status if updated_appointment_with_relations else None,
+                    "error": str(e)
+                })
+        
         api_logger.info(
             "✅ Appointment updated successfully",
             extra={"doctor_id": current_user.id, "appointment_id": appointment_id}
@@ -855,6 +921,8 @@ async def delete_appointment(
         if not appointment:
             raise HTTPException(status_code=404, detail="Appointment not found or access denied")
         
+        doctor_id = appointment.doctor_id
+        
         # Instead of hard delete, mark as cancelled for audit trail
         appointment.status = 'cancelled'
         appointment.cancelled_at = now_cdmx()
@@ -862,6 +930,29 @@ async def delete_appointment(
         appointment.cancelled_reason = "Cancelled by doctor"
         
         db.commit()
+        db.refresh(appointment)
+        
+        # Sincronizar con Google Calendar si está configurado
+        if doctor_id:
+            try:
+                from services.google_calendar_service import GoogleCalendarService
+                api_logger.info("🔄 Intentando eliminar evento de Google Calendar", extra={
+                    "doctor_id": doctor_id,
+                    "appointment_id": appointment_id
+                })
+                result = GoogleCalendarService.delete_calendar_event(db, doctor_id, appointment.id)
+                api_logger.info(f"✅ Resultado de delete_calendar_event: {result}", extra={
+                    "doctor_id": doctor_id,
+                    "appointment_id": appointment_id,
+                    "result": result
+                })
+            except Exception as e:
+                # No fallar si Google Calendar no está configurado o hay error
+                api_logger.error("❌ Error al sincronizar eliminación con Google Calendar", exc_info=True, extra={
+                    "doctor_id": doctor_id,
+                    "appointment_id": appointment_id,
+                    "error": str(e)
+                })
         
         api_logger.info(
             "Appointment cancelled successfully",

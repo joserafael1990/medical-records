@@ -103,10 +103,7 @@ def encrypt_sensitive_data(data: dict, data_type: str = "patient") -> dict:
     
     # Check if encryption is enabled
     if not settings.ENABLE_ENCRYPTION:
-        api_logger.debug(
-            "🔐 Encryption disabled - returning data as-is",
-            extra={"data_type": data_type, "encryption_enabled": False}
-        )
+        # Encryption disabled - no need to log this repeatedly
         return data
     
     try:
@@ -178,10 +175,7 @@ def decrypt_sensitive_data(data: dict, data_type: str = "patient") -> dict:
     
     # Check if encryption is enabled
     if not settings.ENABLE_ENCRYPTION:
-        api_logger.debug(
-            "🔓 Encryption disabled - returning data as-is",
-            extra={"data_type": data_type, "encryption_enabled": False}
-        )
+        # Encryption disabled - no need to log this repeatedly
         return data
     
     try:
@@ -544,22 +538,6 @@ async def create_consultation(
                            doctor_id=current_user.id, patient_id=consultation_data.get("patient_id"))
         
         patient_id = consultation_data.get("patient_id")
-        patient_document_id_raw = consultation_data.get("patient_document_id")
-        patient_document_value = (consultation_data.get("patient_document_value") or "").strip()
-        
-        if not patient_document_id_raw or not patient_document_value:
-            raise HTTPException(
-                status_code=400,
-                detail="El documento de identificación del paciente es obligatorio"
-            )
-        
-        try:
-            patient_document_id = int(patient_document_id_raw)
-        except (TypeError, ValueError):
-            raise HTTPException(
-                status_code=400,
-                detail="El documento de identificación del paciente es inválido"
-            )
         
         if not patient_id:
             raise HTTPException(
@@ -567,38 +545,87 @@ async def create_consultation(
                 detail="El paciente es obligatorio para crear la consulta"
             )
         
-        api_logger.debug(
-            "🔍 Validating patient document for consultation",
-            extra={
-                "patient_id": patient_id,
-                "patient_document_id": patient_document_id_raw,
-                "patient_document_value": patient_document_value
-            }
-        )
+        # Determinar si es una consulta de primera vez
+        consultation_type = consultation_data.get("consultation_type", "").strip()
+        is_first_time = consultation_type and consultation_type.lower() in ['primera vez', 'primera_vez', 'primera']
+        
+        # Validar documento de identificación solo para consultas de primera vez
+        patient_document_id_raw = consultation_data.get("patient_document_id")
+        patient_document_value = (consultation_data.get("patient_document_value") or "").strip()
+        
+        if is_first_time:
+            if not patient_document_id_raw or not patient_document_value:
+                raise HTTPException(
+                    status_code=400,
+                    detail="El documento de identificación del paciente es obligatorio para consultas de primera vez"
+                )
+            
+            try:
+                patient_document_id = int(patient_document_id_raw)
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status_code=400,
+                    detail="El documento de identificación del paciente es inválido"
+                )
+            
+            api_logger.debug(
+                "🔍 Validating patient document for first-time consultation",
+                extra={
+                    "patient_id": patient_id,
+                    "patient_document_id": patient_document_id_raw,
+                    "patient_document_value": patient_document_value
+                }
+            )
 
-        patient_document = db.query(PersonDocument).filter(
-            PersonDocument.person_id == patient_id,
-            PersonDocument.document_id == patient_document_id,
-            PersonDocument.is_active == True
-        ).first()
-        
-        if not patient_document:
-            document = db.query(Document).filter(Document.id == patient_document_id).first()
-            document_name = document.name if document else "documento seleccionado"
-            raise HTTPException(
-                status_code=400,
-                detail=f"El {document_name} no pertenece al paciente o está inactivo"
-            )
-        
-        if patient_document.document_value.strip().upper() != patient_document_value.strip().upper():
-            raise HTTPException(
-                status_code=400,
-                detail="El valor del documento no coincide con el registro del paciente"
-            )
-        
-        # Normalizar valores para el resto del flujo
-        consultation_data["patient_document_id"] = patient_document_id
-        consultation_data["patient_document_value"] = patient_document.document_value
+            patient_document = db.query(PersonDocument).filter(
+                PersonDocument.person_id == patient_id,
+                PersonDocument.document_id == patient_document_id,
+                PersonDocument.is_active == True
+            ).first()
+            
+            if not patient_document:
+                document = db.query(Document).filter(Document.id == patient_document_id).first()
+                document_name = document.name if document else "documento seleccionado"
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"El {document_name} no pertenece al paciente o está inactivo"
+                )
+            
+            if patient_document.document_value.strip().upper() != patient_document_value.strip().upper():
+                raise HTTPException(
+                    status_code=400,
+                    detail="El valor del documento no coincide con el registro del paciente"
+                )
+            
+            # Normalizar valores para el resto del flujo
+            consultation_data["patient_document_id"] = patient_document_id
+            consultation_data["patient_document_value"] = patient_document.document_value
+        else:
+            # Para consultas de seguimiento, el documento es opcional
+            # Si se proporciona, validarlo; si no, dejarlo como None
+            if patient_document_id_raw and patient_document_value:
+                try:
+                    patient_document_id = int(patient_document_id_raw)
+                    patient_document = db.query(PersonDocument).filter(
+                        PersonDocument.person_id == patient_id,
+                        PersonDocument.document_id == patient_document_id,
+                        PersonDocument.is_active == True
+                    ).first()
+                    
+                    if patient_document:
+                        consultation_data["patient_document_id"] = patient_document_id
+                        consultation_data["patient_document_value"] = patient_document.document_value
+                    else:
+                        # Si el documento no existe, no fallar, solo no incluirlo
+                        consultation_data["patient_document_id"] = None
+                        consultation_data["patient_document_value"] = None
+                except (TypeError, ValueError):
+                    # Si el documento es inválido, no fallar, solo no incluirlo
+                    consultation_data["patient_document_id"] = None
+                    consultation_data["patient_document_value"] = None
+            else:
+                consultation_data["patient_document_id"] = None
+                consultation_data["patient_document_value"] = None
         api_logger.debug(
             "✅ Patient document validated for consultation",
             extra={
@@ -713,9 +740,7 @@ async def create_consultation(
         
         # 🆕 8.5. Enviar aviso de privacidad automáticamente si es primera consulta
         # Compliance: LFPDPPP - Consentimiento previo requerido para tratamiento de datos
-        consultation_type = consultation_data.get("consultation_type", "").strip()
-        is_first_time = consultation_type and consultation_type.lower() in ['primera vez', 'primera_vez', 'primera']
-        
+        # is_first_time ya fue determinado anteriormente
         if is_first_time:
             try:
                 import sys
@@ -812,43 +837,70 @@ async def update_consultation(
         except (TypeError, ValueError):
             raise HTTPException(status_code=400, detail="El paciente especificado es inválido")
         
-        # Normalize patient document data
+        # Determinar si es una consulta de primera vez
+        consultation_type = consultation_data.get("consultation_type", consultation.consultation_type or "").strip()
+        is_first_time = consultation_type and consultation_type.lower() in ['primera vez', 'primera_vez', 'primera']
+        
+        # Normalize patient document data - solo requerido para consultas de primera vez
         patient_document_id_raw = consultation_data.get("patient_document_id", consultation.patient_document_id)
         patient_document_value = (consultation_data.get("patient_document_value", consultation.patient_document_value) or "").strip()
         
-        if not patient_document_id_raw or not patient_document_value:
-            raise HTTPException(
-                status_code=400,
-                detail="El documento de identificación del paciente es obligatorio"
-            )
-        
-        try:
-            patient_document_id = int(patient_document_id_raw)
-        except (TypeError, ValueError):
-            raise HTTPException(
-                status_code=400,
-                detail="El documento de identificación del paciente es inválido"
-            )
-        
-        patient_document = db.query(PersonDocument).filter(
-            PersonDocument.person_id == target_patient_id,
-            PersonDocument.document_id == patient_document_id,
-            PersonDocument.is_active == True
-        ).first()
-        
-        if not patient_document:
-            document = db.query(Document).filter(Document.id == patient_document_id).first()
-            document_name = document.name if document else "documento seleccionado"
-            raise HTTPException(
-                status_code=400,
-                detail=f"El {document_name} no pertenece al paciente o está inactivo"
-            )
-        
-        if patient_document.document_value.strip().upper() != patient_document_value.strip().upper():
-            raise HTTPException(
-                status_code=400,
-                detail="El valor del documento no coincide con el registro del paciente"
-            )
+        if is_first_time:
+            if not patient_document_id_raw or not patient_document_value:
+                raise HTTPException(
+                    status_code=400,
+                    detail="El documento de identificación del paciente es obligatorio para consultas de primera vez"
+                )
+            
+            try:
+                patient_document_id = int(patient_document_id_raw)
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status_code=400,
+                    detail="El documento de identificación del paciente es inválido"
+                )
+            
+            patient_document = db.query(PersonDocument).filter(
+                PersonDocument.person_id == target_patient_id,
+                PersonDocument.document_id == patient_document_id,
+                PersonDocument.is_active == True
+            ).first()
+            
+            if not patient_document:
+                document = db.query(Document).filter(Document.id == patient_document_id).first()
+                document_name = document.name if document else "documento seleccionado"
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"El {document_name} no pertenece al paciente o está inactivo"
+                )
+            
+            if patient_document.document_value.strip().upper() != patient_document_value.strip().upper():
+                raise HTTPException(
+                    status_code=400,
+                    detail="El valor del documento no coincide con el registro del paciente"
+                )
+            
+            consultation.patient_document_id = patient_document_id
+            consultation.patient_document_value = patient_document.document_value
+        else:
+            # Para consultas de seguimiento, el documento es opcional
+            # Si se proporciona, validarlo; si no, mantener el valor existente o dejarlo como None
+            if patient_document_id_raw and patient_document_value:
+                try:
+                    patient_document_id = int(patient_document_id_raw)
+                    patient_document = db.query(PersonDocument).filter(
+                        PersonDocument.person_id == target_patient_id,
+                        PersonDocument.document_id == patient_document_id,
+                        PersonDocument.is_active == True
+                    ).first()
+                    
+                    if patient_document:
+                        consultation.patient_document_id = patient_document_id
+                        consultation.patient_document_value = patient_document.document_value
+                    # Si el documento no existe, mantener el valor existente
+                except (TypeError, ValueError):
+                    # Si el documento es inválido, mantener el valor existente
+                    pass
         
         # 🆕 Validate and format diagnoses from CIE-10 catalog if provided
         # Compliance: NOM-004-SSA3-2012 - Register diagnosis codes and descriptions from official catalog
@@ -888,8 +940,6 @@ async def update_consultation(
         
         # Update fields
         consultation.patient_id = target_patient_id
-        consultation.patient_document_id = patient_document_id
-        consultation.patient_document_value = patient_document.document_value
         consultation.consultation_date = consultation_date
         consultation.chief_complaint = consultation_data.get("chief_complaint", consultation.chief_complaint)
         consultation.history_present_illness = consultation_data.get("history_present_illness", consultation.history_present_illness)
@@ -1113,7 +1163,7 @@ async def get_medical_records(
         # Convert to schemas and return
         result = []
         for record in records:
-            record_dict = schemas.MedicalRecord.from_orm(record).dict()
+            record_dict = schemas.MedicalRecord.model_validate(record).model_dump()
             result.append(record_dict)
             
         return {"data": result, "count": len(result)}
@@ -1138,7 +1188,7 @@ async def get_medical_record(
         if record.doctor_id != current_user.id:
             raise HTTPException(status_code=403, detail="Access denied to this medical record")
         
-        return schemas.MedicalRecord.from_orm(record).dict()
+        return schemas.MedicalRecord.model_validate(record).model_dump()
     except HTTPException:
         raise
     except Exception as e:
@@ -1169,7 +1219,7 @@ async def create_medical_record(
         
         return {
             "message": "Medical record created successfully",
-            "data": schemas.MedicalRecord.from_orm(new_record).dict()
+            "data": schemas.MedicalRecord.model_validate(new_record).model_dump()
         }
     except HTTPException:
         raise
@@ -1200,7 +1250,7 @@ async def update_medical_record(
         
         return {
             "message": "Medical record updated successfully",
-            "data": schemas.MedicalRecord.from_orm(updated_record).dict()
+            "data": schemas.MedicalRecord.model_validate(updated_record).model_dump()
         }
     except HTTPException:
         raise

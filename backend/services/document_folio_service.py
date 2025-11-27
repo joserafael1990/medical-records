@@ -4,6 +4,7 @@ from typing import Dict
 from sqlalchemy.orm import Session
 from logger import get_logger
 from database import DocumentFolioSequence, DocumentFolio
+from utils.datetime_utils import utc_now
 
 api_logger = get_logger("medical_records.api")
 
@@ -76,15 +77,15 @@ class DocumentFolioService:
                 doctor_id=doctor_id,
                 document_type=normalized_type,
                 last_number=0,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow()
+                created_at=utc_now(),
+                updated_at=utc_now()
             )
             db.add(sequence)
             db.flush()  # Ensure sequence has an ID before usage
 
         next_number = sequence.last_number + 1
         sequence.last_number = next_number
-        sequence.updated_at = datetime.utcnow()
+        sequence.updated_at = utc_now()
 
         formatted_folio = DocumentFolioService._format_folio(next_number)
 
@@ -94,7 +95,7 @@ class DocumentFolioService:
             document_type=normalized_type,
             folio_number=next_number,
             formatted_folio=formatted_folio,
-            created_at=datetime.utcnow()
+            created_at=utc_now()
         )
 
         db.add(folio)

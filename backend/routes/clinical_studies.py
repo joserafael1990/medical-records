@@ -13,6 +13,7 @@ import uuid
 import pytz
 
 from database import get_db, Person, ClinicalStudy, MedicalRecord
+from utils.datetime_utils import utc_now
 from dependencies import get_current_user
 from logger import get_logger
 from audit_service import audit_service
@@ -54,11 +55,11 @@ async def get_clinical_studies_by_patient(
             api_logger.warning("Patient not found or no access", patient_id=patient_id, doctor_id=current_user.id)
             return []
 
-        # Get clinical studies for this patient
+        # Get clinical studies for this patient (with or without consultation_id)
         studies = db.query(ClinicalStudy).filter(
             ClinicalStudy.patient_id == patient_id,
             ClinicalStudy.created_by == current_user.id  # Only show studies created by current user
-        ).order_by(ClinicalStudy.created_at.desc()).all()  # Most recent first
+        ).order_by(ClinicalStudy.ordered_date.desc(), ClinicalStudy.created_at.desc()).all()  # Most recent first
         
         # Convert to response format
         studies_data = []
@@ -161,11 +162,11 @@ async def create_clinical_study(
     current_user: Person = Depends(get_current_user)
 ):
     """Create a new clinical study"""
-    api_logger.debug("Creating clinical study", consultation_id=study_data.get('consultation_id'), doctor_id=current_user.id)
+    api_logger.debug("Creating clinical study", consultation_id=study_data.get('consultation_id'), doctor_id=current_user.id, study_data_keys=list(study_data.keys()))
     
     try:
-        # Validate required fields (clinical_indication can be empty string)
-        required_fields = ['consultation_id', 'patient_id', 'study_type', 'study_name', 'ordering_doctor']
+        # Validate required fields (consultation_id is now optional - NOT in required_fields)
+        required_fields = ['patient_id', 'study_type', 'study_name', 'ordering_doctor']
         for field in required_fields:
             if field not in study_data or study_data[field] is None:
                 raise HTTPException(status_code=400, detail=f"Field '{field}' is required")
@@ -173,15 +174,6 @@ async def create_clinical_study(
         # clinical_indication is optional but must be present (can be empty string)
         if 'clinical_indication' not in study_data:
             raise HTTPException(status_code=400, detail="Field 'clinical_indication' is required")
-        
-        # Verify consultation exists and user has access
-        consultation = db.query(MedicalRecord).filter(
-            MedicalRecord.id == int(study_data['consultation_id']),
-            MedicalRecord.created_by == current_user.id
-        ).first()
-        
-        if not consultation:
-            raise HTTPException(status_code=404, detail="Consultation not found or no access")
         
         # Verify patient exists and user has access
         patient = db.query(Person).filter(
@@ -193,16 +185,39 @@ async def create_clinical_study(
         if not patient:
             raise HTTPException(status_code=404, detail="Patient not found or no access")
         
+        # Verify consultation exists and user has access (only if consultation_id is provided)
+        consultation_id = study_data.get('consultation_id')
+        consultation = None
+        # Handle consultation_id: can be None, null string, empty string, or valid ID
+        if consultation_id and consultation_id != 'null' and consultation_id != '' and str(consultation_id).strip():
+            try:
+                consultation_id_int = int(consultation_id)
+                consultation = db.query(MedicalRecord).filter(
+                    MedicalRecord.id == consultation_id_int,
+                    MedicalRecord.created_by == current_user.id
+                ).first()
+                
+                if not consultation:
+                    raise HTTPException(status_code=404, detail="Consultation not found or no access")
+            except (ValueError, TypeError):
+                # If consultation_id is not a valid integer, treat it as None
+                consultation_id = None
+        else:
+            # consultation_id is None, null, empty string, etc. - treat as None
+            consultation_id = None
+        
         # study_code column does not exist in clinical_studies table - removed
         
         # Create new clinical study
+        # consultation_id can be None if not provided
+        final_consultation_id = consultation_id if (consultation_id and consultation_id != 'null' and str(consultation_id).strip()) else None
         new_study = ClinicalStudy(
-            consultation_id=int(study_data['consultation_id']),
+            consultation_id=final_consultation_id,
             patient_id=int(study_data['patient_id']),
             doctor_id=current_user.id,
             study_type=study_data['study_type'],
             study_name=study_data['study_name'],
-            ordered_date=datetime.fromisoformat(study_data['ordered_date'].replace('Z', '+00:00')) if study_data.get('ordered_date') else datetime.utcnow(),
+            ordered_date=datetime.fromisoformat(study_data['ordered_date'].replace('Z', '+00:00')) if study_data.get('ordered_date') else utc_now(),
             performed_date=datetime.fromisoformat(study_data['performed_date'].replace('Z', '+00:00')) if study_data.get('performed_date') else None,
             # results_date removed - column does not exist in clinical_studies table
             status=study_data.get('status', 'ordered'),
@@ -223,7 +238,7 @@ async def create_clinical_study(
         # Return created study
         response_data = {
             "id": str(new_study.id),
-            "consultation_id": str(new_study.consultation_id),
+            "consultation_id": str(new_study.consultation_id) if new_study.consultation_id else None,
             "patient_id": str(new_study.patient_id),
             "study_type": new_study.study_type,
             "study_name": new_study.study_name,
@@ -303,13 +318,24 @@ async def update_clinical_study(
         # if 'results_date' in study_data and study_data['results_date']:
         #     study.results_date = datetime.fromisoformat(study_data['results_date'].replace('Z', '+00:00'))
         
-        study.updated_at = datetime.utcnow()
+        study.updated_at = utc_now()
         
         db.commit()
         db.refresh(study)
-        db.refresh(study, ['consultation'])
+        # Only refresh consultation relationship if consultation_id exists
+        if study.consultation_id:
+            db.refresh(study, ['consultation'])
+        # Also refresh patient relationship to get patient name
+        db.refresh(study, ['patient'])
 
         updated_data = serialize_instance(study)
+
+        # Get patient name safely
+        patient_name = None
+        if study.consultation_id and study.consultation and study.consultation.patient:
+            patient_name = study.consultation.patient.name
+        elif study.patient:
+            patient_name = study.patient.name
 
         audit_service.log_action(
             db=db,
@@ -322,7 +348,7 @@ async def update_clinical_study(
             new_values=updated_data,
             operation_type="clinical_study_update",
             affected_patient_id=study.patient_id,
-            affected_patient_name=study.consultation.patient.name if study.consultation and study.consultation.patient else None,
+            affected_patient_name=patient_name,
             metadata={
                 "consultation_id": study.consultation_id,
             },
@@ -331,7 +357,7 @@ async def update_clinical_study(
         # Return updated study
         response_data = {
             "id": str(study.id),
-            "consultation_id": str(study.consultation_id),
+            "consultation_id": str(study.consultation_id) if study.consultation_id else None,
             "patient_id": str(study.patient_id),
             "study_type": study.study_type,
             "study_name": study.study_name,
@@ -401,9 +427,29 @@ async def delete_clinical_study(
         
         original_data = serialize_instance(study)
 
-        db.refresh(study, ['consultation'])
+        # Get patient name BEFORE deleting (while study is still bound to session)
+        # Only refresh consultation relationship if consultation_id exists
+        if study.consultation_id:
+            db.refresh(study, ['consultation'])
+        # Also refresh patient relationship to get patient name
+        db.refresh(study, ['patient'])
 
-        # Delete the study
+        # Get all needed info BEFORE deletion (while study is still bound to session)
+        patient_name = None
+        patient_id = study.patient_id
+        consultation_id = study.consultation_id  # Save before deletion
+        
+        if study.consultation_id and study.consultation and study.consultation.patient:
+            patient_name = study.consultation.patient.name
+        elif study.patient:
+            patient_name = study.patient.name
+        else:
+            # Fallback: query patient directly if relationship doesn't work
+            patient = db.query(Person).filter(Person.id == study.patient_id).first()
+            if patient:
+                patient_name = patient.name
+
+        # Delete the study (after getting all needed info)
         db.delete(study)
         db.commit()
 
@@ -417,10 +463,10 @@ async def delete_clinical_study(
             old_values=original_data,
             new_values=None,
             operation_type="clinical_study_delete",
-            affected_patient_id=study.patient_id,
-            affected_patient_name=study.consultation.patient.name if study.consultation and study.consultation.patient else None,
+            affected_patient_id=patient_id,
+            affected_patient_name=patient_name,
             metadata={
-                "consultation_id": study.consultation_id,
+                "consultation_id": consultation_id,  # Use saved value, not study.consultation_id
             },
         )
         
@@ -564,12 +610,16 @@ async def upload_clinical_study_file(
         study.file_path = file_path
         study.file_type = file.content_type
         study.file_size = len(content)
+        # Automatically set status to 'completed' when file is uploaded
+        study.status = 'completed'
         # Get current time in Mexico City timezone and convert to UTC for storage
         mexico_time = now_cdmx()
         utc_time = mexico_time.astimezone(pytz.UTC).replace(tzinfo=None)
+        # Set performed_date when file is uploaded
+        study.performed_date = utc_time
         # results_date removed - column does not exist in clinical_studies table
         # study.results_date = utc_time  # Store as UTC but represent Mexico time
-        study.updated_at = datetime.utcnow()
+        study.updated_at = utc_now()
         
         
         db.commit()

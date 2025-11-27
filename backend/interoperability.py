@@ -5,6 +5,7 @@ Sistema de intercambio de datos médicos estándar
 from datetime import datetime, date
 from typing import Dict, List, Any, Optional
 from pydantic import BaseModel
+from utils.datetime_utils import utc_now
 import json
 import uuid
 
@@ -139,11 +140,16 @@ class InteroperabilityService:
         ))
         
         # Nombres
+        # Parse name to extract parts if needed, otherwise use full name
+        name_parts = doctor_profile.name.split() if doctor_profile.name else []
+        first_name = name_parts[0] if name_parts else ""
+        family_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
+        
         names = [FHIRName(
-            family=f"{doctor_profile.paternal_surname} {doctor_profile.maternal_surname or ''}".strip(),
-            given=[doctor_profile.first_name],
+            family=family_name,
+            given=[first_name] if first_name else [],
             prefix=[doctor_profile.title] if doctor_profile.title else None,
-            text=doctor_profile.full_name
+            text=doctor_profile.full_name if hasattr(doctor_profile, 'full_name') else doctor_profile.name
         )]
         
         # Contactos
@@ -266,10 +272,15 @@ class InteroperabilityService:
         ))
         
         # Nombres
+        # Parse name to extract parts if needed, otherwise use full name
+        name_parts = patient.name.split() if patient.name else []
+        first_name = name_parts[0] if name_parts else ""
+        family_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
+        
         names = [FHIRName(
-            family=f"{patient.paternal_surname} {patient.maternal_surname or ''}".strip(),
-            given=[patient.first_name],
-            text=f"{patient.first_name} {patient.paternal_surname} {patient.maternal_surname or ''}".strip()
+            family=family_name,
+            given=[first_name] if first_name else [],
+            text=patient.name
         )]
         
         # Contactos
@@ -370,7 +381,7 @@ class FHIRExporter:
             "resourceType": "Bundle",
             "id": str(uuid.uuid4()),
             "type": "collection",
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": utc_now().isoformat() + "Z",
             "total": len(resources),
             "entry": [
                 {
@@ -389,18 +400,18 @@ class FHIRExporter:
         
         # Paciente
         fhir_patient = interop_service.patient_to_fhir_patient(patient)
-        resources.append(fhir_patient.dict())
+        resources.append(fhir_patient.model_dump())
         
         # Médico
         fhir_practitioner = interop_service.doctor_to_fhir_practitioner(doctor_profile)
-        resources.append(fhir_practitioner.dict())
+        resources.append(fhir_practitioner.model_dump())
         
         # Consultas
         for consultation in consultations:
             fhir_encounter = interop_service.consultation_to_fhir_encounter(
                 consultation, patient.id, doctor_profile.id
             )
-            resources.append(fhir_encounter.dict())
+            resources.append(fhir_encounter.model_dump())
         
         return FHIRExporter.export_bundle(resources)
 

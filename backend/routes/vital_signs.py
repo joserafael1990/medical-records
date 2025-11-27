@@ -4,11 +4,12 @@ Migrated from main_clean_english.py to improve code organization
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Body
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 from datetime import datetime
 
 from database import get_db, Person, VitalSign, ConsultationVitalSign, MedicalRecord
+from utils.datetime_utils import utc_now
 from dependencies import get_current_user
 from logger import get_logger
 
@@ -61,7 +62,7 @@ async def get_consultation_vital_signs(
         # Verify consultation exists and user has access
         consultation = db.query(MedicalRecord).filter(
             MedicalRecord.id == consultation_id,
-            MedicalRecord.created_by == current_user.id
+            MedicalRecord.doctor_id == current_user.id
         ).first()
         
         if not consultation:
@@ -72,8 +73,10 @@ async def get_consultation_vital_signs(
             )
             return []
 
-        # Get vital signs for this consultation
-        consultation_vital_signs = db.query(ConsultationVitalSign).filter(
+        # Get vital signs for this consultation with vital_sign relationship loaded
+        consultation_vital_signs = db.query(ConsultationVitalSign).options(
+            joinedload(ConsultationVitalSign.vital_sign)
+        ).filter(
             ConsultationVitalSign.consultation_id == consultation_id
         ).all()
         
@@ -87,11 +90,13 @@ async def get_consultation_vital_signs(
         # Convert to response format
         vital_signs_data = []
         for cv_sign in consultation_vital_signs:
+            # Safely access vital_sign relationship
+            vital_sign_name = cv_sign.vital_sign.name if cv_sign.vital_sign else "Unknown"
             vital_sign_data = {
                 "id": cv_sign.id,
                 "consultation_id": cv_sign.consultation_id,
                 "vital_sign_id": cv_sign.vital_sign_id,
-                "vital_sign_name": cv_sign.vital_sign.name,
+                "vital_sign_name": vital_sign_name,
                 "value": cv_sign.value,
                 "unit": cv_sign.unit,
                 "created_at": cv_sign.created_at.isoformat() if cv_sign.created_at else None,
@@ -175,7 +180,7 @@ async def create_consultation_vital_sign(
             # Update existing vital sign
             existing_cv_sign.value = vital_sign_data.get('value')
             existing_cv_sign.unit = vital_sign_data.get('unit')
-            existing_cv_sign.updated_at = datetime.utcnow()
+            existing_cv_sign.updated_at = utc_now()
             
             db.commit()
             db.refresh(existing_cv_sign)
@@ -261,7 +266,7 @@ async def delete_consultation_vital_sign(
         # Verify consultation exists and user has access
         consultation = db.query(MedicalRecord).filter(
             MedicalRecord.id == consultation_id,
-            MedicalRecord.created_by == current_user.id
+            MedicalRecord.doctor_id == current_user.id
         ).first()
         
         if not consultation:
@@ -300,4 +305,111 @@ async def delete_consultation_vital_sign(
         )
         db.rollback()
         raise HTTPException(status_code=500, detail="Error deleting consultation vital sign")
+
+
+@router.get("/patients/{patient_id}/vital-signs/history")
+async def get_patient_vital_signs_history(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Get historical vital signs for a patient, grouped by vital sign type"""
+    api_logger.info(
+        "Getting patient vital signs history",
+        doctor_id=current_user.id,
+        patient_id=patient_id
+    )
+    
+    try:
+        # Verify patient exists and user has access (doctor can only access own patients)
+        patient = db.query(Person).filter(
+            Person.id == patient_id,
+            Person.person_type == 'patient'
+        ).first()
+        
+        if not patient:
+            raise HTTPException(status_code=404, detail="Patient not found")
+        
+        # Get all consultations for this patient created by the current doctor
+        consultations = db.query(MedicalRecord).filter(
+            MedicalRecord.patient_id == patient_id,
+            MedicalRecord.doctor_id == current_user.id
+        ).order_by(MedicalRecord.consultation_date.asc()).all()
+        
+        if not consultations:
+            return {
+                "patient_id": patient_id,
+                "patient_name": patient.name or "Paciente",
+                "vital_signs_history": []
+            }
+        
+        # Get all vital signs for these consultations with vital_sign relationship loaded
+        consultation_ids = [c.id for c in consultations]
+        vital_signs = db.query(ConsultationVitalSign).options(
+            joinedload(ConsultationVitalSign.vital_sign)
+        ).filter(
+            ConsultationVitalSign.consultation_id.in_(consultation_ids)
+        ).all()
+        
+        # Create a map of consultation_id to date for sorting
+        consultation_date_map = {c.id: c.consultation_date for c in consultations}
+        
+        # Group by vital sign type
+        history_by_type = {}
+        for vs in vital_signs:
+            # Safely access vital_sign relationship
+            if not vs.vital_sign:
+                continue
+            vital_sign_name = vs.vital_sign.name
+            vital_sign_id = vs.vital_sign_id
+            
+            if vital_sign_id not in history_by_type:
+                history_by_type[vital_sign_id] = {
+                    "vital_sign_id": vital_sign_id,
+                    "vital_sign_name": vital_sign_name,
+                    "data": []
+                }
+            
+            # Get consultation date
+            consultation_date = consultation_date_map.get(vs.consultation_id) or vs.created_at
+            
+            # Convert value to float if possible
+            try:
+                numeric_value = float(vs.value) if vs.value else None
+            except (ValueError, TypeError):
+                numeric_value = None
+            
+            history_by_type[vital_sign_id]["data"].append({
+                "value": numeric_value,
+                "unit": vs.unit or "",
+                "date": consultation_date.isoformat() if consultation_date else None,
+                "consultation_id": vs.consultation_id
+            })
+        
+        # Convert to list format
+        vital_signs_history = list(history_by_type.values())
+        
+        api_logger.info(
+            "Patient vital signs history loaded",
+            doctor_id=current_user.id,
+            patient_id=patient_id,
+            vital_signs_count=len(vital_signs_history)
+        )
+        
+        return {
+            "patient_id": patient_id,
+            "patient_name": patient.name or "Paciente",
+            "vital_signs_history": vital_signs_history
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error(
+            "Error getting patient vital signs history",
+            doctor_id=current_user.id,
+            patient_id=patient_id,
+            error=str(e)
+        )
+        raise HTTPException(status_code=500, detail="Error retrieving patient vital signs history")
 

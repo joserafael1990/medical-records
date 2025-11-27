@@ -15,6 +15,7 @@ import crud
 import schemas
 from datetime import datetime
 from utils.audit_utils import serialize_instance
+from utils.datetime_utils import utc_now
 from utils.document_validators import validate_curp_conditional
 
 api_logger = get_logger("medical_records.api")
@@ -128,16 +129,9 @@ async def get_patients(
             
             if getattr(patient, 'primary_phone', None):
                 try:
-                    security_logger.debug(
-                        "🔓 Attempting to decrypt phone for patient",
-                        extra={"patient_id": patient.id, "doctor_id": current_user.id}
-                    )
+                    # Decrypt phone (no need to log every decryption)
                     decrypted_phone = patient.primary_phone
                     patient_data['primary_phone'] = decrypted_phone
-                    security_logger.debug(
-                        "✅ Successfully decrypted phone for patient",
-                        extra={"patient_id": patient.id, "doctor_id": current_user.id}
-                    )
                 except Exception as e:
                     security_logger.warning(
                         "⚠️ Could not decrypt phone for patient",
@@ -297,9 +291,14 @@ async def get_patient(
             'address_state_id': patient.address_state_id,
             'address_country_id': patient.address_country_id,
             'address_postal_code': patient.address_postal_code,
+            'birth_city': getattr(patient, 'birth_city', None),
+            'birth_state_id': getattr(patient, 'birth_state_id', None),
+            'birth_country_id': getattr(patient, 'birth_country_id', None),
             'emergency_contact_name': patient.emergency_contact_name,
             'emergency_contact_phone': patient.emergency_contact_phone,
             'emergency_contact_relationship': patient.emergency_contact_relationship,
+            'insurance_provider': getattr(patient, 'insurance_provider', None),
+            'insurance_number': decrypted_insurance,
             'active': patient.is_active,
             'created_at': patient.created_at.isoformat() if patient.created_at else None,
             'updated_at': patient.updated_at.isoformat() if patient.updated_at else None,
@@ -525,6 +524,9 @@ async def update_patient(
         foreign_key_fields = [
             'emergency_contact_relationship',
             'birth_state_id',
+            'birth_country_id',
+            'address_state_id',
+            'address_country_id',
             # 'city_residence_id'  # Field doesn't exist in Person model - removed
         ]
         
@@ -570,7 +572,7 @@ async def update_patient(
                     if needs_update:
                         existing_doc.document_value = doc_value
                         existing_doc.is_active = True
-                        existing_doc.updated_at = datetime.utcnow()
+                        existing_doc.updated_at = utc_now()
                         security_logger.info(
                             "📄 Patient document updated",
                             extra={
@@ -598,7 +600,7 @@ async def update_patient(
                         }
                     )
         
-        patient.updated_at = datetime.utcnow()
+        patient.updated_at = utc_now()
         db.commit()
         db.refresh(patient)
 

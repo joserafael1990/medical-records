@@ -273,8 +273,8 @@ async def update_my_profile(
         documents_to_save = []
         
         # Get dict WITHOUT exclude_unset to see all fields including None/empty arrays
-        doctor_data_dict_full = doctor_data.dict() if hasattr(doctor_data, 'dict') else {}
-        doctor_data_dict = doctor_data.dict(exclude_unset=True) if hasattr(doctor_data, 'dict') else {}
+        doctor_data_dict_full = doctor_data.model_dump() if hasattr(doctor_data, 'model_dump') else (doctor_data.dict() if hasattr(doctor_data, 'dict') else {})
+        doctor_data_dict = doctor_data.model_dump(exclude_unset=True) if hasattr(doctor_data, 'model_dump') else (doctor_data.dict(exclude_unset=True) if hasattr(doctor_data, 'dict') else {})
         
         api_logger.info(f"📋 Received doctor_data_dict keys: {list(doctor_data_dict.keys())}")
         api_logger.info(f"📋 Full doctor_data_dict_full keys: {list(doctor_data_dict_full.keys())}")
@@ -386,18 +386,32 @@ async def update_my_profile(
             api_logger.info(f"⚠️ No valid documents found in request")
         
         if documents_to_save:
-            formatted_docs = _format_documents_for_validation(documents_to_save)
-            is_valid_curp, curp_error = validate_curp_conditional(formatted_docs)
-            if not is_valid_curp:
+            try:
+                api_logger.info(f"🔍 Validating {len(documents_to_save)} documents...")
+                formatted_docs = _format_documents_for_validation(documents_to_save)
+                api_logger.info(f"🔍 Formatted docs: {formatted_docs}")
+                is_valid_curp, curp_error = validate_curp_conditional(formatted_docs)
+                api_logger.info(f"🔍 CURP validation result: {is_valid_curp}, error: {curp_error}")
+                if not is_valid_curp:
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail=curp_error
+                    )
+                is_valid_license, license_error = validate_professional_license_conditional(formatted_docs)
+                api_logger.info(f"🔍 License validation result: {is_valid_license}, error: {license_error}")
+                if not is_valid_license:
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail=license_error
+                    )
+                api_logger.info(f"✅ Document validation passed")
+            except HTTPException:
+                raise
+            except Exception as e:
+                api_logger.error(f"❌ Error validating documents: {str(e)}", error_type=type(e).__name__, exc_info=True)
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=curp_error
-                )
-            is_valid_license, license_error = validate_professional_license_conditional(formatted_docs)
-            if not is_valid_license:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=license_error
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Error validating documents: {str(e)}"
                 )
         
         # Handle specialty conversion from name to ID if needed
@@ -417,10 +431,13 @@ async def update_my_profile(
             del doctor_data_dict['specialty']
         
         # Update doctor profile (this will handle phone parsing)
+        updated_doctor = None
         try:
             # Log phone data before update
             api_logger.info(f"📞 Phone data before update: primary_phone={getattr(doctor_data, 'primary_phone', None)}, has_attr={hasattr(doctor_data, 'primary_phone')}")
+            api_logger.info(f"🔄 About to call update_doctor_profile for user {current_user.id}")
             updated_doctor = crud.update_doctor_profile(db, current_user.id, doctor_data)
+            api_logger.info(f"✅ update_doctor_profile returned successfully")
             if not updated_doctor:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -428,8 +445,15 @@ async def update_my_profile(
                 )
             # Log phone after update
             api_logger.info(f"📞 Phone data after update: primary_phone={updated_doctor.primary_phone}")
+            # Note: update_doctor_profile already commits internally
+            api_logger.info(f"✅ Doctor profile updated successfully")
+            # Refresh the doctor object to ensure we have the latest data
+            db.refresh(updated_doctor)
+        except HTTPException:
+            db.rollback()
+            raise
         except Exception as e:
-            api_logger.error(f"❌ Error updating doctor profile: {str(e)}", error_type=type(e).__name__, traceback=traceback.format_exc())
+            api_logger.error(f"❌ Error updating doctor profile: {str(e)}", error_type=type(e).__name__, exc_info=True)
             db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -440,6 +464,7 @@ async def update_my_profile(
         if documents_to_save:
             api_logger.info(f"💾 Saving {len(documents_to_save)} documents for user {current_user.id}")
             try:
+                api_logger.info(f"💾 Starting document processing...")
                 # SEPARAR documentos por tipo para aplicar regla de "solo uno por tipo"
                 professional_docs = []
                 personal_docs = []
@@ -515,6 +540,16 @@ async def update_my_profile(
         else:
             api_logger.info(f"ℹ️ No documents to save")
         
+        # Ensure updated_doctor is available
+        if not updated_doctor:
+            api_logger.error("❌ updated_doctor is None after processing")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Doctor profile not found after update"
+            )
+        
+        api_logger.info(f"📋 Building response for doctor {updated_doctor.id}")
+        
         # Get specialty name for response
         specialty_name = None
         if updated_doctor.specialty_id:
@@ -558,10 +593,8 @@ async def update_my_profile(
             "person_code": updated_doctor.person_code,
             "person_type": updated_doctor.person_type,
             "title": updated_doctor.title,
-            "first_name": updated_doctor.first_name,
-            "paternal_surname": updated_doctor.paternal_surname,
-            "maternal_surname": updated_doctor.maternal_surname,
-            "full_name": updated_doctor.full_name,
+            "name": updated_doctor.name,
+            "full_name": updated_doctor.full_name if hasattr(updated_doctor, 'full_name') else updated_doctor.name,
             "email": updated_doctor.email,
             "primary_phone": updated_doctor.primary_phone,
             "birth_date": updated_doctor.birth_date,
@@ -577,7 +610,7 @@ async def update_my_profile(
             "address_city": updated_doctor.address_city,
             "address_state_id": updated_doctor.address_state_id,
             "address_state_name": updated_doctor.address_state.name if updated_doctor.address_state else None,
-            "address_country_name": updated_doctor.address_state.country.name if updated_doctor.address_state and updated_doctor.address_state.country else None,
+            "address_country_name": (updated_doctor.address_state.country.name if updated_doctor.address_state and hasattr(updated_doctor.address_state, 'country') and updated_doctor.address_state.country else None),
             "address_postal_code": updated_doctor.address_postal_code,
             
             # Professional Address (Office) - Moved to offices table
@@ -613,6 +646,10 @@ async def update_my_profile(
             "created_at": updated_doctor.created_at,
             "updated_at": updated_doctor.updated_at
         }
+    except HTTPException:
+        raise
     except Exception as e:
+        api_logger.error(f"❌ Unexpected error in update_my_profile: {str(e)}", error_type=type(e).__name__, exc_info=True)
+        db.rollback()
         raise HTTPException(status_code=500, detail=f"Error updating profile: {str(e)}")
 

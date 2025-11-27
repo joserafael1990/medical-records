@@ -11,6 +11,7 @@ from datetime import datetime
 from logger import get_logger
 
 from database import get_db, Person, Office, State, Country, Appointment, AppointmentType
+from utils.datetime_utils import utc_now
 from dependencies import get_current_user
 import schemas
 
@@ -31,7 +32,7 @@ async def create_office(
             extra={
                 "doctor_id": current_user.id,
                 "office_name": office.name,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": utc_now().isoformat()
             }
         )
         
@@ -230,7 +231,7 @@ async def delete_office(
         # Check for future appointments
         future_appointments = db.query(Appointment).filter(
             Appointment.office_id == office_id,
-            Appointment.appointment_date > datetime.utcnow()
+            Appointment.appointment_date > utc_now()
         ).count()
         
         if future_appointments > 0:

@@ -7,6 +7,7 @@ import traceback
 import uuid
 from datetime import datetime
 from typing import Dict, Any
+from utils.datetime_utils import utc_now
 from fastapi import Request, Response, HTTPException
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -69,7 +70,7 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
             "url": str(request.url),
             "client_ip": client_ip,
             "user_agent": user_agent,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": utc_now().isoformat()
         }
         
         # Handle custom medical system exceptions
@@ -275,7 +276,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Log all incoming requests for debugging and monitoring"""
     
     async def dispatch(self, request: Request, call_next):
-        start_time = datetime.utcnow()
+        start_time = utc_now()
         
         # Log request
         logger.info(
@@ -293,7 +294,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         
         # Calculate duration
-        duration = (datetime.utcnow() - start_time).total_seconds()
+        duration = (utc_now() - start_time).total_seconds()
         
         # Log response
         logger.info(
@@ -325,7 +326,7 @@ class ErrorReporter:
             "error": str(error),
             "type": type(error).__name__,
             "context": context,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now().isoformat(),
             "traceback": traceback.format_exc()
         }
         
@@ -358,7 +359,7 @@ async def health_check_with_error_info() -> Dict[str, Any]:
     """Enhanced health check that includes error statistics"""
     return {
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_now().isoformat(),
         "error_stats": ErrorReporter.get_error_stats(),
         "database_status": "connected",  # Check actual DB connection
         "timezone": "America/Mexico_City"

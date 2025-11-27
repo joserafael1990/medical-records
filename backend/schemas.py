@@ -3,8 +3,8 @@ Schemas Pydantic para APIs con nombres en inglés
 Compatible con nueva arquitectura unificada de base de datos
 """
 
-from pydantic import BaseModel, validator, EmailStr
-from typing import Optional, List, Literal
+from pydantic import BaseModel, field_validator, EmailStr, ConfigDict
+from typing import Optional, List, Literal, Dict, Any
 from datetime import datetime, date
 from decimal import Decimal
 
@@ -13,12 +13,11 @@ from decimal import Decimal
 # ============================================================================
 
 class BaseSchema(BaseModel):
-    class Config:
-        from_attributes = True
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-            date: lambda v: v.isoformat() if v else None
-        }
+    model_config = ConfigDict(
+        from_attributes=True,
+        # json_encoders removed - use model_serializer instead if needed
+        # For datetime/date serialization, Pydantic V2 handles it automatically
+    )
 
 # ============================================================================
 # GEOGRAPHIC CATALOGS
@@ -69,16 +68,18 @@ class OfficeBase(BaseSchema):
     is_virtual: bool = False
     virtual_url: Optional[str] = None
     
-    @validator('name')
+    @field_validator('name')
+    @classmethod
     def validate_name(cls, v):
         if not v or not v.strip():
             raise ValueError('Office name is required and cannot be empty')
         return v.strip()
     
-    @validator('virtual_url')
-    def validate_virtual_url(cls, v, values):
+    @field_validator('virtual_url')
+    @classmethod
+    def validate_virtual_url(cls, v, info):
         # Si es consultorio virtual, la URL es obligatoria
-        if values.get('is_virtual', False) and (not v or not v.strip()):
+        if info.data.get('is_virtual', False) and (not v or not v.strip()):
             raise ValueError('Virtual URL is required for virtual offices')
         return v.strip() if v else None
 
@@ -138,8 +139,7 @@ class DocumentTypeResponse(BaseSchema):
     created_at: datetime
     updated_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class DocumentResponse(BaseSchema):
     id: int
@@ -149,8 +149,7 @@ class DocumentResponse(BaseSchema):
     created_at: datetime
     updated_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class PersonDocumentCreate(BaseSchema):
     document_id: int
@@ -170,8 +169,7 @@ class PersonDocumentResponse(BaseSchema):
     updated_at: datetime
     document: Optional[DocumentResponse] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # ============================================================================
 # PERSONS (UNIFIED)
@@ -186,7 +184,8 @@ class PersonBase(BaseSchema):
     civil_status: Optional[str] = None
     birth_city: Optional[str] = None
     
-    @validator('name')
+    @field_validator('name')
+    @classmethod
     def validate_name(cls, v):
         if not v or not v.strip():
             raise ValueError('El nombre completo es requerido')
@@ -215,7 +214,8 @@ class PersonBase(BaseSchema):
     emergency_contact_phone: Optional[str] = None
     emergency_contact_relationship: Optional[str] = None
     
-    @validator('email')
+    @field_validator('email')
+    @classmethod
     def validate_email(cls, v):
         if not v or v.strip() == '':
             return None
@@ -613,9 +613,7 @@ class UserCreate(BaseSchema):
     username: str
     password: str
     email: str
-    first_name: str
-    paternal_surname: str
-    maternal_surname: Optional[str] = None
+    name: str  # Full name (replaces first_name, paternal_surname, maternal_surname)
 
 class Token(BaseSchema):
     access_token: str
@@ -721,7 +719,8 @@ class StudyRecommendation(BaseSchema):
 class MedicationBase(BaseSchema):
     name: str
 
-    @validator('name')
+    @field_validator('name')
+    @classmethod
     def validate_name(cls, value: str) -> str:
         if not value or not value.strip():
             raise ValueError("El nombre del medicamento es obligatorio")
@@ -738,3 +737,38 @@ class MedicationResponse(MedicationBase):
     is_active: bool = True
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+# ============================================================================
+# LICENSE MANAGEMENT
+# ============================================================================
+
+class LicenseBase(BaseSchema):
+    doctor_id: int
+    license_type: Literal['trial', 'basic', 'premium']
+    start_date: date
+    expiration_date: date
+    payment_date: Optional[date] = None
+    status: Literal['active', 'inactive', 'expired', 'suspended'] = 'active'
+    is_active: bool = True
+    notes: Optional[str] = None
+
+class LicenseCreate(LicenseBase):
+    pass
+
+class LicenseUpdate(BaseSchema):
+    license_type: Optional[Literal['trial', 'basic', 'premium']] = None
+    start_date: Optional[date] = None
+    expiration_date: Optional[date] = None
+    payment_date: Optional[date] = None
+    status: Optional[Literal['active', 'inactive', 'expired', 'suspended']] = None
+    is_active: Optional[bool] = None
+    notes: Optional[str] = None
+
+class LicenseResponse(LicenseBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    created_by: Optional[int] = None
+    doctor: Optional[Dict[str, Any]] = None  # Will include name, email, etc.
+    
+    model_config = ConfigDict(from_attributes=True)

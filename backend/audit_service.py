@@ -9,6 +9,7 @@ from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
 from database import AuditLog, Person
 from datetime import datetime
+from utils.datetime_utils import utc_now
 from fastapi import Request
 from logger import get_logger
 from uuid import uuid4
@@ -163,7 +164,7 @@ class AuditService:
                 error_message=error_message[:1000] if error_message else None,  # Limit length
                 security_level=security_level,
                 
-                timestamp=datetime.utcnow(),
+                timestamp=utc_now(),
                 metadata_json=metadata_payload
             )
             
@@ -404,8 +405,7 @@ class AuditService:
         """Log de creación de paciente"""
         # Datos seguros (sin información médica sensible)
         safe_data = {
-            "first_name": patient_data.get("first_name", ""),
-            "paternal_surname": patient_data.get("paternal_surname", ""),
+            "name": patient_data.get("name", ""),
             "email": patient_data.get("email", ""),
             "gender": patient_data.get("gender", "")
         }

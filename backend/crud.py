@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_, func, text, desc, asc
 from typing import Optional, List, Tuple
 from datetime import datetime, date, timedelta
+from utils.datetime_utils import utc_now
 from fastapi import HTTPException
 import bcrypt
 import pytz
@@ -27,7 +28,7 @@ def to_utc_for_storage(dt: datetime) -> datetime:
     return dt.astimezone(pytz.utc)
 
 from database import (
-    Person, MedicalRecord, Appointment, VitalSign, ConsultationVitalSign,
+    Person, MedicalRecord, Appointment, VitalSign, ConsultationVitalSign, License,
     Country, State, Specialty, EmergencyRelationship,
     DocumentType, Document, PersonDocument
 )
@@ -405,7 +406,7 @@ def update_person(db: Session, person_id: int, person_data: schemas.PersonUpdate
     for field, value in update_data.items():
         setattr(person, field, value)
     
-    person.updated_at = datetime.utcnow()
+    person.updated_at = utc_now()
     db.commit()
     db.refresh(person)
     return person
@@ -417,7 +418,7 @@ def delete_person(db: Session, person_id: int) -> bool:
         return False
     
     person.is_active = False
-    person.updated_at = datetime.utcnow()
+    person.updated_at = utc_now()
     db.commit()
     return True
 
@@ -532,7 +533,7 @@ def upsert_person_document(
         # Update existing document: change document_id (if different) and value
         existing_same_type.document_id = document_id
         existing_same_type.document_value = document_value
-        existing_same_type.updated_at = datetime.utcnow()
+        existing_same_type.updated_at = utc_now()
         return existing_same_type
     else:
         # Check if there's an inactive document of the same type to reactivate/update
@@ -547,7 +548,7 @@ def upsert_person_document(
             existing_inactive.document_id = document_id
             existing_inactive.document_value = document_value
             existing_inactive.is_active = True
-            existing_inactive.updated_at = datetime.utcnow()
+            existing_inactive.updated_at = utc_now()
             return existing_inactive
         else:
             # Create new document
@@ -644,7 +645,7 @@ def create_medical_record(db: Session, record_data: schemas.MedicalRecordCreate)
     
     db_record = MedicalRecord(
         record_code=record_code,
-        **record_data.dict()
+        **record_data.model_dump()
     )
     
     db.add(db_record)
@@ -677,11 +678,11 @@ def update_medical_record(db: Session, record_id: int, record_data: schemas.Medi
     if not record:
         raise HTTPException(status_code=404, detail="Medical record not found")
     
-    update_data = record_data.dict(exclude_unset=True)
+    update_data = record_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(record, field, value)
     
-    record.updated_at = datetime.utcnow()
+    record.updated_at = utc_now()
     db.commit()
     db.refresh(record)
     return record
@@ -695,7 +696,7 @@ def create_appointment(db: Session, appointment_data: schemas.AppointmentCreate,
     from appointment_service import AppointmentService
     
     # Prepare appointment data for the service
-    appointment_dict = appointment_data.dict()
+    appointment_dict = appointment_data.model_dump()
     appointment_dict['doctor_id'] = doctor_id
     
     # Remove end_time if present since AppointmentService will calculate it automatically
@@ -743,7 +744,7 @@ def update_appointment(db: Session, appointment_id: int, appointment_data) -> Ap
     if isinstance(appointment_data, dict):
         update_data = {k: v for k, v in appointment_data.items() if v is not None}
     else:
-        update_data = appointment_data.dict(exclude_unset=True)
+        update_data = appointment_data.model_dump(exclude_unset=True)
     
     api_logger.debug(
         "🔄 CRUD update_appointment start",
@@ -841,14 +842,30 @@ def cancel_appointment(db: Session, appointment_id: int, reason: str, cancelled_
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
     
+    doctor_id = appointment.doctor_id
+    
     appointment.status = 'cancelled'
     appointment.cancelled_reason = reason
-    appointment.cancelled_at = datetime.utcnow()
+    appointment.cancelled_at = utc_now()
     appointment.cancelled_by = cancelled_by
-    appointment.updated_at = datetime.utcnow()
+    appointment.updated_at = utc_now()
     
     db.commit()
     db.refresh(appointment)
+    
+    # Sincronizar con Google Calendar si está configurado
+    if doctor_id:
+        try:
+            from services.google_calendar_service import GoogleCalendarService
+            GoogleCalendarService.delete_calendar_event(db, doctor_id, appointment_id)
+        except Exception as e:
+            # No fallar si Google Calendar no está configurado o hay error
+            api_logger = get_logger("medical_records.api")
+            api_logger.warning("Error al sincronizar eliminación con Google Calendar (no crítico)", exc_info=True, extra={
+                "doctor_id": doctor_id,
+                "appointment_id": appointment_id
+            })
+    
     return appointment
 
 # ============================================================================
@@ -873,7 +890,7 @@ def authenticate_user(db: Session, username: str, password: str) -> Optional[Per
     
     if person and person.hashed_password and verify_password(password, person.hashed_password):
         # Update last login
-        person.last_login = datetime.utcnow()
+        person.last_login = utc_now()
         db.commit()
         return person
     
@@ -920,7 +937,7 @@ def change_password(db: Session, person_id: int, old_password: str, new_password
         return False
     
     person.hashed_password = hash_password(new_password)
-    person.updated_at = datetime.utcnow()
+    person.updated_at = utc_now()
     db.commit()
     return True
 
@@ -1050,3 +1067,76 @@ def search_studies(
     # specialty filter removed - column does not exist
     
     return query.limit(limit).all()
+
+# ============================================================================
+# LICENSE MANAGEMENT CRUD
+# ============================================================================
+
+def create_license(db: Session, license_data, created_by: int):
+    """Create a new license for a doctor"""
+    # Check if doctor already has an active license
+    existing = db.query(License).filter(
+        License.doctor_id == license_data.doctor_id,
+        License.is_active == True
+    ).first()
+    
+    if existing:
+        # Deactivate existing license
+        existing.is_active = False
+        existing.status = 'inactive'
+    
+    new_license = License(
+        doctor_id=license_data.doctor_id,
+        license_type=license_data.license_type,
+        start_date=license_data.start_date,
+        expiration_date=license_data.expiration_date,
+        payment_date=license_data.payment_date,
+        status=license_data.status,
+        is_active=license_data.is_active,
+        notes=license_data.notes,
+        created_by=created_by
+    )
+    db.add(new_license)
+    db.commit()
+    db.refresh(new_license)
+    return new_license
+
+def get_license_by_doctor(db: Session, doctor_id: int) -> Optional[License]:
+    """Get active license for a doctor"""
+    return db.query(License).filter(
+        License.doctor_id == doctor_id,
+        License.is_active == True
+    ).first()
+
+def get_all_licenses(db: Session, skip: int = 0, limit: int = 100) -> List[License]:
+    """Get all licenses"""
+    return db.query(License).offset(skip).limit(limit).all()
+
+def update_license(db: Session, license_id: int, license_data) -> Optional[License]:
+    """Update a license"""
+    license = db.query(License).filter(License.id == license_id).first()
+    if not license:
+        return None
+    
+    # Use model_dump for Pydantic v2
+    update_data = license_data.model_dump(exclude_unset=True) if hasattr(license_data, 'model_dump') else license_data.dict(exclude_unset=True)
+    
+    for key, value in update_data.items():
+        setattr(license, key, value)
+    
+    license.updated_at = utc_now()
+    db.commit()
+    db.refresh(license)
+    return license
+
+def check_license_status(db: Session, license: License) -> str:
+    """Check and update license status based on expiration date"""
+    today = date.today()
+    
+    if license.expiration_date < today and license.status != 'expired':
+        license.status = 'expired'
+        license.is_active = False
+        db.commit()
+        return 'expired'
+    
+    return license.status

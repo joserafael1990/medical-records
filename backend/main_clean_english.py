@@ -6,6 +6,7 @@ No legacy code - completely fresh implementation
 """
 
 from fastapi import FastAPI, Depends, HTTPException, status, Query, File, UploadFile, Request, Body
+from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
@@ -25,13 +26,14 @@ import asyncio
 import time
 from collections import defaultdict, deque
 from pathlib import Path
+from starlette.responses import StreamingResponse
 import crud
 import schemas
 import auth
-from database import get_db, Person, Specialty, Country, State, EmergencyRelationship, Appointment, MedicalRecord, ClinicalStudy, VitalSign, ConsultationVitalSign, Medication, ConsultationPrescription, AuditLog, PrivacyNotice, PrivacyConsent, ARCORequest, Office, AppointmentType, DocumentType, Document, PersonDocument
+from database import get_db, Person, Specialty, Country, State, EmergencyRelationship, Appointment, AppointmentReminder, MedicalRecord, ClinicalStudy, VitalSign, ConsultationVitalSign, Medication, ConsultationPrescription, AuditLog, PrivacyNotice, PrivacyConsent, ARCORequest, Office, AppointmentType, DocumentType, Document, PersonDocument, utc_now
 from appointment_service import AppointmentService
 from audit_service import audit_service
-import data_retention_service as retention
+# import data_retention_service as retention  # Commented: endpoints disabled for MVP
 # Schedule routes migrated to routes/schedule.py
 from consultation_service import (
     decrypt_patient_data,
@@ -179,15 +181,31 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
             if len(bucket) >= self.max_requests:
                 retry_after = max(1, int(self.window_seconds - (now - bucket[0])))
+                # Get CORS origins for headers
+                allowed_origins = _get_cors_origins()
+                origin = request.headers.get("origin")
+                
+                # Build headers with CORS support
+                headers = {
+                    "Retry-After": str(retry_after),
+                    "X-RateLimit-Limit": str(self.max_requests),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Window": str(self.window_seconds)
+                }
+                
+                # Add CORS headers if origin is allowed
+                if origin and (origin in allowed_origins or "*" in allowed_origins):
+                    headers["Access-Control-Allow-Origin"] = origin
+                    headers["Access-Control-Allow-Credentials"] = "true"
+                    headers["Access-Control-Allow-Methods"] = "*"
+                    headers["Access-Control-Allow-Headers"] = "*"
+                elif "*" in allowed_origins:
+                    headers["Access-Control-Allow-Origin"] = "*"
+                
                 return JSONResponse(
                     status_code=429,
                     content={"detail": "Too many requests. Please try again later."},
-                    headers={
-                        "Retry-After": str(retry_after),
-                        "X-RateLimit-Limit": str(self.max_requests),
-                        "X-RateLimit-Remaining": "0",
-                        "X-RateLimit-Window": str(self.window_seconds)
-                    }
+                    headers=headers
                 )
 
             bucket.append(now)
@@ -294,24 +312,47 @@ def sign_medical_document(document_data: dict, doctor_id: int, document_type: st
 # ============================================================================
 
 # Sentry initialization (backend)
-# Solo se activa si SENTRY_DSN_BACKEND está definido (solo en producción)
+# Solo se activa en producción si SENTRY_DSN_BACKEND está definido
 sentry_dsn = os.getenv("SENTRY_DSN_BACKEND")
-if sentry_dsn:
+app_env = os.getenv("APP_ENV", "development").lower()
+is_production = app_env == "production"
+
+if sentry_dsn and is_production:
     sentry_sdk.init(
         dsn=sentry_dsn,
         integrations=[FastApiIntegration()],
-        environment=os.getenv("SENTRY_ENVIRONMENT", "development"),
+        environment=os.getenv("SENTRY_ENVIRONMENT", "production"),
         traces_sample_rate=0.1,
         enable_tracing=True,
         send_default_pii=False,
     )
+    print("✅ Sentry inicializado para producción")
+elif sentry_dsn and not is_production:
+    print("ℹ️ Sentry DSN configurado pero deshabilitado (solo se activa en producción)")
+else:
+    print("ℹ️ Sentry no configurado (SENTRY_DSN_BACKEND no definido)")
+
+# ============================================================================
+# BACKGROUND SCHEDULER: Auto WhatsApp Appointment Reminders
+# ============================================================================
+from services.scheduler import start_auto_reminder_scheduler
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown events"""
+    # Startup
+    start_auto_reminder_scheduler(app)
+    yield
+    # Shutdown (if needed in the future)
+    pass
 
 app = FastAPI(
     title="Medical Records API",
     description="Clean English API for Medical Records System",
     version="3.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -362,13 +403,28 @@ app.mount(
 )
 
 # ============================================================================
-# BACKGROUND SCHEDULER: Auto WhatsApp Appointment Reminders
+# SERVER-SENT EVENTS (SSE) - Real-time updates for frontend
 # ============================================================================
-from services.scheduler import start_auto_reminder_scheduler
+# Global event queue for SSE
+# SSE DISABLED FOR PRODUCTION - Using polling-based updates instead
+# appointment_events_queue: asyncio.Queue = asyncio.Queue()
 
-@app.on_event("startup")
-async def start_background_tasks():
-    start_auto_reminder_scheduler(app)
+async def emit_appointment_event(event_type: str, data: dict):
+    """Emit an appointment event to all connected SSE clients - DISABLED FOR PRODUCTION"""
+    # SSE disabled - no-op function
+    return
+
+@app.get("/api/events/appointments")
+async def stream_appointment_events(
+    request: Request,
+    token: Optional[str] = Query(None, description="JWT token (alternative to Authorization header)"),
+    db: Session = Depends(get_db)
+):
+    """
+    Server-Sent Events endpoint - DISABLED FOR PRODUCTION
+    Returns 501 Not Implemented as SSE is disabled in production mode
+    """
+    raise HTTPException(status_code=501, detail="SSE endpoint disabled in production mode. Use polling-based updates instead.")
 
 if settings.SECURITY_HEADERS_ENABLED and SECURITY_MIDDLEWARE_AVAILABLE:
     app.add_middleware(
@@ -426,6 +482,10 @@ app.include_router(catalogs_router)
 from routes.documents import router as documents_router
 app.include_router(documents_router)
 
+# Include license management routes
+from routes.licenses import router as licenses_router
+app.include_router(licenses_router)
+
 # Include avatar management routes
 from routes.avatars import router as avatars_router
 app.include_router(avatars_router)
@@ -449,17 +509,18 @@ app.include_router(doctors_router)
 # ============================================================================
 # DEBUG/DIAGNOSTICS
 # ============================================================================
-@app.get("/debug-sentry")
-async def debug_sentry():
-    # Endpoint de prueba para verificar Sentry en backend
-    # Solo funciona si SENTRY_DSN_BACKEND está configurado
-    sentry_dsn = os.getenv("SENTRY_DSN_BACKEND")
-    if not sentry_dsn:
-        return {
-            "message": "Sentry no está configurado (SENTRY_DSN_BACKEND no definido)",
-            "sentry_enabled": False
-        }
-    raise RuntimeError("Sentry backend test")
+# Disabled for security - endpoint without authentication
+# @app.get("/debug-sentry")
+# async def debug_sentry():
+#     # Endpoint de prueba para verificar Sentry en backend
+#     # Solo funciona si SENTRY_DSN_BACKEND está configurado
+#     sentry_dsn = os.getenv("SENTRY_DSN_BACKEND")
+#     if not sentry_dsn:
+#         return {
+#             "message": "Sentry no está configurado (SENTRY_DSN_BACKEND no definido)",
+#             "sentry_enabled": False
+#         }
+#     raise RuntimeError("Sentry backend test")
 
 # Include patient management routes
 from routes.patients import router as patients_router
@@ -618,36 +679,11 @@ async def health():
 from routes.whatsapp import router as whatsapp_router
 app.include_router(whatsapp_router)
 
-@app.get("/api/whatsapp/webhook")
-async def whatsapp_webhook_verify(request: Request):
-    """Verificación del webhook de WhatsApp"""
-    try:
-        # Obtener parámetros de verificación
-        mode = request.query_params.get('hub.mode')
-        token = request.query_params.get('hub.verify_token')
-        challenge = request.query_params.get('hub.challenge')
-        
-        api_logger.debug(
-            "🔍 WhatsApp webhook verification",
-            extra={"mode": mode, "token": token}
-        )
-        
-        # Verificar token (debe coincidir con el configurado en Meta)
-        verify_token = "whatsapp_verify_token"  # Debe coincidir con el configurado en Meta
-        
-        if mode == 'subscribe' and token == verify_token:
-            api_logger.info("✅ WhatsApp webhook verified successfully")
-            return int(challenge)  # Meta espera el challenge como número
-        else:
-            api_logger.warning(
-                "❌ WhatsApp webhook verification failed",
-                extra={"mode": mode, "token": token}
-            )
-            raise HTTPException(status_code=403, detail="Verification failed")
-            
-    except Exception as e:
-        api_logger.error("❌ Error in webhook verification", exc_info=True)
-        raise HTTPException(status_code=500, detail="Verification error")
+# Include Google Calendar routes
+from routes.google_calendar import router as google_calendar_router
+app.include_router(google_calendar_router)
+
+# Removed duplicate webhook endpoint - using the one at line 844
 
 
 @app.post("/api/whatsapp/study-results/{study_id}")
@@ -794,8 +830,11 @@ async def verify_whatsapp_webhook(request: Request):
     token = request.query_params.get("hub.verify_token")
     challenge = request.query_params.get("hub.challenge")
     
-    # Verify token (configurable en variables de entorno)
-    verify_token = os.getenv('META_WHATSAPP_VERIFY_TOKEN', 'mi_token_secreto_123')
+    # Verify token (MUST be set in environment variables - no default for security)
+    verify_token = os.getenv('META_WHATSAPP_VERIFY_TOKEN')
+    if not verify_token:
+        api_logger.error("❌ META_WHATSAPP_VERIFY_TOKEN not configured")
+        raise HTTPException(status_code=500, detail="Webhook verification token not configured")
     
     if mode == "subscribe" and token == verify_token:
         api_logger.info("✅ WhatsApp webhook verified successfully")
@@ -803,7 +842,7 @@ async def verify_whatsapp_webhook(request: Request):
     else:
         api_logger.warning(
             "❌ WhatsApp webhook verification failed",
-            extra={"mode": mode, "token": token}
+            extra={"mode": mode, "token_provided": bool(token)}
         )
         raise HTTPException(status_code=403, detail="Verification failed")
 
@@ -815,55 +854,246 @@ async def receive_whatsapp_message(
     """
     Recibir mensajes y respuestas de WhatsApp
     Procesa respuestas a botones de plantillas (ej: cancelar cita)
+    
+    Security: Validates X-Hub-Signature-256 header to ensure request is from Meta
     """
+    # Log inmediato al recibir el request
+    api_logger.warning(
+        "🚨 WEBHOOK RECEIVED: /api/whatsapp/webhook",
+        extra={
+            "method": request.method,
+            "url": str(request.url),
+            "headers": dict(request.headers),
+            "client": request.client.host if request.client else None
+        }
+    )
+    print("=" * 80)
+    print("🚨 WEBHOOK RECEIVED: /api/whatsapp/webhook")
+    print(f"Method: {request.method}")
+    print(f"URL: {request.url}")
+    print(f"Client: {request.client.host if request.client else None}")
+    print("=" * 80)
     try:
-        body = await request.json()
-        api_logger.debug(
-            "📱 Received WhatsApp webhook",
+        # Get raw body for signature validation
+        raw_body = await request.body()
+        
+        # Validate webhook signature from Meta
+        import hmac
+        import hashlib
+        
+        # Get signature from header
+        signature_header = request.headers.get("X-Hub-Signature-256", "")
+        is_production = os.getenv("APP_ENV", "development").lower() == "production"
+        
+        # In production, signature validation is mandatory
+        if is_production and not signature_header:
+            api_logger.error("❌ WhatsApp webhook request without signature header in production")
+            raise HTTPException(status_code=403, detail="Missing signature header")
+        
+        if signature_header:
+            # Extract signature (format: sha256=<signature>)
+            if not signature_header.startswith("sha256="):
+                api_logger.error("❌ Invalid signature format")
+                if is_production:
+                    raise HTTPException(status_code=403, detail="Invalid signature format")
+                else:
+                    api_logger.warning("⚠️ Invalid signature format - allowing in development")
+            else:
+                received_signature = signature_header[7:]  # Remove "sha256=" prefix
+                
+                # Get app secret from environment
+                app_secret = os.getenv("META_WHATSAPP_APP_SECRET")
+                if not app_secret:
+                    api_logger.error("❌ META_WHATSAPP_APP_SECRET not configured")
+                    if is_production:
+                        raise HTTPException(status_code=500, detail="Webhook secret not configured")
+                    else:
+                        api_logger.warning("⚠️ META_WHATSAPP_APP_SECRET not configured - skipping signature validation")
+                else:
+                    # Compute expected signature
+                    expected_signature = hmac.new(
+                        app_secret.encode('utf-8'),
+                        raw_body,
+                        hashlib.sha256
+                    ).hexdigest()
+                    
+                    # Compare signatures using constant-time comparison
+                    if not hmac.compare_digest(received_signature, expected_signature):
+                        api_logger.error("❌ WhatsApp webhook signature validation failed")
+                        raise HTTPException(status_code=403, detail="Invalid signature")
+                    
+                    api_logger.debug("✅ WhatsApp webhook signature validated")
+        elif not is_production:
+            api_logger.warning("⚠️ WhatsApp webhook request without signature header - allowing in development")
+        
+        # Log raw request for debugging
+        # Print directly to ensure visibility
+        print("=" * 80)
+        print("📱 WHATSAPP WEBHOOK RECEIVED")
+        print(f"Content-Type: {request.headers.get('content-type')}")
+        print(f"Body Length: {len(raw_body)}")
+        if raw_body:
+            try:
+                body_preview = raw_body[:500].decode('utf-8', errors='ignore')
+                print(f"Body Preview: {body_preview}")
+            except:
+                print(f"Body Preview: {raw_body[:100]}")
+        print("=" * 80)
+        # Use warning level to ensure it shows up in logs
+        api_logger.warning(
+            "📱 Received WhatsApp webhook request",
+            extra={
+                "content_type": request.headers.get("content-type"),
+                "body_length": len(raw_body),
+                "body_preview": raw_body[:500].decode('utf-8', errors='ignore') if raw_body else None
+            }
+        )
+        
+        # Parse JSON body
+        try:
+            body = json.loads(raw_body.decode('utf-8'))
+        except Exception as json_error:
+            api_logger.error(
+                "❌ Failed to parse WhatsApp webhook JSON",
+                extra={"error": str(json_error), "raw_body": raw_body[:500].decode('utf-8', errors='ignore') if raw_body else None},
+                exc_info=True
+            )
+            return {"status": "error", "message": "Invalid JSON"}
+        
+        print(f"📱 Parsed WhatsApp webhook body: {type(body).__name__}")
+        print(f"Body keys: {list(body.keys()) if isinstance(body, dict) else None}")
+        print(f"Object: {body.get('object') if isinstance(body, dict) else None}")
+        api_logger.warning(
+            "📱 Parsed WhatsApp webhook body",
             extra={
                 "body_type": type(body).__name__,
-                "body_keys": list(body.keys()) if isinstance(body, dict) else None
+                "body_keys": list(body.keys()) if isinstance(body, dict) else None,
+                "object": body.get("object") if isinstance(body, dict) else None
             }
         )
         
         # Verificar que es una notificación de WhatsApp
-        if body.get("object") != "whatsapp_business_account":
-            return {"status": "ignored"}
+        # WhatsApp puede enviar diferentes formatos, verificar múltiples variantes
+        webhook_object = body.get("object")
+        api_logger.info(
+            "🔍 Checking webhook object type",
+            extra={"object": webhook_object, "body_keys": list(body.keys()) if isinstance(body, dict) else None}
+        )
+        
+        # Aceptar diferentes formatos de webhook de WhatsApp
+        # Meta puede enviar "whatsapp_business_account" o "page" dependiendo de la configuración
+        if webhook_object not in ["whatsapp_business_account", "page"]:
+            # Si no tiene "object", puede ser un formato diferente - intentar procesar de todas formas
+            if "entry" in body:
+                api_logger.info(
+                    "⚠️ Webhook object not recognized but has 'entry' field, attempting to process",
+                    extra={"object": webhook_object}
+                )
+            else:
+                api_logger.warning(
+                    "⚠️ Ignoring webhook - not a WhatsApp notification",
+                    extra={"object": webhook_object, "body_keys": list(body.keys()) if isinstance(body, dict) else None}
+                )
+                return {"status": "ignored", "reason": f"object is {webhook_object}"}
         
         # Procesar entries
-        for entry in body.get("entry", []):
-            for change in entry.get("changes", []):
+        entries = body.get("entry", [])
+        print(f"📥 Processing {len(entries)} WhatsApp entries")
+        api_logger.warning(
+            "📥 Processing WhatsApp entries",
+            extra={"entry_count": len(entries)}
+        )
+        
+        processed_messages = 0
+        for entry in entries:
+            changes = entry.get("changes", [])
+            api_logger.debug(
+                "🔍 Processing entry",
+                extra={"entry_id": entry.get("id"), "changes_count": len(changes)}
+            )
+            
+            for change in changes:
                 value = change.get("value", {})
+                field = change.get("field")
                 
-                api_logger.debug(
+                api_logger.warning(
                     "🔍 Processing WhatsApp change",
-                    extra={"change": change, "value_keys": list(value.keys())}
+                    extra={
+                        "field": field,
+                        "value_keys": list(value.keys()) if isinstance(value, dict) else None
+                    }
                 )
                 
                 # Verificar si hay mensajes
                 if "messages" in value:
-                    api_logger.debug(
+                    messages = value["messages"]
+                    print(f"📩 Found {len(messages)} messages in webhook")
+                    api_logger.warning(
                         "📩 Found messages in webhook",
-                        extra={"count": len(value["messages"])}
+                        extra={"count": len(messages)}
                     )
-                    for message in value["messages"]:
-                        api_logger.debug(
+                    for message in messages:
+                        msg_type = message.get("type")
+                        from_phone = message.get("from")
+                        msg_id = message.get("id")
+                        print(f"📩 Processing WhatsApp message: type={msg_type}, from={from_phone}, id={msg_id}")
+                        api_logger.warning(
                             "📩 Processing WhatsApp message",
-                            extra={"message_type": message.get("type")}
+                            extra={
+                                "message_type": msg_type,
+                                "from_phone": from_phone,
+                                "message_id": msg_id
+                            }
                         )
-                        await process_whatsapp_message(message, db)
+                        try:
+                            await process_whatsapp_message(message, db)
+                            processed_messages += 1
+                        except Exception as msg_error:
+                            api_logger.error(
+                                "❌ Error processing individual message",
+                                extra={
+                                    "message_id": message.get("id"),
+                                    "from_phone": message.get("from"),
+                                    "error": str(msg_error)
+                                },
+                                exc_info=True
+                            )
                 
-                # Verificar si hay respuestas a botones
+                # Verificar si hay respuestas a botones interactivos
+                if "messages" in value:
+                    for message in value["messages"]:
+                        if message.get("type") == "interactive":
+                            interactive = message.get("interactive", {})
+                            api_logger.info(
+                                "🔘 Found interactive message",
+                                extra={
+                                    "interactive_type": interactive.get("type"),
+                                    "button_id": interactive.get("button_reply", {}).get("id"),
+                                    "from_phone": message.get("from")
+                                }
+                            )
+                
+                # Verificar si hay actualizaciones de estado
                 if "statuses" in value:
-                    api_logger.debug(
+                    api_logger.info(
                         "📊 Message status update",
                         extra={"statuses": value["statuses"]}
                     )
         
-        return {"status": "success"}
+        print(f"✅ WhatsApp webhook processed: {processed_messages} messages from {len(entries)} entries")
+        api_logger.warning(
+            "✅ WhatsApp webhook processed successfully",
+            extra={"processed_messages": processed_messages, "total_entries": len(entries)}
+        )
+        
+        return {"status": "success", "processed_messages": processed_messages}
         
     except Exception as e:
-        api_logger.error("❌ Error processing WhatsApp webhook", exc_info=True)
+        api_logger.error(
+            "❌ Error processing WhatsApp webhook",
+            extra={"error": str(e)},
+            exc_info=True
+        )
         # Siempre devolver 200 para no causar reintentos de Meta
         return {"status": "error", "message": str(e)}
 
@@ -875,23 +1105,51 @@ async def process_whatsapp_message(message: dict, db: Session):
     try:
         message_type = message.get("type")
         from_phone = message.get("from")
+        message_id = message.get("id")
+        timestamp = message.get("timestamp")
         
-        api_logger.info(
+        print(f"📩 Processing WhatsApp message: type={message_type}, from={from_phone}, id={message_id}, timestamp={timestamp}")
+        api_logger.warning(
             "📩 Processing WhatsApp message",
-            extra={"message_type": message_type, "from_phone": from_phone}
+            extra={
+                "message_type": message_type,
+                "from_phone": from_phone,
+                "message_id": message_id,
+                "timestamp": timestamp,
+                "message_keys": list(message.keys())
+            }
         )
         
         # Procesar respuesta a botón interactivo (nuevo formato de WhatsApp)
         if message_type == "interactive":
             interactive = message.get("interactive", {})
+            
+            # Log completo del mensaje interactivo para debugging
+            api_logger.warning(
+                "🔍 Processing interactive message",
+                extra={
+                    "interactive_type": interactive.get("type"),
+                    "interactive_keys": list(interactive.keys()) if isinstance(interactive, dict) else None,
+                    "full_interactive": interactive,
+                    "full_message": message,
+                    "from_phone": from_phone
+                }
+            )
+            
+            # Procesar button_reply
             if interactive.get("type") == "button_reply":
                 button_reply = interactive.get("button_reply", {})
                 button_id = button_reply.get("id")
                 button_title = button_reply.get("title")
                 
-                api_logger.info(
+                api_logger.warning(
                     "🔘 Interactive button clicked",
-                    extra={"button_id": button_id, "button_title": button_title, "from_phone": from_phone}
+                    extra={
+                        "button_id": button_id,
+                        "button_title": button_title,
+                        "from_phone": from_phone,
+                        "button_reply_full": button_reply
+                    }
                 )
                 
                 # Procesar botones de consentimiento de privacidad
@@ -905,20 +1163,71 @@ async def process_whatsapp_message(message: dict, db: Session):
                 # Procesar botones de cancelación de cita
                 elif button_id and button_id.startswith("cancel_appointment_"):
                     appointment_id = int(button_id.replace("cancel_appointment_", ""))
+                    api_logger.warning(
+                        "🔄 Processing cancel appointment button",
+                        extra={"button_id": button_id, "appointment_id": appointment_id, "from_phone": from_phone}
+                    )
                     await cancel_appointment_via_whatsapp(appointment_id, from_phone, db)
                 elif button_id and button_id.startswith("confirm_appointment_"):
                     appointment_id = int(button_id.replace("confirm_appointment_", ""))
-                    api_logger.info(
-                        "🔘 Confirm appointment button clicked with ID",
+                    api_logger.warning(
+                        "✅ Processing confirm appointment button",
                         extra={"button_id": button_id, "appointment_id": appointment_id, "from_phone": from_phone}
                     )
                     await confirm_appointment_via_whatsapp(appointment_id, from_phone, db)
                 elif button_title and button_title.lower() == "confirmar":
-                    api_logger.info(
-                        "🔘 Confirm appointment button clicked by title",
-                        extra={"button_title": button_title, "from_phone": from_phone}
+                    # Intentar usar context.message_id para eliminar ambigüedad
+                    context = message.get("context", {})
+                    original_message_id = context.get("id") if context else None
+                    
+                    api_logger.warning(
+                        "✅ Processing confirm appointment button by title",
+                        extra={
+                            "button_title": button_title,
+                            "from_phone": from_phone,
+                            "original_message_id": original_message_id,
+                            "has_context": bool(context)
+                        }
                     )
+                    
+                    # Si tenemos el message_id original, buscar el recordatorio por ese ID
+                    if original_message_id:
+                        appointment_id_from_message = await _find_appointment_by_whatsapp_message_id(original_message_id, db)
+                        if appointment_id_from_message:
+                            api_logger.info(
+                                "✅ Found appointment by WhatsApp message_id",
+                                extra={
+                                    "whatsapp_message_id": original_message_id,
+                                    "appointment_id": appointment_id_from_message
+                                }
+                            )
+                            await confirm_appointment_via_whatsapp(appointment_id_from_message, from_phone, db)
+                            return
+                    
+                    # Fallback: búsqueda por teléfono (comportamiento anterior)
                     await confirm_appointment_via_whatsapp(None, from_phone, db)
+                else:
+                    # Si no coincide con ninguna condición, log para debugging
+                    api_logger.warning(
+                        "⚠️ Interactive button not matched",
+                        extra={
+                            "button_id": button_id,
+                            "button_title": button_title,
+                            "from_phone": from_phone,
+                            "button_id_starts_with_confirm": button_id.startswith("confirm_appointment_") if button_id else False,
+                            "button_id_starts_with_cancel": button_id.startswith("cancel_appointment_") if button_id else False
+                        }
+                    )
+            else:
+                # Otros tipos de mensajes interactivos (list_reply, etc.)
+                api_logger.warning(
+                    "⚠️ Interactive message type not handled",
+                    extra={
+                        "interactive_type": interactive.get("type"),
+                        "interactive": interactive,
+                        "from_phone": from_phone
+                    }
+                )
         
         # Procesar respuesta a botón (formato anterior)
         elif message_type == "button":
@@ -936,10 +1245,34 @@ async def process_whatsapp_message(message: dict, db: Session):
                 await cancel_appointment_via_whatsapp(appointment_id, from_phone, db)
             # Manejar payload "Cancelar" genérico
             elif button_payload == "Cancelar" or button_text == "Cancelar":
+                # Intentar usar context.message_id para eliminar ambigüedad
+                context = message.get("context", {})
+                original_message_id = context.get("id") if context else None
+                
                 api_logger.info(
                     "🔄 Generic cancel button clicked, processing as cancellation request",
-                    extra={"from_phone": from_phone}
+                    extra={
+                        "from_phone": from_phone,
+                        "original_message_id": original_message_id,
+                        "has_context": bool(context)
+                    }
                 )
+                
+                # Si tenemos el message_id original, buscar el recordatorio por ese ID
+                if original_message_id:
+                    appointment_id_from_message = await _find_appointment_by_whatsapp_message_id(original_message_id, db)
+                    if appointment_id_from_message:
+                        api_logger.info(
+                            "✅ Found appointment by WhatsApp message_id for cancellation",
+                            extra={
+                                "whatsapp_message_id": original_message_id,
+                                "appointment_id": appointment_id_from_message
+                            }
+                        )
+                        await cancel_appointment_via_whatsapp(appointment_id_from_message, from_phone, db)
+                        return
+                
+                # Fallback: búsqueda por teléfono (comportamiento anterior)
                 await process_text_cancellation_request("cancelar", from_phone, db)
             elif (button_payload and button_payload.startswith("confirm_appointment_")):
                 appointment_id = int(button_payload.replace("confirm_appointment_", ""))
@@ -949,10 +1282,36 @@ async def process_whatsapp_message(message: dict, db: Session):
                 )
                 await confirm_appointment_via_whatsapp(appointment_id, from_phone, db)
             elif (button_payload == "Confirmar" or button_text == "Confirmar"):
+                # Intentar usar context.message_id para eliminar ambigüedad
+                context = message.get("context", {})
+                original_message_id = context.get("id") if context else None
+                
                 api_logger.info(
                     "🔘 Confirm appointment button clicked (legacy) by text",
-                    extra={"button_payload": button_payload, "button_text": button_text, "from_phone": from_phone}
+                    extra={
+                        "button_payload": button_payload,
+                        "button_text": button_text,
+                        "from_phone": from_phone,
+                        "original_message_id": original_message_id,
+                        "has_context": bool(context)
+                    }
                 )
+                
+                # Si tenemos el message_id original, buscar el recordatorio por ese ID
+                if original_message_id:
+                    appointment_id_from_message = await _find_appointment_by_whatsapp_message_id(original_message_id, db)
+                    if appointment_id_from_message:
+                        api_logger.info(
+                            "✅ Found appointment by WhatsApp message_id (legacy)",
+                            extra={
+                                "whatsapp_message_id": original_message_id,
+                                "appointment_id": appointment_id_from_message
+                            }
+                        )
+                        await confirm_appointment_via_whatsapp(appointment_id_from_message, from_phone, db)
+                        return
+                
+                # Fallback: búsqueda por teléfono (comportamiento anterior)
                 await confirm_appointment_via_whatsapp(None, from_phone, db)
             # Manejar consentimiento de privacidad cuando viene como "Acepto" (formato antiguo)
             elif button_payload == "Acepto" or button_text == "Acepto":
@@ -1117,7 +1476,7 @@ async def process_privacy_consent_by_phone(from_phone: str, db: Session):
                 patient_id=matching_patient.id,
                 notice_id=privacy_notice.id,
                 consent_given=False,  # Se establecerá a True abajo
-                consent_date=datetime.utcnow()
+                consent_date=utc_now()
             )
             db.add(consent)
             db.flush()  # Para obtener el ID sin hacer commit todavía
@@ -1128,7 +1487,7 @@ async def process_privacy_consent_by_phone(from_phone: str, db: Session):
         
         # Actualizar el consentimiento
         consent.consent_given = True
-        consent.consent_date = datetime.utcnow()
+        consent.consent_date = utc_now()
         # Nota: consent_method no existe en la tabla, se elimina esa asignación
         
         db.commit()
@@ -1237,7 +1596,7 @@ async def process_privacy_consent(button_id: str, from_phone: str, db: Session):
         
         # Actualizar el consentimiento
         consent.consent_given = True
-        consent.consent_date = datetime.utcnow()
+        consent.consent_date = utc_now()
         # Nota: consent_method no existe en la tabla, se elimina esa asignación
         
         db.commit()
@@ -1257,6 +1616,42 @@ async def process_privacy_consent(button_id: str, from_phone: str, db: Session):
             exc_info=True
         )
         db.rollback()
+
+async def _find_appointment_by_whatsapp_message_id(whatsapp_message_id: str, db: Session) -> Optional[int]:
+    """
+    Buscar appointment_id usando el whatsapp_message_id del recordatorio
+    Esto elimina completamente la ambigüedad cuando se usa template
+    """
+    try:
+        from database import AppointmentReminder
+        
+        reminder = db.query(AppointmentReminder).filter(
+            AppointmentReminder.whatsapp_message_id == whatsapp_message_id
+        ).first()
+        
+        if reminder and reminder.appointment_id:
+            api_logger.info(
+                "✅ Found appointment by WhatsApp message_id",
+                extra={
+                    "whatsapp_message_id": whatsapp_message_id,
+                    "appointment_id": reminder.appointment_id,
+                    "reminder_id": reminder.id
+                }
+            )
+            return reminder.appointment_id
+        
+        api_logger.warning(
+            "⚠️ No appointment found for WhatsApp message_id",
+            extra={"whatsapp_message_id": whatsapp_message_id}
+        )
+        return None
+    except Exception as e:
+        api_logger.error(
+            "❌ Error finding appointment by WhatsApp message_id",
+            extra={"whatsapp_message_id": whatsapp_message_id},
+            exc_info=True
+        )
+        return None
 
 async def cancel_appointment_via_whatsapp(appointment_id: int, patient_phone: str, db: Session):
     """
@@ -1290,33 +1685,58 @@ async def cancel_appointment_via_whatsapp(appointment_id: int, patient_phone: st
             )
             return
         
-        # Normalizar números para comparación
-        whatsapp = get_whatsapp_service()
-        normalized_patient_phone = whatsapp._format_phone_number(patient.primary_phone)
-        normalized_from_phone = whatsapp._format_phone_number(patient_phone)
+        # No verificar teléfono cuando tenemos appointment_id del botón
+        # El appointment_id viene directamente del botón, así que es confiable
         
-        if normalized_patient_phone != normalized_from_phone:
-            api_logger.warning(
-                "❌ Phone mismatch during WhatsApp cancellation",
-                extra={
-                    "appointment_id": appointment_id,
-                    "patient_phone": normalized_patient_phone,
-                    "incoming_phone": normalized_from_phone
-                }
-            )
-            return
+        doctor_id = appointment.doctor_id
         
         # Cancelar la cita
         appointment.status = 'cancelled'
         appointment.cancelled_reason = 'Cancelada por el paciente vía WhatsApp'
-        appointment.updated_at = datetime.utcnow()
+        appointment.updated_at = utc_now()
         
         db.commit()
+        db.refresh(appointment)
+        
+        # Sincronizar con Google Calendar si está configurado
+        if doctor_id:
+            try:
+                from services.google_calendar_service import GoogleCalendarService
+                GoogleCalendarService.delete_calendar_event(db, doctor_id, appointment_id)
+            except Exception as e:
+                # No fallar si Google Calendar no está configurado o hay error
+                api_logger.warning("Error al sincronizar eliminación con Google Calendar (no crítico)", exc_info=True, extra={
+                    "doctor_id": doctor_id,
+                    "appointment_id": appointment_id
+                })
+        
+        # Track WhatsApp cancellation in Amplitude
+        try:
+            from services.amplitude_service import AmplitudeService
+            AmplitudeService.track_whatsapp_reminder_cancelled(
+                appointment_id=appointment_id,
+                patient_id=patient.id
+            )
+        except Exception as e:
+            # Silently fail - Amplitude tracking is non-critical
+            pass
         
         api_logger.info(
             "✅ Appointment cancelled successfully via WhatsApp",
             extra={"appointment_id": appointment_id}
         )
+        
+        # Emit SSE event to notify frontend
+        try:
+            await emit_appointment_event("appointment_cancelled", {
+                "appointment_id": appointment_id,
+                "patient_id": appointment.patient_id,
+                "doctor_id": appointment.doctor_id,
+                "status": appointment.status,
+                "updated_at": appointment.updated_at.isoformat() if appointment.updated_at else None
+            })
+        except Exception as e:
+            api_logger.warning("Failed to emit SSE event", extra={"error": str(e)})
         
         # Opcional: Enviar mensaje de confirmación al paciente
         # (Esto requeriría una plantilla adicional aprobada)
@@ -1365,30 +1785,23 @@ async def confirm_appointment_via_whatsapp(appointment_id: Optional[int], patien
                 return
             
             patient = db.query(Person).filter(Person.id == appointment.patient_id).first()
-            if not patient or not patient.primary_phone:
+            if not patient:
                 api_logger.error(
-                    "❌ Patient not found or missing phone for appointment confirmation",
+                    "❌ Patient not found for appointment confirmation",
                     extra={"appointment_id": appointment_id}
                 )
                 return
             
-            normalized_patient_phone = whatsapp._format_phone_number(patient.primary_phone)
-            if normalized_patient_phone != normalized_from_phone:
-                api_logger.warning(
-                    "❌ Phone mismatch during WhatsApp confirmation",
-                    extra={
-                        "appointment_id": appointment_id,
-                        "patient_phone": normalized_patient_phone,
-                        "incoming_phone": normalized_from_phone
-                    }
-                )
-                return
+            # No verificar teléfono cuando tenemos appointment_id del botón
+            # El appointment_id viene directamente del botón, así que es confiable
         else:
+            # Buscar paciente por teléfono
             patients = db.query(Person).filter(
                 Person.person_type == 'patient',
                 Person.primary_phone.isnot(None)
             ).all()
             
+            matching_patient = None
             for candidate in patients:
                 normalized_candidate_phone = whatsapp._format_phone_number(candidate.primary_phone)
                 
@@ -1398,20 +1811,92 @@ async def confirm_appointment_via_whatsapp(appointment_id: Optional[int], patien
                 if (normalized_candidate_phone == normalized_from_phone or
                     normalized_candidate_phone == alternate_from_phone or
                     alternate_candidate_phone == normalized_from_phone):
-                    appointment = db.query(Appointment).filter(
-                        Appointment.patient_id == candidate.id,
-                        Appointment.status == 'por_confirmar'
-                    ).order_by(Appointment.appointment_date.asc()).first()
-                    if appointment:
-                        patient = candidate
-                        break
-                
-            if not appointment:
+                    matching_patient = candidate
+                    break
+            
+            if not matching_patient:
                 api_logger.info(
-                    "❌ No matching pending appointment found for confirmation",
+                    "❌ No matching patient found for confirmation",
                     extra={"patient_phone": patient_phone}
                 )
                 return
+            
+            # Buscar la cita correcta: priorizar citas con recordatorios enviados recientemente
+            # y luego buscar por fecha cercana para asegurar que sea la cita correcta
+            from datetime import timedelta
+            from sqlalchemy.orm import joinedload
+            from sqlalchemy import func
+            
+            now = utc_now()
+            recent_threshold = now - timedelta(hours=2)  # Últimas 2 horas
+            
+            # Primero intentar encontrar una cita con recordatorio enviado recientemente
+            # Esto asegura que sea la cita del recordatorio que acabamos de enviar
+            appointment_with_recent_reminder = db.query(Appointment).join(
+                AppointmentReminder
+            ).options(
+                joinedload(Appointment.reminders)
+            ).filter(
+                Appointment.patient_id == matching_patient.id,
+                Appointment.status == 'por_confirmar',
+                AppointmentReminder.sent == True,
+                AppointmentReminder.sent_at >= recent_threshold
+            ).order_by(
+                AppointmentReminder.sent_at.desc()  # El recordatorio más reciente primero
+            ).first()
+            
+            if appointment_with_recent_reminder:
+                appointment = appointment_with_recent_reminder
+                patient = matching_patient
+                # Obtener el sent_at del recordatorio más reciente
+                recent_reminder = next(
+                    (r for r in appointment.reminders if r.sent and r.sent_at and r.sent_at >= recent_threshold),
+                    None
+                ) if appointment.reminders else None
+                api_logger.info(
+                    "✅ Found appointment with recent reminder",
+                    extra={
+                        "appointment_id": appointment.id,
+                        "appointment_date": appointment.appointment_date.isoformat() if appointment.appointment_date else None,
+                        "reminder_sent_at": recent_reminder.sent_at.isoformat() if recent_reminder and recent_reminder.sent_at else None
+                    }
+                )
+            else:
+                # Si no hay recordatorio reciente, buscar la cita más próxima en el tiempo
+                # Restringir a un rango más estrecho: desde hace 1 día hasta 7 días en el futuro
+                # Esto asegura que sea una cita relevante y reciente
+                past_threshold = now - timedelta(days=1)  # Máximo 1 día en el pasado
+                future_threshold = now + timedelta(days=7)  # Máximo 7 días en el futuro
+                
+                appointment = db.query(Appointment).filter(
+                    Appointment.patient_id == matching_patient.id,
+                    Appointment.status == 'por_confirmar',
+                    Appointment.appointment_date >= past_threshold,  # No más de 1 día en el pasado
+                    Appointment.appointment_date <= future_threshold  # No más de 7 días en el futuro
+                ).order_by(
+                    Appointment.appointment_date.asc()  # La más próxima primero
+                ).first()
+                
+                if appointment:
+                    patient = matching_patient
+                    api_logger.info(
+                        "✅ Found nearest appointment in date range",
+                        extra={
+                            "appointment_id": appointment.id,
+                            "appointment_date": appointment.appointment_date.isoformat() if appointment.appointment_date else None,
+                            "date_range": f"{past_threshold.isoformat()} to {future_threshold.isoformat()}"
+                        }
+                    )
+                else:
+                    api_logger.info(
+                        "❌ No matching pending appointment found for confirmation in date range",
+                        extra={
+                            "patient_phone": patient_phone,
+                            "patient_id": matching_patient.id,
+                            "date_range": f"{past_threshold.isoformat()} to {future_threshold.isoformat()}"
+                        }
+                    )
+                    return
         
         if appointment.status == 'cancelled':
             api_logger.info(
@@ -1439,7 +1924,7 @@ async def confirm_appointment_via_whatsapp(appointment_id: Optional[int], patien
         
         appointment.status = 'confirmada'
         # Note: Appointment model doesn't have confirmed_at field
-        appointment.updated_at = datetime.utcnow()
+        appointment.updated_at = utc_now()
         appointment.cancelled_reason = None
         
         # Log antes del commit
@@ -1452,10 +1937,36 @@ async def confirm_appointment_via_whatsapp(appointment_id: Optional[int], patien
             }
         )
         
-        db.commit()
-        
-        # Verificar que el cambio se guardó
-        db.refresh(appointment)
+        try:
+            db.commit()
+            # Verificar que el cambio se guardó
+            db.refresh(appointment)
+            
+            # Double-check that the status was saved correctly
+            if appointment.status != 'confirmada':
+                api_logger.error(
+                    "❌ Status not saved correctly after commit",
+                    extra={
+                        "appointment_id": appointment.id,
+                        "expected_status": "confirmada",
+                        "actual_status": appointment.status
+                    }
+                )
+                # Try to fix it
+                appointment.status = 'confirmada'
+                db.commit()
+                db.refresh(appointment)
+        except Exception as commit_error:
+            db.rollback()
+            api_logger.error(
+                "❌ Error committing appointment status change",
+                extra={
+                    "appointment_id": appointment.id,
+                    "error": str(commit_error)
+                },
+                exc_info=True
+            )
+            raise
         api_logger.info(
             "✅ Appointment confirmed successfully via WhatsApp",
             extra={
@@ -1464,6 +1975,29 @@ async def confirm_appointment_via_whatsapp(appointment_id: Optional[int], patien
                 "updated_at": appointment.updated_at.isoformat() if appointment.updated_at else None
             }
         )
+        
+        # Emit SSE event to notify frontend
+        try:
+            await emit_appointment_event("appointment_confirmed", {
+                "appointment_id": appointment.id,
+                "patient_id": appointment.patient_id,
+                "doctor_id": appointment.doctor_id,
+                "status": appointment.status,
+                "updated_at": appointment.updated_at.isoformat() if appointment.updated_at else None
+            })
+        except Exception as e:
+            api_logger.warning("Failed to emit SSE event", extra={"error": str(e)})
+        
+        # Track WhatsApp confirmation in Amplitude
+        try:
+            from services.amplitude_service import AmplitudeService
+            AmplitudeService.track_whatsapp_reminder_confirmed(
+                appointment_id=appointment.id,
+                patient_id=appointment.patient_id
+            )
+        except Exception as e:
+            # Silently fail - Amplitude tracking is non-critical
+            pass
     except Exception as e:
         db.rollback()
         api_logger.error(
@@ -1548,27 +2082,72 @@ async def process_text_cancellation_request(text: str, patient_phone: str, db: S
         if not matching_patient:
             return
         
-        # Buscar la próxima cita del paciente (más flexible)
-        from datetime import datetime
-        # Primero buscar citas confirmadas futuras
-        next_appointment = db.query(Appointment).filter(
-            Appointment.patient_id == matching_patient.id,
-            Appointment.status == 'confirmada',
-            Appointment.appointment_date >= datetime.now()
-        ).order_by(Appointment.appointment_date.asc()).first()
+        # Buscar la cita correcta del paciente: priorizar por fecha cercana
+        # Restringir a un rango razonable para asegurar que sea la cita correcta
+        from datetime import datetime, timedelta
+        from sqlalchemy.orm import joinedload
         
-        if not next_appointment:
-            # Si no hay citas confirmadas, buscar cualquier cita futura (excepto canceladas)
+        now = utc_now()
+        past_threshold = now - timedelta(days=1)  # Máximo 1 día en el pasado
+        future_threshold = now + timedelta(days=7)  # Máximo 7 días en el futuro
+        
+        # Primero buscar citas con recordatorios enviados recientemente (últimas 2 horas)
+        # Esto asegura que sea la cita del recordatorio que acabamos de enviar
+        recent_threshold = now - timedelta(hours=2)
+        appointment_with_recent_reminder = db.query(Appointment).join(
+            AppointmentReminder
+        ).options(
+            joinedload(Appointment.reminders)
+        ).filter(
+            Appointment.patient_id == matching_patient.id,
+            Appointment.status.in_(['confirmada', 'por_confirmar']),
+            AppointmentReminder.sent == True,
+            AppointmentReminder.sent_at >= recent_threshold
+        ).order_by(
+            AppointmentReminder.sent_at.desc()  # El recordatorio más reciente primero
+        ).first()
+        
+        if appointment_with_recent_reminder:
+            next_appointment = appointment_with_recent_reminder
+            api_logger.info(
+                "✅ Found appointment with recent reminder for cancellation",
+                extra={
+                    "appointment_id": next_appointment.id,
+                    "appointment_date": next_appointment.appointment_date.isoformat() if next_appointment.appointment_date else None
+                }
+            )
+        else:
+            # Si no hay recordatorio reciente, buscar en un rango de fechas estrecho
+            # Primero buscar citas confirmadas en el rango
             next_appointment = db.query(Appointment).filter(
                 Appointment.patient_id == matching_patient.id,
-                Appointment.status != 'cancelled',
-                Appointment.appointment_date >= datetime.now()
+                Appointment.status == 'confirmada',
+                Appointment.appointment_date >= past_threshold,
+                Appointment.appointment_date <= future_threshold
             ).order_by(Appointment.appointment_date.asc()).first()
+            
+            if not next_appointment:
+                # Si no hay citas confirmadas, buscar cualquier cita en el rango (excepto canceladas)
+                next_appointment = db.query(Appointment).filter(
+                    Appointment.patient_id == matching_patient.id,
+                    Appointment.status != 'cancelled',
+                    Appointment.appointment_date >= past_threshold,
+                    Appointment.appointment_date <= future_threshold
+                ).order_by(Appointment.appointment_date.asc()).first()
+            
+            if next_appointment:
+                api_logger.info(
+                    "✅ Found appointment in date range for cancellation",
+                    extra={
+                        "appointment_id": next_appointment.id,
+                        "appointment_date": next_appointment.appointment_date.isoformat() if next_appointment.appointment_date else None,
+                        "date_range": f"{past_threshold.isoformat()} to {future_threshold.isoformat()}"
+                    }
+                )
         
         if not next_appointment:
-            # Si no hay citas futuras, buscar cualquier cita reciente (últimos 7 días) EXCEPTO CANCELADAS
-            from datetime import timedelta
-            recent_date = datetime.now() - timedelta(days=7)
+            # Si no hay citas en el rango, buscar cualquier cita reciente (últimos 7 días) EXCEPTO CANCELADAS
+            recent_date = now - timedelta(days=7)
             next_appointment = db.query(Appointment).filter(
                 Appointment.patient_id == matching_patient.id,
                 Appointment.status != 'cancelled',  # ← EXCLUIR CITAS CANCELADAS
@@ -1578,12 +2157,14 @@ async def process_text_cancellation_request(text: str, patient_phone: str, db: S
         if not next_appointment:
             return
         
+        doctor_id = next_appointment.doctor_id
+        
         # Actualizar campos de cancelación específicos
         next_appointment.status = 'cancelled'
         next_appointment.cancelled_reason = 'cancelled by patient'
-        next_appointment.cancelled_at = datetime.utcnow()
+        next_appointment.cancelled_at = utc_now()
         next_appointment.cancelled_by = matching_patient.id
-        next_appointment.updated_at = datetime.utcnow()
+        next_appointment.updated_at = utc_now()
         
         try:
             db.commit()
@@ -1591,6 +2172,18 @@ async def process_text_cancellation_request(text: str, patient_phone: str, db: S
         except Exception as commit_error:
             db.rollback()
             raise commit_error
+        
+        # Sincronizar con Google Calendar si está configurado
+        if doctor_id:
+            try:
+                from services.google_calendar_service import GoogleCalendarService
+                GoogleCalendarService.delete_calendar_event(db, doctor_id, next_appointment.id)
+            except Exception as e:
+                # No fallar si Google Calendar no está configurado o hay error
+                api_logger.warning("Error al sincronizar eliminación con Google Calendar (no crítico)", exc_info=True, extra={
+                    "doctor_id": doctor_id,
+                    "appointment_id": next_appointment.id
+                })
         
         # Opcional: Enviar mensaje de confirmación al paciente
         # (Esto requeriría una plantilla adicional aprobada)
@@ -1610,296 +2203,7 @@ async def process_text_cancellation_request(text: str, patient_phone: str, db: S
 
 # MIGRADO a routes/catalogs.py
 
-# ============================================================================
-# DEBUGGING ENDPOINTS
-# ============================================================================
-# NOTE: These endpoints are for development only. In production, they should be disabled.
-# Debug endpoints are disabled by default for security reasons.
-# To enable debug endpoints, uncomment the block below and set ENABLE_DEBUG_ENDPOINTS=true
-# if os.getenv('ENABLE_DEBUG_ENDPOINTS') == 'true':
-#     @app.get("/api/debug/office-system")
-#     async def debug_office_system(
-#         current_user: Person = Depends(get_current_user),
-#         db: Session = Depends(get_db)
-#     ):
-#         """Debug office system status"""
-#         try:
-#             # Check offices
-#             offices = db.query(Office).all()
-#             office_data = []
-#             
-#             for office in offices:
-#                 office_info = {
-#                     'id': office.id,
-#                     'name': office.name,
-#                     'doctor_id': office.doctor_id,
-#                     'address': office.address,
-#                     'city': office.city,
-#                     'state_id': office.state_id,
-#                     'country_id': office.country_id,
-#                     'phone': office.phone,
-#                     'timezone': office.timezone,
-#                     'is_active': office.is_active,
-#                     'created_at': office.created_at.isoformat() if office.created_at else None
-#                 }
-#                 office_data.append(office_info)
-#             
-#             # Check doctors without offices
-#             doctors_without_offices = db.query(Person).filter(
-#                 Person.person_type == 'doctor',
-#                 Person.is_active == True
-#             ).all()
-#             
-#             doctors_without_offices_data = []
-#             for doctor in doctors_without_offices:
-#                 has_office = db.query(Office).filter(
-#                     Office.doctor_id == doctor.id,
-#                     Office.is_active == True
-#                 ).first() is not None
-#                 
-#                 if not has_office:
-#                     doctors_without_offices_data.append({
-#                         'id': doctor.id,
-#                         'name': f"{doctor.first_name} {doctor.paternal_surname}",
-#                         'email': doctor.email
-#                     })
-#             
-#             return {
-#                 'status': 'success',
-#                 'total_offices': len(offices),
-#                 'offices': office_data,
-#                 'doctors_without_offices': len(doctors_without_offices_data),
-#                 'doctors_without_offices_data': doctors_without_offices_data,
-#                 'timestamp': datetime.now().isoformat()
-#             }
-#             
-#         except Exception as e:
-#             return {
-#                 'status': 'error',
-#                 'error': str(e),
-#                 'timestamp': datetime.now().isoformat()
-#             }
-# 
-#     @app.get("/api/debug/appointment-system")
-#     async def debug_appointment_system(
-#         current_user: Person = Depends(get_current_user),
-#         db: Session = Depends(get_db)
-#     ):
-#         """Debug appointment system status"""
-#         try:
-#             # Check appointments
-#             appointments = db.query(Appointment).all()
-#             appointment_data = []
-#             
-#             for appointment in appointments:
-#                 appointment_info = {
-#                     'id': appointment.id,
-#                     'patient_id': appointment.patient_id,
-#                     'doctor_id': appointment.doctor_id,
-#                     'appointment_date': appointment.appointment_date.isoformat() if appointment.appointment_date else None,
-#                     'appointment_type_id': appointment.appointment_type_id,
-#                     'office_id': appointment.office_id,
-#                     'status': appointment.status,
-#                     'reason': appointment.reason
-#                 }
-#                 appointment_data.append(appointment_info)
-#             
-#             # Check appointment types
-#             appointment_types = db.query(AppointmentType).all()
-#             appointment_types_data = []
-#             
-#             for apt_type in appointment_types:
-#                 apt_type_info = {
-#                     'id': apt_type.id,
-#                     'name': apt_type.name,
-#                     'is_active': apt_type.is_active
-#                 }
-#                 appointment_types_data.append(apt_type_info)
-#             
-#             # Check appointments without office_id
-#             appointments_without_office = db.query(Appointment).filter(
-#                 Appointment.office_id.is_(None)
-#             ).count()
-#             
-#             # Check appointments without appointment_type_id
-#             appointments_without_type = db.query(Appointment).filter(
-#                 Appointment.appointment_type_id.is_(None)
-#             ).count()
-#             
-#             return {
-#                 'status': 'success',
-#                 'total_appointments': len(appointments),
-#                 'appointments': appointment_data,
-#                 'appointment_types': appointment_types_data,
-#                 'appointments_without_office': appointments_without_office,
-#                 'appointments_without_type': appointments_without_type,
-#                 'timestamp': datetime.now().isoformat()
-#             }
-#             
-#         except Exception as e:
-#             return {
-#                 'status': 'error',
-#                 'error': str(e),
-#                 'timestamp': datetime.now().isoformat()
-#             }
-# 
-#     @app.get("/api/debug/consultation-system")
-#     async def debug_consultation_system(
-#         current_user: Person = Depends(get_current_user),
-#         db: Session = Depends(get_db)
-#     ):
-#         """Debug consultation system status"""
-#         try:
-#             # Check medical records
-#             medical_records = db.query(MedicalRecord).all()
-#             medical_records_data = []
-#             
-#             for record in medical_records:
-#                 record_info = {
-#                     'id': record.id,
-#                     'patient_id': record.patient_id,
-#                     'doctor_id': record.doctor_id,
-#                     'consultation_date': record.consultation_date.isoformat() if record.consultation_date else None,
-#                     'appointment_type_id': None,
-#                     'office_id': None,
-#                     'chief_complaint': record.chief_complaint[:100] + '...' if record.chief_complaint and len(record.chief_complaint) > 100 else record.chief_complaint
-#                 }
-#                 medical_records_data.append(record_info)
-#             
-#             records_without_office = 0
-#             records_without_type = 0
-#             
-#             return {
-#                 'status': 'success',
-#                 'total_medical_records': len(medical_records),
-#                 'medical_records': medical_records_data,
-#                 'records_without_office': records_without_office,
-#                 'records_without_type': records_without_type,
-#                 'timestamp': datetime.now().isoformat()
-#             }
-#             
-#         except Exception as e:
-#             return {
-#                 'status': 'error',
-#                 'error': str(e),
-#                 'timestamp': datetime.now().isoformat()
-#             }
-# 
-#     @app.get("/api/debug/whatsapp-system")
-#     async def debug_whatsapp_system(
-#         current_user: Person = Depends(get_current_user),
-#         db: Session = Depends(get_db)
-#     ):
-#         """Debug WhatsApp system status"""
-#         try:
-#             whatsapp_config = {
-#                 'phone_id': os.getenv('META_WHATSAPP_PHONE_ID'),
-#                 'access_token': '***' + os.getenv('META_WHATSAPP_TOKEN', '')[-4:] if os.getenv('META_WHATSAPP_TOKEN') else None,
-#                 'api_version': os.getenv('META_WHATSAPP_API_VERSION', 'v18.0')
-#             }
-#             
-#             appointments_with_whatsapp = db.query(Appointment).filter(
-#                 Appointment.patient_id.isnot(None)
-#             ).all()
-#             
-#             whatsapp_data = []
-#             for appointment in appointments_with_whatsapp:
-#                 patient = db.query(Person).filter(Person.id == appointment.patient_id).first()
-#                 if patient and patient.primary_phone:
-#                     whatsapp_info = {
-#                         'appointment_id': appointment.id,
-#                         'patient_phone': patient.primary_phone,
-#                         'appointment_date': appointment.appointment_date.isoformat() if appointment.appointment_date else None,
-#                         'office_id': appointment.office_id,
-#                         'appointment_type_id': appointment.appointment_type_id
-#                     }
-#                     whatsapp_data.append(whatsapp_info)
-#             
-#             return {
-#                 'status': 'success',
-#                 'whatsapp_config': whatsapp_config,
-#                 'appointments_with_whatsapp': len(whatsapp_data),
-#                 'whatsapp_data': whatsapp_data,
-#                 'timestamp': datetime.now().isoformat()
-#             }
-#             
-#         except Exception as e:
-#             return {
-#                 'status': 'error',
-#                 'error': str(e),
-#                 'timestamp': datetime.now().isoformat()
-#             }
-# 
-#     @app.get("/api/debug/pdf-system")
-#     async def debug_pdf_system(
-#         current_user: Person = Depends(get_current_user),
-#         db: Session = Depends(get_db)
-#     ):
-#         """Debug PDF system status"""
-#         try:
-#             doctors_with_offices = db.query(Person).filter(
-#                 Person.person_type == 'doctor',
-#                 Person.is_active == True
-#             ).all()
-#             
-#             pdf_data = []
-#             for doctor in doctors_with_offices:
-#                 offices = db.query(Office).filter(
-#                     Office.doctor_id == doctor.id,
-#                     Office.is_active == True
-#                 ).all()
-#                 
-#                 doctor_info = {
-#                     'id': doctor.id,
-#                     'name': f"{doctor.first_name} {doctor.paternal_surname}",
-#                     'offices_count': len(offices),
-#                     'offices': [{'id': o.id, 'name': o.name, 'address': o.address} for o in offices]
-#                 }
-#                 pdf_data.append(doctor_info)
-#             
-#             return {
-#                 'status': 'success',
-#                 'doctors_with_offices': len(pdf_data),
-#                 'pdf_data': pdf_data,
-#                 'timestamp': datetime.now().isoformat()
-#             }
-#             
-#         except Exception as e:
-#             return {
-#                 'status': 'error',
-#                 'error': str(e),
-#                 'timestamp': datetime.now().isoformat()
-#             }
-# 
-#     @app.get("/api/debug/full-system")
-#     async def debug_full_system(
-#         current_user: Person = Depends(get_current_user),
-#         db: Session = Depends(get_db)
-#     ):
-#         """Debug complete multi-office system"""
-#         try:
-#             office_debug = await debug_office_system(current_user, db)
-#             appointment_debug = await debug_appointment_system(current_user, db)
-#             consultation_debug = await debug_consultation_system(current_user, db)
-#             whatsapp_debug = await debug_whatsapp_system(current_user, db)
-#             pdf_debug = await debug_pdf_system(current_user, db)
-#             
-#             return {
-#                 'status': 'success',
-#                 'timestamp': datetime.now().isoformat(),
-#                 'office_system': office_debug,
-#                 'appointment_system': appointment_debug,
-#                 'consultation_system': consultation_debug,
-#                 'whatsapp_system': whatsapp_debug,
-#                 'pdf_system': pdf_debug
-#             }
-#             
-#         except Exception as e:
-#             return {
-#                 'status': 'error',
-#                 'error': str(e),
-#                 'timestamp': datetime.now().isoformat()
-#             }
+# Debug endpoints removed - were disabled for security and not needed for MVP
 
 # MIGRADO a routes/catalogs.py
 
@@ -2389,7 +2693,7 @@ async def get_audit_statistics(
 ):
     """Get audit statistics for the last N days"""
     try:
-        from_date = datetime.utcnow() - timedelta(days=days)
+        from_date = utc_now() - timedelta(days=days)
         
         query = db.query(AuditLog).filter(AuditLog.timestamp >= from_date)
         
@@ -2490,13 +2794,19 @@ async def send_whatsapp_privacy_notice(
             raise HTTPException(status_code=404, detail="Paciente no encontrado")
         
         # Verificar que el doctor tiene relación con este paciente
-        consultation = db.query(MedicalRecord).filter(
+        # Permitir si:
+        # 1. El paciente fue creado por este doctor (created_by)
+        # 2. O existe una consulta entre el doctor y el paciente
+        # 3. O el usuario es admin
+        has_consultation = db.query(MedicalRecord).filter(
             MedicalRecord.patient_id == request_data.patient_id,
             MedicalRecord.doctor_id == current_user.id
-            ).first()
+        ).first() is not None
         
-        if not consultation and current_user.person_type != 'admin':
-                raise HTTPException(
+        is_patient_creator = patient.created_by == current_user.id
+        
+        if not has_consultation and not is_patient_creator and current_user.person_type != 'admin':
+            raise HTTPException(
                 status_code=403,
                 detail="No tienes permiso para enviar avisos a este paciente"
             )
@@ -2544,16 +2854,15 @@ async def send_whatsapp_privacy_notice(
         if not privacy_notice:
             raise HTTPException(status_code=404, detail="No hay aviso de privacidad activo. Por favor, contacta al administrador del sistema.")
         
-        # Generar token único para la URL
-        privacy_token = str(uuid.uuid4())
-        privacy_url = f"https://tudominio.com/privacy-notice/{privacy_token}"
+        # URL del aviso de privacidad público
+        privacy_url = "https://cortexclinico.com/privacy"
         
         # Crear registro de consentimiento PRIMERO (para tener el ID)
         consent = PrivacyConsent(
             patient_id=request_data.patient_id,
             notice_id=privacy_notice.id,
             consent_given=False,  # Pendiente hasta que el paciente responda
-            consent_date=datetime.utcnow()
+            consent_date=utc_now()
         )
         
         db.add(consent)
@@ -2661,25 +2970,134 @@ async def whatsapp_webhook(
     """
     Webhook para recibir respuestas de WhatsApp (botones interactivos)
     Meta enviará aquí las respuestas cuando el paciente presione "Acepto"
+    
+    Security: Validates X-Hub-Signature-256 header to ensure request is from Meta
     """
+    # Log inmediato al recibir el request
+    api_logger.warning(
+        "🚨 WEBHOOK RECEIVED: /api/webhooks/whatsapp",
+        extra={
+            "method": request.method,
+            "url": str(request.url),
+            "headers": dict(request.headers),
+            "client": request.client.host if request.client else None
+        }
+    )
+    print("=" * 80)
+    print("🚨 WEBHOOK RECEIVED: /api/webhooks/whatsapp")
+    print(f"Method: {request.method}")
+    print(f"URL: {request.url}")
+    print(f"Client: {request.client.host if request.client else None}")
+    print("=" * 80)
+    
     try:
-        body = await request.json()
+        # Validate webhook signature from Meta
+        import hmac
+        import hashlib
+        
+        # Get raw body for signature validation
+        raw_body = await request.body()
+        
+        # Get signature from header
+        signature_header = request.headers.get("X-Hub-Signature-256", "")
+        is_production = os.getenv("APP_ENV", "development").lower() == "production"
+        
+        # In production, signature validation is mandatory
+        if is_production and not signature_header:
+            api_logger.error("❌ WhatsApp webhook request without signature header in production")
+            raise HTTPException(status_code=403, detail="Missing signature header")
+        
+        if signature_header:
+            # Extract signature (format: sha256=<signature>)
+            if not signature_header.startswith("sha256="):
+                api_logger.error("❌ Invalid signature format")
+                if is_production:
+                    raise HTTPException(status_code=403, detail="Invalid signature format")
+                else:
+                    api_logger.warning("⚠️ Invalid signature format - allowing in development")
+            else:
+                received_signature = signature_header[7:]  # Remove "sha256=" prefix
+                
+                # Get app secret from environment
+                app_secret = os.getenv("META_WHATSAPP_APP_SECRET")
+                if not app_secret:
+                    api_logger.error("❌ META_WHATSAPP_APP_SECRET not configured")
+                    if is_production:
+                        raise HTTPException(status_code=500, detail="Webhook secret not configured")
+                    else:
+                        api_logger.warning("⚠️ META_WHATSAPP_APP_SECRET not configured - skipping signature validation")
+                else:
+                    # Compute expected signature
+                    expected_signature = hmac.new(
+                        app_secret.encode('utf-8'),
+                        raw_body,
+                        hashlib.sha256
+                    ).hexdigest()
+                    
+                    # Compare signatures using constant-time comparison
+                    if not hmac.compare_digest(received_signature, expected_signature):
+                        api_logger.error("❌ WhatsApp webhook signature validation failed")
+                        raise HTTPException(status_code=403, detail="Invalid signature")
+                    
+                    api_logger.debug("✅ WhatsApp webhook signature validated")
+        elif not is_production:
+            api_logger.warning("⚠️ WhatsApp webhook request without signature header - allowing in development")
+        
+        # Parse body as JSON
+        body = json.loads(raw_body.decode('utf-8'))
         
         if 'entry' not in body:
             return {"status": "ignored"}
         
+        processed_messages = 0
         for entry in body['entry']:
+            api_logger.info(
+                "📥 Processing entry (alternative endpoint)",
+                extra={"entry_id": entry.get("id"), "changes_count": len(entry.get('changes', []))}
+            )
+            
             for change in entry.get('changes', []):
-                if change.get('field') != 'messages':
-                    continue
-                
+                field = change.get('field')
                 value = change.get('value', {})
                 
+                api_logger.info(
+                    "🔍 Processing change (alternative endpoint)",
+                    extra={
+                        "field": field,
+                        "value_keys": list(value.keys()) if isinstance(value, dict) else None
+                    }
+                )
+                
+                # Procesar cambios del campo 'messages'
+                if field != 'messages':
+                    api_logger.debug(
+                        "⏭️ Skipping change - field is not 'messages'",
+                        extra={"field": field}
+                    )
+                    continue
+                
                 # Procesar mensajes con botones interactivos
-                for message in value.get('messages', []):
+                messages = value.get('messages', [])
+                api_logger.info(
+                    "📩 Found messages in webhook (alternative endpoint)",
+                    extra={"count": len(messages)}
+                )
+                
+                for message in messages:
                     message_type = message.get('type')
                     from_phone = message.get('from')
                     timestamp = message.get('timestamp')
+                    message_id = message.get('id')
+                    
+                    api_logger.info(
+                        "📩 Processing WhatsApp message (alternative endpoint)",
+                        extra={
+                            "message_id": message_id,
+                            "message_type": message_type,
+                            "from_phone": from_phone,
+                            "timestamp": timestamp
+                        }
+                    )
                     
                     # PROCESAR BOTÓN INTERACTIVO
                     if message_type == 'interactive':
@@ -2688,6 +3106,19 @@ async def whatsapp_webhook(
                         
                         button_id = button_reply.get('id', '')
                         button_title = button_reply.get('title', '')
+                        
+                        # Log detallado para debugging
+                        api_logger.warning(
+                            "📱 WhatsApp interactive message received (alternative endpoint)",
+                            extra={
+                                "button_id": button_id,
+                                "button_title": button_title,
+                                "from_phone": from_phone,
+                                "timestamp": timestamp,
+                                "interactive_data": interactive_data,
+                                "message": message
+                            }
+                        )
                         
                         security_logger.info(
                             "📱 WhatsApp consent button pressed",
@@ -2702,6 +3133,10 @@ async def whatsapp_webhook(
                         # Extraer consent_id del button_id
                         # Formato: "accept_privacy_123"
                         parts = button_id.split('_')
+                        api_logger.warning(
+                            "🔍 Parsing consent button_id (alternative endpoint)",
+                            extra={"button_id": button_id, "parts": parts, "parts_count": len(parts)}
+                        )
                         security_logger.debug(
                             "🔍 Parsing consent button_id",
                             extra={"button_id": button_id, "parts": parts}
@@ -2744,10 +3179,30 @@ async def whatsapp_webhook(
                                 continue
                             
                             # ACEPTADO
+                            api_logger.warning(
+                                "✅ Updating consent to accepted (alternative endpoint)",
+                                extra={
+                                    "consent_id": consent_id,
+                                    "patient_id": patient.id,
+                                    "before_consent_given": consent.consent_given,
+                                    "timestamp": timestamp
+                                }
+                            )
                             consent.consent_given = True
                             consent.consent_date = datetime.fromtimestamp(int(timestamp))
                             
                             db.commit()
+                            db.refresh(consent)
+                            
+                            api_logger.warning(
+                                "✅ Consent updated successfully (alternative endpoint)",
+                                extra={
+                                    "consent_id": consent_id,
+                                    "patient_id": patient.id,
+                                    "after_consent_given": consent.consent_given,
+                                    "consent_date": consent.consent_date.isoformat() if consent.consent_date else None
+                                }
+                            )
                             
                             # Enviar confirmación
                             from whatsapp_service import get_whatsapp_service
@@ -2795,26 +3250,43 @@ async def whatsapp_webhook(
                                 },
                                 security_level='INFO'
                             )
+                            processed_messages += 1
                 
                 # Procesar status updates (entregado, leído)
-                for status in value.get('statuses', []):
-                    status_type = status.get('status')
-                    message_id = status.get('id')
-                    
-                    # Find consent by patient phone (simplified - WhatsApp message tracking removed)
-                    # Note: In a real implementation, you'd need to track message_id differently
-                    consent = None  # Placeholder - implement based on your needs
-                    
-                    if consent:
-                        # WhatsApp status tracking removed - simplified schema
-                        # No action needed for delivered/read status
-                        db.commit()
-                        security_logger.debug(
-                            "📊 Consent status update received",
-                            extra={"consent_id": consent.id, "status": status_type, "message_id": message_id}
+                statuses = value.get('statuses', [])
+                if statuses:
+                    api_logger.info(
+                        "📊 Message status updates received (alternative endpoint)",
+                        extra={"count": len(statuses)}
+                    )
+                    for status in statuses:
+                        status_type = status.get('status')
+                        status_message_id = status.get('id')
+                        
+                        api_logger.debug(
+                            "📊 Processing status update",
+                            extra={"status": status_type, "message_id": status_message_id}
                         )
+                        
+                        # Find consent by patient phone (simplified - WhatsApp message tracking removed)
+                        # Note: In a real implementation, you'd need to track message_id differently
+                        consent = None  # Placeholder - implement based on your needs
+                        
+                        if consent:
+                            # WhatsApp status tracking removed - simplified schema
+                            # No action needed for delivered/read status
+                            db.commit()
+                            security_logger.debug(
+                                "📊 Consent status update received",
+                                extra={"consent_id": consent.id, "status": status_type, "message_id": status_message_id}
+                            )
         
-        return {"status": "ok"}
+        api_logger.info(
+            "✅ WhatsApp webhook processed successfully (alternative endpoint)",
+            extra={"processed_messages": processed_messages, "total_entries": len(body.get('entry', []))}
+        )
+        
+        return {"status": "ok", "processed_messages": processed_messages}
         
     except Exception as e:
         security_logger.error(
@@ -2915,28 +3387,47 @@ async def revoke_consent(
         
         # Verificar acceso
         if current_user.person_type == 'doctor':
-            consultation = db.query(MedicalRecord).filter(
+            # Obtener el paciente para verificar created_by
+            patient = db.query(Person).filter(
+                Person.id == patient_id,
+                Person.person_type == 'patient'
+            ).first()
+            
+            if not patient:
+                raise HTTPException(status_code=404, detail="Paciente no encontrado")
+            
+            # Permitir si:
+            # 1. El paciente fue creado por este doctor (created_by)
+            # 2. O existe una consulta entre el doctor y el paciente
+            # 3. O el usuario es admin
+            has_consultation = db.query(MedicalRecord).filter(
                 MedicalRecord.patient_id == patient_id,
-            MedicalRecord.doctor_id == current_user.id
-        ).first()
-        
-        if not consultation:
+                MedicalRecord.doctor_id == current_user.id
+            ).first() is not None
+            
+            is_patient_creator = patient.created_by == current_user.id
+            
+            if not has_consultation and not is_patient_creator:
                 raise HTTPException(status_code=403, detail="No tiene acceso a este paciente")
         
-        # Buscar consentimiento activo
+        # Buscar consentimiento más reciente (no revocado, es decir, consent_given puede ser True o False pero debe existir)
         consent = db.query(PrivacyConsent).filter(
-            PrivacyConsent.patient_id == patient_id,
-            PrivacyConsent.is_revoked == False
+            PrivacyConsent.patient_id == patient_id
         ).order_by(PrivacyConsent.created_at.desc()).first()
         
         if not consent:
-            raise HTTPException(status_code=404, detail="No se encontró consentimiento activo para este paciente")
+            raise HTTPException(status_code=404, detail="No se encontró consentimiento para este paciente")
         
-        # Revocar
-        # Revocation: Set consent_given to False
+        # Si ya está revocado (consent_given = False), no hacer nada
+        if not consent.consent_given:
+            raise HTTPException(status_code=400, detail="El consentimiento ya está revocado")
+        
+        # Revocar: Set consent_given to False
+        # Usar timezone CDMX para la fecha
+        import pytz
+        cdmx_tz = pytz.timezone('America/Mexico_City')
         consent.consent_given = False
-        consent.consent_date = datetime.utcnow()
-        consent.updated_at = datetime.utcnow()
+        consent.consent_date = datetime.now(cdmx_tz)
         
         db.commit()
         
@@ -2944,14 +3435,16 @@ async def revoke_consent(
         audit_service.log_action(
             db=db,
             action='privacy_consent_revoked',
-            entity_type='privacy_consent',
-            entity_id=consent.id,
-            user_id=current_user.id,
-            user_type=current_user.person_type,
-            changes={'revocation_reason': revocation_reason},
-            ip_address=request.client.host,
-            summary=f"Consentimiento revocado para paciente {patient_id}",
-            security_level='WARNING'
+            user=current_user,
+            request=request,
+            table_name='privacy_consents',
+            record_id=consent.id,
+            new_values={'revocation_reason': revocation_reason, 'consent_given': False},
+            operation_type='privacy_consent_revoke',
+            affected_patient_id=patient_id,
+            affected_patient_name=patient.name or "Paciente",
+            security_level='WARNING',
+            change_reason=revocation_reason
         )
         
         api_logger.info(
@@ -2997,24 +3490,37 @@ async def create_arco_request(
         
         # Verificar acceso
         if current_user.person_type == 'doctor':
-            consultation = db.query(MedicalRecord).filter(
-                MedicalRecord.patient_id == patient_id,
-                MedicalRecord.doctor_id == current_user.id
+            # Obtener el paciente para verificar created_by
+            patient = db.query(Person).filter(
+                Person.id == patient_id,
+                Person.person_type == 'patient'
             ).first()
             
-            if not consultation:
+            if not patient:
+                raise HTTPException(status_code=404, detail="Paciente no encontrado")
+            
+            # Permitir si:
+            # 1. El paciente fue creado por este doctor (created_by)
+            # 2. O existe una consulta entre el doctor y el paciente
+            # 3. O el usuario es admin
+            has_consultation = db.query(MedicalRecord).filter(
+                MedicalRecord.patient_id == patient_id,
+                MedicalRecord.doctor_id == current_user.id
+            ).first() is not None
+            
+            is_patient_creator = patient.created_by == current_user.id
+            
+            if not has_consultation and not is_patient_creator:
                 raise HTTPException(status_code=403, detail="No tiene acceso a este paciente")
         
         # Crear solicitud ARCO
         arco_request = ARCORequest(
             patient_id=patient_id,
             request_type=request_type,
-            request_description=description,  # Field name in model
+            description=description,  # En BD es "description"
             status='pending',
-            request_date=datetime.utcnow(),
-            assigned_to=current_user.id,  # Use assigned_to instead of requested_by
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            processed_by=current_user.id,  # En BD es "processed_by"
+            created_at=utc_now()
         )
         
         db.add(arco_request)
@@ -3025,13 +3531,13 @@ async def create_arco_request(
         audit_service.log_action(
             db=db,
             action='arco_request_created',
-            entity_type='arco_request',
-            entity_id=arco_request.id,
-            user_id=current_user.id,
-            user_type=current_user.person_type,
-            changes={'request_type': request_type, 'patient_id': patient_id},
-            ip_address=request.client.host,
-            summary=f"Solicitud ARCO ({request_type}) creada para paciente {patient_id}",
+            user=current_user,
+            request=request,
+            table_name='arco_requests',
+            record_id=arco_request.id,
+            new_values={'request_type': request_type, 'patient_id': patient_id},
+            operation_type='arco_request_create',
+            affected_patient_id=patient_id,
             security_level='INFO'
         )
         
@@ -3049,9 +3555,9 @@ async def create_arco_request(
                 "id": arco_request.id,
                 "patient_id": arco_request.patient_id,
                 "request_type": arco_request.request_type,
-                "description": arco_request.request_description,
+                "description": arco_request.description,
                 "status": arco_request.status,
-                "requested_at": arco_request.request_date.isoformat() if arco_request.request_date else None,
+                "requested_at": arco_request.created_at.isoformat() if arco_request.created_at else None,
                 "created_at": arco_request.created_at.isoformat()
             }
         }
@@ -3074,12 +3580,27 @@ async def get_arco_requests(
     try:
         # Verificar acceso
         if current_user.person_type == 'doctor':
-            consultation = db.query(MedicalRecord).filter(
-                MedicalRecord.patient_id == patient_id,
-                MedicalRecord.doctor_id == current_user.id
+            # Obtener el paciente para verificar created_by
+            patient = db.query(Person).filter(
+                Person.id == patient_id,
+                Person.person_type == 'patient'
             ).first()
             
-            if not consultation:
+            if not patient:
+                raise HTTPException(status_code=404, detail="Paciente no encontrado")
+            
+            # Permitir si:
+            # 1. El paciente fue creado por este doctor (created_by)
+            # 2. O existe una consulta entre el doctor y el paciente
+            # 3. O el usuario es admin
+            has_consultation = db.query(MedicalRecord).filter(
+                MedicalRecord.patient_id == patient_id,
+                MedicalRecord.doctor_id == current_user.id
+            ).first() is not None
+            
+            is_patient_creator = patient.created_by == current_user.id
+            
+            if not has_consultation and not is_patient_creator:
                 raise HTTPException(status_code=403, detail="No tiene acceso a este paciente")
         
         # Obtener solicitudes ARCO
@@ -3093,15 +3614,15 @@ async def get_arco_requests(
                     "id": req.id,
                     "patient_id": req.patient_id,
                     "request_type": req.request_type,
-                    "description": getattr(req, 'request_description', None),
+                    "description": getattr(req, 'description', None),  # En BD es "description"
                     "status": req.status,
                     "contact_email": getattr(req, 'contact_email', None),  # Field may not exist in model
                     "contact_phone": getattr(req, 'contact_phone', None),  # Field may not exist in model
-                    "requested_at": req.request_date.isoformat() if req.request_date else None,
-                    "resolved_at": getattr(req, 'response_date', None),  # Use response_date instead
-                    "resolution_notes": getattr(req, 'response_description', None),  # Use response_description instead
+                    "requested_at": req.created_at.isoformat() if req.created_at else None,  # Usar created_at ya que request_date no existe
+                    "resolved_at": req.processed_at.isoformat() if req.processed_at else None,  # En BD es "processed_at"
+                    "resolution_notes": getattr(req, 'response', None),  # En BD es "response"
                     "created_at": req.created_at.isoformat(),
-                    "updated_at": req.updated_at.isoformat()
+                    "updated_at": req.created_at.isoformat() if req.created_at else None  # No hay updated_at en BD
                 }
                 for req in arco_requests
             ]
@@ -3144,22 +3665,36 @@ async def update_arco_request(
         
         # Verificar acceso
         if current_user.person_type == 'doctor':
-            consultation = db.query(MedicalRecord).filter(
+            # Obtener el paciente para verificar created_by
+            patient = db.query(Person).filter(
+                Person.id == arco_request.patient_id,
+                Person.person_type == 'patient'
+            ).first()
+            
+            if not patient:
+                raise HTTPException(status_code=404, detail="Paciente no encontrado")
+            
+            # Permitir si:
+            # 1. El paciente fue creado por este doctor (created_by)
+            # 2. O existe una consulta entre el doctor y el paciente
+            # 3. O el usuario es admin
+            has_consultation = db.query(MedicalRecord).filter(
                 MedicalRecord.patient_id == arco_request.patient_id,
                 MedicalRecord.doctor_id == current_user.id
-            ).first()
-        
-            if not consultation:
+            ).first() is not None
+            
+            is_patient_creator = patient.created_by == current_user.id
+            
+            if not has_consultation and not is_patient_creator:
                 raise HTTPException(status_code=403, detail="No tiene acceso a este paciente")
         
         # Actualizar
         old_status = arco_request.status
         arco_request.status = status
         if resolution_notes:
-            arco_request.response_description = resolution_notes  # Use response_description instead
+            arco_request.response = resolution_notes  # En BD es "response"
         if status == 'completed':  # Model uses 'completed', not 'resolved'
-            arco_request.response_date = datetime.utcnow()  # Use response_date instead
-        arco_request.updated_at = datetime.utcnow()
+            arco_request.processed_at = utc_now()  # En BD es "processed_at"
         
         db.commit()
         
@@ -3167,13 +3702,14 @@ async def update_arco_request(
         audit_service.log_action(
             db=db,
             action='arco_request_updated',
-            entity_type='arco_request',
-            entity_id=arco_request.id,
-            user_id=current_user.id,
-            user_type=current_user.person_type,
-            changes={'old_status': old_status, 'new_status': status},
-            ip_address=request.client.host,
-            summary=f"Solicitud ARCO {request_id} actualizada: {old_status} → {status}",
+            user=current_user,
+            request=request,
+            table_name='arco_requests',
+            record_id=arco_request.id,
+            old_values={'status': old_status},
+            new_values={'status': status, 'resolution_notes': resolution_notes} if resolution_notes else {'status': status},
+            operation_type='arco_request_update',
+            affected_patient_id=arco_request.patient_id,
             security_level='INFO'
         )
         
@@ -3189,9 +3725,9 @@ async def update_arco_request(
             "arco_request": {
                 "id": arco_request.id,
                 "status": arco_request.status,
-                "resolution_notes": arco_request.response_description,  # Use response_description instead
-                "resolved_at": arco_request.response_date.isoformat() if arco_request.response_date else None,  # Use response_date instead
-                "updated_at": arco_request.updated_at.isoformat()
+                "resolution_notes": arco_request.response,  # En BD es "response"
+                "resolved_at": arco_request.processed_at.isoformat() if arco_request.processed_at else None,  # En BD es "processed_at"
+                "updated_at": arco_request.created_at.isoformat() if arco_request.created_at else None  # No hay updated_at en BD
             }
         }
         
@@ -3238,360 +3774,363 @@ async def get_public_privacy_notice(db: Session = Depends(get_db)):
 # ============================================================================
 # DATA RETENTION ENDPOINTS (LFPDPPP + NOM-004 Compliance)
 # ============================================================================
-
-@app.get("/api/data-retention/stats")
-async def get_retention_stats(
-    db: Session = Depends(get_db),
-    current_user: Person = Depends(get_current_user)
-):
-    """
-    Get data retention statistics for the current doctor
-    """
-    try:
-        stats = retention.get_retention_stats(db, current_user.id)
-        
-        return {
-            "success": True,
-            "stats": stats,
-            "doctor_id": current_user.id
-        }
-    except Exception as e:
-        api_logger.error(f"Error getting retention stats: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/data-retention/expiring")
-async def get_expiring_records(
-    days: int = 90,
-    limit: int = 100,
-    db: Session = Depends(get_db),
-    current_user: Person = Depends(get_current_user)
-):
-    """
-    Get records expiring within specified days
-    
-    Args:
-        days: Days threshold for expiration (default: 90)
-        limit: Maximum records to return (default: 100)
-    """
-    try:
-        records = retention.get_expiring_records(
-            db, 
-            doctor_id=current_user.id,
-            days_threshold=days,
-            limit=limit
-        )
-        
-        return {
-            "success": True,
-            "records": records,
-            "count": len(records),
-            "days_threshold": days
-        }
-    except Exception as e:
-        api_logger.error(f"Error getting expiring records: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+# ============================================================================
+# DATA RETENTION ENDPOINTS
+# ============================================================================
+# Data retention endpoints removed - disabled for MVP
+# Service code remains in data_retention_service.py for future use
+# async def get_retention_stats(
+#     db: Session = Depends(get_db),
+#     current_user: Person = Depends(get_current_user)
+# ):
+#     """
+#     Get data retention statistics for the current doctor
+#     """
+#     try:
+#         stats = retention.get_retention_stats(db, current_user.id)
+#         
+#         return {
+#             "success": True,
+#             "stats": stats,
+#             "doctor_id": current_user.id
+#         }
+#     except Exception as e:
+#         api_logger.error(f"Error getting retention stats: {str(e)}")
+#         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/data-retention/anonymize/{record_id}")
-async def anonymize_record(
-    record_id: int,
-    reason: str = "manual_request",
-    strategy: str = "full",
-    db: Session = Depends(get_db),
-    current_user: Person = Depends(get_current_user)
-):
-    """
-    Anonymize a specific medical record
-    
-    Args:
-        record_id: Medical record ID
-        reason: Reason for anonymization
-        strategy: Anonymization strategy (full, partial, pseudo)
-    """
-    try:
-        # Verify record belongs to current doctor
-        record = db.query(MedicalRecord).filter(
-            MedicalRecord.id == record_id,
-            MedicalRecord.doctor_id == current_user.id
-        ).first()
-        
-        if not record:
-            raise HTTPException(
-                status_code=404,
-                detail="Registro no encontrado o no autorizado"
-            )
-        
-        success = retention.anonymize_medical_record(
-            db,
-            record_id,
-            performed_by=current_user.id,
-            reason=reason,
-            strategy=strategy
-        )
-        
-        if not success:
-            raise HTTPException(
-                status_code=400,
-                detail="No se pudo anonimizar el registro (puede estar en retención legal)"
-            )
-        
-        return {
-            "success": True,
-            "message": "Registro anonimizado exitosamente",
-            "record_id": record_id
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        api_logger.error(f"Error anonymizing record {record_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+# @app.get("/api/data-retention/expiring")
+# async def get_expiring_records(
+#     days: int = 90,
+#     limit: int = 100,
+#     db: Session = Depends(get_db),
+#     current_user: Person = Depends(get_current_user)
+# ):
+#     """
+#     Get records expiring within specified days
+#     
+#     Args:
+#         days: Days threshold for expiration (default: 90)
+#         limit: Maximum records to return (default: 100)
+#     """
+#     try:
+#         records = retention.get_expiring_records(
+#             db, 
+#             doctor_id=current_user.id,
+#             days_threshold=days,
+#             limit=limit
+#         )
+#         
+#         return {
+#             "success": True,
+#             "records": records,
+#             "count": len(records),
+#             "days_threshold": days
+#         }
+#     except Exception as e:
+#         api_logger.error(f"Error getting expiring records: {str(e)}")
+#         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/data-retention/anonymize-expired")
-async def anonymize_expired_records_endpoint(
-    batch_size: int = 100,
-    db: Session = Depends(get_db),
-    current_user: Person = Depends(get_current_user)
-):
-    """
-    Anonymize all expired records for current doctor
-    
-    Args:
-        batch_size: Maximum records to process (default: 100)
-    """
-    try:
-        # This endpoint processes ALL expired records for the doctor
-        # In production, this would be a scheduled job
-        
-        result = retention.anonymize_expired_records(
-            db,
-            performed_by=current_user.id,
-            batch_size=batch_size
-        )
-        
-        return {
-            "success": True,
-            "message": f"Procesados {result['total_processed']} registros",
-            **result
-        }
-        
-    except Exception as e:
-        api_logger.error(f"Error in batch anonymization: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+# @app.post("/api/data-retention/anonymize/{record_id}")
+# async def anonymize_record(
+#     record_id: int,
+#     reason: str = "manual_request",
+#     strategy: str = "full",
+#     db: Session = Depends(get_db),
+#     current_user: Person = Depends(get_current_user)
+# ):
+#     """
+#     Anonymize a specific medical record
+#     
+#     Args:
+#         record_id: Medical record ID
+#         reason: Reason for anonymization
+#         strategy: Anonymization strategy (full, partial, pseudo)
+#     """
+#     try:
+#         # Verify record belongs to current doctor
+#         record = db.query(MedicalRecord).filter(
+#             MedicalRecord.id == record_id,
+#             MedicalRecord.doctor_id == current_user.id
+#         ).first()
+#         
+#         if not record:
+#             raise HTTPException(
+#                 status_code=404,
+#                 detail="Registro no encontrado o no autorizado"
+#             )
+#         
+#         success = retention.anonymize_medical_record(
+#             db,
+#             record_id,
+#             performed_by=current_user.id,
+#             reason=reason,
+#             strategy=strategy
+#         )
+#         
+#         if not success:
+#             raise HTTPException(
+#                 status_code=400,
+#                 detail="No se pudo anonimizar el registro (puede estar en retención legal)"
+#             )
+#         
+#         return {
+#             "success": True,
+#             "message": "Registro anonimizado exitosamente",
+#             "record_id": record_id
+#         }
+#         
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         api_logger.error(f"Error anonymizing record {record_id}: {str(e)}")
+#         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/data-retention/archive/{record_id}")
-async def archive_record(
-    record_id: int,
-    db: Session = Depends(get_db),
-    current_user: Person = Depends(get_current_user)
-):
-    """
-    Archive a medical record (move to cold storage)
-    """
-    try:
-        # Verify record belongs to current doctor
-        record = db.query(MedicalRecord).filter(
-            MedicalRecord.id == record_id,
-            MedicalRecord.doctor_id == current_user.id
-        ).first()
-        
-        if not record:
-            raise HTTPException(
-                status_code=404,
-                detail="Registro no encontrado o no autorizado"
-            )
-        
-        success = retention.archive_medical_record(
-            db,
-            record_id,
-            performed_by=current_user.id
-        )
-        
-        if not success:
-            raise HTTPException(
-                status_code=400,
-                detail="No se pudo archivar el registro"
-            )
-        
-        return {
-            "success": True,
-            "message": "Registro archivado exitosamente",
-            "record_id": record_id
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        api_logger.error(f"Error archiving record {record_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+# @app.post("/api/data-retention/anonymize-expired")
+# async def anonymize_expired_records_endpoint(
+#     batch_size: int = 100,
+#     db: Session = Depends(get_db),
+#     current_user: Person = Depends(get_current_user)
+# ):
+#     """
+#     Anonymize all expired records for current doctor
+#     
+#     Args:
+#         batch_size: Maximum records to process (default: 100)
+#     """
+#     try:
+#         # This endpoint processes ALL expired records for the doctor
+#         # In production, this would be a scheduled job
+#         
+#         result = retention.anonymize_expired_records(
+#             db,
+#             performed_by=current_user.id,
+#             batch_size=batch_size
+#         )
+#         
+#         return {
+#             "success": True,
+#             "message": f"Procesados {result['total_processed']} registros",
+#             **result
+#         }
+#         
+#     except Exception as e:
+#         api_logger.error(f"Error in batch anonymization: {str(e)}")
+#         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/data-retention/legal-hold/{record_id}")
-async def set_legal_hold_endpoint(
-    record_id: int,
-    enable: bool = True,
-    reason: str = "",
-    db: Session = Depends(get_db),
-    current_user: Person = Depends(get_current_user)
-):
-    """
-    Set or remove legal hold on a medical record
-    
-    Args:
-        record_id: Medical record ID
-        enable: True to enable hold, False to remove
-        reason: Reason for legal hold
-    """
-    try:
-        # Verify record belongs to current doctor
-        record = db.query(MedicalRecord).filter(
-            MedicalRecord.id == record_id,
-            MedicalRecord.doctor_id == current_user.id
-        ).first()
-        
-        if not record:
-            raise HTTPException(
-                status_code=404,
-                detail="Registro no encontrado o no autorizado"
-            )
-        
-        if enable and not reason:
-            raise HTTPException(
-                status_code=400,
-                detail="Se requiere especificar la razón para la retención legal"
-            )
-        
-        success = retention.set_legal_hold(
-            db,
-            record_id,
-            performed_by=current_user.id,
-            reason=reason,
-            enable=enable
-        )
-        
-        if not success:
-            raise HTTPException(
-                status_code=400,
-                detail="No se pudo establecer la retención legal"
-            )
-        
-        action = "activada" if enable else "removida"
-        return {
-            "success": True,
-            "message": f"Retención legal {action} exitosamente",
-            "record_id": record_id,
-            "legal_hold": enable
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        api_logger.error(f"Error setting legal hold on record {record_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+# @app.post("/api/data-retention/archive/{record_id}")
+# async def archive_record(
+#     record_id: int,
+#     db: Session = Depends(get_db),
+#     current_user: Person = Depends(get_current_user)
+# ):
+#     """
+#     Archive a medical record (move to cold storage)
+#     """
+#     try:
+#         # Verify record belongs to current doctor
+#         record = db.query(MedicalRecord).filter(
+#             MedicalRecord.id == record_id,
+#             MedicalRecord.doctor_id == current_user.id
+#         ).first()
+#         
+#         if not record:
+#             raise HTTPException(
+#                 status_code=404,
+#                 detail="Registro no encontrado o no autorizado"
+#             )
+#         
+#         success = retention.archive_medical_record(
+#             db,
+#             record_id,
+#             performed_by=current_user.id
+#         )
+#         
+#         if not success:
+#             raise HTTPException(
+#                 status_code=400,
+#                 detail="No se pudo archivar el registro"
+#             )
+#         
+#         return {
+#             "success": True,
+#             "message": "Registro archivado exitosamente",
+#             "record_id": record_id
+#         }
+#         
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         api_logger.error(f"Error archiving record {record_id}: {str(e)}")
+#         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/data-retention/extend/{record_id}")
-async def extend_retention_endpoint(
-    record_id: int,
-    additional_years: int,
-    reason: str,
-    db: Session = Depends(get_db),
-    current_user: Person = Depends(get_current_user)
-):
-    """
-    Extend retention period for a medical record
-    
-    Args:
-        record_id: Medical record ID
-        additional_years: Years to add to retention period
-        reason: Reason for extension
-    """
-    try:
-        # Verify record belongs to current doctor
-        record = db.query(MedicalRecord).filter(
-            MedicalRecord.id == record_id,
-            MedicalRecord.doctor_id == current_user.id
-        ).first()
-        
-        if not record:
-            raise HTTPException(
-                status_code=404,
-                detail="Registro no encontrado o no autorizado"
-            )
-        
-        if additional_years < 1 or additional_years > 50:
-            raise HTTPException(
-                status_code=400,
-                detail="El número de años debe estar entre 1 y 50"
-            )
-        
-        success = retention.extend_retention(
-            db,
-            record_id,
-            performed_by=current_user.id,
-            additional_years=additional_years,
-            reason=reason
-        )
-        
-        if not success:
-            raise HTTPException(
-                status_code=400,
-                detail="No se pudo extender el periodo de retención"
-            )
-        
-        return {
-            "success": True,
-            "message": f"Periodo de retención extendido por {additional_years} años",
-            "record_id": record_id,
-            "additional_years": additional_years
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        api_logger.error(f"Error extending retention for record {record_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+# @app.post("/api/data-retention/legal-hold/{record_id}")
+# async def set_legal_hold_endpoint(
+#     record_id: int,
+#     enable: bool = True,
+#     reason: str = "",
+#     db: Session = Depends(get_db),
+#     current_user: Person = Depends(get_current_user)
+# ):
+#     """
+#     Set or remove legal hold on a medical record
+#     
+#     Args:
+#         record_id: Medical record ID
+#         enable: True to enable hold, False to remove
+#         reason: Reason for legal hold
+#     """
+#     try:
+#         # Verify record belongs to current doctor
+#         record = db.query(MedicalRecord).filter(
+#             MedicalRecord.id == record_id,
+#             MedicalRecord.doctor_id == current_user.id
+#         ).first()
+#         
+#         if not record:
+#             raise HTTPException(
+#                 status_code=404,
+#                 detail="Registro no encontrado o no autorizado"
+#             )
+#         
+#         if enable and not reason:
+#             raise HTTPException(
+#                 status_code=400,
+#                 detail="Se requiere especificar la razón para la retención legal"
+#             )
+#         
+#         success = retention.set_legal_hold(
+#             db,
+#             record_id,
+#             performed_by=current_user.id,
+#             reason=reason,
+#             enable=enable
+#         )
+#         
+#         if not success:
+#             raise HTTPException(
+#                 status_code=400,
+#                 detail="No se pudo establecer la retención legal"
+#             )
+#         
+#         action = "activada" if enable else "removida"
+#         return {
+#             "success": True,
+#             "message": f"Retención legal {action} exitosamente",
+#             "record_id": record_id,
+#             "legal_hold": enable
+#         }
+#         
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         api_logger.error(f"Error setting legal hold on record {record_id}: {str(e)}")
+#         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/data-retention/logs")
-async def get_retention_logs_endpoint(
-    entity_type: Optional[str] = None,
-    entity_id: Optional[int] = None,
-    action_type: Optional[str] = None,
-    limit: int = 100,
-    db: Session = Depends(get_db),
-    current_user: Person = Depends(get_current_user)
-):
-    """
-    Get data retention action logs
-    
-    Args:
-        entity_type: Filter by entity type (optional)
-        entity_id: Filter by entity ID (optional)
-        action_type: Filter by action type (optional)
-        limit: Maximum logs to return
-    """
-    try:
-        logs = retention.get_retention_logs(
-            db,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            action_type=action_type,
-            limit=limit
-        )
-        
-        return {
-            "success": True,
-            "logs": logs,
-            "count": len(logs)
-        }
-        
-    except Exception as e:
-        api_logger.error(f"Error getting retention logs: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+# @app.post("/api/data-retention/extend/{record_id}")
+# async def extend_retention_endpoint(
+#     record_id: int,
+#     additional_years: int,
+#     reason: str,
+#     db: Session = Depends(get_db),
+#     current_user: Person = Depends(get_current_user)
+# ):
+#     """
+#     Extend retention period for a medical record
+#     
+#     Args:
+#         record_id: Medical record ID
+#         additional_years: Years to add to retention period
+#         reason: Reason for extension
+#     """
+#     try:
+#         # Verify record belongs to current doctor
+#         record = db.query(MedicalRecord).filter(
+#             MedicalRecord.id == record_id,
+#             MedicalRecord.doctor_id == current_user.id
+#         ).first()
+#         
+#         if not record:
+#             raise HTTPException(
+#                 status_code=404,
+#                 detail="Registro no encontrado o no autorizado"
+#             )
+#         
+#         if additional_years < 1 or additional_years > 50:
+#             raise HTTPException(
+#                 status_code=400,
+#                 detail="El número de años debe estar entre 1 y 50"
+#             )
+#         
+#         success = retention.extend_retention(
+#             db,
+#             record_id,
+#             performed_by=current_user.id,
+#             additional_years=additional_years,
+#             reason=reason
+#         )
+#         
+#         if not success:
+#             raise HTTPException(
+#                 status_code=400,
+#                 detail="No se pudo extender el periodo de retención"
+#             )
+#         
+#         return {
+#             "success": True,
+#             "message": f"Periodo de retención extendido por {additional_years} años",
+#             "record_id": record_id,
+#             "additional_years": additional_years
+#         }
+#         
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         api_logger.error(f"Error extending retention for record {record_id}: {str(e)}")
+#         raise HTTPException(status_code=500, detail=str(e))
+
+
+# @app.get("/api/data-retention/logs")
+# async def get_retention_logs_endpoint(
+#     entity_type: Optional[str] = None,
+#     entity_id: Optional[int] = None,
+#     action_type: Optional[str] = None,
+#     limit: int = 100,
+#     db: Session = Depends(get_db),
+#     current_user: Person = Depends(get_current_user)
+# ):
+#     """
+#     Get data retention action logs
+#     
+#     Args:
+#         entity_type: Filter by entity type (optional)
+#         entity_id: Filter by entity ID (optional)
+#         action_type: Filter by action type (optional)
+#         limit: Maximum logs to return
+#     """
+#     try:
+#         logs = retention.get_retention_logs(
+#             db,
+#             entity_type=entity_type,
+#             entity_id=entity_id,
+#             action_type=action_type,
+#             limit=limit
+#         )
+#         
+#         return {
+#             "success": True,
+#             "logs": logs,
+#             "count": len(logs)
+#         }
+#         
+#     except Exception as e:
+#         api_logger.error(f"Error getting retention logs: {str(e)}")
+#         raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================================
@@ -3600,6 +4139,16 @@ async def get_retention_logs_endpoint(
 
 if __name__ == "__main__":
     import uvicorn
+    api_logger.info("🚀 Starting clean English API server...")
+    uvicorn.run(
+        "main_clean_english:app",
+        host="127.0.0.1",
+        port=8000,
+        reload=True,
+        log_level="info"
+    )
+
+
     api_logger.info("🚀 Starting clean English API server...")
     uvicorn.run(
         "main_clean_english:app",

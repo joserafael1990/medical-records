@@ -4,7 +4,7 @@
 
 from sqlalchemy import Column, Integer, String, Boolean, Time, ForeignKey, DateTime, Text
 from sqlalchemy.orm import relationship
-from database import Base
+from database import Base, utc_now
 from datetime import datetime, time
 from typing import Optional, List, Dict, Any
 
@@ -40,8 +40,8 @@ class ScheduleTemplate(Base):
     is_active = Column(Boolean, default=True)
     
     # Metadatos
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     
     # Relaciones
     # office = relationship("Office", back_populates="schedule_templates")
@@ -53,7 +53,7 @@ class ScheduleTemplate(Base):
 # PYDANTIC MODELS
 # ============================================================================
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from datetime import time, date
 from typing import Optional, List
 
@@ -67,15 +67,17 @@ class ScheduleTemplateBase(BaseModel):
     lunch_end: Optional[time] = Field(None, description="Fin de almuerzo")
     is_active: bool = Field(True, description="Estado del horario")
     
-    @validator('end_time')
-    def end_time_after_start_time(cls, v, values):
-        if 'start_time' in values and v <= values['start_time']:
+    @field_validator('end_time')
+    @classmethod
+    def end_time_after_start_time(cls, v, info):
+        if info.data.get('start_time') and v <= info.data['start_time']:
             raise ValueError('La hora de fin debe ser posterior a la hora de inicio')
         return v
     
-    @validator('lunch_end')
-    def lunch_end_after_lunch_start(cls, v, values):
-        if v and 'lunch_start' in values and values['lunch_start'] and v <= values['lunch_start']:
+    @field_validator('lunch_end')
+    @classmethod
+    def lunch_end_after_lunch_start(cls, v, info):
+        if v and info.data.get('lunch_start') and v <= info.data['lunch_start']:
             raise ValueError('La hora de fin de almuerzo debe ser posterior al inicio')
         return v
 
@@ -97,8 +99,7 @@ class ScheduleTemplate(ScheduleTemplateBase):
     created_at: datetime
     updated_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # ScheduleException Pydantic models removed - table deleted
 
@@ -112,8 +113,7 @@ class WeeklySchedule(BaseModel):
     saturday: Optional[ScheduleTemplate] = None
     sunday: Optional[ScheduleTemplate] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class AvailableSlot(BaseModel):
     """Slot disponible para citas"""
@@ -129,5 +129,4 @@ class DaySchedule(BaseModel):
     available_slots: List[AvailableSlot]
     # exceptions field removed - ScheduleException table deleted
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

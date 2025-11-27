@@ -10,6 +10,7 @@ from auth import get_user_from_token
 from whatsapp_service import get_whatsapp_service
 from services.office_helpers import build_office_address, resolve_maps_url, resolve_country_code
 from logger import get_logger
+from utils.datetime_utils import utc_now
 
 
 router = APIRouter(prefix="/api/whatsapp", tags=["whatsapp"])
@@ -177,9 +178,8 @@ async def send_whatsapp_appointment_reminder(
             )
             
             # Actualizar appointment: marcar reminder_sent y reminder_sent_at
-            from datetime import datetime
             appointment.reminder_sent = True
-            appointment.reminder_sent_at = datetime.utcnow()
+            appointment.reminder_sent_at = utc_now()
             db.commit()
             
             return {

@@ -5,13 +5,17 @@ Compliance: 100% Mexican NOMs
 """
 
 from sqlalchemy import Column, Integer, String, DateTime, Date, Time, Text, Boolean, ForeignKey, DECIMAL, JSON, Numeric, CheckConstraint, UniqueConstraint
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.orm import relationship, sessionmaker, declarative_base
 from sqlalchemy import create_engine
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 
 from logger import get_logger
+
+# Utility function to replace deprecated datetime.utcnow()
+def utc_now():
+    """Get current UTC datetime (replaces deprecated datetime.utcnow())"""
+    return datetime.now(timezone.utc)
 
 # Base para modelos (must be defined before importing models that use it)
 Base = declarative_base()
@@ -33,7 +37,7 @@ class Country(Base):
     name = Column(String(100), nullable=False)
     phone_code = Column(String(5))  # International dialing code (e.g., +52, +58)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     
     # Relationships
     states = relationship("State", back_populates="country")
@@ -45,7 +49,7 @@ class State(Base):
     name = Column(String(100), nullable=False)
     country_id = Column(Integer, ForeignKey("countries.id"))
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     
     # Relationships
     country = relationship("Country", back_populates="states")
@@ -83,8 +87,8 @@ class Office(Base):
     is_active = Column(Boolean, default=True)
     is_virtual = Column(Boolean, default=False)  # Indica si es consultorio virtual
     virtual_url = Column(String(500))  # URL para consultas virtuales (Zoom, Teams, etc.)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     
     # Relaciones
     doctor = relationship("Person", back_populates="offices")
@@ -106,7 +110,7 @@ class Specialty(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(100), nullable=False)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     
     # Relationships
     doctors = relationship("Person", back_populates="specialty")
@@ -117,7 +121,7 @@ class EmergencyRelationship(Base):
     code = Column(String(20), primary_key=True)
     name = Column(String(50), nullable=False)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     
     # Relationships
     persons = relationship("Person", back_populates="emergency_relationship")
@@ -128,7 +132,7 @@ class AppointmentType(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(50), nullable=False, unique=True)  # "Presencial", "En línea"
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 # ============================================================================
 # DOCUMENT MANAGEMENT
@@ -140,8 +144,8 @@ class DocumentType(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(50), nullable=False, unique=True)  # "Personal", "Profesional"
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     
     # Relationships
     documents = relationship("Document", back_populates="document_type")
@@ -153,8 +157,8 @@ class Document(Base):
     name = Column(String(100), nullable=False)  # "DNI", "CURP", "Cédula Profesional", etc.
     document_type_id = Column(Integer, ForeignKey("document_types.id", ondelete="CASCADE"))
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     
     # Relationships
     document_type = relationship("DocumentType", back_populates="documents")
@@ -168,8 +172,8 @@ class PersonDocument(Base):
     document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
     document_value = Column(String(255), nullable=False)  # Valor del documento
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     
     # Relationships
     person = relationship("Person", back_populates="person_documents")
@@ -241,8 +245,8 @@ class Person(Base):
     # SYSTEM
     is_active = Column(Boolean, default=True)
     last_login = Column(DateTime)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     created_by = Column(Integer, ForeignKey("persons.id"))
     
     # RELATIONSHIPS
@@ -268,6 +272,12 @@ class Person(Base):
     clinical_studies_as_doctor = relationship("ClinicalStudy", foreign_keys="ClinicalStudy.doctor_id", back_populates="doctor")
     document_folio_sequences = relationship("DocumentFolioSequence", back_populates="doctor", cascade="all, delete-orphan")
     document_folios = relationship("DocumentFolio", back_populates="doctor", cascade="all, delete-orphan")
+    
+    # License relationships
+    licenses = relationship("License", foreign_keys="License.doctor_id", back_populates="doctor")
+    
+    # Google Calendar relationship
+    google_calendar_token = relationship("GoogleCalendarToken", back_populates="doctor", uselist=False, cascade="all, delete-orphan")
     
     
     # PROPERTIES
@@ -351,8 +361,8 @@ class MedicalRecord(Base):
     notes = Column(Text)
     
     # SYSTEM
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     created_by = Column(Integer, ForeignKey("persons.id"))
     
     # RELATIONSHIPS
@@ -393,8 +403,8 @@ class Appointment(Base):
     cancelled_by = Column(Integer, ForeignKey("persons.id"))
     
     # SYSTEM
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     # created_by removed - not used, doctor_id already identifies the doctor
     
     # RELATIONSHIPS
@@ -403,6 +413,7 @@ class Appointment(Base):
     office = relationship("Office", back_populates="appointments")
     appointment_type_rel = relationship("AppointmentType")
     reminders = relationship("AppointmentReminder", back_populates="appointment", cascade="all, delete-orphan")
+    google_calendar_mapping = relationship("GoogleCalendarEventMapping", back_populates="appointment", uselist=False, cascade="all, delete-orphan")
 
 class AppointmentReminder(Base):
     """
@@ -418,8 +429,9 @@ class AppointmentReminder(Base):
     enabled = Column(Boolean, default=True, nullable=False)
     sent = Column(Boolean, default=False, nullable=False)
     sent_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    whatsapp_message_id = Column(String(255), nullable=True)  # WhatsApp message_id to eliminate ambiguity
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     
     # RELATIONSHIPS
     appointment = relationship("Appointment", back_populates="reminders")
@@ -436,7 +448,7 @@ class ClinicalStudy(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     # study_code column does not exist in clinical_studies table - removed
-    consultation_id = Column(Integer, ForeignKey("medical_records.id"), nullable=False)
+    consultation_id = Column(Integer, ForeignKey("medical_records.id"), nullable=True)
     patient_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
     doctor_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
     # study_catalog_id column does not exist in clinical_studies table - removed
@@ -451,7 +463,7 @@ class ClinicalStudy(Base):
     # results_date column does not exist in clinical_studies table - removed
     
     # STATUS AND URGENCY
-    status = Column(String(20), default='ordered')  # ordered, in_progress, completed, cancelled, failed
+    status = Column(String(20), default='ordered')  # ordered, previous, completed
     urgency = Column(String(20), default='routine')  # routine, urgent, stat, emergency
     
     # MEDICAL INFORMATION
@@ -470,8 +482,8 @@ class ClinicalStudy(Base):
     file_size = Column(Integer)  # in bytes
     
     # SYSTEM
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     created_by = Column(Integer, ForeignKey("persons.id"))
     
     # RELATIONSHIPS
@@ -492,7 +504,7 @@ class StudyCategory(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     
     # Relationships
     studies = relationship("StudyCatalog", back_populates="category")
@@ -504,8 +516,8 @@ class StudyCatalog(Base):
     name = Column(String(200), nullable=False)
     category_id = Column(Integer, ForeignKey("study_categories.id"), nullable=False)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     
     # Relationships
     category = relationship("StudyCategory", back_populates="studies")
@@ -546,7 +558,7 @@ class VitalSign(Base):
     
     id = Column(Integer, primary_key=True)
     name = Column(String(50), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     
     # Relationships
     consultation_vital_signs = relationship("ConsultationVitalSign", back_populates="vital_sign")
@@ -559,8 +571,8 @@ class ConsultationVitalSign(Base):
     vital_sign_id = Column(Integer, ForeignKey("vital_signs.id"), nullable=False)
     value = Column(String(100), nullable=False)
     unit = Column(String(20))
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     
     # Relationships
     consultation = relationship("MedicalRecord")
@@ -579,8 +591,8 @@ class Medication(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     created_by = Column(Integer, ForeignKey("persons.id"), nullable=False)
     
     # Relationships
@@ -598,7 +610,7 @@ class ConsultationPrescription(Base):
     instructions = Column(Text)
     quantity = Column(Integer)
     via_administracion = Column(String(100))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     
     # Relationships
     consultation = relationship("MedicalRecord")
@@ -615,8 +627,8 @@ class DocumentFolioSequence(Base):
     doctor_id = Column(Integer, ForeignKey("persons.id"), nullable=False)
     document_type = Column(String(50), nullable=False)
     last_number = Column(Integer, nullable=False, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     doctor = relationship("Person", back_populates="document_folio_sequences")
 
@@ -629,7 +641,7 @@ class DocumentFolio(Base):
     document_type = Column(String(50), nullable=False)
     folio_number = Column(Integer, nullable=False)
     formatted_folio = Column(String(20), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     doctor = relationship("Person", back_populates="document_folios")
     consultation = relationship("MedicalRecord", back_populates="document_folios")
@@ -681,7 +693,7 @@ class AuditLog(Base):
     security_level = Column(String(20), default='INFO')  # 'INFO', 'WARNING', 'CRITICAL'
     
     # Timestamp
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=utc_now)
     
     # Additional metadata
     metadata_json = Column("metadata", JSON)
@@ -709,7 +721,7 @@ class PrivacyNotice(Base):
     effective_date = Column(Date, nullable=False)
     # expiry_date removed - not used, expiration is calculated from consent_date + 365 days
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     
     # Relationships
     consents = relationship("PrivacyConsent", back_populates="privacy_notice")
@@ -728,7 +740,7 @@ class PrivacyConsent(Base):
     consent_date = Column(DateTime, nullable=False)
     ip_address = Column(String(45))
     user_agent = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     
     # Relationships
     patient = relationship("Person", foreign_keys=[patient_id], backref="privacy_consents")
@@ -744,35 +756,90 @@ class ARCORequest(Base):
     id = Column(Integer, primary_key=True)
     patient_id = Column(Integer, ForeignKey("persons.id", ondelete="CASCADE"))
     request_type = Column(String(20), nullable=False)  # 'access', 'rectification', 'cancellation', 'opposition'
-    request_date = Column(DateTime, default=datetime.utcnow)
     
-    # Detalles de la solicitud
-    request_description = Column(Text, nullable=False)
-    requested_data = Column(Text)
+    # Detalles de la solicitud (usando nombres reales de la BD)
+    description = Column(Text)  # En BD es "description", no "request_description"
     
     # Estado
     status = Column(String(20), default='pending')  # 'pending', 'in_progress', 'completed', 'rejected'
-    assigned_to = Column(Integer, ForeignKey("persons.id"))
+    processed_by = Column(Integer, ForeignKey("persons.id"))  # En BD es "processed_by", no "assigned_to"
     
-    # Respuesta
-    response_date = Column(DateTime)
-    response_description = Column(Text)
-    response_attachments = Column(JSON)  # Array de rutas
+    # Respuesta (usando nombres reales de la BD)
+    response = Column(Text)  # En BD es "response", no "response_description"
+    processed_at = Column(DateTime)  # En BD es "processed_at", no "response_date"
     
-    # Plazos legales
-    legal_deadline = Column(Date)
-    days_to_respond = Column(Integer)
-    
-    # Seguimiento
-    notes = Column(Text)
-    priority = Column(String(20), default='normal')
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     
     # Relationships
     patient = relationship("Person", foreign_keys=[patient_id])
-    assigned_officer = relationship("Person", foreign_keys=[assigned_to])
+    processed_by_person = relationship("Person", foreign_keys=[processed_by])
+
+# ============================================================================
+# GOOGLE CALENDAR INTEGRATION
+# ============================================================================
+
+class GoogleCalendarToken(Base):
+    """
+    Almacena tokens OAuth de Google Calendar por doctor
+    Cada doctor puede conectar su propia cuenta de Google Calendar
+    """
+    __tablename__ = "google_calendar_tokens"
+    
+    id = Column(Integer, primary_key=True)
+    doctor_id = Column(Integer, ForeignKey("persons.id", ondelete="CASCADE"), nullable=False, unique=True)
+    access_token = Column(Text, nullable=False)
+    refresh_token = Column(Text)
+    token_expires_at = Column(DateTime)
+    calendar_id = Column(String(255), default='primary')  # ID del calendario de Google
+    sync_enabled = Column(Boolean, default=True)
+    last_sync_at = Column(DateTime)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
+    
+    # Relationships
+    doctor = relationship("Person", back_populates="google_calendar_token")
+
+class GoogleCalendarEventMapping(Base):
+    """
+    Mapea citas del sistema con eventos de Google Calendar
+    Permite sincronización Sistema → Google Calendar
+    """
+    __tablename__ = "google_calendar_event_mappings"
+    
+    id = Column(Integer, primary_key=True)
+    appointment_id = Column(Integer, ForeignKey("appointments.id", ondelete="CASCADE"), nullable=False, unique=True)
+    google_event_id = Column(String(255), nullable=False, unique=True)  # ID del evento en Google Calendar
+    doctor_id = Column(Integer, ForeignKey("persons.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
+    
+    # Relationships
+    appointment = relationship("Appointment", back_populates="google_calendar_mapping")
+    doctor = relationship("Person")
+
+# ============================================================================
+# LICENSE MANAGEMENT
+# ============================================================================
+
+class License(Base):
+    __tablename__ = "licenses"
+    
+    id = Column(Integer, primary_key=True)
+    doctor_id = Column(Integer, ForeignKey("persons.id", ondelete="CASCADE"), nullable=False)
+    license_type = Column(String(50), nullable=False)  # 'trial', 'basic', 'premium'
+    start_date = Column(Date, nullable=False)
+    expiration_date = Column(Date, nullable=False)
+    payment_date = Column(Date, nullable=True)
+    status = Column(String(20), nullable=False, default='active')  # 'active', 'inactive', 'expired', 'suspended'
+    is_active = Column(Boolean, nullable=False, default=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
+    created_by = Column(Integer, ForeignKey("persons.id"))
+    
+    # Relationships
+    doctor = relationship("Person", foreign_keys=[doctor_id], back_populates="licenses")
+    creator = relationship("Person", foreign_keys=[created_by])
 
 def init_db():
     """Inicializar base de datos - solo crear tablas que no existen"""
