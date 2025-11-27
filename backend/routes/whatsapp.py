@@ -45,6 +45,89 @@ def _mask_phone(phone: Optional[str]) -> str:
     return f"{masked_prefix}{trimmed}"
 
 
+def _setup_spanish_locale():
+    """Setup Spanish locale for date formatting."""
+    try:
+        locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
+    except Exception:
+        try:
+            locale.setlocale(locale.LC_TIME, 'es_MX.UTF-8')
+        except Exception:
+            pass  # Use default locale if Spanish not available
+
+
+def _convert_to_mexico_timezone(dt: datetime) -> datetime:
+    """Convert datetime to Mexico City timezone."""
+    mexico_tz = pytz.timezone('America/Mexico_City')
+    
+    if dt.tzinfo is None:
+        # If naive datetime, assume it's already in CDMX timezone
+        return mexico_tz.localize(dt)
+    else:
+        # If aware datetime, convert to CDMX timezone
+        return dt.astimezone(mexico_tz)
+
+
+def _format_appointment_datetime(appointment_date: datetime) -> tuple[str, str]:
+    """Format appointment date and time for WhatsApp message.
+    
+    Returns:
+        tuple: (formatted_date, formatted_time)
+    """
+    _setup_spanish_locale()
+    appointment_mexico = _convert_to_mexico_timezone(appointment_date)
+    
+    # Format date (e.g., "Lunes 15 de Enero")
+    formatted_date = appointment_mexico.strftime('%A %d de %B').capitalize()
+    
+    # Format time (e.g., "14:30")
+    formatted_time = appointment_mexico.strftime('%H:%M')
+    
+    return formatted_date, formatted_time
+
+
+def _get_appointment_details(db: Session, appointment_id: int) -> tuple[Appointment, Person, Person]:
+    """Get appointment, patient, and doctor details.
+    
+    Returns:
+        tuple: (appointment, patient, doctor)
+    
+    Raises:
+        HTTPException: If appointment or patient not found
+    """
+    appointment = db.query(Appointment).filter(
+        Appointment.id == appointment_id
+    ).first()
+
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    patient = db.query(Person).filter(Person.id == appointment.patient_id).first()
+
+    if not patient or not patient.primary_phone:
+        raise HTTPException(status_code=400, detail="Patient phone number not found")
+
+    doctor = db.query(Person).filter(Person.id == appointment.doctor_id).first()
+    
+    return appointment, patient, doctor
+
+
+def _get_doctor_info(doctor: Optional[Person]) -> tuple[str, str]:
+    """Get doctor title and full name.
+    
+    Returns:
+        tuple: (doctor_title, doctor_full_name)
+    """
+    if doctor:
+        doctor_title = doctor.title or "Dr"
+        doctor_full_name = doctor.name
+    else:
+        doctor_title = "Dr"
+        doctor_full_name = "Dr. Test"
+    
+    return doctor_title, doctor_full_name
+
+
 @router.post("/appointment-reminder/{appointment_id}")
 async def send_whatsapp_appointment_reminder(
     appointment_id: int,
@@ -55,56 +138,15 @@ async def send_whatsapp_appointment_reminder(
     api_logger.debug("Sending WhatsApp reminder for appointment", appointment_id=appointment_id)
 
     try:
-        # Get appointment (temporarily without doctor filter for testing)
-        appointment = db.query(Appointment).filter(
-            Appointment.id == appointment_id
-        ).first()
-
-        if not appointment:
-            raise HTTPException(status_code=404, detail="Appointment not found")
-
-        # Get patient
-        patient = db.query(Person).filter(Person.id == appointment.patient_id).first()
-
-        if not patient or not patient.primary_phone:
-            raise HTTPException(status_code=400, detail="Patient phone number not found")
-
-        # Get doctor information
-        doctor = db.query(Person).filter(Person.id == appointment.doctor_id).first()
-        if doctor:
-            doctor_title = doctor.title or "Dr"  # Use doctor's title or default to "Dr"
-            doctor_full_name = doctor.name
-        else:
-            doctor_title = "Dr"
-            doctor_full_name = "Dr. Test"
-
-        # Get patient full name
+        # Get appointment, patient, and doctor using helper
+        appointment, patient, doctor = _get_appointment_details(db, appointment_id)
+        
+        # Get doctor info using helper
+        doctor_title, doctor_full_name = _get_doctor_info(doctor)
         patient_full_name = patient.name
 
-        # Format appointment date and time separately
-        try:
-            locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
-        except Exception:
-            try:
-                locale.setlocale(locale.LC_TIME, 'es_MX.UTF-8')
-            except Exception:
-                pass  # Use default locale if Spanish not available
-
-        # Convert appointment date to Mexico City timezone
-        # IMPORTANT: Appointments are stored as naive datetime in CDMX timezone (not UTC)
-        mexico_tz = pytz.timezone('America/Mexico_City')
-
-        # Handle timezone conversion
-        if appointment.appointment_date.tzinfo is None:
-            # If naive datetime, assume it's already in CDMX timezone (as per storage convention)
-            appointment_mexico = mexico_tz.localize(appointment.appointment_date)
-        else:
-            # If timezone aware, convert to CDMX timezone
-            appointment_mexico = appointment.appointment_date.astimezone(mexico_tz)
-
-        # Format in Mexico timezone
-        appointment_date = appointment_mexico.strftime('%d de %B de %Y')
-        appointment_time = appointment_mexico.strftime('%I:%M %p')
+        # Format appointment date and time using helper
+        formatted_date, formatted_time = _format_appointment_datetime(appointment.appointment_date)
 
         # Get office information and appointment type
         appointment_type = "presencial"  # Default
@@ -147,7 +189,8 @@ async def send_whatsapp_appointment_reminder(
 
         # Send WhatsApp
         whatsapp = get_whatsapp_service()
-        # Debug proveedor actual
+        
+        # Debug provider configuration
         try:
             provider = (os.getenv('WHATSAPP_PROVIDER') or 'auto').lower()
             security_logger.debug(
@@ -159,11 +202,12 @@ async def send_whatsapp_appointment_reminder(
             )
         except Exception:
             pass
+            
         result = whatsapp.send_appointment_reminder(
             patient_phone=patient.primary_phone,
             patient_full_name=patient_full_name,
-            appointment_date=appointment_date,
-            appointment_time=appointment_time,
+            appointment_date=formatted_date,
+            appointment_time=formatted_time,
             doctor_title=doctor_title,
             doctor_full_name=doctor_full_name,
             office_address=office_address,
@@ -181,7 +225,7 @@ async def send_whatsapp_appointment_reminder(
                 patient_phone_mask=_mask_phone(patient.primary_phone)
             )
             
-            # Actualizar appointment: marcar reminder_sent y reminder_sent_at
+            # Update appointment: mark reminder_sent and reminder_sent_at
             appointment.reminder_sent = True
             appointment.reminder_sent_at = utc_now()
             db.commit()
@@ -199,7 +243,7 @@ async def send_whatsapp_appointment_reminder(
                 error=str(error_msg)
             )
 
-            # Mapeo genérico de errores (proveedor-agnóstico)
+            # Generic error mapping (provider-agnostic)
             if ('24 hours' in str(error_msg).lower() or '24-hour' in str(error_msg).lower()):
                 raise HTTPException(
                     status_code=400,
