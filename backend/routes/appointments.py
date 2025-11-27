@@ -30,6 +30,164 @@ from consultation_service import now_cdmx
 router = APIRouter(prefix="/api", tags=["appointments"])
 
 
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def _build_calendar_query(db: Session, doctor_id: int):
+    """Build the base query for calendar appointments."""
+    try:
+        return db.query(Appointment).options(
+            joinedload(Appointment.patient),
+            joinedload(Appointment.doctor),
+            joinedload(Appointment.office),
+            joinedload(Appointment.appointment_type_rel),
+            joinedload(Appointment.reminders)
+        ).filter(Appointment.doctor_id == doctor_id)
+    except Exception:
+        # Fallback if appointment_types table doesn't exist
+        return db.query(Appointment).options(
+            joinedload(Appointment.patient),
+            joinedload(Appointment.doctor),
+            joinedload(Appointment.office),
+            joinedload(Appointment.reminders)
+        ).filter(Appointment.doctor_id == doctor_id)
+
+
+def _apply_date_filters(
+    query, 
+    start_date: Optional[str], 
+    end_date: Optional[str], 
+    target_date: Optional[str],
+    doctor_id: int
+):
+    """Apply date filters to the calendar query."""
+    if start_date and end_date:
+        # Date range query for weekly/monthly views
+        parsed_start = datetime.fromisoformat(start_date).date()
+        parsed_end = datetime.fromisoformat(end_date).date()
+        
+        # Convert to CDMX timezone for filtering
+        cdmx_start = SYSTEM_TIMEZONE.localize(datetime.combine(parsed_start, datetime.min.time()))
+        cdmx_end = SYSTEM_TIMEZONE.localize(datetime.combine(parsed_end, datetime.max.time()))
+        
+        # Convert to UTC for database query
+        utc_start = cdmx_start.astimezone(pytz.utc)
+        utc_end = cdmx_end.astimezone(pytz.utc)
+        
+        query = query.filter(
+            Appointment.appointment_date >= utc_start,
+            Appointment.appointment_date <= utc_end
+        )
+        api_logger.debug(
+            "📅 Fetching appointments for range",
+            extra={
+                "doctor_id": doctor_id,
+                "start_date": str(parsed_start),
+                "end_date": str(parsed_end),
+                "utc_start": utc_start.isoformat(),
+                "utc_end": utc_end.isoformat()
+            }
+        )
+        
+    elif target_date:
+        # Single date query for daily view
+        try:
+            parsed_date = datetime.fromisoformat(target_date).date()
+        except ValueError:
+            api_logger.warning(
+                "⚠️ Invalid target date received, defaulting to today",
+                extra={"doctor_id": doctor_id, "target_date": target_date}
+            )
+            parsed_date = now_cdmx().date()
+        
+        # Use func.date() to compare dates properly
+        query = query.filter(
+            func.date(Appointment.appointment_date) == parsed_date
+        )
+        
+        api_logger.debug(
+            "📅 Fetching appointments for single date",
+            extra={
+                "doctor_id": doctor_id,
+                "target_date": str(parsed_date)
+            }
+        )
+        
+    else:
+        # Default to today in CDMX timezone
+        today_cdmx = now_cdmx().date()
+        cdmx_start = SYSTEM_TIMEZONE.localize(datetime.combine(today_cdmx, datetime.min.time()))
+        cdmx_end = SYSTEM_TIMEZONE.localize(datetime.combine(today_cdmx, datetime.max.time()))
+        
+        utc_start = cdmx_start.astimezone(pytz.utc)
+        utc_end = cdmx_end.astimezone(pytz.utc)
+        
+        query = query.filter(
+            Appointment.appointment_date >= utc_start,
+            Appointment.appointment_date <= utc_end
+        )
+    
+    return query
+
+
+def _process_calendar_results(appointments: list) -> list:
+    """Process appointment results and handle timezone conversion."""
+    cdmx_tz = pytz.timezone('America/Mexico_City')
+    result = []
+    
+    for appointment in appointments:
+        # Handle timezone conversion for display
+        if appointment.appointment_date.tzinfo is None:
+            # Naive datetime (stored in CDMX) -> localize
+            start_time = cdmx_tz.localize(appointment.appointment_date)
+        else:
+            # Aware datetime (stored in UTC) -> convert to CDMX
+            start_time = appointment.appointment_date.astimezone(cdmx_tz)
+            
+        # Calculate end time (default 30 mins if not set)
+        if appointment.end_time:
+            if appointment.end_time.tzinfo is None:
+                end_time = cdmx_tz.localize(appointment.end_time)
+            else:
+                end_time = appointment.end_time.astimezone(cdmx_tz)
+        else:
+            end_time = start_time + timedelta(minutes=30)
+
+        # Format patient name
+        patient_name = "Paciente no encontrado"
+        if appointment.patient:
+            patient_name = appointment.patient.name or "Paciente sin nombre"
+
+        # Build result dictionary
+        result.append({
+            "id": appointment.id,
+            "title": f"{patient_name} - {appointment.consultation_type}",
+            "start": start_time.isoformat(),
+            "end": end_time.isoformat(),
+            "patient_id": appointment.patient_id,
+            "patient_name": patient_name,
+            "status": appointment.status,
+            "consultation_type": appointment.consultation_type,
+            "notes": appointment.notes,
+            "appointment_type_name": appointment.appointment_type_rel.name if getattr(appointment, "appointment_type_rel", None) else None,
+            "office_name": appointment.office.name if getattr(appointment, "office", None) else None,
+            "backgroundColor": "#10B981" if appointment.status == 'completed' else 
+                             "#EF4444" if appointment.status == 'cancelled' else 
+                             "#3B82F6",
+            "borderColor": "#10B981" if appointment.status == 'completed' else 
+                           "#EF4444" if appointment.status == 'cancelled' else 
+                           "#3B82F6",
+            "extendedProps": {
+                "status": appointment.status,
+                "consultation_type": appointment.consultation_type,
+                "patient_id": appointment.patient_id
+            }
+        })
+        
+    return result
+
+
 def serialize_appointment(appointment: Appointment) -> dict:
     """Serialize Appointment ORM instance to dict for API responses."""
     patient_name = "Paciente no encontrado"
@@ -185,100 +343,19 @@ async def get_calendar_appointments(
         # Use 'date' parameter if provided (for daily view), otherwise fall back to 'target_date'
         effective_target_date = date or target_date
         
-        # Build the base query
-        # Try to include appointment_type_rel, but handle gracefully if table doesn't exist
-        try:
-            query = db.query(Appointment).options(
-                joinedload(Appointment.patient),
-                joinedload(Appointment.doctor),
-                joinedload(Appointment.office),
-                joinedload(Appointment.appointment_type_rel),
-                joinedload(Appointment.reminders)
-            ).filter(Appointment.doctor_id == current_user.id)
-        except Exception:
-            # Fallback if appointment_types table doesn't exist
-            query = db.query(Appointment).options(
-                joinedload(Appointment.patient),
-                joinedload(Appointment.doctor),
-                joinedload(Appointment.office),
-                joinedload(Appointment.reminders)
-            ).filter(Appointment.doctor_id == current_user.id)
+        # Build base query
+        query = _build_calendar_query(db, current_user.id)
         
+        # Apply filters
+        query = _apply_date_filters(
+            query, 
+            start_date, 
+            end_date, 
+            effective_target_date, 
+            current_user.id
+        )
         
-        # Handle different date filtering scenarios with CDMX timezone
-        if start_date and end_date:
-            # Date range query for weekly/monthly views
-            parsed_start = datetime.fromisoformat(start_date).date()
-            parsed_end = datetime.fromisoformat(end_date).date()
-            
-            # Convert to CDMX timezone for filtering
-            cdmx_start = SYSTEM_TIMEZONE.localize(datetime.combine(parsed_start, datetime.min.time()))
-            cdmx_end = SYSTEM_TIMEZONE.localize(datetime.combine(parsed_end, datetime.max.time()))
-            
-            # Convert to UTC for database query
-            utc_start = cdmx_start.astimezone(pytz.utc)
-            utc_end = cdmx_end.astimezone(pytz.utc)
-            
-            query = query.filter(
-                Appointment.appointment_date >= utc_start,
-                Appointment.appointment_date <= utc_end
-            )
-            api_logger.debug(
-                "📅 Fetching appointments for range",
-                extra={
-                    "doctor_id": current_user.id,
-                    "start_date": str(parsed_start),
-                    "end_date": str(parsed_end),
-                    "utc_start": utc_start.isoformat(),
-                    "utc_end": utc_end.isoformat()
-                }
-            )
-            
-        elif effective_target_date:
-            # Single date query for daily view
-            try:
-                parsed_date = datetime.fromisoformat(effective_target_date).date()
-            except ValueError:
-                api_logger.warning(
-                    "⚠️ Invalid target date received, defaulting to today",
-                    extra={"doctor_id": current_user.id, "target_date": effective_target_date}
-                )
-                parsed_date = now_cdmx().date()
-            
-            # Create naive datetime bounds for the day (appointments are stored as naive datetime in CDMX timezone)
-            day_start = datetime.combine(parsed_date, datetime.min.time())
-            day_end = datetime.combine(parsed_date, datetime.max.time())
-            
-            # Use func.date() to compare dates properly, handling both naive and timezone-aware datetimes
-            query = query.filter(
-                func.date(Appointment.appointment_date) == parsed_date
-            )
-            
-            api_logger.debug(
-                "📅 Fetching appointments for single date",
-                extra={
-                    "doctor_id": current_user.id,
-                    "target_date": str(parsed_date),
-                    "day_start": day_start.isoformat(),
-                    "day_end": day_end.isoformat()
-                }
-            )
-            
-        else:
-            # Default to today in CDMX timezone
-            today_cdmx = now_cdmx().date()
-            cdmx_start = SYSTEM_TIMEZONE.localize(datetime.combine(today_cdmx, datetime.min.time()))
-            cdmx_end = SYSTEM_TIMEZONE.localize(datetime.combine(today_cdmx, datetime.max.time()))
-            
-            utc_start = cdmx_start.astimezone(pytz.utc)
-            utc_end = cdmx_end.astimezone(pytz.utc)
-            
-            query = query.filter(
-                Appointment.appointment_date >= utc_start,
-                Appointment.appointment_date <= utc_end
-            )
-        
-        # Execute query and return results
+        # Execute query
         appointments = query.order_by(Appointment.appointment_date).all()
         
         api_logger.info(
@@ -291,68 +368,19 @@ async def get_calendar_appointments(
             }
         )
         
-        # Since appointments are stored in CDMX timezone (without tzinfo), 
-        # we need to assume they are already in CDMX timezone for proper display
-        cdmx_tz = pytz.timezone('America/Mexico_City')
+        # Process results
+        return _process_calendar_results(appointments)
         
-        # Create a list of appointment dictionaries with converted dates
-        result = []
-        for appointment in appointments:
-            # Since appointments are stored in CDMX timezone (without tzinfo),
-            # we assume they are already in CDMX timezone and just format them
-            appointment_date_str = appointment.appointment_date.strftime('%Y-%m-%dT%H:%M:%S') if appointment.appointment_date else None
-            end_time_str = appointment.end_time.strftime('%Y-%m-%dT%H:%M:%S') if appointment.end_time else None
-            
-            # Create appointment dict with converted dates
-            apt_dict = {
-                "id": appointment.id,
-                "patient_id": appointment.patient_id,
-                "doctor_id": appointment.doctor_id,
-                "appointment_date": appointment_date_str,
-                "date_time": appointment_date_str,
-                "end_time": end_time_str,
-                "appointment_type_id": appointment.appointment_type_id,
-                "appointment_type_name": appointment.appointment_type_rel.name if appointment.appointment_type_rel else None,
-                "office_id": appointment.office_id,
-                "office_name": appointment.office.name if appointment.office else None,
-                "consultation_type": appointment.consultation_type,
-                "status": appointment.status,
-                "consultation_type": appointment.consultation_type,
-                "status": appointment.status,
-            "consultation_type": appointment.consultation_type,
-            "status": appointment.status,
-                "room_number": getattr(appointment, 'room_number', None),
-                "reminder_sent": getattr(appointment, 'reminder_sent', False),
-                "reminder_sent_at": appointment.reminder_sent_at.isoformat() if getattr(appointment, 'reminder_sent_at', None) else None,
-                # Auto reminder fields included for FE editing
-                "auto_reminder_enabled": getattr(appointment, 'auto_reminder_enabled', None),
-                "auto_reminder_offset_minutes": getattr(appointment, 'auto_reminder_offset_minutes', None),
-                "auto_reminder_sent_at": appointment.auto_reminder_sent_at.isoformat() if getattr(appointment, 'auto_reminder_sent_at', None) else None,
-                "reminders": [
-                    {
-                        "id": r.id,
-                        "reminder_number": r.reminder_number,
-                        "offset_minutes": r.offset_minutes,
-                        "enabled": r.enabled,
-                        "sent": r.sent,
-                        "sent_at": r.sent_at.isoformat() if r.sent_at else None,
-                        "created_at": r.created_at.isoformat() if r.created_at else None,
-                        "updated_at": r.updated_at.isoformat() if r.updated_at else None
-                    }
-                    for r in (list(appointment.reminders) if hasattr(appointment, 'reminders') and appointment.reminders is not None else [])
-                ],
-                "patient": appointment.patient,
-                "office": appointment.office
-            }
-            result.append(apt_dict)
-        
-        return result
     except Exception as e:
         api_logger.error(
-            "Error in get_calendar_appointments",
-            extra={"doctor_id": current_user.id},
+            "❌ Error fetching calendar appointments",
+            extra={
+                "doctor_id": current_user.id,
+                "error": str(e)
+            },
             exc_info=True
         )
+        # Return empty list on error to avoid breaking calendar view
         return []
 
 
