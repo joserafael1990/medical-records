@@ -726,3 +726,44 @@ async def get_study_catalog(
         api_logger.error("Error in get_study_catalog", error=str(e), exc_info=True)
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
+
+@router.get("/study-recommendations")
+async def get_study_recommendations(
+    diagnosis: Optional[str] = None,
+    specialty: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Get study recommendations based on diagnosis and specialty"""
+    try:
+        studies = crud.get_study_recommendations(db, diagnosis=diagnosis, specialty=specialty)
+        return [schemas.StudyCatalog.model_validate(study) for study in studies]
+    except Exception as e:
+        api_logger.error("❌ Error in get_study_recommendations", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@router.get("/study-search")
+async def search_studies(
+    q: str,
+    category_id: Optional[int] = None,
+    specialty: Optional[str] = None,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Search studies with advanced filters"""
+    try:
+        studies = crud.search_studies(
+            db,
+            search_term=q,
+            category_id=category_id,
+            specialty=specialty,
+            limit=limit
+        )
+        return [schemas.StudyCatalog.model_validate(study) for study in studies]
+    except Exception as e:
+        api_logger.error("❌ Error in search_studies", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+

@@ -24,9 +24,8 @@ api_logger = get_logger("medical_records.api")
 # CDMX timezone configuration
 SYSTEM_TIMEZONE = pytz.timezone('America/Mexico_City')
 
-def now_cdmx():
-    """Get current datetime in CDMX timezone"""
-    return datetime.now(SYSTEM_TIMEZONE)
+# Import now_cdmx from consultation_service to avoid duplication
+from consultation_service import now_cdmx
 
 router = APIRouter(prefix="/api", tags=["appointments"])
 

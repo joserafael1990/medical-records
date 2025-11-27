@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 from datetime import datetime, timedelta
 import pytz
-import uuid
 import traceback
 
 from database import get_db, Person, MedicalRecord, ConsultationPrescription, Medication, PersonDocument, Document
@@ -30,7 +29,6 @@ from consultation_service import (
     get_consultation_prescriptions as get_prescriptions_for_consultation,
     get_consultation_clinical_studies as get_clinical_studies_for_consultation,
     build_consultation_response,
-    # Create consultation helpers
     encrypt_consultation_fields,
     parse_consultation_date,
     create_medical_record_object,
@@ -38,15 +36,14 @@ from consultation_service import (
     mark_appointment_completed,
     get_patient_info,
     build_create_consultation_response,
-    # Diagnosis catalog helpers
-    format_diagnoses_from_catalog
+    format_diagnoses_from_catalog,
+    encrypt_sensitive_data,
+    decrypt_sensitive_data,
+    sign_medical_document,
+    now_cdmx,
+    cdmx_datetime
 )
 from services.document_folio_service import DocumentFolioService
-
-# Import encryption and digital signature services
-from encryption import get_encryption_service, MedicalDataEncryption
-from digital_signature import get_digital_signature_service, get_medical_document_signer
-from config import settings
 
 api_logger = get_logger("medical_records.api")
 security_logger = get_logger("medical_records.security")
@@ -54,253 +51,7 @@ security_logger = get_logger("medical_records.security")
 # CDMX timezone configuration
 SYSTEM_TIMEZONE = pytz.timezone('America/Mexico_City')
 
-def now_cdmx():
-    """Get current datetime in CDMX timezone"""
-    return datetime.now(SYSTEM_TIMEZONE)
 
-def cdmx_datetime(dt_string: str) -> datetime:
-    """Parse datetime string and convert to CDMX timezone"""
-    if isinstance(dt_string, str):
-        # Parse the datetime string
-        dt = datetime.fromisoformat(dt_string.replace('Z', ''))
-        
-        # If the datetime is naive (no timezone info), assume it's UTC
-        if dt.tzinfo is None:
-            # Assume it's UTC and convert to CDMX
-            utc_tz = pytz.utc
-            cdmx_tz = pytz.timezone('America/Mexico_City')
-            utc_dt = utc_tz.localize(dt)
-            result = utc_dt.astimezone(cdmx_tz)
-        else:
-            # If it already has timezone info, convert to CDMX
-            cdmx_tz = pytz.timezone('America/Mexico_City')
-            result = dt.astimezone(cdmx_tz)
-        
-        return result
-    return dt_string
-
-# Initialize encryption service
-encryption_service = get_encryption_service()
-
-# Initialize digital signature services
-digital_signature_service = get_digital_signature_service()
-medical_document_signer = get_medical_document_signer()
-
-def encrypt_sensitive_data(data: dict, data_type: str = "patient") -> dict:
-    """
-    Encrypt sensitive fields in data based on type
-    Compliance: NOM-035-SSA3-2012 - Encryption of sensitive medical data
-    
-    Args:
-        data: Dictionary with data to encrypt
-        data_type: Type of data ('patient', 'consultation', 'doctor')
-        
-    Returns:
-        Dictionary with encrypted sensitive fields
-    """
-    if not data:
-        return data
-    
-    # Check if encryption is enabled
-    if not settings.ENABLE_ENCRYPTION:
-        # Encryption disabled - no need to log this repeatedly
-        return data
-    
-    try:
-        # Get encryption service
-        encryption_service = get_encryption_service()
-        
-        # Define sensitive fields based on data type
-        sensitive_fields = []
-        if data_type == "patient":
-            sensitive_fields = ["curp", "primary_phone", "email", "home_address", "emergency_contact_name", "emergency_contact_phone"]
-        elif data_type == "consultation":
-            sensitive_fields = ["chief_complaint", "history_present_illness", "family_history", 
-                               "personal_pathological_history", "personal_non_pathological_history",
-                               "physical_examination", "primary_diagnosis", "secondary_diagnoses",
-                               "treatment_plan", "follow_up_instructions", "prescribed_medications",
-                               "notes", "laboratory_results"]
-        elif data_type == "doctor":
-            sensitive_fields = ["curp", "rfc", "primary_phone", "email", "office_address"]
-        
-        # Encrypt sensitive fields
-        encrypted_data = data.copy()
-        for field in sensitive_fields:
-            if field in encrypted_data and encrypted_data[field]:
-                try:
-                    # Only encrypt if value is a string and not empty
-                    if isinstance(encrypted_data[field], str) and encrypted_data[field].strip():
-                        encrypted_data[field] = encryption_service.encrypt_sensitive_data(encrypted_data[field])
-                        api_logger.debug(
-                            f"🔐 Encrypted field: {field}",
-                            extra={"data_type": data_type, "field": field}
-                        )
-                except Exception as e:
-                    # If encryption fails, log error but don't break the flow
-                    api_logger.error(
-                        f"❌ Failed to encrypt field {field}",
-                        extra={"data_type": data_type, "field": field, "error": str(e)}
-                    )
-                    # Keep original value if encryption fails
-                    continue
-        
-        api_logger.debug(
-            "🔐 Encryption completed",
-            extra={"data_type": data_type, "fields_encrypted": len([f for f in sensitive_fields if f in encrypted_data])}
-        )
-        return encrypted_data
-    
-    except Exception as e:
-        # If encryption service fails, log error and return data as-is
-        api_logger.error(
-            f"❌ Encryption service error - returning data as-is",
-            extra={"data_type": data_type, "error": str(e)}
-        )
-        return data
-
-def decrypt_sensitive_data(data: dict, data_type: str = "patient") -> dict:
-    """
-    Decrypt sensitive fields in data based on type
-    Compliance: NOM-035-SSA3-2012 - Decryption of sensitive medical data
-    
-    Args:
-        data: Dictionary with data to decrypt
-        data_type: Type of data ('patient', 'consultation', 'doctor')
-        
-    Returns:
-        Dictionary with decrypted sensitive fields
-    """
-    if not data:
-        return data
-    
-    # Check if encryption is enabled
-    if not settings.ENABLE_ENCRYPTION:
-        # Encryption disabled - no need to log this repeatedly
-        return data
-    
-    try:
-        # Get encryption service
-        encryption_service = get_encryption_service()
-        
-        # Define sensitive fields based on data type
-        sensitive_fields = []
-        if data_type == "patient":
-            sensitive_fields = ["curp", "primary_phone", "email", "home_address", "emergency_contact_name", "emergency_contact_phone"]
-        elif data_type == "consultation":
-            sensitive_fields = ["chief_complaint", "history_present_illness", "family_history",
-                               "personal_pathological_history", "personal_non_pathological_history",
-                               "physical_examination", "primary_diagnosis", "secondary_diagnoses",
-                               "treatment_plan", "follow_up_instructions", "prescribed_medications",
-                               "notes", "laboratory_results"]
-        elif data_type == "doctor":
-            sensitive_fields = ["curp", "rfc", "primary_phone", "email", "office_address"]
-        
-        # Decrypt sensitive fields
-        decrypted_data = data.copy()
-        for field in sensitive_fields:
-            if field in decrypted_data and decrypted_data[field]:
-                try:
-                    # Try to decrypt - the service will detect if data is encrypted or not
-                    if isinstance(decrypted_data[field], str):
-                        decrypted_data[field] = encryption_service.decrypt_sensitive_data(decrypted_data[field])
-                        api_logger.debug(
-                            f"🔓 Decrypted field: {field}",
-                            extra={"data_type": data_type, "field": field}
-                        )
-                except Exception as e:
-                    # If decryption fails, assume data is not encrypted and keep original value
-                    api_logger.debug(
-                        f"🔓 Field {field} not encrypted or decryption failed - keeping original",
-                        extra={"data_type": data_type, "field": field, "error": str(e)}
-                    )
-                    # Keep original value if decryption fails (backward compatibility)
-                    continue
-        
-        api_logger.debug(
-            "🔓 Decryption completed",
-            extra={"data_type": data_type}
-        )
-        return decrypted_data
-    
-    except Exception as e:
-        # If decryption service fails, log error and return data as-is (backward compatibility)
-        api_logger.error(
-            f"❌ Decryption service error - returning data as-is",
-            extra={"data_type": data_type, "error": str(e)}
-        )
-        return data
-
-def sign_medical_document(document_data: dict, doctor_id: int, document_type: str = "consultation") -> dict:
-    """Sign medical document with digital signature"""
-    try:
-        api_logger.info(
-            "🔏 Signing medical document",
-            extra={"doctor_id": doctor_id, "document_type": document_type}
-        )
-        
-        # Add document metadata
-        document_data["id"] = str(document_data.get("id", "unknown"))
-        document_data["doctor_id"] = doctor_id
-        document_data["date"] = document_data.get("consultation_date", now_cdmx().isoformat())
-        
-        # Generate a simple key pair for demonstration (in production, use real certificates)
-        private_key, public_key = digital_signature_service.generate_key_pair()
-        
-        # Create a self-signed certificate for the doctor
-        doctor_info = {
-            "name": f"Doctor {doctor_id}",
-            "curp": f"DOCTOR{doctor_id:06d}",
-            "license": f"LIC{doctor_id:06d}"
-        }
-        
-        certificate = digital_signature_service.create_self_signed_certificate(
-            private_key, doctor_info, validity_days=365
-        )
-        
-        # Sign the document
-        if document_type == "consultation":
-            signature_result = medical_document_signer.sign_consultation(
-                document_data, private_key, certificate
-            )
-        else:
-            # Generic document signing
-            signature_result = medical_document_signer.sign_consultation(
-                document_data, private_key, certificate
-            )
-        
-        api_logger.info(
-            "✅ Document signed successfully",
-            extra={
-                "doctor_id": doctor_id,
-                "document_type": document_type,
-                "signature_id": signature_result["signatures"][0]["signature_id"]
-            }
-        )
-        return signature_result
-        
-    except Exception as e:
-        api_logger.error(
-            "⚠️ Failed to sign medical document",
-            extra={"doctor_id": doctor_id, "document_type": document_type},
-            exc_info=True
-        )
-        # Return a placeholder signature for demonstration
-        return {
-            "document_id": str(document_data.get("id", "unknown")),
-            "document_type": document_type,
-            "signatures": [{
-                "signature_id": f"sig_{uuid.uuid4().hex[:8]}",
-                "document_hash": "placeholder_hash",
-                "signature_value": "placeholder_signature",
-                "timestamp": now_cdmx().isoformat(),
-                "signer_certificate": "placeholder_certificate",
-                "algorithm": "SHA256withRSA",
-                "status": "signed"
-            }],
-            "document_hash": "placeholder_document_hash",
-            "creation_timestamp": now_cdmx().isoformat(),
-            "last_signature_timestamp": now_cdmx().isoformat()
-        }
 
 router = APIRouter(prefix="/api", tags=["consultations"])
 
