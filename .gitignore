@@ -5,10 +5,16 @@
 node_modules/
 */node_modules/
 
-# Python virtual environment
+# Python virtual environment and cache
 backend/venv/
+backend/.venv/
 */venv/
+*/.venv/
 __pycache__/
+*/__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
 *.pyc
 *.pyo
 *.pyd
@@ -17,6 +23,14 @@ env/
 pip-log.txt
 pip-delete-this-directory.txt
 .env
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.manifest
+*.spec
 
 # IDE files
 .vscode/

@@ -335,18 +335,8 @@ app.include_router(doctors_router)
 # ============================================================================
 # DEBUG/DIAGNOSTICS
 # ============================================================================
-# Disabled for security - endpoint without authentication
-# @app.get("/debug-sentry")
-# async def debug_sentry():
-#     # Endpoint de prueba para verificar Sentry en backend
-#     # Solo funciona si SENTRY_DSN_BACKEND está configurado
-#     sentry_dsn = os.getenv("SENTRY_DSN_BACKEND")
-#     if not sentry_dsn:
-#         return {
-#             "message": "Sentry no está configurado (SENTRY_DSN_BACKEND no definido)",
-#             "sentry_enabled": False
-#         }
-#     raise RuntimeError("Sentry backend test")
+# Debug endpoints have been removed for security (no authentication)
+
 
 # Include patient management routes
 from routes.patients import router as patients_router
