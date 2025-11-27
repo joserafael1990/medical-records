@@ -86,7 +86,10 @@ class Settings(BaseSettings):
         "RATE_LIMIT_ENABLED",
         os.getenv("APP_ENV", "development").lower() == "production"
     )
-    RATE_LIMIT_MAX_REQUESTS: int = int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "120"))
+    # In development, use much higher limits to accommodate React Strict Mode double-mounting
+    # In production, use stricter limits for security
+    _is_dev = os.getenv("APP_ENV", "development").lower() == "development"
+    RATE_LIMIT_MAX_REQUESTS: int = int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "1000" if _is_dev else "120"))
     RATE_LIMIT_WINDOW_SECONDS: int = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
     
     # Email Configuration
