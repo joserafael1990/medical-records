@@ -327,27 +327,38 @@ class WhatsAppService:
         """
         Enviar recordatorio de cita médica usando plantilla aprobada
         
-        Selecciona la plantilla según el estado de la cita:
-        - Si status es 'por_confirmar': usa 'appointment_reminder_no_confirmed' (botones: Confirmar, Cancelar)
-        - Si status es 'confirmada': usa 'appointment_reminder_confirmed' (botón: Cancelar)
+        La plantilla funciona siempre (dentro y fuera de ventana de 24 horas).
+        El appointment_id se usa para guardar el message_id y eliminar ambigüedad al procesar respuestas.
         
         Args:
             country_code: Código de país del consultorio. Si es None, usa '52' (México) como fallback
             appointment_type: "presencial" o "online"
             online_consultation_url: URL para citas online (parámetro 7)
             appointment_status: Estado de la cita ('por_confirmar' o 'confirmada')
-            appointment_id: ID de la cita para incluir en los botones
+            appointment_id: ID de la cita (se guarda el message_id para eliminar ambigüedad)
         """
         # Preparar parámetros para la plantilla según el formato exacto:
         # ¡Hola *{{1}}*, 🗓️
         # Este es un recordatorio de tu cita hoy *{{2}} a las {{3}}* con {{4}} {{5}}
         # 📍 *Lugar:* {{6}}
         
-        # Usar maps_url de Office si viene, si no generar una de respaldo (param 7)
-        maps_url_final = maps_url or f"https://www.google.com/maps/search/?api=1&query={office_address.replace(' ', '+')}"
-
-        # Dirección limpia sin URL (param 6)
-        office_address_clean = str(office_address or "Consultorio médico")
+        # Manejar consultorios virtuales vs físicos para parámetro 6 (dirección)
+        if appointment_type == "online" and online_consultation_url:
+            # Para consultorios virtuales, usar la URL de consulta en línea
+            office_address_clean = f"Consulta virtual: {online_consultation_url}"
+            maps_url_final = online_consultation_url
+        elif office_address and "No especificado" not in office_address and office_address != "Consultorio Médico":
+            # Office físico con dirección válida
+            office_address_clean = str(office_address)
+            maps_url_final = maps_url or f"https://www.google.com/maps/search/?api=1&query={office_address.replace(' ', '+')}"
+        elif appointment_type == "online":
+            # Consultorio virtual sin URL específica
+            office_address_clean = "Consulta virtual"
+            maps_url_final = maps_url or online_consultation_url
+        else:
+            # Fallback para office físico sin dirección
+            office_address_clean = "Consultorio médico"
+            maps_url_final = maps_url or f"https://www.google.com/maps/search/?api=1&query={office_address.replace(' ', '+')}" if office_address else None
 
         # Parámetros EXACTOS según plantilla aprobada:
         # {{1}} paciente, {{2}} fecha, {{3}} hora, {{4}} título, {{5}} nombre médico, {{6}} dirección, {{7}} URL Maps
@@ -590,34 +601,12 @@ class WhatsAppService:
         
         formatted_phone = self._format_phone_number(patient_phone, country_code)
         
-        # Intentar primero usar el template 'aviso_de_privacidad'
-        # El template espera: {{1}} = paciente, {{2}} = titulo, {{3}} = nombre doctor, {{4}} = url
-        template_params = [
-            patient_name,
-            doctor_title,
-            doctor_full_name,
-            privacy_notice_url
-        ]
-        
-        logger.info(f"📤 Attempting to send privacy notice using template 'aviso_de_privacidad'")
-        logger.info(f"📤 Template params: {template_params}")
-        logger.info(f"📤 Formatted phone: {formatted_phone}")
-        template_result = self.send_template_message(
-            to_phone=patient_phone,
-            template_name='aviso_de_privacidad',
-            template_params=template_params,
-            language_code='es',
-            country_code=country_code
-        )
-        
-        logger.info(f"📤 Template result: success={template_result.get('success')}, error={template_result.get('error', 'none')}")
-        
-        if template_result.get('success'):
-            logger.info(f"✅ Privacy notice sent successfully using template")
-            return template_result
-        
-        # Si el template falla, usar mensaje interactivo como fallback
-        logger.warning(f"⚠️ Template failed ({template_result.get('error', 'unknown error')}), falling back to interactive message")
+        # IMPORTANTE: Usar SIEMPRE mensaje interactivo con botones para que el webhook funcione
+        # El template 'aviso_de_privacidad' NO tiene botones interactivos configurados en Meta
+        # Si usamos el template, el webhook NO recibirá las respuestas de los botones
+        # Por lo tanto, debemos usar mensaje interactivo para capturar las respuestas del botón
+        logger.info(f"📤 Using interactive message with buttons for privacy notice (required for webhook to work)")
+        logger.info(f"📤 Formatted phone: {formatted_phone}, Consent ID: {consent_id}")
         
         # Construir nombre completo para el mensaje
         doctor_name_display = f"{doctor_title} {doctor_full_name}".strip() if doctor_title else doctor_full_name
