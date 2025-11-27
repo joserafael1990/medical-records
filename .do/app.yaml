@@ -1,0 +1,158 @@
+name: cortex-medical
+region: nyc1
+
+# Frontend - React Static Site (Recommended for MVP)
+static_sites:
+  - name: frontend
+    source_dir: /frontend
+    github:
+      repo: your-org/medical-records-main  # UPDATE: Replace with your GitHub repo
+      branch: main
+      deploy_on_push: true
+    build_command: npm ci && npm run build
+    output_dir: build
+    routes:
+      - path: /
+    catchall_document: index.html  # Required for React Router
+    envs:
+      - key: REACT_APP_API_URL
+        value: ${backend.PUBLIC_URL}
+      - key: REACT_APP_SENTRY_DSN
+        value: ${REACT_APP_SENTRY_DSN}
+        type: SECRET
+      - key: REACT_APP_SENTRY_ENVIRONMENT
+        value: production
+      - key: REACT_APP_AMPLITUDE_API_KEY
+        value: ${REACT_APP_AMPLITUDE_API_KEY}
+        type: SECRET
+
+# Backend - FastAPI Service
+services:
+  - name: backend
+    source_dir: /backend
+    github:
+      repo: your-org/medical-records-main  # UPDATE: Replace with your GitHub repo
+      branch: main
+      deploy_on_push: true
+    dockerfile_path: Dockerfile
+    http_port: 8000
+    instance_count: 1
+    instance_size_slug: basic-xs  # $12/mes (512MB RAM, 0.5 vCPU)
+    health_check:
+      http_path: /health
+      initial_delay_seconds: 30
+      period_seconds: 10
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
+    routes:
+      - path: /api
+    envs:
+      # Database Connection (Auto-provided by App Platform)
+      - key: DATABASE_URL
+        value: ${db.DATABASE_URL}
+        type: SECRET
+      
+      # Security Keys (Set these in App Platform Secrets)
+      - key: SECRET_KEY
+        value: ${SECRET_KEY}
+        type: SECRET
+      - key: JWT_SECRET_KEY
+        value: ${JWT_SECRET_KEY}
+        type: SECRET
+      - key: MEDICAL_ENCRYPTION_KEY
+        value: ${MEDICAL_ENCRYPTION_KEY}
+        type: SECRET
+      
+      # Application Configuration
+      - key: APP_ENV
+        value: production
+      - key: ENABLE_ENCRYPTION
+        value: "true"
+      - key: RATE_LIMIT_ENABLED
+        value: "true"
+      - key: RATE_LIMIT_MAX_REQUESTS
+        value: "120"
+      - key: RATE_LIMIT_WINDOW_SECONDS
+        value: "60"
+      - key: LOG_LEVEL
+        value: info
+      - key: SECURITY_HEADERS_ENABLED
+        value: "true"
+      
+      # CORS Configuration
+      - key: CORS_ORIGINS
+        value: ${frontend.PUBLIC_URL}
+      
+      # Sentry Error Tracking
+      - key: SENTRY_DSN_BACKEND
+        value: ${SENTRY_DSN_BACKEND}
+        type: SECRET
+      - key: SENTRY_ENVIRONMENT
+        value: production
+      
+      # Amplitude Analytics
+      - key: AMPLITUDE_API_KEY
+        value: ${AMPLITUDE_API_KEY}
+        type: SECRET
+      
+      # Google Calendar OAuth
+      - key: GOOGLE_CLIENT_ID
+        value: ${GOOGLE_CLIENT_ID}
+        type: SECRET
+      - key: GOOGLE_CLIENT_SECRET
+        value: ${GOOGLE_CLIENT_SECRET}
+        type: SECRET
+      - key: GOOGLE_REDIRECT_URI
+        value: ${GOOGLE_REDIRECT_URI}
+        type: SECRET
+      
+      # WhatsApp Provider (Meta)
+      - key: WHATSAPP_PROVIDER
+        value: meta
+      - key: META_WHATSAPP_PHONE_ID
+        value: ${META_WHATSAPP_PHONE_ID}
+        type: SECRET
+      - key: META_WHATSAPP_TOKEN
+        value: ${META_WHATSAPP_TOKEN}
+        type: SECRET
+      - key: META_WHATSAPP_API_VERSION
+        value: v24.0
+      - key: META_WHATSAPP_APP_SECRET
+        value: ${META_WHATSAPP_APP_SECRET}
+        type: SECRET
+      - key: META_WHATSAPP_VERIFY_TOKEN
+        value: ${META_WHATSAPP_VERIFY_TOKEN}
+        type: SECRET
+      
+      # DigitalOcean Spaces (S3-compatible storage)
+      - key: SPACES_ENDPOINT
+        value: nyc3.digitaloceanspaces.com
+      - key: SPACES_ACCESS_KEY
+        value: ${SPACES_ACCESS_KEY}
+        type: SECRET
+      - key: SPACES_SECRET_KEY
+        value: ${SPACES_SECRET_KEY}
+        type: SECRET
+      - key: SPACES_BUCKET
+        value: cortex-medical-files
+      - key: SPACES_REGION
+        value: nyc3
+
+# Managed PostgreSQL Database
+databases:
+  - name: db
+    engine: PG
+    version: "15"  # Latest stable PostgreSQL
+    production: false  # Set to true for production
+    cluster_name: cortex-db
+    db_name: historias_clinicas
+    db_user: cortex_user
+    size_slug: db-s-1vcpu-1gb  # $15/mes (1GB RAM, 10GB storage)
+    region: nyc1
+    backups:
+      - name: daily-backup
+        schedule:
+          cron: "0 2 * * *"  # 2 AM daily
+        retention: 7  # Keep 7 days of backups
+

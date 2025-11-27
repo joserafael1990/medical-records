@@ -15,8 +15,32 @@ CURP_DOCUMENT_ID = 5  # Document ID for "CURP" (Personal)
 PROFESSIONAL_LICENSE_DOCUMENT_ID = 13  # Document ID for "Cédula Profesional" (Professional)
 
 # Document names for validation (case-insensitive matching)
+# Document names for validation (case-insensitive matching)
 CURP_DOCUMENT_NAME = "CURP"
 PROFESSIONAL_LICENSE_DOCUMENT_NAME = "Cédula Profesional"
+
+
+def format_documents_for_validation(documents_payload: List[Any]) -> List[Dict[str, Any]]:
+    """Format documents payload into simple dict list for validation helpers."""
+    formatted = []
+    for doc in documents_payload or []:
+        if doc is None:
+            continue
+        if isinstance(doc, dict):
+            document_id = doc.get('document_id')
+            document_value = doc.get('document_value')
+            document_name = doc.get('document_name')
+        else:
+            document_id = getattr(doc, 'document_id', None)
+            document_value = getattr(doc, 'document_value', None)
+            document_name = getattr(doc, 'document_name', None)
+        if document_id:
+            formatted.append({
+                "document_id": document_id,
+                "document_value": (document_value or "").strip(),
+                "document_name": document_name
+            })
+    return formatted
 
 
 def validate_curp_format(curp: str) -> Tuple[bool, Optional[str]]:

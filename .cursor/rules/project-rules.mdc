@@ -1,742 +1,99 @@
----
-alwaysApply: true
----
-
 # ============================================================================
-# MEDICAL RECORDS SYSTEM - CURSOR AI RULES
-# Sistema de Historias Clínicas Electrónicas
+# MEDICAL RECORDS SYSTEM - SENIOR AGENT RULES
 # ============================================================================
 
-## 📋 GENERAL RULES
+## 🧠 AGENT BEHAVIOR & THOUGHT PROCESS
+**Role:** Senior MedTech FullStack Engineer.
+**Goal:** Ensure Data Integrity, Security (NOM-004), and System Stability.
 
-### Documentation
-- **NEVER** create .md files unless explicitly requested
-- Do NOT create README files, documentation, or guides proactively
-- Code should be self-documenting with clear function/class names
-- Use docstrings in Python and JSDoc in TypeScript for functions
+**BEFORE WRITING CODE, YOU MUST:**
+1.  **Analyze:** Read the relevant files. Do not guess existing patterns.
+2.  **Plan:** Briefly outline your changes in **Spanish**.
+3.  **Check Constraints:** Verify your plan against the *Tech Stack* & *Architecture* below.
+4.  **Execute:** Write the code in **English**.
 
-### Communication
-- Communicate with user in **Spanish**
-- Code (variables, functions, classes) in **English**
-- Comments in code can be in **Spanish**
-- Console logs and debug messages in **Spanish**
-- Git commit messages in **English**
-- Do not send anything to github unless requested
-
-### Development Environment
-- **ALL compilations MUST be done with Docker**
-- Use `docker-compose` for all operations
-- Never run `npm`, `pip`, or build commands outside containers
-- Respect Docker volume mounts for hot reload
+## 📋 CRITICAL RULES (Violations = Failure)
+- **Language:** Chat in **Spanish**. Code/Comments/Commits in **English**.
+- **Docker Only:** ALL commands (`npm`, `pip`, build) run inside containers via `docker-compose`.
+- **Docs:** Do NOT create .md/README files unless asked. Self-documenting code only.
+- **Security:**
+  - 🛑 NEVER hardcode secrets.
+  - 🛑 NEVER log PII (Personal Identifiable Information).
+  - ✅ Use `encrypt_sensitive_data()` for medical fields.
+- **Timezone:** ALL dates/times must be **America/Mexico_City**. Use `now_cdmx()`.
 
 ---
 
-## 🏗️ ARCHITECTURE & CODE ORGANIZATION
+## 🛠 TECH STACK (STRICT VERSIONS)
 
-### Service Layer Pattern
-- Extract complex logic to service files (e.g., `consultation_service.py`)
-- Keep endpoints thin - delegate to service layer
-- Create reusable helper functions
-- Each service should have clear, single responsibility
+### ⚛️ Frontend
+- **Core:** React 19, TypeScript 4.9.
+- **Build Tool:** Create React App (CRA). **DO NOT** use Vite commands/configs.
+- **UI Framework:** Material UI (MUI) v7. Use `sx` prop for styling.
+- **State:** Context API + Hooks (No Redux).
 
-### Code Quality Standards
-- **Maximum function length:** 100 lines
-- **Maximum component length:** 300 lines
-- **Maximum service method length:** 50 lines
-- **Maximum endpoint length:** 50 lines
-- If endpoint exceeds 50 lines → refactor to service layer
-- If component exceeds 300 lines → split into smaller components
-- If function exceeds 100 lines → split into smaller functions
-- If service method exceeds 50 lines → split into helpers
-- Avoid code duplication - create helpers instead
-- Use descriptive function names that explain intent
-- **Extract complex logic to service layer (backend) or custom hooks (frontend)**
-
-### File Structure
-```
-backend/
-  - services/        # Service layer (consultation_service.py, etc.)
-  - routes/          # API routers (diagnosis.py, etc.)
-  - models/          # SQLAlchemy models (schedule.py, diagnosis.py)
-  - migrations/      # Database migrations
-  - main_clean_english.py  # Main FastAPI app
-
-frontend/
-  - src/
-    - services/      # API services (modular structure)
-      - base/        # ApiBase and common utilities
-      - auth/        # AuthService
-      - patients/    # PatientService
-      - appointments/# AppointmentService
-      - consultations/# ConsultationService
-      - catalogs/    # CatalogService
-      - documents/   # DocumentService
-      - clinical-studies/# ClinicalStudyService
-      - doctors/     # DoctorService
-      - offices/     # OfficeService
-      - whatsapp/    # WhatsAppService
-      - ApiService.ts # Main aggregator
-      - index.ts     # Exports
-    - hooks/         # Custom React hooks
-    - components/
-      - common/      # Reusable components
-      - dialogs/     # Modal dialogs
-        - ConsultationDialog/  # Component subdirectory pattern
-          - ConsultationDialog.tsx
-          - ConsultationBasicInfo.tsx
-          - ConsultationActions.tsx
-      - layout/      # Layout components
-```
+### 🐍 Backend
+- **Core:** Python 3.11, FastAPI.
+- **Validation:** Pydantic v2 (Use `model_validate`, `field_validator`).
+- **Database:** PostgreSQL (Latest).
+- **ORM:** SQLAlchemy 2.0 (**SYNCHRONOUS**).
+  - 🛑 **WARNING:** Do NOT use `AsyncSession` or `await` for DB calls.
+  - ✅ **USE:** `Session`, `db.execute()`, `db.commit()`.
 
 ---
 
-## 🔌 API SERVICES - Arquitectura Modular (Frontend)
+## 🏗️ ARCHITECTURE (STRICT)
 
-### Estructura de Servicios
-**NUNCA** crear métodos API directamente en componentes o hooks.
-**SIEMPRE** usar servicios modulares organizados por dominio.
+### 1. Backend (FastAPI + Sync DB)
+- **Concurrency:** Use standard `def` for endpoints interacting with the DB (FastAPI runs them in threadpool).
+- **Structure:** `routes/` -> calls -> `services/` -> calls -> `models/`
+- **Dependency Injection:** Use `db: Session = Depends(get_db)`.
+- **Refactor:** Endpoint > 50 lines → Move logic to `services/`.
 
-### Reglas de Importación
-```typescript
-// ✅ CORRECTO - Importar desde index.ts
-import { apiService } from '../services';
-// o
-import { apiService } from '../services/ApiService';
-
-// ✅ CORRECTO - Importar servicio específico si se necesita instanciar
-import { AuthService } from '../services/auth/AuthService';
-
-// ❌ INCORRECTO - NO usar api.ts antiguo
-import { apiService } from '../services/api';
-```
-
-### Uso de Servicios
-```typescript
-// ✅ CORRECTO - Usar servicios modulares
-const patients = await apiService.patients.getPatients();
-const appointments = await apiService.appointments.getAppointments();
-await apiService.auth.login({ email, password });
-
-// ✅ CORRECTO - Para endpoints genéricos, usar api directo
-const response = await apiService.consultations.api.get('/api/custom-endpoint');
-const response = await apiService.patients.api.post('/api/custom-endpoint', data);
-
-// ❌ INCORRECTO - NO usar métodos genéricos del apiService principal
-await apiService.get('/api/patients'); // ❌
-await apiService.post('/api/patients', data); // ❌
-```
-
-### Crear Nuevo Servicio
-1. Crear clase que extienda `ApiBase`
-2. Ubicar en `frontend/src/services/{domain}/`
-3. Nombre: `{Domain}Service.ts` (ej: `InvoiceService.ts`)
-4. Agregar al `ApiService.ts` como propiedad pública
-5. Exportar en `index.ts`
-6. Ejemplo:
-```typescript
-// frontend/src/services/invoices/InvoiceService.ts
-import { ApiBase } from '../base/ApiBase';
-import { logger } from '../../utils/logger';
-
-export class InvoiceService extends ApiBase {
-  async getInvoices(): Promise<Invoice[]> {
-    try {
-      logger.debug('Fetching invoices', undefined, 'api');
-      const response = await this.api.get<Invoice[]>('/api/invoices');
-      logger.debug('Invoices fetched successfully', undefined, 'api');
-      return response.data;
-    } catch (error: any) {
-      logger.error('Failed to fetch invoices', error, 'api');
-      throw error;
-    }
-  }
-}
-```
-
-### Logging en Servicios
-**SIEMPRE** usar `logger` con categoría apropiada:
-```typescript
-// ✅ CORRECTO
-logger.debug('Fetching data', { id }, 'api');
-logger.error('Failed to fetch data', error, 'api');
-
-// ❌ INCORRECTO - NO usar console.log directamente
-console.log('Fetching data'); // ❌
-```
-
-### Manejo de Errores
-Todos los servicios heredan de `ApiBase` que maneja:
-- Interceptores de request/response
-- Manejo automático de tokens
-- Transformación de errores
-- Logging de errores
-- Manejo de 401/403 (expiración de sesión)
-
-**NO** crear manejo de errores personalizado en servicios, usar el de `ApiBase`.
+### 2. Frontend Services (Modular)
+- **Pattern:** Modular Service Layer.
+- **Import:** `import { apiService } from '../services';`
+- **Usage:** `await apiService.patients.getPatients()`
+- **Forbidden:** NEVER use generic `api.get()` inside components.
 
 ---
 
-## 🔧 BACKEND RULES (FastAPI + Python)
+## 💻 CODING STANDARDS
 
-### API Endpoints
-- Always use async def for endpoints
-- Always include type hints
-- Use Depends() for dependency injection
-- Authentication required for all medical data endpoints
-- Use `get_current_user` dependency for auth
-- **Service layer pattern: Extract complex logic to service files**
-- **Keep endpoints thin - delegate to service layer**
-- Maximum endpoint length: 50 lines
-- If endpoint exceeds 50 lines → refactor to service layer
+### Frontend (React 19 + MUI v7)
+- **Hooks:** Prefix `use`. Logic goes here, not in JSX.
+- **Styling:** Use MUI `Grid` (v2 if avail) and `Stack` for layout. Avoid raw CSS.
+- **Logging:** Use `logger.debug/info/error`. **NO `console.log`**.
+- **Error UI:** Use `useScrollToError` in forms. Red background errors.
 
-### Database
-- **ORM:** SQLAlchemy
-- **Database:** PostgreSQL
-- **Timezone:** America/Mexico_City (CDMX)
-- Use `now_cdmx()` for timestamps
-- Store dates as naive datetime in CDMX time
-- Connection: `postgresql://historias_user:historias_pass@postgres-db:5432/historias_clinicas`
-
-### Security & Encryption
-- Encrypt sensitive medical data using `encrypt_sensitive_data()`
-- Decrypt when reading using `decrypt_sensitive_data()`
-- DEVELOPMENT MODE: Encryption currently disabled for testing
-- All consultations must be digitally signed
-- Use `sign_medical_document()` for digital signatures
-
-### Error Handling
-- Always use try-except blocks in endpoints
-- Log errors with `api_logger.error()` or `security_logger.error()`
-- Return specific HTTP exceptions (404, 400, 500)
-- Never expose internal errors to client
-- Auto-scroll to errors in frontend
-
-### Logging
-- Use structured logging with context
-- Include operation, doctor_id, patient_id when relevant
-- Use emoji prefixes for visibility: 📋 🔍 ✅ ❌ ⚠️
-- Log at appropriate levels: info, warning, error
-- **Frontend: Use `logger` from `utils/logger.ts` instead of `console.log`**
-- **Backend: Use `api_logger` or `security_logger` from `logger.py`**
-
-### Data Validation
-- Use Pydantic schemas for request/response validation
-- Create specific schemas in `schemas.py`
-- Validate foreign keys exist before insert
-- Check permissions (doctor can only access own patients)
+### Backend (Python)
+- **Typing:** Strict Type Hints (`def get_user(id: int) -> UserSchema:`).
+- **Pydantic:** Define schemas in `schemas.py`. Use strict types.
+- **Error Handling:** `try/except` -> Log (`api_logger`) -> Raise `HTTPException`.
 
 ---
 
-## ⚛️ FRONTEND RULES (React + TypeScript)
-
-### Component Structure
-- Use functional components with hooks
-- **Maximum component length: 300 lines**
-- **If component exceeds 300 lines → split into smaller components**
-- Extract complex logic to custom hooks
-- One component per file
-- Follow the pattern used in `RegisterView.tsx` and `ConsultationDialog.tsx`:
-  - Split large components by logical sections (steps, tabs, sections)
-  - Create subdirectories for component groups
-  - Keep parent component focused on orchestration
-  - Example structure:
-    ```
-    components/
-      dialogs/
-        ConsultationDialog/
-          ├── ConsultationDialog.tsx       # Main orchestrator
-          ├── ConsultationBasicInfo.tsx    # Section component
-          ├── ConsultationActions.tsx      # Action buttons
-          └── ConsultationDiagnosis.tsx    # Diagnosis section
-    ```
-
-### Custom Hooks Pattern
-- Create custom hooks for business logic
-- Prefix with `use` (e.g., `usePrescriptions`, `useScrollToError`)
-- Hooks should manage state and side effects
-- Keep components focused on rendering
-- **Hooks should use modular services, NOT direct API calls**
-- **Never use `console.log` in hooks - use `logger` instead**
-- Example pattern:
-  ```typescript
-  // ✅ CORRECTO - Hook usando servicios modulares
-  export const usePrescriptions = (consultationId: number) => {
-    const [prescriptions, setPrescriptions] = useState([]);
-    
-    const fetchPrescriptions = useCallback(async () => {
-      const data = await apiService.consultations.api.get(
-        `/api/consultations/${consultationId}/prescriptions`
-      );
-      setPrescriptions(data);
-    }, [consultationId]);
-    
-    return { prescriptions, fetchPrescriptions };
-  };
-  ```
-
-### State Management
-- Use React hooks (useState, useEffect)
-- Pass state down, callbacks up
-- Consider custom hooks for shared logic
-- Temporary data uses local state with 'temp_' prefix
-
-### Error Handling
-- Display errors at top of forms/dialogs
-- Use `useScrollToError` hook to auto-scroll to errors
-- Apply system-wide in ALL forms and dialogs
-- Red background (#d32f2f) with white text for errors
-- Clear errors on successful submission
-
-### Material-UI Guidelines
-- Use MUI components consistently
-- Apply theme colors and spacing
-- Responsive design (xs, sm, md, lg breakpoints)
-- Use `sx` prop for styling over makeStyles
-- Autocomplete for searchable dropdowns
-
-### PDF Generation
-- Use jspdf and jspdf-autotable
-- Services in `pdfService.ts`
-- Include header, footer on all pages
-- Dynamic doctor title (not hardcoded "Dr.")
-- Spacing: 5px after tables, 6px before titles
-- Margin bottom: 35px for content to avoid footer overlap
+## 🚫 ANTI-PATTERNS (Negative Constraints)
+The following are strictly forbidden:
+1.  ❌ **Async DB:** Using `await db.execute()` (Since we are using Sync SQLAlchemy).
+2.  ❌ **Vite Configs:** Trying to edit `vite.config.ts` (We use CRA/Webpack).
+3.  ❌ **Mixing Logic/UI:** API calls directly inside `.tsx` files.
+4.  ❌ **Legacy Imports:** Importing from `services/api.ts` (Use modular services).
+5.  ❌ **Security Leaks:** Committing `keys`, `passwords`, or `env` vars.
+6.  ❌ **Local Runs:** Running `npm start` outside Docker.
 
 ---
 
-## 📊 DATABASE CONVENTIONS
-
-### Table Names
-- Use plural snake_case (e.g., `medical_records`, `consultation_prescriptions`)
-- Prefix junction tables with both entity names
-
-### Column Names
-- Use snake_case for all columns
-- English names only
-- Include timestamps: `created_at`, `updated_at`
-- Use `id` for primary keys (INTEGER, AUTO_INCREMENT)
-
-### Foreign Keys
-- Name pattern: `{table_singular}_id` (e.g., `doctor_id`, `patient_id`)
-- Always include ON DELETE behavior (CASCADE or RESTRICT)
-- Create indexes on foreign keys
-
-### Migrations
-- Create SQL migration files in `backend/migrations/`
-- Name pattern: `migration_description.sql`
-- Include rollback instructions in comments
-- Test migrations before committing
+## 📂 DIRECTORY MAP
+- **Backend Services:** `backend/services/{domain}_service.py`
+- **Frontend Services:** `frontend/src/services/{domain}/{Domain}Service.ts`
+- **Components:** `frontend/src/components/{category}/{Component}/{Component}.tsx`
+- **Migrations:** `backend/migrations/` (SQL files)
 
 ---
 
-## 🎨 UI/UX PATTERNS
-
-### Form Validation
-- Show validation errors immediately
-- Auto-scroll to first error
-- Highlight invalid fields in red
-- Clear, specific error messages in Spanish
-
-### Button States
-- Disable during loading/submission
-- Show loading indicators
-- Success feedback after actions
-- Confirmation only for destructive actions (not for delete prescriptions)
-
-### Dialogs
-- Use Material-UI Dialog component
-- Full-screen on mobile (xs, sm)
-- Max-width on desktop (md, lg, xl)
-- Close on successful submission
-- Scroll to top on error within dialog
-
-### Tables & Lists
-- Card-based layout for mobile
-- Table layout for desktop
-- Include edit/delete actions
-- Empty state messages
-- Loading skeletons
-
----
-
-## 📦 DEPENDENCIES & VERSIONS
-
-### Backend
-```python
-fastapi
-uvicorn[standard]
-sqlalchemy
-psycopg2-binary
-pydantic
-python-jose[cryptography]
-passlib[bcrypt]
-```
-
-### Frontend
-```json
-{
-  "react": "^18.x",
-  "typescript": "^5.x",
-  "@mui/material": "^5.x",
-  "jspdf": "^2.x",
-  "jspdf-autotable": "^3.x"
-}
-```
-
----
-
-## 🔄 WORKFLOW PATTERNS
-
-### Adding New Feature
-1. Create database migration if needed
-2. Update SQLAlchemy models
-3. Create/update Pydantic schemas
-4. Create service layer helpers
-5. Add API endpoint
-6. Create frontend types
-7. Create/update React components
-8. Test with Docker containers
-9. Commit with descriptive message
-
-### Refactoring Checklist
-- Extract to service layer if >100 lines (functions) or >50 lines (endpoints)
-- Split components if >300 lines
-- Create reusable helpers
-- Remove code duplication
-- Update tests if applicable
-- Verify with Docker restart
-
-### Refactoring Patterns
-
-#### When to Refactor
-- Component > 300 lines → Split into sub-components
-- Function > 100 lines → Split into smaller functions
-- Endpoint > 50 lines → Extract to service layer
-- Service method > 50 lines → Split into helpers
-- Duplicate code in 3+ places → Extract to helper/utility
-- Complex logic in component → Extract to custom hook
-
-#### Refactoring Large Components
-1. Identify logical sections (steps, tabs, sections)
-2. Create subdirectory: `ComponentName/`
-3. Extract sections to separate components
-4. Keep main component as orchestrator
-5. Example: `RegisterView.tsx` → `RegisterView/` with step components
-
-#### Refactoring API Code (Frontend)
-1. Identify domain (auth, patients, appointments, etc.)
-2. Create service class extending `ApiBase`
-3. Move related methods to service
-4. Update imports in consuming code: `from '../services/api'` → `from '../services'`
-5. Update method calls: `apiService.getPatients()` → `apiService.patients.getPatients()`
-6. Add to `ApiService.ts` aggregator
-7. Export in `index.ts`
-
-#### Refactoring API Code (Backend)
-1. Identify domain logic
-2. Create service file: `{domain}_service.py`
-3. Move business logic from endpoint to service
-4. Keep endpoint thin - delegate to service
-5. Update endpoint to use service
-
-### Git Commit Messages
-```
-Format: <type>: <description>
-
-Types:
-- feat: New feature
-- fix: Bug fix
-- refactor: Code refactoring
-- docs: Documentation (rare)
-- style: Formatting
-- perf: Performance
-- test: Tests
-
-Example:
-feat: Add prescription module with medication catalog
-fix: PostgreSQL healthcheck database name
-refactor: Extract consultation logic to service layer
-```
-
----
-
-## 🚫 ANTI-PATTERNS (NEVER DO)
-
-### Code
-- ❌ Hard-code "Dr." instead of using database title
-- ❌ Create endpoints without authentication
-- ❌ Leave debug endpoints in production
-- ❌ Store sensitive data unencrypted
-- ❌ Use `any` type in TypeScript
-- ❌ Create functions longer than 100 lines
-- ❌ Create components longer than 300 lines
-- ❌ Create service methods longer than 50 lines
-- ❌ Create endpoints longer than 50 lines
-- ❌ Duplicate logic instead of extracting to helper
-- ❌ Use `console.log` instead of `logger`
-- ❌ Import from `services/api.ts` (use `services/` instead)
-- ❌ Make direct API calls in components (use services)
-- ❌ Create service methods without logging
-- ❌ Create services that don't extend `ApiBase`
-
-### Database
-- ❌ Store dates without timezone awareness
-- ❌ Create tables without timestamps
-- ❌ Use VARCHAR without length limit
-- ❌ Skip foreign key constraints
-- ❌ Forget ON DELETE behavior
-
-### UI
-- ❌ Hard-code strings (use constants)
-- ❌ Skip error handling
-- ❌ Forget loading states
-- ❌ Make forms without validation
-- ❌ Skip auto-scroll to errors
-
-### DevOps
-- ❌ Run builds outside Docker
-- ❌ Commit without testing
-- ❌ Push directly to main without review
-- ❌ Leave debug logs in production
-- ❌ Skip migration testing
-
----
-
-## 🎯 SPECIFIC MODULES
-
-### Prescriptions Module
-- Use `medications` table (200+ common medications)
-- Junction table: `consultation_prescriptions`
-- Allow creating new medications inline
-- Include: dosage, frequency, duration, quantity, via_administracion
-- No confirmation prompt for delete
-- Handle temp_consultation for unsaved consultations
-
-### Schedule Module
-- Tables: `schedule_templates`, `schedule_exceptions`
-- Day of week: 0=Monday, 6=Sunday
-- Store times in HH:MM format
-- Support multiple time blocks per day
-- CDMX timezone
-
-### Clinical Studies
-- Store PDFs in `backend/uploads/clinical_studies/`
-- Link to consultation via `consultation_id`
-- Include study_name, study_type, description
-- Display thumbnails in UI
-
-### Vital Signs
-- Store per consultation in `consultation_vital_signs`
-- Fields: blood pressure, heart rate, temperature, weight, height, BMI
-- Calculate BMI automatically
-- Display in cards, editable within consultation
-
----
-
-## 🔐 SECURITY RULES
-
-### Authentication
-- JWT tokens with Bearer scheme
-- Tokens include user_id and person_type
-- Validate on every protected endpoint
-- Never expose password hashes
-
-### Authorization
-- Doctors can only access own patients
-- Doctors can only see own consultations
-- Validate ownership before updates/deletes
-- No cross-doctor data access
-
-### Data Protection
-- Encrypt sensitive medical fields
-- Log security events
-- Never log sensitive data (passwords, medical info)
-- Use HTTPS in production
-
----
-
-## 📱 RESPONSIVE DESIGN
-
-### Breakpoints
-- xs: 0-600px (mobile)
-- sm: 600-900px (tablet)
-- md: 900-1200px (small desktop)
-- lg: 1200-1536px (desktop)
-- xl: 1536px+ (large desktop)
-
-### Mobile-First
-- Design for mobile first
-- Progressive enhancement for larger screens
-- Touch-friendly buttons (min 44x44px)
-- Readable font sizes (min 16px)
-
----
-
-## 🧪 TESTING APPROACH
-
-### Manual Testing
-- Test in Docker containers
-- Test all CRUD operations
-- Test error scenarios
-- Test different screen sizes
-- Test auto-scroll to errors
-
-### Docker Commands
-```bash
-# Start services
-docker-compose up -d
-
-# Rebuild after changes
-docker-compose up -d --build
-
-# Restart specific service
-docker-compose restart python-backend
-
-# View logs
-docker-compose logs -f python-backend
-
-# Stop all
-docker-compose down
-```
-
----
-
-## 💡 BEST PRACTICES
-
-### Performance
-- Use indexes on foreign keys
-- Limit query results with pagination
-- Lazy load large datasets
-- Optimize images before upload
-- Minimize bundle size
-
-### Maintainability
-- Write self-documenting code
-- Keep functions small and focused
-- Use consistent naming conventions
-- Refactor when code smells appear
-- Document complex business logic
-
-### User Experience
-- Provide immediate feedback
-- Show loading states
-- Display clear error messages
-- Auto-save when possible
-- Keyboard shortcuts for power users
-
----
-
-## 🎓 DOMAIN KNOWLEDGE
-
-### Medical Standards (Mexico)
-- Comply with NOM-004-SSA3-2012
-- Include required fields: CURP, RFC
-- Professional license validation
-- Digital signature for legal compliance
-- Proper data retention policies
-
-### Timezone Handling
-- All times in America/Mexico_City
-- Display in local format
-- Store as naive datetime in CDMX time
-- Use `now_cdmx()` and `cdmx_datetime()`
-
----
-
-## 🚀 PRODUCTION READINESS
-
-Before deploying:
-- [ ] Enable real encryption (update keys)
-- [ ] Remove debug endpoints
-- [ ] Set proper CORS origins
-- [ ] Enable rate limiting
-- [ ] Set up backup strategy
-- [ ] Configure SSL/TLS
-- [ ] Set secure session cookies
-- [ ] Enable audit logging
-- [ ] Test with real data volume
-- [ ] Load testing
-
----
-
----
-
-## 📝 LOGGING STANDARDS
-
-### Logger Utility
-**SIEMPRE** usar `logger` de `utils/logger.ts` (frontend) o `logger.py` (backend) en lugar de `console.log` o `print`.
-
-### Categorías de Logging (Frontend)
-- `'api'` - Para operaciones de API
-- `'auth'` - Para autenticación
-- `'ui'` - Para interacciones de UI
-- `'error'` - Para errores críticos
-
-### Uso Correcto (Frontend)
-```typescript
-// ✅ CORRECTO
-import { logger } from '../utils/logger';
-
-logger.debug('Fetching patients', { filters }, 'api');
-logger.error('Failed to fetch patients', error, 'api');
-logger.auth.info('Login attempt', { email });
-
-// ❌ INCORRECTO
-console.log('Fetching patients'); // ❌
-console.error('Error:', error); // ❌
-```
-
-### Uso Correcto (Backend)
-```python
-# ✅ CORRECTO
-from logger import api_logger, security_logger
-
-api_logger.info('Fetching patients', extra={'doctor_id': doctor_id})
-api_logger.error('Failed to fetch patients', exc_info=True)
-security_logger.warning('Unauthorized access attempt')
-
-# ❌ INCORRECTO
-print('Fetching patients')  # ❌
-```
-
-### Niveles de Logging
-- `debug` - Información de depuración
-- `info` - Información general
-- `warning` - Advertencias
-- `error` - Errores que requieren atención
-
----
-
-## 🔄 MIGRATION CHECKLIST
-
-### Migrating from Old API to New Services (Frontend)
-1. ✅ Update import: `from '../services/api'` → `from '../services'`
-2. ✅ Update method calls: `apiService.getPatients()` → `apiService.patients.getPatients()`
-3. ✅ Replace `console.log` with `logger.debug/error`
-4. ✅ Verify error handling (handled by ApiBase)
-5. ✅ Test the migrated code
-6. ✅ Remove old `api.ts` references
-
-### Creating New API Endpoint (Frontend)
-1. ✅ Identify domain (auth, patients, appointments, etc.)
-2. ✅ Find or create appropriate service
-3. ✅ Add method to service extending `ApiBase`
-4. ✅ Use `logger` for logging
-5. ✅ Handle errors (inherited from `ApiBase`)
-6. ✅ Export from `index.ts`
-7. ✅ Update `ApiService.ts` if needed
-
-### Creating New API Endpoint (Backend)
-1. ✅ Create service file if needed: `{domain}_service.py`
-2. ✅ Add business logic to service
-3. ✅ Create endpoint in route file
-4. ✅ Keep endpoint thin - delegate to service
-5. ✅ Add authentication if needed
-6. ✅ Add logging with `api_logger`
-7. ✅ Add error handling
-
----
-
-**Last Updated:** 2025-01-22
-**Version:** 2.0
-**Project:** Sistema de Historias Clínicas Electrónicas
+## 🧪 VERIFICATION CHECKLIST
+1.  **Docker:** Did you run this in Docker?
+2.  **Sync Check:** Did you use synchronous DB calls (`def endpoint`, not `async def`)?
+3.  **Logs:** Did you use the structured `logger`?
+4.  **Responsiveness:** Is the UI responsive on `xs`?

@@ -1,0 +1,98 @@
+# ============================================================================
+# VARIABLES DE ENTORNO PARA DOPPLER - PRODUCCIÓN
+# ============================================================================
+# Copia y pega estas variables en Doppler, reemplazando los valores <...>
+# ============================================================================
+
+# ============================================================================
+# 🔴 CRÍTICAS - OBLIGATORIAS
+# ============================================================================
+
+# Seguridad y Autenticación
+SECRET_KEY=<generar-con: python -c "import secrets; print(secrets.token_urlsafe(64))">
+JWT_SECRET_KEY=<generar-con: python -c "import secrets; print(secrets.token_urlsafe(64))">
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=1440
+JWT_REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# Encriptación de Datos Médicos (NOM-035-SSA3-2012)
+ENABLE_ENCRYPTION=true
+MEDICAL_ENCRYPTION_KEY=<generar-con: python -c "import secrets; print(secrets.token_hex(32))">
+
+# Base de Datos
+DATABASE_URL=postgresql://usuario:password@host:5432/historias_clinicas
+
+# Configuración de Ambiente
+ENVIRONMENT=production
+APP_ENV=production
+DEBUG=false
+LOG_LEVEL=info
+
+# ============================================================================
+# 🟡 IMPORTANTES - CONFIGURAR CORRECTAMENTE
+# ============================================================================
+
+# CORS y Seguridad
+CORS_ORIGINS=["https://tu-dominio.com"]
+ALLOWED_HOSTS=["tu-dominio.com"]
+SECURITY_HEADERS_ENABLED=true
+CONTENT_SECURITY_POLICY=default-src 'self'; img-src 'self' data: https:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://api.whatsapp.com https://graph.facebook.com; frame-ancestors 'none'; base-uri 'self'
+
+# Rate Limiting
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_MAX_REQUESTS=120
+RATE_LIMIT_WINDOW_SECONDS=60
+
+# WhatsApp - Meta Business API
+WHATSAPP_PROVIDER=meta
+META_WHATSAPP_PHONE_ID=<tu-phone-number-id>
+META_WHATSAPP_TOKEN=<tu-access-token>
+META_WHATSAPP_API_VERSION=v24.0
+META_WHATSAPP_VERIFY_TOKEN=<token-para-webhook-verification>
+WHATSAPP_TEMPLATE_APPOINTMENT_REMINDER_NO_CONFIRMED=appointment_reminder_no_confirmed
+WHATSAPP_TEMPLATE_APPOINTMENT_REMINDER_CONFIRMED=appointment_reminder_confirmed
+WHATSAPP_TEMPLATE_LANGUAGE=es
+
+# Monitoreo (Sentry)
+SENTRY_DSN_BACKEND=<tu-sentry-dsn-backend>
+SENTRY_ENVIRONMENT=production
+REACT_APP_SENTRY_DSN=<tu-sentry-dsn-frontend>
+REACT_APP_SENTRY_ENVIRONMENT=production
+
+# ============================================================================
+# 🟢 OPCIONALES - Según Necesidad
+# ============================================================================
+
+# WhatsApp - Twilio (Solo si usas Twilio en lugar de Meta)
+# TWILIO_ACCOUNT_SID=<tu-account-sid>
+# TWILIO_AUTH_TOKEN=<tu-auth-token>
+# TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
+# TWILIO_CONTENT_SID_APPOINTMENT_REMINDER=<content-sid>
+# TWILIO_CONTENT_SID_PRIVACY_NOTICE=<content-sid>
+
+# Email (SMTP) - Solo si necesitas enviar emails
+# SMTP_HOST=smtp.tu-servidor.com
+# SMTP_PORT=587
+# SMTP_USERNAME=<usuario-smtp>
+# SMTP_PASSWORD=<password-smtp>
+# EMAIL_FROM=noreply@tu-dominio.com
+
+# URLs del Frontend
+# FRONTEND_URL=https://tu-dominio.com
+
+# Configuración de Admin (Solo si necesitas cambiar defaults)
+# DEFAULT_ADMIN_USERNAME=admin
+# DEFAULT_ADMIN_PASSWORD=<password-seguro>
+
+# ============================================================================
+# NOTAS IMPORTANTES:
+# ============================================================================
+# 1. Genera las claves secretas ANTES de agregarlas a Doppler
+# 2. Reemplaza <tu-dominio.com> con tu dominio real de producción
+# 3. Reemplaza todos los valores <...> con valores reales
+# 4. Para CORS_ORIGINS y ALLOWED_HOSTS, usa formato JSON array
+# 5. Guarda las claves generadas en un lugar seguro (gestor de secretos)
+# ============================================================================
+
+
+
