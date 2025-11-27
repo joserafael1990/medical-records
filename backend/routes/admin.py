@@ -4,7 +4,7 @@ Administrative endpoints for system monitoring and configuration
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from database import get_db
 from dependencies import get_current_user
 from config import settings
@@ -81,6 +81,35 @@ async def get_encryption_status(
             detail="Error retrieving encryption status"
         )
 
+
+@router.get("/doctors")
+async def get_doctors(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+) -> List[Dict[str, Any]]:
+    """Get list of all doctors"""
+    try:
+        from database import Person
+        doctors = db.query(Person).filter(
+            Person.person_type == 'doctor',
+            Person.is_active == True
+        ).all()
+        
+        return [
+            {
+                'id': doctor.id,
+                'name': doctor.name,
+                'email': doctor.email,
+                'person_type': doctor.person_type
+            }
+            for doctor in doctors
+        ]
+    except Exception as e:
+        api_logger.error(f"Error getting doctors: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Error retrieving doctors"
+        )
 
 @router.get("/catalog-status")
 async def get_catalog_status(

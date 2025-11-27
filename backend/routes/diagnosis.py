@@ -44,11 +44,11 @@ def filter_diagnoses_by_creator(query, current_user: Optional[Person] = None):
     # If current_user is None or not a doctor, show all diagnoses (no filter)
     return query
 
-# Add a simple test endpoint
-@router.get("/test")
-async def test_diagnosis_api():
-    """Simple test endpoint to verify the API is working"""
-    return {"message": "Diagnosis API is working", "status": "ok"}
+# Disabled for security - endpoint without authentication
+# @router.get("/test")
+# async def test_diagnosis_api():
+#     """Simple test endpoint to verify the API is working"""
+#     return {"message": "Diagnosis API is working", "status": "ok"}
 
 @router.get("/catalog", response_model=List[DiagnosisCatalogSchema])
 async def get_diagnosis_catalog(

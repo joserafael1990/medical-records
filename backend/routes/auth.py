@@ -325,6 +325,22 @@ async def login(
         # Obtener usuario para auditoría
         user = db.query(Person).filter(Person.email == login_data.email).first()
         
+        # Validar licencia para doctores
+        if user and user.person_type == 'doctor':
+            from services.license_service import LicenseService
+            try:
+                LicenseService.require_valid_license(db, user.id)
+            except HTTPException as license_error:
+                # Registrar intento de login bloqueado por licencia
+                audit_service.log_login(
+                    db=db,
+                    user=user,
+                    request=request,
+                    success=False,
+                    error=f"License validation failed: {license_error.detail}"
+                )
+                raise license_error
+        
         # 🆕 Registrar login exitoso en auditoría
         audit_service.log_login(
             db=db,
