@@ -3,8 +3,8 @@
 # Uso: ./scripts/verificar-variables-produccion.sh
 
 PROJECT="cortex"
-CONFIG_DEV="dev"
-CONFIG_PROD="prd_production"
+CONFIG_DEV="dev"  # IMPORTANTE: Usar solo 'dev' para desarrollo (NO usar 'dev_personal')
+CONFIG_PROD="prd"  # IMPORTANTE: Usar 'prd' para producción (NO usar 'production' o 'prd_production')
 
 echo "🔍 Verificando variables en producción vs desarrollo"
 echo "=================================================="
@@ -51,4 +51,6 @@ echo "📝 Para copiar una variable de dev a prod:"
 echo "   doppler secrets get VARIABLE_NAME --project $PROJECT --config $CONFIG_DEV --plain"
 echo "   doppler secrets set VARIABLE_NAME=\"<valor>\" --project $PROJECT --config $CONFIG_PROD"
 echo ""
+
+
 

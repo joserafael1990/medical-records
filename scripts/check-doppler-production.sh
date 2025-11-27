@@ -5,7 +5,7 @@
 set -e
 
 PROJECT_NAME="cortex"
-CONFIG_PROD="production"
+CONFIG_PROD="prd"  # IMPORTANTE: Usar 'prd' para producción (NO usar 'production')
 
 echo "🔍 Verificando variables de producción en Doppler"
 echo "=================================================="
@@ -90,4 +90,6 @@ fi
 echo ""
 echo "📝 Para ver todas las variables:"
 echo "  doppler secrets --project $PROJECT_NAME --config $CONFIG_PROD"
+
+
 
