@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from backend.models import Person, Appointment, MedicalRecord
+from models import Person, Appointment, MedicalRecord
 
 # ============================================================================
 # STATISTICS AND REPORTS

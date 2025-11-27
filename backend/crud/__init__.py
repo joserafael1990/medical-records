@@ -25,7 +25,7 @@ from .medical import (
 )
 from .appointment import (
     create_appointment, get_appointment, get_appointments_by_patient,
-    get_appointments_by_doctor, update_appointment, cancel_appointment
+    get_appointments_by_doctor, get_appointments, update_appointment, cancel_appointment
 )
 from .stats import get_dashboard_stats
 from .license import (

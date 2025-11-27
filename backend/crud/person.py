@@ -4,9 +4,9 @@ from typing import List, Optional
 from datetime import date
 from fastapi import HTTPException
 
-from backend.models import Person, PersonDocument, Document, State, utc_now
-from backend.crud.base import hash_password, verify_password, build_phone
-from backend.crud.document import upsert_person_document
+from models import Person, PersonDocument, Document, State, utc_now
+from crud.base import hash_password, verify_password, build_phone
+from crud.document import upsert_person_document
 import schemas
 from logger import get_logger
 

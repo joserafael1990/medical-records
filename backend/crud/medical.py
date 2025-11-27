@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc
 from typing import List, Optional
 from fastapi import HTTPException
-from backend.models import MedicalRecord, utc_now
+from models import MedicalRecord, utc_now
 import schemas
 from logger import get_logger
 

@@ -111,17 +111,37 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
   // Load previous studies when patient is selected or when dialog opens for editing
   useEffect(() => {
+    let isMounted = true;
+    let timeoutId: NodeJS.Timeout;
+
     if (open && formHook.selectedPatient?.id) {
       const patientId = formHook.selectedPatient.id.toString();
-      // Load previous studies for the patient with a small delay to ensure patient data is fully loaded
-      const timeoutId = setTimeout(() => {
-        previousStudiesHook.fetchPatientStudies(patientId).catch((error: any) => {
-          logger.error('Error loading previous studies', error, 'api');
-        });
-      }, 100);
-      return () => clearTimeout(timeoutId);
+      
+      // Skip if we already fetched for this patient
+      if (lastFetchedPatientRef.current === formHook.selectedPatient.id) {
+        return;
+      }
+      
+      // Load previous studies for the patient with debounce to avoid rapid successive calls
+      timeoutId = setTimeout(() => {
+        if (isMounted && formHook.selectedPatient?.id) {
+          lastFetchedPatientRef.current = formHook.selectedPatient.id;
+          previousStudiesHook.fetchPatientStudies(patientId).catch((error: any) => {
+            // Ignore 429 errors (rate limiting) - will retry later
+            if (error?.response?.status !== 429) {
+              logger.error('Error loading previous studies', error, 'api');
+            }
+          });
+        }
+      }, 500); // Increased debounce to 500ms
+      
+      return () => {
+        isMounted = false;
+        clearTimeout(timeoutId);
+      };
     } else if (!open) {
       previousStudiesHook.clearTemporaryStudies();
+      lastFetchedPatientRef.current = null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, formHook.selectedPatient?.id, consultation?.id]);

@@ -386,6 +386,10 @@ app.include_router(privacy_router)
 from routes.consultations import router as consultations_router
 app.include_router(consultations_router)
 
+# Include prescriptions routes
+from routes.prescriptions import router as prescriptions_router
+app.include_router(prescriptions_router)
+
 # Include analytics routes
 from routes.analytics import router as analytics_router
 app.include_router(analytics_router)

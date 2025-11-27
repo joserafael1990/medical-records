@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from fastapi import HTTPException
-from backend.models import DocumentType, Document, PersonDocument, utc_now
+from models import DocumentType, Document, PersonDocument, utc_now
 
 # ============================================================================
 # DOCUMENT MANAGEMENT CRUD

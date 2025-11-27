@@ -62,6 +62,7 @@ export interface OfficeInfo {
   phone?: string;
   mapsUrl?: string;
   is_virtual?: boolean;
+  virtual_url?: string;
 }
 
 export interface MedicationInfo {
@@ -164,18 +165,98 @@ class PDFService {
     }
   }
 
-  private selectBestOfficeForPDF(offices: OfficeInfo[]): OfficeInfo | null {
+  private selectBestOfficeForPDF(offices: any[]): OfficeInfo | null {
     if (!offices || offices.length === 0) return null;
     
-    // Prefer non-virtual offices
-    const presentialOffices = offices.filter(office => !office.is_virtual);
+    // Helper function to check if office is virtual (handles boolean, string, number)
+    const isVirtualOffice = (office: any): boolean => {
+      const isVirtual = office.is_virtual;
+      if (isVirtual === true || isVirtual === 'true' || isVirtual === 1 || isVirtual === '1') {
+        return true;
+      }
+      return false;
+    };
     
-    if (presentialOffices.length > 0) {
-      return presentialOffices[0];
+    // ALWAYS prefer physical (non-virtual) offices for PDF address display
+    const physicalOffices = offices.filter(office => !isVirtualOffice(office));
+    const virtualOffices = offices.filter(office => isVirtualOffice(office));
+    
+    console.log('🏢 Office selection for PDF:', {
+      total: offices.length,
+      physical: physicalOffices.length,
+      virtual: virtualOffices.length,
+      allOffices: offices.map(o => ({ 
+        id: o.id, 
+        name: o.name, 
+        is_virtual: o.is_virtual, 
+        is_virtual_type: typeof o.is_virtual,
+        address: o.address 
+      })),
+      physicalOffices: physicalOffices.map(o => ({ id: o.id, name: o.name, address: o.address })),
+      virtualOffices: virtualOffices.map(o => ({ id: o.id, name: o.name, is_virtual: o.is_virtual }))
+    });
+    
+    // CRITICAL: Always select physical office if available, NEVER select virtual if physical exists
+    let selectedOffice;
+    if (physicalOffices.length > 0) {
+      selectedOffice = physicalOffices[0];
+      console.log('✅ Selected PHYSICAL office for PDF (as required)');
+    } else {
+      selectedOffice = offices[0];
+      console.warn('⚠️ No physical office found, falling back to first office (may be virtual)');
     }
     
-    // If all offices are virtual, return the first one
-    return offices[0];
+    console.log('✅ Selected office for PDF:', {
+      id: selectedOffice.id,
+      name: selectedOffice.name,
+      is_virtual: selectedOffice.is_virtual,
+      is_virtual_parsed: isVirtualOffice(selectedOffice),
+      address: selectedOffice.address,
+      city: selectedOffice.city,
+      state_name: selectedOffice.state_name
+    });
+    
+    // Map to OfficeInfo format, handling both Office type and OfficeInfo type
+    const mappedOffice = {
+      id: selectedOffice.id,
+      name: selectedOffice.name,
+      address: selectedOffice.address,
+      city: selectedOffice.city,
+      state: selectedOffice.state,
+      state_name: selectedOffice.state_name, // Populated by backend
+      country: selectedOffice.country,
+      country_name: selectedOffice.country_name, // Populated by backend
+      phone: selectedOffice.phone,
+      mapsUrl: selectedOffice.maps_url || selectedOffice.mapsUrl,
+      is_virtual: isVirtualOffice(selectedOffice), // Normalize to boolean
+      virtual_url: selectedOffice.virtual_url
+    };
+    
+    // Final safety check: if somehow a virtual office was selected but physical exists, log error
+    if (mappedOffice.is_virtual && physicalOffices.length > 0) {
+      console.error('❌ ERROR: Virtual office selected when physical office exists!', {
+        selected: mappedOffice,
+        availablePhysical: physicalOffices[0]
+      });
+      // Override with physical office
+      const physicalOffice = physicalOffices[0];
+      return {
+        id: physicalOffice.id,
+        name: physicalOffice.name,
+        address: physicalOffice.address,
+        city: physicalOffice.city,
+        state: physicalOffice.state,
+        state_name: physicalOffice.state_name,
+        country: physicalOffice.country,
+        country_name: physicalOffice.country_name,
+        phone: physicalOffice.phone,
+        mapsUrl: physicalOffice.maps_url || physicalOffice.mapsUrl,
+        is_virtual: false,
+        virtual_url: physicalOffice.virtual_url
+      };
+    }
+    
+    return mappedOffice;
   }
 
   private getDoctorInitialsForPdf(doctor: DoctorInfo): string {
@@ -402,7 +483,65 @@ class PDFService {
     doc.setTextColor(107, 114, 128); // Gray-500
     doc.setFont('helvetica', 'normal');
     
-    // Phone
+    // Address (FIRST - as requested: Dirección, Teléfono, Email)
+    // IMPORTANT: Only show physical address, never virtual office info
+    if (officeInfo) {
+      console.log('📍 Office info for address:', {
+        name: officeInfo.name,
+        address: officeInfo.address,
+        city: officeInfo.city,
+        state: officeInfo.state,
+        state_name: officeInfo.state_name,
+        is_virtual: officeInfo.is_virtual
+      });
+      
+      // Only display address for physical offices
+      // If office is virtual, don't show address (shouldn't happen due to selectBestOfficeForPDF, but safety check)
+      if (!officeInfo.is_virtual) {
+        const addressParts: string[] = [];
+        
+        // Build physical address from available parts
+        if (officeInfo.address) addressParts.push(officeInfo.address);
+        if (officeInfo.city) addressParts.push(officeInfo.city);
+        if (officeInfo.state || officeInfo.state_name) {
+          addressParts.push(officeInfo.state || officeInfo.state_name);
+        }
+        if (officeInfo.country_name && officeInfo.country_name !== 'México') {
+          addressParts.push(officeInfo.country_name);
+        }
+        
+        // If no address parts but we have a name, use the name
+        if (addressParts.length === 0 && officeInfo.name) {
+          addressParts.push(officeInfo.name);
+        }
+        
+        if (addressParts.length > 0) {
+          // Location icon
+          doc.setLineWidth(0.4);
+          doc.circle(contactIconX + 1.3, headerContactY - 1.2, 1.3, 'S');
+          doc.circle(contactIconX + 1.3, headerContactY - 1.2, 0.5, 'F');
+          
+          const addressText = addressParts.join(', ');
+          console.log('📍 Displaying physical address in PDF:', addressText);
+          const maxAddressWidth = 45;
+          const addressLines = doc.splitTextToSize(addressText, maxAddressWidth);
+          doc.text(addressLines[0], contactTextX, headerContactY);
+          if (addressLines.length > 1) {
+            headerContactY += 3.5;
+            doc.text(addressLines[1], contactTextX, headerContactY);
+          }
+          headerContactY += 4;
+        } else {
+          console.warn('⚠️ Physical office exists but no address parts to display:', officeInfo);
+        }
+      } else {
+        console.warn('⚠️ Virtual office selected - should not happen. Skipping address display.');
+      }
+    } else {
+      console.warn('⚠️ No office info available for PDF');
+    }
+    
+    // Phone (SECOND - as requested: Dirección, Teléfono, Email)
     const phoneNumber = officeInfo?.phone || doctor.phone;
     if (phoneNumber) {
       // Phone icon
@@ -415,7 +554,7 @@ class PDFService {
       headerContactY += 4;
     }
     
-    // Email
+    // Email (THIRD - as requested: Dirección, Teléfono, Email)
     if (doctor.email) {
       // Email icon
       doc.setLineWidth(0.4);
@@ -431,31 +570,6 @@ class PDFService {
         doc.text(emailLines[1], contactTextX, headerContactY);
       }
       headerContactY += 4;
-    }
-    
-    // Address
-    if (officeInfo) {
-      const addressParts: string[] = [];
-      if (officeInfo.address) addressParts.push(officeInfo.address);
-      if (officeInfo.city) addressParts.push(officeInfo.city);
-      if (officeInfo.state || officeInfo.state_name) addressParts.push(officeInfo.state || officeInfo.state_name);
-      
-      if (addressParts.length > 0) {
-        // Location icon
-        doc.setLineWidth(0.4);
-        doc.circle(contactIconX + 1.3, headerContactY - 1.2, 1.3, 'S');
-        doc.circle(contactIconX + 1.3, headerContactY - 1.2, 0.5, 'F');
-        
-        const addressText = addressParts.join(', ');
-        const maxAddressWidth = 45;
-        const addressLines = doc.splitTextToSize(addressText, maxAddressWidth);
-        doc.text(addressLines[0], contactTextX, headerContactY);
-        if (addressLines.length > 1) {
-          headerContactY += 3.5;
-          doc.text(addressLines[1], contactTextX, headerContactY);
-        }
-        headerContactY += 4;
-      }
     }
 
     currentY = Math.max(currentY + 25, headerContactY + 5);
@@ -870,14 +984,17 @@ class PDFService {
     if (!doctor.offices || doctor.offices.length === 0) {
       try {
         const offices = await apiService.getOffices();
+        console.log('📋 Fetched offices for PDF:', offices);
         if (offices && offices.length > 0) {
           officeInfo = this.selectBestOfficeForPDF(offices);
+          console.log('📋 Selected office for PDF:', officeInfo);
         }
       } catch (error) {
         console.warn('Could not fetch office information:', error);
       }
     } else {
       officeInfo = this.selectBestOfficeForPDF(doctor.offices);
+      console.log('📋 Using doctor.offices for PDF:', officeInfo);
     }
     
     try {

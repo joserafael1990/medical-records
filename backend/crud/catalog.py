@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
-from backend.models import (
+from models import (
     Country, State, Specialty, EmergencyRelationship,
     StudyCategory, StudyCatalog
 )

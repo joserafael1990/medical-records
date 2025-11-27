@@ -228,30 +228,57 @@ export const useStudyCatalog = (): UseStudyCatalogReturn => {
   // Track if initial data has been loaded to prevent multiple calls
   const hasLoadedInitialDataRef = useRef(false);
 
-  // Load initial data only once
+  // Load initial data only once (with debouncing to avoid rate limiting)
   useEffect(() => {
+    let isMounted = true;
+    let timeoutId: NodeJS.Timeout;
+
     if (hasLoadedInitialDataRef.current) {
       return;
     }
 
     const loadInitialData = async () => {
       try {
-        hasLoadedInitialDataRef.current = true;
         // Load critical data first
         await Promise.all([
-          fetchCategories(),
-          fetchStudies()
+          fetchCategories().catch((err: any) => {
+            // Ignore 429 errors
+            if (err?.response?.status !== 429) {
+              console.warn('Error loading study categories:', err);
+            }
+          }),
+          fetchStudies().catch((err: any) => {
+            // Ignore 429 errors
+            if (err?.response?.status !== 429) {
+              console.warn('Error loading studies:', err);
+            }
+          })
         ]);
-      } catch (err) {
-        hasLoadedInitialDataRef.current = false; // Reset on error to allow retry
-        // Don't set error state for non-critical failures
-        if (err instanceof Error && !err.message.includes('studies')) {
-          setError(err.message);
+        
+        if (isMounted) {
+          hasLoadedInitialDataRef.current = true;
+        }
+      } catch (err: any) {
+        // Ignore 429 errors
+        if (err?.response?.status !== 429) {
+          hasLoadedInitialDataRef.current = false; // Reset on error to allow retry
+          // Don't set error state for non-critical failures
+          if (err instanceof Error && !err.message.includes('studies')) {
+            setError(err.message);
+          }
         }
       }
     };
     
-    loadInitialData();
+    // Debounce to avoid rapid successive calls
+    timeoutId = setTimeout(() => {
+      loadInitialData();
+    }, 500);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
   }, [fetchCategories, fetchStudies]);
 
   return {

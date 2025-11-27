@@ -166,16 +166,19 @@ async def get_available_times_for_booking(
                 break
         
         if is_available:
+            time_str = current_time.strftime("%H:%M")
             available_slots.append({
-                "time": current_time.strftime("%H:%M"),
-                "datetime": current_time.isoformat()
+                "time": time_str,
+                "display": time_str,
+                "datetime": current_time.isoformat(),
+                "duration_minutes": slot_duration
             })
         
         current_time += timedelta(minutes=slot_duration)
     
     return {
         "date": date,
-        "available_slots": available_slots,
+        "available_times": available_slots,
         "slot_duration_minutes": slot_duration
     }
 

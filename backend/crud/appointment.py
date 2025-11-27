@@ -5,8 +5,8 @@ from datetime import date, datetime, timedelta
 from fastapi import HTTPException
 import pytz
 
-from backend.models import Appointment, Person, utc_now
-from backend.crud.base import get_cdmx_now, to_utc_for_storage
+from models import Appointment, Person, utc_now
+from crud.base import get_cdmx_now, to_utc_for_storage
 import schemas
 from logger import get_logger
 
@@ -78,6 +78,48 @@ def get_appointments_by_doctor(db: Session, doctor_id: int, date_from: Optional[
         query = query.filter(Appointment.appointment_date <= date_to)
     
     return query.order_by(Appointment.appointment_date).all()
+
+def get_appointments(
+    db: Session,
+    doctor_id: int,
+    skip: int = 0,
+    limit: int = 100,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    status: Optional[str] = None,
+    available_for_consultation: bool = False
+) -> List[Appointment]:
+    """Get appointments with optional filters"""
+    query = db.query(Appointment).options(
+        joinedload(Appointment.patient),
+        joinedload(Appointment.doctor),
+        joinedload(Appointment.office)
+    ).filter(Appointment.doctor_id == doctor_id)
+    
+    # Apply date filters
+    if start_date:
+        try:
+            start_dt = datetime.fromisoformat(start_date)
+            query = query.filter(Appointment.appointment_date >= start_dt)
+        except ValueError:
+            pass
+    
+    if end_date:
+        try:
+            end_dt = datetime.fromisoformat(end_date)
+            query = query.filter(Appointment.appointment_date <= end_dt)
+        except ValueError:
+            pass
+    
+    # Apply status filter
+    if status:
+        query = query.filter(Appointment.status == status)
+    
+    # Filter for appointments available for consultation
+    if available_for_consultation:
+        query = query.filter(Appointment.status.in_(['confirmed', 'por_confirmar']))
+    
+    return query.order_by(desc(Appointment.appointment_date)).offset(skip).limit(limit).all()
 
 def update_appointment(db: Session, appointment_id: int, appointment_data) -> Appointment:
     """Update appointment with CDMX timezone support

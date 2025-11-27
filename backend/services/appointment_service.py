@@ -130,6 +130,9 @@ class AppointmentService:
         result = []
         
         for appointment in appointments:
+            # Use serialize_appointment to get the full structure with patient and office objects
+            serialized = AppointmentService.serialize_appointment(appointment)
+            
             # Handle timezone conversion for display
             if appointment.appointment_date.tzinfo is None:
                 # Naive datetime (stored in CDMX) -> localize
@@ -147,24 +150,14 @@ class AppointmentService:
             else:
                 end_time = start_time + timedelta(minutes=30)
 
-            # Format patient name
-            patient_name = "Paciente no encontrado"
-            if appointment.patient:
-                patient_name = appointment.patient.name or "Paciente sin nombre"
+            # Format patient name for calendar title
+            patient_name = serialized.get("patient_name", "Paciente no encontrado")
 
-            # Build result dictionary
-            result.append({
-                "id": appointment.id,
-                "title": f"{patient_name} - {appointment.consultation_type}",
+            # Add calendar-specific fields to the serialized appointment
+            serialized.update({
+                "title": f"{patient_name} - {appointment.consultation_type or 'Consulta'}",
                 "start": start_time.isoformat(),
                 "end": end_time.isoformat(),
-                "patient_id": appointment.patient_id,
-                "patient_name": patient_name,
-                "status": appointment.status,
-                "consultation_type": appointment.consultation_type,
-                "notes": appointment.notes,
-                "appointment_type_name": appointment.appointment_type_rel.name if getattr(appointment, "appointment_type_rel", None) else None,
-                "office_name": appointment.office.name if getattr(appointment, "office", None) else None,
                 "backgroundColor": "#10B981" if appointment.status == 'completed' else 
                                  "#EF4444" if appointment.status == 'cancelled' else 
                                  "#3B82F6",
@@ -177,6 +170,8 @@ class AppointmentService:
                     "patient_id": appointment.patient_id
                 }
             })
+            
+            result.append(serialized)
             
         return result
 
@@ -228,7 +223,21 @@ class AppointmentService:
             "created_at": appointment.created_at.isoformat() if appointment.created_at else None,
             "updated_at": appointment.updated_at.isoformat() if appointment.updated_at else None,
             "patient_name": patient_name,
-            "patient": appointment.patient
+            "patient": {
+                "id": appointment.patient.id,
+                "name": appointment.patient.name,
+                "first_name": getattr(appointment.patient, 'first_name', None),
+                "last_name": getattr(appointment.patient, 'last_name', None),
+                "primary_phone": getattr(appointment.patient, 'primary_phone', None),
+                "email": getattr(appointment.patient, 'email', None)
+            } if appointment.patient else None,
+            "office": {
+                "id": appointment.office.id,
+                "name": appointment.office.name,
+                "address": getattr(appointment.office, 'address', None),
+                "is_virtual": getattr(appointment.office, 'is_virtual', False),
+                "virtual_url": getattr(appointment.office, 'virtual_url', None)
+            } if appointment.office else None
         }
 
     @classmethod

@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date
-from backend.models import License, utc_now
+from models import License, utc_now
 
 # ============================================================================
 # LICENSE MANAGEMENT CRUD

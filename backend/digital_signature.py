@@ -107,10 +107,10 @@ class DigitalSignatureService:
             x509.NameAttribute(NameOID.LOCALITY_NAME, doctor_info.get("city", "Ciudad de México")),
             x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Sistema Médico CORTEX"),
             x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, "Médicos Certificados"),
-            x509.NameAttribute(NameOID.COMMON_NAME, doctor_info["full_name"]),
-            x509.NameAttribute(NameOID.EMAIL_ADDRESS, doctor_info["email"]),
+            x509.NameAttribute(NameOID.COMMON_NAME, doctor_info.get("full_name", doctor_info.get("name", "Unknown Doctor"))),
+            x509.NameAttribute(NameOID.EMAIL_ADDRESS, doctor_info.get("email", "unknown@example.com")),
             # Campos específicos mexicanos
-            x509.NameAttribute(x509.oid.NameOID.SERIAL_NUMBER, doctor_info["professional_license"]),
+            x509.NameAttribute(x509.oid.NameOID.SERIAL_NUMBER, doctor_info.get("professional_license", "N/A")),
         ])
         
         # Crear certificado

@@ -6,11 +6,11 @@ import {
   CardContent,
   CircularProgress,
   Alert,
-  Grid,
   Button
 } from '@mui/material';
 import {
-  MonitorHeart as MonitorHeartIcon
+  MonitorHeart as MonitorHeartIcon,
+  ShowChart as ShowChartIcon
 } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { PatientVitalSignsHistory } from '../../hooks/useVitalSigns';
@@ -22,19 +22,28 @@ interface VitalSignsEvolutionViewProps {
   patientName: string;
   onBack?: () => void; // Optional since Dialog handles closing
   fetchHistory: (patientId: number) => Promise<PatientVitalSignsHistory>;
+  initialHistory?: PatientVitalSignsHistory | null; // Optional pre-loaded history
 }
 
 const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
   patientId,
   patientName,
   onBack,
-  fetchHistory
+  fetchHistory,
+  initialHistory
 }) => {
-  const [history, setHistory] = useState<PatientVitalSignsHistory | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [history, setHistory] = useState<PatientVitalSignsHistory | null>(initialHistory || null);
+  const [loading, setLoading] = useState(!initialHistory);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // If initialHistory is provided, use it and don't fetch
+    if (initialHistory) {
+      setHistory(initialHistory);
+      setLoading(false);
+      return;
+    }
+
     const loadHistory = async () => {
       setLoading(true);
       setError(null);
@@ -51,7 +60,7 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
     if (patientId) {
       loadHistory();
     }
-  }, [patientId, fetchHistory]);
+  }, [patientId, fetchHistory, initialHistory]);
 
   const formatDate = (dateString: string | null): string => {
     if (!dateString) return '';
@@ -63,16 +72,31 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
   };
 
   const prepareChartData = (vitalSignData: PatientVitalSignsHistory['vital_signs_history'][0]) => {
+    if (!vitalSignData || !vitalSignData.data || !Array.isArray(vitalSignData.data)) {
+      return [];
+    }
+    
     return vitalSignData.data
-      .filter(item => item.value !== null && item.date !== null)
+      .filter(item => {
+        // Include items with valid date and value (including 0)
+        // value can be 0, so we check for !== null and !== undefined
+        return item.date !== null && 
+               item.date !== undefined && 
+               item.value !== null && 
+               item.value !== undefined;
+      })
       .map(item => ({
         date: formatDate(item.date),
-        value: item.value,
+        value: Number(item.value), // Ensure value is a number
         fullDate: item.date
       }))
       .sort((a, b) => {
         if (!a.fullDate || !b.fullDate) return 0;
-        return new Date(a.fullDate).getTime() - new Date(b.fullDate).getTime();
+        try {
+          return new Date(a.fullDate).getTime() - new Date(b.fullDate).getTime();
+        } catch {
+          return 0;
+        }
       });
   };
 
@@ -103,18 +127,18 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
   }
 
   return (
-    <Box sx={{ p: 3, width: '100%', height: '100%', overflow: 'auto' }}>
-      {/* Header */}
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box>
-          <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
-            Evolución de Signos Vitales
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            Paciente: {history.patient_name || patientName}
-          </Typography>
-        </Box>
-        {onBack && (
+    <Box sx={{ width: '100%', overflow: 'visible' }}>
+      {/* Header - Only show if onBack is provided (modal view) */}
+      {onBack && (
+        <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
+              Evolución de Signos Vitales
+            </Typography>
+            <Typography variant="body1" color="text.secondary">
+              Paciente: {history.patient_name || patientName}
+            </Typography>
+          </Box>
           <Button
             variant="outlined"
             onClick={onBack}
@@ -122,11 +146,24 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
           >
             Volver
           </Button>
-        )}
-      </Box>
+        </Box>
+      )}
+      
+      {/* Inline header when no back button */}
+      {!onBack && (
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <ShowChartIcon color="primary" />
+            Evolución de Signos Vitales
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Historial completo de signos vitales del paciente
+          </Typography>
+        </Box>
+      )}
 
       {/* Charts */}
-      <Grid container spacing={3} sx={{ width: '100%' }}>
+      <Box sx={{ width: '100%' }}>
         {history.vital_signs_history.map((vitalSign) => {
           const chartData = prepareChartData(vitalSign);
           
@@ -134,21 +171,25 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
             return null;
           }
 
+          // Get unit from first data item if available
+          const unit = vitalSign.data && vitalSign.data.length > 0 
+            ? vitalSign.data.find(item => item.unit)?.unit 
+            : null;
+
           return (
-            <Grid item xs={12} sm={12} md={12} lg={12} xl={12} key={vitalSign.vital_sign_id} sx={{ width: '100%' }}>
-              <Card sx={{ display: 'flex', flexDirection: 'column', mb: 3, width: '100%' }}>
-                <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', p: 3 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, flexShrink: 0 }}>
-                    <MonitorHeartIcon sx={{ mr: 1, color: 'primary.main' }} />
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                      {vitalSign.vital_sign_name}
-                      {vitalSign.unit && (
-                        <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-                          ({vitalSign.unit})
-                        </Typography>
-                      )}
-                    </Typography>
-                  </Box>
+            <Card key={vitalSign.vital_sign_id} sx={{ display: 'flex', flexDirection: 'column', mb: 3, width: '100%' }}>
+              <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', p: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, flexShrink: 0 }}>
+                  <MonitorHeartIcon sx={{ mr: 1, color: 'primary.main' }} />
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    {vitalSign.vital_sign_name}
+                    {unit && (
+                      <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                        ({unit})
+                      </Typography>
+                    )}
+                  </Typography>
+                </Box>
                   <Box sx={{ width: '100%', height: '450px', minHeight: '450px' }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart 
@@ -195,10 +236,9 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
                   </Box>
                 </CardContent>
               </Card>
-            </Grid>
           );
         })}
-      </Grid>
+      </Box>
     </Box>
   );
 };

@@ -6,7 +6,7 @@ import PrescriptionsSection from '../../common/PrescriptionsSection';
 import ClinicalStudiesSection from '../../common/ClinicalStudiesSection';
 import ScheduleAppointmentSection from '../../common/ScheduleAppointmentSection';
 import VitalSignsEvolutionView from '../../views/VitalSignsEvolutionView';
-import { ConsultationVitalSign, VitalSign, Prescription, ClinicalStudy, Medication } from '../../../types';
+import { ConsultationVitalSign, VitalSign, ConsultationPrescription, ClinicalStudy, Medication } from '../../../types';
 import { CreateClinicalStudyData } from '../../../types';
 import { TEMP_IDS } from '../../../utils/vitalSignUtils';
 import { useVitalSigns } from '../../../hooks/useVitalSigns';
@@ -27,7 +27,7 @@ interface ConsultationSectionsProps {
   onDeleteVitalSign: (vitalSignId: number) => void;
   
   // Prescriptions
-  prescriptions: Prescription[];
+  prescriptions: ConsultationPrescription[];
   prescriptionsLoading: boolean;
   medications: Medication[];
   onAddPrescription: (prescriptionData: any) => Promise<void>;
@@ -91,50 +91,66 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
 }) => {
   const consultationIdStr = consultationId ? String(consultationId) : TEMP_IDS.CONSULTATION;
   const patientIdStr = selectedPatientId?.toString() || formDataPatientId || TEMP_IDS.PATIENT;
-  const [showEvolutionView, setShowEvolutionView] = useState(false);
+  const [vitalSignsHistory, setVitalSignsHistory] = useState<any>(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const [hasPreviousVitalSigns, setHasPreviousVitalSigns] = useState(false);
   const vitalSignsHook = useVitalSigns();
 
-  // Check if patient has previous vital signs history (from any previous consultation)
+  // Load vital signs history when patient is selected (inline, no button needed)
   useEffect(() => {
-    const checkPreviousVitalSigns = async () => {
+    let isMounted = true;
+    let timeoutId: NodeJS.Timeout;
+
+    const loadVitalSignsHistory = async () => {
       if (!selectedPatientId) {
-        setHasPreviousVitalSigns(false);
+        if (isMounted) {
+          setHasPreviousVitalSigns(false);
+          setVitalSignsHistory(null);
+        }
         return;
       }
 
       try {
+        setLoadingHistory(true);
         const history = await vitalSignsHook.fetchPatientVitalSignsHistory(selectedPatientId);
         
+        if (!isMounted) return;
+        
         // Check if patient has any vital signs history at all (from previous consultations)
-        // This should show the button even if current consultation doesn't have vital signs yet
-        const hasHistory = history.vital_signs_history.some(vsHistory => 
+        const hasHistory = history.vital_signs_history && history.vital_signs_history.some((vsHistory: any) => 
           vsHistory.data && vsHistory.data.length > 0
         );
         
         setHasPreviousVitalSigns(hasHistory);
-      } catch (error) {
-        // Silently fail - don't show button if we can't check
-        setHasPreviousVitalSigns(false);
+        setVitalSignsHistory(history);
+      } catch (error: any) {
+        // Ignore 429 errors (rate limiting) - will retry later
+        if (error?.response?.status === 429) {
+          console.warn('Rate limited when fetching vital signs history, will retry later');
+          return;
+        }
+        // Silently fail - don't show charts if we can't load
+        if (isMounted) {
+          setHasPreviousVitalSigns(false);
+          setVitalSignsHistory(null);
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingHistory(false);
+        }
       }
     };
 
-    checkPreviousVitalSigns();
-  }, [selectedPatientId, vitalSignsHook]);
+    // Debounce to avoid rapid successive calls
+    timeoutId = setTimeout(() => {
+      loadVitalSignsHistory();
+    }, 500); // 500ms debounce
 
-  // Show evolution view if enabled
-  if (showEvolutionView && selectedPatientId) {
-    return (
-      <Box sx={{ width: '100%', height: '100%', overflow: 'auto' }}>
-        <VitalSignsEvolutionView
-          patientId={selectedPatientId}
-          patientName=""
-          onBack={() => setShowEvolutionView(false)}
-          fetchHistory={vitalSignsHook.fetchPatientVitalSignsHistory}
-        />
-      </Box>
-    );
-  }
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, [selectedPatientId]); // Removed vitalSignsHook from dependencies to prevent infinite loops
 
   return (
     <>
@@ -150,17 +166,16 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
         onDeleteVitalSign={onDeleteVitalSign}
       />
 
-      {/* Evolution Button - Show if there are previous vital signs */}
-      {hasPreviousVitalSigns && selectedPatientId && (
-        <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end' }}>
-          <Button
-            variant="outlined"
-            startIcon={<ShowChartIcon />}
-            onClick={() => setShowEvolutionView(true)}
-            sx={{ borderRadius: '8px' }}
-          >
-            Ver evolución de signos vitales
-          </Button>
+      {/* Evolution Charts - Show inline if there are previous vital signs */}
+      {hasPreviousVitalSigns && selectedPatientId && vitalSignsHistory && (
+        <Box sx={{ mb: 3 }}>
+          <VitalSignsEvolutionView
+            patientId={selectedPatientId}
+            patientName=""
+            onBack={undefined} // No back button needed - inline display
+            fetchHistory={vitalSignsHook.fetchPatientVitalSignsHistory}
+            initialHistory={vitalSignsHistory} // Pass pre-loaded history to avoid duplicate fetch
+          />
         </Box>
       )}
 
@@ -225,8 +240,20 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
           isLoading={studiesLoading}
           onAddStudy={onAddStudy}
           onRemoveStudy={onDeleteStudy}
-          onViewFile={onViewStudyFile}
-          onDownloadFile={onDownloadStudyFile}
+          onViewFile={(fileUrl: string) => {
+            // Find study by fileUrl and call onViewStudyFile with studyId
+            const study = studies.find(s => (s as any).file_url === fileUrl || (s as any).file_path === fileUrl);
+            if (study && study.id) {
+              onViewStudyFile(typeof study.id === 'string' ? parseInt(study.id) : study.id);
+            }
+          }}
+          onDownloadFile={(fileUrl: string, fileName: string) => {
+            // Find study by fileUrl and call onDownloadStudyFile with studyId
+            const study = studies.find(s => (s as any).file_url === fileUrl || (s as any).file_path === fileUrl);
+            if (study && study.id) {
+              onDownloadStudyFile(typeof study.id === 'string' ? parseInt(study.id) : study.id);
+            }
+          }}
           doctorName={doctorName}
         />
       </Box>

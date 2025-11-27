@@ -304,12 +304,34 @@ class PatientService:
             # Capture original state
             original_data = serialize_instance(patient, exclude={"updated_at"})
             
-            # Validate CURP
+            # Validate CURP only if it's being changed
             documents_payload = getattr(patient_data, 'documents', []) or []
             formatted_documents = cls._format_documents_for_validation(documents_payload)
-            is_valid_curp, curp_error = validate_curp_conditional(formatted_documents)
-            if not is_valid_curp:
-                raise HTTPException(status_code=422, detail=curp_error)
+            
+            # Check if CURP is actually being changed
+            curp_being_changed = False
+            if formatted_documents:
+                for doc in formatted_documents:
+                    if doc.get('document_id') == 5:  # CURP document ID
+                        # Get existing CURP value
+                        existing_curp_doc = db.query(PersonDocument).filter(
+                            PersonDocument.person_id == patient_id,
+                            PersonDocument.document_id == 5
+                        ).first()
+                        
+                        new_curp_value = doc.get('document_value', '').strip()
+                        existing_curp_value = existing_curp_doc.document_value if existing_curp_doc else ''
+                        
+                        # Only validate if CURP value is different and not empty
+                        if new_curp_value and new_curp_value != existing_curp_value:
+                            curp_being_changed = True
+                            break
+            
+            # Only validate CURP if it's being changed
+            if curp_being_changed:
+                is_valid_curp, curp_error = validate_curp_conditional(formatted_documents)
+                if not is_valid_curp:
+                    raise HTTPException(status_code=422, detail=curp_error)
             
             # Check document uniqueness (excluding current patient)
             if documents_payload:

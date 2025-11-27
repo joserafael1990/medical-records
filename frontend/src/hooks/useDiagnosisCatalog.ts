@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiService } from '../services';
 import { logger } from '../utils/logger';
 
@@ -173,26 +173,50 @@ export const useDiagnosisCatalog = () => {
     }
   }, []);
 
-  // Load initial data
+  // Load initial data (with debouncing and caching to avoid rate limiting)
+  const hasLoadedStatsRef = useRef(false);
   useEffect(() => {
+    let isMounted = true;
+    let timeoutId: NodeJS.Timeout;
+
+    // Skip if already loaded
+    if (hasLoadedStatsRef.current) {
+      return;
+    }
+
     const loadInitialData = async () => {
       try {
         // Try to load stats, but don't fail if it errors (non-critical)
         try {
           await getStats();
-        } catch (statsErr) {
-          console.warn('⚠️ Could not load diagnosis statistics (non-critical):', statsErr);
-          // Don't set error state for stats failure as it's not critical
+          if (isMounted) {
+            hasLoadedStatsRef.current = true;
+          }
+        } catch (statsErr: any) {
+          // Ignore 429 errors (rate limiting) - will retry later
+          if (statsErr?.response?.status !== 429) {
+            console.warn('⚠️ Could not load diagnosis statistics (non-critical):', statsErr);
+          }
         }
       } catch (err) {
-        logger.error('Error loading initial diagnosis data', err, 'api');
-        if (err instanceof Error && !err.message.includes('statistics')) {
-          setError(err.message);
+        if (isMounted) {
+          logger.error('Error loading initial diagnosis data', err, 'api');
+          if (err instanceof Error && !err.message.includes('statistics')) {
+            setError(err.message);
+          }
         }
       }
     };
 
-    loadInitialData();
+    // Debounce to avoid rapid successive calls
+    timeoutId = setTimeout(() => {
+      loadInitialData();
+    }, 500);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
   }, [getStats]);
 
   return {

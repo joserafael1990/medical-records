@@ -739,35 +739,83 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vitalSignsHook.vitalSignDialogOpen, isEditing, consultation?.id]);
 
-  // Load initial catalog data
+  // Load initial catalog data (with debouncing and caching to avoid rate limiting)
+  const hasLoadedCatalogsRef = useRef(false);
   useEffect(() => {
+    let isMounted = true;
+    let timeoutId: NodeJS.Timeout;
+
+    if (!open) {
+      hasLoadedCatalogsRef.current = false; // Reset when dialog closes
+      return;
+    }
+
+    // Skip if already loaded
+    if (hasLoadedCatalogsRef.current) {
+      return;
+    }
+
     const loadInitialData = async () => {
       try {
         const [countriesData, relationshipsData] = await Promise.all([
-          apiService.catalogs.getCountries(),
-          apiService.catalogs.getEmergencyRelationships()
+          apiService.catalogs.getCountries().catch((err: any) => {
+            // Ignore 429 errors
+            if (err?.response?.status !== 429) {
+              logger.error('Error loading countries', err, 'api');
+            }
+            return [];
+          }),
+          apiService.catalogs.getEmergencyRelationships().catch((err: any) => {
+            // Ignore 429 errors
+            if (err?.response?.status !== 429) {
+              logger.error('Error loading emergency relationships', err, 'api');
+            }
+            return [];
+          })
         ]);
-        setCountries(countriesData);
-        setEmergencyRelationships(relationshipsData);
+        
+        if (isMounted) {
+          setCountries(countriesData);
+          setEmergencyRelationships(relationshipsData);
+          hasLoadedCatalogsRef.current = true;
+        }
 
         vitalSignsHook.fetchAvailableVitalSigns();
 
         if (appointments && appointments.length > 0) {
           const patientIds = (appointments || []).map((apt: any) => apt.patient_id).filter((id: any) => id);
-          const allPatients = await apiService.patients.getPatients();
-          const appointmentPatients = (allPatients || []).filter((patient: any) =>
-            patientIds.includes(patient.id)
-          );
-          setAppointmentPatients(appointmentPatients);
+          try {
+            const allPatients = await apiService.patients.getPatients();
+            if (isMounted) {
+              const appointmentPatients = (allPatients || []).filter((patient: any) =>
+                patientIds.includes(patient.id)
+              );
+              setAppointmentPatients(appointmentPatients);
+            }
+          } catch (err: any) {
+            // Ignore 429 errors
+            if (err?.response?.status !== 429) {
+              logger.error('Error loading appointment patients', err, 'api');
+            }
+          }
         }
-      } catch (error) {
-        logger.error('Error loading initial data', error, 'api');
+      } catch (error: any) {
+        // Ignore 429 errors
+        if (error?.response?.status !== 429 && isMounted) {
+          logger.error('Error loading initial data', error, 'api');
+        }
       }
     };
 
-    if (open) {
+    // Debounce to avoid rapid successive calls
+    timeoutId = setTimeout(() => {
       loadInitialData();
-    }
+    }, 500);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, appointments?.length]);
 
@@ -780,27 +828,65 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, isEditing, consultation?.id]);
 
-  // Load states when patient data changes
+  // Load states when patient data changes (with debouncing and caching)
   useEffect(() => {
-    const loadStatesForPatient = async () => {
-      if (patientEditData) {
-        try {
-          if (patientEditData.address_country_id) {
-            const addressStatesData = await apiService.catalogs.getStates(parseInt(patientEditData.address_country_id));
-            setStates(addressStatesData);
-          }
+    let isMounted = true;
+    let timeoutId: NodeJS.Timeout;
 
-          if (patientEditData.birth_country_id) {
-            const birthStatesData = await apiService.catalogs.getStates(parseInt(patientEditData.birth_country_id));
-            setBirthStates(birthStatesData);
+    const loadStatesForPatient = async () => {
+      if (!patientEditData) return;
+
+      try {
+        // Only load if country_id has actually changed and is valid
+        if (patientEditData.address_country_id) {
+          const countryId = parseInt(patientEditData.address_country_id);
+          if (!isNaN(countryId) && countryId > 0) {
+            try {
+              const addressStatesData = await apiService.catalogs.getStates(countryId);
+              if (isMounted) {
+                setStates(addressStatesData);
+              }
+            } catch (error: any) {
+              // Ignore 429 errors (rate limiting) - will retry later
+              if (error?.response?.status !== 429) {
+                logger.error('Error loading address states', error, 'api');
+              }
+            }
           }
-        } catch (error) {
+        }
+
+        if (patientEditData.birth_country_id) {
+          const countryId = parseInt(patientEditData.birth_country_id);
+          if (!isNaN(countryId) && countryId > 0) {
+            try {
+              const birthStatesData = await apiService.catalogs.getStates(countryId);
+              if (isMounted) {
+                setBirthStates(birthStatesData);
+              }
+            } catch (error: any) {
+              // Ignore 429 errors (rate limiting) - will retry later
+              if (error?.response?.status !== 429) {
+                logger.error('Error loading birth states', error, 'api');
+              }
+            }
+          }
+        }
+      } catch (error) {
+        if (isMounted) {
           logger.error('Error loading states', error, 'api');
         }
       }
     };
 
-    loadStatesForPatient();
+    // Debounce the API call to avoid rapid successive requests
+    timeoutId = setTimeout(() => {
+      loadStatesForPatient();
+    }, 300); // 300ms debounce
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
   }, [patientEditData?.address_country_id, patientEditData?.birth_country_id]);
 
   // Handlers
@@ -1167,10 +1253,25 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
       return;
     }
 
-    if (!personalDocument.document_id || !personalDocument.document_value.trim()) {
-      setError('El documento de identificación del paciente es obligatorio');
-      return;
+    // Determine if this is a first-time consultation
+    const isEditingFirstTimeConsultation = consultation && consultation.consultation_type === 'Primera vez';
+    const hasFirstTimeAppointment = selectedAppointment && (
+      selectedAppointment.consultation_type === 'Primera vez' ||
+      selectedAppointment.appointment_type === 'Primera vez' ||
+      selectedAppointment.appointment_type === 'primera vez' ||
+      selectedAppointment.appointment_type === 'first_visit'
+    );
+    const isFirstTimeConsultation = isEditingFirstTimeConsultation || hasFirstTimeAppointment;
+
+    // Only require document for first-time consultations
+    // For follow-up consultations, document is optional - patient may already have documents saved
+    if (isFirstTimeConsultation) {
+      if (!personalDocument.document_id || !personalDocument.document_value.trim()) {
+        setError('El documento de identificación del paciente es obligatorio para consultas de primera vez');
+        return;
+      }
     }
+    // For follow-up consultations, document is not required - allow submission even without document
 
     if (patientEditData && selectedPatient) {
       try {

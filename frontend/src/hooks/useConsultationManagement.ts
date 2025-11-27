@@ -3,7 +3,7 @@
  * Centralized hook for all consultation-related operations extracted from App.tsx
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { apiService } from '../services';
 import { logger } from '../utils/logger';
 import type { ConsultationFormData } from '../hooks/useConsultationForm';
@@ -139,20 +139,36 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
     }
   }, []);
 
-  // Load all available appointments for consultation dialog
+  // Load all available appointments for consultation dialog (with debouncing to avoid rate limiting)
+  const loadAllAppointmentsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const loadAllAppointments = useCallback(async () => {
-    try {
-      // Get appointments available for consultation (both confirmed and pending confirmation)
-      // These are appointments that can be used to create consultations
-      const consultationAppointments = await apiService.appointments.getAppointments({
-        available_for_consultation: true
-      });
-      
-      setAllAvailableAppointments(consultationAppointments || []);
-    } catch (error: any) {
-      logger.error('Error loading available appointments', error, 'api');
-      setAllAvailableAppointments([]);
+    // Clear any pending timeout
+    if (loadAllAppointmentsTimeoutRef.current) {
+      clearTimeout(loadAllAppointmentsTimeoutRef.current);
     }
+
+    // Debounce the API call
+    return new Promise<void>((resolve) => {
+      loadAllAppointmentsTimeoutRef.current = setTimeout(async () => {
+        try {
+          // Get appointments available for consultation (both confirmed and pending confirmation)
+          // These are appointments that can be used to create consultations
+          const consultationAppointments = await apiService.appointments.getAppointments({
+            available_for_consultation: true
+          });
+          
+          setAllAvailableAppointments(consultationAppointments || []);
+          resolve();
+        } catch (error: any) {
+          // Ignore 429 errors (rate limiting) - will retry later
+          if (error?.response?.status !== 429) {
+            logger.error('Error loading available appointments', error, 'api');
+          }
+          setAllAvailableAppointments([]);
+          resolve();
+        }
+      }, 500); // 500ms debounce
+    });
   }, []);
 
   // Load consultations on mount - only if authenticated
