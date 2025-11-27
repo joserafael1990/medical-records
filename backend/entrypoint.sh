@@ -47,6 +47,34 @@ else
     echo "✅ .venv already exists and is complete, skipping restoration"
 fi
 
+# Check if Google Calendar dependencies are installed
+if ! /app/.venv/bin/python -c "from google.oauth2.credentials import Credentials" 2>/dev/null; then
+    echo "⚠️  Google Calendar dependencies not found, installing..."
+    /app/.venv/bin/pip install --quiet --no-cache-dir \
+        google-auth==2.23.4 \
+        google-auth-oauthlib==1.1.0 \
+        google-auth-httplib2==0.1.1 \
+        google-api-python-client==2.108.0
+    if [ $? -eq 0 ]; then
+        echo "✅ Google Calendar dependencies installed"
+    else
+        echo "❌ Failed to install Google Calendar dependencies"
+    fi
+fi
+
+# Run Alembic migrations automatically on startup (only if not explicitly disabled)
+if [ "${SKIP_ALEMBIC_MIGRATIONS:-false}" != "true" ]; then
+    echo "🔄 Running Alembic migrations..."
+    if /app/.venv/bin/python /app/scripts/alembic_wrapper.py upgrade head; then
+        echo "✅ Alembic migrations completed"
+    else
+        echo "⚠️  Alembic migrations failed (non-critical, continuing anyway)"
+        echo "💡 You can run migrations manually with: python scripts/alembic_wrapper.py upgrade head"
+    fi
+else
+    echo "⏭️  Skipping Alembic migrations (SKIP_ALEMBIC_MIGRATIONS=true)"
+fi
+
 # Execute the original command
 exec "$@"
 

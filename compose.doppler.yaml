@@ -1,5 +1,7 @@
 # Docker Compose con soporte para Doppler
-# Uso: doppler run --config dev -- docker compose -f compose.doppler.yaml up
+# Uso para desarrollo: doppler run --project cortex --config dev -- docker compose -f compose.doppler.yaml up
+# Uso para producción: doppler run --project cortex --config prd -- docker compose -f compose.doppler.yaml up -d
+# IMPORTANTE: Usar solo 'dev' para desarrollo (NO usar 'dev_personal') y 'prd' para producción (NO usar 'production')
 
 services:
   python-backend:
@@ -36,9 +38,15 @@ services:
       - META_WHATSAPP_PHONE_ID=${META_WHATSAPP_PHONE_ID}
       - META_WHATSAPP_TOKEN=${META_WHATSAPP_TOKEN}
       - META_WHATSAPP_API_VERSION=${META_WHATSAPP_API_VERSION:-v24.0}
+      # Variables adicionales para producción
+      - APP_ENV=${APP_ENV:-development}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - META_WHATSAPP_APP_SECRET=${META_WHATSAPP_APP_SECRET}
+      - META_WHATSAPP_VERIFY_TOKEN=${META_WHATSAPP_VERIFY_TOKEN}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
     # NO usar env_file cuando usas Doppler
     volumes:
-      - ./backend:/app
+      - ./backend:/app:cached  # Usar 'cached' en macOS para evitar deadlocks
       - /app/__pycache__
     depends_on:
       - postgres-db
@@ -82,15 +90,16 @@ services:
     networks:
       - appnet
     environment:
-      POSTGRES_USER: historias_user
-      POSTGRES_PASSWORD: historias_pass
-      POSTGRES_DB: historias_clinicas
+      # Credenciales desde Doppler (con valores por defecto para desarrollo)
+      POSTGRES_USER: ${POSTGRES_USER:-historias_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-historias_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-historias_clinicas}
     ports:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U historias_user -d historias_clinicas"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-historias_user} -d ${POSTGRES_DB:-historias_clinicas}"]
       interval: 10s
       timeout: 5s
       retries: 5

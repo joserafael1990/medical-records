@@ -18,15 +18,19 @@ services:
     environment:
       - SECRET_KEY=${SECRET_KEY:-}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
-      - SENTRY_DSN_BACKEND=${SENTRY_DSN_BACKEND}
-      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-development}
       - ENABLE_ENCRYPTION=${ENABLE_ENCRYPTION:-false}
       - SECURITY_HEADERS_ENABLED=${SECURITY_HEADERS_ENABLED:-true}
-      - CONTENT_SECURITY_POLICY=${CONTENT_SECURITY_POLICY}
+      - CONTENT_SECURITY_POLICY=${CONTENT_SECURITY_POLICY:-}
       - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
       - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-120}
       - RATE_LIMIT_WINDOW_SECONDS=${RATE_LIMIT_WINDOW_SECONDS:-60}
-      - MEDICAL_ENCRYPTION_KEY=${MEDICAL_ENCRYPTION_KEY}
+      - MEDICAL_ENCRYPTION_KEY=${MEDICAL_ENCRYPTION_KEY:-}
+      # Google Calendar OAuth
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+      # Amplitude Analytics
+      - AMPLITUDE_API_KEY=${AMPLITUDE_API_KEY}
       # WhatsApp Provider: 'meta' para usar Meta directamente, 'twilio' para usar Twilio
       - WHATSAPP_PROVIDER=${WHATSAPP_PROVIDER:-meta}
 
@@ -64,15 +68,17 @@ services:
     environment:
       - NODE_OPTIONS=--max-old-space-size=8192  # 8GB memory limit
       - GENERATE_SOURCEMAP=false
-      - REACT_APP_SENTRY_DSN=${REACT_APP_SENTRY_DSN}
-      - REACT_APP_SENTRY_ENVIRONMENT=${REACT_APP_SENTRY_ENVIRONMENT:-development}
+      - HOST=0.0.0.0  # Escuchar en todas las interfaces para acceso desde host
+      - PORT=3000  # Puerto del servidor de desarrollo React
+      - REACT_APP_AMPLITUDE_API_KEY=${REACT_APP_AMPLITUDE_API_KEY}
       - TSC_COMPILE_ON_ERROR=true
       - ESLINT_NO_DEV_ERRORS=true
       - SKIP_PREFLIGHT_CHECK=true
       - DISABLE_ESLINT_PLUGIN=true
       - FAST_REFRESH=true  # Enable hot reload
       - CI=false  # Disable CI mode for development
-    # env_file: ./frontend/.env  # Uncomment if .env file exists
+    env_file:
+      - .env
     volumes:
       # Mount frontend source code for hot reload
       - ./frontend:/app
@@ -92,15 +98,15 @@ services:
     networks:
       - appnet
     environment:
-      POSTGRES_USER: historias_user
-      POSTGRES_PASSWORD: historias_pass
-      POSTGRES_DB: historias_clinicas
+      POSTGRES_USER: ${POSTGRES_USER:-historias_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-historias_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-historias_clinicas}
     ports:
       - "5433:5432"  # Expose on port 5433 to avoid conflict with local PostgreSQL
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U historias_user -d historias_clinicas"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-historias_user} -d ${POSTGRES_DB:-historias_clinicas}"]
       interval: 10s
       timeout: 5s
       retries: 5
