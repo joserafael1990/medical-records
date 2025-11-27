@@ -60,6 +60,7 @@ def decrypt_consultation_data(consultation: MedicalRecord, decrypt_fn: callable)
         "primary_diagnosis": consultation.primary_diagnosis,
         "secondary_diagnoses": consultation.secondary_diagnoses,
         "treatment_plan": consultation.treatment_plan,
+        "follow_up_instructions": consultation.follow_up_instructions,
         "laboratory_results": consultation.laboratory_results,
         "notes": consultation.notes
     }

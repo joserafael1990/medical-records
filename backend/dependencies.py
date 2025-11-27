@@ -39,3 +39,21 @@ async def get_current_user(
             detail="Not authenticated",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+def require_valid_license_for_doctor(
+    current_user: Person = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Person:
+    """Dependency to require valid license for doctors"""
+    from services.license_service import LicenseService
+    
+    # Admins are exempt
+    if current_user.person_type == 'admin':
+        return current_user
+    
+    # Only validate for doctors
+    if current_user.person_type == 'doctor':
+        LicenseService.require_valid_license(db, current_user.id)
+    
+    return current_user

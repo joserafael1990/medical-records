@@ -293,6 +293,7 @@ class MedicalDataEncryption:
         'primary_diagnosis',  # Diagnóstico principal
         'secondary_diagnoses',  # Diagnósticos secundarios
         'treatment_plan',  # Plan de tratamiento
+        'follow_up_instructions',  # Instrucciones de seguimiento
         'prescribed_medications',  # Medicamentos prescritos
         'notes',  # Notas adicionales
     ]
@@ -313,7 +314,8 @@ class MedicalDataEncryption:
         high_security_fields = [
             'chief_complaint', 'history_present_illness', 'family_history',
             'personal_pathological_history', 'physical_examination',
-            'primary_diagnosis', 'treatment_plan', 'prescribed_medications'
+            'primary_diagnosis', 'treatment_plan', 'follow_up_instructions',
+            'prescribed_medications'
         ]
         
         # Datos personales sensibles - cifrado medio

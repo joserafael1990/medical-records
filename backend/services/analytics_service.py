@@ -349,21 +349,29 @@ class AnalyticsService:
         if total_scheduled == 0:
             return {
                 "totalScheduled": 0,
+                "confirmedAppointments": 0,
                 "completedConsultations": 0,
                 "cancelledByDoctor": 0,
                 "cancelledByPatient": 0,
-                "pending": 0,
                 "percentages": {
+                    "confirmed": 0,
                     "completed": 0,
                     "cancelledByDoctor": 0,
-                    "cancelledByPatient": 0,
-                    "pending": 0
+                    "cancelledByPatient": 0
                 },
                 "sankeyData": {
                     "nodes": [],
                     "links": []
                 }
             }
+        
+        # Confirmed appointments (status='confirmada')
+        confirmed_appointments = db.query(func.count(Appointment.id)).filter(
+            Appointment.doctor_id == doctor_id,
+            Appointment.status == 'confirmada',
+            func.date(Appointment.appointment_date) >= date_from,
+            func.date(Appointment.appointment_date) <= date_to
+        ).scalar() or 0
         
         # Completed consultations (has medical_record within 1 hour of appointment)
         completed_consultations = db.query(func.count(func.distinct(Appointment.id))).join(
@@ -403,66 +411,88 @@ class AnalyticsService:
             func.date(Appointment.appointment_date) <= date_to
         ).scalar() or 0
         
-        pending = db.query(func.count(Appointment.id)).filter(
-            Appointment.doctor_id == doctor_id,
-            Appointment.status == 'por_confirmar',
-            func.date(Appointment.appointment_date) >= date_from,
-            func.date(Appointment.appointment_date) <= date_to
-        ).scalar() or 0
-        
-        # Calculate percentages
+        # Calculate percentages based on total scheduled
         percentages = {
-            "completed": round((completed_consultations / total_scheduled) * 100, 2),
-            "cancelledByDoctor": round((cancelled_by_doctor / total_scheduled) * 100, 2),
-            "cancelledByPatient": round((cancelled_by_patient / total_scheduled) * 100, 2),
-            "pending": round((pending / total_scheduled) * 100, 2)
+            "confirmed": round((confirmed_appointments / total_scheduled) * 100, 2) if total_scheduled > 0 else 0,
+            "completed": round((completed_consultations / total_scheduled) * 100, 2) if total_scheduled > 0 else 0,
+            "cancelledByDoctor": round((cancelled_by_doctor / total_scheduled) * 100, 2) if total_scheduled > 0 else 0,
+            "cancelledByPatient": round((cancelled_by_patient / total_scheduled) * 100, 2) if total_scheduled > 0 else 0
         }
         
-        # Build Sankey data structure
+        # Calculate total cancelled
+        total_cancelled = cancelled_by_doctor + cancelled_by_patient
+        cancelled_percentage = round((total_cancelled / total_scheduled) * 100, 2) if total_scheduled > 0 else 0
+        
+        # Calculate percentage from confirmed to completed
+        confirmed_to_completed_pct = round((completed_consultations / confirmed_appointments) * 100, 2) if confirmed_appointments > 0 else 0
+        
+        # Calculate percentages from cancelled to doctor/patient
+        cancelled_to_doctor_pct = round((cancelled_by_doctor / total_cancelled) * 100, 2) if total_cancelled > 0 else 0
+        cancelled_to_patient_pct = round((cancelled_by_patient / total_cancelled) * 100, 2) if total_cancelled > 0 else 0
+        
+        # Build Sankey data structure with funnel stages
         nodes = [
             {"id": "Citas Agendadas", "label": "Citas Agendadas"},
-            {"id": "Consultas Completadas", "label": "Consultas Completadas"},
+            {"id": "Citas Confirmadas", "label": "Citas Confirmadas"},
+            {"id": "Consultas", "label": "Consultas"},
+            {"id": "Citas Canceladas", "label": "Citas Canceladas"},
             {"id": "Canceladas por Médico", "label": "Canceladas por Médico"},
-            {"id": "Canceladas por Paciente", "label": "Canceladas por Paciente"},
-            {"id": "Pacientes", "label": "Pacientes"}
+            {"id": "Canceladas por Paciente", "label": "Canceladas por Paciente"}
         ]
         
         links = []
-        if completed_consultations > 0:
-            links.append({
-                "source": "Citas Agendadas",
-                "target": "Consultas Completadas",
-                "value": completed_consultations,
-                "percentage": percentages["completed"]
-            })
-        if cancelled_by_doctor > 0:
-            links.append({
-                "source": "Citas Agendadas",
-                "target": "Canceladas por Médico",
-                "value": cancelled_by_doctor,
-                "percentage": percentages["cancelledByDoctor"]
-            })
-        if cancelled_by_patient > 0:
-            links.append({
-                "source": "Citas Agendadas",
-                "target": "Canceladas por Paciente",
-                "value": cancelled_by_patient,
-                "percentage": percentages["cancelledByPatient"]
-            })
-        if pending > 0:
-            links.append({
-                "source": "Citas Agendadas",
-                "target": "Pacientes",
-                "value": pending,
-                "percentage": percentages["pending"]
-            })
+        
+        # Flow: Agendadas -> Confirmadas
+        # Always create link with actual value (even if 0) to maintain funnel structure
+        links.append({
+            "source": "Citas Agendadas",
+            "target": "Citas Confirmadas",
+            "value": confirmed_appointments,
+            "percentage": percentages["confirmed"]
+        })
+        
+        # Flow: Confirmadas -> Consultas
+        # Always create link with actual value (even if 0) to maintain funnel structure
+        links.append({
+            "source": "Citas Confirmadas",
+            "target": "Consultas",
+            "value": completed_consultations,
+            "percentage": confirmed_to_completed_pct
+        })
+        
+        # Flow: Agendadas -> Citas Canceladas
+        # Always create link with actual value (even if 0) to maintain funnel structure
+        links.append({
+            "source": "Citas Agendadas",
+            "target": "Citas Canceladas",
+            "value": total_cancelled,
+            "percentage": cancelled_percentage
+        })
+        
+        # Flow: Citas Canceladas -> Canceladas por Médico
+        # Always create link with actual value (even if 0) to maintain funnel structure
+        links.append({
+            "source": "Citas Canceladas",
+            "target": "Canceladas por Médico",
+            "value": cancelled_by_doctor,
+            "percentage": cancelled_to_doctor_pct
+        })
+        
+        # Flow: Citas Canceladas -> Canceladas por Paciente
+        # Always create link with actual value (even if 0) to maintain funnel structure
+        links.append({
+            "source": "Citas Canceladas",
+            "target": "Canceladas por Paciente",
+            "value": cancelled_by_patient,
+            "percentage": cancelled_to_patient_pct
+        })
         
         return {
             "totalScheduled": total_scheduled,
+            "confirmedAppointments": confirmed_appointments,
             "completedConsultations": completed_consultations,
             "cancelledByDoctor": cancelled_by_doctor,
             "cancelledByPatient": cancelled_by_patient,
-            "pending": pending,
             "percentages": percentages,
             "sankeyData": {
                 "nodes": nodes,

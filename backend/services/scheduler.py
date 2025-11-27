@@ -4,9 +4,11 @@ Background scheduler for automatic WhatsApp appointment reminders.
 import asyncio
 from typing import Optional
 from sqlalchemy.orm import joinedload
+from sqlalchemy import func
+from datetime import datetime
 
 from database import SessionLocal, Appointment, AppointmentReminder
-from appointment_service import AppointmentService
+from appointment_service import AppointmentService, now_cdmx
 from logger import get_logger
 
 
@@ -25,10 +27,14 @@ class AutoReminderScheduler:
                 
                 # NEW: Query individual reminders instead of appointments
                 # Get all enabled reminders that haven't been sent yet
+                # Exclude cancelled appointments - no reminders should be sent for cancelled appointments
+                # Exclude appointments that have already passed - no point in sending reminders for past appointments
+                now = now_cdmx().replace(tzinfo=None)  # Get current time in CDMX (naive datetime for comparison)
                 reminders = db.query(AppointmentReminder).join(Appointment).filter(
                     AppointmentReminder.enabled == True,
                     AppointmentReminder.sent == False,
-                    Appointment.status == 'por_confirmar'
+                    Appointment.status.in_(['por_confirmar', 'confirmada']),  # Only allow reminders for pending and confirmed, exclude cancelled
+                    Appointment.appointment_date > now  # Only include appointments that haven't passed yet
                 ).options(
                     # Load appointment and related data needed for sending reminders
                     joinedload(AppointmentReminder.appointment).joinedload(Appointment.patient),
@@ -36,11 +42,7 @@ class AutoReminderScheduler:
                     joinedload(AppointmentReminder.appointment).joinedload(Appointment.office)
                 ).all()
                 
-                api_logger.debug(
-                    f"🔍 Checking {len(reminders)} reminders",
-                    extra={"reminder_count": len(reminders)}
-                )
-                
+                # Check reminders (only log when actually sending)
                 for reminder in reminders:
                     appointment = reminder.appointment
                     if not appointment:
@@ -50,19 +52,7 @@ class AutoReminderScheduler:
                         )
                         continue
                     
-                    api_logger.debug(
-                        "🔍 Checking reminder",
-                        extra={
-                            "reminder_id": reminder.id,
-                            "appointment_id": appointment.id,
-                            "reminder_number": reminder.reminder_number,
-                            "offset_minutes": reminder.offset_minutes,
-                            "enabled": reminder.enabled,
-                            "sent": reminder.sent,
-                            "appointment_status": appointment.status,
-                            "appointment_date": appointment.appointment_date.isoformat() if appointment.appointment_date else None
-                        }
-                    )
+                    # Check reminder (only log when actually sending)
                     
                     if appointment and AppointmentService.should_send_reminder_by_id(reminder, appointment):
                         api_logger.info(
@@ -94,9 +84,12 @@ class AutoReminderScheduler:
                 
                 # LEGACY: Also check old single-reminder system for backward compatibility
                 # This can be removed after migration is complete
+                # Exclude cancelled appointments - no reminders should be sent for cancelled appointments
+                # Exclude appointments that have already passed - no point in sending reminders for past appointments
                 legacy_candidates = db.query(Appointment).filter(
                     Appointment.auto_reminder_enabled == True,
-                    Appointment.status == 'por_confirmar'
+                    Appointment.status.in_(['por_confirmar', 'confirmada']),  # Only allow reminders for pending and confirmed, exclude cancelled
+                    Appointment.appointment_date > now  # Only include appointments that haven't passed yet
                 ).all()
                 for apt in legacy_candidates:
                     # Only process if no reminders exist (old system)

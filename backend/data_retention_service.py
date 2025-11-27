@@ -101,10 +101,12 @@ def get_retention_stats(db: Session, doctor_id: Optional[int] = None) -> Dict[st
         FROM medical_records
         """
         
+        params = {}
         if doctor_id:
-            query += f" WHERE doctor_id = {doctor_id}"
+            query += " WHERE doctor_id = :doctor_id"
+            params["doctor_id"] = doctor_id
         
-        result = db.execute(text(query)).fetchone()
+        result = db.execute(text(query), params).fetchone()
         
         return {
             "active_records": result[0] or 0,
@@ -166,14 +168,16 @@ def get_expiring_records(
             AND retention_end_date <= CURRENT_TIMESTAMP + INTERVAL ':days days'
         """
         
+        params = {"days": days_threshold, "limit": limit}
         if doctor_id:
-            query += f" AND doctor_id = {doctor_id}"
+            query += " AND doctor_id = :doctor_id"
+            params["doctor_id"] = doctor_id
         
         query += " ORDER BY retention_end_date ASC LIMIT :limit"
         
         result = db.execute(
             text(query),
-            {"days": days_threshold, "limit": limit}
+            params
         ).fetchall()
         
         return [
