@@ -76,7 +76,7 @@ export interface UseConsultationFormReturn {
   error: string | null;
   setError: (error: string | null) => void;
   currentConsultationId: number | null;
-  
+
   // Patient state
   selectedPatient: Patient | null;
   patientEditData: PatientFormData | null;
@@ -84,49 +84,49 @@ export interface UseConsultationFormReturn {
   setPersonalDocument: (doc: { document_id: number | null; document_value: string; document_name?: string }) => void;
   showAdvancedPatientData: boolean;
   setShowAdvancedPatientData: (show: boolean) => void;
-  
+
   // Appointment state
   selectedAppointment: any | null;
   appointmentOffice: any | null;
   availableAppointments: any[];
-  
+
   // Catalog data
   countries: any[];
   states: any[];
   birthStates: any[];
   emergencyRelationships: any[];
   appointmentPatients: any[];
-  
+
   // Previous studies (from hook)
   patientPreviousStudies: ClinicalStudy[];
   loadingPreviousStudies: boolean;
   patientHasPreviousConsultations: boolean;
-  
+
   // Handlers
   handleChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | { name?: string; value: unknown }>) => void;
   handleDateChange: (date: Date | null) => void;
   handlePatientChange: (patient: Patient | null) => Promise<void>;
   handleAppointmentChange: (appointment: any | null) => Promise<void>;
   handleSubmit: () => Promise<void>;
-  
+
   // Patient data handlers
   handlePatientDataChange: (field: keyof any, value: any) => void;
   handlePatientDataChangeWrapper: (field: string, value: any) => void;
   handleCountryChange: (field: 'address_country_id' | 'birth_country_id', countryId: string) => Promise<void>;
   getPatientData: (field: string) => any;
-  
+
   // Study handlers (delegated to previous studies hook)
   handleUploadStudyFile: (studyId: string, file: File) => Promise<void>;
   handleUpdateStudyStatus: (studyId: string, status: string) => Promise<void>;
   handleViewStudyFile: (studyId: string) => Promise<void>;
   handleViewPreviousConsultations: () => void;
-  
+
   // Diagnosis handlers
   handleAddPrimaryDiagnosis: (diagnosis: DiagnosisCatalog) => void;
   handleRemovePrimaryDiagnosis: (diagnosisId: string) => void;
   handleAddSecondaryDiagnosis: (diagnosis: DiagnosisCatalog) => void;
   handleRemoveSecondaryDiagnosis: (diagnosisId: string) => void;
-  
+
   // Utilities
   shouldShowFirstTimeFields: () => boolean;
   shouldShowPreviousConsultationsButton: () => boolean;
@@ -175,7 +175,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
 
   const { showSuccess, showError } = useToast();
   const isEditing = !!consultation;
-  
+
   // Use previous studies hook
   const previousStudiesHook = usePatientPreviousStudies();
 
@@ -199,7 +199,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
     follow_up_instructions: '',
     therapeutic_plan: '',
     interconsultations: '',
-    doctor_name: doctorProfile?.first_name && doctorProfile?.last_name 
+    doctor_name: doctorProfile?.first_name && doctorProfile?.last_name
       ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name} ${doctorProfile.last_name}`.trim()
       : '',
     doctor_professional_license: doctorProfile?.professional_license || '',
@@ -219,17 +219,17 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
   const [personalDocument, setPersonalDocument] = useState<{ document_id: number | null; document_value: string; document_name?: string }>(
     mapPatientDocument(null)
   );
-  
+
   // Track previous personalDocument values to avoid unnecessary updates
   const prevPersonalDocumentRef = useRef<{ document_id: number | null; document_value: string; document_name?: string }>(personalDocument);
-  
+
   useEffect(() => {
     // Only update if values actually changed
-    const hasChanged = 
+    const hasChanged =
       prevPersonalDocumentRef.current.document_id !== personalDocument.document_id ||
       prevPersonalDocumentRef.current.document_value !== personalDocument.document_value ||
       prevPersonalDocumentRef.current.document_name !== personalDocument.document_name;
-    
+
     if (hasChanged) {
       prevPersonalDocumentRef.current = personalDocument;
       setFormData(prev => {
@@ -272,18 +272,18 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
     // IMPORTANTE: Las citas del mismo día deben estar disponibles aunque ya haya pasado la hora
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Reset to start of day
-    
+
     return (appointments || []).filter((appointment: any) => {
       // Exclude cancelled appointments
       if (appointment.status === 'cancelled' || appointment.status === 'cancelada') {
         return false;
       }
       // Include confirmed, pending confirmation, and completed appointments
-      const validStatus = appointment.status === 'confirmada' || 
-                         appointment.status === 'por_confirmar' || 
-                         appointment.status === 'completada';
+      const validStatus = appointment.status === 'confirmada' ||
+        appointment.status === 'por_confirmar' ||
+        appointment.status === 'completada';
       const correctDoctor = appointment.doctor_id === doctorProfile?.id;
-      
+
       // IMPORTANTE: Solo comparar la fecha, no la hora
       // Las citas del mismo día deben estar disponibles aunque ya haya pasado la hora
       if (appointment.appointment_date) {
@@ -292,7 +292,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
           // Reset to start of day for comparison (only compare dates, not times)
           const appointmentDateOnly = new Date(appointmentDate);
           appointmentDateOnly.setHours(0, 0, 0, 0);
-          
+
           // Only include appointments that are today or in the future (by date, not time)
           if (appointmentDateOnly < today) {
             return false;
@@ -303,7 +303,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
           return false;
         }
       }
-      
+
       return validStatus && correctDoctor;
     });
   }, [appointments, doctorProfile?.id]);
@@ -352,9 +352,9 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
       if (
         resolvedConsultation.id &&
         (typeof resolvedConsultation.follow_up_instructions === 'undefined' ||
-         resolvedConsultation.follow_up_instructions === null ||
-         !resolvedConsultation.patient_id ||
-         !resolvedConsultation.date)
+          resolvedConsultation.follow_up_instructions === null ||
+          !resolvedConsultation.patient_id ||
+          !resolvedConsultation.date)
       ) {
         try {
           const fullConsultation = await apiService.consultations.getConsultationById(
@@ -370,8 +370,8 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
             patient_id: fullConsultation.patient_id || resolvedConsultation.patient_id,
             date: fullConsultation.date || resolvedConsultation.date,
             // Ensure follow_up_instructions is loaded if it was missing
-            follow_up_instructions: fullConsultation.follow_up_instructions !== undefined 
-              ? fullConsultation.follow_up_instructions 
+            follow_up_instructions: fullConsultation.follow_up_instructions !== undefined
+              ? fullConsultation.follow_up_instructions
               : resolvedConsultation.follow_up_instructions
           };
         } catch (error) {
@@ -391,7 +391,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
         return;
       }
       setCurrentConsultationId(finalConsultationId);
-      
+
       // Debug log to check consultation and patient data
       logger.info('📋 Consultation data loaded', {
         consultationId: finalConsultationId,
@@ -405,7 +405,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
       // Use current formData as base to avoid recreating from initialFormData which may change
       // Ensure patient_id is set from multiple sources
       const finalPatientId = resolvedConsultation.patient_id || formData.patient_id || consultation?.patient_id || '';
-      
+
       // Update formData first
       setFormData(prev => ({
         ...prev,
@@ -429,7 +429,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
         therapeutic_plan: resolvedConsultation.therapeutic_plan || '',
         laboratory_results: resolvedConsultation.laboratory_results || '',
         interconsultations: resolvedConsultation.interconsultations || '',
-        doctor_name: resolvedConsultation.doctor_name || doctorProfile?.first_name && doctorProfile?.last_name 
+        doctor_name: resolvedConsultation.doctor_name || doctorProfile?.first_name && doctorProfile?.last_name
           ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name} ${doctorProfile.last_name}`.trim()
           : '',
         doctor_professional_license: resolvedConsultation.doctor_professional_license || doctorProfile?.professional_license || '',
@@ -441,11 +441,11 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
       const loadPatientData = async () => {
         // Use finalPatientId which we just set in formData, or fallback to other sources
         // Try multiple sources to ensure we get the patient_id
-        const patientId = finalPatientId || 
-                         resolvedConsultation.patient_id || 
-                         consultation?.patient_id ||
-                         formData.patient_id;
-        
+        const patientId = finalPatientId ||
+          resolvedConsultation.patient_id ||
+          consultation?.patient_id ||
+          formData.patient_id;
+
         logger.info('🔍 Loading patient data', {
           consultationId: finalConsultationId,
           patient_id_from_resolved: resolvedConsultation.patient_id,
@@ -454,7 +454,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
           finalPatientId: finalPatientId,
           final_patient_id: patientId
         }, 'api');
-        
+
         if (patientId) {
           try {
             // Convert to number if it's a string
@@ -467,7 +467,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
               }, 'api');
               return;
             }
-            
+
             const patientData = await apiService.patients.getPatientById(numericPatientId);
             if (!isMounted) return;
             logger.info('✅ Patient data fetched successfully', {
@@ -595,7 +595,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
       clinicalStudiesHook.fetchStudies(String(finalConsultationId));
       vitalSignsHook.fetchConsultationVitalSigns(String(finalConsultationId));
       prescriptionsHook.fetchPrescriptions(String(finalConsultationId));
-      
+
       if (resolvedConsultation.appointment_id) {
         loadOfficeForConsultation(resolvedConsultation.appointment_id);
       } else {
@@ -681,7 +681,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
         therapeutic_plan: '',
         laboratory_results: '',
         interconsultations: '',
-        doctor_name: doctorProfile?.first_name && doctorProfile?.last_name 
+        doctor_name: doctorProfile?.first_name && doctorProfile?.last_name
           ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name} ${doctorProfile.last_name}`.trim()
           : '',
         doctor_professional_license: doctorProfile?.professional_license || '',
@@ -716,11 +716,11 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
   useEffect(() => {
     const wasOpen = prevClinicalDialogOpen.current;
     const isOpen = clinicalStudiesHook.clinicalStudyDialogOpen;
-    
+
     if (isEditing && consultation?.id && wasOpen && !isOpen) {
       clinicalStudiesHook.fetchStudies(String(consultation.id));
     }
-    
+
     prevClinicalDialogOpen.current = isOpen;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clinicalStudiesHook.clinicalStudyDialogOpen, isEditing, consultation?.id]);
@@ -730,11 +730,11 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
   useEffect(() => {
     const wasOpen = prevVitalSignDialogOpen.current;
     const isOpen = vitalSignsHook.vitalSignDialogOpen;
-    
+
     if (isEditing && consultation?.id && wasOpen && !isOpen) {
       vitalSignsHook.fetchConsultationVitalSigns(String(consultation.id));
     }
-    
+
     prevVitalSignDialogOpen.current = isOpen;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vitalSignsHook.vitalSignDialogOpen, isEditing, consultation?.id]);
@@ -749,13 +749,13 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
         ]);
         setCountries(countriesData);
         setEmergencyRelationships(relationshipsData);
-        
+
         vitalSignsHook.fetchAvailableVitalSigns();
 
         if (appointments && appointments.length > 0) {
           const patientIds = (appointments || []).map((apt: any) => apt.patient_id).filter((id: any) => id);
           const allPatients = await apiService.patients.getPatients();
-          const appointmentPatients = (allPatients || []).filter((patient: any) => 
+          const appointmentPatients = (allPatients || []).filter((patient: any) =>
             patientIds.includes(patient.id)
           );
           setAppointmentPatients(appointmentPatients);
@@ -789,7 +789,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
             const addressStatesData = await apiService.catalogs.getStates(parseInt(patientEditData.address_country_id));
             setStates(addressStatesData);
           }
-          
+
           if (patientEditData.birth_country_id) {
             const birthStatesData = await apiService.catalogs.getStates(parseInt(patientEditData.birth_country_id));
             setBirthStates(birthStatesData);
@@ -836,7 +836,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
   const handlePatientChange = useCallback(async (patient: Patient | null) => {
     setSelectedPatient(patient);
     setFormData((prev: ConsultationFormData) => ({ ...prev, patient_id: patient?.id || '' }));
-    
+
     if (patient) {
       try {
         const fullPatientData = await apiService.patients.getPatientById(patient.id);
@@ -853,7 +853,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
         } else {
           setPersonalDocument(mapPatientDocument(null));
         }
-        
+
         await Promise.all([
           previousStudiesHook.checkPatientPreviousConsultations(patient.id),
           previousStudiesHook.loadPatientPreviousStudies(patient.id)
@@ -866,9 +866,9 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
     } else {
       setPatientEditData(null);
       setPersonalDocument(mapPatientDocument(null));
-      previousStudiesHook.loadPatientPreviousStudies(0).catch(() => {}); // Clear studies
+      previousStudiesHook.loadPatientPreviousStudies(0).catch(() => { }); // Clear studies
     }
-    
+
     if (errors.patient_id) {
       setErrors((prev: { [key: string]: string }) => {
         const newErrors = { ...prev };
@@ -880,14 +880,14 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
 
   const handleAppointmentChange = useCallback(async (appointment: any | null) => {
     setSelectedAppointment(appointment);
-    
+
     if (appointment) {
       const patient = appointment.patient || (patients || []).find((p: any) => p.id === appointment.patient_id);
-      
+
       if (patient) {
         setSelectedPatient(patient);
         setFormData((prev: ConsultationFormData) => ({ ...prev, patient_id: patient.id.toString(), appointment_id: appointment.id.toString() }));
-        
+
         if (appointment.office_id) {
           try {
             const officeData = await apiService.offices.getOffice(appointment.office_id);
@@ -899,7 +899,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
         } else {
           setAppointmentOffice(null);
         }
-        
+
         try {
           const fullPatientData = await apiService.patients.getPatientById(patient.id);
           setPatientEditData(fullPatientData);
@@ -916,7 +916,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
             setPersonalDocument(mapPatientDocument(null));
           }
           setSelectedPatient(fullPatientData);
-          
+
           logger.debug('Loading patient previous consultations and studies', { patientId: patient.id }, 'api');
           await Promise.all([
             previousStudiesHook.checkPatientPreviousConsultations(patient.id),
@@ -963,7 +963,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
         setAppointmentOffice(null);
         return;
       }
-      
+
       const offices = await apiService.offices.getOffices(doctorId);
       if (offices && offices.length > 0) {
         const defaultOffice = offices.find(office => office.is_active) || offices[0];
@@ -987,7 +987,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
 
   const handleCountryChange = useCallback(async (field: 'address_country_id' | 'birth_country_id', countryId: string) => {
     handlePatientDataChange(field, countryId);
-    
+
     if (countryId) {
       try {
         const statesData = await apiService.catalogs.getStates(parseInt(countryId));
@@ -1031,7 +1031,8 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
 
   const handleViewPreviousConsultations = useCallback(() => {
     if (selectedPatient) {
-      const patientName = `${selectedPatient.first_name} ${selectedPatient.paternal_surname}`.trim();
+      // Use the new 'name' field which contains the full name
+      const patientName = selectedPatient.name || '';
       previousStudiesHook.handleViewPreviousConsultations(selectedPatient.id, patientName);
     }
   }, [selectedPatient, previousStudiesHook]);
@@ -1094,7 +1095,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
   // Submit handler
   const handleSubmit = useCallback(async () => {
     setError(null);
-    
+
     // Track form validation attempt
     try {
       const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
@@ -1102,7 +1103,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
     } catch (error) {
       // Silently fail
     }
-    
+
     if (!consultation) {
       if (!selectedAppointment) {
         setError('Por favor, selecciona una cita para crear la consulta');
@@ -1178,9 +1179,9 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
           ...patientBaseData,
           documents: personalDocument.document_id
             ? [{
-                document_id: personalDocument.document_id,
-                document_value: personalDocument.document_value.trim()
-              }]
+              document_id: personalDocument.document_id,
+              document_value: personalDocument.document_value.trim()
+            }]
             : []
         };
         await apiService.patients.updatePatient(selectedPatient.id.toString(), patientDataWithDocument);
@@ -1214,10 +1215,10 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
             ...prev,
             personal_documents: personalDocument.document_id
               ? [{
-                  document_id: personalDocument.document_id,
-                  document_value: personalDocument.document_value.trim(),
-                  document_name: personalDocument.document_name || consultation?.patient_document_name
-                }]
+                document_id: personalDocument.document_id,
+                document_value: personalDocument.document_value.trim(),
+                document_name: personalDocument.document_name || consultation?.patient_document_name
+              }]
               : []
           };
         });
@@ -1236,7 +1237,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
       } else {
         consultationType = consultation.consultation_type || 'Seguimiento';
       }
-      
+
       const finalFormData = {
         ...formData,
         patient_id: finalPatientId?.toString() || '',
@@ -1246,18 +1247,18 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
         primary_diagnoses: formData.primary_diagnoses,
         secondary_diagnoses_list: formData.secondary_diagnoses_list
       };
-      
+
       const createdConsultation = await onSubmit(finalFormData);
-      
+
       if (createdConsultation?.id) {
         setCurrentConsultationId(createdConsultation.id);
       }
 
       if ((clinicalStudiesHook.studies || []).length > 0 && createdConsultation?.id) {
-        const temporaryStudies = (clinicalStudiesHook.studies || []).filter(study => 
+        const temporaryStudies = (clinicalStudiesHook.studies || []).filter(study =>
           study.id.toString().startsWith('temp_')
         );
-        
+
         for (const study of temporaryStudies) {
           const studyData = {
             ...study,
@@ -1305,17 +1306,17 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
         await prescriptionsHook.fetchPrescriptions(String(createdConsultation.id));
         prescriptionsHook.clearTemporaryPrescriptions();
       }
-      
+
       if (isEditing) {
         showSuccess('Consulta actualizada exitosamente', '¡Edición completada!');
       } else {
         showSuccess('Consulta creada exitosamente', '¡Creación completada!');
       }
-      
+
       setTimeout(() => {
         onSuccess?.();
       }, 1000);
-      
+
     } catch (err: any) {
       logger.error('Error saving consultation', err, 'api');
       setError(err.message || 'Error al guardar consulta');
@@ -1344,7 +1345,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
   const shouldShowFirstTimeFields = useCallback((): boolean => {
     const isEditingFirstTimeConsultation = consultation && consultation.consultation_type === 'Primera vez';
     const hasFirstTimeAppointment = selectedAppointment && (
-      selectedAppointment.consultation_type === 'Primera vez' || 
+      selectedAppointment.consultation_type === 'Primera vez' ||
       selectedAppointment.appointment_type === 'Primera vez' ||
       selectedAppointment.appointment_type === 'primera vez' ||
       selectedAppointment.appointment_type === 'first_visit'
@@ -1360,13 +1361,13 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
       selectedAppointment.appointment_type === 'follow_up' ||
       (selectedAppointment.appointment_type_id && selectedAppointment.appointment_type_id !== 1)
     );
-    
+
     const isExistingPatientSelected = selectedPatient && selectedPatient.id;
-    
+
     if (isFollowUpAppointment && isExistingPatientSelected) {
       return true;
     }
-    
+
     return Boolean(isExistingPatientSelected && previousStudiesHook.patientHasPreviousConsultations);
   }, [selectedAppointment, selectedPatient, previousStudiesHook.patientHasPreviousConsultations]);
 
@@ -1383,7 +1384,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
     error,
     setError,
     currentConsultationId,
-    
+
     // Patient state
     selectedPatient,
     patientEditData,
@@ -1391,49 +1392,49 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
     setPersonalDocument,
     showAdvancedPatientData,
     setShowAdvancedPatientData,
-    
+
     // Appointment state
     selectedAppointment,
     appointmentOffice,
     availableAppointments,
-    
+
     // Catalog data
     countries,
     states,
     birthStates,
     emergencyRelationships,
     appointmentPatients,
-    
+
     // Previous studies
     patientPreviousStudies: previousStudiesHook.patientPreviousStudies,
     loadingPreviousStudies: previousStudiesHook.loadingPreviousStudies,
     patientHasPreviousConsultations: previousStudiesHook.patientHasPreviousConsultations,
-    
+
     // Handlers
     handleChange,
     handleDateChange,
     handlePatientChange,
     handleAppointmentChange,
     handleSubmit,
-    
+
     // Patient data handlers
     handlePatientDataChange,
     handlePatientDataChangeWrapper,
     handleCountryChange,
     getPatientData,
-    
+
     // Study handlers
     handleUploadStudyFile,
     handleUpdateStudyStatus,
     handleViewStudyFile,
     handleViewPreviousConsultations,
-    
+
     // Diagnosis handlers
     handleAddPrimaryDiagnosis,
     handleRemovePrimaryDiagnosis,
     handleAddSecondaryDiagnosis,
     handleRemoveSecondaryDiagnosis,
-    
+
     // Utilities
     shouldShowFirstTimeFields,
     shouldShowPreviousConsultationsButton,
