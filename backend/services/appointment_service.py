@@ -53,7 +53,7 @@ class AppointmentService:
         doctor_id: int
     ):
         """Apply date filters to the calendar query."""
-        from consultation_service import now_cdmx
+        from services.consultation_service import now_cdmx
         
         if start_date and end_date:
             # Date range query for weekly/monthly views

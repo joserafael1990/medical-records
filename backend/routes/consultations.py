@@ -20,7 +20,7 @@ import schemas
 from utils.audit_utils import serialize_instance
 
 # Import consultation service helpers
-from consultation_service import (
+from services.consultation_service import (
     decrypt_patient_data,
     decrypt_consultation_data,
     format_patient_name,
