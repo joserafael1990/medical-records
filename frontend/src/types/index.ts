@@ -725,3 +725,9 @@ export interface DoctorFormData {
   office_timezone?: string;
   appointment_duration?: string;
 }
+
+export interface TimeSlot {
+  time: string;
+  display: string;
+  duration_minutes: number;
+}
