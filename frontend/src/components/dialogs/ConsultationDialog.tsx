@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -33,10 +33,11 @@ import { VitalSignsDialogs } from './ConsultationDialog/VitalSignsDialogs';
 import { ConsultationSections } from './ConsultationDialog/ConsultationSections';
 import { PrivacyConsentStatusSection } from './ConsultationDialog/PrivacyConsentStatusSection';
 import { useConsultationForm, ConsultationFormData } from '../../hooks/useConsultationForm';
-import { apiService } from '../../services';
-import { logger } from '../../utils/logger';
 import { useDiagnosisCatalog } from '../../hooks/useDiagnosisCatalog';
-import { AmplitudeService } from '../../services/analytics/AmplitudeService';
+import { useClinicalStudiesManager } from '../../hooks/useClinicalStudiesManager';
+import { usePreviousStudiesLoader } from '../../hooks/usePreviousStudiesLoader';
+import { useFollowUpAppointments } from '../../hooks/useFollowUpAppointments';
+import { logger } from '../../utils/logger';
 
 export interface ConsultationDialogProps {
   open: boolean;
@@ -61,27 +62,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   onNewAppointment,
   appointments = []
 }: ConsultationDialogProps) => {
-  const [followUpAppointments, setFollowUpAppointments] = useState<any[]>([]);
-  const nextAppointmentDate = useMemo(() => {
-    if (!followUpAppointments || followUpAppointments.length === 0) {
-      return null;
-    }
-    const withDates = followUpAppointments.filter((appointment) => appointment?.appointment_date);
-    if (withDates.length === 0) {
-      return null;
-    }
-    withDates.sort((a, b) => new Date(a.appointment_date).getTime() - new Date(b.appointment_date).getTime());
-    return withDates[0].appointment_date;
-  }, [followUpAppointments]);
-
-  const lastFetchedPatientRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!open) {
-      lastFetchedPatientRef.current = null;
-      setFollowUpAppointments([]);
-    }
-  }, [open]);
+  // Follow-up appointments management
+  const { followUpAppointments, setFollowUpAppointments, nextAppointmentDate } = useFollowUpAppointments(open);
 
   // Section hooks
   const clinicalStudiesHook = useClinicalStudies();
@@ -109,45 +91,26 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   // Get diagnosis catalog hook for creating new diagnoses
   const diagnosisCatalog = useDiagnosisCatalog();
 
-  // Load previous studies when patient is selected or when dialog opens for editing
-  useEffect(() => {
-    let isMounted = true;
-    let timeoutId: NodeJS.Timeout;
+  // Clinical studies manager hook
+  const clinicalStudiesManager = useClinicalStudiesManager({
+    clinicalStudiesHook,
+    isEditing: formHook.isEditing,
+    consultationId: consultation?.id,
+    selectedPatientId: formHook.selectedPatient?.id,
+    doctorProfile,
+    onError: formHook.setError
+  });
 
-    if (open && formHook.selectedPatient?.id) {
-      const patientId = formHook.selectedPatient.id.toString();
-      
-      // Skip if we already fetched for this patient
-      if (lastFetchedPatientRef.current === formHook.selectedPatient.id) {
-        return;
-      }
-      
-      // Load previous studies for the patient with debounce to avoid rapid successive calls
-      timeoutId = setTimeout(() => {
-        if (isMounted && formHook.selectedPatient?.id) {
-          lastFetchedPatientRef.current = formHook.selectedPatient.id;
-          previousStudiesHook.fetchPatientStudies(patientId).catch((error: any) => {
-            // Ignore 429 errors (rate limiting) - will retry later
-            if (error?.response?.status !== 429) {
-              logger.error('Error loading previous studies', error, 'api');
-            }
-          });
-        }
-      }, 500); // Increased debounce to 500ms
-      
-      return () => {
-        isMounted = false;
-        clearTimeout(timeoutId);
-      };
-    } else if (!open) {
-      previousStudiesHook.clearTemporaryStudies();
-      lastFetchedPatientRef.current = null;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, formHook.selectedPatient?.id, consultation?.id]);
+  // Previous studies loader hook
+  usePreviousStudiesLoader({
+    open,
+    selectedPatientId: formHook.selectedPatient?.id,
+    consultationId: consultation?.id,
+    previousStudiesHook
+  });
 
   // Track consultation form opened
-  React.useEffect(() => {
+  useEffect(() => {
     if (open) {
       try {
         const { trackAmplitudeEvent } = require('../../utils/amplitudeHelper');
@@ -160,65 +123,11 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
     }
   }, [open, consultation]);
 
-  // Don't load previous appointments - only show appointments scheduled during this consultation
-  // The ScheduleAppointmentSection will manage its own state for appointments created in this session
-  useEffect(() => {
-    if (!open) {
-      // Clear appointments when dialog closes
-      setFollowUpAppointments([]);
-      lastFetchedPatientRef.current = null;
-    }
-  }, [open]);
-
   // Auto-scroll to error when it appears
   const { errorRef } = useScrollToErrorInDialog(formHook.error);
 
   const handleClose = () => {
     onClose();
-  };
-
-  // Clinical studies handlers
-  const handleAddStudy = async (studyData: any) => {
-    const consultationIdStr = formHook.isEditing && consultation?.id ? String(consultation.id) : TEMP_IDS.CONSULTATION;
-    const patientId = formHook.selectedPatient?.id?.toString() || TEMP_IDS.PATIENT;
-    const doctorName = doctorProfile?.full_name || `${doctorProfile?.title || 'Dr.'} ${doctorProfile?.first_name || 'Usuario'} ${doctorProfile?.last_name || 'Sistema'}`.trim();
-    
-    if (consultationIdStr === TEMP_IDS.CONSULTATION) {
-      const tempStudy = {
-        id: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        consultation_id: consultationIdStr,
-        patient_id: patientId,
-        study_type: studyData.study_type,
-        study_name: studyData.study_name,
-        ordered_date: studyData.ordered_date,
-        status: studyData.status || 'ordered',
-        urgency: studyData.urgency || 'routine',
-        ordering_doctor: doctorName,
-        clinical_indication: studyData.clinical_indication || '',
-        created_by: '',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      clinicalStudiesHook.addTemporaryStudy(tempStudy);
-    } else {
-      await clinicalStudiesHook.createStudy({
-        ...studyData,
-        ordering_doctor: doctorName
-      });
-      await clinicalStudiesHook.fetchStudies(consultationIdStr);
-    }
-  };
-
-  const handleDeleteStudy = async (studyId: string) => {
-    try {
-      if (studyId.startsWith('temp_')) {
-        clinicalStudiesHook.deleteStudy(studyId);
-      } else {
-        await clinicalStudiesHook.deleteStudy(studyId);
-      }
-    } catch (error) {
-      formHook.setError('Error al eliminar el estudio clínico');
-    }
   };
 
   return (
@@ -239,13 +148,13 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
 
       <DialogContent sx={{ maxHeight: '80vh', overflow: 'auto', p: 3 }}>
         {formHook.error && (
-          <Box 
+          <Box
             ref={errorRef}
             data-testid="error-message"
-            sx={{ 
-              mb: 2, 
-              p: 2, 
-              bgcolor: 'error.main', 
+            sx={{
+              mb: 2,
+              p: 2,
+              bgcolor: 'error.main',
               borderRadius: 1,
               backgroundColor: '#d32f2f !important'
             }}
@@ -255,7 +164,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             </Typography>
           </Box>
         )}
-        
+
         <Box component="form" sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
           {/* Appointment Selection - Only show for new consultations */}
           {!consultation && (
@@ -349,7 +258,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 const consultationIdStr = formHook.isEditing && consultation?.id ? String(consultation.id) : null;
                 const patientId = formHook.selectedPatient?.id?.toString() || '';
                 const doctorName = doctorProfile?.full_name || `${doctorProfile?.title || 'Dr.'} ${doctorProfile?.first_name || 'Usuario'} ${doctorProfile?.last_name || 'Sistema'}`.trim();
-                
+
                 // Create study without consultation_id (or with it if editing existing consultation)
                 const studyToCreate: any = {
                   ...studyData,
@@ -361,7 +270,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   studyToCreate.consultation_id = consultationIdStr;
                 }
                 // Don't include consultation_id at all if it's null/empty
-                
+
                 try {
                   await previousStudiesHook.createStudy(studyToCreate);
                   // Refresh studies
@@ -425,7 +334,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             onAddVitalSign={async (vitalSignData) => {
               const resolvedId = formHook.currentConsultationId || consultation?.id;
               const consultationIdStr = resolvedId ? String(resolvedId) : TEMP_IDS.CONSULTATION;
-              
+
               if (consultationIdStr === TEMP_IDS.CONSULTATION) {
                 const vitalSign = vitalSignsHook.availableVitalSigns.find(vs => vs.id === vitalSignData.vital_sign_id);
                 if (vitalSign) {
@@ -478,8 +387,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             onFollowUpInstructionsChange={formHook.handleChange}
             studies={clinicalStudiesHook.studies}
             studiesLoading={clinicalStudiesHook.isLoading}
-            onAddStudy={handleAddStudy}
-            onDeleteStudy={handleDeleteStudy}
+            onAddStudy={clinicalStudiesManager.handleAddStudy}
+            onDeleteStudy={clinicalStudiesManager.handleDeleteStudy}
             onViewStudyFile={(studyId: number) => {
               const study = clinicalStudiesHook.studies.find(s => String(s.id) === String(studyId));
               if (study && (study as any).file_url) {
@@ -506,7 +415,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       <DialogActions sx={{ p: 2, flexDirection: 'column', gap: 2 }}>
         {/* Print buttons */}
         <PrintButtonsSection
-          show={((prescriptionsHook.prescriptions && prescriptionsHook.prescriptions.length > 0) || 
+          show={((prescriptionsHook.prescriptions && prescriptionsHook.prescriptions.length > 0) ||
             (clinicalStudiesHook.studies && clinicalStudiesHook.studies.length > 0))}
           selectedPatient={formHook.selectedPatient}
           doctorProfile={doctorProfile}
@@ -520,7 +429,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           vitalSigns={vitalSignsHook.getAllVitalSigns()}
           nextAppointmentDate={nextAppointmentDate}
         />
-        
+
         {/* Action buttons */}
         <ConsultationActions
           onClose={handleClose}
