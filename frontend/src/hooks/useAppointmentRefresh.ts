@@ -99,6 +99,12 @@ export const useAppointmentRefresh = ({
                 // Only update if not aborted
                 if (!abortController.signal.aborted) {
                     const data = await fetchAppointmentsForView(agendaView, dateToFetch, apiService.appointments);
+                    console.log('📅 Fetched appointments:', {
+                        count: data?.length || 0,
+                        agendaView,
+                        date: dateToFetch.toISOString(),
+                        sample: data?.[0]
+                    });
                     setAppointments(data || []);
                 }
             } catch (error) {
