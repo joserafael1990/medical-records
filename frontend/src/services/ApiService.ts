@@ -12,6 +12,9 @@ import { WhatsAppService } from './whatsapp/WhatsAppService';
 import { AnalyticsService } from './analytics/AnalyticsService';
 import { GoogleCalendarService } from './google-calendar/GoogleCalendarService';
 import { LicenseService } from './licenses/LicenseService';
+import { HealthService } from './health/HealthService';
+import { TestService } from './test/TestService';
+import { DashboardService } from './dashboard/DashboardService';
 import { logger } from '../utils/logger';
 
 /**
@@ -33,6 +36,9 @@ export class ApiService {
   public avatars: AvatarService;
   public googleCalendar: GoogleCalendarService;
   public licenses: LicenseService;
+  public health: HealthService;
+  public test: TestService;
+  public dashboard: DashboardService;
 
   constructor() {
     this.auth = new AuthService();
@@ -49,18 +55,14 @@ export class ApiService {
     this.avatars = new AvatarService();
     this.googleCalendar = new GoogleCalendarService();
     this.licenses = new LicenseService();
+    this.health = new HealthService();
+    this.test = new TestService();
+    this.dashboard = new DashboardService();
   }
 
   // Convenience methods for common operations
   async getDashboardData(): Promise<any> {
-    try {
-      // Use appointments service's api instance (all services share the same base)
-      const response = await this.appointments.api.get<any>('/api/dashboard');
-      return response.data;
-    } catch (error) {
-      logger.error('Failed to fetch dashboard data', error, 'api');
-      throw error;
-    }
+    return this.dashboard.getDashboardData();
   }
 
   async searchAll(query: string): Promise<{
@@ -126,4 +128,7 @@ export { OfficeService } from './offices/OfficeService';
 export { WhatsAppService } from './whatsapp/WhatsAppService';
 export { AnalyticsService } from './analytics/AnalyticsService';
 export { AvatarService } from './avatars/AvatarService';
+export { HealthService } from './health/HealthService';
+export { TestService } from './test/TestService';
+export { DashboardService } from './dashboard/DashboardService';
 export type { DashboardMetrics } from './analytics/AnalyticsService';

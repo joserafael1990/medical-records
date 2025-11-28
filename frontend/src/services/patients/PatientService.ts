@@ -15,12 +15,22 @@ export class PatientService extends ApiBase {
     }
   }
 
-  async getPatientById(id: string): Promise<CompletePatientData> {
+  async getPatientById(id: string): Promise<Patient> {
     try {
-      const response = await this.api.get<CompletePatientData>(`/api/patients/${id}`);
+      const response = await this.api.get<Patient>(`/api/patients/${id}`);
       return response.data;
     } catch (error: any) {
       logger.error('Failed to fetch patient', error, 'api');
+      throw error;
+    }
+  }
+
+  async getCompletePatientInfo(id: string): Promise<CompletePatientData> {
+    try {
+      const response = await this.api.get<CompletePatientData>(`/api/patients/${id}/complete`);
+      return response.data;
+    } catch (error: any) {
+      logger.error('Failed to fetch complete patient info', error, 'api');
       throw error;
     }
   }
@@ -113,7 +123,7 @@ export class PatientService extends ApiBase {
   async importPatients(file: File): Promise<{ success: number; errors: any[] }> {
     try {
       logger.debug('Importing patients from file', { fileName: file.name }, 'api');
-      
+
       const formData = new FormData();
       formData.append('file', file);
 
@@ -122,7 +132,7 @@ export class PatientService extends ApiBase {
           'Content-Type': 'multipart/form-data'
         }
       });
-      
+
       logger.debug('Patients imported successfully', undefined, 'api');
       return response.data;
     } catch (error: any) {

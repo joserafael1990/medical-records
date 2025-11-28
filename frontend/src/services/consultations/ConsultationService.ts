@@ -3,9 +3,16 @@ import { Consultation, ConsultationFormData, DocumentFolio } from '../../types';
 import { logger } from '../../utils/logger';
 
 export class ConsultationService extends ApiBase {
-  async getConsultations(): Promise<Consultation[]> {
+  async getConsultations(filters?: {
+    patient_search?: string;
+    date_from?: string;
+    date_to?: string;
+    doctor_name?: string;
+  }): Promise<Consultation[]> {
     try {
-      const response = await this.api.get<Consultation[]>('/api/consultations');
+      const response = await this.api.get<Consultation[]>('/api/consultations', {
+        params: filters
+      });
       return response.data;
     } catch (error: any) {
       logger.error('Failed to fetch consultations', error, 'api');

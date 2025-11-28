@@ -76,7 +76,7 @@ export interface MedicalRecord {
   patient_id: number;
   doctor_id: number;
   consultation_date: string;
-  
+
   // NOM-004 required fields
   chief_complaint: string;
   history_present_illness: string;
@@ -89,18 +89,18 @@ export interface MedicalRecord {
   primary_diagnosis: string;
   treatment_plan: string;
   follow_up_instructions: string;
-  
+
   // Optional fields
   secondary_diagnoses?: string;
   prescribed_medications?: string;
   laboratory_results?: string;
   notes?: string;
-  
+
   // System fields
   created_at: string;
   updated_at: string;
   created_by?: number;
-  
+
   // Relationships
   patient?: any; // Person type will be defined later
   doctor?: any; // Person type will be defined later
@@ -424,7 +424,7 @@ export interface PrivacyConsent {
   consent_date?: string;
   consent_method: ConsentMethod;
   consent_status: ConsentStatus;
-  
+
   // WhatsApp specific
   whatsapp_message_id?: string;
   whatsapp_sent_at?: string;
@@ -432,25 +432,25 @@ export interface PrivacyConsent {
   whatsapp_read_at?: string;
   whatsapp_response_at?: string;
   whatsapp_response_text?: string;
-  
+
   // Consent types
   data_collection_consent: boolean;
   data_processing_consent: boolean;
   data_sharing_consent: boolean;
   marketing_consent: boolean;
-  
+
   // Digital signature
   digital_signature?: string;
   signature_ip?: string;
-  
+
   // Revocation
   is_revoked: boolean;
   revoked_date?: string;
   revocation_reason?: string;
-  
+
   // Metadata
   metadata?: any;
-  
+
   created_at: string;
   updated_at: string;
 }
@@ -592,7 +592,7 @@ export interface Appointment {
   // created_by removed - not used, doctor_id already identifies the doctor
   created_at: string;
   updated_at: string;
-  
+
   // Relationships
   patient?: any; // Person type will be defined later
   doctor?: any; // Person type will be defined later
@@ -634,6 +634,17 @@ export interface AppointmentFormData {
   cancelled_at?: string;
   cancelled_by?: number;
   created_by?: number;
+}
+
+export type AppointmentUpdateData = Partial<AppointmentFormData>;
+
+export interface DashboardData {
+  total_patients: number;
+  total_appointments: number;
+  total_consultations: number;
+  recent_appointments: Appointment[];
+  recent_patients: Patient[];
+  [key: string]: any;
 }
 
 export interface DoctorProfile {

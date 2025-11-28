@@ -47,7 +47,7 @@ export class AuthService extends ApiBase {
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     try {
       logger.auth.info('Attempting login for:', credentials.email);
-      
+
       const response = await this.api.post<AuthResponse>('/api/auth/login', {
         email: credentials.email,
         password: credentials.password
@@ -78,7 +78,7 @@ export class AuthService extends ApiBase {
       return response.data;
     } catch (error: any) {
       logger.auth.error(`Login failed for: ${credentials.email}`, error);
-      
+
       // Re-throw with more context if it's a response processing error
       if (error.message && (error.message.includes('No data') || error.message.includes('No access token') || error.message.includes('No user data'))) {
         logger.auth.error('Response processing error', {
@@ -86,7 +86,7 @@ export class AuthService extends ApiBase {
           endpoint: '/api/auth/login'
         });
       }
-      
+
       throw error;
     }
   }
@@ -94,7 +94,7 @@ export class AuthService extends ApiBase {
   async register(registerData: RegisterData): Promise<AuthResponse> {
     try {
       logger.auth.info('Attempting registration for:', registerData.email);
-      
+
       const response = await this.api.post<AuthResponse>('/api/auth/register', registerData);
 
       if (response.data.access_token) {
@@ -113,14 +113,14 @@ export class AuthService extends ApiBase {
   async logout(): Promise<void> {
     try {
       logger.auth.info('Logging out user');
-      
+
       // Clear local storage
       localStorage.removeItem('token');
       localStorage.removeItem('doctor_data');
-      
+
       // Optionally call backend logout endpoint
       // await this.api.post('/api/auth/logout');
-      
+
       logger.auth.info('Logout successful');
     } catch (error: any) {
       logger.auth.error('Logout error:', error);
@@ -143,7 +143,7 @@ export class AuthService extends ApiBase {
   async refreshToken(): Promise<AuthResponse> {
     try {
       const response = await this.api.post<AuthResponse>('/api/auth/refresh');
-      
+
       if (response.data.access_token) {
         localStorage.setItem('token', response.data.access_token);
         localStorage.setItem('doctor_data', JSON.stringify(response.data.user));
@@ -193,8 +193,57 @@ export class AuthService extends ApiBase {
       logger.auth.info('Password reset confirmed successfully');
       return response.data;
     } catch (error: any) {
-      logger.auth.error('Password reset confirmation failed', error);
+      logger.error('Failed to confirm password reset', error, 'auth');
       throw error;
+    }
+  }
+
+  async testAuth(): Promise<{ status: string; user?: any }> {
+    logger.debug('Testing authentication', undefined, 'auth');
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        return { status: 'no_token' };
+      }
+
+      // Try to get current user info to validate token
+      const response = await this.api.get<{ data: any }>('/api/doctors/me/profile');
+      return { status: 'valid', user: response.data };
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        return { status: 'expired' };
+      } else if (error.response?.status === 403) {
+        return { status: 'forbidden' };
+      } else {
+        return { status: 'error' };
+      }
+    }
+  }
+
+  async testTokenValidity(): Promise<{ status: string; error?: string; user?: any }> {
+    logger.debug('Testing token validity', undefined, 'auth');
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        return { status: 'no_token' };
+      }
+
+      logger.debug('Token format check', {
+        hasThreeParts: token.split('.').length === 3,
+        parts: token.split('.').map((part, i) => `Part ${i + 1}: ${part.length} chars`)
+      });
+
+      // Try to get current user info to validate token
+      const response = await this.api.get<{ data: any }>('/api/doctors/me/profile');
+      return { status: 'valid', user: response.data };
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        return { status: 'expired_or_invalid' };
+      } else if (error.response?.status === 403) {
+        return { status: 'forbidden' };
+      } else {
+        return { status: 'error', error: error.message };
+      }
     }
   }
 }

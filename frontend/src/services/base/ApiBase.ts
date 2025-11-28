@@ -40,7 +40,7 @@ export class ApiBase {
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
-        
+
         // Removed debug logging for performance - only log errors
         return config;
       },
@@ -79,15 +79,15 @@ export class ApiBase {
       message: error.message,
       networkError: !error.response
     };
-    
+
     // Log error safely to avoid [object Object] issues
     try {
       logger.error('API Error', error, 'api');
     } catch (loggingError) {
       // Fallback if logger fails
       const responseData = error.response?.data;
-      const detail = (isErrorResponse(responseData) && typeof responseData.detail === 'string') 
-        ? responseData.detail 
+      const detail = (isErrorResponse(responseData) && typeof responseData.detail === 'string')
+        ? responseData.detail
         : 'No detail';
       console.error('API Error:', {
         message: error.message,
@@ -97,7 +97,7 @@ export class ApiBase {
         detail
       });
     }
-    
+
     // Track API errors in Amplitude (if available)
     const status = error.response?.status;
     if (status) {
@@ -112,7 +112,7 @@ export class ApiBase {
         method: error.config?.method?.toUpperCase()
       });
     }
-    
+
     // Track validation errors (without detailed logging for performance)
     if (error.response?.status === 422) {
       const responseData = error.response.data;
@@ -125,11 +125,11 @@ export class ApiBase {
         });
       }
     }
-    
+
     if (!error.response) {
       logger.warn('Network error - possible causes: backend down, CORS issue, network problem, firewall, o problema de red', undefined, 'api');
     }
-    
+
     if (FEATURE_FLAGS.ENABLE_DEBUG_MODE) {
       logger.api.error(error.config?.url || 'unknown', {
         status: error.response?.status,
@@ -137,44 +137,44 @@ export class ApiBase {
         data: error.response?.data
       });
     }
-    
+
     // Handle specific error cases
     // Only treat 401/403 as session expired if NOT an auth endpoint (login/register)
     // Auth endpoints return 401 for invalid credentials, not expired sessions
     // Some endpoints may return 403 for business logic (e.g., patient access, not auth issues)
-    const isAuthEndpoint = error.config?.url?.includes('/auth/login') || 
-                          error.config?.url?.includes('/auth/register') ||
-                          error.config?.url?.includes('/auth/refresh');
-    
+    const isAuthEndpoint = error.config?.url?.includes('/auth/login') ||
+      error.config?.url?.includes('/auth/register') ||
+      error.config?.url?.includes('/auth/refresh');
+
     // Endpoints that may return 403 for business reasons, not auth issues
     // These endpoints can return 403 when:
     // - Patient doesn't exist (404 converted to 403 by middleware)
     // - Patient is not active
     // - User doesn't have permission (business logic, not auth failure)
     const isBusinessLogic403 = error.config?.url?.includes('/privacy/consent-status') ||
-                               error.config?.url?.includes('/clinical-studies/patient/') ||
-                               (error.config?.url?.includes('/consultations') && error.response?.status === 403) ||
-                               (error.config?.url?.includes('/api/privacy/') && error.response?.status === 403);
-    
+      error.config?.url?.includes('/clinical-studies/patient/') ||
+      (error.config?.url?.includes('/consultations') && error.response?.status === 403) ||
+      (error.config?.url?.includes('/api/privacy/') && error.response?.status === 403);
+
     // Only treat 401/403 as session expired if:
     // 1. Not an auth endpoint (auth endpoints use 401 for invalid credentials)
     // 2. Not a business logic 403 (these are expected errors, not auth failures)
     // 3. Response indicates "Not authenticated" or similar auth-related message
     const responseDataForAuth = error.response?.data;
-    const detailString = (isErrorResponse(responseDataForAuth) && typeof responseDataForAuth.detail === 'string') 
-      ? responseDataForAuth.detail.toLowerCase() 
+    const detailString = (isErrorResponse(responseDataForAuth) && typeof responseDataForAuth.detail === 'string')
+      ? responseDataForAuth.detail.toLowerCase()
       : '';
     const isAuthFailure = detailString.includes('not authenticated') ||
-                         detailString.includes('invalid token') ||
-                         detailString.includes('token') ||
-                         (error.response?.status === 401 && !isAuthEndpoint && !isBusinessLogic403);
-    
+      detailString.includes('invalid token') ||
+      detailString.includes('token') ||
+      (error.response?.status === 401 && !isAuthEndpoint && !isBusinessLogic403);
+
     if (isAuthFailure && !isAuthEndpoint && !isBusinessLogic403) {
       // Handle unauthorized/forbidden - clear auth data (only for actual auth failures)
       logger.auth.sessionExpired();
       localStorage.removeItem('token');
       localStorage.removeItem('doctor_data');
-      
+
       // Dispatch a custom event to notify the auth context
       // This avoids forced page reloads that cause blinking
       window.dispatchEvent(new CustomEvent('auth-expired'));
@@ -203,16 +203,16 @@ export class ApiBase {
     if (status === 401) {
       // For auth endpoints, use the backend's error message (e.g., "Credenciales inválidas")
       // For other endpoints, use generic unauthorized message
-      const isAuthEndpoint = error.config?.url?.includes('/auth/login') || 
-                            error.config?.url?.includes('/auth/register') ||
-                            error.config?.url?.includes('/auth/refresh');
-      
+      const isAuthEndpoint = error.config?.url?.includes('/auth/login') ||
+        error.config?.url?.includes('/auth/register') ||
+        error.config?.url?.includes('/auth/refresh');
+
       let message = ERROR_MESSAGES.UNAUTHORIZED;
       if (isAuthEndpoint && isErrorResponse(responseData) && typeof responseData.detail === 'string') {
         // Use backend's specific error message for auth endpoints
         message = responseData.detail;
       }
-      
+
       return {
         message,
         status,
@@ -290,7 +290,7 @@ export class ApiBase {
         errorMessage = responseData.message;
       }
     }
-    
+
     return {
       message: errorMessage,
       status,
@@ -327,5 +327,29 @@ export class ApiBase {
       'femenino': 'F'
     };
     return genderMap[gender] || gender;
+  }
+
+  async withRetry<T>(operation: () => Promise<T>, maxRetries = 3): Promise<T> {
+    let lastError: any;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error;
+
+        if (attempt === maxRetries) {
+          throw error;
+        }
+
+        // Wait before retry (exponential backoff)
+        const delay = Math.pow(2, attempt) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+
+        logger.debug(`🔄 Retry attempt ${attempt}/${maxRetries} after ${delay}ms`, undefined, 'api');
+      }
+    }
+
+    throw lastError;
   }
 }
