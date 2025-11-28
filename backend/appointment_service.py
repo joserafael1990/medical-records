@@ -342,6 +342,8 @@ class AppointmentService:
     @staticmethod
     def mark_reminder_sent(db: Session, appointment_id: int) -> None:
         """Persist sent timestamp for auto reminder."""
+        from utils.datetime_utils import utc_now
+        
         try:
             apt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
             if not apt:
@@ -350,10 +352,11 @@ class AppointmentService:
                     extra={"appointment_id": appointment_id}
                 )
                 return
-            # Update reminder_sent and reminder_sent_at fields
+            
             apt.reminder_sent = True
-            apt.reminder_sent_at = datetime.utcnow()
+            apt.reminder_sent_at = utc_now()
             db.commit()
+            
             api_logger.info(
                 "✅ Marked reminder as sent",
                 extra={
@@ -361,7 +364,7 @@ class AppointmentService:
                     "reminder_sent_at": apt.reminder_sent_at.isoformat() if apt.reminder_sent_at else None
                 }
             )
-        except Exception as e:
+        except Exception:
             api_logger.error(
                 "❌ Error marking reminder as sent",
                 extra={"appointment_id": appointment_id},
@@ -371,29 +374,22 @@ class AppointmentService:
             raise
 
     @staticmethod
-    def send_appointment_reminder(db: Session, appointment_id: int) -> bool:
-        """Send WhatsApp reminder using existing WhatsAppService. Returns True on success.
+    def _atomic_mark_reminder_sent(db: Session, appointment_id: int) -> bool:
+        """Atomically mark reminder as sent. Returns True if successful (i.e., wasn't already sent)."""
+        from utils.datetime_utils import utc_now
         
-        Uses atomic update to prevent duplicate reminders: marks reminder_sent BEFORE sending
-        to avoid race conditions when scheduler runs multiple times.
-        """
-        from whatsapp_service import get_whatsapp_service
-        
-        # Atomic update: mark reminder_sent BEFORE sending to prevent duplicates
-        # This ensures that if two scheduler processes run simultaneously, only one will succeed
         try:
             result = db.execute(
                 update(Appointment)
                 .where(Appointment.id == appointment_id)
-                .where(Appointment.reminder_sent == False)  # Only update if not already sent
+                .where(Appointment.reminder_sent == False)
                 .values(
                     reminder_sent=True,
-                    reminder_sent_at=datetime.utcnow()
+                    reminder_sent_at=utc_now()
                 )
             )
             db.commit()
             
-            # If no rows were updated, reminder was already sent by another process
             if result.rowcount == 0:
                 api_logger.info(
                     "⚠️ Reminder already sent, skipping duplicate",
@@ -405,13 +401,43 @@ class AppointmentService:
                 "✅ Marked reminder as sent (atomic update)",
                 extra={"appointment_id": appointment_id}
             )
-        except Exception as e:
+            return True
+        except Exception:
             db.rollback()
             api_logger.error(
                 "❌ Error marking reminder as sent (atomic update)",
                 extra={"appointment_id": appointment_id},
                 exc_info=True
             )
+            return False
+    
+    @staticmethod
+    def _rollback_reminder_sent(db: Session, appointment_id: int) -> None:
+        """Rollback reminder_sent flag if sending failed."""
+        try:
+            db.execute(
+                update(Appointment)
+                .where(Appointment.id == appointment_id)
+                .values(
+                    reminder_sent=False,
+                    reminder_sent_at=None
+                )
+            )
+            db.commit()
+        except Exception:
+            db.rollback()
+    
+    @staticmethod
+    def send_appointment_reminder(db: Session, appointment_id: int) -> bool:
+        """Send WhatsApp reminder using existing WhatsAppService. Returns True on success.
+        
+        Uses atomic update to prevent duplicate reminders: marks reminder_sent BEFORE sending
+        to avoid race conditions when scheduler runs multiple times.
+        """
+        from whatsapp_service import get_whatsapp_service
+        
+        # Atomic update: mark reminder_sent BEFORE sending to prevent duplicates
+        if not AppointmentService._atomic_mark_reminder_sent(db, appointment_id):
             return False
         
         # Now fetch the appointment and send the reminder
@@ -429,36 +455,30 @@ class AppointmentService:
                 "⚠️ Appointment not eligible for reminder (status mismatch)",
                 extra={"appointment_id": appointment_id, "status": apt.status}
             )
-            db.execute(
-                update(Appointment)
-                .where(Appointment.id == appointment_id)
-                .values(
-                    reminder_sent=False,
-                    reminder_sent_at=None
-                )
-            )
-            db.commit()
+            AppointmentService._rollback_reminder_sent(db, appointment_id)
             return False
         
-        # Build parameters similarly to endpoint logic
+        # Build WhatsApp message parameters
         mexico_tz = pytz.timezone('America/Mexico_City')
-        # Assume stored naive datetime is local CDMX
         local_dt = mexico_tz.localize(apt.appointment_date)
         appointment_date = local_dt.strftime('%d de %B de %Y')
         appointment_time = local_dt.strftime('%I:%M %p')
+        
+        # Determine appointment type
         appointment_type = "presencial"
         if apt.appointment_type_rel:
             appointment_type = "online" if apt.appointment_type_rel.name == "En línea" else "presencial"
+        
+        if apt.office and apt.office.is_virtual and apt.office.virtual_url:
+            appointment_type = "online"
+
+        # Prepare office details
+        office_address_val = build_office_address(apt.office) if apt.office else "mi consultorio en linea - No especificado"
+        maps_url_val = resolve_maps_url(apt.office, office_address_val) if apt.office else None
+        country_code_val = resolve_country_code(apt.office) if apt.office else '52'
 
         service = get_whatsapp_service()
         try:
-            # Preparar dirección y URL usando helpers
-            office_address_val = build_office_address(apt.office) if getattr(apt, 'office', None) else "mi consultorio en linea - No especificado"
-            maps_url_val = resolve_maps_url(apt.office, office_address_val) if getattr(apt, 'office', None) else None
-            country_code_val = resolve_country_code(apt.office) if getattr(apt, 'office', None) else '52'
-            if getattr(apt, 'office', None) and getattr(apt.office, 'is_virtual', False) and getattr(apt.office, 'virtual_url', None):
-                appointment_type = "online"
-
             resp = service.send_appointment_reminder(
                 patient_phone=apt.patient.primary_phone if apt.patient else None,
                 patient_full_name=apt.patient.full_name if apt.patient else "Paciente",
@@ -471,6 +491,7 @@ class AppointmentService:
                 appointment_type=appointment_type,
                 maps_url=maps_url_val
             )
+            
             if resp and resp.get('success'):
                 api_logger.info(
                     "✅ Appointment reminder sent successfully",
@@ -478,40 +499,19 @@ class AppointmentService:
                 )
                 return True
             else:
-                # If sending failed, rollback the reminder_sent flag
                 api_logger.warning(
                     "⚠️ Reminder sending failed, rolling back flag",
                     extra={"appointment_id": appointment_id, "response": resp}
                 )
-                db.execute(
-                    update(Appointment)
-                    .where(Appointment.id == appointment_id)
-                    .values(
-                        reminder_sent=False,
-                        reminder_sent_at=None
-                    )
-                )
-                db.commit()
+                AppointmentService._rollback_reminder_sent(db, appointment_id)
                 return False
-        except Exception as e:
-            # If exception occurred, rollback the reminder_sent flag
+        except Exception:
             api_logger.error(
                 "❌ Exception sending appointment reminder",
                 extra={"appointment_id": appointment_id},
                 exc_info=True
             )
-            try:
-                db.execute(
-                    update(Appointment)
-                    .where(Appointment.id == appointment_id)
-                    .values(
-                        reminder_sent=False,
-                        reminder_sent_at=None
-                    )
-                )
-                db.commit()
-            except:
-                db.rollback()
+            AppointmentService._rollback_reminder_sent(db, appointment_id)
             return False
     
     @staticmethod

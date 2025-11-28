@@ -42,7 +42,13 @@ export const apiService = {
   // AUTH SERVICES
   // ============================================================================
 
-  login: (email: string, password: string) => modularApiService.auth.login({ email, password }),
+  login: (emailOrCredentials: string | { email: string; password: string }, password?: string) => {
+    // Support both old (email, password) and new ({ email, password }) signatures
+    const credentials = typeof emailOrCredentials === 'string'
+      ? { email: emailOrCredentials, password: password! }
+      : emailOrCredentials;
+    return modularApiService.auth.login(credentials);
+  },
   register: (userData: any) => modularApiService.auth.register(userData),
   requestPasswordReset: (email: string) => modularApiService.auth.requestPasswordReset(email),
   confirmPasswordReset: (token: string, newPassword: string, confirmPassword: string) => modularApiService.auth.confirmPasswordReset(token, newPassword, confirmPassword),
@@ -67,10 +73,15 @@ export const apiService = {
   getConsultations: (filters?: any) => modularApiService.consultations.getConsultations(filters), // Note: filters might need adjustment if signature differs
   getPatientConsultations: (patientId: string) => modularApiService.consultations.getConsultationsByPatient(patientId),
   getConsultation: (id: string) => modularApiService.consultations.getConsultationById(id),
-  createConsultation: (patientIdOrData: string | ConsultationFormData, consultationData?: ConsultationFormData) =>
-    modularApiService.consultations.createConsultation(
-      typeof patientIdOrData === 'string' && consultationData ? consultationData : patientIdOrData as ConsultationFormData
-    ),
+  createConsultation: (dataOrPatientId: ConsultationFormData | string, consultationData?: ConsultationFormData) => {
+    // Support both old (patientId, data) and new (data) signatures
+    // New signature: just pass the data (which should include patient_id)
+    // Old signature: merge patientId into the data 
+    const data = typeof dataOrPatientId === 'string' && consultationData
+      ? { ...consultationData, patient_id: dataOrPatientId }
+      : dataOrPatientId as ConsultationFormData;
+    return modularApiService.consultations.createConsultation(data);
+  },
   updateConsultation: (id: string, consultationData: Partial<ConsultationFormData>) => modularApiService.consultations.updateConsultation(id, consultationData),
   deleteConsultation: (id: string) => modularApiService.consultations.deleteConsultation(id),
 
