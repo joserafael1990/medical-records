@@ -42,7 +42,7 @@ export const apiService = {
   // AUTH SERVICES
   // ============================================================================
 
-  login: (email: string, password: string) => modularApiService.auth.login(email, password),
+  login: (email: string, password: string) => modularApiService.auth.login({ email, password }),
   register: (userData: any) => modularApiService.auth.register(userData),
   requestPasswordReset: (email: string) => modularApiService.auth.requestPasswordReset(email),
   confirmPasswordReset: (token: string, newPassword: string, confirmPassword: string) => modularApiService.auth.confirmPasswordReset(token, newPassword, confirmPassword),
@@ -67,7 +67,10 @@ export const apiService = {
   getConsultations: (filters?: any) => modularApiService.consultations.getConsultations(filters), // Note: filters might need adjustment if signature differs
   getPatientConsultations: (patientId: string) => modularApiService.consultations.getConsultationsByPatient(patientId),
   getConsultation: (id: string) => modularApiService.consultations.getConsultationById(id),
-  createConsultation: (patientId: string, consultationData: ConsultationFormData) => modularApiService.consultations.createConsultation(consultationData), // Note: createConsultation in service takes 1 arg
+  createConsultation: (patientIdOrData: string | ConsultationFormData, consultationData?: ConsultationFormData) =>
+    modularApiService.consultations.createConsultation(
+      typeof patientIdOrData === 'string' && consultationData ? consultationData : patientIdOrData as ConsultationFormData
+    ),
   updateConsultation: (id: string, consultationData: Partial<ConsultationFormData>) => modularApiService.consultations.updateConsultation(id, consultationData),
   deleteConsultation: (id: string) => modularApiService.consultations.deleteConsultation(id),
 

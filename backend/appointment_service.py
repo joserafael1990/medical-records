@@ -9,20 +9,20 @@ from typing import List, Optional, Dict
 import uuid
 import pytz
 import os
-os.environ['TZ'] = 'America/Mexico_City'
 
 from database import Appointment, Person
 from services.office_helpers import build_office_address, resolve_maps_url, resolve_country_code
 from logger import get_logger
+from utils.datetime_utils import (
+    now_cdmx, 
+    now_in_timezone, 
+    to_utc_for_storage, 
+    from_utc_to_timezone,
+    SYSTEM_TIMEZONE
+)
+
 # Structured logger
 api_logger = get_logger("medical_records.api")
-
-# Global CDMX Timezone configuration 
-SYSTEM_TIMEZONE = pytz.timezone('America/Mexico_City')
-
-def now_cdmx() -> datetime:
-    """Get current datetime in CDMX timezone"""
-    return datetime.now(SYSTEM_TIMEZONE)
 
 def get_doctor_timezone(db: Session, doctor_id: int) -> str:
     """Get doctor's office timezone from database"""
@@ -30,139 +30,88 @@ def get_doctor_timezone(db: Session, doctor_id: int) -> str:
     # In a full implementation, this would query the offices table
     return 'America/Mexico_City'  # Default fallback
 
-def now_in_timezone(timezone_str: str = 'America/Mexico_City') -> datetime:
-    """Get current datetime in specified timezone"""
-    tz = pytz.timezone(timezone_str)
-    return datetime.now(tz)
-
-def to_utc_for_storage(dt: datetime, doctor_timezone: str = 'America/Mexico_City') -> datetime:
-    """Convert datetime to UTC for database storage"""
-    if dt.tzinfo is None:
-        # Assume doctor timezone if naive
-        tz = pytz.timezone(doctor_timezone)
-        dt = tz.localize(dt)
-    return dt.astimezone(pytz.utc)
-
-def from_utc_to_timezone(dt: datetime, doctor_timezone: str = 'America/Mexico_City') -> datetime:
-    """Convert UTC datetime to doctor's timezone"""
-    if dt.tzinfo is None:
-        # Assume UTC if naive
-        dt = pytz.utc.localize(dt)
-    tz = pytz.timezone(doctor_timezone)
-    return dt.astimezone(tz)
-
 
 class AppointmentService:
     """Service for managing medical appointments"""
     
     @staticmethod
+    def _parse_appointment_date(start_time: str | datetime, doctor_timezone: str, doctor_id: Optional[int] = None) -> datetime:
+        """Parse and localize appointment date"""
+        if isinstance(start_time, str):
+            if start_time.endswith('Z'):
+                # Treat as UTC
+                dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                api_logger.debug("📅 Parsed appointment_date as UTC", extra={"doctor_id": doctor_id, "parsed_value": dt.isoformat()})
+                return dt
+            elif '+' in start_time or start_time.count('-') > 2:
+                # ISO with timezone
+                dt = datetime.fromisoformat(start_time)
+                api_logger.debug("📅 Parsed appointment_date with timezone info", extra={"doctor_id": doctor_id, "parsed_value": dt.isoformat()})
+                return dt
+            else:
+                # Naive -> localize
+                dt = datetime.fromisoformat(start_time)
+                tz = pytz.timezone(doctor_timezone)
+                dt = tz.localize(dt)
+                api_logger.debug("📅 Localized naive appointment_date", extra={"doctor_id": doctor_id, "localized_value": dt.isoformat()})
+                return dt
+        return start_time
+
+    @staticmethod
     def create_appointment(db: Session, appointment_data: dict) -> Appointment:
         """Create a new appointment"""
-        # Remove ID from appointment_data - let PostgreSQL auto-generate it
-        if 'id' in appointment_data:
-            del appointment_data['id']
-
-        # Remove reason if provided (kept for backward compatibility)
+        # Remove ID if present
+        appointment_data.pop('id', None)
         appointment_data.pop('reason', None)
         
-        # Get doctor's timezone and appointment duration
+        # Get context
         doctor_id = appointment_data.get('doctor_id')
-        doctor_timezone = 'America/Mexico_City'  # Default fallback
-        duration_minutes = 30  # Default fallback
+        doctor_timezone = 'America/Mexico_City'
+        duration_minutes = 30
         
         if doctor_id:
             doctor = db.query(Person).filter(Person.id == doctor_id).first()
             if doctor:
-                # Use default timezone since office_timezone was moved to Office table
-                doctor_timezone = 'America/Mexico_City'  # Default timezone
-                duration_minutes = doctor.appointment_duration if doctor.appointment_duration else 30
+                duration_minutes = doctor.appointment_duration or 30
                 
-                # If appointment has office_id, get timezone from office
+                # Check office timezone
                 office_id = appointment_data.get('office_id')
                 if office_id:
                     from database import Office
                     office = db.query(Office).filter(Office.id == office_id).first()
                     if office:
                         doctor_timezone = office.timezone
-        
-        # Calculate end_time based on appointment_date and doctor's appointment_duration
-        start_time = appointment_data['appointment_date']
-        
-        api_logger.debug(
-            "🔍 Appointment creation payload received",
-            extra={
-                "doctor_id": doctor_id,
-                "appointment_date_raw": start_time,
-                "appointment_date_type": str(type(start_time)),
-                "doctor_timezone": doctor_timezone
-            }
-        )
-        
-        if isinstance(start_time, str):
-            # Parse the datetime string - frontend now sends ISO strings with timezone
-            if start_time.endswith('Z'):
-                # If it ends with Z, treat it as UTC
-                start_time = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
-                api_logger.debug(
-                    "📅 Parsed appointment_date as UTC",
-                    extra={"doctor_id": doctor_id, "parsed_value": start_time.isoformat()}
-                )
-            elif '+' in start_time or start_time.count('-') > 2:
-                # If it has timezone info, parse it directly
-                start_time = datetime.fromisoformat(start_time)
-                api_logger.debug(
-                    "📅 Parsed appointment_date with timezone info",
-                    extra={"doctor_id": doctor_id, "parsed_value": start_time.isoformat()}
-                )
-            else:
-                # Fallback: parse as naive datetime and localize to doctor's timezone
-                start_time = datetime.fromisoformat(start_time)
-                tz = pytz.timezone(doctor_timezone)
-                start_time = tz.localize(start_time)
-                api_logger.debug(
-                    "📅 Localized naive appointment_date to doctor timezone",
-                    extra={"doctor_id": doctor_id, "localized_value": start_time.isoformat(), "timezone": doctor_timezone}
-                )
 
-        # Convert to UTC for storage
-        start_time_utc = start_time.astimezone(pytz.utc)
-        api_logger.debug(
-            "📅 Converted appointment_date to UTC for storage",
-            extra={"doctor_id": doctor_id, "utc_value": start_time_utc.isoformat()}
+        # Parse and process dates
+        start_time = AppointmentService._parse_appointment_date(
+            appointment_data['appointment_date'], 
+            doctor_timezone, 
+            doctor_id
         )
         
-        # Since the database uses 'timestamp without time zone', we need to store
-        # the datetime in the doctor's timezone, not UTC
-        # Convert back to doctor's timezone for storage
+        # Convert to UTC for calculation/storage logic
+        start_time_utc = start_time.astimezone(pytz.utc)
+        
+        # Store in doctor's timezone (as naive) per DB requirement
         tz = pytz.timezone(doctor_timezone)
         start_time_for_storage = start_time_utc.astimezone(tz).replace(tzinfo=None)
-        api_logger.debug(
-            "📅 Final datetime for storage (naive doctor timezone)",
-            extra={"doctor_id": doctor_id, "local_value": start_time_for_storage.isoformat()}
-        )
-        
         appointment_data['appointment_date'] = start_time_for_storage
-
+        
+        # Calculate end time
         end_time = start_time_utc + timedelta(minutes=duration_minutes)
         end_time_for_storage = end_time.astimezone(tz).replace(tzinfo=None)
         appointment_data['end_time'] = end_time_for_storage
-        api_logger.debug(
-            "📅 Calculated end_time for storage",
-            extra={"doctor_id": doctor_id, "end_time": end_time_for_storage.isoformat()}
-        )
         
-        # Set created_at in UTC
-        appointment_data['created_at'] = now_in_timezone(doctor_timezone).astimezone(pytz.utc)
+        # Set timestamps
+        now_utc = now_in_timezone(doctor_timezone).astimezone(pytz.utc)
+        appointment_data['created_at'] = now_utc
         
-        # Ensure status defaults to 'por_confirmar' and handle confirmation timestamp
         status_value = appointment_data.get('status') or 'por_confirmar'
         appointment_data['status'] = status_value
         if status_value == 'confirmada':
-            appointment_data['confirmed_at'] = now_in_timezone(doctor_timezone).astimezone(pytz.utc)
-        
-        # Remove any invalid fields that don't exist in the Appointment model
-        # Note: patient and doctor names are available through relationships, not stored fields
-        
+            appointment_data['confirmed_at'] = now_utc
+            
+        # Create record
         appointment = Appointment(**appointment_data)
         db.add(appointment)
         db.commit()
@@ -232,6 +181,12 @@ class AppointmentService:
         return db.query(Appointment).filter(Appointment.id == appointment_id).first()
     
     @staticmethod
+    def _get_doctor_duration(db: Session, doctor_id: int) -> int:
+        """Get doctor's appointment duration, with fallback"""
+        doctor = db.query(Person).filter(Person.id == doctor_id).first()
+        return doctor.appointment_duration if doctor and doctor.appointment_duration else 30
+    
+    @staticmethod
     def update_appointment(db: Session, appointment_id: str, appointment_data: dict) -> Optional[Appointment]:
         """Update an existing appointment"""
         appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
@@ -241,34 +196,29 @@ class AppointmentService:
         appointment_data.pop('reason', None)
         
         # Handle datetime conversion for appointment_date
-        if 'appointment_date' in appointment_data and isinstance(appointment_data['appointment_date'], str):
-            appointment_data['appointment_date'] = datetime.fromisoformat(
-                appointment_data['appointment_date'].replace('Z', '+00:00')
-            )
-            # Convert to UTC for storage
-            appointment_data['appointment_date'] = to_utc_for_storage(appointment_data['appointment_date'])
-        
-        # Recalculate end_time if appointment_date changed (duration comes from doctor's profile)
         if 'appointment_date' in appointment_data:
-            start_time = appointment_data['appointment_date']
-            # Get doctor's appointment_duration from persons table
-            doctor = db.query(Person).filter(Person.id == appointment.doctor_id).first()
-            if doctor and doctor.appointment_duration:
-                duration = doctor.appointment_duration
-            else:
-                duration = 30  # Default fallback
-            appointment_data['end_time'] = start_time + timedelta(minutes=duration)
+            if isinstance(appointment_data['appointment_date'], str):
+                parsed_dt = datetime.fromisoformat(
+                    appointment_data['appointment_date'].replace('Z', '+00:00')
+                )
+                appointment_data['appointment_date'] = to_utc_for_storage(parsed_dt)
+            
+            # Recalculate end_time
+            duration = AppointmentService._get_doctor_duration(db, appointment.doctor_id)
+            appointment_data['end_time'] = appointment_data['appointment_date'] + timedelta(minutes=duration)
         
         # Handle cancellation
         if appointment_data.get('status') == 'cancelled' and 'cancelled_reason' in appointment_data:
-            appointment_data['cancelled_at'] = now_cdmx().astimezone(pytz.utc)
+            from utils.datetime_utils import utc_now
+            appointment_data['cancelled_at'] = utc_now()
         
         # Update fields
         for key, value in appointment_data.items():
             if hasattr(appointment, key):
                 setattr(appointment, key, value)
         
-        appointment.updated_at = now_cdmx().astimezone(pytz.utc)
+        from utils.datetime_utils import utc_now
+        appointment.updated_at = utc_now()
         db.commit()
         db.refresh(appointment)
         return appointment
@@ -280,10 +230,13 @@ class AppointmentService:
         if not appointment:
             return False
         
+        from utils.datetime_utils import utc_now
+        now = utc_now()
+        
         # Soft delete by setting status to cancelled
         appointment.status = "cancelled"
-        appointment.cancelled_at = datetime.utcnow()
-        appointment.updated_at = datetime.utcnow()
+        appointment.cancelled_at = now
+        appointment.updated_at = now
         db.commit()
         return True
     
