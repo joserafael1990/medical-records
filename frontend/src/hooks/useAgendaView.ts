@@ -103,28 +103,61 @@ export const useAgendaView = (
 
   // Función para obtener citas filtradas por vista
   const getFilteredAppointments = useCallback((date: Date, view: 'daily' | 'weekly' | 'monthly'): any[] => {
-    switch (view) {
-      case 'daily':
-        return appointments.filter(apt => {
-          const aptDate = parseBackendDate(apt.date_time);
-          return isSameDay(aptDate, date);
-        });
-      case 'weekly':
-        const weekStart = startOfWeek(date, { weekStartsOn: 1 });
-        const weekEnd = endOfWeek(date, { weekStartsOn: 1 });
-        return appointments.filter(apt => {
-          const aptDate = parseBackendDate(apt.date_time);
-          return aptDate >= weekStart && aptDate <= weekEnd;
-        });
-      case 'monthly':
-        const monthStart = startOfMonth(date);
-        const monthEnd = endOfMonth(date);
-        return appointments.filter(apt => {
-          const aptDate = parseBackendDate(apt.date_time);
-          return aptDate >= monthStart && aptDate <= monthEnd;
-        });
-      default:
-        return appointments;
+    if (!appointments || appointments.length === 0) {
+      return [];
+    }
+
+    try {
+      switch (view) {
+        case 'daily':
+          return appointments.filter(apt => {
+            try {
+              const dateField = apt.date_time || apt.appointment_date;
+              if (!dateField) return false;
+              const aptDate = parseBackendDate(dateField);
+              if (isNaN(aptDate.getTime())) return false;
+              return isSameDay(aptDate, date);
+            } catch (error) {
+              console.warn('Error parsing appointment date:', apt, error);
+              return false;
+            }
+          });
+        case 'weekly':
+          const weekStart = startOfWeek(date, { weekStartsOn: 1 });
+          const weekEnd = endOfWeek(date, { weekStartsOn: 1 });
+          return appointments.filter(apt => {
+            try {
+              const dateField = apt.date_time || apt.appointment_date;
+              if (!dateField) return false;
+              const aptDate = parseBackendDate(dateField);
+              if (isNaN(aptDate.getTime())) return false;
+              return aptDate >= weekStart && aptDate <= weekEnd;
+            } catch (error) {
+              console.warn('Error parsing appointment date:', apt, error);
+              return false;
+            }
+          });
+        case 'monthly':
+          const monthStart = startOfMonth(date);
+          const monthEnd = endOfMonth(date);
+          return appointments.filter(apt => {
+            try {
+              const dateField = apt.date_time || apt.appointment_date;
+              if (!dateField) return false;
+              const aptDate = parseBackendDate(dateField);
+              if (isNaN(aptDate.getTime())) return false;
+              return aptDate >= monthStart && aptDate <= monthEnd;
+            } catch (error) {
+              console.warn('Error parsing appointment date:', apt, error);
+              return false;
+            }
+          });
+        default:
+          return appointments;
+      }
+    } catch (error) {
+      console.error('Error in getFilteredAppointments:', error);
+      return [];
     }
   }, [appointments]);
 
@@ -137,8 +170,19 @@ export const useAgendaView = (
   }, [currentDate]);
 
   const filteredAppointments = useMemo(() => {
-    return getFilteredAppointments(currentDate, agendaView);
-  }, [currentDate, agendaView, getFilteredAppointments]);
+    const filtered = getFilteredAppointments(currentDate, agendaView);
+    // Debug logging
+    if (appointments.length > 0 && filtered.length === 0) {
+      console.log('🔍 Debug: Appointments exist but none filtered', {
+        totalAppointments: appointments.length,
+        currentDate: currentDate.toISOString(),
+        agendaView,
+        sampleAppointment: appointments[0],
+        sampleDateField: appointments[0]?.date_time || appointments[0]?.appointment_date
+      });
+    }
+    return filtered;
+  }, [currentDate, agendaView, getFilteredAppointments, appointments]);
 
   // Navegación de fechas
   const handleDateNavigation = useCallback((direction: 'prev' | 'next') => {
@@ -214,9 +258,22 @@ export const useAgendaView = (
   }, [getCalendarDays]);
 
   const getDayAppointments = useCallback((day: Date): any[] => {
-    return appointments.filter(apt => 
-      isSameDay(parseBackendDate(apt.date_time), day)
-    );
+    if (!appointments || appointments.length === 0) {
+      return [];
+    }
+    
+    return appointments.filter(apt => {
+      try {
+        const dateField = apt.date_time || apt.appointment_date;
+        if (!dateField) return false;
+        const aptDate = parseBackendDate(dateField);
+        if (isNaN(aptDate.getTime())) return false;
+        return isSameDay(aptDate, day);
+      } catch (error) {
+        console.warn('Error parsing appointment date in getDayAppointments:', apt, error);
+        return false;
+      }
+    });
   }, [appointments]);
 
   return {

@@ -88,9 +88,10 @@ const AgendaView: React.FC<AgendaViewProps> = ({
 
   // Helper function to check if appointment time has passed
   const isAppointmentPast = (appointment: any): boolean => {
-    if (!appointment.date_time) return false;
+    const dateField = appointment.date_time || appointment.appointment_date;
+    if (!dateField) return false;
     try {
-      const appointmentDate = parseBackendDate(appointment.date_time);
+      const appointmentDate = parseBackendDate(dateField);
       return isPast(appointmentDate);
     } catch (error) {
       return false;
@@ -158,7 +159,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                             }}
                           >
                             <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
-                              {formatTime(appointment.date_time)}
+                              {formatTime(appointment.date_time || appointment.appointment_date)}
                             </Typography>
                             <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
                               {appointment.patient?.name}
@@ -265,7 +266,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                           return (
                             <Box key={index} sx={{ mb: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
                               <Chip
-                                label={`${formatTime(appointment.date_time)} ${appointment.patient?.first_name}`}
+                                label={`${formatTime(appointment.date_time || appointment.appointment_date)} ${appointment.patient?.first_name || appointment.patient?.name}`}
                                 size="small"
                                 sx={{ 
                                   fontSize: '0.65rem', 
@@ -351,7 +352,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                   <Box component="span" sx={{ mt: 1, display: 'block' }}>
                     <Typography variant="body2" color={isPast ? 'text.secondary' : 'text.secondary'} component="span" sx={{ display: 'block' }}>
                       <TimeIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: 'middle' }} />
-                      {formatTime(appointment.date_time)}
+                      {formatTime(appointment.date_time || appointment.appointment_date)}
                     </Typography>
                     {appointment.office && (
                       <Typography variant="body2" color={isPast ? 'text.secondary' : 'text.secondary'} sx={{ mt: 0.5, display: 'block' }} component="span">

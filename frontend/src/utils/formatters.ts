@@ -37,16 +37,40 @@ export const formatDoctorName = (doctorProfile: any): string => {
 export const parseBackendDate = (dateString: string): Date => {
   if (!dateString) return new Date();
   
-  // If the date string already has timezone info, parse it directly
-  if (dateString.includes('+') || dateString.includes('Z') || dateString.includes('-', 10)) {
-    return new Date(dateString);
+  try {
+    // If the date string already has timezone info, parse it directly
+    if (dateString.includes('+') || dateString.includes('Z')) {
+      return new Date(dateString);
+    }
+    
+    // Backend sends dates like "2025-10-27T09:00:00" which are in CDMX timezone (naive)
+    // When JavaScript parses a date without timezone, it treats it as local time
+    // But we need to treat it as CDMX timezone. We'll parse it and adjust if needed.
+    
+    // Check if it's in the format "YYYY-MM-DDTHH:MM:SS" (no timezone)
+    const naiveDatePattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
+    if (naiveDatePattern.test(dateString)) {
+      // Parse as if it's in CDMX timezone by appending the timezone offset
+      // CDMX is UTC-6 (or UTC-5 during DST, but we'll use UTC-6 as default)
+      // Actually, let's just parse it as-is and let JavaScript handle it as local time
+      // This should work correctly for date comparisons within the same timezone
+      return new Date(dateString);
+    }
+    
+    // Fallback to standard parsing
+    const date = new Date(dateString);
+    
+    // Validate the date
+    if (isNaN(date.getTime())) {
+      console.warn('Invalid date string:', dateString);
+      return new Date();
+    }
+    
+    return date;
+  } catch (error) {
+    console.error('Error parsing date:', dateString, error);
+    return new Date();
   }
-  
-  // Backend now sends dates like "2025-10-27T09:00:00" which are already in CDMX timezone
-  // Parse as naive datetime - no timezone adjustment needed
-  const date = new Date(dateString);
-  
-  return date;
 };
 
 /**
