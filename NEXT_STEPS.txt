@@ -1,0 +1,58 @@
+# 🚀 Final Steps for Deployment
+
+Great news! I have successfully:
+1.  Connected to your Digital Ocean server (`134.199.196.165`).
+2.  Installed **Docker** and **Doppler** on the server.
+3.  Uploaded your project code and the production configuration.
+
+Now, you just need to authorize Doppler and start the app.
+
+## Step 1: Connect to your Server
+
+Copy and paste this command into your terminal:
+
+```bash
+ssh root@134.199.196.165
+```
+
+**Password:** `k5Oso5fl3k8wXx6qEn4QFa368h%$GN`
+
+## Step 2: Login to Doppler
+
+Once you are inside the server, run:
+
+```bash
+cd app
+doppler login
+```
+
+It will ask you to open a URL in your browser and enter an auth code. Do that.
+
+## Step 3: Configure Doppler
+
+After logging in, run:
+
+```bash
+doppler setup
+```
+
+-   **Project**: Select `cortex` (or your project name).
+-   **Config**: Select `prd` (or `production`).
+
+## Step 4: Start the Application
+
+Finally, launch your application:
+
+```bash
+doppler run -- docker compose -f compose.prod.yaml up -d --build
+```
+
+## Verification
+
+You can check if it's running with:
+
+```bash
+docker compose -f compose.prod.yaml ps
+```
+
+Your app should be live at: http://134.199.196.165:3000
