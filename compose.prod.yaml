@@ -1,8 +1,10 @@
-# Docker Compose for Production (Doppler + Production Dockerfiles)
+# Docker Compose for Production (Doppler + Docker Hub Images)
 # Usage: doppler run --project cortex --config prd -- docker compose -f compose.prod.yaml up -d
 
 services:
   python-backend:
+    # Use pre-built image from Docker Hub
+    image: joserafael1990/medical-records-backend:latest
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -13,7 +15,7 @@ services:
     networks:
       - appnet
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      test: [ "CMD-SHELL", "curl -f http://localhost:8000/health || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -44,6 +46,8 @@ services:
       - postgres-db
 
   typescript-frontend:
+    # Use pre-built image from Docker Hub
+    image: joserafael1990/medical-records-frontend:latest
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -62,10 +66,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G  # Lower memory limit for production (static files)
+          memory: 2G # Lower memory limit for production (static files)
 
   postgres-db:
-    image: postgres:latest
+    image: postgres:15-alpine
     restart: always
     networks:
       - appnet
@@ -78,7 +82,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-historias_user} -d ${POSTGRES_DB:-historias_clinicas}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-historias_user} -d ${POSTGRES_DB:-historias_clinicas}" ]
       interval: 10s
       timeout: 5s
       retries: 5
