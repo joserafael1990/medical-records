@@ -10,8 +10,8 @@ services:
       dockerfile: Dockerfile
     restart: always
     init: true
-    ports:
-      - "8001:8000"
+    expose:
+      - "8000"
     networks:
       - appnet
     healthcheck:
