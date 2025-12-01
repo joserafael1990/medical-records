@@ -2,7 +2,8 @@
 # Usage: doppler run --project cortex --config prd -- docker compose -f compose.prod.yaml up -d
 
 services:
-python-backend:
+  # --- AQUÍ ESTABA EL ERROR: FALTABAN 2 ESPACIOS AL INICIO ---
+  python-backend:
     # Use pre-built image from Docker Hub
     image: joserafael1990/medical-records-backend:latest
     build:
@@ -13,11 +14,10 @@ python-backend:
     expose:
       - "8000"
     
-    # --- ARREGLO 1: CONEXIÓN DE RED (IMPORTANTE) ---
+    # Etiquetas para que Coolify (Traefik) encuentre el puerto correcto
     labels:
       - "traefik.enable=true"
       - "traefik.http.services.python-backend.loadbalancer.server.port=8000"
-    # -----------------------------------------------
 
     networks:
       - appnet
@@ -46,11 +46,9 @@ python-backend:
       - META_WHATSAPP_API_VERSION=${META_WHATSAPP_API_VERSION:-v24.0}
       - APP_ENV=${APP_ENV:-production}
       
-      # --- ARREGLO 2: CORS MANUAL (EVITA EL CRASH) ---
-      # Ignoramos Doppler aquí para asegurar que el formato sea perfecto
+      # CORS Arreglado con comillas simples para evitar crash
       - CORS_ORIGINS='["https://sistema.cortexclinico.com","https://api.cortexclinico.com"]'
-      # -----------------------------------------------
-
+      
       - META_WHATSAPP_APP_SECRET=${META_WHATSAPP_APP_SECRET}
       - META_WHATSAPP_VERIFY_TOKEN=${META_WHATSAPP_VERIFY_TOKEN}
       - LOG_LEVEL=${LOG_LEVEL:-info}
