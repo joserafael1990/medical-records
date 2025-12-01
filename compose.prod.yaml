@@ -47,7 +47,7 @@ services:
       - APP_ENV=${APP_ENV:-production}
       
       # CORS Arreglado con comillas simples para evitar crash
-      - CORS_ORIGINS='["https://sistema.cortexclinico.com","https://api.cortexclinico.com"]'
+      - CORS_ORIGINS=["https://sistema.cortexclinico.com","https://api.cortexclinico.com"]
       
       - META_WHATSAPP_APP_SECRET=${META_WHATSAPP_APP_SECRET}
       - META_WHATSAPP_VERIFY_TOKEN=${META_WHATSAPP_VERIFY_TOKEN}
