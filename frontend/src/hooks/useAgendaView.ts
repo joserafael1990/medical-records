@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+    import { useState, useEffect, useMemo, useCallback } from 'react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, addDays, addWeeks, addMonths, isSameDay, isSameMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { parseBackendDate } from '../utils/formatters';
@@ -50,10 +50,17 @@ export const useAgendaView = (
 
   const [localSelectedDate, setLocalSelectedDate] = useState(selectedDate || new Date());
 
-  // Actualizar fecha local cuando cambie la prop
+  // Serialize selectedDate to avoid infinite loops from Date object reference changes
+  const selectedDateKey = selectedDate instanceof Date && !isNaN(selectedDate.getTime())
+    ? selectedDate.getTime()
+    : new Date().getTime();
+
+  // Actualizar fecha local cuando cambie la prop (usando la clave serializada)
   useEffect(() => {
-    setLocalSelectedDate(selectedDate);
-  }, [selectedDate]);
+    if (selectedDate instanceof Date && !isNaN(selectedDate.getTime())) {
+      setLocalSelectedDate(selectedDate);
+    }
+  }, [selectedDateKey]);
 
   // Asegurar que si la fecha seleccionada es hoy, se muestren las citas de hoy
   useEffect(() => {

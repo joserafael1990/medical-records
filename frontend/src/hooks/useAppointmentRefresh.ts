@@ -50,6 +50,11 @@ export const useAppointmentRefresh = ({
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [isLoading, setIsLoading] = useState(false);
 
+    // Serialize selectedDate to avoid infinite loops from Date object reference changes
+    const selectedDateKey = selectedDate instanceof Date && !isNaN(selectedDate.getTime())
+        ? selectedDate.getTime()
+        : new Date().getTime();
+
     // Refresh appointments function - can be called from child components
     const refreshAppointments = useCallback(async () => {
         try {
@@ -63,20 +68,13 @@ export const useAppointmentRefresh = ({
 
             const data = await fetchAppointmentsForView(agendaView, dateToRefresh, apiService.appointments);
 
-            // Force state update to ensure UI refreshes
+            // Update state once with the fetched data
             setAppointments(data || []);
-
-            // Additional state update to ensure the change is reflected
-            setTimeout(() => {
-                setAppointments(prev => {
-                    return data || [];
-                });
-            }, 100);
         } catch (error) {
             console.error('❌ Error refreshing appointments:', error);
             // Don't clear the view if refresh fails
         }
-    }, [selectedDate, agendaView]);
+    }, [selectedDateKey, agendaView]);
 
     // Auto-refresh appointments when view or date changes - only if authenticated
     useEffect(() => {
@@ -120,7 +118,7 @@ export const useAppointmentRefresh = ({
             clearTimeout(timeoutId);
             abortController.abort();
         };
-    }, [agendaView, selectedDate, userId, debounceMs]);
+    }, [agendaView, selectedDateKey, userId, debounceMs]);
 
     return {
         appointments,
