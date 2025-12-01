@@ -2,34 +2,33 @@
 # Usage: doppler run --project cortex --config prd -- docker compose -f compose.prod.yaml up -d
 
 services:
+  # CORREGIDO: Ahora tiene los 2 espacios de sangría necesarios
   python-backend:
-    # Use pre-built image from Docker Hub
-
+    # Use pre-built image from Docker Hub (GitHub Actions)
     image: joserafael1990/medical-records-backend:latest
     restart: always
     init: true
     expose:
       - "8000"
     
-    # --- ARREGLO 1: CONEXIÓN DE RED (IMPORTANTE) ---
+    # Etiquetas para que Coolify (Traefik) encuentre el puerto correcto
     labels:
       - "traefik.enable=true"
       - "traefik.http.services.python-backend.loadbalancer.server.port=8000"
-    # -----------------------------------------------
 
     networks:
       - appnet
     
-    # --- ARREGLO 2: HEALTHCHECK DESACTIVADO (IMPORTANTE) ---
-    # Comentado temporalmente para evitar que Coolify reinicie el contenedor
-    # hasta que agregues la ruta /health en tu código Python.
-     healthcheck:
-       test: [ "CMD-SHELL", "curl -f http://localhost:8000/health || exit 1" ]
-       interval: 30s
-       timeout: 10s
-       retries: 3
-       start_period: 40s
-    # -------------------------------------------------------
+    # --- HEALTHCHECK (Paso 2) ---
+    # Mantenlo comentado por ahora. Cuando agregues @app.get("/health") en tu Python,
+    # quita los símbolos '#' de las siguientes 6 líneas:
+    # healthcheck:
+    #   test: [ "CMD-SHELL", "curl -f http://localhost:8000/health || exit 1" ]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 40s
+    # -----------------------------
 
     environment:
       # Variables injected by Doppler
@@ -50,11 +49,9 @@ services:
       - META_WHATSAPP_API_VERSION=${META_WHATSAPP_API_VERSION:-v24.0}
       - APP_ENV=${APP_ENV:-production}
       
-      # --- ARREGLO 3: CORS MANUAL (EVITA EL CRASH) ---
-      # Sin comillas simples alrededor, solo corchetes y comillas dobles internas
+      # CORS arreglado manualmente (formato lista JSON directo)
       - CORS_ORIGINS=["https://sistema.cortexclinico.com","https://api.cortexclinico.com"]
-      # -----------------------------------------------
-
+      
       - META_WHATSAPP_APP_SECRET=${META_WHATSAPP_APP_SECRET}
       - META_WHATSAPP_VERIFY_TOKEN=${META_WHATSAPP_VERIFY_TOKEN}
       - LOG_LEVEL=${LOG_LEVEL:-info}
@@ -64,9 +61,6 @@ services:
   typescript-frontend:
     # Use pre-built image from Docker Hub
     image: joserafael1990/medical-records-frontend:latest
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
     restart: always
     init: true
     ports:
@@ -82,7 +76,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G # Lower memory limit for production (static files)
+          memory: 512M # Limite bajo porque son archivos estáticos
 
   postgres-db:
     image: postgres:15-alpine
