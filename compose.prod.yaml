@@ -4,7 +4,6 @@
 services:
   python-backend:
     # Use pre-built image from Docker Hub
-    image: joserafael1990/medical-records-backend:latest
     build:
       context: ./backend
       dockerfile: Dockerfile
