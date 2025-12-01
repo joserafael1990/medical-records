@@ -7,11 +7,14 @@
     # ----------- Builder stage -----------
     FROM base AS builder
     
-    # [NUEVO] Instalar herramientas de compilación (GCC, libffi)
-    # Esto es necesario para que 'pip' pueda construir bcrypt y otras librerías C
+    # [CRÍTICO] Instalamos dependencias de compilación
+    # build-essential & python3-dev: Para compilar extensiones de C
+    # libffi-dev: Para bcrypt (seguridad/passwords)
+    # libpq-dev: Para psycopg2 (base de datos Postgres)
     RUN apt-get update && apt-get install -y \
         build-essential \
         libffi-dev \
+        libpq-dev \
         python3-dev \
         && rm -rf /var/lib/apt/lists/*
     
@@ -24,18 +27,17 @@
         .venv/bin/pip install --upgrade pip && \
         .venv/bin/pip install -r requirements.txt
     
-    # Copy the rest of the backend code (excluding secrets, git, IDE files)
+    # Copy the rest of the backend code
     COPY --link . ./
-    
-    # (Omitido) Validación de sintaxis para acelerar builds en MVP
     
     # ----------- Final stage -----------
     FROM base AS final
     
-    # [NUEVO] Instalar librerías de sistema para ejecución (Runtime)
-    # Esto soluciona el error: "cannot open shared object file"
+    # [CRÍTICO] Instalamos dependencias de ejecución (Runtime)
+    # Estas son necesarias para que las librerías compiladas arriba funcionen al arrancar
     RUN apt-get update && apt-get install -y \
         libffi-dev \
+        libpq-dev \
         && rm -rf /var/lib/apt/lists/*
     
     # Create a non-root user for security
@@ -43,21 +45,18 @@
     
     WORKDIR /app
     
-    # Copy the virtual environment from builder
+    # Copy the virtual environment and code from builder
     COPY --from=builder /app/.venv /app/.venv
-    # Copy the backend code from builder
     COPY --from=builder /app /app
-    
-    # Copy entrypoint script and make it executable
     COPY --from=builder /app/entrypoint.sh /app/entrypoint.sh
     
-    # Create backup of .venv in a location that won't be mounted (as root)
+    # Create backup of .venv
     RUN cp -r /app/.venv /opt/.venv_backup
     
     # Set PATH to use the virtual environment
     ENV PATH="/app/.venv/bin:$PATH"
     
-    # Change ownership to appuser (including backup for restoration)
+    # Change ownership
     RUN chown -R appuser:appuser /app && \
         chown -R appuser:appuser /opt/.venv_backup && \
         chmod +x /app/entrypoint.sh
@@ -65,12 +64,11 @@
     # Switch to non-root user
     USER appuser
     
-    # Expose the default port (FastAPI default is 8000)
+    # Expose the default port
     EXPOSE 8000
     
-    # Use entrypoint script to preserve .venv when volumes mount
-    # Use sh to execute script to avoid permission issues when volume mounts
+    # Entrypoint
     ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]
     
-    # Default command: run the FastAPI app
+    # Default command
     CMD ["/app/.venv/bin/uvicorn", "main_clean_english:app", "--host", "0.0.0.0", "--port", "8000"]
