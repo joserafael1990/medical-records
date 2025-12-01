@@ -2,6 +2,8 @@ import { useCallback } from 'react';
 import { Appointment, AppointmentFormData } from '../types';
 import { apiService } from '../services';
 import { transformFormDataToCreatePayload, transformFormDataToUpdatePayload } from '../utils/appointmentTransformers';
+import { logger } from '../utils/logger';
+import { safeConsoleError } from '../utils/errorHandling';
 
 interface UseAppointmentActionsProps {
     user: any;
@@ -90,7 +92,8 @@ export const useAppointmentActions = ({
 
             return response;
         } catch (error: any) {
-            console.error('Error creating appointment directly:', error);
+            logger.error('Error creating appointment directly', error, 'api');
+            safeConsoleError('Error creating appointment directly:', error);
             throw error;
         } finally {
             setIsLoading(false);
@@ -155,7 +158,9 @@ export const useAppointmentActions = ({
             await refreshAppointments();
 
         } catch (error: any) {
-            console.error('Error submitting appointment:', error);
+            // Log error with full details using safe error logging
+            logger.error('Error submitting appointment', error, 'api');
+            safeConsoleError('Error submitting appointment:', error);
 
             // Handle validation errors
             if (error.response?.data?.detail) {
@@ -166,6 +171,9 @@ export const useAppointmentActions = ({
                     // If detail is a string (general error)
                     setFormErrorMessage(error.response.data.detail);
                 }
+            } else if (error.message) {
+                // Use error message if available
+                setFormErrorMessage(error.message);
             } else {
                 setFormErrorMessage('Ocurrió un error al guardar la cita. Por favor intente nuevamente.');
             }
@@ -199,8 +207,9 @@ export const useAppointmentActions = ({
 
             showSuccessMessage('Cita cancelada correctamente');
             await refreshAppointments();
-        } catch (error) {
-            console.error('Error cancelling appointment:', error);
+        } catch (error: any) {
+            logger.error('Error cancelling appointment', error, 'api');
+            safeConsoleError('Error cancelling appointment:', error);
             setFormErrorMessage('Error al cancelar la cita');
         }
     }, [refreshAppointments, showSuccessMessage, setFormErrorMessage]);

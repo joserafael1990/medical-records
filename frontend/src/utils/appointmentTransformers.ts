@@ -46,9 +46,19 @@ export const transformFormDataToCreatePayload = (
     doctorId: number,
     appointmentDuration: number
 ) => {
-    const dateTimeStr = formData.date_time.includes(':') && !formData.date_time.includes(':00')
-        ? `${formData.date_time}:00`
-        : formData.date_time;
+    // Support both date_time (legacy) and appointment_date (current)
+    const dateTimeValue = formData.date_time || formData.appointment_date;
+    
+    if (!dateTimeValue) {
+        throw new Error('Missing date/time field: appointment_date or date_time is required');
+    }
+
+    // Ensure dateTimeValue is a string before calling includes
+    const dateTimeStr = typeof dateTimeValue === 'string' 
+        ? (dateTimeValue.includes(':') && !dateTimeValue.includes(':00')
+            ? `${dateTimeValue}:00`
+            : dateTimeValue)
+        : String(dateTimeValue);
 
     const appointmentDate = new Date(dateTimeStr);
 
@@ -66,17 +76,26 @@ export const transformFormDataToCreatePayload = (
     const cdmxDateISO = mexicoTimeString.replace(' ', 'T') + '-06:00';
     const cdmxEndDateISO = mexicoEndTimeString.replace(' ', 'T') + '-06:00';
 
-    return {
+    const payload: any = {
         patient_id: formData.patient_id,
         doctor_id: doctorId,
         appointment_date: cdmxDateISO,
         end_time: cdmxEndDateISO,
-        appointment_type: formData.appointment_type,
+        appointment_type_id: formData.appointment_type_id || 1, // Default to 1 (primera vez) if not provided
+        office_id: formData.office_id || null,
+        consultation_type: formData.consultation_type || 'Seguimiento',
         status: formData.status || 'por_confirmar',
         preparation_instructions: formData.preparation_instructions || '',
         auto_reminder_enabled: !!formData.auto_reminder_enabled,
         auto_reminder_offset_minutes: (formData.auto_reminder_offset_minutes ?? 360)
     };
+
+    // Include reminders if present
+    if (formData.reminders && Array.isArray(formData.reminders) && formData.reminders.length > 0) {
+        payload.reminders = formData.reminders;
+    }
+
+    return payload;
 };
 
 /**
