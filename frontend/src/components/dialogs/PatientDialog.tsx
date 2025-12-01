@@ -217,7 +217,12 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
 
         {/* Action buttons */}
         <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', width: '100%' }}>
-          <Button onClick={handleClose} color="inherit" disabled={loading}>
+          <Button 
+            onClick={handleClose} 
+            color="inherit" 
+            disabled={loading}
+            type="button"
+          >
             Cancelar
           </Button>
           <Button
