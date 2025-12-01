@@ -1,7 +1,7 @@
 """
 Diagnosis catalog utilities for consultation service
 """
-from typing import Dict, Any, Optional, List, tuple
+from typing import Dict, Any, Optional, List
 from sqlalchemy.orm import Session
 from logger import get_logger
 

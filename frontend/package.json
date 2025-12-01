@@ -39,10 +39,11 @@
   "scripts": {
     "start": "SKIP_PREFLIGHT_CHECK=true TSC_COMPILE_ON_ERROR=true DISABLE_ESLINT_PLUGIN=true GENERATE_SOURCEMAP=false react-scripts start",
     "build": "react-scripts build",
-    "test": "jest",
+    "test": "jest --forceExit --detectOpenHandles",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
-    "test:ci": "jest --ci --coverage --watchAll=false",
+    "test:coverage": "jest --coverage --forceExit",
+    "test:ci": "jest --ci --coverage --watchAll=false --forceExit --maxWorkers=2",
+    "test:cleanup": "pkill -f jest-worker || true",
     "lint": "eslint src --ext .ts,.tsx",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
     "type-check": "tsc --noEmit",
@@ -71,8 +72,13 @@
     ]
   },
   "devDependencies": {
+    "@babel/core": "^7.23.0",
+    "@babel/preset-env": "^7.23.0",
+    "@babel/preset-react": "^7.22.0",
+    "@babel/preset-typescript": "^7.23.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
+    "babel-jest": "^29.7.0",
     "babel-plugin-import": "^1.13.8",
     "webpack-bundle-analyzer": "^4.10.2"
   }

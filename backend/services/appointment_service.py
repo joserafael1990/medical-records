@@ -124,7 +124,7 @@ class AppointmentService:
         return query
 
     @staticmethod
-    def _process_calendar_results(appointments: List[Appointment]) -> List[Dict[str, Any]]:
+    def _process_calendar_results(appointments: List[Appointment], db: Session = None) -> List[Dict[str, Any]]:
         """Process appointment results and handle timezone conversion."""
         cdmx_tz = pytz.timezone('America/Mexico_City')
         result = []
@@ -141,14 +141,19 @@ class AppointmentService:
                 # Aware datetime (stored in UTC) -> convert to CDMX
                 start_time = appointment.appointment_date.astimezone(cdmx_tz)
                 
-            # Calculate end time (default 30 mins if not set)
+            # Calculate end time - use doctor's duration if end_time is not set
             if appointment.end_time:
                 if appointment.end_time.tzinfo is None:
                     end_time = cdmx_tz.localize(appointment.end_time)
                 else:
                     end_time = appointment.end_time.astimezone(cdmx_tz)
             else:
-                end_time = start_time + timedelta(minutes=30)
+                # Get doctor's appointment duration, fallback to 30 if not available
+                duration_minutes = 30
+                if appointment.doctor and appointment.doctor.appointment_duration:
+                    # Try to get from already loaded relationship
+                    duration_minutes = appointment.doctor.appointment_duration
+                end_time = start_time + timedelta(minutes=duration_minutes)
 
             # Format patient name for calendar title
             patient_name = serialized.get("patient_name", "Paciente no encontrado")
@@ -261,7 +266,7 @@ class AppointmentService:
             extra={"doctor_id": doctor_id, "count": len(appointments)}
         )
         
-        return cls._process_calendar_results(appointments)
+        return cls._process_calendar_results(appointments, db)
 
     @classmethod
     def create_appointment_with_reminders(

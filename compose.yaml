@@ -1,112 +1,99 @@
+# Docker Compose for Production (Doppler + Docker Hub Images)
+# Usage: doppler run --project cortex --config prd -- docker compose -f compose.prod.yaml up -d
+
 services:
   python-backend:
+    # Use pre-built image from Docker Hub
+    image: joserafael1990/medical-records-backend:latest
     build:
       context: ./backend
       dockerfile: Dockerfile
-    restart: unless-stopped
+    restart: always
     init: true
-    ports:
-      - "8000:8000"  # FastAPI default port
+    expose:
+      - "8000"
+
+    # --- ARREGLO 1: CONEXIÓN CON COOLIFY (TRAEFIK) ---
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.python-backend.loadbalancer.server.port=8000"
+    # -------------------------------------------------
+
     networks:
       - appnet
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      test: [ "CMD-SHELL", "curl -f http://localhost:8000/health || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
     environment:
-      - SECRET_KEY=${SECRET_KEY:-}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
-      - ENABLE_ENCRYPTION=${ENABLE_ENCRYPTION:-false}
+      # Variables injected by Doppler
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - SENTRY_DSN_BACKEND=${SENTRY_DSN_BACKEND}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
+      - ENABLE_ENCRYPTION=${ENABLE_ENCRYPTION:-true}
       - SECURITY_HEADERS_ENABLED=${SECURITY_HEADERS_ENABLED:-true}
-      - CONTENT_SECURITY_POLICY=${CONTENT_SECURITY_POLICY:-}
+      - CONTENT_SECURITY_POLICY=${CONTENT_SECURITY_POLICY}
       - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
       - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-120}
       - RATE_LIMIT_WINDOW_SECONDS=${RATE_LIMIT_WINDOW_SECONDS:-60}
-      - MEDICAL_ENCRYPTION_KEY=${MEDICAL_ENCRYPTION_KEY:-}
-      # Google Calendar OAuth
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
-      # Amplitude Analytics
-      - AMPLITUDE_API_KEY=${AMPLITUDE_API_KEY}
-      # WhatsApp Provider: 'meta' para usar Meta directamente, 'twilio' para usar Twilio
+      - MEDICAL_ENCRYPTION_KEY=${MEDICAL_ENCRYPTION_KEY}
       - WHATSAPP_PROVIDER=${WHATSAPP_PROVIDER:-meta}
-
-      # Meta WhatsApp credentials (cuando WHATSAPP_PROVIDER=meta)
-      # Obtén estas credenciales de: https://developers.facebook.com/
       - META_WHATSAPP_PHONE_ID=${META_WHATSAPP_PHONE_ID}
       - META_WHATSAPP_TOKEN=${META_WHATSAPP_TOKEN}
       - META_WHATSAPP_API_VERSION=${META_WHATSAPP_API_VERSION:-v24.0}
-      # Opcional:
-      # - META_WHATSAPP_BUSINESS_ID=${META_WHATSAPP_BUSINESS_ID}
-      # - META_WHATSAPP_VERIFY_TOKEN=${META_WHATSAPP_VERIFY_TOKEN}
+      - APP_ENV=${APP_ENV:-production}
 
-    env_file:
-      - .env
+      # --- ARREGLO 2: CORS FIXED (EVITA EL CRASH LOOP) ---
+      - CORS_ORIGINS=["https://sistema.cortexclinico.com","https://api.cortexclinico.com"]
+      # ---------------------------------------------------
 
-    # env_file: .env  # Puedes usar un archivo .env para las credenciales en lugar de hardcodearlas
-    volumes:
-      # Mount backend source code for hot reload (exclude venv)
-      # Note: entrypoint.sh will restore .venv if it gets overwritten by volume mount
-      - ./backend:/app
-      - /app/__pycache__  # Exclude Python cache
+      - META_WHATSAPP_APP_SECRET=${META_WHATSAPP_APP_SECRET}
+      - META_WHATSAPP_VERIFY_TOKEN=${META_WHATSAPP_VERIFY_TOKEN}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
     depends_on:
-      - postgres-db  # Ensure DB is up before backend starts
+      - postgres-db
 
   typescript-frontend:
+    # Use pre-built image from Docker Hub
+    image: joserafael1990/medical-records-frontend:latest
     build:
       context: ./frontend
-      dockerfile: Dockerfile.dev  # Desarrollo con hot reload
-    restart: unless-stopped
+      dockerfile: Dockerfile
+    restart: always
     init: true
     ports:
-      - "3000:3000"  # React app default port
+      - "3000:3000"
     networks:
       - appnet
     environment:
-      - NODE_OPTIONS=--max-old-space-size=8192  # 8GB memory limit
-      - GENERATE_SOURCEMAP=false
-      - HOST=0.0.0.0  # Escuchar en todas las interfaces para acceso desde host
-      - PORT=3000  # Puerto del servidor de desarrollo React
+      - REACT_APP_SENTRY_DSN=${REACT_APP_SENTRY_DSN}
+      - REACT_APP_SENTRY_ENVIRONMENT=${REACT_APP_SENTRY_ENVIRONMENT:-production}
       - REACT_APP_AMPLITUDE_API_KEY=${REACT_APP_AMPLITUDE_API_KEY}
-      - TSC_COMPILE_ON_ERROR=true
-      - ESLINT_NO_DEV_ERRORS=true
-      - SKIP_PREFLIGHT_CHECK=true
-      - DISABLE_ESLINT_PLUGIN=true
-      - FAST_REFRESH=true  # Enable hot reload
-      - CI=false  # Disable CI mode for development
-    env_file:
-      - .env
-    volumes:
-      # Mount frontend source code for hot reload
-      - ./frontend:/app
-      - /app/node_modules  # Exclude node_modules (use container's version)
-      - /app/build  # Exclude build directory
-      - /app/dist  # Exclude dist directory
     depends_on:
-      - python-backend  # Frontend expects backend to be up
+      - python-backend
     deploy:
       resources:
         limits:
-          memory: 10G  # Limit container memory to 10GB
+          memory: 2G # Lower memory limit for production (static files)
 
   postgres-db:
-    image: postgres:latest
-    restart: unless-stopped
+    image: postgres:15-alpine
+    restart: always
     networks:
       - appnet
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-historias_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-historias_pass}
-      POSTGRES_DB: ${POSTGRES_DB:-historias_clinicas}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5433:5432"  # Expose on port 5433 to avoid conflict with local PostgreSQL
+      - "5432:5432" # Standard port for production
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-historias_user} -d ${POSTGRES_DB:-historias_clinicas}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-historias_user} -d ${POSTGRES_DB:-historias_clinicas}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -117,4 +104,3 @@ networks:
 
 volumes:
   postgres_data:
-    # Persistent storage for PostgreSQL

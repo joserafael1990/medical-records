@@ -51,6 +51,18 @@ def create_appointment(db: Session, appointment_data: Union[schemas.AppointmentC
     db.add(db_appointment)
     db.commit()
     db.refresh(db_appointment)
+    
+    # Sincronizar con Google Calendar si está configurado
+    try:
+        from services.google_calendar_service import GoogleCalendarService
+        GoogleCalendarService.create_calendar_event(db, doctor_id, db_appointment)
+    except Exception as e:
+        # No fallar si Google Calendar no está configurado o hay error
+        api_logger.warning("Error al sincronizar creación con Google Calendar (no crítico)", exc_info=True, extra={
+            "doctor_id": doctor_id,
+            "appointment_id": db_appointment.id
+        })
+    
     return db_appointment
 
 def get_appointment(db: Session, appointment_id: int) -> Optional[Appointment]:
@@ -210,6 +222,17 @@ def update_appointment(db: Session, appointment_id: int, appointment_data) -> Ap
     
     db.commit()
     db.refresh(appointment)
+    
+    # Sincronizar con Google Calendar si está configurado
+    try:
+        from services.google_calendar_service import GoogleCalendarService
+        GoogleCalendarService.update_calendar_event(db, appointment.doctor_id, appointment)
+    except Exception as e:
+        # No fallar si Google Calendar no está configurado o hay error
+        api_logger.warning("Error al sincronizar actualización con Google Calendar (no crítico)", exc_info=True, extra={
+            "doctor_id": appointment.doctor_id,
+            "appointment_id": appointment_id
+        })
     
     api_logger.info(
         "✅ Appointment updated successfully",

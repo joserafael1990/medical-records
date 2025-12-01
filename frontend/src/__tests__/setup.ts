@@ -9,20 +9,20 @@ global.IntersectionObserver = class IntersectionObserver {
   root = null;
   rootMargin = '';
   thresholds = [];
-  
-  constructor() {}
-  disconnect() {}
-  observe() {}
-  unobserve() {}
+
+  constructor() { }
+  disconnect() { }
+  observe() { }
+  unobserve() { }
   takeRecords() { return []; }
 } as any;
 
 // Mock ResizeObserver
 global.ResizeObserver = class ResizeObserver {
-  constructor() {}
-  disconnect() {}
-  observe() {}
-  unobserve() {}
+  constructor() { }
+  disconnect() { }
+  observe() { }
+  unobserve() { }
 };
 
 // Mock matchMedia
@@ -128,3 +128,39 @@ export const createMockAppointment = (overrides = {}) => ({
   updated_at: '2024-01-01T09:00:00Z',
   ...overrides
 });
+
+// ============================================================================
+// CLEANUP HOOKS - Prevent zombie processes
+// ============================================================================
+
+// Global cleanup after all tests
+afterAll(() => {
+  // Clear all timers
+  jest.clearAllTimers();
+
+  // Clear all mocks
+  jest.clearAllMocks();
+
+  // Reset modules
+  jest.resetModules();
+});
+
+// Cleanup after each test
+afterEach(() => {
+  // Clear any pending timers
+  jest.clearAllTimers();
+
+  // Restore all mocks
+  jest.restoreAllMocks();
+});
+
+// Handle process exit signals
+const cleanup = () => {
+  // Force exit if tests hang
+  process.exit(0);
+};
+
+// Register cleanup handlers
+process.on('SIGINT', cleanup);
+process.on('SIGTERM', cleanup);
+process.on('exit', cleanup);

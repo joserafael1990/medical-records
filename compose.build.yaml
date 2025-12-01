@@ -1,0 +1,12 @@
+services:
+  python-backend:
+    image: joserafael1990/medical-records-backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+  typescript-frontend:
+    image: joserafael1990/medical-records-frontend:latest
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile

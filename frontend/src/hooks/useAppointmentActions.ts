@@ -214,11 +214,14 @@ export const useAppointmentActions = ({
         }
     }, [refreshAppointments, showSuccessMessage, setFormErrorMessage]);
 
-    // Wrapper for handleCancelAppointment to use with selectedAppointment
+    // Wrapper for handleCancelAppointment to close dialog and optionally cancel appointment
     const handleCancelAppointment = useCallback(() => {
+        // Always close the dialog
+        setAppointmentDialogOpen(false);
+        
+        // If there's a selected appointment, cancel it
         if (selectedAppointment) {
             cancelAppointment(selectedAppointment.id);
-            setAppointmentDialogOpen(false);
         }
     }, [selectedAppointment, cancelAppointment, setAppointmentDialogOpen]);
 

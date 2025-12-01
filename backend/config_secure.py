@@ -22,8 +22,10 @@ def get_jwt_secret_key() -> str:
     if env_key:
         return env_key
     
-    # 2. Key segura para desarrollo (cambiar en producción)
-    dev_key = "hc_2024_super_secure_random_key_9f8e7d6c5b4a3210fedcba0987654321abcdef"
+    # 2. Generar key aleatoria para desarrollo si no existe
+    # Esto evita tener secretos hardcodeados en el código
+    import secrets
+    dev_key = secrets.token_urlsafe(64)
     
     return dev_key
 
@@ -47,7 +49,7 @@ DATABASE_URL = os.getenv(
 # ============================================================================
 
 DEFAULT_ADMIN_USERNAME = os.getenv("DEFAULT_ADMIN_USERNAME", "admin")
-DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "HistoriasClinicas2024!")
+DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "") # Debe configurarse vía ENV
 
 # ============================================================================
 # CONFIGURACIÓN GENERAL
@@ -79,12 +81,12 @@ def generate_secret_key() -> str:
 def validate_config() -> bool:
     """Validar que la configuración sea segura"""
     if is_production():
-        # En producción, verificar que las keys no sean las default
-        if JWT_SECRET_KEY == "hc_2024_super_secure_random_key_9f8e7d6c5b4a3210fedcba0987654321abcdef":
-            raise ValueError("⚠️ SECURITY: Cambiar JWT_SECRET_KEY en producción!")
+        # En producción, verificar que las keys estén configuradas
+        if not JWT_SECRET_KEY or len(JWT_SECRET_KEY) < 32:
+            raise ValueError("⚠️ SECURITY: JWT_SECRET_KEY insegura o no configurada en producción!")
         
-        if DEFAULT_ADMIN_PASSWORD == "HistoriasClinicas2024!":
-            raise ValueError("⚠️ SECURITY: Cambiar DEFAULT_ADMIN_PASSWORD en producción!")
+        if not DEFAULT_ADMIN_PASSWORD:
+            raise ValueError("⚠️ SECURITY: DEFAULT_ADMIN_PASSWORD no configurada en producción!")
     
     return True
 

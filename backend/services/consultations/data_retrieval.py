@@ -1,7 +1,7 @@
 """
 Data retrieval helpers for consultation service
 """
-from typing import List, Dict, Any, Optional, tuple
+from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from database import (
     ConsultationVitalSign, ConsultationPrescription, 

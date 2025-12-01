@@ -5,10 +5,15 @@
 module.exports = {
   // Test environment
   testEnvironment: 'jsdom',
-  
+
+  // Transform files with babel-jest
+  transform: {
+    '^.+\\.(ts|tsx|js|jsx)$': ['babel-jest', { configFile: './.babelrc' }]
+  },
+
   // Setup files
   setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'],
-  
+
   // Module name mapping for absolute imports and static assets
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
@@ -21,21 +26,21 @@ module.exports = {
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
     '\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$': '<rootDir>/src/__tests__/__mocks__/fileMock.js'
   },
-  
+
   // File extensions to consider
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
-  
+
   // Transform ignore patterns - allow transforming node_modules ESM packages
   transformIgnorePatterns: [
     'node_modules/(?!(axios|date-fns|@mui/x-date-pickers)/)'
   ],
-  
+
   // Test match patterns
   testMatch: [
     '<rootDir>/src/**/__tests__/**/*.(ts|tsx|js|jsx)',
     '<rootDir>/src/**/*.(test|spec).(ts|tsx|js|jsx)'
   ],
-  
+
   // Coverage configuration
   collectCoverageFrom: [
     'src/**/*.(ts|tsx)',
@@ -44,7 +49,7 @@ module.exports = {
     '!src/react-app-env.d.ts',
     '!src/__tests__/**/*'
   ],
-  
+
   // Coverage thresholds
   coverageThreshold: {
     global: {
@@ -54,16 +59,28 @@ module.exports = {
       statements: 70
     }
   },
-  
+
   // Coverage reporters
   coverageReporters: ['text', 'lcov', 'html'],
-  
+
   // Clear mocks between tests
   clearMocks: true,
-  
+
   // Verbose output
   verbose: true,
-  
+
   // Test timeout
-  testTimeout: 10000
+  testTimeout: 10000,
+
+  // Force exit after tests complete
+  forceExit: true,
+
+  // Detect open handles (async operations that prevent exit)
+  detectOpenHandles: true,
+
+  // Max workers for parallel execution
+  maxWorkers: '50%',
+
+  // Bail after first test failure in CI
+  bail: process.env.CI ? 1 : 0
 };

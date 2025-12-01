@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi.testclient import TestClient
 import types
 
@@ -19,7 +20,7 @@ def test_whatsapp_test_endpoint_success(monkeypatch):
 
     # Mock del servicio de WhatsApp para no llamar proveedores reales
     class FakeService:
-        def send_text_message(self, to_phone: str, message: str, country_code: str | None = None):
+        def send_text_message(self, to_phone: str, message: str, country_code: Optional[str] = None):
             assert to_phone
             assert isinstance(message, str) and len(message) > 0
             return {"success": True, "message_sid": "SMxxxxxxxx"}
@@ -49,7 +50,7 @@ def test_whatsapp_test_endpoint_failure(monkeypatch):
 
     # Fake service que falla
     class FakeServiceFail:
-        def send_text_message(self, to_phone: str, message: str, country_code: str | None = None):
+        def send_text_message(self, to_phone: str, message: str, country_code: Optional[str] = None):
             return {"success": False, "error": "provider error"}
 
     monkeypatch.setattr(ws_module, "get_whatsapp_service", lambda: FakeServiceFail())

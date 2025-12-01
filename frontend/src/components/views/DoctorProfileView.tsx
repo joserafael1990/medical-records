@@ -18,7 +18,8 @@ import {
   Person as PersonIcon,
   Schedule as ScheduleIcon,
   Add as AddIcon,
-  Edit as EditIcon
+  Edit as EditIcon,
+  LocationOn as LocationIcon
 } from '@mui/icons-material';
 import DoctorProfileDialog from '../dialogs/DoctorProfileDialog';
 import ScheduleConfigDialog from '../dialogs/ScheduleConfigDialog';
