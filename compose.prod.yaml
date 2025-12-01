@@ -4,9 +4,8 @@
 services:
   python-backend:
     # Use pre-built image from Docker Hub
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+
+    image: joserafael1990/medical-records-backend:latest
     restart: always
     init: true
     expose:
@@ -65,9 +64,7 @@ services:
   typescript-frontend:
     # Use pre-built image from Docker Hub
     image: joserafael1990/medical-records-frontend:latest
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+
     restart: always
     init: true
     ports:
