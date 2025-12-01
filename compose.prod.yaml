@@ -23,12 +23,12 @@ services:
     # --- ARREGLO 2: HEALTHCHECK DESACTIVADO (IMPORTANTE) ---
     # Comentado temporalmente para evitar que Coolify reinicie el contenedor
     # hasta que agregues la ruta /health en tu código Python.
-    # healthcheck:
-    #   test: [ "CMD-SHELL", "curl -f http://localhost:8000/health || exit 1" ]
-    #   interval: 30s
-    #   timeout: 10s
-    #   retries: 3
-    #   start_period: 40s
+     healthcheck:
+       test: [ "CMD-SHELL", "curl -f http://localhost:8000/health || exit 1" ]
+       interval: 30s
+       timeout: 10s
+       retries: 3
+       start_period: 40s
     # -------------------------------------------------------
 
     environment:
@@ -64,7 +64,9 @@ services:
   typescript-frontend:
     # Use pre-built image from Docker Hub
     image: joserafael1990/medical-records-frontend:latest
-
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     restart: always
     init: true
     ports:
