@@ -330,11 +330,11 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                   }}
                 >
                   <Avatar sx={{ bgcolor: 'primary.main' }}>
-                    {appointment.patient?.first_name?.[0] || 'P'}
+                    {(appointment.patient_name || appointment.patient?.name || 'P')[0].toUpperCase()}
                   </Avatar>
                   <Box sx={{ flex: 1 }}>
                     <Typography variant="body1" sx={{ color: 'text.primary' }}>
-                      {appointment.patient?.first_name} {appointment.patient?.last_name}
+                      {appointment.patient_name || appointment.patient?.name || 'Paciente'}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       {formatTime(appointment.date_time)} - {appointment.appointment_type_name || 'Cita'}

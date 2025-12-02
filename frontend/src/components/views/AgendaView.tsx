@@ -266,7 +266,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                           return (
                             <Box key={index} sx={{ mb: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
                               <Chip
-                                label={`${formatTime(appointment.date_time || appointment.appointment_date)} ${appointment.patient?.first_name || appointment.patient?.name}`}
+                                label={`${formatTime(appointment.date_time || appointment.appointment_date)} ${appointment.patient_name || appointment.patient?.name || 'Paciente'}`}
                                 size="small"
                                 sx={{ 
                                   fontSize: '0.65rem', 
