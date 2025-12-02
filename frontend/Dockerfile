@@ -5,6 +5,19 @@ ARG NODE_VERSION=22.13.1
 FROM node:${NODE_VERSION}-slim AS builder
 WORKDIR /app
 
+# Build arguments for React environment variables
+# These need to be available during build time, not just runtime
+ARG REACT_APP_API_URL
+ARG REACT_APP_SENTRY_DSN
+ARG REACT_APP_SENTRY_ENVIRONMENT
+ARG REACT_APP_AMPLITUDE_API_KEY
+
+# Set as environment variables for the build process
+ENV REACT_APP_API_URL=${REACT_APP_API_URL}
+ENV REACT_APP_SENTRY_DSN=${REACT_APP_SENTRY_DSN}
+ENV REACT_APP_SENTRY_ENVIRONMENT=${REACT_APP_SENTRY_ENVIRONMENT}
+ENV REACT_APP_AMPLITUDE_API_KEY=${REACT_APP_AMPLITUDE_API_KEY}
+
 # Install dependencies (use npm ci for deterministic builds)
 COPY --link package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \

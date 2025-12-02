@@ -11,7 +11,8 @@ import './services/analytics/AmplitudeService';
 const sentryDsn = process.env.REACT_APP_SENTRY_DSN;
 const isProduction = 
   process.env.NODE_ENV === 'production' ||
-  process.env.REACT_APP_ENV === 'production';
+  process.env.REACT_APP_ENV === 'production' ||
+  process.env.REACT_APP_SENTRY_ENVIRONMENT === 'production';
 
 // Solo habilitar Sentry en producción
 const isSentryEnabled = Boolean(sentryDsn) && isProduction;
