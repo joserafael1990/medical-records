@@ -62,7 +62,7 @@ export function usePatientManagementComponent(
 
   // Handle view patient details
   const handleViewPatientDetails = useCallback((patient: Patient) => {
-    console.log('👁️ Viendo detalles del paciente:', patient.first_name, patient.paternal_surname);
+    console.log('👁️ Viendo detalles del paciente:', patient.name || patient.full_name || 'Paciente sin nombre');
     setSelectedPatient(patient);
     setSelectedPatientData({
       patient: patient,

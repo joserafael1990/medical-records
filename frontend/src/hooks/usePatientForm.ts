@@ -259,9 +259,7 @@ export const usePatientForm = (props: UsePatientFormProps): UsePatientFormReturn
           }
           
           setFormData({
-            first_name: patient.first_name || '',
-            paternal_surname: patient.paternal_surname || '',
-            maternal_surname: patient.maternal_surname || '',
+            name: patient.name || patient.full_name || '',
             birth_date: patient.birth_date || '',
             date_of_birth: patient.birth_date || '',
             gender: patient.gender || '',

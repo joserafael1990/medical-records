@@ -68,9 +68,7 @@ export const usePatientDialog = ({
   
   // Form state
   const [formData, setFormData] = useState<PatientFormData>({
-    first_name: '',
-    paternal_surname: '',
-    maternal_surname: '',
+    name: '',
     birth_date: '',
     date_of_birth: '',
     gender: '',
@@ -174,9 +172,7 @@ export const usePatientDialog = ({
   useEffect(() => {
     if (patient) {
       setFormData({
-        first_name: patient.first_name || '',
-        paternal_surname: patient.paternal_surname || '',
-        maternal_surname: patient.maternal_surname || '',
+        name: patient.name || patient.full_name || '',
         birth_date: patient.birth_date || '',
         date_of_birth: patient.birth_date || '',
         gender: patient.gender || '',
@@ -210,9 +206,7 @@ export const usePatientDialog = ({
     } else {
       // Reset form for new patient
       setFormData({
-        first_name: '',
-        paternal_surname: '',
-        maternal_surname: '',
+        name: '',
         birth_date: '',
         date_of_birth: '',
         gender: '',
@@ -265,10 +259,8 @@ export const usePatientDialog = ({
   // Validate individual field
   const validateField = useCallback((field: string, value: any): string => {
     switch (field) {
-      case 'first_name':
-        return !value ? 'El nombre es obligatorio' : '';
-      case 'paternal_surname':
-        return !value ? 'El apellido paterno es obligatorio' : '';
+      case 'name':
+        return !value || !value.trim() ? 'El nombre completo es obligatorio' : '';
       case 'email':
         if (!value) return 'El email es obligatorio';
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -291,7 +283,7 @@ export const usePatientDialog = ({
   // Validate entire form
   const validateForm = useCallback((): boolean => {
     const requiredFields = [
-      'first_name', 'paternal_surname', 'email', 'primary_phone', 
+      'name', 'email', 'primary_phone', 
       'curp', 'birth_date', 'gender'
     ];
     

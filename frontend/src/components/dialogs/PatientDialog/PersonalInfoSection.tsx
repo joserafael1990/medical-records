@@ -21,9 +21,7 @@ import { es } from 'date-fns/locale';
 
 interface PersonalInfoSectionProps {
   formData: {
-    first_name: string;
-    paternal_surname: string;
-    maternal_surname: string;
+    name: string;
     birth_date: string;
     gender: string;
     curp: string;
@@ -70,41 +68,16 @@ export const PersonalInfoSection: React.FC<PersonalInfoSectionProps> = ({
       </Box>
       
       <Grid container spacing={2}>
-        {/* First Name */}
-        <Grid item xs={12} sm={6}>
+        {/* Full Name */}
+        <Grid item xs={12}>
           <TextField
-            label="Nombre"
-            value={formData.first_name}
-            onChange={(e) => onInputChange('first_name', e.target.value)}
-            error={!!errors.first_name}
-            helperText={errors.first_name}
+            label="Nombre Completo"
+            value={formData.name}
+            onChange={(e) => onInputChange('name', e.target.value)}
+            error={!!errors.name}
+            helperText={errors.name || 'Ingrese el nombre completo del paciente'}
             fullWidth
             required
-          />
-        </Grid>
-        
-        {/* Paternal Surname */}
-        <Grid item xs={12} sm={6}>
-          <TextField
-            label="Apellido Paterno"
-            value={formData.paternal_surname}
-            onChange={(e) => onInputChange('paternal_surname', e.target.value)}
-            error={!!errors.paternal_surname}
-            helperText={errors.paternal_surname}
-            fullWidth
-            required
-          />
-        </Grid>
-        
-        {/* Maternal Surname */}
-        <Grid item xs={12} sm={6}>
-          <TextField
-            label="Apellido Materno"
-            value={formData.maternal_surname}
-            onChange={(e) => onInputChange('maternal_surname', e.target.value)}
-            error={!!errors.maternal_surname}
-            helperText={errors.maternal_surname}
-            fullWidth
           />
         </Grid>
         

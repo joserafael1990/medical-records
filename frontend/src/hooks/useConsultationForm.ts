@@ -199,8 +199,8 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
     follow_up_instructions: '',
     therapeutic_plan: '',
     interconsultations: '',
-    doctor_name: doctorProfile?.first_name && doctorProfile?.last_name
-      ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name} ${doctorProfile.last_name}`.trim()
+    doctor_name: doctorProfile?.name || doctorProfile?.full_name
+      ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.name || doctorProfile.full_name}`.trim()
       : '',
     doctor_professional_license: doctorProfile?.professional_license || '',
     doctor_specialty: doctorProfile?.specialty || '',
@@ -208,7 +208,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
     appointment_id: '',
     primary_diagnoses: [],
     secondary_diagnoses_list: [],
-  }), [doctorProfile?.first_name, doctorProfile?.last_name, doctorProfile?.title, doctorProfile?.professional_license, doctorProfile?.specialty]);
+  }), [doctorProfile?.name, doctorProfile?.full_name, doctorProfile?.title, doctorProfile?.professional_license, doctorProfile?.specialty]);
 
   const [formData, setFormData] = useState<ConsultationFormData>(initialFormData);
   const [currentConsultationId, setCurrentConsultationId] = useState<number | null>(consultation?.id ?? null);
@@ -429,8 +429,8 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
         therapeutic_plan: resolvedConsultation.therapeutic_plan || '',
         laboratory_results: resolvedConsultation.laboratory_results || '',
         interconsultations: resolvedConsultation.interconsultations || '',
-        doctor_name: resolvedConsultation.doctor_name || doctorProfile?.first_name && doctorProfile?.last_name
-          ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name} ${doctorProfile.last_name}`.trim()
+        doctor_name: resolvedConsultation.doctor_name || (doctorProfile?.name || doctorProfile?.full_name)
+          ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.name || doctorProfile.full_name}`.trim()
           : '',
         doctor_professional_license: resolvedConsultation.doctor_professional_license || doctorProfile?.professional_license || '',
         doctor_specialty: resolvedConsultation.doctor_specialty || doctorProfile?.specialty || '',
@@ -681,8 +681,8 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
         therapeutic_plan: '',
         laboratory_results: '',
         interconsultations: '',
-        doctor_name: doctorProfile?.first_name && doctorProfile?.last_name
-          ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name} ${doctorProfile.last_name}`.trim()
+        doctor_name: (doctorProfile?.name || doctorProfile?.full_name)
+          ? `${doctorProfile.title || 'Dr.'} ${doctorProfile.name || doctorProfile.full_name}`.trim()
           : '',
         doctor_professional_license: doctorProfile?.professional_license || '',
         doctor_specialty: doctorProfile?.specialty || '',

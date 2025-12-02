@@ -105,12 +105,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       localStorage.setItem('doctor_data', JSON.stringify(data.user));
       
       // Transform user data to match DoctorInfo interface
+      const doctorName = data.user.name || data.user.full_name || 
+        (data.user.first_name && data.user.paternal_surname 
+          ? `${data.user.first_name} ${data.user.paternal_surname} ${data.user.maternal_surname || ''}`.trim()
+          : 'Usuario');
+      
       const doctorInfo: DoctorInfo = {
         id: String(data.user.id),
-        full_name: `${data.user.title || 'Dr.'} ${data.user.first_name} ${data.user.paternal_surname} ${data.user.maternal_surname || ''}`.trim(),
+        full_name: `${data.user.title || 'Dr.'} ${doctorName}`.trim(),
+        name: data.user.name || data.user.full_name || doctorName,
         title: data.user.title || 'Dr.',
-        first_name: data.user.first_name,
-        paternal_surname: data.user.paternal_surname,
+        // Keep legacy fields for backward compatibility if backend still sends them
+        first_name: data.user.first_name || '',
+        paternal_surname: data.user.paternal_surname || '',
         maternal_surname: data.user.maternal_surname || '',
         email: data.user.email,
         specialty: '', // Will be loaded from profile
@@ -132,8 +139,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         user_id: String(data.user.id), // Keep numeric ID as property
         specialty: data.user.specialty || 'unknown',
         title: data.user.title || 'Dr.',
-        first_name: data.user.first_name,
-        last_name: data.user.paternal_surname
+        name: data.user.name || data.user.full_name || `${data.user.first_name || ''} ${data.user.paternal_surname || ''}`.trim(),
+        first_name: data.user.first_name || '', // Legacy field
+        last_name: data.user.paternal_surname || '' // Legacy field
       }).catch(() => {
         // Silently fail - Amplitude tracking is non-critical
       });

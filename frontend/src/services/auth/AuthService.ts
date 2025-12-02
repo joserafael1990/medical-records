@@ -95,7 +95,27 @@ export class AuthService extends ApiBase {
     try {
       logger.auth.info('Attempting registration for:', registerData.email);
 
-      const response = await this.api.post<AuthResponse>('/api/auth/register', registerData);
+      // Combine first_name, paternal_surname, maternal_surname into name
+      const name = `${registerData.first_name || ''} ${registerData.paternal_surname || ''} ${registerData.maternal_surname || ''}`.trim();
+      
+      // Prepare payload with name instead of separate name fields
+      const payload = {
+        ...registerData,
+        name: name,
+        // Remove first_name, paternal_surname, maternal_surname from payload
+        first_name: undefined,
+        paternal_surname: undefined,
+        maternal_surname: undefined
+      };
+      
+      // Remove undefined fields
+      Object.keys(payload).forEach(key => {
+        if (payload[key as keyof typeof payload] === undefined) {
+          delete payload[key as keyof typeof payload];
+        }
+      });
+
+      const response = await this.api.post<AuthResponse>('/api/auth/register', payload);
 
       if (response.data.access_token) {
         localStorage.setItem('token', response.data.access_token);

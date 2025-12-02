@@ -20,8 +20,9 @@ export const useClinicalStudiesManager = ({
     onError
 }: UseClinicalStudiesManagerProps) => {
     const getDoctorName = useCallback(() => {
-        return doctorProfile?.full_name ||
-            `${doctorProfile?.title || 'Dr.'} ${doctorProfile?.first_name || 'Usuario'} ${doctorProfile?.last_name || 'Sistema'}`.trim();
+        return doctorProfile?.full_name || doctorProfile?.name
+          ? `${doctorProfile?.title || 'Dr.'} ${doctorProfile?.full_name || doctorProfile?.name}`.trim()
+          : 'Dr. Usuario';
     }, [doctorProfile]);
 
     const handleAddStudy = useCallback(async (studyData: any) => {

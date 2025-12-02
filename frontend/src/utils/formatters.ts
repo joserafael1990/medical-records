@@ -24,7 +24,8 @@ export const formatPatientNameWithAge = (patient: Patient): string => {
 export const formatDoctorName = (doctorProfile: any): string => {
   if (!doctorProfile) return 'Dr. Usuario';
   
-  return `${doctorProfile.title || 'Dr.'} ${doctorProfile.first_name} ${doctorProfile.paternal_surname} ${doctorProfile.maternal_surname || ''}`.trim();
+  const doctorName = doctorProfile.name || doctorProfile.full_name || 'Usuario';
+  return `${doctorProfile.title || 'Dr.'} ${doctorName}`.trim();
 };
 
 // formatDate and formatDateTime now imported from dateHelpers.ts to avoid conflicts

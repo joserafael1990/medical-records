@@ -121,8 +121,9 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
           user_id: String(data.id),
           specialty: data.specialty_name || (data as any).specialty || 'unknown',
           title: data.title || 'Dr.',
-          first_name: data.first_name || data.name?.split(' ')[0] || '',
-          last_name: data.paternal_surname || data.name?.split(' ').slice(1).join(' ') || ''
+          name: data.name || data.full_name || '',
+          first_name: data.first_name || data.name?.split(' ')[0] || '', // Legacy field
+          last_name: data.paternal_surname || data.name?.split(' ').slice(1).join(' ') || '' // Legacy field
         };
         
         // Agregar información de oficina como último recurso para ubicación

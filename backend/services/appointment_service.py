@@ -231,8 +231,6 @@ class AppointmentService:
             "patient": {
                 "id": appointment.patient.id,
                 "name": appointment.patient.name,
-                "first_name": getattr(appointment.patient, 'first_name', None),
-                "last_name": getattr(appointment.patient, 'last_name', None),
                 "primary_phone": getattr(appointment.patient, 'primary_phone', None),
                 "email": getattr(appointment.patient, 'email', None)
             } if appointment.patient else None,

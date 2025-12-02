@@ -89,7 +89,7 @@ export const usePatientManagement = (onNavigate?: (view: string) => void): Patie
       const cleanedData = data.map((patient: any) => ({
         ...patient,
         // Map backend fields to frontend expected fields
-        full_name: `${patient.first_name || ''} ${patient.paternal_surname || ''} ${patient.maternal_surname || ''}`.trim(),
+        full_name: patient.name || patient.full_name || '',
         primary_phone: patient.primary_phone || '',
         address_street: patient.address_street || patient.home_address || '',
         

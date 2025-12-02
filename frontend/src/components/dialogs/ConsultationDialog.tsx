@@ -257,7 +257,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               onAddStudy={async (studyData) => {
                 const consultationIdStr = formHook.isEditing && consultation?.id ? String(consultation.id) : null;
                 const patientId = formHook.selectedPatient?.id?.toString() || '';
-                const doctorName = doctorProfile?.full_name || `${doctorProfile?.title || 'Dr.'} ${doctorProfile?.first_name || 'Usuario'} ${doctorProfile?.last_name || 'Sistema'}`.trim();
+                const doctorName = doctorProfile?.full_name || doctorProfile?.name 
+                  ? `${doctorProfile?.title || 'Dr.'} ${doctorProfile?.full_name || doctorProfile?.name}`.trim()
+                  : 'Dr. Usuario';
 
                 // Create study without consultation_id (or with it if editing existing consultation)
                 const studyToCreate: any = {
@@ -298,7 +300,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   await previousStudiesHook.fetchPatientStudies(formHook.selectedPatient.id.toString());
                 }
               }}
-              doctorName={doctorProfile?.full_name || `${doctorProfile?.title || 'Dr.'} ${doctorProfile?.first_name || 'Usuario'} ${doctorProfile?.last_name || 'Sistema'}`.trim()}
+              doctorName={doctorProfile?.full_name || doctorProfile?.name 
+                ? `${doctorProfile?.title || 'Dr.'} ${doctorProfile?.full_name || doctorProfile?.name}`.trim()
+                : 'Dr. Usuario'}
               consultationId={formHook.isEditing && consultation?.id ? String(consultation.id) : null}
             />
           )}
@@ -401,7 +405,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 clinicalStudiesHook.downloadFile((study as any).file_url, (study as any).study_name || 'estudio');
               }
             }}
-            doctorName={doctorProfile?.full_name || `${doctorProfile?.title || 'Dr.'} ${doctorProfile?.first_name || 'Usuario'} ${doctorProfile?.last_name || 'Sistema'}`.trim()}
+            doctorName={doctorProfile?.full_name || doctorProfile?.name 
+              ? `${doctorProfile?.title || 'Dr.'} ${doctorProfile?.full_name || doctorProfile?.name}`.trim()
+              : 'Dr. Usuario'}
             patientId={formHook.selectedPatient?.id || parseInt(formHook.formData.patient_id) || 0}
             doctorProfile={doctorProfile}
             onAppointmentsChange={setFollowUpAppointments}

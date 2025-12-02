@@ -21,11 +21,11 @@ export const useMedicalTableColumns = () => {
       render: (value: Patient[keyof Patient], patient: Patient, index: number) => (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Avatar sx={{ width: 40, height: 40, bgcolor: 'primary.main' }}>
-            {patient.first_name?.charAt(0)?.toUpperCase()}
+            {(patient.name || patient.full_name || 'P')[0].toUpperCase()}
           </Avatar>
           <Box>
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              {patient.full_name || `${patient.first_name} ${patient.paternal_surname}`}
+              {patient.name || patient.full_name || 'Paciente sin nombre'}
             </Typography>
             <Typography variant="caption" color="text.secondary">
               ID: {patient.id}
@@ -240,7 +240,7 @@ export const useMedicalTableColumns = () => {
       sortable: true,
       render: (value: Patient[keyof Patient], patient: Patient, index: number) => (
         <Typography variant="body2" sx={{ fontWeight: 600 }}>
-          {patient.full_name || `${patient.first_name} ${patient.paternal_surname}`}
+          {patient.name || patient.full_name || 'Paciente sin nombre'}
         </Typography>
       )
     },

@@ -190,13 +190,8 @@ export const PrintButtonsSection: React.FC<PrintButtonsSectionProps> = ({
       return selectedPatient.full_name.trim();
     }
     
-    // Priority 4: Build from first_name, paternal_surname, maternal_surname
-    const firstName = selectedPatient?.first_name || '';
-    const paternalSurname = selectedPatient?.paternal_surname || '';
-    const maternalSurname = selectedPatient?.maternal_surname || '';
-    const constructedName = [firstName, paternalSurname, maternalSurname]
-      .filter(Boolean)
-      .join(' ')
+    // Priority 4: Use name or full_name directly
+    const constructedName = selectedPatient?.name || selectedPatient?.full_name || 'Paciente sin nombre'
       .trim();
     if (constructedName) {
       return constructedName;

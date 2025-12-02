@@ -118,7 +118,7 @@ export const ConsultationFormHeader: React.FC<ConsultationFormHeaderProps> = ({
                   const consultationType = getConsultationTypeDisplay(appointment.consultation_type);
                   
                   const patientName = appointment.patient_name || 
-                    (patient ? `${patient.first_name || ''} ${patient.paternal_surname || ''}`.trim() : 'Paciente no encontrado');
+                    (patient ? (patient.name || patient.full_name || 'Paciente sin nombre') : 'Paciente no encontrado');
                   
                   return (
                     <MenuItem key={appointment.id} value={appointment.id.toString()}>

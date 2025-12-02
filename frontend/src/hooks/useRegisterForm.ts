@@ -348,8 +348,10 @@ export const useRegisterForm = (): UseRegisterFormReturn => {
         break;
         
       case 1: // Personal Information
+        const fullName = `${formData.first_name || ''} ${formData.paternal_surname || ''} ${formData.maternal_surname || ''}`.trim();
         if (!formData.first_name) errors.first_name = 'El nombre es obligatorio';
         if (!formData.paternal_surname) errors.paternal_surname = 'El apellido paterno es obligatorio';
+        if (!fullName) errors.name = 'El nombre completo es obligatorio';
         if (!formData.gender) errors.gender = 'El género es obligatorio';
         if (!formData.birth_date) errors.birth_date = 'La fecha de nacimiento es obligatoria';
         if (!formData.phone) errors.phone = 'El teléfono es obligatorio';

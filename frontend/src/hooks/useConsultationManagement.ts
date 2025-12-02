@@ -202,7 +202,7 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
       const transformedData = data.map((consultation: any) => ({
         ...consultation,
         patient_name: consultation.patient_name || 
-                    `${consultation.patient?.first_name || ''} ${consultation.patient?.paternal_surname || ''}`.trim(),
+                    (consultation.patient ? (consultation.patient.name || consultation.patient.full_name || 'Paciente sin nombre') : 'Paciente no encontrado'),
         date: consultation.date || consultation.consultation_date,
         id: consultation.id || consultation.consultation_id
       }));

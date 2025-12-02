@@ -473,7 +473,7 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
                     </MenuItem>
                     {patients.map((patient) => (
                       <MenuItem key={patient.id} value={patient.id}>
-                        {patient.first_name} {patient.paternal_surname}
+                        {patient.name || patient.full_name || 'Paciente sin nombre'}
                       </MenuItem>
                     ))}
                   </Select>
