@@ -7,11 +7,15 @@ WORKDIR /app
 # ----------- Builder stage -----------
 FROM base AS builder
 
-# Instalar dependencias para COMPILAR (gcc, etc)
+# Instalar dependencias para COMPILAR (gcc, etc) + Image processing libraries for Pillow
 RUN apt-get update && apt-get install -y \
     build-essential \
     libffi-dev \
     python3-dev \
+    libjpeg-dev \
+    libpng-dev \
+    libwebp-dev \
+    zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --link requirements.txt ./
@@ -30,6 +34,7 @@ FROM base AS final
 # Aquí es donde estaba el error. El sistema final necesita libffi para leer bcrypt.
 RUN apt-get update && apt-get install -y \
     libffi-dev \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m appuser
