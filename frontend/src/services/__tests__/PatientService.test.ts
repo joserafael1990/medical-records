@@ -35,8 +35,8 @@ describe('PatientService', () => {
   describe('getPatients', () => {
     it('should fetch all patients successfully', async () => {
       const mockPatients = [
-        { id: '1', first_name: 'John', paternal_surname: 'Doe' },
-        { id: '2', first_name: 'Jane', paternal_surname: 'Smith' }
+        { id: '1', name: 'John Doe', full_name: 'John Doe' },
+        { id: '2', name: 'Jane Smith', full_name: 'Jane Smith' }
       ];
 
       mockAxiosInstance.get.mockResolvedValue({ data: mockPatients });
@@ -59,9 +59,8 @@ describe('PatientService', () => {
     it('should fetch patient by ID successfully', async () => {
       const mockPatient = {
         id: '1',
-        first_name: 'John',
-        paternal_surname: 'Doe',
-        maternal_surname: 'Smith',
+        name: 'John Doe Smith',
+        full_name: 'John Doe Smith',
         birth_date: '1990-01-01',
         gender: 'M',
         primary_phone: '555-1234',
@@ -80,9 +79,8 @@ describe('PatientService', () => {
   describe('createPatient', () => {
     it('should create patient successfully', async () => {
       const patientData = {
-        first_name: 'John',
-        paternal_surname: 'Doe',
-        maternal_surname: 'Smith',
+        name: 'John Doe Smith',
+        full_name: 'John Doe Smith',
         birth_date: '1990-01-01',
         gender: 'M',
         primary_phone: '555-1234',
@@ -132,7 +130,7 @@ describe('PatientService', () => {
     it('should update patient successfully', async () => {
       const patientId = '1';
       const updateData = {
-        first_name: 'John Updated',
+        name: 'John Updated Doe',
         primary_phone: '555-9999'
       };
 
@@ -166,7 +164,7 @@ describe('PatientService', () => {
     it('should search patients successfully', async () => {
       const query = 'John';
       const mockResults = [
-        { id: '1', first_name: 'John', paternal_surname: 'Doe' }
+        { id: '1', name: 'John Doe', full_name: 'John Doe' }
       ];
 
       mockAxiosInstance.get.mockResolvedValue({ data: mockResults });
@@ -182,7 +180,7 @@ describe('PatientService', () => {
     it('should fetch patients by doctor successfully', async () => {
       const doctorId = '1';
       const mockPatients = [
-        { id: '1', first_name: 'John', doctor_id: doctorId }
+        { id: '1', name: 'John Doe', full_name: 'John Doe', doctor_id: doctorId }
       ];
 
       mockAxiosInstance.get.mockResolvedValue({ data: mockPatients });

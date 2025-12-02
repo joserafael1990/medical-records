@@ -125,10 +125,12 @@ async def get_available_times_for_booking(
     # Get doctor's timezone (default to CDMX)
     doctor_tz = pytz.timezone('America/Mexico_City')
     
+    # Get doctor's appointment duration from persons table
+    slot_duration = current_user.appointment_duration if current_user.appointment_duration else 30  # minutes, fallback to 30
+    
     # Define working hours (9 AM to 6 PM)
     working_start = 9
     working_end = 18
-    slot_duration = 30  # minutes
     
     # Get existing appointments for the day
     start_of_day = doctor_tz.localize(datetime.combine(target_date, datetime.min.time()))

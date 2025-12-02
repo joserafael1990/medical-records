@@ -71,7 +71,7 @@ describe('useAgendaView', () => {
     {
       id: 1,
       date_time: '2024-01-15T09:00:00',
-      patient: { first_name: 'Juan', paternal_surname: 'Pérez' },
+      patient: { name: 'Juan Pérez', full_name: 'Juan Pérez' },
       status: 'confirmada',
       office: { name: 'Consultorio 1' }
     },

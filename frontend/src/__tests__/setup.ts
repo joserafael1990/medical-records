@@ -76,9 +76,7 @@ global.console = {
 // Global test utilities
 export const createMockPatient = (overrides = {}) => ({
   id: 'PAT001',
-  first_name: 'Juan',
-  paternal_surname: 'Pérez',
-  maternal_surname: 'García',
+  name: 'Juan Pérez García',
   full_name: 'Juan Pérez García',
   date_of_birth: '1990-01-01',
   age: 34,

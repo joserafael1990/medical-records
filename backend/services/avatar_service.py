@@ -113,8 +113,14 @@ def _validate_file_size(upload_file: UploadFile) -> None:
         )
 
 
+from PIL import Image
+import io
+
 def save_custom_avatar(doctor_id: int, upload_file: UploadFile) -> Dict[str, str]:
-    """Persist a custom avatar for a doctor and return its metadata."""
+    """Persist a custom avatar for a doctor and return its metadata.
+    Enforces a limit of 1 avatar per doctor (deletes previous ones).
+    Compresses and resizes the image using Pillow.
+    """
     extension = Path(upload_file.filename or "").suffix.lower()
     if extension not in ALLOWED_EXTENSIONS:
         raise HTTPException(
@@ -125,19 +131,77 @@ def save_custom_avatar(doctor_id: int, upload_file: UploadFile) -> Dict[str, str
     _validate_file_size(upload_file)
 
     doctor_dir = _ensure_doctor_upload_dir(doctor_id, create=True)
-    random_name = f"avatar_{secrets.token_hex(8)}{extension}"
-    destination = doctor_dir / random_name
+    
+    # ENFORCE LIMIT: Delete all existing custom avatars for this doctor
+    if doctor_dir and doctor_dir.exists():
+        for existing_file in doctor_dir.iterdir():
+            if existing_file.is_file():
+                try:
+                    existing_file.unlink()
+                    api_logger.info(f"Deleted old avatar: {existing_file.name}", extra={"doctor_id": doctor_id})
+                except Exception as e:
+                    api_logger.warning(f"Failed to delete old avatar: {existing_file.name}", extra={"error": str(e)})
 
-    try:
-        with destination.open("wb") as buffer:
-            shutil.copyfileobj(upload_file.file, buffer)
-    finally:
-        upload_file.file.close()
+    # Generate new filename
+    # We'll standardize to .webp or .jpg for compressed images, or keep original if SVG
+    if extension == '.svg':
+        # Don't compress SVG, just save
+        random_name = f"avatar_{secrets.token_hex(8)}{extension}"
+        destination = doctor_dir / random_name
+        try:
+            with destination.open("wb") as buffer:
+                shutil.copyfileobj(upload_file.file, buffer)
+        finally:
+            upload_file.file.close()
+    else:
+        # Compress using Pillow
+        try:
+            image = Image.open(upload_file.file)
+            
+            # Convert to RGB if necessary (e.g. for PNG with transparency if saving as JPEG, 
+            # but we'll try to keep transparency if supported or convert to WebP/PNG)
+            # Let's standardize on WebP for efficiency, or keep original format but optimized.
+            # For simplicity and compatibility, let's stick to the original format but resized/optimized,
+            # unless it's a huge PNG, then maybe JPEG? 
+            # Let's resize to max 800x800
+            image.thumbnail((800, 800))
+            
+            # Prepare output buffer
+            output_buffer = io.BytesIO()
+            
+            # Save optimized
+            if extension in ['.jpg', '.jpeg']:
+                image = image.convert('RGB')
+                image.save(output_buffer, format='JPEG', quality=85, optimize=True)
+                random_name = f"avatar_{secrets.token_hex(8)}.jpg"
+            elif extension == '.png':
+                image.save(output_buffer, format='PNG', optimize=True)
+                random_name = f"avatar_{secrets.token_hex(8)}.png"
+            elif extension == '.webp':
+                image.save(output_buffer, format='WEBP', quality=85)
+                random_name = f"avatar_{secrets.token_hex(8)}.webp"
+            else:
+                # Fallback for others
+                image.save(output_buffer, format=image.format)
+                random_name = f"avatar_{secrets.token_hex(8)}{extension}"
+            
+            destination = doctor_dir / random_name
+            with destination.open("wb") as buffer:
+                buffer.write(output_buffer.getvalue())
+                
+        except Exception as e:
+            api_logger.error("Error compressing image", extra={"error": str(e)})
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error procesando la imagen."
+            )
+        finally:
+            upload_file.file.close()
 
     relative_suffix = destination.relative_to(UPLOAD_AVATAR_ROOT).as_posix()
     relative_path = f"doctor_avatars/{relative_suffix}"
     api_logger.info(
-        "✅ Custom avatar saved",
+        "✅ Custom avatar saved (optimized)",
         extra={"doctor_id": doctor_id, "file": relative_path}
     )
     return {

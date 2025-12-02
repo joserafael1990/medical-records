@@ -74,13 +74,13 @@ describe('usePatientForm', () => {
     ]);
     mockApiService.patients.getPatient = jest.fn().mockResolvedValue({
       id: '1',
-      first_name: 'Juan',
-      paternal_surname: 'Pérez',
+      name: 'Juan Pérez',
+      full_name: 'Juan Pérez',
       primary_phone: '+522221234567'
     });
     mockApiService.documents.getPersonDocuments = jest.fn().mockResolvedValue([]);
     mockApiService.patients.getPatients = jest.fn().mockResolvedValue([
-      { id: '1', first_name: 'Juan', paternal_surname: 'Pérez' }
+      { id: '1', name: 'Juan Pérez', full_name: 'Juan Pérez' }
     ]);
     mockApiService.documents.savePersonDocument = jest.fn().mockResolvedValue({});
   });
@@ -96,8 +96,7 @@ describe('usePatientForm', () => {
     );
 
     await waitFor(() => {
-      expect(result.current.formData.first_name).toBe('');
-      expect(result.current.formData.paternal_surname).toBe('');
+      expect(result.current.formData.name).toBe('');
       expect(result.current.isEditing).toBe(false);
     });
   });
@@ -105,8 +104,8 @@ describe('usePatientForm', () => {
   it('should load patient data when editing', async () => {
     const mockPatient = {
       id: '1',
-      first_name: 'Juan',
-      paternal_surname: 'Pérez',
+      name: 'Juan Pérez',
+      full_name: 'Juan Pérez',
       primary_phone: '+522221234567'
     } as any;
 
@@ -124,7 +123,7 @@ describe('usePatientForm', () => {
     });
 
     await waitFor(() => {
-      expect(result.current.formData.first_name).toBe('Juan');
+      expect(result.current.formData.name).toBe('Juan Pérez');
       expect(result.current.isEditing).toBe(true);
     });
   });
@@ -160,11 +159,11 @@ describe('usePatientForm', () => {
     });
 
     act(() => {
-      const handleChange = result.current.handleChange('first_name');
-      handleChange({ target: { value: 'María' } } as any);
+      const handleChange = result.current.handleChange('name');
+      handleChange({ target: { value: 'María García' } } as any);
     });
 
-    expect(result.current.formData.first_name).toBe('María');
+    expect(result.current.formData.name).toBe('María García');
   });
 
   it('should load states when country changes', async () => {
@@ -208,7 +207,7 @@ describe('usePatientForm', () => {
       await result.current.handleSubmit();
     });
 
-    expect(result.current.error).toBe('El nombre es requerido');
+    expect(result.current.error).toBe('El nombre completo es requerido');
     expect(mockOnSubmit).not.toHaveBeenCalled();
   });
 
@@ -228,13 +227,8 @@ describe('usePatientForm', () => {
 
     // Fill required fields
     act(() => {
-      const handleChange = result.current.handleChange('first_name');
-      handleChange({ target: { value: 'Juan' } } as any);
-    });
-
-    act(() => {
-      const handleChange = result.current.handleChange('paternal_surname');
-      handleChange({ target: { value: 'Pérez' } } as any);
+      const handleChange = result.current.handleChange('name');
+      handleChange({ target: { value: 'Juan Pérez' } } as any);
     });
 
     act(() => {

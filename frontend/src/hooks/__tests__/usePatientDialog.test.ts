@@ -10,9 +10,8 @@ jest.mock('../../utils/disablePaymentDetection');
 describe('usePatientDialog', () => {
   const mockPatient = {
     id: '1',
-    first_name: 'John',
-    paternal_surname: 'Doe',
-    maternal_surname: 'Smith',
+    name: 'John Doe Smith',
+    full_name: 'John Doe Smith',
     birth_date: '1990-01-01',
     gender: 'M',
     email: 'john@example.com',
@@ -52,8 +51,7 @@ describe('usePatientDialog', () => {
       })
     );
 
-    expect(result.current.formData.first_name).toBe('John');
-    expect(result.current.formData.paternal_surname).toBe('Doe');
+    expect(result.current.formData.name).toBe('John Doe Smith');
     expect(result.current.formData.email).toBe('john@example.com');
   });
 
@@ -84,17 +82,17 @@ describe('usePatientDialog', () => {
 
     // Set an error
     act(() => {
-      result.current.setErrors({ first_name: 'Name is required' });
+      result.current.setErrors({ name: 'El nombre completo es obligatorio' });
     });
 
-    expect(result.current.errors.first_name).toBe('Name is required');
+    expect(result.current.errors.name).toBe('El nombre completo es obligatorio');
 
     // Change input
     act(() => {
-      result.current.handleInputChange('first_name', 'Jane');
+      result.current.handleInputChange('name', 'Jane Doe');
     });
 
-    expect(result.current.errors.first_name).toBe('');
+    expect(result.current.errors.name).toBe('');
   });
 
   it('should validate required fields', () => {
@@ -109,12 +107,11 @@ describe('usePatientDialog', () => {
     // Test with empty form
     let isValid = result.current.validateForm();
     expect(isValid).toBe(false);
-    expect(result.current.errors.first_name).toBe('El nombre es obligatorio');
+    expect(result.current.errors.name).toBe('El nombre completo es obligatorio');
 
     // Fill required fields
     act(() => {
-      result.current.handleInputChange('first_name', 'John');
-      result.current.handleInputChange('paternal_surname', 'Doe');
+      result.current.handleInputChange('name', 'John Doe');
       result.current.handleInputChange('email', 'john@example.com');
       result.current.handleInputChange('primary_phone', '555-1234');
       result.current.handleInputChange('curp', 'ABCD123456HDFGHG01');
@@ -174,8 +171,7 @@ describe('usePatientDialog', () => {
 
     // Fill required fields
     act(() => {
-      result.current.handleInputChange('first_name', 'John');
-      result.current.handleInputChange('paternal_surname', 'Doe');
+      result.current.handleInputChange('name', 'John Doe');
       result.current.handleInputChange('email', 'john@example.com');
       result.current.handleInputChange('primary_phone', '555-1234');
       result.current.handleInputChange('curp', 'ABCD123456HDFGHG01');
@@ -204,8 +200,7 @@ describe('usePatientDialog', () => {
 
     // Fill required fields
     act(() => {
-      result.current.handleInputChange('first_name', 'John');
-      result.current.handleInputChange('paternal_surname', 'Doe');
+      result.current.handleInputChange('name', 'John Doe');
       result.current.handleInputChange('email', 'john@example.com');
       result.current.handleInputChange('primary_phone', '555-1234');
       result.current.handleInputChange('curp', 'ABCD123456HDFGHG01');
@@ -234,15 +229,14 @@ describe('usePatientDialog', () => {
     );
 
     // Verify initial data
-    expect(result.current.formData.first_name).toBe('John');
+    expect(result.current.formData.name).toBe('John Doe Smith');
 
     // Reset form
     act(() => {
       result.current.handleReset();
     });
 
-    expect(result.current.formData.first_name).toBe('');
-    expect(result.current.formData.paternal_surname).toBe('');
+    expect(result.current.formData.name).toBe('');
     expect(result.current.errors).toEqual({});
     expect(result.current.error).toBe('');
   });
@@ -258,17 +252,17 @@ describe('usePatientDialog', () => {
 
     // Set some data
     act(() => {
-      result.current.handleInputChange('first_name', 'Jane');
+      result.current.handleInputChange('name', 'Jane Doe');
     });
 
-    expect(result.current.formData.first_name).toBe('Jane');
+    expect(result.current.formData.name).toBe('Jane Doe');
 
     // Close dialog
     act(() => {
       result.current.handleClose();
     });
 
-    expect(result.current.formData.first_name).toBe('');
+    expect(result.current.formData.name).toBe('');
   });
 
   it('should load states for country', async () => {

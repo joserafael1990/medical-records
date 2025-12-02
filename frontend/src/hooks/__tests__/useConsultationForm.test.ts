@@ -94,17 +94,16 @@ describe('useConsultationForm', () => {
   const mockPatients = [
     {
       id: 1,
-      first_name: 'Juan',
-      paternal_surname: 'Pérez',
+      name: 'Juan Pérez',
+      full_name: 'Juan Pérez',
       birth_date: '1990-01-01'
     }
   ];
 
   const mockDoctorProfile = {
     id: 1,
-    first_name: 'Juan',
-    last_name: 'Médico',
-    paternal_surname: 'Médico',
+    name: 'Juan Médico',
+    full_name: 'Juan Médico',
     title: 'Dr.',
     professional_license: '12345',
     specialty: 'Cardiología'

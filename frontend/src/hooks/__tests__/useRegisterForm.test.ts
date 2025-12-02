@@ -17,7 +17,7 @@ describe('useRegisterForm', () => {
 
     expect(result.current.formData.email).toBe('');
     expect(result.current.formData.password).toBe('');
-    expect(result.current.formData.first_name).toBe('');
+    expect(result.current.formData.first_name).toBe(''); // Still uses first_name for form, but combines to name on submit
     expect(result.current.activeStep).toBe(0);
     expect(result.current.isLoading).toBe(false);
     expect(result.current.error).toBe('');
@@ -88,7 +88,7 @@ describe('useRegisterForm', () => {
     // Test with empty form
     let isValid = result.current.validateStep(1);
     expect(isValid).toBe(false);
-    expect(result.current.fieldErrors.first_name).toBe('El nombre es obligatorio');
+    expect(result.current.fieldErrors.first_name).toBe('El nombre es obligatorio'); // Form still uses first_name
 
     // Fill required fields
     act(() => {

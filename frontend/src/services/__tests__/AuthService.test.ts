@@ -46,9 +46,8 @@ describe('AuthService', () => {
             email: 'test@example.com',
             person_type: 'doctor',
             title: 'Dr.',
-            first_name: 'John',
-            paternal_surname: 'Doe',
-            maternal_surname: 'Smith'
+            name: 'John Doe Smith',
+            full_name: 'John Doe Smith'
           }
         }
       };

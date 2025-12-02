@@ -90,9 +90,8 @@ describe('Validation Utils', () => {
   /*
   describe('validatePatientForm', () => {
     const validFormData = {
-      first_name: 'Juan',
-      paternal_surname: 'Pérez',
-      maternal_surname: 'García',
+      name: 'Juan Pérez García',
+      full_name: 'Juan Pérez García',
       birth_date: '1990-01-01',
       gender: 'Masculino',
       address: 'Calle Principal 123',
@@ -110,9 +109,9 @@ describe('Validation Utils', () => {
     });
 
     it('should fail validation with missing required fields', () => {
-      const invalidFormData = { ...validFormData, first_name: '' };
+      const invalidFormData = { ...validFormData, name: '' };
       const errors = validatePatientForm(invalidFormData);
-      expect(errors.first_name).toBeDefined();
+      expect(errors.name).toBeDefined();
     });
 
     it('should fail validation with invalid phone', () => {

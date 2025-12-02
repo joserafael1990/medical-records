@@ -450,6 +450,14 @@ async def delete_clinical_study(
                 patient_name = patient.name
 
         # Delete the study (after getting all needed info)
+        # Clean up file from disk if it exists
+        if study.file_path and os.path.exists(study.file_path):
+            try:
+                os.remove(study.file_path)
+                api_logger.info("Deleted file for clinical study", study_id=study_id, file_path=study.file_path)
+            except Exception as e:
+                api_logger.error("Error deleting file for clinical study", study_id=study_id, error=str(e))
+
         db.delete(study)
         db.commit()
 
@@ -601,6 +609,14 @@ async def upload_clinical_study_file(
         if len(content) == 0:
             raise HTTPException(status_code=400, detail="Archivo vacío no permitido")
         
+        # Delete old file if it exists (prevent orphaned files)
+        if study.file_path and os.path.exists(study.file_path):
+            try:
+                os.remove(study.file_path)
+                api_logger.info("Deleted old file for clinical study before upload", study_id=study_id, file_path=study.file_path)
+            except Exception as e:
+                api_logger.warning("Failed to delete old file for clinical study", study_id=study_id, file_path=study.file_path, error=str(e))
+
         # Save file
         with open(file_path, "wb") as buffer:
             buffer.write(content)

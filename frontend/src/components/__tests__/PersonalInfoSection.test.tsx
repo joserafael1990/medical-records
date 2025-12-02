@@ -7,9 +7,7 @@ import { PersonalInfoSection } from '../dialogs/PatientDialog/PersonalInfoSectio
 const theme = createTheme();
 
 const mockFormData = {
-  first_name: '',
-  paternal_surname: '',
-  maternal_surname: '',
+  name: '',
   birth_date: '',
   gender: '',
   curp: '',
@@ -41,9 +39,7 @@ describe('PersonalInfoSection', () => {
       />
     );
 
-    expect(screen.getByLabelText('Nombre')).toBeInTheDocument();
-    expect(screen.getByLabelText('Apellido Paterno')).toBeInTheDocument();
-    expect(screen.getByLabelText('Apellido Materno')).toBeInTheDocument();
+    expect(screen.getByLabelText('Nombre Completo')).toBeInTheDocument();
     expect(screen.getByLabelText('Fecha de Nacimiento')).toBeInTheDocument();
     expect(screen.getByLabelText('Género')).toBeInTheDocument();
     expect(screen.getByLabelText('Estado Civil')).toBeInTheDocument();
@@ -53,9 +49,7 @@ describe('PersonalInfoSection', () => {
 
   it('should display current form values', () => {
     const formDataWithValues = {
-      first_name: 'John',
-      paternal_surname: 'Doe',
-      maternal_surname: 'Smith',
+      name: 'John Doe Smith',
       birth_date: '1990-01-01',
       gender: 'M',
       curp: 'ABCD123456HDFGHG01',
@@ -71,9 +65,7 @@ describe('PersonalInfoSection', () => {
       />
     );
 
-    expect(screen.getByDisplayValue('John')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('Doe')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('Smith')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('John Doe Smith')).toBeInTheDocument();
   });
 
   it('should call onInputChange when inputs change', () => {
@@ -85,17 +77,15 @@ describe('PersonalInfoSection', () => {
       />
     );
 
-    const firstNameField = screen.getByLabelText('Nombre');
-    fireEvent.change(firstNameField, { target: { value: 'John' } });
+    const nameField = screen.getByLabelText('Nombre Completo');
+    fireEvent.change(nameField, { target: { value: 'John Doe' } });
 
-    expect(mockOnInputChange).toHaveBeenCalledWith('first_name', 'John');
+    expect(mockOnInputChange).toHaveBeenCalledWith('name', 'John Doe');
   });
 
   it('should display field errors', () => {
     const fieldErrors = {
-      first_name: 'Name is required',
-      paternal_surname: 'Paternal surname is required',
-      email: 'Email is required',
+      name: 'El nombre completo es obligatorio',
       curp: 'CURP is invalid'
     };
 
@@ -107,8 +97,7 @@ describe('PersonalInfoSection', () => {
       />
     );
 
-    expect(screen.getByText('Name is required')).toBeInTheDocument();
-    expect(screen.getByText('Paternal surname is required')).toBeInTheDocument();
+    expect(screen.getByText('El nombre completo es obligatorio')).toBeInTheDocument();
     expect(screen.getByText('CURP is invalid')).toBeInTheDocument();
   });
 
@@ -138,7 +127,7 @@ describe('PersonalInfoSection', () => {
     );
 
     // Check for required fields
-    const requiredFields = ['Nombre', 'Apellido Paterno', 'CURP'];
+    const requiredFields = ['Nombre Completo', 'CURP'];
     requiredFields.forEach(fieldLabel => {
       const field = screen.getByLabelText(fieldLabel);
       expect(field).toHaveAttribute('required');
