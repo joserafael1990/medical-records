@@ -4,8 +4,10 @@
 services:
   # CORREGIDO: Ahora tiene los 2 espacios de sangría necesarios
   python-backend:
-    # Use pre-built image from Docker Hub (GitHub Actions)
-    image: joserafael1990/medical-records-backend:latest
+    # Build from source
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     restart: always
     init: true
     expose:
@@ -60,8 +62,15 @@ services:
       - postgres-db
 
   typescript-frontend:
-    # Use pre-built image from Docker Hub
-    image: joserafael1990/medical-records-frontend:latest
+    # Build from source
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - REACT_APP_API_URL=${REACT_APP_API_URL:-https://api.cortexclinico.com}
+        - REACT_APP_SENTRY_DSN=${REACT_APP_SENTRY_DSN}
+        - REACT_APP_SENTRY_ENVIRONMENT=${REACT_APP_SENTRY_ENVIRONMENT:-production}
+        - REACT_APP_AMPLITUDE_API_KEY=${REACT_APP_AMPLITUDE_API_KEY}
     restart: always
     init: true
     ports:

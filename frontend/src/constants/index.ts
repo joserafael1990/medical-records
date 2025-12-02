@@ -1,13 +1,12 @@
 // API Configuration
 export const API_CONFIG = {
-  BASE_URL: 'http://localhost:8000', // cambio temportal
-  //BASE_URL: 'https://unbrave-thi-interventral.ngrok-free.dev', 
+  BASE_URL: process.env.REACT_APP_API_URL || 'https://api.cortexclinico.com',
   ENDPOINTS: {
     // Authentication
     LOGIN: '/api/auth/login',
     REGISTER: '/api/auth/register',
     REFRESH_TOKEN: '/api/auth/refresh',
-    
+
     // Doctor Profile
     DOCTOR_PROFILE: '/api/doctors/me/profile',
     UPDATE_DOCTOR_PROFILE: '/api/doctors/me/profile',
@@ -15,34 +14,34 @@ export const API_CONFIG = {
     AVATAR_UPLOAD: '/api/avatars/upload',
     AVATAR_SELECT: '/api/avatars/select',
     AVATAR_DELETE: '/api/avatars/custom',
-    
+
     // Patients
     PATIENTS: '/api/patients',
     PATIENT_BY_ID: (id: number) => `/api/patients/${id}`,
-    
+
     // Appointments
     APPOINTMENTS: '/api/appointments',
     APPOINTMENT_BY_ID: (id: number) => `/api/appointments/${id}`,
     DAILY_AGENDA: '/api/appointments/calendar',
     WEEKLY_AGENDA: '/api/appointments/calendar',
     CANCEL_APPOINTMENT: (id: number) => `/api/appointments/${id}/cancel`,
-    
+
     // Consultations
     CONSULTATIONS: '/api/consultations',
-    
+
     // Clinical Studies
     CLINICAL_STUDIES: '/api/clinical-studies',
     CLINICAL_STUDY_BY_ID: (id: number) => `/api/clinical-studies/${id}`,
-    
+
     // Catalogs
     SPECIALTIES: '/api/catalogs/specialties',
     STATES: '/api/catalogs/states',
     COUNTRIES: '/api/catalogs/countries',
     EMERGENCY_RELATIONSHIPS: '/api/catalogs/emergency-relationships',
-    
+
     // Health Check
     HEALTH: '/api/health',
-    
+
     // Dashboard
     DASHBOARD: '/api/dashboard',
   }
@@ -82,7 +81,7 @@ export const formatAppointmentTimeRange = (startTime: string, durationMinutes: n
   if (!startTime) return '';
   const start = new Date(`2000-01-01T${startTime}`);
   const end = new Date(start.getTime() + durationMinutes * 60000);
-  
+
   const formatTime = (date: Date) => {
     const hours = date.getHours();
     const minutes = date.getMinutes();
@@ -90,7 +89,7 @@ export const formatAppointmentTimeRange = (startTime: string, durationMinutes: n
     const displayHour = hours % 12 || 12;
     return `${displayHour}:${minutes.toString().padStart(2, '0')} ${ampm}`;
   };
-  
+
   return `${formatTime(start)} - ${formatTime(end)}`;
 };
 
