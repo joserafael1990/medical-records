@@ -1,6 +1,20 @@
 // API Configuration
+// In development, default to localhost backend if REACT_APP_API_URL is not set
+// In production, default to production API
+const getDefaultApiUrl = () => {
+  if (process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL;
+  }
+  // In development, try local backend first
+  if (process.env.NODE_ENV === 'development') {
+    return 'http://localhost:8000';
+  }
+  // In production, use production API
+  return 'https://api.cortexclinico.com';
+};
+
 export const API_CONFIG = {
-  BASE_URL: process.env.REACT_APP_API_URL || 'https://api.cortexclinico.com',
+  BASE_URL: getDefaultApiUrl(),
   ENDPOINTS: {
     // Authentication
     LOGIN: '/api/auth/login',
