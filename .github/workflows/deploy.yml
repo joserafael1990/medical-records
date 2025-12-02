@@ -1,22 +1,18 @@
 name: Build and Deploy
-
 on:
   push:
     branches: [ "main" ]
-
 jobs:
   build-push-backend:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-
       - name: Build and push Backend
         uses: docker/build-push-action@v5
         with:
@@ -24,30 +20,38 @@ jobs:
           file: ./backend/Dockerfile
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/medical-records-backend:latest
-
   build-push-frontend:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-
+      # 1. Install Doppler CLI
+      - name: Install Doppler CLI
+        uses: dopplerhq/cli-action@v3
+      # 2. Fetch secrets from Doppler and save to GitHub Environment
+      - name: Load Secrets from Doppler
+        run: doppler secrets download --no-file --format docker >> $GITHUB_ENV
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Build and push Frontend
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
           file: ./frontend/Dockerfile
-          # Pasamos NODE_ENV development para que instale las herramientas de compilación
+          # 3. Pass the secrets (now in env) to the build
           build-args: |
             NODE_ENV=development
+            REACT_APP_API_URL=${{ env.REACT_APP_API_URL }}
+            REACT_APP_SENTRY_DSN=${{ env.REACT_APP_SENTRY_DSN }}
+            REACT_APP_SENTRY_ENVIRONMENT=production
+            REACT_APP_AMPLITUDE_API_KEY=${{ env.REACT_APP_AMPLITUDE_API_KEY }}
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/medical-records-frontend:latest
-
   trigger-coolify:
     needs: [build-push-backend, build-push-frontend]
     runs-on: ubuntu-latest
