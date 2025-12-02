@@ -10,7 +10,7 @@ services:
     init: true
     expose:
       - "8000"
-    
+
     # Etiquetas para que Coolify (Traefik) encuentre el puerto correcto
     labels:
       - "traefik.enable=true"
@@ -18,7 +18,7 @@ services:
 
     networks:
       - appnet
-    
+
     # --- HEALTHCHECK (Paso 2) ---
     # Mantenlo comentado por ahora. Cuando agregues @app.get("/health") en tu Python,
     # quita los símbolos '#' de las siguientes 6 líneas:
@@ -48,10 +48,11 @@ services:
       - META_WHATSAPP_TOKEN=${META_WHATSAPP_TOKEN}
       - META_WHATSAPP_API_VERSION=${META_WHATSAPP_API_VERSION:-v24.0}
       - APP_ENV=${APP_ENV:-production}
-      
+
       # CORS arreglado manualmente (formato lista JSON directo)
-      - CORS_ORIGINS=["https://sistema.cortexclinico.com","https://api.cortexclinico.com"]
-      
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - DATABASE_URL=${DATABASE_URL}
+
       - META_WHATSAPP_APP_SECRET=${META_WHATSAPP_APP_SECRET}
       - META_WHATSAPP_VERIFY_TOKEN=${META_WHATSAPP_VERIFY_TOKEN}
       - LOG_LEVEL=${LOG_LEVEL:-info}
@@ -84,9 +85,9 @@ services:
     networks:
       - appnet
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-historias_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-historias_pass}
-      POSTGRES_DB: ${POSTGRES_DB:-historias_clinicas}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432" # Standard port for production
     volumes:

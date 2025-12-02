@@ -47,7 +47,8 @@ services:
       - APP_ENV=${APP_ENV:-production}
 
       # --- ARREGLO 2: CORS FIXED (EVITA EL CRASH LOOP) ---
-      - CORS_ORIGINS=["https://sistema.cortexclinico.com","https://api.cortexclinico.com"]
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - DATABASE_URL=${DATABASE_URL}
       # ---------------------------------------------------
 
       - META_WHATSAPP_APP_SECRET=${META_WHATSAPP_APP_SECRET}
