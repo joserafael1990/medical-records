@@ -53,8 +53,12 @@ class Settings(BaseSettings):
     if _cors_origins_env:
         CORS_ORIGINS: List[str] = [origin.strip() for origin in _cors_origins_env.split(",")]
     else:
-        # Default to localhost only in development
-        CORS_ORIGINS: List[str] = ["http://localhost:3000"] if os.getenv("APP_ENV", "development").lower() == "development" else []
+        # Default fallback
+        if os.getenv("APP_ENV", "development").lower() == "development":
+            CORS_ORIGINS: List[str] = ["http://localhost:3000"]
+        else:
+            # Production default
+            CORS_ORIGINS: List[str] = ["https://sistema.cortexclinico.com"]
     CORS_ALLOW_CREDENTIALS: bool = True
     
     # Security
