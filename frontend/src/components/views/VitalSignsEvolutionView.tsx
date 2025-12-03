@@ -37,7 +37,7 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // If initialHistory is provided, use it and don't fetch
+    // If initialHistory is provided, use it
     if (initialHistory) {
       setHistory(initialHistory);
       setLoading(false);
@@ -61,6 +61,13 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
       loadHistory();
     }
   }, [patientId, fetchHistory, initialHistory]);
+
+  // Update history when initialHistory changes (for real-time updates)
+  useEffect(() => {
+    if (initialHistory) {
+      setHistory(initialHistory);
+    }
+  }, [initialHistory]);
 
   const formatDate = (dateString: string | null): string => {
     if (!dateString) return '';

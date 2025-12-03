@@ -96,61 +96,72 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
   const [hasPreviousVitalSigns, setHasPreviousVitalSigns] = useState(false);
   const vitalSignsHook = useVitalSigns();
 
+  // Function to load vital signs history
+  const loadVitalSignsHistory = React.useCallback(async () => {
+    if (!selectedPatientId) {
+      setHasPreviousVitalSigns(false);
+      setVitalSignsHistory(null);
+      return;
+    }
+
+    try {
+      setLoadingHistory(true);
+      const history = await vitalSignsHook.fetchPatientVitalSignsHistory(selectedPatientId);
+      
+      // Check if patient has any vital signs history at all (from previous consultations)
+      const hasHistory = history.vital_signs_history && history.vital_signs_history.some((vsHistory: any) => 
+        vsHistory.data && vsHistory.data.length > 0
+      );
+      
+      setHasPreviousVitalSigns(hasHistory);
+      setVitalSignsHistory(history);
+    } catch (error: any) {
+      // Ignore 429 errors (rate limiting) - will retry later
+      if (error?.response?.status === 429) {
+        console.warn('Rate limited when fetching vital signs history, will retry later');
+        return;
+      }
+      // Silently fail - don't show charts if we can't load
+      setHasPreviousVitalSigns(false);
+      setVitalSignsHistory(null);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, [selectedPatientId, vitalSignsHook]);
+
   // Load vital signs history when patient is selected (inline, no button needed)
   useEffect(() => {
     let isMounted = true;
     let timeoutId: NodeJS.Timeout;
 
-    const loadVitalSignsHistory = async () => {
-      if (!selectedPatientId) {
-        if (isMounted) {
-          setHasPreviousVitalSigns(false);
-          setVitalSignsHistory(null);
-        }
-        return;
-      }
-
-      try {
-        setLoadingHistory(true);
-        const history = await vitalSignsHook.fetchPatientVitalSignsHistory(selectedPatientId);
-        
-        if (!isMounted) return;
-        
-        // Check if patient has any vital signs history at all (from previous consultations)
-        const hasHistory = history.vital_signs_history && history.vital_signs_history.some((vsHistory: any) => 
-          vsHistory.data && vsHistory.data.length > 0
-        );
-        
-        setHasPreviousVitalSigns(hasHistory);
-        setVitalSignsHistory(history);
-      } catch (error: any) {
-        // Ignore 429 errors (rate limiting) - will retry later
-        if (error?.response?.status === 429) {
-          console.warn('Rate limited when fetching vital signs history, will retry later');
-          return;
-        }
-        // Silently fail - don't show charts if we can't load
-        if (isMounted) {
-          setHasPreviousVitalSigns(false);
-          setVitalSignsHistory(null);
-        }
-      } finally {
-        if (isMounted) {
-          setLoadingHistory(false);
-        }
-      }
-    };
-
     // Debounce to avoid rapid successive calls
     timeoutId = setTimeout(() => {
-      loadVitalSignsHistory();
+      if (isMounted) {
+        loadVitalSignsHistory();
+      }
     }, 500); // 500ms debounce
 
     return () => {
       isMounted = false;
       clearTimeout(timeoutId);
     };
-  }, [selectedPatientId]); // Removed vitalSignsHook from dependencies to prevent infinite loops
+  }, [selectedPatientId, loadVitalSignsHistory]);
+
+  // Refresh history when vital signs change (add, edit, delete)
+  useEffect(() => {
+    if (!selectedPatientId || !hasPreviousVitalSigns) {
+      return;
+    }
+
+    // Debounce to avoid too many refreshes
+    const timeoutId = setTimeout(() => {
+      loadVitalSignsHistory();
+    }, 300); // 300ms debounce for updates
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [vitalSigns, selectedPatientId, hasPreviousVitalSigns, loadVitalSignsHistory]);
 
   return (
     <>

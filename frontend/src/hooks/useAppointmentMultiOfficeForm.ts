@@ -495,9 +495,17 @@ export const useAppointmentMultiOfficeForm = (
     setLoading(true);
     
     try {
+      // Validate date and time are selected
+      if (!selectedDate || !selectedTime) {
+        setError('Debe seleccionar fecha y hora de la cita');
+        setLoading(false);
+        return;
+      }
+
       // Validar consultorio
       if (!currentFormData.office_id || currentFormData.office_id === 0) {
         setError('Seleccione un consultorio');
+        setLoading(false);
         return;
       }
 
@@ -573,12 +581,25 @@ export const useAppointmentMultiOfficeForm = (
           ? currentFormData.reminders
           : undefined;
       
+      // Ensure appointment_date is properly constructed from selectedDate and selectedTime
+      const dateOnly = selectedDate.split('T')[0]; // Get just the date part
+      const appointmentDateTime = `${dateOnly}T${selectedTime}:00`;
+      
+      // Validate the constructed date
+      const testDate = new Date(appointmentDateTime);
+      if (isNaN(testDate.getTime())) {
+        setError('Fecha y hora inválidas. Por favor, seleccione nuevamente.');
+        setLoading(false);
+        return;
+      }
+
       // Build formDataToSubmit - remove reminders from currentFormData first to avoid undefined
       const { reminders: _, ...currentFormDataWithoutReminders } = currentFormData as any;
       const formDataToSubmit: any = {
         ...currentFormDataWithoutReminders,
         patient_id: finalPatientId,
-        appointment_type_id: currentFormData.appointment_type_id || 1
+        appointment_type_id: currentFormData.appointment_type_id || 1,
+        appointment_date: appointmentDateTime // Ensure appointment_date is properly set
       };
       
       // Only add reminders property if there are actual reminders
@@ -617,7 +638,9 @@ export const useAppointmentMultiOfficeForm = (
     onSubmit,
     onClose,
     showSuccess,
-    showError
+    showError,
+    selectedDate,
+    selectedTime
   ]);
 
   return {

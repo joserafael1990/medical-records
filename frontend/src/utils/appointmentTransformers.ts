@@ -63,7 +63,7 @@ export const transformFormDataToCreatePayload = (
     const appointmentDate = new Date(dateTimeStr);
 
     if (isNaN(appointmentDate.getTime())) {
-        throw new Error(`Invalid date format: ${formData.date_time}`);
+        throw new Error(`Invalid date format: ${dateTimeStr || dateTimeValue || 'undefined'}. Expected ISO format (YYYY-MM-DDTHH:mm:ss or similar)`);
     }
 
     const endTime = new Date(appointmentDate.getTime() + appointmentDuration * 60000);

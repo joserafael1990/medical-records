@@ -16,6 +16,60 @@ export interface ApiError {
   details?: any;
 }
 
+// Request deduplication cache
+interface PendingRequest {
+  promise: Promise<any>;
+  timestamp: number;
+}
+
+const requestCache = new Map<string, PendingRequest>();
+const CACHE_DURATION = 1000; // 1 second - deduplicate requests within this window
+const MAX_CACHE_SIZE = 100; // Maximum number of cached requests
+
+function getRequestKey(config: any): string {
+  // Create a unique key from method, URL, and params
+  const method = (config.method || 'get').toUpperCase();
+  let url = config.url || '';
+  
+  // Remove query string from URL if params are provided separately
+  // (axios will add them, so we don't want to double-count them)
+  if (config.params && url.includes('?')) {
+    url = url.split('?')[0];
+  }
+  
+  // Sort params for consistent key generation
+  const params = config.params 
+    ? JSON.stringify(Object.keys(config.params).sort().reduce((acc: any, key: string) => {
+        acc[key] = config.params[key];
+        return acc;
+      }, {}))
+    : '';
+  
+  return `${method}:${url}:${params}`;
+}
+
+function cleanupCache(): void {
+  const now = Date.now();
+  const keysToDelete: string[] = [];
+  
+  // Remove expired entries
+  for (const [key, value] of requestCache.entries()) {
+    if (now - value.timestamp > CACHE_DURATION) {
+      keysToDelete.push(key);
+    }
+  }
+  
+  keysToDelete.forEach(key => requestCache.delete(key));
+  
+  // If cache is still too large, remove oldest entries
+  if (requestCache.size > MAX_CACHE_SIZE) {
+    const entries = Array.from(requestCache.entries())
+      .sort((a, b) => a[1].timestamp - b[1].timestamp);
+    const toRemove = entries.slice(0, requestCache.size - MAX_CACHE_SIZE);
+    toRemove.forEach(([key]) => requestCache.delete(key));
+  }
+}
+
 export class ApiBase {
   public api: AxiosInstance;
 
@@ -28,11 +82,75 @@ export class ApiBase {
       },
     });
 
+    this.setupRequestDeduplication();
     this.setupInterceptors();
   }
 
+  private setupRequestDeduplication(): void {
+    // Store original request method
+    const originalRequest = this.api.request.bind(this.api);
+    
+    // Override request method to add deduplication
+    this.api.request = ((config: any) => {
+      const method = (config?.method || 'get').toLowerCase();
+      const isIdempotent = ['get', 'head', 'options'].includes(method);
+      
+      // Only deduplicate idempotent requests
+      if (isIdempotent && !config?.headers?.['X-Skip-Deduplication']) {
+        const requestKey = getRequestKey(config);
+        const cached = requestCache.get(requestKey);
+        const now = Date.now();
+        
+        // If there's a pending request within the cache window, reuse it
+        if (cached && (now - cached.timestamp) < CACHE_DURATION) {
+          // Return a clone of the cached promise
+          return cached.promise.then((response: any) => {
+            // Return a new response object to avoid sharing references
+            return { ...response, config: { ...response.config } };
+          }).catch((error: any) => {
+            // Remove from cache on error so it can be retried
+            requestCache.delete(requestKey);
+            throw error;
+          });
+        }
+        
+        // Make the actual request
+        const requestPromise = originalRequest(config);
+        
+        // Cache the promise
+        requestCache.set(requestKey, {
+          promise: requestPromise,
+          timestamp: now
+        });
+        
+        // Clean up cache entry when request completes (success or error)
+        requestPromise
+          .then(() => {
+            // Keep in cache for CACHE_DURATION, then remove
+            setTimeout(() => {
+              requestCache.delete(requestKey);
+            }, CACHE_DURATION);
+          })
+          .catch(() => {
+            // Remove immediately on error
+            requestCache.delete(requestKey);
+          });
+        
+        // Clean up old cache entries periodically
+        if (Math.random() < 0.1) { // 10% chance to cleanup
+          cleanupCache();
+        }
+        
+        return requestPromise;
+      }
+      
+      // For non-idempotent requests, just make the request normally
+      return originalRequest(config);
+    }) as any;
+  }
+
   private setupInterceptors(): void {
-    // Request interceptor
+    // Request interceptor with deduplication
     this.api.interceptors.request.use(
       (config) => {
         // Add auth token if available
@@ -61,6 +179,7 @@ export class ApiBase {
         return Promise.reject(this.transformError(error));
       }
     );
+
   }
 
   private handleError(error: AxiosError): void {

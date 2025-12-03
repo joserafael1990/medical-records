@@ -83,7 +83,9 @@ CREATE TABLE IF NOT EXISTS study_categories (
 CREATE TABLE IF NOT EXISTS study_catalog (
     id SERIAL PRIMARY KEY,
     name VARCHAR(200) NOT NULL,
+    code VARCHAR(50),
     category_id INTEGER REFERENCES study_categories(id),
+    specialty VARCHAR(100),
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
@@ -125,6 +127,8 @@ CREATE TABLE IF NOT EXISTS diagnosis_catalog (
     age_group VARCHAR(50),
     gender_specific VARCHAR(50),
     is_active BOOLEAN DEFAULT TRUE,
+    created_by INTEGER DEFAULT 0,
+    search_vector tsvector,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -143,9 +147,6 @@ CREATE TABLE IF NOT EXISTS persons (
     
     -- Datos personales (NOM-004)
     title VARCHAR(10),
-    first_name VARCHAR(100) NOT NULL,
-    paternal_surname VARCHAR(100) NOT NULL,
-    maternal_surname VARCHAR(100),
     birth_date DATE,
     gender VARCHAR(20),  -- Optional: can be NULL for first-time appointments
     civil_status VARCHAR(20),
@@ -178,6 +179,7 @@ CREATE TABLE IF NOT EXISTS persons (
     specialty_id INTEGER REFERENCES medical_specialties(id),
     university VARCHAR(200),
     graduation_year INTEGER,
+    professional_license VARCHAR(50),
     appointment_duration INTEGER,  -- Duración de citas en minutos (solo doctores)
     
     -- Datos médicos (solo pacientes)
@@ -197,7 +199,15 @@ CREATE TABLE IF NOT EXISTS persons (
     last_login TIMESTAMP,  -- Fecha y hora del último inicio de sesión
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
-    created_by INTEGER REFERENCES persons(id)
+    created_by INTEGER,
+    
+    -- Name (single column instead of first_name/paternal_surname/maternal_surname)
+    name VARCHAR(200) NOT NULL,
+    
+    -- Avatar fields
+    avatar_type VARCHAR(50),
+    avatar_template_key VARCHAR(100),
+    avatar_file_path VARCHAR(500)
 );
 
 -- ============================================================================
@@ -529,10 +539,11 @@ SELECT
     dc.is_chronic,
     dc.is_contagious,
     dc.age_group,
-    dc.gender_specific
+    dc.gender_specific,
+    dc.search_vector
 FROM diagnosis_catalog dc
 LEFT JOIN diagnosis_categories cat ON dc.category_id = cat.id
-WHERE dc.active = TRUE;
+WHERE dc.is_active = TRUE;
 
 -- Vista de estadísticas de retención de datos
 CREATE OR REPLACE VIEW v_data_retention_stats AS
