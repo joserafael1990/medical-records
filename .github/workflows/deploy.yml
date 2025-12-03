@@ -36,8 +36,8 @@ jobs:
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
         run: |
-          # Use doppler run to inject secrets directly into the docker build command
-          doppler run --command 'docker build \
+          # CRITICAL FIX: Use 'sh -c' to ensure variables are expanded INSIDE the Doppler environment
+          doppler run -- sh -c 'docker build \
             --build-arg NODE_ENV=production \
             --build-arg REACT_APP_API_URL=$REACT_APP_API_URL \
             --build-arg REACT_APP_SENTRY_DSN=$REACT_APP_SENTRY_DSN \
