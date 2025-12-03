@@ -50,7 +50,8 @@ services:
       - APP_ENV=${APP_ENV:-production}
 
       # CORS arreglado manualmente (formato lista JSON directo)
-      - CORS_ORIGINS=${CORS_ORIGINS}
+      # CORS hardcoded to fix deployment issue
+      - CORS_ORIGINS=["https://sistema.cortexclinico.com", "https://api.cortexclinico.com"]
       - DATABASE_URL=${DATABASE_URL}
 
       - META_WHATSAPP_APP_SECRET=${META_WHATSAPP_APP_SECRET}
