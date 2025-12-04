@@ -4,8 +4,9 @@
 services:
   # CORREGIDO: Ahora tiene los 2 espacios de sangría necesarios
   python-backend:
-    # Use pre-built image from Docker Hub
-    image: joserafael1990/medical-records-backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     restart: always
     init: true
     expose:
@@ -31,7 +32,7 @@ services:
     # -----------------------------
 
     environment:
-      # Variables injected by Doppler
+      # Variables injected by Coolify
       - SECRET_KEY=${SECRET_KEY}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - SENTRY_DSN_BACKEND=${SENTRY_DSN_BACKEND}
@@ -50,7 +51,6 @@ services:
       - APP_ENV=${APP_ENV:-production}
 
       # CORS arreglado manualmente (formato lista JSON directo)
-      # CORS hardcoded to fix deployment issue
       - CORS_ORIGINS=["https://sistema.cortexclinico.com", "https://api.cortexclinico.com"]
       - DATABASE_URL=${DATABASE_URL}
 
@@ -61,8 +61,15 @@ services:
       - postgres-db
 
   typescript-frontend:
-    # Use pre-built image from Docker Hub
-    image: joserafael1990/medical-records-frontend:latest
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Build-time variables needed for React
+        - REACT_APP_API_URL=${REACT_APP_API_URL}
+        - REACT_APP_SENTRY_DSN=${REACT_APP_SENTRY_DSN}
+        - REACT_APP_SENTRY_ENVIRONMENT=${REACT_APP_SENTRY_ENVIRONMENT:-production}
+        - REACT_APP_AMPLITUDE_API_KEY=${REACT_APP_AMPLITUDE_API_KEY}
     restart: always
     init: true
     ports:
@@ -70,9 +77,8 @@ services:
     networks:
       - appnet
     environment:
-      - REACT_APP_SENTRY_DSN=${REACT_APP_SENTRY_DSN}
-      - REACT_APP_SENTRY_ENVIRONMENT=${REACT_APP_SENTRY_ENVIRONMENT:-production}
-      - REACT_APP_AMPLITUDE_API_KEY=${REACT_APP_AMPLITUDE_API_KEY}
+      # Runtime variables (if needed by serve or other tools)
+      - NODE_ENV=production
     depends_on:
       - python-backend
     deploy:
