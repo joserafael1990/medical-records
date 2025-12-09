@@ -27,9 +27,9 @@ def upgrade() -> None:
     op.drop_table('data_retention_logs')
     op.drop_constraint('appointment_reminders_appointment_id_reminder_number_key', 'appointment_reminders', type_='unique')
     op.drop_index('idx_appointment_reminders_appointment_id', table_name='appointment_reminders', if_exists=True)
-    op.drop_index('idx_appointment_reminders_appointment_status', table_name='appointment_reminders', postgresql_where='((enabled = true) AND (sent = false))')
-    op.drop_index('idx_appointment_reminders_enabled_sent', table_name='appointment_reminders', postgresql_where='((enabled = true) AND (sent = false))')
-    op.drop_index('idx_appointment_reminders_whatsapp_message_id', table_name='appointment_reminders')
+    op.drop_index('idx_appointment_reminders_appointment_status', table_name='appointment_reminders', postgresql_where='((enabled = true) AND (sent = false))', if_exists=True)
+    op.drop_index('idx_appointment_reminders_enabled_sent', table_name='appointment_reminders', postgresql_where='((enabled = true) AND (sent = false))', if_exists=True)
+    op.drop_index('idx_appointment_reminders_whatsapp_message_id', table_name='appointment_reminders', if_exists=True)
     op.create_unique_constraint('unique_appointment_reminder_number', 'appointment_reminders', ['appointment_id', 'reminder_number'])
     op.drop_table_comment(
         'appointment_reminders',
