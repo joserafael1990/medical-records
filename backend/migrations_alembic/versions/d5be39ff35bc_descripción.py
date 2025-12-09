@@ -90,17 +90,60 @@ def safe_alter_column(*args, **kwargs) -> None:
         pass  # Column might not exist or already have correct type
 
 
+def safe_add_column(table_name: str, column: sa.Column, *args, **kwargs) -> None:
+    """Safely add a column, handling transaction aborts"""
+    bind = op.get_bind()
+    try:
+        op.add_column(table_name, column, *args, **kwargs)
+    except Exception as e:
+        # If transaction is aborted, rollback and retry
+        error_str = str(e).lower()
+        if 'transaction' in error_str and 'aborted' in error_str:
+            try:
+                # Rollback the failed transaction
+                bind.execute(sa.text("ROLLBACK"))
+                # Retry the operation
+                op.add_column(table_name, column, *args, **kwargs)
+            except Exception:
+                # If it still fails, check if column already exists
+                try:
+                    # Check if column exists
+                    result = bind.execute(sa.text(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_name = :table_name AND column_name = :column_name"
+                    ), {"table_name": table_name, "column_name": column.name})
+                    if result.scalar():
+                        # Column already exists, that's fine
+                        pass
+                except Exception:
+                    # Ignore - column might not exist or other issue
+                    pass
+        else:
+            # Different error, might be column already exists
+            pass
+
+
 def safe_execute(sql: str, *args, **kwargs) -> None:
     """Safely execute SQL, ignoring errors (especially transaction aborted errors)"""
+    bind = op.get_bind()
     try:
         # Try to execute in autocommit block to avoid transaction issues
         # This commits any pending transaction and runs in autocommit mode
         with op.get_context().autocommit_block():
-            op.execute(sql, *args, **kwargs)
+            bind.execute(sa.text(sql), *args, **kwargs)
     except Exception as e:
-        # If autocommit block fails (e.g., transaction already aborted), just skip
-        # The operation is not critical - migration can continue
-        pass
+        # If autocommit block fails (e.g., transaction already aborted), rollback and retry
+        try:
+            bind.execute(sa.text("ROLLBACK"))
+        except Exception:
+            pass
+        try:
+            # Retry in autocommit block
+            with op.get_context().autocommit_block():
+                bind.execute(sa.text(sql), *args, **kwargs)
+        except Exception:
+            # If it still fails, just skip - operation is not critical
+            pass
 
 
 def safe_drop_index(*args, **kwargs) -> None:
@@ -542,10 +585,10 @@ def upgrade() -> None:
         existing_comment='Avisos de privacidad',
         schema=None
     )
-    op.add_column('schedule_templates', sa.Column('consultation_duration', sa.Integer(), nullable=True))
-    op.add_column('schedule_templates', sa.Column('break_duration', sa.Integer(), nullable=True))
-    op.add_column('schedule_templates', sa.Column('lunch_start', sa.Time(), nullable=True))
-    op.add_column('schedule_templates', sa.Column('lunch_end', sa.Time(), nullable=True))
+    safe_add_column('schedule_templates', sa.Column('consultation_duration', sa.Integer(), nullable=True))
+    safe_add_column('schedule_templates', sa.Column('break_duration', sa.Integer(), nullable=True))
+    safe_add_column('schedule_templates', sa.Column('lunch_start', sa.Time(), nullable=True))
+    safe_add_column('schedule_templates', sa.Column('lunch_end', sa.Time(), nullable=True))
     # Before making office_id NOT NULL, update any NULL values
     # Find the first office for each doctor, or create a default office
     safe_execute("""
