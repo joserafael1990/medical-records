@@ -62,6 +62,11 @@ if ! /app/.venv/bin/python -c "from google.oauth2.credentials import Credentials
     fi
 fi
 
+# CRITICAL: Ensure appointment_reminders table exists BEFORE running migrations
+# This guarantees the table exists even if migrations fail
+echo "🔧 Ensuring appointment_reminders table exists..."
+/app/.venv/bin/python /app/scripts/ensure_appointment_reminders_table.py || echo "⚠️  Could not ensure table (will try in migration)"
+
 # Run Alembic migrations automatically on startup (only if not explicitly disabled)
 if [ "${SKIP_ALEMBIC_MIGRATIONS:-false}" != "true" ]; then
     echo "🔄 Running Alembic migrations..."
