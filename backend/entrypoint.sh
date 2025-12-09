@@ -62,6 +62,11 @@ if ! /app/.venv/bin/python -c "from google.oauth2.credentials import Credentials
     fi
 fi
 
+# CRITICAL: Ensure alembic_version table exists BEFORE running migrations
+# This is required for Alembic to track which migrations have been applied
+echo "🔧 Ensuring alembic_version table exists..."
+/app/.venv/bin/python /app/scripts/ensure_alembic_version_table.py || echo "⚠️  Could not ensure alembic_version table"
+
 # CRITICAL: Ensure appointment_reminders table exists BEFORE running migrations
 # This guarantees the table exists even if migrations fail
 echo "🔧 Ensuring appointment_reminders table exists..."
