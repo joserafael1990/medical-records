@@ -2085,10 +2085,9 @@ INSERT INTO diagnosis_catalog (code, name, is_active, created_by, created_at, up
 ('L95.9', 'Vasculitis limitada a la piel, no especificada', TRUE, 0, NOW(), NOW()),
 ('L98.9', 'Trastorno de la piel y del tejido subcutáneo, no especificado', TRUE, 0, NOW(), NOW()),
 ('L99', 'Otros trastornos de la piel y del tejido subcutáneo en enfermedades clasificadas en otra parte', TRUE, 0, NOW(), NOW()),
-('NULL', 'consulta de niño sano', TRUE, 0, NOW(), NOW())
+(NULL, 'consulta de niño sano', TRUE, 0, NOW(), NOW())
 
-ON CONFLICT (id) DO UPDATE SET
-    code = EXCLUDED.code,
+ON CONFLICT (code) DO UPDATE SET
     name = EXCLUDED.name,
     is_active = EXCLUDED.is_active,
     created_by = 0,
