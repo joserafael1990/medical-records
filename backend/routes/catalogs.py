@@ -35,7 +35,20 @@ async def get_specialties(db: Session = Depends(get_db)):
 @router.get("/countries")
 async def get_countries(db: Session = Depends(get_db)):
     """Get list of countries"""
-    return crud.get_countries(db, active=True)
+    try:
+        countries = crud.get_countries(db, active=True)
+        return [
+            {
+                "id": country.id,
+                "name": country.name,
+                "phone_code": country.phone_code,
+                "is_active": country.is_active,
+                "created_at": country.created_at.isoformat() if country.created_at else None
+            }
+            for country in countries
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting countries: {str(e)}")
 
 
 @router.get("/states")
@@ -44,7 +57,20 @@ async def get_states(
     db: Session = Depends(get_db)
 ):
     """Get list of states"""
-    return crud.get_states(db, country_id=country_id, active=True)
+    try:
+        states = crud.get_states(db, country_id=country_id, active=True)
+        return [
+            {
+                "id": state.id,
+                "name": state.name,
+                "country_id": state.country_id,
+                "is_active": state.is_active,
+                "created_at": state.created_at.isoformat() if state.created_at else None
+            }
+            for state in states
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting states: {str(e)}")
 
 
 @router.get("/emergency-relationships")
