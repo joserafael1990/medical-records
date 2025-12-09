@@ -96,15 +96,45 @@ export class CatalogService extends ApiBase {
     try {
       const url = countryId ? `/api/catalogs/states?country_id=${countryId}` : '/api/catalogs/states';
       const response = await this.api.get(url);
-      const states = response.data || [];
-      if (!Array.isArray(states)) {
-        logger.warn('getStates: respuesta no es un array', states, 'api');
+      let states = response.data;
+      
+      // Handle different response structures
+      if (!states) {
+        logger.warn('getStates: respuesta vacía', response, 'api');
         return [];
       }
-      return states.map((state: any) => ({
-        ...state,
-        is_active: state?.is_active ?? state?.active ?? false
+      
+      // If wrapped in data property
+      if (states.data && Array.isArray(states.data)) {
+        states = states.data;
+      }
+      // If wrapped in results property
+      else if (states.results && Array.isArray(states.results)) {
+        states = states.results;
+      }
+      
+      if (!Array.isArray(states)) {
+        logger.warn('getStates: respuesta no es un array', { 
+          type: typeof states,
+          data: states,
+          response: response.data 
+        }, 'api');
+        return [];
+      }
+      
+      const mappedStates = states.map((state: any) => ({
+        id: state.id,
+        name: state.name,
+        country_id: state.country_id,
+        is_active: state?.is_active ?? state?.active ?? true
       }));
+      
+      logger.debug('getStates: estados cargados', { 
+        count: mappedStates.length,
+        countryId 
+      }, 'api');
+      
+      return mappedStates;
     } catch (error) {
       logger.error('Error getting states', error, 'api');
       throw error;
