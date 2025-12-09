@@ -46,3 +46,4 @@ echo "⚠️  IMPORTANT: Update DATABASE_URL in Coolify before restarting your a
 
 
 
+
