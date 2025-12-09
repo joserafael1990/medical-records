@@ -1,5 +1,6 @@
-# Docker Compose for Production (Doppler + Docker Hub Images)
-# Usage: doppler run --project cortex --config prd -- docker compose -f compose.prod.yaml up -d
+# Docker Compose for Production (Coolify)
+# Usage: docker compose -f compose.prod.yaml up -d
+# Environment variables are injected by Coolify
 
 services:
   # CORREGIDO: Ahora tiene los 2 espacios de sangría necesarios
@@ -87,7 +88,7 @@ services:
           memory: 512M # Limite bajo porque son archivos estáticos
 
   postgres-db:
-    image: postgres:16-alpine
+    image: postgres:15-alpine
     restart: always
     networks:
       - appnet

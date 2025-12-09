@@ -32,5 +32,5 @@ echo ""
 
 # Usar Doppler para inyectar variables y ejecutar docker compose
 doppler run --project cortex --config "$CONFIG" -- \
-    docker compose -f compose.doppler.yaml $COMPOSE_CMD "${@:3}"
+    docker compose -f compose.dev.yaml $COMPOSE_CMD "${@:3}"
 

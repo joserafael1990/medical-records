@@ -1,96 +1,109 @@
-# Docker Compose for Production (Doppler + Docker Hub Images)
-# Usage: doppler run --project cortex --config prd -- docker compose -f compose.prod.yaml up -d
+# Docker Compose for Development (Local .env file)
+# Usage: docker compose -f compose.dev.yaml up -d
+# Environment variables are loaded from .env file in the project root
+# Copy .env.example to .env and fill in your values
 
 services:
   python-backend:
-    # Use pre-built image from Docker Hub
-    image: joserafael1990/medical-records-backend:latest
     build:
       context: ./backend
       dockerfile: Dockerfile
-    restart: always
+    restart: unless-stopped
     init: true
     ports:
       - "8000:8000"
-
-    # --- ARREGLO 1: CONEXIÓN CON COOLIFY (TRAEFIK) ---
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.services.python-backend.loadbalancer.server.port=8000"
-    # -------------------------------------------------
-
+    
+    # Explicitly load .env file (Docker Compose also auto-loads .env, but this is clearer)
+    env_file:
+      - .env
+    
+    # No Traefik labels needed for local development
     networks:
       - appnet
+    
     healthcheck:
       test: [ "CMD-SHELL", "curl -f http://localhost:8000/health || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+    
     environment:
-      # Variables injected by Doppler
+      # Variables from .env file (can also override here if needed)
       - SECRET_KEY=${SECRET_KEY}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - SENTRY_DSN_BACKEND=${SENTRY_DSN_BACKEND}
-      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
-      - ENABLE_ENCRYPTION=${ENABLE_ENCRYPTION:-true}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-development}
+      - ENABLE_ENCRYPTION=${ENABLE_ENCRYPTION:-false}
       - SECURITY_HEADERS_ENABLED=${SECURITY_HEADERS_ENABLED:-true}
       - CONTENT_SECURITY_POLICY=${CONTENT_SECURITY_POLICY}
-      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
-      - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-120}
+      # Rate limiting disabled by default in dev to avoid issues with React Strict Mode
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-false}
+      - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-1000}
       - RATE_LIMIT_WINDOW_SECONDS=${RATE_LIMIT_WINDOW_SECONDS:-60}
       - MEDICAL_ENCRYPTION_KEY=${MEDICAL_ENCRYPTION_KEY}
       - WHATSAPP_PROVIDER=${WHATSAPP_PROVIDER:-meta}
       - META_WHATSAPP_PHONE_ID=${META_WHATSAPP_PHONE_ID}
       - META_WHATSAPP_TOKEN=${META_WHATSAPP_TOKEN}
       - META_WHATSAPP_API_VERSION=${META_WHATSAPP_API_VERSION:-v24.0}
-      - APP_ENV=${APP_ENV:-production}
-
-      # --- ARREGLO 2: CORS FIXED (EVITA EL CRASH LOOP) ---
-      - CORS_ORIGINS=${CORS_ORIGINS}
+      - APP_ENV=${APP_ENV:-development}
+      - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:3000"]}
       - DATABASE_URL=${DATABASE_URL}
-      # ---------------------------------------------------
-
       - META_WHATSAPP_APP_SECRET=${META_WHATSAPP_APP_SECRET}
       - META_WHATSAPP_VERIFY_TOKEN=${META_WHATSAPP_VERIFY_TOKEN}
-      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+    
     depends_on:
       - postgres-db
 
   typescript-frontend:
-    # Use pre-built image from Docker Hub
-    image: joserafael1990/medical-records-frontend:latest
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    restart: always
+      args:
+        # Build-time variables needed for React (from .env)
+        - REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:8000}
+        - REACT_APP_SENTRY_DSN=${REACT_APP_SENTRY_DSN}
+        - REACT_APP_SENTRY_ENVIRONMENT=${REACT_APP_SENTRY_ENVIRONMENT:-development}
+        - REACT_APP_AMPLITUDE_API_KEY=${REACT_APP_AMPLITUDE_API_KEY}
+    restart: unless-stopped
     init: true
     ports:
       - "3000:3000"
+    
+    # Load .env file for runtime variables
+    env_file:
+      - .env
+    
     networks:
       - appnet
     environment:
-      - REACT_APP_SENTRY_DSN=${REACT_APP_SENTRY_DSN}
-      - REACT_APP_SENTRY_ENVIRONMENT=${REACT_APP_SENTRY_ENVIRONMENT:-production}
-      - REACT_APP_AMPLITUDE_API_KEY=${REACT_APP_AMPLITUDE_API_KEY}
+      # Runtime variables (can override .env values here if needed)
+      - NODE_ENV=development
     depends_on:
       - python-backend
     deploy:
       resources:
         limits:
-          memory: 2G # Lower memory limit for production (static files)
+          memory: 2G
 
   postgres-db:
     image: postgres:16-alpine
-    restart: always
+    restart: unless-stopped
+    
+    # Load .env file for database credentials
+    env_file:
+      - .env
+    
     networks:
       - appnet
     environment:
+      # Database credentials from .env (with defaults)
       POSTGRES_USER: ${POSTGRES_USER:-historias_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-historias_pass}
       POSTGRES_DB: ${POSTGRES_DB:-historias_clinicas}
     ports:
-      - "5432:5432" # Standard port for production
+      - "5432:5432" # Exposed for local development access
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

@@ -42,5 +42,5 @@ echo ""
 
 # Ejecutar docker compose con Doppler
 doppler run --project cortex --config dev -- \
-    docker compose -f compose.doppler.yaml "${@:-up}"
+    docker compose -f compose.dev.yaml "${@:-up}"
 
