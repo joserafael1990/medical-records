@@ -90,7 +90,7 @@ async def get_timezones():
 async def get_catalog_stats(db: Session = Depends(get_db)):
     """Get catalog statistics - useful for debugging"""
     try:
-        from models import Country, State, Specialty
+        from database import Country, State, Specialty
         return {
             "countries": {
                 "total": db.query(Country).count(),
