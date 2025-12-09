@@ -84,3 +84,26 @@ async def get_timezones():
     """Get list of available timezones for doctor offices"""
     timezone_options = get_timezone_options()
     return [{"value": tz[0], "label": tz[1]} for tz in timezone_options]
+
+
+@router.get("/stats")
+async def get_catalog_stats(db: Session = Depends(get_db)):
+    """Get catalog statistics - useful for debugging"""
+    try:
+        from models import Country, State, Specialty
+        return {
+            "countries": {
+                "total": db.query(Country).count(),
+                "active": db.query(Country).filter(Country.is_active == True).count()
+            },
+            "states": {
+                "total": db.query(State).count(),
+                "active": db.query(State).filter(State.is_active == True).count()
+            },
+            "specialties": {
+                "total": db.query(Specialty).count(),
+                "active": db.query(Specialty).filter(Specialty.is_active == True).count()
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting stats: {str(e)}")
