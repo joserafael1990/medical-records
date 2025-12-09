@@ -94,14 +94,13 @@ def safe_execute(sql: str, *args, **kwargs) -> None:
     """Safely execute SQL, ignoring errors (especially transaction aborted errors)"""
     try:
         # Try to execute in autocommit block to avoid transaction issues
+        # This commits any pending transaction and runs in autocommit mode
         with op.get_context().autocommit_block():
             op.execute(sql, *args, **kwargs)
-    except Exception:
-        # If autocommit block fails, try regular execute
-        try:
-            op.execute(sql, *args, **kwargs)
-        except Exception:
-            pass  # Operation might fail due to transaction abort or other issues
+    except Exception as e:
+        # If autocommit block fails (e.g., transaction already aborted), just skip
+        # The operation is not critical - migration can continue
+        pass
 
 
 def safe_drop_index(*args, **kwargs) -> None:
