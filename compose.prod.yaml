@@ -87,7 +87,7 @@ services:
           memory: 512M # Limite bajo porque son archivos estáticos
 
   postgres-db:
-    image: postgres:15-alpine
+    image: postgres:16-alpine
     restart: always
     networks:
       - appnet

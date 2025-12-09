@@ -599,6 +599,35 @@ SELECT setval('document_types_id_seq', 2, true);
 
 
 -- ============================================================================
+-- 7.1 DOCUMENTS (17 documents)
+-- ============================================================================
+INSERT INTO documents (id, name, document_type_id, is_active, created_at) VALUES
+(1, 'DNI', 1, TRUE, NOW()),
+(2, 'C.I', 1, TRUE, NOW()),
+(3, 'DUI', 1, TRUE, NOW()),
+(4, 'DPI', 1, TRUE, NOW()),
+(5, 'CURP', 1, TRUE, NOW()),
+(6, 'C.I.P', 1, TRUE, NOW()),
+(7, 'C.I.E', 1, TRUE, NOW()),
+(8, 'Otro', 1, TRUE, NOW()),
+(9, 'Número de Colegiación', 2, TRUE, NOW()),
+(10, 'Matrícula Nacional', 2, TRUE, NOW()),
+(11, 'Número de Registro', 2, TRUE, NOW()),
+(12, 'Registro Médico Nacional', 2, TRUE, NOW()),
+(13, 'Cédula Profesional', 2, TRUE, NOW()),
+(14, 'Número de Colegiatura', 2, TRUE, NOW()),
+(15, 'Número de Registro Profesional', 2, TRUE, NOW()),
+(16, 'Medical License Number', 2, TRUE, NOW()),
+(17, 'Otro', 2, TRUE, NOW())
+ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    document_type_id = EXCLUDED.document_type_id,
+    is_active = EXCLUDED.is_active;
+
+SELECT setval('documents_id_seq', 17, true);
+
+
+-- ============================================================================
 -- 8. STUDY CATEGORIES (25 categories)
 -- ============================================================================
 INSERT INTO study_categories (id, name, is_active, created_at) VALUES

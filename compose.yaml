@@ -10,8 +10,8 @@ services:
       dockerfile: Dockerfile
     restart: always
     init: true
-    expose:
-      - "8000"
+    ports:
+      - "8000:8000"
 
     # --- ARREGLO 1: CONEXIÓN CON COOLIFY (TRAEFIK) ---
     labels:
@@ -81,14 +81,14 @@ services:
           memory: 2G # Lower memory limit for production (static files)
 
   postgres-db:
-    image: postgres:15-alpine
+    image: postgres:16-alpine
     restart: always
     networks:
       - appnet
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:-historias_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-historias_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-historias_clinicas}
     ports:
       - "5432:5432" # Standard port for production
     volumes:
