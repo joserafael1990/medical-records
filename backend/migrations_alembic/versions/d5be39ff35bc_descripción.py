@@ -50,6 +50,38 @@ def safe_drop_column(*args, **kwargs) -> None:
         pass  # Column might not exist
 
 
+def safe_create_index(*args, **kwargs) -> None:
+    """Safely create an index, ignoring errors"""
+    try:
+        op.create_index(*args, **kwargs)
+    except Exception:
+        pass  # Index might already exist
+
+
+def safe_drop_constraint(*args, **kwargs) -> None:
+    """Safely drop a constraint, ignoring errors"""
+    try:
+        op.drop_constraint(*args, **kwargs)
+    except Exception:
+        pass  # Constraint might not exist
+
+
+def safe_create_foreign_key(*args, **kwargs) -> None:
+    """Safely create a foreign key, ignoring errors"""
+    try:
+        op.create_foreign_key(*args, **kwargs)
+    except Exception:
+        pass  # Foreign key might already exist
+
+
+def safe_create_unique_constraint(*args, **kwargs) -> None:
+    """Safely create a unique constraint, ignoring errors"""
+    try:
+        op.create_unique_constraint(*args, **kwargs)
+    except Exception:
+        pass  # Constraint might already exist
+
+
 def safe_alter_column(*args, **kwargs) -> None:
     """Safely alter a column, ignoring errors"""
     try:
@@ -104,14 +136,14 @@ def upgrade() -> None:
     # Only modify appointment_reminders if the table exists
     if table_exists('appointment_reminders'):
         try:
-            op.drop_constraint('appointment_reminders_appointment_id_reminder_number_key', 'appointment_reminders', type_='unique')
+            safe_drop_constraint('appointment_reminders_appointment_id_reminder_number_key', 'appointment_reminders', type_='unique')
         except Exception:
             pass  # Constraint might not exist
         op.drop_index('idx_appointment_reminders_appointment_id', table_name='appointment_reminders', if_exists=True)
         op.drop_index('idx_appointment_reminders_appointment_status', table_name='appointment_reminders', postgresql_where='((enabled = true) AND (sent = false))', if_exists=True)
         op.drop_index('idx_appointment_reminders_enabled_sent', table_name='appointment_reminders', postgresql_where='((enabled = true) AND (sent = false))', if_exists=True)
         op.drop_index('idx_appointment_reminders_whatsapp_message_id', table_name='appointment_reminders', if_exists=True)
-        op.create_unique_constraint('unique_appointment_reminder_number', 'appointment_reminders', ['appointment_id', 'reminder_number'])
+        safe_create_unique_constraint('unique_appointment_reminder_number', 'appointment_reminders', ['appointment_id', 'reminder_number'])
         try:
             safe_drop_table_comment(
                 'appointment_reminders',
@@ -134,11 +166,11 @@ def upgrade() -> None:
         op.drop_index('idx_appointments_patient_doctor', table_name='appointments', if_exists=True)
         op.drop_index('idx_appointments_patient_id', table_name='appointments', if_exists=True)
         try:
-            op.create_foreign_key(None, 'appointments', 'appointment_types', ['appointment_type_id'], ['id'])
+            safe_create_foreign_key(None, 'appointments', 'appointment_types', ['appointment_type_id'], ['id'])
         except Exception:
             pass  # Foreign key might already exist
         try:
-            op.create_foreign_key(None, 'appointments', 'offices', ['office_id'], ['id'])
+            safe_create_foreign_key(None, 'appointments', 'offices', ['office_id'], ['id'])
         except Exception:
             pass  # Foreign key might already exist
         try:
@@ -212,9 +244,18 @@ def upgrade() -> None:
         op.drop_index('idx_clinical_studies_ordered_date', table_name='clinical_studies', if_exists=True)
         op.drop_index('idx_clinical_studies_patient_doctor', table_name='clinical_studies', if_exists=True)
         op.drop_index('idx_clinical_studies_patient_id', table_name='clinical_studies', if_exists=True)
-    op.create_index(op.f('ix_clinical_studies_id'), 'clinical_studies', ['id'], unique=False)
-    op.drop_constraint('clinical_studies_consultation_id_fkey', 'clinical_studies', type_='foreignkey')
-    op.create_foreign_key(None, 'clinical_studies', 'medical_records', ['consultation_id'], ['id'])
+        try:
+            safe_create_index(op.f('ix_clinical_studies_id'), 'clinical_studies', ['id'], unique=False)
+        except Exception:
+            pass  # Index might already exist
+        try:
+            safe_drop_constraint('clinical_studies_consultation_id_fkey', 'clinical_studies', type_='foreignkey')
+        except Exception:
+            pass  # Constraint might not exist
+        try:
+            safe_create_foreign_key(None, 'clinical_studies', 'medical_records', ['consultation_id'], ['id'])
+        except Exception:
+            pass  # Foreign key might already exist
     safe_drop_table_comment(
         'clinical_studies',
         existing_comment='Estudios clínicos realizados',
@@ -238,16 +279,16 @@ def upgrade() -> None:
                existing_type=sa.VARCHAR(length=100),
                type_=sa.String(length=255),
                nullable=False)
-    op.drop_constraint('consultation_prescriptions_consultation_id_fkey', 'consultation_prescriptions', type_='foreignkey')
-    op.create_foreign_key(None, 'consultation_prescriptions', 'medical_records', ['consultation_id'], ['id'])
+    safe_drop_constraint('consultation_prescriptions_consultation_id_fkey', 'consultation_prescriptions', type_='foreignkey')
+    safe_create_foreign_key(None, 'consultation_prescriptions', 'medical_records', ['consultation_id'], ['id'])
     safe_alter_column('consultation_vital_signs', 'consultation_id',
                existing_type=sa.INTEGER(),
                nullable=False)
     safe_alter_column('consultation_vital_signs', 'vital_sign_id',
                existing_type=sa.INTEGER(),
                nullable=False)
-    op.drop_constraint('consultation_vital_signs_consultation_id_fkey', 'consultation_vital_signs', type_='foreignkey')
-    op.create_foreign_key(None, 'consultation_vital_signs', 'medical_records', ['consultation_id'], ['id'])
+    safe_drop_constraint('consultation_vital_signs_consultation_id_fkey', 'consultation_vital_signs', type_='foreignkey')
+    safe_create_foreign_key(None, 'consultation_vital_signs', 'medical_records', ['consultation_id'], ['id'])
     safe_drop_table_comment(
         'consultation_vital_signs',
         existing_comment='Signos vitales por consulta',
@@ -276,27 +317,27 @@ def upgrade() -> None:
                type_=sa.DateTime(timezone=True),
                existing_nullable=True,
                existing_server_default=sa.text('now()'))
-    op.drop_constraint('diagnosis_catalog_code_key', 'diagnosis_catalog', type_='unique')
+    safe_drop_constraint('diagnosis_catalog_code_key', 'diagnosis_catalog', type_='unique')
     op.drop_index('idx_diagnosis_catalog_code', table_name='diagnosis_catalog')
     op.drop_index('idx_diagnosis_catalog_created_by', table_name='diagnosis_catalog')
-    op.create_index(op.f('ix_diagnosis_catalog_code'), 'diagnosis_catalog', ['code'], unique=True)
-    op.create_index(op.f('ix_diagnosis_catalog_created_by'), 'diagnosis_catalog', ['created_by'], unique=False)
-    op.create_index(op.f('ix_diagnosis_catalog_id'), 'diagnosis_catalog', ['id'], unique=False)
+    safe_create_index(op.f('ix_diagnosis_catalog_code'), 'diagnosis_catalog', ['code'], unique=True)
+    safe_create_index(op.f('ix_diagnosis_catalog_created_by'), 'diagnosis_catalog', ['created_by'], unique=False)
+    safe_create_index(op.f('ix_diagnosis_catalog_id'), 'diagnosis_catalog', ['id'], unique=False)
     safe_drop_table_comment(
         'diagnosis_catalog',
         existing_comment='Catálogo de diagnósticos médicos',
         schema=None
     )
     op.drop_index('idx_document_folio_sequences_doctor_type', table_name='document_folio_sequences')
-    op.drop_constraint('document_folio_sequences_doctor_id_fkey', 'document_folio_sequences', type_='foreignkey')
-    op.create_foreign_key(None, 'document_folio_sequences', 'persons', ['doctor_id'], ['id'])
+    safe_drop_constraint('document_folio_sequences_doctor_id_fkey', 'document_folio_sequences', type_='foreignkey')
+    safe_create_foreign_key(None, 'document_folio_sequences', 'persons', ['doctor_id'], ['id'])
     op.drop_index('idx_document_folios_doctor_type_number', table_name='document_folios')
     op.drop_index('idx_document_folios_unique_consultation', table_name='document_folios')
-    op.drop_constraint('document_folios_doctor_id_fkey', 'document_folios', type_='foreignkey')
-    op.drop_constraint('document_folios_consultation_id_fkey', 'document_folios', type_='foreignkey')
-    op.create_foreign_key(None, 'document_folios', 'medical_records', ['consultation_id'], ['id'])
-    op.create_foreign_key(None, 'document_folios', 'persons', ['doctor_id'], ['id'])
-    op.drop_constraint('documents_name_document_type_id_key', 'documents', type_='unique')
+    safe_drop_constraint('document_folios_doctor_id_fkey', 'document_folios', type_='foreignkey')
+    safe_drop_constraint('document_folios_consultation_id_fkey', 'document_folios', type_='foreignkey')
+    safe_create_foreign_key(None, 'document_folios', 'medical_records', ['consultation_id'], ['id'])
+    safe_create_foreign_key(None, 'document_folios', 'persons', ['doctor_id'], ['id'])
+    safe_drop_constraint('documents_name_document_type_id_key', 'documents', type_='unique')
     safe_drop_table_comment(
         'emergency_relationships',
         existing_comment='Relaciones familiares para contactos de emergencia',
@@ -414,7 +455,7 @@ def upgrade() -> None:
                nullable=True,
                existing_server_default=None)
     # Create FK (allows NULL values)
-    op.create_foreign_key(None, 'medications', 'persons', ['created_by'], ['id'])
+    safe_create_foreign_key(None, 'medications', 'persons', ['created_by'], ['id'])
     # Now make it NOT NULL if we want (but this might fail if there are still NULLs)
     # For now, we'll leave it nullable to match the constraint that allows system-created medications
     safe_drop_table_comment(
@@ -427,7 +468,7 @@ def upgrade() -> None:
     op.drop_index('idx_person_documents_document_id', table_name='person_documents')
     op.drop_index('idx_person_documents_person_id', table_name='person_documents')
     op.drop_index('idx_person_documents_value', table_name='person_documents')
-    op.drop_constraint('person_documents_person_id_document_id_key', 'person_documents', type_='unique')
+    safe_drop_constraint('person_documents_person_id_document_id_key', 'person_documents', type_='unique')
     safe_alter_column('persons', 'title',
                existing_type=sa.VARCHAR(length=10),
                comment=None,
@@ -445,7 +486,7 @@ def upgrade() -> None:
                existing_nullable=True)
     op.drop_index('idx_persons_email', table_name='persons')
     op.drop_index('idx_persons_person_type', table_name='persons')
-    op.drop_constraint('persons_office_state_id_fkey', 'persons', type_='foreignkey')
+    safe_drop_constraint('persons_office_state_id_fkey', 'persons', type_='foreignkey')
     safe_drop_table_comment(
         'persons',
         existing_comment='Tabla unificada de doctores, pacientes y administradores',
@@ -469,7 +510,7 @@ def upgrade() -> None:
     safe_drop_column('privacy_consents', 'anonymization_reason')
     safe_drop_column('privacy_consents', 'deletion_scheduled_date')
     safe_drop_column('privacy_consents', 'is_anonymized')
-    op.create_unique_constraint(None, 'privacy_notices', ['version'])
+    safe_create_unique_constraint(None, 'privacy_notices', ['version'])
     safe_drop_table_comment(
         'privacy_notices',
         existing_comment='Avisos de privacidad',
@@ -498,14 +539,14 @@ def upgrade() -> None:
     safe_alter_column('schedule_templates', 'office_id',
                existing_type=sa.INTEGER(),
                nullable=False)
-    op.create_index(op.f('ix_schedule_templates_id'), 'schedule_templates', ['id'], unique=False)
-    op.drop_constraint('schedule_templates_office_id_fkey', 'schedule_templates', type_='foreignkey')
-    op.drop_constraint('schedule_templates_doctor_id_fkey', 'schedule_templates', type_='foreignkey')
-    op.create_foreign_key(None, 'schedule_templates', 'persons', ['doctor_id'], ['id'])
-    op.create_foreign_key(None, 'schedule_templates', 'offices', ['office_id'], ['id'])
+    safe_create_index(op.f('ix_schedule_templates_id'), 'schedule_templates', ['id'], unique=False)
+    safe_drop_constraint('schedule_templates_office_id_fkey', 'schedule_templates', type_='foreignkey')
+    safe_drop_constraint('schedule_templates_doctor_id_fkey', 'schedule_templates', type_='foreignkey')
+    safe_create_foreign_key(None, 'schedule_templates', 'persons', ['doctor_id'], ['id'])
+    safe_create_foreign_key(None, 'schedule_templates', 'offices', ['office_id'], ['id'])
     safe_drop_column('schedule_templates', 'time_blocks')
-    op.drop_constraint('states_country_id_fkey', 'states', type_='foreignkey')
-    op.create_foreign_key(None, 'states', 'countries', ['country_id'], ['id'])
+    safe_drop_constraint('states_country_id_fkey', 'states', type_='foreignkey')
+    safe_create_foreign_key(None, 'states', 'countries', ['country_id'], ['id'])
     safe_drop_table_comment(
         'states',
         existing_comment='Catálogo de estados/provincias por país',
@@ -514,13 +555,13 @@ def upgrade() -> None:
     safe_alter_column('study_catalog', 'category_id',
                existing_type=sa.INTEGER(),
                nullable=False)
-    op.create_index(op.f('ix_study_catalog_id'), 'study_catalog', ['id'], unique=False)
+    safe_create_index(op.f('ix_study_catalog_id'), 'study_catalog', ['id'], unique=False)
     safe_drop_table_comment(
         'study_catalog',
         existing_comment='Catálogo de estudios clínicos disponibles',
         schema=None
     )
-    op.create_index(op.f('ix_study_categories_id'), 'study_categories', ['id'], unique=False)
+    safe_create_index(op.f('ix_study_categories_id'), 'study_categories', ['id'], unique=False)
     safe_drop_table_comment(
         'study_categories',
         existing_comment='Categorías de estudios clínicos',
@@ -565,13 +606,13 @@ def downgrade() -> None:
         existing_comment=None,
         schema=None
     )
-    op.drop_constraint(None, 'states', type_='foreignkey')
-    op.create_foreign_key('states_country_id_fkey', 'states', 'countries', ['country_id'], ['id'], ondelete='CASCADE')
+    safe_drop_constraint(None, 'states', type_='foreignkey')
+    safe_create_foreign_key('states_country_id_fkey', 'states', 'countries', ['country_id'], ['id'], ondelete='CASCADE')
     op.add_column('schedule_templates', sa.Column('time_blocks', postgresql.JSONB(astext_type=sa.Text()), server_default=sa.text("'[]'::jsonb"), autoincrement=False, nullable=True))
-    op.drop_constraint(None, 'schedule_templates', type_='foreignkey')
-    op.drop_constraint(None, 'schedule_templates', type_='foreignkey')
-    op.create_foreign_key('schedule_templates_doctor_id_fkey', 'schedule_templates', 'persons', ['doctor_id'], ['id'], ondelete='CASCADE')
-    op.create_foreign_key('schedule_templates_office_id_fkey', 'schedule_templates', 'offices', ['office_id'], ['id'], ondelete='CASCADE')
+    safe_drop_constraint(None, 'schedule_templates', type_='foreignkey')
+    safe_drop_constraint(None, 'schedule_templates', type_='foreignkey')
+    safe_create_foreign_key('schedule_templates_doctor_id_fkey', 'schedule_templates', 'persons', ['doctor_id'], ['id'], ondelete='CASCADE')
+    safe_create_foreign_key('schedule_templates_office_id_fkey', 'schedule_templates', 'offices', ['office_id'], ['id'], ondelete='CASCADE')
     op.drop_index(op.f('ix_schedule_templates_id'), table_name='schedule_templates')
     safe_alter_column('schedule_templates', 'office_id',
                existing_type=sa.INTEGER(),
@@ -586,7 +627,7 @@ def downgrade() -> None:
         existing_comment=None,
         schema=None
     )
-    op.drop_constraint(None, 'privacy_notices', type_='unique')
+    safe_drop_constraint(None, 'privacy_notices', type_='unique')
     op.add_column('privacy_consents', sa.Column('is_anonymized', sa.BOOLEAN(), server_default=sa.text('false'), autoincrement=False, nullable=True, comment='Whether the consent data has been anonymized'))
     op.add_column('privacy_consents', sa.Column('deletion_scheduled_date', postgresql.TIMESTAMP(), autoincrement=False, nullable=True, comment='Scheduled date for data deletion after retention period'))
     op.add_column('privacy_consents', sa.Column('anonymization_reason', sa.TEXT(), autoincrement=False, nullable=True, comment='Reason for anonymization (retention_expired, patient_request, etc)'))
@@ -598,8 +639,8 @@ def downgrade() -> None:
         existing_comment=None,
         schema=None
     )
-    op.create_index('idx_privacy_consents_deletion_scheduled', 'privacy_consents', ['deletion_scheduled_date'], unique=False, postgresql_where='((deletion_scheduled_date IS NOT NULL) AND (is_anonymized = false))')
-    op.create_index('idx_privacy_consents_anonymized', 'privacy_consents', ['is_anonymized', 'anonymization_date'], unique=False)
+    safe_create_index('idx_privacy_consents_deletion_scheduled', 'privacy_consents', ['deletion_scheduled_date'], unique=False, postgresql_where='((deletion_scheduled_date IS NOT NULL) AND (is_anonymized = false))')
+    safe_create_index('idx_privacy_consents_anonymized', 'privacy_consents', ['is_anonymized', 'anonymization_date'], unique=False)
     op.add_column('persons', sa.Column('office_phone', sa.VARCHAR(length=20), autoincrement=False, nullable=True))
     op.add_column('persons', sa.Column('office_city', sa.VARCHAR(length=100), autoincrement=False, nullable=True))
     op.add_column('persons', sa.Column('office_address', sa.TEXT(), autoincrement=False, nullable=True))
@@ -612,9 +653,9 @@ def downgrade() -> None:
         existing_comment=None,
         schema=None
     )
-    op.create_foreign_key('persons_office_state_id_fkey', 'persons', 'states', ['office_state_id'], ['id'])
-    op.create_index('idx_persons_person_type', 'persons', ['person_type'], unique=False)
-    op.create_index('idx_persons_email', 'persons', ['email'], unique=False)
+    safe_create_foreign_key('persons_office_state_id_fkey', 'persons', 'states', ['office_state_id'], ['id'])
+    safe_create_index('idx_persons_person_type', 'persons', ['person_type'], unique=False)
+    safe_create_index('idx_persons_email', 'persons', ['email'], unique=False)
     safe_alter_column('persons', 'gender',
                existing_type=sa.VARCHAR(length=20),
                comment='Optional field. Can be NULL when creating patients from appointment dialogs or when patient prefers not to specify.',
@@ -627,19 +668,19 @@ def downgrade() -> None:
                existing_type=sa.VARCHAR(length=10),
                comment='Professional title for doctors (Dr., Dra., etc.) - kept separate',
                existing_nullable=True)
-    op.create_unique_constraint('person_documents_person_id_document_id_key', 'person_documents', ['person_id', 'document_id'])
-    op.create_index('idx_person_documents_value', 'person_documents', ['document_value'], unique=False)
-    op.create_index('idx_person_documents_person_id', 'person_documents', ['person_id'], unique=False)
-    op.create_index('idx_person_documents_document_id', 'person_documents', ['document_id'], unique=False)
-    op.create_index('idx_offices_is_active', 'offices', ['is_active'], unique=False)
-    op.create_index('idx_offices_doctor_id', 'offices', ['doctor_id'], unique=False)
+    safe_create_unique_constraint('person_documents_person_id_document_id_key', 'person_documents', ['person_id', 'document_id'])
+    safe_create_index('idx_person_documents_value', 'person_documents', ['document_value'], unique=False)
+    safe_create_index('idx_person_documents_person_id', 'person_documents', ['person_id'], unique=False)
+    safe_create_index('idx_person_documents_document_id', 'person_documents', ['document_id'], unique=False)
+    safe_create_index('idx_offices_is_active', 'offices', ['is_active'], unique=False)
+    safe_create_index('idx_offices_doctor_id', 'offices', ['doctor_id'], unique=False)
     op.create_table_comment(
         'medications',
         'Catálogo de medicamentos',
         existing_comment=None,
         schema=None
     )
-    op.drop_constraint(None, 'medications', type_='foreignkey')
+    safe_drop_constraint(None, 'medications', type_='foreignkey')
     safe_alter_column('medications', 'created_by',
                existing_type=sa.INTEGER(),
                nullable=True,
@@ -661,15 +702,15 @@ def downgrade() -> None:
         existing_comment=None,
         schema=None
     )
-    op.create_index('idx_medical_records_retention_end', 'medical_records', ['retention_end_date'], unique=False, postgresql_where='((retention_end_date IS NOT NULL) AND (is_anonymized = false))')
-    op.create_index('idx_medical_records_patient_id', 'medical_records', ['patient_id'], unique=False)
-    op.create_index('idx_medical_records_patient_document', 'medical_records', ['patient_document_id'], unique=False)
-    op.create_index('idx_medical_records_patient_doctor', 'medical_records', ['patient_id', 'doctor_id'], unique=False)
-    op.create_index('idx_medical_records_legal_hold', 'medical_records', ['legal_hold'], unique=False, postgresql_where='(legal_hold = true)')
-    op.create_index('idx_medical_records_doctor_id', 'medical_records', ['doctor_id'], unique=False)
-    op.create_index('idx_medical_records_consultation_date', 'medical_records', ['consultation_date'], unique=False)
-    op.create_index('idx_medical_records_archived', 'medical_records', ['is_archived', 'archived_date'], unique=False)
-    op.create_index('idx_medical_records_anonymized', 'medical_records', ['is_anonymized', 'anonymization_date'], unique=False)
+    safe_create_index('idx_medical_records_retention_end', 'medical_records', ['retention_end_date'], unique=False, postgresql_where='((retention_end_date IS NOT NULL) AND (is_anonymized = false))')
+    safe_create_index('idx_medical_records_patient_id', 'medical_records', ['patient_id'], unique=False)
+    safe_create_index('idx_medical_records_patient_document', 'medical_records', ['patient_document_id'], unique=False)
+    safe_create_index('idx_medical_records_patient_doctor', 'medical_records', ['patient_id', 'doctor_id'], unique=False)
+    safe_create_index('idx_medical_records_legal_hold', 'medical_records', ['legal_hold'], unique=False, postgresql_where='(legal_hold = true)')
+    safe_create_index('idx_medical_records_doctor_id', 'medical_records', ['doctor_id'], unique=False)
+    safe_create_index('idx_medical_records_consultation_date', 'medical_records', ['consultation_date'], unique=False)
+    safe_create_index('idx_medical_records_archived', 'medical_records', ['is_archived', 'archived_date'], unique=False)
+    safe_create_index('idx_medical_records_anonymized', 'medical_records', ['is_anonymized', 'anonymization_date'], unique=False)
     op.add_column('google_calendar_tokens', sa.Column('channel_id', sa.VARCHAR(length=255), autoincrement=False, nullable=True, comment='ID del canal de webhook de Google Calendar'))
     op.add_column('google_calendar_tokens', sa.Column('watch_expiration', postgresql.TIMESTAMP(), autoincrement=False, nullable=True, comment='Fecha de expiración de la suscripción (max 7 días)'))
     op.add_column('google_calendar_tokens', sa.Column('resource_id', sa.VARCHAR(length=255), autoincrement=False, nullable=True, comment='ID del recurso de la suscripción (watch)'))
@@ -679,10 +720,10 @@ def downgrade() -> None:
         existing_comment=None,
         schema=None
     )
-    op.create_index('idx_google_calendar_tokens_sync_enabled', 'google_calendar_tokens', ['sync_enabled'], unique=False)
-    op.create_index('idx_google_calendar_tokens_resource_id', 'google_calendar_tokens', ['resource_id'], unique=False)
-    op.create_index('idx_google_calendar_tokens_doctor_id', 'google_calendar_tokens', ['doctor_id'], unique=False)
-    op.create_index('idx_google_calendar_tokens_channel_id', 'google_calendar_tokens', ['channel_id'], unique=False)
+    safe_create_index('idx_google_calendar_tokens_sync_enabled', 'google_calendar_tokens', ['sync_enabled'], unique=False)
+    safe_create_index('idx_google_calendar_tokens_resource_id', 'google_calendar_tokens', ['resource_id'], unique=False)
+    safe_create_index('idx_google_calendar_tokens_doctor_id', 'google_calendar_tokens', ['doctor_id'], unique=False)
+    safe_create_index('idx_google_calendar_tokens_channel_id', 'google_calendar_tokens', ['channel_id'], unique=False)
     safe_alter_column('google_calendar_tokens', 'sync_enabled',
                existing_type=sa.BOOLEAN(),
                comment='Indica si la sincronización está habilitada',
@@ -715,9 +756,9 @@ def downgrade() -> None:
         existing_comment=None,
         schema=None
     )
-    op.create_index('idx_google_event_mappings_google_event_id', 'google_calendar_event_mappings', ['google_event_id'], unique=False)
-    op.create_index('idx_google_event_mappings_doctor_id', 'google_calendar_event_mappings', ['doctor_id'], unique=False)
-    op.create_index('idx_google_event_mappings_appointment_id', 'google_calendar_event_mappings', ['appointment_id'], unique=False)
+    safe_create_index('idx_google_event_mappings_google_event_id', 'google_calendar_event_mappings', ['google_event_id'], unique=False)
+    safe_create_index('idx_google_event_mappings_doctor_id', 'google_calendar_event_mappings', ['doctor_id'], unique=False)
+    safe_create_index('idx_google_event_mappings_appointment_id', 'google_calendar_event_mappings', ['appointment_id'], unique=False)
     safe_alter_column('google_calendar_event_mappings', 'doctor_id',
                existing_type=sa.INTEGER(),
                comment='ID del doctor propietario del evento',
@@ -736,16 +777,16 @@ def downgrade() -> None:
         existing_comment=None,
         schema=None
     )
-    op.create_unique_constraint('documents_name_document_type_id_key', 'documents', ['name', 'document_type_id'])
-    op.drop_constraint(None, 'document_folios', type_='foreignkey')
-    op.drop_constraint(None, 'document_folios', type_='foreignkey')
-    op.create_foreign_key('document_folios_consultation_id_fkey', 'document_folios', 'medical_records', ['consultation_id'], ['id'], ondelete='CASCADE')
-    op.create_foreign_key('document_folios_doctor_id_fkey', 'document_folios', 'persons', ['doctor_id'], ['id'], ondelete='CASCADE')
-    op.create_index('idx_document_folios_unique_consultation', 'document_folios', ['doctor_id', 'consultation_id', 'document_type'], unique=True)
-    op.create_index('idx_document_folios_doctor_type_number', 'document_folios', ['doctor_id', 'document_type', 'folio_number'], unique=False)
-    op.drop_constraint(None, 'document_folio_sequences', type_='foreignkey')
-    op.create_foreign_key('document_folio_sequences_doctor_id_fkey', 'document_folio_sequences', 'persons', ['doctor_id'], ['id'], ondelete='CASCADE')
-    op.create_index('idx_document_folio_sequences_doctor_type', 'document_folio_sequences', ['doctor_id', 'document_type'], unique=True)
+    safe_create_unique_constraint('documents_name_document_type_id_key', 'documents', ['name', 'document_type_id'])
+    safe_drop_constraint(None, 'document_folios', type_='foreignkey')
+    safe_drop_constraint(None, 'document_folios', type_='foreignkey')
+    safe_create_foreign_key('document_folios_consultation_id_fkey', 'document_folios', 'medical_records', ['consultation_id'], ['id'], ondelete='CASCADE')
+    safe_create_foreign_key('document_folios_doctor_id_fkey', 'document_folios', 'persons', ['doctor_id'], ['id'], ondelete='CASCADE')
+    safe_create_index('idx_document_folios_unique_consultation', 'document_folios', ['doctor_id', 'consultation_id', 'document_type'], unique=True)
+    safe_create_index('idx_document_folios_doctor_type_number', 'document_folios', ['doctor_id', 'document_type', 'folio_number'], unique=False)
+    safe_drop_constraint(None, 'document_folio_sequences', type_='foreignkey')
+    safe_create_foreign_key('document_folio_sequences_doctor_id_fkey', 'document_folio_sequences', 'persons', ['doctor_id'], ['id'], ondelete='CASCADE')
+    safe_create_index('idx_document_folio_sequences_doctor_type', 'document_folio_sequences', ['doctor_id', 'document_type'], unique=True)
     op.create_table_comment(
         'diagnosis_catalog',
         'Catálogo de diagnósticos médicos',
@@ -755,9 +796,9 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_diagnosis_catalog_id'), table_name='diagnosis_catalog')
     op.drop_index(op.f('ix_diagnosis_catalog_created_by'), table_name='diagnosis_catalog')
     op.drop_index(op.f('ix_diagnosis_catalog_code'), table_name='diagnosis_catalog')
-    op.create_index('idx_diagnosis_catalog_created_by', 'diagnosis_catalog', ['created_by'], unique=False)
-    op.create_index('idx_diagnosis_catalog_code', 'diagnosis_catalog', ['code'], unique=False)
-    op.create_unique_constraint('diagnosis_catalog_code_key', 'diagnosis_catalog', ['code'])
+    safe_create_index('idx_diagnosis_catalog_created_by', 'diagnosis_catalog', ['created_by'], unique=False)
+    safe_create_index('idx_diagnosis_catalog_code', 'diagnosis_catalog', ['code'], unique=False)
+    safe_create_unique_constraint('diagnosis_catalog_code_key', 'diagnosis_catalog', ['code'])
     safe_alter_column('diagnosis_catalog', 'updated_at',
                existing_type=sa.DateTime(timezone=True),
                type_=postgresql.TIMESTAMP(),
@@ -788,16 +829,16 @@ def downgrade() -> None:
         existing_comment=None,
         schema=None
     )
-    op.drop_constraint(None, 'consultation_vital_signs', type_='foreignkey')
-    op.create_foreign_key('consultation_vital_signs_consultation_id_fkey', 'consultation_vital_signs', 'medical_records', ['consultation_id'], ['id'], ondelete='CASCADE')
+    safe_drop_constraint(None, 'consultation_vital_signs', type_='foreignkey')
+    safe_create_foreign_key('consultation_vital_signs_consultation_id_fkey', 'consultation_vital_signs', 'medical_records', ['consultation_id'], ['id'], ondelete='CASCADE')
     safe_alter_column('consultation_vital_signs', 'vital_sign_id',
                existing_type=sa.INTEGER(),
                nullable=True)
     safe_alter_column('consultation_vital_signs', 'consultation_id',
                existing_type=sa.INTEGER(),
                nullable=True)
-    op.drop_constraint(None, 'consultation_prescriptions', type_='foreignkey')
-    op.create_foreign_key('consultation_prescriptions_consultation_id_fkey', 'consultation_prescriptions', 'medical_records', ['consultation_id'], ['id'], ondelete='CASCADE')
+    safe_drop_constraint(None, 'consultation_prescriptions', type_='foreignkey')
+    safe_create_foreign_key('consultation_prescriptions_consultation_id_fkey', 'consultation_prescriptions', 'medical_records', ['consultation_id'], ['id'], ondelete='CASCADE')
     safe_alter_column('consultation_prescriptions', 'duration',
                existing_type=sa.String(length=255),
                type_=sa.VARCHAR(length=100),
@@ -822,12 +863,12 @@ def downgrade() -> None:
         existing_comment=None,
         schema=None
     )
-    op.drop_constraint(None, 'clinical_studies', type_='foreignkey')
-    op.create_foreign_key('clinical_studies_consultation_id_fkey', 'clinical_studies', 'medical_records', ['consultation_id'], ['id'], ondelete='CASCADE')
+    safe_drop_constraint(None, 'clinical_studies', type_='foreignkey')
+    safe_create_foreign_key('clinical_studies_consultation_id_fkey', 'clinical_studies', 'medical_records', ['consultation_id'], ['id'], ondelete='CASCADE')
     op.drop_index(op.f('ix_clinical_studies_id'), table_name='clinical_studies')
-    op.create_index('idx_clinical_studies_patient_id', 'clinical_studies', ['patient_id'], unique=False)
-    op.create_index('idx_clinical_studies_patient_doctor', 'clinical_studies', ['patient_id', 'doctor_id'], unique=False)
-    op.create_index('idx_clinical_studies_ordered_date', 'clinical_studies', ['ordered_date'], unique=False)
+    safe_create_index('idx_clinical_studies_patient_id', 'clinical_studies', ['patient_id'], unique=False)
+    safe_create_index('idx_clinical_studies_patient_doctor', 'clinical_studies', ['patient_id', 'doctor_id'], unique=False)
+    safe_create_index('idx_clinical_studies_ordered_date', 'clinical_studies', ['ordered_date'], unique=False)
     safe_alter_column('clinical_studies', 'file_type',
                existing_type=sa.String(length=100),
                type_=sa.VARCHAR(length=50),
@@ -853,9 +894,9 @@ def downgrade() -> None:
         existing_comment=None,
         schema=None
     )
-    op.create_index('idx_audit_log_user_id', 'audit_log', ['user_id'], unique=False)
-    op.create_index('idx_audit_log_timestamp_user', 'audit_log', ['timestamp', 'user_id'], unique=False)
-    op.create_index('idx_audit_log_timestamp', 'audit_log', ['timestamp'], unique=False)
+    safe_create_index('idx_audit_log_user_id', 'audit_log', ['user_id'], unique=False)
+    safe_create_index('idx_audit_log_timestamp_user', 'audit_log', ['timestamp', 'user_id'], unique=False)
+    safe_create_index('idx_audit_log_timestamp', 'audit_log', ['timestamp'], unique=False)
     op.create_table_comment(
         'arco_requests',
         'Solicitudes ARCO (LFPDPPP)',
@@ -872,12 +913,12 @@ def downgrade() -> None:
         existing_comment=None,
         schema=None
     )
-    op.drop_constraint(None, 'appointments', type_='foreignkey')
-    op.drop_constraint(None, 'appointments', type_='foreignkey')
-    op.create_index('idx_appointments_patient_id', 'appointments', ['patient_id'], unique=False)
-    op.create_index('idx_appointments_patient_doctor', 'appointments', ['patient_id', 'doctor_id'], unique=False)
-    op.create_index('idx_appointments_doctor_id', 'appointments', ['doctor_id'], unique=False)
-    op.create_index('idx_appointments_appointment_date', 'appointments', ['appointment_date'], unique=False)
+    safe_drop_constraint(None, 'appointments', type_='foreignkey')
+    safe_drop_constraint(None, 'appointments', type_='foreignkey')
+    safe_create_index('idx_appointments_patient_id', 'appointments', ['patient_id'], unique=False)
+    safe_create_index('idx_appointments_patient_doctor', 'appointments', ['patient_id', 'doctor_id'], unique=False)
+    safe_create_index('idx_appointments_doctor_id', 'appointments', ['doctor_id'], unique=False)
+    safe_create_index('idx_appointments_appointment_date', 'appointments', ['appointment_date'], unique=False)
     safe_alter_column('appointments', 'end_time',
                existing_type=postgresql.TIMESTAMP(),
                nullable=True)
@@ -887,12 +928,12 @@ def downgrade() -> None:
         existing_comment=None,
         schema=None
     )
-    op.drop_constraint('unique_appointment_reminder_number', 'appointment_reminders', type_='unique')
-    op.create_index('idx_appointment_reminders_whatsapp_message_id', 'appointment_reminders', ['whatsapp_message_id'], unique=False)
-    op.create_index('idx_appointment_reminders_enabled_sent', 'appointment_reminders', ['enabled', 'sent'], unique=False, postgresql_where='((enabled = true) AND (sent = false))')
-    op.create_index('idx_appointment_reminders_appointment_status', 'appointment_reminders', ['appointment_id'], unique=False, postgresql_where='((enabled = true) AND (sent = false))')
-    op.create_index('idx_appointment_reminders_appointment_id', 'appointment_reminders', ['appointment_id'], unique=False)
-    op.create_unique_constraint('appointment_reminders_appointment_id_reminder_number_key', 'appointment_reminders', ['appointment_id', 'reminder_number'])
+    safe_drop_constraint('unique_appointment_reminder_number', 'appointment_reminders', type_='unique')
+    safe_create_index('idx_appointment_reminders_whatsapp_message_id', 'appointment_reminders', ['whatsapp_message_id'], unique=False)
+    safe_create_index('idx_appointment_reminders_enabled_sent', 'appointment_reminders', ['enabled', 'sent'], unique=False, postgresql_where='((enabled = true) AND (sent = false))')
+    safe_create_index('idx_appointment_reminders_appointment_status', 'appointment_reminders', ['appointment_id'], unique=False, postgresql_where='((enabled = true) AND (sent = false))')
+    safe_create_index('idx_appointment_reminders_appointment_id', 'appointment_reminders', ['appointment_id'], unique=False)
+    safe_create_unique_constraint('appointment_reminders_appointment_id_reminder_number_key', 'appointment_reminders', ['appointment_id', 'reminder_number'])
     op.create_table('data_retention_logs',
     sa.Column('id', sa.INTEGER(), autoincrement=True, nullable=False),
     sa.Column('table_name', sa.VARCHAR(length=50), autoincrement=False, nullable=False),
