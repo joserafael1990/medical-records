@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import Optional
 from datetime import datetime
 import pytz
@@ -442,6 +443,28 @@ async def health():
         "service": "Medical Records API",
         "version": "3.0.0"
     }
+
+@app.get("/health/db")
+async def health_db(db: Session = Depends(get_db)):
+    """
+    Database health check endpoint
+    Verifica que la conexión a la base de datos funcione correctamente
+    """
+    try:
+        # Simple query to test database connection
+        result = db.execute(text("SELECT 1 as test"))
+        result.scalar()
+        return {
+            "status": "healthy",
+            "database": "connected",
+            "timestamp": now_cdmx().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Database health check failed: {str(e)}")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Database connection failed: {str(e)}"
+        )
 
 # Removed custom OPTIONS handler - let CORS middleware handle preflight requests
 
