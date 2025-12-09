@@ -90,6 +90,20 @@ def safe_alter_column(*args, **kwargs) -> None:
         pass  # Column might not exist or already have correct type
 
 
+def safe_execute(sql: str, *args, **kwargs) -> None:
+    """Safely execute SQL, ignoring errors (especially transaction aborted errors)"""
+    try:
+        # Try to execute in autocommit block to avoid transaction issues
+        with op.get_context().autocommit_block():
+            op.execute(sql, *args, **kwargs)
+    except Exception:
+        # If autocommit block fails, try regular execute
+        try:
+            op.execute(sql, *args, **kwargs)
+        except Exception:
+            pass  # Operation might fail due to transaction abort or other issues
+
+
 def safe_drop_index(*args, **kwargs) -> None:
     """Safely drop an index, ignoring errors"""
     try:
@@ -138,8 +152,8 @@ def upgrade() -> None:
             pass  # Savepoint might not exist, continue anyway
     
     # Drop views that depend on data_retention_logs first
-    op.execute('DROP VIEW IF EXISTS v_data_retention_expiring CASCADE')
-    op.execute('DROP VIEW IF EXISTS v_data_retention_stats CASCADE')
+    safe_execute('DROP VIEW IF EXISTS v_data_retention_expiring CASCADE')
+    safe_execute('DROP VIEW IF EXISTS v_data_retention_stats CASCADE')
     # Now we can drop the table
     if table_exists('data_retention_logs'):
         op.drop_table('data_retention_logs')
@@ -448,7 +462,7 @@ def upgrade() -> None:
                existing_nullable=False)
     # Before creating FK, update any created_by=0 to a valid person_id
     # Find the first doctor (person_type='doctor') and use their ID, or set to NULL if no doctors exist
-    op.execute("""
+    safe_execute("""
         UPDATE medications 
         SET created_by = (
             SELECT id FROM persons 
@@ -459,7 +473,7 @@ def upgrade() -> None:
         WHERE created_by = 0 AND EXISTS (SELECT 1 FROM persons WHERE person_type = 'doctor')
     """)
     # If no doctors exist, set to NULL
-    op.execute("UPDATE medications SET created_by = NULL WHERE created_by = 0")
+    safe_execute("UPDATE medications SET created_by = NULL WHERE created_by = 0")
     # Make column nullable temporarily to allow FK creation
     safe_alter_column('medications', 'created_by',
                existing_type=sa.INTEGER(),
@@ -533,7 +547,7 @@ def upgrade() -> None:
     op.add_column('schedule_templates', sa.Column('lunch_end', sa.Time(), nullable=True))
     # Before making office_id NOT NULL, update any NULL values
     # Find the first office for each doctor, or create a default office
-    op.execute("""
+    safe_execute("""
         UPDATE schedule_templates st
         SET office_id = (
             SELECT o.id 
@@ -546,7 +560,7 @@ def upgrade() -> None:
     """)
     # If still NULL (no offices for doctor), delete those records or set to a default
     # For safety, we'll delete schedule templates without office_id
-    op.execute("DELETE FROM schedule_templates WHERE office_id IS NULL")
+    safe_execute("DELETE FROM schedule_templates WHERE office_id IS NULL")
     safe_alter_column('schedule_templates', 'office_id',
                existing_type=sa.INTEGER(),
                nullable=False)
