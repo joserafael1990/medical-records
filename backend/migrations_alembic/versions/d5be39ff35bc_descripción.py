@@ -677,7 +677,7 @@ def downgrade() -> None:
     )
     safe_drop_constraint(None, 'states', type_='foreignkey')
     safe_create_foreign_key('states_country_id_fkey', 'states', 'countries', ['country_id'], ['id'], ondelete='CASCADE')
-    op.add_column('schedule_templates', sa.Column('time_blocks', postgresql.JSONB(astext_type=sa.Text()), server_default=sa.text("'[]'::jsonb"), autoincrement=False, nullable=True))
+    safe_add_column('schedule_templates', sa.Column('time_blocks', postgresql.JSONB(astext_type=sa.Text()), server_default=sa.text("'[]'::jsonb"), autoincrement=False, nullable=True))
     safe_drop_constraint(None, 'schedule_templates', type_='foreignkey')
     safe_drop_constraint(None, 'schedule_templates', type_='foreignkey')
     safe_create_foreign_key('schedule_templates_doctor_id_fkey', 'schedule_templates', 'persons', ['doctor_id'], ['id'], ondelete='CASCADE')
