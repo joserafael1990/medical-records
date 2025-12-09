@@ -6,6 +6,10 @@
 -- Compliance: NOM-004-SSA3-2012, NOM-024-SSA3-2012
 -- Source: Extracted from localhost database
 -- ============================================================================
+-- NOTE: This script uses explicit transaction control for DBeaver compatibility
+-- ============================================================================
+
+BEGIN;
 
 -- ============================================================================
 -- 0. SYSTEM USER (Required for created_by FKs)
@@ -2640,3 +2644,6 @@ SELECT 'Clinical Studies', COUNT(*) FROM study_catalog;
 -- ============================================================================
 -- END OF SCRIPT
 -- ============================================================================
+
+-- Explicit commit to ensure data persists (important for DBeaver)
+COMMIT;

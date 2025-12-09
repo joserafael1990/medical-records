@@ -50,25 +50,7 @@ class Settings(BaseSettings):
     # In production, CORS_ORIGINS must be set via environment variable
     # Format: comma-separated list, e.g., "https://sistema.cortexclinico.com"
     # Or JSON array: '["http://localhost:3000", "https://example.com"]'
-    _cors_origins_env = os.getenv("CORS_ORIGINS")
-    if _cors_origins_env:
-        # Try to parse as JSON first (handles array format)
-        try:
-            parsed = json.loads(_cors_origins_env)
-            if isinstance(parsed, list):
-                CORS_ORIGINS: List[str] = [str(origin).strip() for origin in parsed]
-            else:
-                CORS_ORIGINS: List[str] = [str(parsed).strip()]
-        except (json.JSONDecodeError, ValueError):
-            # Fall back to comma-separated string
-            CORS_ORIGINS: List[str] = [origin.strip() for origin in _cors_origins_env.split(",") if origin.strip()]
-    else:
-        # Default fallback
-        if os.getenv("APP_ENV", "development").lower() == "development":
-            CORS_ORIGINS: List[str] = ["http://localhost:3000"]
-        else:
-            # Production default
-            CORS_ORIGINS: List[str] = ["https://sistema.cortexclinico.com"]
+    CORS_ORIGINS: List[str] = []  # Will be set by validator
     CORS_ALLOW_CREDENTIALS: bool = True
     
     # Security
@@ -102,8 +84,10 @@ class Settings(BaseSettings):
     )
     # In development, use much higher limits to accommodate React Strict Mode double-mounting
     # In production, use stricter limits for security
-    _is_dev = os.getenv("APP_ENV", "development").lower() == "development"
-    RATE_LIMIT_MAX_REQUESTS: int = int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "1000" if _is_dev else "120"))
+    RATE_LIMIT_MAX_REQUESTS: int = int(os.getenv(
+        "RATE_LIMIT_MAX_REQUESTS",
+        "1000" if os.getenv("APP_ENV", "development").lower() == "development" else "120"
+    ))
     RATE_LIMIT_WINDOW_SECONDS: int = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
     
     # Email Configuration
@@ -120,14 +104,46 @@ class Settings(BaseSettings):
     @field_validator('CORS_ORIGINS', mode='before')
     @classmethod
     def parse_cors_origins(cls, v):
-        """Parse CORS origins from JSON string if needed"""
+        """Parse CORS origins from environment variable or provided value"""
+        # If value is already provided (from field default), check env var
+        if v == []:
+            _cors_origins_env = os.getenv("CORS_ORIGINS")
+            if _cors_origins_env:
+                # Try to parse as JSON first (handles array format)
+                try:
+                    parsed: List[str] = json.loads(_cors_origins_env)
+                    if isinstance(parsed, list):
+                        return [str(origin).strip() for origin in parsed]
+                    else:
+                        return [str(parsed).strip()]
+                except (json.JSONDecodeError, ValueError):
+                    # Fall back to comma-separated string
+                    return [origin.strip() for origin in _cors_origins_env.split(",") if origin.strip()]
+            else:
+                # Default fallback
+                if os.getenv("APP_ENV", "development").lower() == "development":
+                    return ["http://localhost:3000"]
+                else:
+                    # Production default
+                    return ["https://sistema.cortexclinico.com"]
+        
+        # If value is provided as string, parse it
         if isinstance(v, str):
             try:
-                return json.loads(v)
+                parsed: List[str] = json.loads(v)
+                if isinstance(parsed, list):
+                    return [str(origin).strip() for origin in parsed]
+                else:
+                    return [str(parsed).strip()]
             except json.JSONDecodeError:
                 # If it's not valid JSON, treat as single origin
-                return [v]
-        return v
+                return [v.strip()] if v.strip() else []
+        
+        # If already a list, return as-is
+        if isinstance(v, list):
+            return v
+        
+        return []
     
     @field_validator('ALLOWED_HOSTS', mode='before')
     @classmethod
