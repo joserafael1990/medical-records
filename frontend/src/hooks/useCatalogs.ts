@@ -32,8 +32,23 @@ export const useCatalogs = () => {
           apiService.catalogs.getStates()
         ]);
 
-        setCountries(countriesData || []);
-        setAllStates(statesData || []);
+        // Filter active countries and states, ensure they're arrays
+        const activeCountries = Array.isArray(countriesData) 
+          ? countriesData.filter(c => c.is_active !== false)
+          : [];
+        const activeStates = Array.isArray(statesData)
+          ? statesData.filter(s => s.is_active !== false)
+          : [];
+
+        logger.debug('Catalogs loaded', {
+          countries: activeCountries.length,
+          states: activeStates.length,
+          totalCountries: countriesData?.length || 0,
+          totalStates: statesData?.length || 0
+        }, 'api');
+
+        setCountries(activeCountries);
+        setAllStates(activeStates);
 
       } catch (err) {
         setError('Error al cargar catálogos');

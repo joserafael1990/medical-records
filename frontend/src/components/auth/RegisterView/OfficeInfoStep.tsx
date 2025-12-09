@@ -117,12 +117,17 @@ export const OfficeInfoStep: React.FC<OfficeInfoStepProps> = ({
               value={selectedOfficeCountry}
               onChange={(e) => handleOfficeCountryChange(e.target.value)}
               label="País"
+              disabled={!countries || countries.length === 0}
             >
-              {countries.map((country) => (
-                <MenuItem key={country.id} value={country.name}>
-                  {country.name}
-                </MenuItem>
-              ))}
+              {countries && countries.length > 0 ? (
+                countries.map((country) => (
+                  <MenuItem key={country.id} value={country.name}>
+                    {country.name}
+                  </MenuItem>
+                ))
+              ) : (
+                <MenuItem disabled>No hay países disponibles</MenuItem>
+              )}
             </Select>
           </FormControl>
         </Box>

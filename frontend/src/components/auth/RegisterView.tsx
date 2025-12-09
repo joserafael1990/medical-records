@@ -157,20 +157,28 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
     const loadSpecialties = async () => {
       try {
         const data = await apiService.catalogs.getSpecialties();
-        // Asegurar que siempre sea un array
+        // Asegurar que siempre sea un array y filtrar activos
         const specialtiesArray = Array.isArray(data) ? data : (data?.data || data?.results || []);
-        setSpecialties(specialtiesArray);
-        logger.debug('Especialidades cargadas', { count: specialtiesArray.length }, 'api');
+        const activeSpecialties = specialtiesArray.filter((s: any) => s.is_active !== false);
+        setSpecialties(activeSpecialties);
+        logger.debug('Especialidades cargadas', { 
+          total: specialtiesArray.length,
+          active: activeSpecialties.length 
+        }, 'api');
       } catch (error) {
         logger.error('Error loading specialties', error, 'api');
         // Intentar con el endpoint alternativo
         try {
           const response = await fetch(`${API_CONFIG.BASE_URL}/api/catalogs/specialties`);
           const data = await response.json();
-          // Asegurar que siempre sea un array
+          // Asegurar que siempre sea un array y filtrar activos
           const specialtiesArray = Array.isArray(data) ? data : (data?.data || data?.results || []);
-          setSpecialties(specialtiesArray);
-          logger.debug('Especialidades cargadas (fallback)', { count: specialtiesArray.length }, 'api');
+          const activeSpecialties = specialtiesArray.filter((s: any) => s.is_active !== false);
+          setSpecialties(activeSpecialties);
+          logger.debug('Especialidades cargadas (fallback)', { 
+            total: specialtiesArray.length,
+            active: activeSpecialties.length 
+          }, 'api');
         } catch (fallbackError) {
           logger.error('Error en fallback de especialidades', fallbackError, 'api');
           setSpecialties([]); // Asegurar array vacío en caso de error

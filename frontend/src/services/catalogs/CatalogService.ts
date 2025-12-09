@@ -45,15 +45,44 @@ export class CatalogService extends ApiBase {
   async getCountries(): Promise<Array<{id: number; name: string; is_active: boolean}>> {
     try {
       const response = await this.api.get('/api/catalogs/countries');
-      const countries = response.data || [];
-      if (!Array.isArray(countries)) {
-        logger.warn('getCountries: respuesta no es un array', countries, 'api');
+      let countries = response.data;
+      
+      // Handle different response structures
+      if (!countries) {
+        logger.warn('getCountries: respuesta vacía', response, 'api');
         return [];
       }
-      return countries.map((country: any) => ({
-        ...country,
-        is_active: country?.is_active ?? country?.active ?? false
+      
+      // If wrapped in data property
+      if (countries.data && Array.isArray(countries.data)) {
+        countries = countries.data;
+      }
+      // If wrapped in results property
+      else if (countries.results && Array.isArray(countries.results)) {
+        countries = countries.results;
+      }
+      
+      if (!Array.isArray(countries)) {
+        logger.warn('getCountries: respuesta no es un array', { 
+          type: typeof countries,
+          data: countries,
+          response: response.data 
+        }, 'api');
+        return [];
+      }
+      
+      const mappedCountries = countries.map((country: any) => ({
+        id: country.id,
+        name: country.name,
+        is_active: country?.is_active ?? country?.active ?? true
       }));
+      
+      logger.debug('getCountries: países cargados', { 
+        count: mappedCountries.length,
+        sample: mappedCountries.slice(0, 3)
+      }, 'api');
+      
+      return mappedCountries;
     } catch (error) {
       logger.error('Error getting countries', error, 'api');
       throw error;

@@ -69,12 +69,17 @@ export const ProfessionalInfoStep: React.FC<ProfessionalInfoStepProps> = ({
               onChange={(e) => onSpecialtyChange(e.target.value)}
               label="Especialidad"
               required
+              disabled={!specialties || specialties.length === 0}
             >
-              {Array.isArray(specialties) && specialties.map((spec) => (
-                <MenuItem key={spec.id} value={spec.id.toString()}>
-                  {spec.name}
-                </MenuItem>
-              ))}
+              {Array.isArray(specialties) && specialties.length > 0 ? (
+                specialties.map((spec) => (
+                  <MenuItem key={spec.id} value={spec.id.toString()}>
+                    {spec.name}
+                  </MenuItem>
+                ))
+              ) : (
+                <MenuItem disabled>No hay especialidades disponibles</MenuItem>
+              )}
             </Select>
           </FormControl>
         </Box>
