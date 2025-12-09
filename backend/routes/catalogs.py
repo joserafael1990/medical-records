@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 
-from database import get_db
+from database import get_db, Country, State, Specialty
 import crud
 from timezone_list import get_timezone_options
 
@@ -90,7 +90,6 @@ async def get_timezones():
 async def get_catalog_stats(db: Session = Depends(get_db)):
     """Get catalog statistics - useful for debugging"""
     try:
-        from database import Country, State, Specialty
         return {
             "countries": {
                 "total": db.query(Country).count(),
