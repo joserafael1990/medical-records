@@ -49,9 +49,19 @@ class Settings(BaseSettings):
     # CORS Configuration
     # In production, CORS_ORIGINS must be set via environment variable
     # Format: comma-separated list, e.g., "https://sistema.cortexclinico.com"
+    # Or JSON array: '["http://localhost:3000", "https://example.com"]'
     _cors_origins_env = os.getenv("CORS_ORIGINS")
     if _cors_origins_env:
-        CORS_ORIGINS: List[str] = [origin.strip() for origin in _cors_origins_env.split(",")]
+        # Try to parse as JSON first (handles array format)
+        try:
+            parsed = json.loads(_cors_origins_env)
+            if isinstance(parsed, list):
+                CORS_ORIGINS: List[str] = [str(origin).strip() for origin in parsed]
+            else:
+                CORS_ORIGINS: List[str] = [str(parsed).strip()]
+        except (json.JSONDecodeError, ValueError):
+            # Fall back to comma-separated string
+            CORS_ORIGINS: List[str] = [origin.strip() for origin in _cors_origins_env.split(",") if origin.strip()]
     else:
         # Default fallback
         if os.getenv("APP_ENV", "development").lower() == "development":

@@ -150,12 +150,14 @@ def upgrade() -> None:
         except Exception:
             pass  # Savepoint might not exist, continue anyway
     
-    # Drop views that depend on data_retention_logs first
-    safe_execute('DROP VIEW IF EXISTS v_data_retention_expiring CASCADE')
-    safe_execute('DROP VIEW IF EXISTS v_data_retention_stats CASCADE')
-    # Now we can drop the table
+    # Drop views that depend on data_retention_logs first, then drop table with CASCADE
+    # Using raw SQL to ensure CASCADE works properly
     if table_exists('data_retention_logs'):
-        op.drop_table('data_retention_logs')
+        # Drop views first
+        safe_execute('DROP VIEW IF EXISTS v_data_retention_expiring CASCADE')
+        safe_execute('DROP VIEW IF EXISTS v_data_retention_stats CASCADE')
+        # Drop table with CASCADE to handle any remaining dependencies
+        safe_execute('DROP TABLE IF EXISTS data_retention_logs CASCADE')
     
     # Only modify appointment_reminders if the table exists
     if table_exists('appointment_reminders'):

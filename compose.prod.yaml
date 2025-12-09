@@ -51,8 +51,9 @@ services:
       - META_WHATSAPP_API_VERSION=${META_WHATSAPP_API_VERSION:-v24.0}
       - APP_ENV=${APP_ENV:-production}
 
-      # CORS arreglado manualmente (formato lista JSON directo)
-      - CORS_ORIGINS=["https://sistema.cortexclinico.com", "https://api.cortexclinico.com"]
+      # CORS configuration - supports both JSON array and comma-separated formats
+      # Format: comma-separated list (recommended) or JSON array
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://sistema.cortexclinico.com}
       - DATABASE_URL=${DATABASE_URL}
 
       - META_WHATSAPP_APP_SECRET=${META_WHATSAPP_APP_SECRET}
