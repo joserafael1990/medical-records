@@ -1411,10 +1411,8 @@ INSERT INTO medications (name, is_active, created_by, created_at, updated_at) VA
 ('motrin', TRUE, 0, NOW(), NOW()),
 ('loratadina', TRUE, 0, NOW(), NOW())
 
-ON CONFLICT (id) DO UPDATE SET
-    name = EXCLUDED.name,
+ON CONFLICT (name, created_by) DO UPDATE SET
     is_active = EXCLUDED.is_active,
-    created_by = 0,
     updated_at = NOW();
 
 
