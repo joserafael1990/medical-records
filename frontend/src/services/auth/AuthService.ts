@@ -91,18 +91,21 @@ export class AuthService extends ApiBase {
     }
   }
 
-  async register(registerData: RegisterData): Promise<AuthResponse> {
+  async register(registerData: any): Promise<AuthResponse> {
     try {
       logger.auth.info('Attempting registration for:', registerData.email);
 
-      // Combine first_name, paternal_surname, maternal_surname into name
-      const name = `${registerData.first_name || ''} ${registerData.paternal_surname || ''} ${registerData.maternal_surname || ''}`.trim();
+      // Use existing name field if present, otherwise combine separate name fields
+      let name = registerData.name;
+      if (!name && (registerData.first_name || registerData.paternal_surname || registerData.maternal_surname)) {
+        name = `${registerData.first_name || ''} ${registerData.paternal_surname || ''} ${registerData.maternal_surname || ''}`.trim();
+      }
       
-      // Prepare payload with name instead of separate name fields
+      // Prepare payload with name
       const payload = {
         ...registerData,
         name: name,
-        // Remove first_name, paternal_surname, maternal_surname from payload
+        // Remove separate name fields from payload (backend expects single 'name' field)
         first_name: undefined,
         paternal_surname: undefined,
         maternal_surname: undefined
