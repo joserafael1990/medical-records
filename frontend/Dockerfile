@@ -38,6 +38,9 @@ RUN --mount=type=cache,target=/root/.npm \
 FROM node:${NODE_VERSION}-slim AS final
 WORKDIR /app
 
+# Install curl for health checks
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
 # Create non-root user
 RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
 

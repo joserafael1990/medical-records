@@ -52,7 +52,9 @@ services:
       - APP_ENV=${APP_ENV:-production}
 
       # CORS configuration - supports both JSON array and comma-separated formats
-      # Format: comma-separated list (recommended) or JSON array
+      # Recommended format: comma-separated (no brackets/quotes needed)
+      # Example: https://sistema.cortexclinico.com,https://api.cortexclinico.com
+      # Alternative: JSON array format ["https://sistema.cortexclinico.com", "https://api.cortexclinico.com"]
       - CORS_ORIGINS=${CORS_ORIGINS:-https://sistema.cortexclinico.com}
       - DATABASE_URL=${DATABASE_URL}
 
@@ -89,6 +91,12 @@ services:
       - NODE_ENV=production
     depends_on:
       - python-backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     deploy:
       resources:
         limits:
