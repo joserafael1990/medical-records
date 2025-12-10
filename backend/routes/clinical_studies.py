@@ -4,19 +4,21 @@ Migrated from main_clean_english.py to improve code organization
 """
 
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Query, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime
 import os
 import uuid
 import pytz
+import io
 
 from database import get_db, Person, ClinicalStudy, MedicalRecord
 from utils.datetime_utils import utc_now
 from dependencies import get_current_user
 from logger import get_logger
 from audit_service import audit_service
+from services.storage_service import get_storage_service, generate_storage_key, LocalStorageService
 import crud
 import schemas
 from utils.audit_utils import serialize_instance
@@ -450,10 +452,11 @@ async def delete_clinical_study(
                 patient_name = patient.name
 
         # Delete the study (after getting all needed info)
-        # Clean up file from disk if it exists
-        if study.file_path and os.path.exists(study.file_path):
+        # Clean up file from storage if it exists
+        if study.file_path:
             try:
-                os.remove(study.file_path)
+                storage = get_storage_service()
+                storage.delete(study.file_path)
                 api_logger.info("Deleted file for clinical study", study_id=study_id, file_path=study.file_path)
             except Exception as e:
                 api_logger.error("Error deleting file for clinical study", study_id=study_id, error=str(e))
@@ -587,15 +590,6 @@ async def upload_clinical_study_file(
         if not study:
             raise HTTPException(status_code=404, detail="Clinical study not found or no access")
         
-        # Create uploads directory if it doesn't exist
-        upload_dir = os.path.join(os.getcwd(), "uploads", "clinical_studies")
-        os.makedirs(upload_dir, exist_ok=True)
-        
-        # Generate unique filename using study ID (study_code column does not exist)
-        file_extension = os.path.splitext(file.filename)[1]
-        unique_filename = f"study_{study_id}_{uuid.uuid4()}{file_extension}"
-        file_path = os.path.join(upload_dir, unique_filename)
-        
         # Security: Check file size before processing
         content = await file.read()
         if len(content) > MAX_FILE_SIZE:
@@ -609,21 +603,25 @@ async def upload_clinical_study_file(
         if len(content) == 0:
             raise HTTPException(status_code=400, detail="Archivo vacío no permitido")
         
+        # Get storage service (S3 in production, local in development)
+        storage = get_storage_service()
+        
         # Delete old file if it exists (prevent orphaned files)
-        if study.file_path and os.path.exists(study.file_path):
+        if study.file_path:
             try:
-                os.remove(study.file_path)
+                storage.delete(study.file_path)
                 api_logger.info("Deleted old file for clinical study before upload", study_id=study_id, file_path=study.file_path)
             except Exception as e:
                 api_logger.warning("Failed to delete old file for clinical study", study_id=study_id, file_path=study.file_path, error=str(e))
 
-        # Save file
-        with open(file_path, "wb") as buffer:
-            buffer.write(content)
+        # Generate storage key and upload file
+        storage_key = generate_storage_key("clinical_studies", file.filename)
+        storage.upload(content, storage_key, content_type=file.content_type)
         
         # Update study with file information
+        # file_path now stores the storage key (works for both local and S3)
         study.file_name = file.filename
-        study.file_path = file_path
+        study.file_path = storage_key
         study.file_type = file.content_type
         study.file_size = len(content)
         # Automatically set status to 'completed' when file is uploaded
@@ -680,8 +678,11 @@ async def get_clinical_study_file(
         if not study.file_path:
             raise HTTPException(status_code=404, detail="No file associated with this study")
         
+        # Get storage service
+        storage = get_storage_service()
+        
         # Check if file exists
-        if not os.path.exists(study.file_path):
+        if not storage.exists(study.file_path):
             raise HTTPException(status_code=404, detail="File not found on server")
         
         api_logger.info(
@@ -691,11 +692,31 @@ async def get_clinical_study_file(
             file_name=study.file_name
         )
         
-        # Return file with appropriate headers
-        return FileResponse(
-            path=study.file_path,
-            filename=study.file_name,
-            media_type=study.file_type or 'application/octet-stream'
+        # For S3 storage, redirect to presigned URL
+        presigned_url = storage.get_url(study.file_path, expires_in=3600)
+        if presigned_url:
+            return RedirectResponse(url=presigned_url, status_code=302)
+        
+        # For local storage, serve file directly
+        if isinstance(storage, LocalStorageService):
+            full_path = storage.get_full_path(study.file_path)
+            return FileResponse(
+                path=full_path,
+                filename=study.file_name,
+                media_type=study.file_type or 'application/octet-stream'
+            )
+        
+        # Fallback: stream file content
+        content = storage.download(study.file_path)
+        if content is None:
+            raise HTTPException(status_code=404, detail="File not found on server")
+        
+        return StreamingResponse(
+            io.BytesIO(content),
+            media_type=study.file_type or 'application/octet-stream',
+            headers={
+                "Content-Disposition": f'attachment; filename="{study.file_name}"'
+            }
         )
         
     except HTTPException:

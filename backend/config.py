@@ -101,6 +101,14 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE: int = 10485760  # 10MB
     UPLOAD_DIR: str = "uploads"
     
+    # AWS S3 Configuration (Production)
+    # Used for storing clinical study files in production
+    # Set via environment variables in Coolify
+    AWS_ACCESS_KEY_ID: Optional[str] = None
+    AWS_SECRET_ACCESS_KEY: Optional[str] = None
+    AWS_REGION: str = "us-east-1"
+    AWS_BUCKET_NAME: Optional[str] = None
+    
     @field_validator('CORS_ORIGINS', mode='before')
     @classmethod
     def parse_cors_origins(cls, v):
