@@ -56,10 +56,26 @@ ENV NODE_OPTIONS="--max-old-space-size=4096"
 # 1. Install 'serve' globally while you are still ROOT
 RUN --mount=type=cache,target=/root/.npm npm install -g serve
 
-# 2. NOW switch to the restricted user
+# 2. Verify build directory exists and set correct permissions
+RUN if [ ! -d "/app/build" ]; then \
+        echo "ERROR: Build directory /app/build does not exist!" && \
+        ls -la /app && \
+        exit 1; \
+    fi && \
+    chown -R appuser:appgroup /app/build && \
+    echo "Build directory verified: $(ls -la /app/build | head -5)"
+
+# 3. NOW switch to the restricted user
 USER appuser
 
 EXPOSE 3000
 
-# 3. Run the app
-CMD ["serve", "-s", "build", "-l", "3000"]
+# 4. Use shell form to verify build exists and start serve
+# Use full path to serve and add helpful flags
+CMD if [ ! -d "/app/build" ]; then \
+        echo "ERROR: Build directory not found at startup!" && \
+        ls -la /app && \
+        exit 1; \
+    fi && \
+    echo "Starting serve on port 3000..." && \
+    /usr/local/bin/serve -s /app/build -l 3000 --no-clipboard --no-compression
