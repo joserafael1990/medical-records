@@ -6,7 +6,8 @@
 -- Compliance: NOM-004-SSA3-2012, NOM-024-SSA3-2012
 -- Source: Extracted from localhost database
 -- ============================================================================
--- NOTE: This script uses explicit transaction control for DBeaver compatibility
+-- NOTE: Uses ON CONFLICT DO NOTHING for maximum compatibility
+-- Run ROLLBACK; first if you get transaction errors
 -- ============================================================================
 
 BEGIN;
@@ -16,7 +17,7 @@ BEGIN;
 -- ============================================================================
 INSERT INTO persons (id, person_code, person_type, name) 
 VALUES (0, 'SYS', 'admin', 'System Administrator')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- ============================================================================
 -- 1. COUNTRIES (20 countries)
@@ -42,11 +43,7 @@ INSERT INTO countries (id, name, phone_code, is_active, created_at) VALUES
 (19, 'Panamá', '+507', TRUE, NOW()),
 (21, 'República Dominicana', '+1', TRUE, NOW()),
 (22, 'Otro', NULL, TRUE, NOW())
-
-ON CONFLICT (id) DO UPDATE SET
-    name = EXCLUDED.name,
-    phone_code = EXCLUDED.phone_code,
-    is_active = EXCLUDED.is_active;
+ON CONFLICT DO NOTHING;
 
 -- Update sequence
 SELECT setval('countries_id_seq', 20, true);
@@ -469,10 +466,7 @@ INSERT INTO states (id, name, country_id, is_active, created_at) VALUES
 (412, 'Valverde', 21, TRUE, NOW()),
 (413, 'Otro', 22, TRUE, NOW())
 
-ON CONFLICT (id) DO UPDATE SET
-    name = EXCLUDED.name,
-    country_id = EXCLUDED.country_id,
-    is_active = EXCLUDED.is_active;
+ON CONFLICT DO NOTHING;
 
 -- Update sequence
 SELECT setval('states_id_seq', 413, true);
@@ -509,9 +503,7 @@ INSERT INTO medical_specialties (id, name, is_active, created_at) VALUES
 (26, 'Cirugía Plástica', TRUE, NOW()),
 (27, 'Cirugía Cardiovascular', TRUE, NOW())
 
-ON CONFLICT (id) DO UPDATE SET
-    name = EXCLUDED.name,
-    is_active = EXCLUDED.is_active;
+ON CONFLICT DO NOTHING;
 
 -- Update sequence
 SELECT setval('medical_specialties_id_seq', 27, true);
@@ -550,9 +542,7 @@ INSERT INTO emergency_relationships (code, name, is_active, created_at) VALUES
 ('VECINO', 'Vecino', TRUE, NOW()),
 ('YERNO', 'Yerno', TRUE, NOW())
 
-ON CONFLICT (code) DO UPDATE SET
-    name = EXCLUDED.name,
-    is_active = EXCLUDED.is_active;
+ON CONFLICT DO NOTHING;
 
 -- ============================================================================
 -- 5. APPOINTMENT TYPES
@@ -560,9 +550,7 @@ ON CONFLICT (code) DO UPDATE SET
 INSERT INTO appointment_types (id, name, is_active, created_at) VALUES
 (1, 'Presencial', TRUE, NOW()),
 (2, 'En línea', TRUE, NOW())
-ON CONFLICT (id) DO UPDATE SET
-    name = EXCLUDED.name,
-    is_active = EXCLUDED.is_active;
+ON CONFLICT DO NOTHING;
 
 SELECT setval('appointment_types_id_seq', 2, true);
 
@@ -583,8 +571,7 @@ INSERT INTO vital_signs (id, name, created_at) VALUES
 (9, 'Índice de Masa Corporal', NOW()),
 (10, 'Perímetro cefálico', NOW()),
 (11, 'Superficie Corporal', NOW())
-ON CONFLICT (id) DO UPDATE SET
-    name = EXCLUDED.name;
+ON CONFLICT DO NOTHING;
 
 SELECT setval('vital_signs_id_seq', 11, true);
 
@@ -595,9 +582,7 @@ SELECT setval('vital_signs_id_seq', 11, true);
 INSERT INTO document_types (id, name, is_active, created_at) VALUES
 (1, 'Personal', TRUE, NOW()),
 (2, 'Profesional', TRUE, NOW())
-ON CONFLICT (id) DO UPDATE SET
-    name = EXCLUDED.name,
-    is_active = EXCLUDED.is_active;
+ON CONFLICT DO NOTHING;
 
 SELECT setval('document_types_id_seq', 2, true);
 
@@ -623,10 +608,7 @@ INSERT INTO documents (id, name, document_type_id, is_active, created_at) VALUES
 (15, 'Número de Registro Profesional', 2, TRUE, NOW()),
 (16, 'Medical License Number', 2, TRUE, NOW()),
 (17, 'Otro', 2, TRUE, NOW())
-ON CONFLICT (id) DO UPDATE SET
-    name = EXCLUDED.name,
-    document_type_id = EXCLUDED.document_type_id,
-    is_active = EXCLUDED.is_active;
+ON CONFLICT DO NOTHING;
 
 SELECT setval('documents_id_seq', 17, true);
 
@@ -661,9 +643,7 @@ INSERT INTO study_categories (id, name, is_active, created_at) VALUES
 (24, 'Oncología', TRUE, NOW()),
 (25, 'Medicina Preventiva', TRUE, NOW())
 
-ON CONFLICT (id) DO UPDATE SET
-    name = EXCLUDED.name,
-    is_active = EXCLUDED.is_active;
+ON CONFLICT DO NOTHING;
 
 -- Update sequence
 SELECT setval('study_categories_id_seq', 25, true);
@@ -1415,9 +1395,7 @@ INSERT INTO medications (name, is_active, created_by, created_at, updated_at) VA
 ('motrin', TRUE, 0, NOW(), NOW()),
 ('loratadina', TRUE, 0, NOW(), NOW())
 
-ON CONFLICT (name, created_by) DO UPDATE SET
-    is_active = EXCLUDED.is_active,
-    updated_at = NOW();
+ON CONFLICT DO NOTHING;
 
 
 -- ============================================================================
@@ -2091,11 +2069,7 @@ INSERT INTO diagnosis_catalog (code, name, is_active, created_by, created_at, up
 ('L99', 'Otros trastornos de la piel y del tejido subcutáneo en enfermedades clasificadas en otra parte', TRUE, 0, NOW(), NOW()),
 (NULL, 'consulta de niño sano', TRUE, 0, NOW(), NOW())
 
-ON CONFLICT (code) DO UPDATE SET
-    name = EXCLUDED.name,
-    is_active = EXCLUDED.is_active,
-    created_by = 0,
-    updated_at = NOW();
+ON CONFLICT DO NOTHING;
 
 -- Update sequence
 SELECT setval('diagnosis_catalog_id_seq', 666, true);
@@ -2605,11 +2579,7 @@ INSERT INTO study_catalog (id, name, category_id, is_active, created_at, updated
 (499, 'CA 125', 24, TRUE, NOW(), NOW()),
 (500, 'PSA (Antígeno Prostático Específico)', 24, TRUE, NOW(), NOW())
 
-ON CONFLICT (id) DO UPDATE SET
-    name = EXCLUDED.name,
-    category_id = EXCLUDED.category_id,
-    is_active = EXCLUDED.is_active,
-    updated_at = NOW();
+ON CONFLICT DO NOTHING;
 
 -- Update sequence
 SELECT setval('study_catalog_id_seq', 500, true);
