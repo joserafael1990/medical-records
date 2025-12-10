@@ -7,7 +7,7 @@ import json
 import secrets
 from typing import List, Optional
 from pydantic_settings import BaseSettings
-from pydantic import field_validator, model_validator
+from pydantic import field_validator, model_validator, Field
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     # In production, CORS_ORIGINS must be set via environment variable
     # Format: comma-separated list, e.g., "https://sistema.cortexclinico.com"
     # Or JSON array: '["http://localhost:3000", "https://example.com"]'
-    CORS_ORIGINS: List[str] = []  # Will be set by validator
+    CORS_ORIGINS: List[str] = Field(default_factory=list)  # Will be set by validator
     CORS_ALLOW_CREDENTIALS: bool = True
     
     # Security
@@ -109,68 +109,70 @@ class Settings(BaseSettings):
     AWS_REGION: str = "us-east-1"
     AWS_BUCKET_NAME: Optional[str] = None
     
-    @field_validator('CORS_ORIGINS', mode='before')
+    @model_validator(mode='before')
     @classmethod
-    def parse_cors_origins(cls, v):
-        """Parse CORS origins from environment variable or provided value"""
-        # If value is already provided (from field default), check env var
-        if v == []:
-            _cors_origins_env = os.getenv("CORS_ORIGINS", "").strip()
-            if _cors_origins_env:
-                # Remove surrounding quotes if present (common in Docker/Compose)
-                if _cors_origins_env.startswith('"') and _cors_origins_env.endswith('"'):
-                    _cors_origins_env = _cors_origins_env[1:-1]
-                if _cors_origins_env.startswith("'") and _cors_origins_env.endswith("'"):
-                    _cors_origins_env = _cors_origins_env[1:-1]
-                
-                # Try to parse as JSON first (handles array format like ["https://example.com"])
-                try:
-                    parsed: List[str] = json.loads(_cors_origins_env)
-                    if isinstance(parsed, list):
-                        result = [str(origin).strip() for origin in parsed if origin.strip()]
-                        if result:
-                            # Log in production to help debug CORS issues
-                            print(f"[CORS] Parsed {len(result)} origins from JSON: {result}")
-                            return result
-                except (json.JSONDecodeError, ValueError) as e:
-                    # Fall back to comma-separated string
-                    print(f"[CORS] JSON parse failed, trying comma-separated: {e}")
-                    result = [origin.strip() for origin in _cors_origins_env.split(",") if origin.strip()]
-                    if result:
-                        print(f"[CORS] Parsed {len(result)} origins from comma-separated: {result}")
-                        return result
-                    else:
-                        print(f"[CORS] Warning: CORS_ORIGINS env var set but empty after parsing: '{_cors_origins_env}'")
-            
-            # Default fallback if env var is empty or invalid
-            app_env = os.getenv("APP_ENV", "development").lower()
-            if app_env == "development":
-                default = ["http://localhost:3000"]
-                print(f"[CORS] Using development default: {default}")
-                return default
+    def parse_cors_origins_before(cls, data: dict) -> dict:
+        """Parse CORS_ORIGINS from environment variable before field validation.
+        This prevents Pydantic from trying to auto-parse JSON and failing on empty/invalid values.
+        """
+        # Get raw env var value
+        cors_env = os.getenv("CORS_ORIGINS", "").strip()
+        
+        # If CORS_ORIGINS is not in data or is empty list, use env var
+        if "CORS_ORIGINS" not in data or (isinstance(data.get("CORS_ORIGINS"), list) and not data["CORS_ORIGINS"]):
+            if cors_env:
+                data["CORS_ORIGINS"] = cors_env
             else:
-                # Production default - ensure frontend domain is always allowed
-                default = ["https://sistema.cortexclinico.com"]
-                print(f"[CORS] Using production default: {default}")
-                return default
-        
-        # If value is provided as string, parse it
-        if isinstance(v, str):
-            try:
-                parsed: List[str] = json.loads(v)
-                if isinstance(parsed, list):
-                    return [str(origin).strip() for origin in parsed]
+                # Use defaults based on environment
+                app_env = os.getenv("APP_ENV", "development").lower()
+                if app_env == "development":
+                    data["CORS_ORIGINS"] = ["http://localhost:3000"]
                 else:
-                    return [str(parsed).strip()]
-            except json.JSONDecodeError:
-                # If it's not valid JSON, treat as single origin
-                return [v.strip()] if v.strip() else []
+                    data["CORS_ORIGINS"] = ["https://sistema.cortexclinico.com"]
+                return data
         
-        # If already a list, return as-is
-        if isinstance(v, list):
-            return v
+        # If it's a string (from env var), parse it
+        if isinstance(data.get("CORS_ORIGINS"), str):
+            v = data["CORS_ORIGINS"].strip()
+            # Remove surrounding quotes
+            if v.startswith('"') and v.endswith('"'):
+                v = v[1:-1]
+            if v.startswith("'") and v.endswith("'"):
+                v = v[1:-1]
+            
+            if not v:
+                # Empty string, use defaults
+                app_env = os.getenv("APP_ENV", "development").lower()
+                if app_env == "development":
+                    data["CORS_ORIGINS"] = ["http://localhost:3000"]
+                else:
+                    data["CORS_ORIGINS"] = ["https://sistema.cortexclinico.com"]
+                return data
+            
+            # Try JSON first
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    result = [str(origin).strip() for origin in parsed if origin and str(origin).strip()]
+                    if result:
+                        data["CORS_ORIGINS"] = result
+                        return data
+            except (json.JSONDecodeError, ValueError, TypeError):
+                pass
+            
+            # Try comma-separated
+            result = [origin.strip() for origin in v.split(",") if origin.strip()]
+            if result:
+                data["CORS_ORIGINS"] = result
+            else:
+                # Empty after parsing, use defaults
+                app_env = os.getenv("APP_ENV", "development").lower()
+                if app_env == "development":
+                    data["CORS_ORIGINS"] = ["http://localhost:3000"]
+                else:
+                    data["CORS_ORIGINS"] = ["https://sistema.cortexclinico.com"]
         
-        return []
+        return data
     
     @field_validator('ALLOWED_HOSTS', mode='before')
     @classmethod
