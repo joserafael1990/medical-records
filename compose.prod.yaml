@@ -74,8 +74,14 @@ services:
         - REACT_APP_AMPLITUDE_API_KEY=${REACT_APP_AMPLITUDE_API_KEY}
     restart: always
     init: true
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
+    
+    # Etiquetas para que Coolify (Traefik) encuentre el puerto correcto
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.typescript-frontend.loadbalancer.server.port=3000"
+    
     networks:
       - appnet
     environment:
