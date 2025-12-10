@@ -117,26 +117,42 @@ class Settings(BaseSettings):
         if v == []:
             _cors_origins_env = os.getenv("CORS_ORIGINS", "").strip()
             if _cors_origins_env:
-                # Try to parse as JSON first (handles array format)
+                # Remove surrounding quotes if present (common in Docker/Compose)
+                if _cors_origins_env.startswith('"') and _cors_origins_env.endswith('"'):
+                    _cors_origins_env = _cors_origins_env[1:-1]
+                if _cors_origins_env.startswith("'") and _cors_origins_env.endswith("'"):
+                    _cors_origins_env = _cors_origins_env[1:-1]
+                
+                # Try to parse as JSON first (handles array format like ["https://example.com"])
                 try:
                     parsed: List[str] = json.loads(_cors_origins_env)
                     if isinstance(parsed, list):
                         result = [str(origin).strip() for origin in parsed if origin.strip()]
                         if result:
+                            # Log in production to help debug CORS issues
+                            print(f"[CORS] Parsed {len(result)} origins from JSON: {result}")
                             return result
-                except (json.JSONDecodeError, ValueError):
+                except (json.JSONDecodeError, ValueError) as e:
                     # Fall back to comma-separated string
+                    print(f"[CORS] JSON parse failed, trying comma-separated: {e}")
                     result = [origin.strip() for origin in _cors_origins_env.split(",") if origin.strip()]
                     if result:
+                        print(f"[CORS] Parsed {len(result)} origins from comma-separated: {result}")
                         return result
+                    else:
+                        print(f"[CORS] Warning: CORS_ORIGINS env var set but empty after parsing: '{_cors_origins_env}'")
             
             # Default fallback if env var is empty or invalid
             app_env = os.getenv("APP_ENV", "development").lower()
             if app_env == "development":
-                return ["http://localhost:3000"]
+                default = ["http://localhost:3000"]
+                print(f"[CORS] Using development default: {default}")
+                return default
             else:
                 # Production default - ensure frontend domain is always allowed
-                return ["https://sistema.cortexclinico.com"]
+                default = ["https://sistema.cortexclinico.com"]
+                print(f"[CORS] Using production default: {default}")
+                return default
         
         # If value is provided as string, parse it
         if isinstance(v, str):
