@@ -115,25 +115,28 @@ class Settings(BaseSettings):
         """Parse CORS origins from environment variable or provided value"""
         # If value is already provided (from field default), check env var
         if v == []:
-            _cors_origins_env = os.getenv("CORS_ORIGINS")
+            _cors_origins_env = os.getenv("CORS_ORIGINS", "").strip()
             if _cors_origins_env:
                 # Try to parse as JSON first (handles array format)
                 try:
                     parsed: List[str] = json.loads(_cors_origins_env)
                     if isinstance(parsed, list):
-                        return [str(origin).strip() for origin in parsed]
-                    else:
-                        return [str(parsed).strip()]
+                        result = [str(origin).strip() for origin in parsed if origin.strip()]
+                        if result:
+                            return result
                 except (json.JSONDecodeError, ValueError):
                     # Fall back to comma-separated string
-                    return [origin.strip() for origin in _cors_origins_env.split(",") if origin.strip()]
+                    result = [origin.strip() for origin in _cors_origins_env.split(",") if origin.strip()]
+                    if result:
+                        return result
+            
+            # Default fallback if env var is empty or invalid
+            app_env = os.getenv("APP_ENV", "development").lower()
+            if app_env == "development":
+                return ["http://localhost:3000"]
             else:
-                # Default fallback
-                if os.getenv("APP_ENV", "development").lower() == "development":
-                    return ["http://localhost:3000"]
-                else:
-                    # Production default
-                    return ["https://sistema.cortexclinico.com"]
+                # Production default - ensure frontend domain is always allowed
+                return ["https://sistema.cortexclinico.com"]
         
         # If value is provided as string, parse it
         if isinstance(v, str):

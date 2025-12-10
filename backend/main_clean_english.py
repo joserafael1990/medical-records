@@ -189,7 +189,14 @@ def _get_cors_origins():
     configured = [origin for origin in settings.CORS_ORIGINS or [] if origin not in {"*", "null"}]
     if not configured:
         # Sensible default for local development
-        return ["http://localhost:3000"]
+        default = ["http://localhost:3000"]
+        logger.warning(f"No CORS origins configured, using default: {default}")
+        return default
+    
+    # Log configured origins (but not in production to avoid log spam)
+    if not settings.is_production:
+        logger.info(f"CORS origins configured: {configured}")
+    
     return configured
 
 # Middleware to add CORS headers to static file responses
