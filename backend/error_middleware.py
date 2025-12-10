@@ -6,7 +6,7 @@ import logging
 import traceback
 import uuid
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, List
 from utils.datetime_utils import utc_now
 from fastapi import Request, Response, HTTPException
 from fastapi.responses import JSONResponse
@@ -21,6 +21,7 @@ from exceptions import (
     ErrorCode,
     to_http_exception
 )
+from config import settings
 
 
 # Configure logging
@@ -43,6 +44,28 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, debug: bool = False):
         super().__init__(app)
         self.debug = debug
+    
+    def _add_cors_headers(self, response: JSONResponse, request: Request) -> JSONResponse:
+        """Add CORS headers to error responses"""
+        origin = request.headers.get("origin")
+        if origin:
+            # Get allowed origins from settings
+            allowed_origins = [o for o in (settings.CORS_ORIGINS or []) if o not in {"*", "null"}]
+            if not allowed_origins:
+                # Fallback to production default
+                if settings.is_production:
+                    allowed_origins = ["https://sistema.cortexclinico.com"]
+                else:
+                    allowed_origins = ["http://localhost:3000"]
+            
+            # Check if origin is allowed
+            if origin in allowed_origins or "*" in allowed_origins:
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+                response.headers["Access-Control-Allow-Methods"] = "*"
+                response.headers["Access-Control-Allow-Headers"] = "*"
+        
+        return response
     
     async def dispatch(self, request: Request, call_next):
         # Generate unique request ID for tracking
@@ -75,23 +98,22 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
         
         # Handle custom medical system exceptions
         if isinstance(exc, MedicalSystemException):
-            return await self.handle_medical_exception(exc, error_context)
-        
+            response = await self.handle_medical_exception(exc, error_context)
         # Handle database exceptions
         elif isinstance(exc, SQLAlchemyError):
-            return await self.handle_database_exception(exc, error_context)
-        
+            response = await self.handle_database_exception(exc, error_context)
         # Handle validation exceptions
         elif isinstance(exc, ValidationError):
-            return await self.handle_validation_exception(exc, error_context)
-        
+            response = await self.handle_validation_exception(exc, error_context)
         # Handle HTTP exceptions
         elif isinstance(exc, HTTPException):
-            return await self.handle_http_exception(exc, error_context)
-        
+            response = await self.handle_http_exception(exc, error_context)
         # Handle unexpected exceptions
         else:
-            return await self.handle_unexpected_exception(exc, error_context)
+            response = await self.handle_unexpected_exception(exc, error_context)
+        
+        # Add CORS headers to error response (critical for browser to accept error responses)
+        return self._add_cors_headers(response, request)
     
     async def handle_medical_exception(
         self, 
