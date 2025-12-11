@@ -78,4 +78,4 @@ CMD if [ ! -d "/app/build" ]; then \
     exit 1; \
     fi && \
     echo "Starting serve on port 3000..." && \
-    /usr/local/bin/serve -s /app/build -l 0.0.0.0:3000 --no-clipboard --no-compression
+    /usr/local/bin/serve -s /app/build -l tcp://0.0.0.0:3000 --no-clipboard --no-compression
