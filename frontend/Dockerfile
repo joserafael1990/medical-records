@@ -58,9 +58,9 @@ RUN --mount=type=cache,target=/root/.npm npm install -g serve
 
 # 2. Verify build directory exists and set correct permissions
 RUN if [ ! -d "/app/build" ]; then \
-        echo "ERROR: Build directory /app/build does not exist!" && \
-        ls -la /app && \
-        exit 1; \
+    echo "ERROR: Build directory /app/build does not exist!" && \
+    ls -la /app && \
+    exit 1; \
     fi && \
     chown -R appuser:appgroup /app/build && \
     echo "Build directory verified: $(ls -la /app/build | head -5)"
@@ -73,9 +73,9 @@ EXPOSE 3000
 # 4. Use shell form to verify build exists and start serve
 # Use full path to serve and add helpful flags
 CMD if [ ! -d "/app/build" ]; then \
-        echo "ERROR: Build directory not found at startup!" && \
-        ls -la /app && \
-        exit 1; \
+    echo "ERROR: Build directory not found at startup!" && \
+    ls -la /app && \
+    exit 1; \
     fi && \
     echo "Starting serve on port 3000..." && \
-    /usr/local/bin/serve -s /app/build -l 3000 --no-clipboard --no-compression
+    /usr/local/bin/serve -s /app/build -l tcp://0.0.0.0:3000 --no-clipboard --no-compression
