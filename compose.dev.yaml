@@ -12,22 +12,22 @@ services:
     init: true
     ports:
       - "8000:8000"
-    
+
     # Explicitly load .env file (Docker Compose also auto-loads .env, but this is clearer)
     env_file:
       - .env
-    
+
     # No Traefik labels needed for local development
     networks:
       - appnet
-    
+
     healthcheck:
       test: [ "CMD-SHELL", "curl -f http://localhost:8000/health || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-    
+
     environment:
       # Variables from .env file (can also override here if needed)
       - SECRET_KEY=${SECRET_KEY}
@@ -52,7 +52,7 @@ services:
       - META_WHATSAPP_APP_SECRET=${META_WHATSAPP_APP_SECRET}
       - META_WHATSAPP_VERIFY_TOKEN=${META_WHATSAPP_VERIFY_TOKEN}
       - LOG_LEVEL=${LOG_LEVEL:-debug}
-    
+
     depends_on:
       - postgres-db
 
@@ -70,11 +70,11 @@ services:
     init: true
     ports:
       - "3000:3000"
-    
+
     # Load .env file for runtime variables
     env_file:
       - .env
-    
+
     networks:
       - appnet
     environment:
@@ -90,24 +90,21 @@ services:
   postgres-db:
     image: postgres:16-alpine
     restart: unless-stopped
-    
-    # Load .env file for database credentials
-    env_file:
-      - .env
-    
+
     networks:
       - appnet
     environment:
-      # Database credentials from .env (with defaults)
-      POSTGRES_USER: ${POSTGRES_USER:-historias_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-historias_pass}
-      POSTGRES_DB: ${POSTGRES_DB:-historias_clinicas}
+      # Hardcoded credentials for local development only
+      # Production uses Azure PostgreSQL (no container needed)
+      POSTGRES_USER: historias_user
+      POSTGRES_PASSWORD: historias_pass
+      POSTGRES_DB: historias_clinicas
     ports:
       - "5432:5432" # Exposed for local development access
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-historias_user} -d ${POSTGRES_DB:-historias_clinicas}" ]
+      test: [ "CMD-SHELL", "pg_isready -U historias_user -d historias_clinicas" ]
       interval: 10s
       timeout: 5s
       retries: 5
