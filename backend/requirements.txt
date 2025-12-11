@@ -15,7 +15,7 @@ pydantic[email]==2.12.3
 pydantic-settings==2.11.0
 
 # Autenticación y seguridad
-bcrypt==4.1.2
+bcrypt==3.2.2  # Pinned to 3.x for passlib compatibility (4.x breaks passlib)
 python-jose[cryptography]==3.3.0
 python-multipart==0.0.6
 passlib==1.7.4
