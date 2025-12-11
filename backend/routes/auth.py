@@ -359,6 +359,7 @@ async def login(
         # 🆕 Registrar intento de login fallido
         # CRITICAL FIX: Use a fresh database session for audit logging
         # The main session (db) is in a failed state after the exception
+        api_logger.error(f"Login failed with HTTPException: {e.status_code} - {e.detail}", email=login_data.email)
         audit_db = next(get_db())
         try:
             audit_service.log_login(
@@ -377,6 +378,10 @@ async def login(
     except Exception as e:
         # 🆕 Registrar error de sistema
         # CRITICAL FIX: Use a fresh database session for audit logging
+        api_logger.error(f"Login failed with unexpected error: {type(e).__name__} - {str(e)}", 
+                        email=login_data.email, 
+                        error_type=type(e).__name__,
+                        traceback=traceback.format_exc())
         audit_db = next(get_db())
         try:
             audit_service.log_login(
