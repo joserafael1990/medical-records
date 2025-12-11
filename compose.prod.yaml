@@ -13,10 +13,8 @@ services:
     expose:
       - "8000"
 
-    # Etiquetas para que Coolify (Traefik) encuentre el puerto correcto
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.services.python-backend.loadbalancer.server.port=8000"
+    # Coolify auto-generates Traefik labels based on domain configuration
+    # Domain: https://api.cortexclinico.com (configured in Coolify UI)
 
     networks:
       - appnet
@@ -78,10 +76,8 @@ services:
     expose:
       - "3000"
 
-    # Etiquetas para que Coolify (Traefik) encuentre el puerto correcto
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.services.typescript-frontend.loadbalancer.server.port=3000"
+    # Coolify auto-generates Traefik labels based on domain configuration
+    # Domain: https://sistema.cortexclinico.com (configured in Coolify UI)
 
     networks:
       - appnet
