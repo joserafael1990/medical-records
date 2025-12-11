@@ -13,6 +13,10 @@ services:
     expose:
       - "8000"
 
+    # Minimal label for Coolify to identify the service port
+    labels:
+      - "traefik.http.services.python-backend.loadbalancer.server.port=8000"
+
     # Coolify auto-generates Traefik labels based on domain configuration
     # Domain: https://api.cortexclinico.com (configured in Coolify UI)
 
@@ -76,8 +80,9 @@ services:
     expose:
       - "3000"
 
-    # Coolify auto-generates Traefik labels based on domain configuration
-    # Domain: https://sistema.cortexclinico.com (configured in Coolify UI)
+    # Minimal label for Coolify to identify the service port
+    labels:
+      - "traefik.http.services.typescript-frontend.loadbalancer.server.port=3000"
 
     networks:
       - appnet
