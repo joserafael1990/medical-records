@@ -20,8 +20,7 @@ services:
     # Coolify auto-generates Traefik labels based on domain configuration
     # Domain: https://api.cortexclinico.com (configured in Coolify UI)
 
-    networks:
-      - appnet
+
 
     # --- HEALTHCHECK (Paso 2) ---
     # Mantenlo comentado por ahora. Cuando agregues @app.get("/health") en tu Python,
@@ -84,8 +83,6 @@ services:
     labels:
       - "traefik.http.services.typescript-frontend.loadbalancer.server.port=3000"
 
-    networks:
-      - appnet
     environment:
       # Runtime variables (if needed by serve or other tools)
       - NODE_ENV=production
@@ -102,8 +99,7 @@ services:
         limits:
           memory: 512M # Limite bajo porque son archivos estáticos
 
-networks:
-  appnet:
-    driver: bridge
+# Network configuration removed - Coolify manages networking automatically
+# This ensures Traefik can reach the services
 
 # No volumes needed - using Azure PostgreSQL (external managed database)
