@@ -65,10 +65,20 @@ class AuditService:
             metadata: Metadatos adicionales
         """
         try:
-            # Si la sesión viene de una operación fallida, limpiar estado antes de auditar
-            current_tx = db.get_transaction()
-            if current_tx is not None and not current_tx.is_active:
-                db.rollback()
+            # CRITICAL FIX: If the session has a failed transaction, rollback completely
+            # This happens when login fails or any DB operation fails before audit logging
+            try:
+                current_tx = db.get_transaction()
+                if current_tx is not None and not current_tx.is_active:
+                    db.rollback()
+                    # After rollback, we need to ensure we're in a clean state
+                    # The next operation will start a new transaction automatically
+            except Exception:
+                # If checking transaction state fails, force a rollback
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
 
             # Extraer información del request
             ip_address = request.client.host if request.client else None
