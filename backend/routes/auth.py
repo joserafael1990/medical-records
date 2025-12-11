@@ -329,7 +329,9 @@ async def login(
         if user and user.person_type == 'doctor':
             from services.license_service import LicenseService
             try:
-                LicenseService.require_valid_license(db, user.id)
+                license_result = LicenseService.require_valid_license(db, user.id)
+                # If license_result is None, it means the licenses table doesn't exist
+                # We skip validation and allow login in this case
             except HTTPException as license_error:
                 # Registrar intento de login bloqueado por licencia
                 # Use a fresh session for audit logging

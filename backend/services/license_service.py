@@ -53,11 +53,32 @@ class LicenseService:
         
         return license.status == 'active' and license.is_active
     
+    # Sentinel value to indicate table doesn't exist
+    _LICENSE_TABLE_MISSING = object()
+    
     @staticmethod
-    def require_valid_license(db: Session, doctor_id: int) -> License:
-        """Require a valid active license, raise exception if not valid"""
-        license = LicenseService.get_current_license(db, doctor_id)
+    def require_valid_license(db: Session, doctor_id: int) -> Optional[License]:
+        """
+        Require a valid active license, raise exception if not valid.
+        If the licenses table doesn't exist, skip validation (allows login during migration).
+        Returns:
+            License object if valid, None if table doesn't exist (skip validation)
+        """
+        try:
+            license = LicenseService.get_current_license(db, doctor_id)
+        except Exception as e:
+            # If the licenses table doesn't exist, skip license validation
+            # This allows the system to work while migrations are pending
+            error_msg = str(e).lower()
+            if "relation" in error_msg and "does not exist" in error_msg:
+                logger.warning(f"Licenses table not found, skipping license validation for doctor {doctor_id}")
+                # Rollback the failed transaction so the session is usable
+                db.rollback()
+                return None  # Skip license validation, allow login
+            # Re-raise other database errors
+            raise
         
+        # If we get here, table exists but no license found
         if not license:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
