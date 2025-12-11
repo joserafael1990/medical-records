@@ -332,13 +332,18 @@ async def login(
                 LicenseService.require_valid_license(db, user.id)
             except HTTPException as license_error:
                 # Registrar intento de login bloqueado por licencia
-                audit_service.log_login(
-                    db=db,
-                    user=user,
-                    request=request,
-                    success=False,
-                    error=f"License validation failed: {license_error.detail}"
-                )
+                # Use a fresh session for audit logging
+                audit_db = next(get_db())
+                try:
+                    audit_service.log_login(
+                        db=audit_db,
+                        user=user,
+                        request=request,
+                        success=False,
+                        error=f"License validation failed: {license_error.detail}"
+                    )
+                finally:
+                    audit_db.close()
                 raise license_error
         
         # 🆕 Registrar login exitoso en auditoría
@@ -352,23 +357,40 @@ async def login(
         return result
     except HTTPException as e:
         # 🆕 Registrar intento de login fallido
-        audit_service.log_login(
-            db=db,
-            user=user,
-            request=request,
-            success=False,
-            error=str(e.detail)
-        )
+        # CRITICAL FIX: Use a fresh database session for audit logging
+        # The main session (db) is in a failed state after the exception
+        audit_db = next(get_db())
+        try:
+            audit_service.log_login(
+                db=audit_db,
+                user=user,
+                request=request,
+                success=False,
+                error=str(e.detail)
+            )
+        except Exception as audit_error:
+            # If audit logging fails, log it but don't crash
+            api_logger.error(f"Failed to log failed login attempt: {str(audit_error)}")
+        finally:
+            audit_db.close()
         raise e
     except Exception as e:
         # 🆕 Registrar error de sistema
-        audit_service.log_login(
-            db=db,
-            user=user,
-            request=request,
-            success=False,
-            error="Internal server error"
-        )
+        # CRITICAL FIX: Use a fresh database session for audit logging
+        audit_db = next(get_db())
+        try:
+            audit_service.log_login(
+                db=audit_db,
+                user=user,
+                request=request,
+                success=False,
+                error="Internal server error"
+            )
+        except Exception as audit_error:
+            # If audit logging fails, log it but don't crash
+            api_logger.error(f"Failed to log system error during login: {str(audit_error)}")
+        finally:
+            audit_db.close()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
