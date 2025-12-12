@@ -416,15 +416,23 @@ CREATE TABLE IF NOT EXISTS consultation_vital_signs (
 CREATE TABLE IF NOT EXISTS schedule_templates (
     id SERIAL PRIMARY KEY,
     doctor_id INTEGER REFERENCES persons(id) ON DELETE CASCADE,
-    office_id INTEGER REFERENCES offices(id) ON DELETE CASCADE,
+    office_id INTEGER NOT NULL REFERENCES offices(id) ON DELETE CASCADE,
     day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
     start_time TIME NOT NULL,
     end_time TIME NOT NULL,
+    consultation_duration INTEGER DEFAULT 30,
+    break_duration INTEGER DEFAULT 0,
+    lunch_start TIME,
+    lunch_end TIME,
     is_active BOOLEAN DEFAULT TRUE,
-    time_blocks JSONB DEFAULT '[]',
+    time_blocks JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Create index for time_blocks
+CREATE INDEX IF NOT EXISTS idx_schedule_templates_time_blocks 
+ON schedule_templates USING GIN (time_blocks);
 
 -- schedule_exceptions table removed - not used
 
@@ -653,6 +661,13 @@ COMMENT ON TABLE privacy_consents IS 'Consentimientos de privacidad';
 COMMENT ON TABLE arco_requests IS 'Solicitudes ARCO (LFPDPPP)';
 COMMENT ON TABLE google_calendar_tokens IS 'Tokens OAuth de Google Calendar por doctor';
 COMMENT ON TABLE google_calendar_event_mappings IS 'Mapeo de citas a eventos de Google Calendar';
+COMMENT ON TABLE schedule_templates IS 'Plantillas de horarios de trabajo por día de la semana';
+COMMENT ON COLUMN schedule_templates.office_id IS 'Consultorio donde aplica este horario';
+COMMENT ON COLUMN schedule_templates.consultation_duration IS 'Duración de cada consulta en minutos';
+COMMENT ON COLUMN schedule_templates.break_duration IS 'Tiempo de descanso entre consultas en minutos';
+COMMENT ON COLUMN schedule_templates.lunch_start IS 'Hora de inicio del almuerzo';
+COMMENT ON COLUMN schedule_templates.lunch_end IS 'Hora de fin del almuerzo';
+COMMENT ON COLUMN schedule_templates.time_blocks IS 'Bloques de tiempo específicos en formato JSON';
 
 -- ============================================================================
 -- FIN DEL SCRIPT
