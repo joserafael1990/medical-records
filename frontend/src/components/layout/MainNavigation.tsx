@@ -61,13 +61,24 @@ interface MainNavigationProps {
   activeView: string;
   onViewChange: (view: string) => void;
   items?: NavigationItem[];
+  personType?: string; // 'doctor', 'patient', 'admin'
 }
 
 export const MainNavigation: React.FC<MainNavigationProps> = ({
   activeView,
   onViewChange,
-  items = MAIN_NAVIGATION_ITEMS
+  items = MAIN_NAVIGATION_ITEMS,
+  personType
 }) => {
+  // Filter navigation items based on person_type
+  // Only admins can see the "Licencias" option
+  const filteredItems = React.useMemo(() => {
+    if (personType === 'admin') {
+      return items; // Admins see all options
+    }
+    // Non-admins don't see "Licencias"
+    return items.filter(item => item.id !== 'licenses');
+  }, [items, personType]);
 
   return (
     <Box
@@ -89,7 +100,7 @@ export const MainNavigation: React.FC<MainNavigationProps> = ({
           Panel de Control
         </Typography>
         <MenuList sx={{ gap: 1 }}>
-          {items.map((item) => (
+          {filteredItems.map((item) => (
             <ListItemButton
               key={item.id}
               selected={activeView === item.id}

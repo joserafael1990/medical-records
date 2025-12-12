@@ -26,6 +26,7 @@ interface ViewRendererProps {
   doctorProfile: any;
   onSaveProfile: (profile: any) => void;
   doctorProfileHook: any;
+  personType?: string; // 'doctor', 'patient', 'admin'
 }
 
 export const ViewRenderer: React.FC<ViewRendererProps> = ({
@@ -37,7 +38,8 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
   appointmentManager,
   doctorProfile,
   onSaveProfile,
-  doctorProfileHook
+  doctorProfileHook,
+  personType
 }) => {
   // Track view navigation
   useEffect(() => {
@@ -154,10 +156,21 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
         </Suspense>
       )}
 
-      {activeView === 'licenses' && (
+      {activeView === 'licenses' && personType === 'admin' && (
         <Suspense fallback={<LoadingFallback message="Cargando licencias..." />}>
           <LicenseManagement />
         </Suspense>
+      )}
+      
+      {activeView === 'licenses' && personType !== 'admin' && (
+        <Box sx={{ p: 3, textAlign: 'center' }}>
+          <Typography variant="h5" color="error" gutterBottom>
+            Acceso Denegado
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            No tienes permisos para acceder a esta sección.
+          </Typography>
+        </Box>
       )}
     </Box>
   );

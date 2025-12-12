@@ -134,6 +134,16 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     setMobileNavOpen(false);
   };
 
+  // Filter navigation items for mobile drawer based on person_type
+  const filteredNavItems = useMemo(() => {
+    const personType = user?.doctor?.person_type;
+    if (personType === 'admin') {
+      return MAIN_NAVIGATION_ITEMS; // Admins see all options
+    }
+    // Non-admins don't see "Licencias"
+    return MAIN_NAVIGATION_ITEMS.filter(item => item.id !== 'licenses');
+  }, [user?.doctor?.person_type]);
+
   const renderMobileDrawer = (
     <Box
       role="presentation"
@@ -146,7 +156,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       </Box>
       <Divider />
       <List>
-        {MAIN_NAVIGATION_ITEMS.map((item) => {
+        {filteredNavItems.map((item) => {
           const handleSelect = () => {
             navigateToView(item.id);
             handleCloseMobileNav();
@@ -269,6 +279,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             <MainNavigation
               activeView={activeView}
               onViewChange={navigateToView}
+              personType={user?.doctor?.person_type}
             />
           </Box>
 
@@ -283,6 +294,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             doctorProfile={doctorProfile}
             onSaveProfile={doctorProfileHook.handleSubmit}
             doctorProfileHook={doctorProfileHook}
+            personType={user?.doctor?.person_type}
           />
         </Box>
       </Container>

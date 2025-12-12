@@ -14,6 +14,7 @@ interface DoctorInfo {
   specialty: string;
   professional_license: string;
   appointment_duration?: number; // Duration of appointments in minutes
+  person_type?: string; // 'doctor', 'patient', 'admin'
 }
 
 interface User {
@@ -121,7 +122,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         maternal_surname: data.user.maternal_surname || '',
         email: data.user.email,
         specialty: '', // Will be loaded from profile
-        professional_license: '' // Will be loaded from profile
+        professional_license: '', // Will be loaded from profile
+        person_type: data.user.person_type || 'doctor' // Store person_type
       };
       
       console.log('🔐 AuthContext.login: Setting user:', doctorInfo);
