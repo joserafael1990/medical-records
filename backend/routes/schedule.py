@@ -11,7 +11,7 @@ from typing import Optional
 import json
 import psycopg2
 
-from database import get_db, Person, Appointment
+from database import get_db, Person, Appointment, Office
 from dependencies import get_current_user
 from logger import get_logger
 import pytz
@@ -254,6 +254,18 @@ async def create_schedule_template(
     try:
         api_logger.info("Creating schedule template", doctor_id=current_user.id, template_data=template_data)
         
+        # Get doctor's first office (required for schedule template)
+        office = db.query(Office).filter(
+            Office.doctor_id == current_user.id,
+            Office.is_active == True
+        ).first()
+        
+        if not office:
+            raise HTTPException(
+                status_code=400,
+                detail="Doctor must have at least one active office to create schedule templates"
+            )
+        
         # Extract data
         day_of_week = template_data.get('day_of_week', 0)
         is_active = template_data.get('is_active', True)
@@ -277,11 +289,12 @@ async def create_schedule_template(
         # Create template in database
         result = db.execute(text("""
             INSERT INTO schedule_templates 
-            (doctor_id, day_of_week, start_time, end_time, is_active, time_blocks, created_at, updated_at)
-            VALUES (:doctor_id, :day_of_week, :start_time, :end_time, :is_active, :time_blocks, NOW(), NOW())
+            (doctor_id, office_id, day_of_week, start_time, end_time, is_active, time_blocks, created_at, updated_at)
+            VALUES (:doctor_id, :office_id, :day_of_week, :start_time, :end_time, :is_active, :time_blocks, NOW(), NOW())
             RETURNING id
         """), {
             "doctor_id": current_user.id,
+            "office_id": office.id,
             "day_of_week": day_of_week,
             "start_time": start_time,
             "end_time": end_time,

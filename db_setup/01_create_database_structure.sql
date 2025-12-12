@@ -302,6 +302,11 @@ CREATE TABLE IF NOT EXISTS medical_records (
     prescribed_medications TEXT,
     laboratory_results TEXT,
     notes TEXT,
+    follow_up_instructions TEXT NOT NULL DEFAULT '',
+    
+    -- Patient document reference (for linking to specific ID document)
+    patient_document_id INTEGER REFERENCES documents(id),
+    patient_document_value VARCHAR(255),
     
     -- Sistema
     created_at TIMESTAMP DEFAULT NOW(),
