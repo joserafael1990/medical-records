@@ -3,6 +3,7 @@ import { ClinicalStudy } from '../types';
 import { apiService } from '../services';
 import { useToast } from '../components/common/ToastNotification';
 import { logger } from '../utils/logger';
+import { API_CONFIG } from '../constants';
 
 /**
  * Hook para manejar estudios clínicos previos del paciente
@@ -132,7 +133,7 @@ export const usePatientPreviousStudies = (): UsePatientPreviousStudiesReturn => 
         return;
       }
 
-      const response = await fetch(`http://localhost:8000/api/clinical-studies/${studyId}/file`, {
+      const response = await fetch(`${API_CONFIG.BASE_URL}/api/clinical-studies/${studyId}/file`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`

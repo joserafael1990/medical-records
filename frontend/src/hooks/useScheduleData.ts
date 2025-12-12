@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { API_CONFIG } from '../constants';
 
 interface TimeBlock {
   start_time: string;
@@ -44,7 +45,7 @@ export const useScheduleData = () => {
         throw new Error('No authentication token found');
       }
 
-      const response = await fetch('http://localhost:8000/api/schedule/templates/weekly', {
+      const response = await fetch(`${API_CONFIG.BASE_URL}/api/schedule/templates/weekly`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',

@@ -507,6 +507,61 @@ CREATE TABLE IF NOT EXISTS data_retention_logs (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Tabla de logs de licencias
+CREATE TABLE IF NOT EXISTS licenses (
+    id SERIAL PRIMARY KEY,
+    doctor_id INTEGER REFERENCES persons(id) ON DELETE CASCADE NOT NULL,
+    license_type VARCHAR(50) NOT NULL CHECK (license_type IN ('trial', 'basic', 'premium')),
+    start_date DATE NOT NULL,
+    expiration_date DATE NOT NULL,
+    payment_date DATE,
+    status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'expired', 'suspended')),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    created_by INTEGER REFERENCES persons(id),
+    UNIQUE(doctor_id)
+);
+CREATE INDEX IF NOT EXISTS idx_licenses_doctor_id ON licenses(doctor_id);
+CREATE INDEX IF NOT EXISTS idx_licenses_status ON licenses(status);
+CREATE INDEX IF NOT EXISTS idx_licenses_expiration_date ON licenses(expiration_date);
+CREATE INDEX IF NOT EXISTS idx_licenses_is_active ON licenses(is_active);
+
+-- ============================================================================
+-- GOOGLE CALENDAR INTEGRATION
+-- ============================================================================
+
+-- Tabla de tokens OAuth de Google Calendar
+CREATE TABLE IF NOT EXISTS google_calendar_tokens (
+    id SERIAL PRIMARY KEY,
+    doctor_id INTEGER NOT NULL UNIQUE REFERENCES persons(id) ON DELETE CASCADE,
+    access_token TEXT NOT NULL,
+    refresh_token TEXT,
+    token_expires_at TIMESTAMP,
+    calendar_id VARCHAR(255) DEFAULT 'primary',
+    sync_enabled BOOLEAN DEFAULT TRUE,
+    last_sync_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tabla de mapeo de eventos de Google Calendar
+CREATE TABLE IF NOT EXISTS google_calendar_event_mappings (
+    id SERIAL PRIMARY KEY,
+    appointment_id INTEGER NOT NULL UNIQUE REFERENCES appointments(id) ON DELETE CASCADE,
+    google_event_id VARCHAR(255) NOT NULL UNIQUE,
+    doctor_id INTEGER NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Índices para Google Calendar
+CREATE INDEX IF NOT EXISTS idx_google_calendar_tokens_doctor_id ON google_calendar_tokens(doctor_id);
+CREATE INDEX IF NOT EXISTS idx_google_calendar_event_mappings_appointment_id ON google_calendar_event_mappings(appointment_id);
+CREATE INDEX IF NOT EXISTS idx_google_calendar_event_mappings_google_event_id ON google_calendar_event_mappings(google_event_id);
+CREATE INDEX IF NOT EXISTS idx_google_calendar_event_mappings_doctor_id ON google_calendar_event_mappings(doctor_id);
+
 -- ============================================================================
 -- ÍNDICES PARA OPTIMIZACIÓN
 -- ============================================================================
@@ -596,6 +651,8 @@ COMMENT ON TABLE audit_log IS 'Log de auditoría del sistema';
 COMMENT ON TABLE privacy_notices IS 'Avisos de privacidad';
 COMMENT ON TABLE privacy_consents IS 'Consentimientos de privacidad';
 COMMENT ON TABLE arco_requests IS 'Solicitudes ARCO (LFPDPPP)';
+COMMENT ON TABLE google_calendar_tokens IS 'Tokens OAuth de Google Calendar por doctor';
+COMMENT ON TABLE google_calendar_event_mappings IS 'Mapeo de citas a eventos de Google Calendar';
 
 -- ============================================================================
 -- FIN DEL SCRIPT

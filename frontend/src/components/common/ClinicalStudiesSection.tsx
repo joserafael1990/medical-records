@@ -29,7 +29,7 @@ import {
   Search as SearchIcon
 } from '@mui/icons-material';
 import { ClinicalStudy, StudyStatus, CreateClinicalStudyData, StudyCatalog } from '../../types';
-import { STUDY_STATUS_OPTIONS, STUDY_TYPES } from '../../constants';
+import { STUDY_STATUS_OPTIONS, STUDY_TYPES, API_CONFIG } from '../../constants';
 import { TEMP_IDS } from '../../utils/vitalSignUtils';
 import { useStudyCatalog } from '../../hooks/useStudyCatalog';
 import { logger } from '../../utils/logger';
@@ -129,7 +129,7 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
       }
 
       // Fetch the file with authentication
-      const response = await fetch(`http://localhost:8000/api/clinical-studies/${studyId}/file`, {
+      const response = await fetch(`${API_CONFIG.BASE_URL}/api/clinical-studies/${studyId}/file`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
