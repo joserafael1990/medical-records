@@ -420,3 +420,141 @@ class AppointmentService:
         )
         
         return {"message": "Appointment cancelled successfully"}
+
+    @staticmethod
+    def should_send_reminder_by_id(reminder: AppointmentReminder, appointment: Appointment) -> bool:
+        """Check if an individual reminder should be sent now based on offset and current time"""
+        try:
+            if not reminder.enabled or reminder.sent:
+                return False
+            
+            if appointment.status not in ['por_confirmar', 'confirmada']:
+                return False
+            
+            # Calculate when this reminder should be sent
+            from utils.datetime_utils import now_cdmx
+            send_time = appointment.appointment_date - timedelta(minutes=reminder.offset_minutes)
+            
+            # Check if we're in the send window (2-minute tolerance)
+            now = now_cdmx().replace(tzinfo=None)
+            window_end = send_time + timedelta(minutes=2)
+            
+            should_send = send_time <= now <= window_end
+            
+            if should_send:
+                api_logger.debug(
+                    "📤 Reminder ready to send",
+                    extra={
+                        "reminder_id": reminder.id,
+                        "appointment_id": appointment.id,
+                        "send_time": send_time.isoformat(),
+                        "current_time": now.isoformat()
+                    }
+                )
+            
+            return should_send
+        except Exception as e:
+            api_logger.error(
+                "❌ Error checking reminder send time",
+                extra={"reminder_id": reminder.id, "error": str(e)},
+                exc_info=True
+            )
+            return False
+
+    @staticmethod
+    def send_reminder_by_id(db: Session, reminder_id: int) -> bool:
+        """Send a specific reminder by its ID"""
+        try:
+            # Get the reminder with its appointment
+            reminder = db.query(AppointmentReminder).options(
+                joinedload(AppointmentReminder.appointment).joinedload(Appointment.patient),
+                joinedload(AppointmentReminder.appointment).joinedload(Appointment.doctor),
+                joinedload(AppointmentReminder.appointment).joinedload(Appointment.office),
+                joinedload(AppointmentReminder.appointment).joinedload(Appointment.appointment_type_rel)
+            ).filter(AppointmentReminder.id == reminder_id).first()
+            
+            if not reminder or not reminder.appointment:
+                api_logger.warning(
+                    "⚠️ Reminder or appointment not found",
+                    extra={"reminder_id": reminder_id}
+                )
+                return False
+            
+            appointment = reminder.appointment
+            
+            # Mark as sent before sending (atomic operation to prevent duplicates)
+            if reminder.sent:
+                api_logger.info(
+                    "⚠️ Reminder already sent, skipping",
+                    extra={"reminder_id": reminder_id}
+                )
+                return False
+            
+            # Mark as sent
+            from utils.datetime_utils import utc_now
+            reminder.sent = True
+            reminder.sent_at = utc_now()
+            db.commit()
+            
+            # Build WhatsApp message
+            import pytz
+            from services.office_helpers import build_office_address, resolve_maps_url, resolve_country_code
+            from whatsapp_service import get_whatsapp_service
+            
+            mexico_tz = pytz.timezone('America/Mexico_City')
+            local_dt = mexico_tz.localize(appointment.appointment_date)
+            appointment_date = local_dt.strftime('%d de %B de %Y')
+            appointment_time = local_dt.strftime('%I:%M %p')
+            
+            # Determine appointment type
+            appointment_type = "presencial"
+            if appointment.appointment_type_rel:
+                appointment_type = "online" if appointment.appointment_type_rel.name == "En línea" else "presencial"
+            
+            if appointment.office and appointment.office.is_virtual and appointment.office.virtual_url:
+                appointment_type = "online"
+            
+            # Prepare office details
+            office_address_val = build_office_address(appointment.office) if appointment.office else "mi consultorio - No especificado"
+            maps_url_val = resolve_maps_url(appointment.office, office_address_val) if appointment.office else None
+            country_code_val = resolve_country_code(appointment.office) if appointment.office else '52'
+            
+            service = get_whatsapp_service()
+            resp = service.send_appointment_reminder(
+                patient_phone=appointment.patient.primary_phone if appointment.patient else None,
+                patient_full_name=appointment.patient.full_name if appointment.patient else "Paciente",
+                appointment_date=appointment_date,
+                appointment_time=appointment_time,
+                doctor_title=(appointment.doctor.title if appointment.doctor else "Dr."),
+                doctor_full_name=(appointment.doctor.full_name if appointment.doctor else "Médico"),
+                office_address=office_address_val,
+                country_code=country_code_val,
+                appointment_type=appointment_type,
+                maps_url=maps_url_val
+            )
+            
+            if resp and resp.get('success'):
+                api_logger.info(
+                    "✅ Reminder sent successfully",
+                    extra={"reminder_id": reminder_id, "appointment_id": appointment.id}
+                )
+                return True
+            else:
+                # Rollback if sending failed
+                reminder.sent = False
+                reminder.sent_at = None
+                db.commit()
+                api_logger.warning(
+                    "⚠️ Reminder sending failed, rolled back",
+                    extra={"reminder_id": reminder_id, "response": resp}
+                )
+                return False
+                
+        except Exception as e:
+            db.rollback()
+            api_logger.error(
+                "❌ Exception sending reminder",
+                extra={"reminder_id": reminder_id, "error": str(e)},
+                exc_info=True
+            )
+            return False
