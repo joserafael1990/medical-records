@@ -55,7 +55,13 @@ async def process_webhook_event(request: Request, db: Session):
         
         body = json.loads(raw_body.decode('utf-8'))
         
+        api_logger.info(
+            "📥 WhatsApp webhook received",
+            extra={"body_keys": list(body.keys()), "entry_count": len(body.get('entry', []))}
+        )
+        
         if 'entry' not in body:
+            api_logger.warning("⚠️ Webhook has no 'entry' field, ignoring")
             return {"status": "ignored"}
         
         processed_messages = 0
@@ -99,12 +105,24 @@ async def process_webhook_event(request: Request, db: Session):
                     elif message_type == 'text':
                         text_body = message.get('text', {}).get('body', '').lower()
                         
+                        api_logger.info(
+                            "📱 Received text message from WhatsApp",
+                            extra={"from_phone": from_phone, "text": text_body, "timestamp": timestamp}
+                        )
+                        
                         if 'cancel' in text_body or 'cancelar' in text_body:
+                            api_logger.info("🚫 Processing cancellation request", extra={"from_phone": from_phone})
                             await process_text_cancellation_request(text_body, from_phone, db)
                             processed_messages += 1
                         elif 'confirm' in text_body or 'si' in text_body or 'sí' in text_body:
+                            api_logger.info("✅ Processing confirmation request", extra={"from_phone": from_phone})
                             await confirm_appointment_via_whatsapp(None, from_phone, db)
                             processed_messages += 1
+                        else:
+                            api_logger.info(
+                                "ℹ️ Text message doesn't match confirm/cancel patterns",
+                                extra={"from_phone": from_phone, "text": text_body}
+                            )
         
         return {"status": "ok", "processed_messages": processed_messages}
         
