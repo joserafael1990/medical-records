@@ -311,7 +311,7 @@ class DoctorUpdate(BaseSchema):
 # Medical data for patients
 class PatientCreate(PersonBase):
     person_type: Literal['patient'] = 'patient'
-    gender: str  # Required field - user must select gender
+    gender: Optional[str] = None  # Optional for first-time appointments
     
     # Medical data
     insurance_provider: Optional[str] = None
@@ -319,13 +319,6 @@ class PatientCreate(PersonBase):
     
     # Documents (normalized)
     documents: List[PersonDocumentCreate] = []
-    
-    @field_validator('gender')
-    @classmethod
-    def validate_gender(cls, v):
-        if not v or not v.strip():
-            raise ValueError('El género es requerido')
-        return v.strip()
 
 class PersonUpdate(BaseSchema):
     # Personal data

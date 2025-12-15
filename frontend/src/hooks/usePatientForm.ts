@@ -402,18 +402,7 @@ export const usePatientForm = (props: UsePatientFormProps): UsePatientFormReturn
       // Silently fail
     }
     
-    // Validate required fields
-    const newErrors: { [key: string]: string } = {};
-    
-    if (!formData.gender || formData.gender.trim() === '') {
-      newErrors.gender = 'El género es obligatorio';
-    }
-    
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      setError('Por favor, completa todos los campos obligatorios');
-      return;
-    }
+    // Basic validation (gender is optional for first-time appointments)
     
     setLoading(true);
     try {
