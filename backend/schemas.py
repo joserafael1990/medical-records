@@ -180,7 +180,7 @@ class PersonBase(BaseSchema):
     title: Optional[str] = None
     name: str
     birth_date: Optional[date] = None
-    gender: str
+    gender: Optional[str] = None  # Optional: can be null for first-time appointments
     civil_status: Optional[str] = None
     birth_city: Optional[str] = None
     
