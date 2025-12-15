@@ -402,7 +402,18 @@ export const usePatientForm = (props: UsePatientFormProps): UsePatientFormReturn
       // Silently fail
     }
     
-    // Basic validation (todos los campos son opcionales según modelos actualizados)
+    // Validate required fields
+    const newErrors: { [key: string]: string } = {};
+    
+    if (!formData.gender || formData.gender.trim() === '') {
+      newErrors.gender = 'El género es obligatorio';
+    }
+    
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      setError('Por favor, completa todos los campos obligatorios');
+      return;
+    }
     
     setLoading(true);
     try {
