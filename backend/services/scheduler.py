@@ -22,6 +22,8 @@ class AutoReminderScheduler:
 
     async def _run_loop(self) -> None:
         await asyncio.sleep(5)
+        api_logger.info("🔄 Auto reminder scheduler started")
+        loop_count = 0
         while True:
             try:
                 db = SessionLocal()
@@ -42,6 +44,14 @@ class AutoReminderScheduler:
                     joinedload(AppointmentReminder.appointment).joinedload(Appointment.doctor),
                     joinedload(AppointmentReminder.appointment).joinedload(Appointment.office)
                 ).all()
+                
+                # Log periodic status every 10 loops (every ~10 minutes)
+                loop_count += 1
+                if loop_count % 10 == 0:
+                    api_logger.debug(
+                        "🔄 Scheduler loop running",
+                        extra={"reminders_found": len(reminders), "loop_count": loop_count}
+                    )
                 
                 # Check reminders (only log when actually sending)
                 for reminder in reminders:
@@ -116,6 +126,7 @@ class AutoReminderScheduler:
     def start(self) -> None:
         if self._task is None or self._task.done():
             self._task = asyncio.create_task(self._run_loop())
+            api_logger.info("✅ Auto reminder scheduler task created")
 
     def stop(self) -> None:
         if self._task and not self._task.done():
@@ -128,9 +139,11 @@ _scheduler = AutoReminderScheduler()
 
 def start_auto_reminder_scheduler(app=None) -> None:
     """Start the auto reminder loop and optionally store it in app.state."""
+    api_logger.info("🚀 Starting auto reminder scheduler...")
     _scheduler.start()
     if app is not None:
         setattr(app.state, "auto_reminder_scheduler", _scheduler)
+    api_logger.info("✅ Auto reminder scheduler initialized")
 
 
 def stop_auto_reminder_scheduler(app=None) -> None:

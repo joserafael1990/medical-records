@@ -18,6 +18,11 @@ class WhatsAppService:
         
         if not self.phone_id or not self.access_token:
             logger.warning("WhatsApp credentials not configured. Service will not work.")
+        else:
+            # Log successful initialization (mask sensitive data)
+            phone_id_masked = f"{self.phone_id[:4]}...{self.phone_id[-4:]}" if len(self.phone_id) > 8 else "***"
+            token_masked = f"{self.access_token[:10]}...{self.access_token[-4:]}" if len(self.access_token) > 14 else "***"
+            logger.info(f"✅ WhatsApp Meta service initialized - Phone ID: {phone_id_masked}, Token: {token_masked}, API: {self.api_version}")
     
     def _get_headers(self) -> Dict[str, str]:
         """Obtener headers para peticiones a la API"""
