@@ -56,34 +56,46 @@ class ConsultationService:
         Get list of consultations for a specific doctor
         """
         try:
-            api_logger.debug("Fetching consultations from database", doctor_id=doctor_id, skip=skip, limit=limit)
+            api_logger.info("🔍 Fetching consultations from database", doctor_id=doctor_id, skip=skip, limit=limit)
             
             # Query medical records (consultations) from database
             # Optimize: Only load necessary fields from persons to avoid loading large TEXT fields unnecessarily
             # Use load_only to reduce data transfer and improve query performance
-            consultations = db.query(MedicalRecord).options(
-                joinedload(MedicalRecord.patient).load_only(
-                    Person.id, Person.name, Person.email, Person.primary_phone,
-                    Person.person_code, Person.person_type, Person.birth_date,
-                    Person.gender, Person.civil_status, Person.birth_city,
-                    Person.birth_state_id, Person.birth_country_id,
-                    Person.home_address, Person.address_city, Person.address_state_id,
-                    Person.address_country_id, Person.address_postal_code,
-                    Person.avatar_type, Person.avatar_template_key, Person.avatar_file_path,
-                    Person.insurance_provider, Person.insurance_number,
-                    Person.emergency_contact_name, Person.emergency_contact_phone,
-                    Person.emergency_contact_relationship, Person.is_active
-                ),
-                joinedload(MedicalRecord.doctor).load_only(
-                    Person.id, Person.name, Person.email, Person.primary_phone,
-                    Person.person_code, Person.person_type, Person.title,
-                    Person.specialty_id, Person.university, Person.graduation_year
-                ).joinedload(Person.offices)
-            ).filter(
-                MedicalRecord.doctor_id == doctor_id
-            ).order_by(MedicalRecord.consultation_date.desc()).offset(skip).limit(limit).all()
+            try:
+                consultations = db.query(MedicalRecord).options(
+                    joinedload(MedicalRecord.patient).load_only(
+                        Person.id, Person.name, Person.email, Person.primary_phone,
+                        Person.person_code, Person.person_type, Person.birth_date,
+                        Person.gender, Person.civil_status, Person.birth_city,
+                        Person.birth_state_id, Person.birth_country_id,
+                        Person.home_address, Person.address_city, Person.address_state_id,
+                        Person.address_country_id, Person.address_postal_code,
+                        Person.avatar_type, Person.avatar_template_key, Person.avatar_file_path,
+                        Person.insurance_provider, Person.insurance_number,
+                        Person.emergency_contact_name, Person.emergency_contact_phone,
+                        Person.emergency_contact_relationship, Person.is_active
+                    ),
+                    joinedload(MedicalRecord.doctor).load_only(
+                        Person.id, Person.name, Person.email, Person.primary_phone,
+                        Person.person_code, Person.person_type, Person.title,
+                        Person.specialty_id, Person.university, Person.graduation_year
+                    ).joinedload(Person.offices),
+                    joinedload(MedicalRecord.patient_document)
+                ).filter(
+                    MedicalRecord.doctor_id == doctor_id
+                ).order_by(MedicalRecord.consultation_date.desc()).offset(skip).limit(limit).all()
+                
+                api_logger.info("✅ Query executed successfully", doctor_id=doctor_id, count=len(consultations))
+            except Exception as query_error:
+                api_logger.error(
+                    "❌ Query failed",
+                    doctor_id=doctor_id,
+                    error=str(query_error),
+                    exc_info=True
+                )
+                raise
             
-            api_logger.debug("Found consultations in database", doctor_id=doctor_id, count=len(consultations))
+            api_logger.info("📊 Found consultations in database", doctor_id=doctor_id, count=len(consultations))
             
             # Transform to API format using helper functions
             result = []
@@ -144,10 +156,45 @@ class ConsultationService:
                     api_logger.error("Error processing consultation", consultation_id=consultation.id, error=str(e), exc_info=True)
                     continue
             
-            api_logger.info("Returning consultations", doctor_id=doctor_id, count=len(result))
+            api_logger.info(
+                "✅ Returning consultations",
+                extra={
+                    "doctor_id": doctor_id,
+                    "count": len(result),
+                    "result_type": type(result).__name__
+                }
+            )
+            if len(result) == 0 and len(consultations) > 0:
+                api_logger.error(
+                    "❌ CRITICAL: Query returned consultations but result is empty! All consultations failed to process.",
+                    extra={
+                        "doctor_id": doctor_id,
+                        "consultations_found": len(consultations),
+                        "result_count": len(result),
+                        "message": "This indicates all consultations failed during processing (decryption, formatting, etc.)"
+                    }
+                )
+            elif len(result) == 0 and len(consultations) == 0:
+                api_logger.info(
+                    "ℹ️ No consultations found for doctor",
+                    extra={
+                        "doctor_id": doctor_id,
+                        "skip": skip,
+                        "limit": limit
+                    }
+                )
             return result
         except Exception as e:
-            api_logger.error("Error in get_consultations", doctor_id=doctor_id, error=str(e), exc_info=True)
+            api_logger.error(
+                "❌ Error in get_consultations",
+                extra={
+                    "doctor_id": doctor_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__
+                },
+                exc_info=True
+            )
+            # Return empty list to prevent frontend crash, but log the error
             return []
 
     @staticmethod

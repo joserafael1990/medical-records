@@ -32,13 +32,42 @@ async def get_consultations(
     limit: int = Query(100)
 ):
     """Get list of consultations"""
-    return ConsultationService.get_consultations_for_doctor(
-        db=db,
-        doctor_id=current_user.id,
-        skip=skip,
-        limit=limit,
-        decrypt_sensitive_data_fn=decrypt_sensitive_data
+    api_logger.info(
+        "📋 GET /consultations called",
+        extra={
+            "doctor_id": current_user.id,
+            "skip": skip,
+            "limit": limit,
+            "user_type": current_user.person_type
+        }
     )
+    try:
+        result = ConsultationService.get_consultations_for_doctor(
+            db=db,
+            doctor_id=current_user.id,
+            skip=skip,
+            limit=limit,
+            decrypt_sensitive_data_fn=decrypt_sensitive_data
+        )
+        api_logger.info(
+            "✅ GET /consultations returning result",
+            extra={
+                "doctor_id": current_user.id,
+                "result_count": len(result) if result else 0,
+                "result_is_list": isinstance(result, list)
+            }
+        )
+        return result
+    except Exception as e:
+        api_logger.error(
+            "❌ GET /consultations error",
+            extra={
+                "doctor_id": current_user.id,
+                "error": str(e)
+            },
+            exc_info=True
+        )
+        raise
 
 
 @router.get("/consultations/{consultation_id}")
