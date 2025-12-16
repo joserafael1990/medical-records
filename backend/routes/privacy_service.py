@@ -81,6 +81,7 @@ def check_if_first_appointment(db: Session, patient_id: int, doctor_id: int, cur
     """
     Check if this is the patient's first appointment with this doctor
     Excludes the current appointment being created if provided
+    Excludes cancelled appointments (so patients can rebook first-time if previous was cancelled)
     
     Args:
         db: Database session
@@ -96,7 +97,8 @@ def check_if_first_appointment(db: Session, patient_id: int, doctor_id: int, cur
         
         query = db.query(Appointment).filter(
             Appointment.patient_id == patient_id,
-            Appointment.doctor_id == doctor_id
+            Appointment.doctor_id == doctor_id,
+            Appointment.status != 'cancelled'  # Exclude cancelled appointments
         )
         
         if current_appointment_id:
