@@ -276,7 +276,7 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
 
       <DialogActions>
         <Button onClick={onClose} disabled={currentLoading}>
-          Cancelar
+          Cerrar
         </Button>
         <Button
           onClick={handleSubmit}
