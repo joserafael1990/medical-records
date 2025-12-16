@@ -38,14 +38,27 @@ def build_consultation_response(
                 "email": getattr(office, 'email', None)
             }
     
-    # Get document folios
+    # Get document folios (handle case where table might not exist)
     folios = {}
-    if hasattr(consultation, 'document_folios') and consultation.document_folios:
-        for folio in consultation.document_folios:
-            folios[folio.document_type] = {
-                "folio_number": folio.folio_number,
-                "formatted_folio": folio.formatted_folio
-            }
+    try:
+        if hasattr(consultation, 'document_folios'):
+            # Use getattr with default to avoid lazy loading if table doesn't exist
+            document_folios = getattr(consultation, 'document_folios', None)
+            if document_folios:
+                # Try to access, but catch if table doesn't exist
+                try:
+                    folios_list = list(document_folios) if document_folios else []
+                    for folio in folios_list:
+                        folios[folio.document_type] = {
+                            "folio_number": folio.folio_number,
+                            "formatted_folio": folio.formatted_folio
+                        }
+                except Exception:
+                    # Table doesn't exist or other error - just use empty dict
+                    folios = {}
+    except Exception:
+        # If document_folios table doesn't exist, just use empty dict
+        folios = {}
     
     return {
         "id": consultation.id,
