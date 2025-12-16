@@ -314,6 +314,12 @@ async def get_patient_vital_signs_history(
     current_user: Person = Depends(get_current_user)
 ):
     """Get historical vital signs for a patient, grouped by vital sign type"""
+    import traceback
+    
+    # #region agent log
+    api_logger.info("DEBUG: Function entry", extra={"hypothesisId":"A","location":"vital_signs.py:310","patient_id":patient_id,"doctor_id":current_user.id})
+    # #endregion
+    
     api_logger.info(
         "Getting patient vital signs history",
         doctor_id=current_user.id,
@@ -322,19 +328,35 @@ async def get_patient_vital_signs_history(
     
     try:
         # Verify patient exists and user has access (doctor can only access own patients)
+        # #region agent log
+        api_logger.debug("DEBUG: Before patient query", extra={"hypothesisId":"A","location":"vital_signs.py:325","patient_id":patient_id})
+        # #endregion
+        
         patient = db.query(Person).filter(
             Person.id == patient_id,
             Person.person_type == 'patient'
         ).first()
         
+        # #region agent log
+        api_logger.debug("DEBUG: After patient query", extra={"hypothesisId":"A","location":"vital_signs.py:332","patient_found":patient is not None,"patient_name":patient.name if patient else None})
+        # #endregion
+        
         if not patient:
             raise HTTPException(status_code=404, detail="Patient not found")
         
         # Get all consultations for this patient created by the current doctor
+        # #region agent log
+        api_logger.debug("DEBUG: Before consultations query", extra={"hypothesisId":"B","location":"vital_signs.py:338","patient_id":patient_id,"doctor_id":current_user.id})
+        # #endregion
+        
         consultations = db.query(MedicalRecord).filter(
             MedicalRecord.patient_id == patient_id,
             MedicalRecord.doctor_id == current_user.id
         ).order_by(MedicalRecord.consultation_date.asc()).all()
+        
+        # #region agent log
+        api_logger.debug("DEBUG: After consultations query", extra={"hypothesisId":"B","location":"vital_signs.py:345","consultations_count":len(consultations),"consultation_ids":[c.id for c in consultations]})
+        # #endregion
         
         if not consultations:
             return {
@@ -345,20 +367,43 @@ async def get_patient_vital_signs_history(
         
         # Get all vital signs for these consultations with vital_sign relationship loaded
         consultation_ids = [c.id for c in consultations]
+        
+        # #region agent log
+        api_logger.debug("DEBUG: Before vital signs query", extra={"hypothesisId":"C","location":"vital_signs.py:352","consultation_ids":consultation_ids})
+        # #endregion
+        
         vital_signs = db.query(ConsultationVitalSign).options(
             joinedload(ConsultationVitalSign.vital_sign)
         ).filter(
             ConsultationVitalSign.consultation_id.in_(consultation_ids)
         ).all()
         
+        # #region agent log
+        api_logger.debug("DEBUG: After vital signs query", extra={"hypothesisId":"C","location":"vital_signs.py:359","vital_signs_count":len(vital_signs),"sample_vital_signs":[{"id":vs.id,"vital_sign_id":vs.vital_sign_id,"has_vital_sign":vs.vital_sign is not None} for vs in vital_signs[:5]]})
+        # #endregion
+        
         # Create a map of consultation_id to date for sorting
         consultation_date_map = {c.id: c.consultation_date for c in consultations}
         
+        # #region agent log
+        api_logger.debug("DEBUG: Created consultation_date_map", extra={"hypothesisId":"D","location":"vital_signs.py:365","map_size":len(consultation_date_map),"sample_dates":{str(k):str(v) if v else None for k,v in list(consultation_date_map.items())[:3]}})
+        # #endregion
+        
         # Group by vital sign type
         history_by_type = {}
+        vs_count = 0
         for vs in vital_signs:
+            vs_count += 1
+            # #region agent log
+            if vs_count <= 3:  # Only log first 3 to avoid spam
+                api_logger.debug("DEBUG: Processing vital sign", extra={"hypothesisId":"E","location":"vital_signs.py:373","vs_id":vs.id,"vs_count":vs_count,"vital_sign_id":vs.vital_sign_id,"has_vital_sign":vs.vital_sign is not None,"consultation_id":vs.consultation_id})
+            # #endregion
+            
             # Safely access vital_sign relationship
             if not vs.vital_sign:
+                # #region agent log
+                api_logger.warning("DEBUG: Skipping vs with no vital_sign relationship", extra={"hypothesisId":"C","location":"vital_signs.py:376","vs_id":vs.id,"vital_sign_id":vs.vital_sign_id})
+                # #endregion
                 continue
             vital_sign_name = vs.vital_sign.name
             vital_sign_id = vs.vital_sign_id
@@ -373,21 +418,42 @@ async def get_patient_vital_signs_history(
             # Get consultation date
             consultation_date = consultation_date_map.get(vs.consultation_id) or vs.created_at
             
+            # #region agent log
+            if vs_count <= 3:  # Only log first 3
+                api_logger.debug("DEBUG: Before date conversion", extra={"hypothesisId":"D","location":"vital_signs.py:392","consultation_id":vs.consultation_id,"consultation_date":str(consultation_date) if consultation_date else None,"vs_created_at":str(vs.created_at) if vs.created_at else None,"date_type":type(consultation_date).__name__ if consultation_date else None})
+            # #endregion
+            
             # Convert value to float if possible
             try:
                 numeric_value = float(vs.value) if vs.value else None
-            except (ValueError, TypeError):
+            except (ValueError, TypeError) as ve:
+                # #region agent log
+                api_logger.warning("DEBUG: Value conversion error", extra={"hypothesisId":"E","location":"vital_signs.py:399","vs_id":vs.id,"value":vs.value,"value_type":type(vs.value).__name__,"error":str(ve)})
+                # #endregion
                 numeric_value = None
+            
+            # Convert date to ISO format
+            try:
+                date_str = consultation_date.isoformat() if consultation_date else None
+            except Exception as de:
+                # #region agent log
+                api_logger.error("DEBUG: Date isoformat error", extra={"hypothesisId":"D","location":"vital_signs.py:407","consultation_id":vs.consultation_id,"consultation_date":str(consultation_date) if consultation_date else None,"date_type":type(consultation_date).__name__ if consultation_date else None,"error":str(de),"traceback":traceback.format_exc()}, exc_info=True)
+                # #endregion
+                date_str = None
             
             history_by_type[vital_sign_id]["data"].append({
                 "value": numeric_value,
                 "unit": vs.unit or "",
-                "date": consultation_date.isoformat() if consultation_date else None,
+                "date": date_str,
                 "consultation_id": vs.consultation_id
             })
         
         # Convert to list format
         vital_signs_history = list(history_by_type.values())
+        
+        # #region agent log
+        api_logger.info("DEBUG: Function exit success", extra={"hypothesisId":"A","location":"vital_signs.py:425","vital_signs_count":len(vital_signs_history)})
+        # #endregion
         
         api_logger.info(
             "Patient vital signs history loaded",
@@ -405,6 +471,10 @@ async def get_patient_vital_signs_history(
     except HTTPException:
         raise
     except Exception as e:
+        # #region agent log
+        api_logger.error("DEBUG: Exception caught", extra={"hypothesisId":"F","location":"vital_signs.py:440","error":str(e),"error_type":type(e).__name__,"traceback":traceback.format_exc()}, exc_info=True)
+        # #endregion
+        
         api_logger.error(
             "Error getting patient vital signs history",
             doctor_id=current_user.id,
