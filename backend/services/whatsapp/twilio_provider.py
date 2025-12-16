@@ -18,7 +18,8 @@ class TwilioWhatsAppService:
         self._client = None
 
         if not (self.account_sid and self.auth_token and self.whatsapp_from):
-            logger.warning("Twilio WhatsApp not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM")
+            # Only log as debug, not warning, since Twilio is optional
+            logger.debug("Twilio WhatsApp not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM")
 
         # Inicializar cliente de forma lazy para evitar fallo si no está instalado
         try:

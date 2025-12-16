@@ -13,8 +13,9 @@ import os
 api_logger = get_logger("api")
 
 # Initialize WhatsApp services
+# Only instantiate Twilio if it's actually being used to avoid unnecessary warnings
 whatsapp_service = WhatsAppService()
-twilio_service = TwilioWhatsAppService()
+# twilio_service will be created lazily only if needed (see send_appointment_reminder method)
 
 class WhatsAppBusinessService:
     
