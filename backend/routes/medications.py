@@ -5,6 +5,7 @@ Migrated from main_clean_english.py to improve code organization
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from typing import List, Optional
 
 from database import get_db, Person, Medication
@@ -30,7 +31,13 @@ async def get_medications(
     )
 
     try:
-        query = db.query(Medication).filter(Medication.created_by == current_user.id)
+        # Show system medications (created_by=0) OR doctor's own medications (created_by=doctor_id)
+        query = db.query(Medication).filter(
+            or_(
+                Medication.created_by == 0,
+                Medication.created_by == current_user.id
+            )
+        )
 
         if search:
             search_pattern = f"%{search.strip()}%"
