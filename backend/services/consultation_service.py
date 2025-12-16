@@ -3,7 +3,7 @@ Consultation Service - Refactored to use modular utilities
 Provides comprehensive consultation management functionality
 """
 from typing import Dict, List, Any
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, load_only
 from datetime import timedelta
 from fastapi import HTTPException
 
@@ -59,9 +59,26 @@ class ConsultationService:
             api_logger.debug("Fetching consultations from database", doctor_id=doctor_id, skip=skip, limit=limit)
             
             # Query medical records (consultations) from database
+            # Optimize: Only load necessary fields from persons to avoid loading large TEXT fields unnecessarily
+            # Use load_only to reduce data transfer and improve query performance
             consultations = db.query(MedicalRecord).options(
-                joinedload(MedicalRecord.patient),
-                joinedload(MedicalRecord.doctor)
+                joinedload(MedicalRecord.patient).load_only(
+                    Person.id, Person.name, Person.email, Person.primary_phone,
+                    Person.person_code, Person.person_type, Person.birth_date,
+                    Person.gender, Person.civil_status, Person.birth_city,
+                    Person.birth_state_id, Person.birth_country_id,
+                    Person.home_address, Person.address_city, Person.address_state_id,
+                    Person.address_country_id, Person.address_postal_code,
+                    Person.avatar_type, Person.avatar_template_key, Person.avatar_file_path,
+                    Person.insurance_provider, Person.insurance_number,
+                    Person.emergency_contact_name, Person.emergency_contact_phone,
+                    Person.emergency_contact_relationship, Person.is_active
+                ),
+                joinedload(MedicalRecord.doctor).load_only(
+                    Person.id, Person.name, Person.email, Person.primary_phone,
+                    Person.person_code, Person.person_type, Person.title,
+                    Person.specialty_id, Person.university, Person.graduation_year
+                ).joinedload(Person.offices)
             ).filter(
                 MedicalRecord.doctor_id == doctor_id
             ).order_by(MedicalRecord.consultation_date.desc()).offset(skip).limit(limit).all()
@@ -151,9 +168,25 @@ class ConsultationService:
             )
             
             # Query specific medical record
+            # Optimize: Only load necessary fields from persons to avoid loading large TEXT fields unnecessarily
             consultation = db.query(MedicalRecord).options(
-                joinedload(MedicalRecord.patient),
-                joinedload(MedicalRecord.doctor)
+                joinedload(MedicalRecord.patient).load_only(
+                    Person.id, Person.name, Person.email, Person.primary_phone,
+                    Person.person_code, Person.person_type, Person.birth_date,
+                    Person.gender, Person.civil_status, Person.birth_city,
+                    Person.birth_state_id, Person.birth_country_id,
+                    Person.home_address, Person.address_city, Person.address_state_id,
+                    Person.address_country_id, Person.address_postal_code,
+                    Person.avatar_type, Person.avatar_template_key, Person.avatar_file_path,
+                    Person.insurance_provider, Person.insurance_number,
+                    Person.emergency_contact_name, Person.emergency_contact_phone,
+                    Person.emergency_contact_relationship, Person.is_active
+                ),
+                joinedload(MedicalRecord.doctor).load_only(
+                    Person.id, Person.name, Person.email, Person.primary_phone,
+                    Person.person_code, Person.person_type, Person.title,
+                    Person.specialty_id, Person.university, Person.graduation_year
+                ).joinedload(Person.offices)
             ).filter(
                 MedicalRecord.id == consultation_id,
                 MedicalRecord.doctor_id == doctor_id

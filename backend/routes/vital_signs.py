@@ -4,7 +4,7 @@ Migrated from main_clean_english.py to improve code organization
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Body
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, load_only
 from typing import Optional
 from datetime import datetime
 
@@ -349,7 +349,10 @@ async def get_patient_vital_signs_history(
         api_logger.debug("DEBUG: Before consultations query", extra={"hypothesisId":"B","location":"vital_signs.py:338","patient_id":patient_id,"doctor_id":current_user.id})
         # #endregion
         
-        consultations = db.query(MedicalRecord).filter(
+        # Only load id and consultation_date to avoid loading all columns (some may be missing in DB)
+        consultations = db.query(MedicalRecord).options(
+            load_only(MedicalRecord.id, MedicalRecord.consultation_date)
+        ).filter(
             MedicalRecord.patient_id == patient_id,
             MedicalRecord.doctor_id == current_user.id
         ).order_by(MedicalRecord.consultation_date.asc()).all()

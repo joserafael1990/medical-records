@@ -22,7 +22,7 @@ class AutoReminderScheduler:
 
     async def _run_loop(self) -> None:
         await asyncio.sleep(5)
-        api_logger.info("🔄 Auto reminder scheduler started")
+        api_logger.info("🔄 Auto reminder scheduler started", extra={"scheduler": "AutoReminderScheduler"})
         loop_count = 0
         while True:
             try:
@@ -48,9 +48,15 @@ class AutoReminderScheduler:
                 # Log periodic status every 10 loops (every ~10 minutes)
                 loop_count += 1
                 if loop_count % 10 == 0:
-                    api_logger.debug(
+                    api_logger.info(
                         "🔄 Scheduler loop running",
-                        extra={"reminders_found": len(reminders), "loop_count": loop_count}
+                        extra={"reminders_found": len(reminders), "loop_count": loop_count, "current_time": now.isoformat()}
+                    )
+                elif loop_count == 1:
+                    # Log first loop to confirm scheduler is running
+                    api_logger.info(
+                        "🔄 Scheduler first loop completed",
+                        extra={"reminders_found": len(reminders), "current_time": now.isoformat()}
                     )
                 
                 # Check reminders (only log when actually sending)
@@ -63,9 +69,22 @@ class AutoReminderScheduler:
                         )
                         continue
                     
-                    # Check reminder (only log when actually sending)
+                    # Check reminder (log when checking, not just when sending)
+                    should_send = AppointmentService.should_send_reminder_by_id(reminder, appointment)
+                    if not should_send and loop_count % 10 == 0:
+                        # Log why reminder is not being sent (only every 10 loops to avoid spam)
+                        api_logger.debug(
+                            "⏳ Reminder not ready yet",
+                            extra={
+                                "reminder_id": reminder.id,
+                                "appointment_id": appointment.id,
+                                "appointment_date": appointment.appointment_date.isoformat() if appointment.appointment_date else None,
+                                "offset_minutes": reminder.offset_minutes,
+                                "current_time": now.isoformat()
+                            }
+                        )
                     
-                    if appointment and AppointmentService.should_send_reminder_by_id(reminder, appointment):
+                    if appointment and should_send:
                         api_logger.info(
                             "📤 Sending reminder",
                             extra={
@@ -120,7 +139,11 @@ class AutoReminderScheduler:
                 
                 db.close()
             except Exception as e:
-                api_logger.error("⚠️ Auto reminder loop error", exc_info=True)
+                api_logger.error(
+                    "⚠️ Auto reminder loop error",
+                    extra={"error": str(e), "error_type": type(e).__name__},
+                    exc_info=True
+                )
             await asyncio.sleep(60)
 
     def start(self) -> None:
