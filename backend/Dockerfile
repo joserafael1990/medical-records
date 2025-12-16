@@ -7,6 +7,17 @@ WORKDIR /app
 # ----------- Builder stage -----------
 FROM base AS builder
 
+# Accept build args that Coolify might pass (even though we don't use them at build time)
+# These are runtime secrets, but Coolify passes them as build args
+ARG META_WHATSAPP_VERIFY_TOKEN
+ARG META_WHATSAPP_TOKEN
+ARG META_WHATSAPP_APP_SECRET
+ARG SECRET_KEY
+ARG JWT_SECRET_KEY
+ARG SENTRY_DSN_BACKEND
+ARG DATABASE_URL
+ARG MEDICAL_ENCRYPTION_KEY
+
 # Instalar dependencias para COMPILAR (gcc, etc) + Image processing libraries for Pillow
 RUN apt-get update && apt-get install -y \
     build-essential \
