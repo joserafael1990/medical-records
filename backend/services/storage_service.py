@@ -184,13 +184,27 @@ class S3StorageService(StorageService):
                 self.s3_client = boto3.client('s3', config=config)
                 auth_method = 'default_credentials'
             
+            # Try to get caller identity to verify credentials
+            try:
+                sts_client = boto3.client('sts', config=config)
+                if access_key_id and secret_access_key:
+                    sts_client = boto3.client('sts', 
+                                             aws_access_key_id=access_key_id,
+                                             aws_secret_access_key=secret_access_key,
+                                             config=config)
+                caller_identity = sts_client.get_caller_identity()
+                caller_arn = caller_identity.get('Arn', 'unknown')
+            except Exception as sts_error:
+                caller_arn = f"Error getting identity: {str(sts_error)}"
+            
             # #region agent log
             logger.info("DEBUG: S3 client initialized",
                        bucket_name=bucket_name,
                        region=region,
                        auth_method=auth_method,
                        has_access_key=bool(access_key_id),
-                       has_secret_key=bool(secret_access_key))
+                       has_secret_key=bool(secret_access_key),
+                       caller_arn=caller_arn)
             # #endregion
             
             logger.info(f"S3 storage service initialized for bucket: {bucket_name}")
@@ -225,6 +239,14 @@ class S3StorageService(StorageService):
         extra_args['ServerSideEncryption'] = 'AES256'
         
         try:
+            # #region agent log
+            logger.debug("DEBUG: S3 put_object call details",
+                        bucket_name=self.bucket_name,
+                        key=key,
+                        extra_args_keys=list(extra_args.keys()),
+                        server_side_encryption=extra_args.get('ServerSideEncryption'))
+            # #endregion
+            
             self.s3_client.put_object(
                 Bucket=self.bucket_name,
                 Key=key,
@@ -240,12 +262,19 @@ class S3StorageService(StorageService):
             return key
         except Exception as upload_error:
             # #region agent log
-            logger.error("DEBUG: S3 upload failed",
+            error_code = None
+            error_message = str(upload_error)
+            if hasattr(upload_error, 'response'):
+                error_code = upload_error.response.get('Error', {}).get('Code')
+                error_message = upload_error.response.get('Error', {}).get('Message', error_message)
+            logger.error("DEBUG: S3 upload failed - detailed",
                         bucket_name=self.bucket_name,
                         key=key,
                         file_size=len(file_content),
-                        error=str(upload_error),
+                        error=error_message,
+                        error_code=error_code,
                         error_type=type(upload_error).__name__,
+                        server_side_encryption=extra_args.get('ServerSideEncryption'),
                         exc_info=True)
             # #endregion
             raise
