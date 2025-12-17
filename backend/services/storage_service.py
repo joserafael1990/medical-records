@@ -234,9 +234,10 @@ class S3StorageService(StorageService):
         if content_type:
             extra_args['ContentType'] = content_type
         
-        # Use SSE-S3 (AES256) encryption instead of KMS to avoid KMS permission issues
-        # This uses S3-managed encryption keys which don't require KMS permissions
-        extra_args['ServerSideEncryption'] = 'AES256'
+        # Try without explicit encryption first - let bucket use its default encryption
+        # If bucket has default encryption set, it will use that
+        # Only specify if we need to override bucket default (commented out for now)
+        # extra_args['ServerSideEncryption'] = 'AES256'
         
         try:
             # #region agent log
