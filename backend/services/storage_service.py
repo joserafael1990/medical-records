@@ -220,6 +220,10 @@ class S3StorageService(StorageService):
         if content_type:
             extra_args['ContentType'] = content_type
         
+        # Use SSE-S3 (AES256) encryption instead of KMS to avoid KMS permission issues
+        # This uses S3-managed encryption keys which don't require KMS permissions
+        extra_args['ServerSideEncryption'] = 'AES256'
+        
         try:
             self.s3_client.put_object(
                 Bucket=self.bucket_name,
