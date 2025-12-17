@@ -7,9 +7,9 @@ import uuid
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Optional, BinaryIO, Union
-import logging
+from logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger("medical_records.storage")
 
 
 class StorageService(ABC):
