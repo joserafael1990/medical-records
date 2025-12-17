@@ -603,8 +603,26 @@ async def upload_clinical_study_file(
         if len(content) == 0:
             raise HTTPException(status_code=400, detail="Archivo vacío no permitido")
         
+        # #region agent log
+        api_logger.debug("DEBUG: Before get_storage_service", study_id=study_id, filename=file.filename, content_size=len(content))
+        # #endregion
+
         # Get storage service (S3 in production, local in development)
-        storage = get_storage_service()
+        try:
+            storage = get_storage_service()
+            # #region agent log
+            storage_type = type(storage).__name__
+            api_logger.info("DEBUG: Storage service initialized", storage_type=storage_type, study_id=study_id)
+            # #endregion
+        except Exception as storage_init_error:
+            # #region agent log
+            api_logger.error("DEBUG: Storage service init failed", 
+                           study_id=study_id, 
+                           error=str(storage_init_error), 
+                           error_type=type(storage_init_error).__name__,
+                           exc_info=True)
+            # #endregion
+            raise
         
         # Delete old file if it exists (prevent orphaned files)
         if study.file_path:
@@ -616,7 +634,24 @@ async def upload_clinical_study_file(
 
         # Generate storage key and upload file
         storage_key = generate_storage_key("clinical_studies", file.filename)
-        storage.upload(content, storage_key, content_type=file.content_type)
+        # #region agent log
+        api_logger.debug("DEBUG: Before storage.upload", storage_key=storage_key, content_size=len(content), content_type=file.content_type)
+        # #endregion
+
+        try:
+            storage.upload(content, storage_key, content_type=file.content_type)
+            # #region agent log
+            api_logger.info("DEBUG: storage.upload successful", storage_key=storage_key)
+            # #endregion
+        except Exception as upload_error:
+            # #region agent log
+            api_logger.error("DEBUG: storage.upload failed",
+                           storage_key=storage_key,
+                           error=str(upload_error),
+                           error_type=type(upload_error).__name__,
+                           exc_info=True)
+            # #endregion
+            raise
         
         # Update study with file information
         # file_path now stores the storage key (works for both local and S3)
@@ -636,8 +671,25 @@ async def upload_clinical_study_file(
         study.updated_at = utc_now()
         
         
-        db.commit()
-        db.refresh(study)
+        # #region agent log
+        api_logger.debug("DEBUG: Before db.commit", study_id=study_id, file_path=storage_key, file_name=file.filename)
+        # #endregion
+
+        try:
+            db.commit()
+            db.refresh(study)
+            # #region agent log
+            api_logger.info("DEBUG: db.commit successful", study_id=study_id)
+            # #endregion
+        except Exception as db_error:
+            # #region agent log
+            api_logger.error("DEBUG: db.commit failed",
+                           study_id=study_id,
+                           error=str(db_error),
+                           error_type=type(db_error).__name__,
+                           exc_info=True)
+            # #endregion
+            raise
         
         api_logger.info("File uploaded successfully for study", study_id=study_id, filename=file.filename, size=len(content))
         
@@ -651,9 +703,20 @@ async def upload_clinical_study_file(
     except HTTPException:
         raise
     except Exception as e:
+        # #region agent log
+        filename_value = file.filename if 'file' in locals() else None
+        api_logger.error("DEBUG: Exception in upload handler",
+                       study_id=study_id,
+                       filename=filename_value,
+                       error=str(e),
+                       error_type=type(e).__name__,
+                       exc_info=True)
+        # #endregion
         api_logger.error("Error uploading file for study", study_id=study_id, error=str(e), exc_info=True)
         db.rollback()
-        raise HTTPException(status_code=500, detail="Error uploading file")
+        # Include more error detail in response for debugging (remove in production if sensitive)
+        error_detail = f"Error uploading file: {str(e)}" if os.getenv("APP_ENV", "development") == "development" else "Error uploading file"
+        raise HTTPException(status_code=500, detail=error_detail)
 
 
 @router.get("/clinical-studies/{study_id}/file")

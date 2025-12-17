@@ -170,34 +170,81 @@ class S3StorageService(StorageService):
             retries={'max_attempts': 3, 'mode': 'standard'}
         )
         
-        if access_key_id and secret_access_key:
-            self.s3_client = boto3.client(
-                's3',
-                aws_access_key_id=access_key_id,
-                aws_secret_access_key=secret_access_key,
-                config=config
-            )
-        else:
-            # Use default credentials (IAM role, environment variables, etc.)
-            self.s3_client = boto3.client('s3', config=config)
-        
-        logger.info(f"S3 storage service initialized for bucket: {bucket_name}")
+        try:
+            if access_key_id and secret_access_key:
+                self.s3_client = boto3.client(
+                    's3',
+                    aws_access_key_id=access_key_id,
+                    aws_secret_access_key=secret_access_key,
+                    config=config
+                )
+                auth_method = 'explicit_credentials'
+            else:
+                # Use default credentials (IAM role, environment variables, etc.)
+                self.s3_client = boto3.client('s3', config=config)
+                auth_method = 'default_credentials'
+            
+            # #region agent log
+            logger.info("DEBUG: S3 client initialized",
+                       bucket_name=bucket_name,
+                       region=region,
+                       auth_method=auth_method,
+                       has_access_key=bool(access_key_id),
+                       has_secret_key=bool(secret_access_key))
+            # #endregion
+            
+            logger.info(f"S3 storage service initialized for bucket: {bucket_name}")
+        except Exception as init_error:
+            # #region agent log
+            logger.error("DEBUG: S3 client init failed",
+                        bucket_name=bucket_name,
+                        region=region,
+                        error=str(init_error),
+                        error_type=type(init_error).__name__,
+                        exc_info=True)
+            # #endregion
+            raise
     
     def upload(self, file_content: bytes, key: str, content_type: Optional[str] = None) -> str:
         """Upload a file to S3"""
+        # #region agent log
+        logger.debug("DEBUG: S3 upload start",
+                    bucket_name=self.bucket_name,
+                    key=key,
+                    content_type=content_type,
+                    file_size=len(file_content),
+                    region=self.region)
+        # #endregion
+        
         extra_args = {}
         if content_type:
             extra_args['ContentType'] = content_type
         
-        self.s3_client.put_object(
-            Bucket=self.bucket_name,
-            Key=key,
-            Body=file_content,
-            **extra_args
-        )
-        
-        logger.info(f"S3 storage: uploaded file to s3://{self.bucket_name}/{key}")
-        return key
+        try:
+            self.s3_client.put_object(
+                Bucket=self.bucket_name,
+                Key=key,
+                Body=file_content,
+                **extra_args
+            )
+            
+            # #region agent log
+            logger.info("DEBUG: S3 upload successful", bucket_name=self.bucket_name, key=key)
+            # #endregion
+            
+            logger.info(f"S3 storage: uploaded file to s3://{self.bucket_name}/{key}")
+            return key
+        except Exception as upload_error:
+            # #region agent log
+            logger.error("DEBUG: S3 upload failed",
+                        bucket_name=self.bucket_name,
+                        key=key,
+                        file_size=len(file_content),
+                        error=str(upload_error),
+                        error_type=type(upload_error).__name__,
+                        exc_info=True)
+            # #endregion
+            raise
     
     def download(self, key: str) -> Optional[bytes]:
         """Download a file from S3"""
