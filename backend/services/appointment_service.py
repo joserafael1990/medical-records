@@ -471,7 +471,7 @@ class AppointmentService:
             
             # Check if we're in the send window (2-minute tolerance)
             now = now_cdmx().replace(tzinfo=None)
-            window_end = send_time + timedelta(minutes=2)
+            window_end = send_time + timedelta(hours=6)
             
             should_send = send_time <= now <= window_end
             

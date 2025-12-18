@@ -31,7 +31,7 @@ def should_send_reminder(appointment) -> bool:
         )
         # Estrictamente en la hora programada (tolerancia breve para el loop)
         now = now_cdmx().replace(tzinfo=None)
-        window_end = send_time + timedelta(minutes=2)
+        window_end = send_time + timedelta(hours=6)
         return send_time <= now <= window_end
     except Exception:
         return False
