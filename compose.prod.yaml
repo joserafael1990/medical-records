@@ -61,6 +61,8 @@ services:
 
       - META_WHATSAPP_APP_SECRET=${META_WHATSAPP_APP_SECRET}
       - META_WHATSAPP_VERIFY_TOKEN=${META_WHATSAPP_VERIFY_TOKEN}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - LOG_LEVEL=${LOG_LEVEL:-info}
     # No depends_on needed - using Azure PostgreSQL (external managed database)
 

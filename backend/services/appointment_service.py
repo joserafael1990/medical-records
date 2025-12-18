@@ -274,6 +274,14 @@ class AppointmentService:
         doctor_id: int
     ) -> Dict[str, Any]:
         """Create appointment with optional reminders and privacy notice"""
+        # #region agent log
+        import json
+        log_path = '/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log'
+        try:
+            with open(log_path, 'a') as f:
+                f.write(json.dumps({"location":"appointment_service.py:270","message":"create_appointment_with_reminders entry","data":{"doctor_id":doctor_id,"appointment_date":str(appointment_data.appointment_date) if hasattr(appointment_data,'appointment_date') else None,"appointment_date_type":type(appointment_data.appointment_date).__name__ if hasattr(appointment_data,'appointment_date') else None,"patient_id":appointment_data.patient_id if hasattr(appointment_data,'patient_id') else None,"appointment_type_id":appointment_data.appointment_type_id if hasattr(appointment_data,'appointment_type_id') else None},"timestamp":datetime.now().isoformat(),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"}) + '\n')
+        except: pass
+        # #endregion
         # Extract reminders from appointment_data
         reminders_data = []
         if hasattr(appointment_data, 'reminders') and appointment_data.reminders is not None:
@@ -294,8 +302,20 @@ class AppointmentService:
                 if reminder.offset_minutes <= 0:
                     raise HTTPException(status_code=400, detail="Offset minutes must be greater than 0")
         
+        # #region agent log
+        try:
+            with open(log_path, 'a') as f:
+                f.write(json.dumps({"location":"appointment_service.py:298","message":"calling crud.create_appointment","data":{"doctor_id":doctor_id},"timestamp":datetime.now().isoformat(),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"}) + '\n')
+        except: pass
+        # #endregion
         # Create the appointment
         appointment = crud.create_appointment(db, appointment_data, doctor_id)
+        # #region agent log
+        try:
+            with open(log_path, 'a') as f:
+                f.write(json.dumps({"location":"appointment_service.py:299","message":"crud.create_appointment returned","data":{"appointment_id":appointment.id if appointment else None},"timestamp":datetime.now().isoformat(),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"}) + '\n')
+        except: pass
+        # #endregion
         
         # Create reminders if provided
         if reminders_data:

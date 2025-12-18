@@ -3,7 +3,7 @@ Schemas Pydantic para APIs con nombres en inglés
 Compatible con nueva arquitectura unificada de base de datos
 """
 
-from pydantic import BaseModel, field_validator, EmailStr, ConfigDict
+from pydantic import BaseModel, field_validator, EmailStr, ConfigDict, model_validator
 from typing import Optional, List, Literal, Dict, Any
 from datetime import datetime, date
 from decimal import Decimal
@@ -183,6 +183,16 @@ class PersonBase(BaseSchema):
     gender: Optional[str] = None  # Optional: can be null for first-time appointments
     civil_status: Optional[str] = None
     birth_city: Optional[str] = None
+    
+    @model_validator(mode='before')
+    @classmethod
+    def validate_gender_allow_none(cls, data: Any) -> Any:
+        # Ensure gender can be None in response validation
+        if isinstance(data, dict) and 'gender' in data:
+            # Explicitly allow None - convert empty string to None
+            if data['gender'] is None or data['gender'] == '':
+                data['gender'] = None
+        return data
     
     @field_validator('name')
     @classmethod

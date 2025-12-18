@@ -8,7 +8,7 @@ from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 import os
 
@@ -119,11 +119,14 @@ class GoogleCalendarService:
         if not token_data:
             return None
         
-        # Verificar si el token expiró o está por expirar (5 minutos de margen)
-        needs_refresh = False
         if token_data.token_expires_at:
+            # Asegurar que sea aware para comparación si viene naive de la BD
+            expires_at = token_data.token_expires_at
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            
             # Agregar 5 minutos de margen para refrescar antes de que expire
-            expiry_with_margin = token_data.token_expires_at - timedelta(minutes=5)
+            expiry_with_margin = expires_at - timedelta(minutes=5)
             if expiry_with_margin <= utc_now():
                 needs_refresh = True
         else:

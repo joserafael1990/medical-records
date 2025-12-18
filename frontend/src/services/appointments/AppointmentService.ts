@@ -35,10 +35,22 @@ export class AppointmentService extends ApiBase {
   }
 
   async createAppointment(appointmentData: AppointmentFormData): Promise<Appointment> {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AppointmentService.ts:37',message:'createAppointment called',data:{appointment_date:appointmentData.appointment_date,patient_id:appointmentData.patient_id,appointment_type_id:appointmentData.appointment_type_id,office_id:appointmentData.office_id,consultation_type:appointmentData.consultation_type},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     try {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AppointmentService.ts:39',message:'POST request starting',data:{endpoint:'/api/appointments',payload_keys:Object.keys(appointmentData)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       const response = await this.api.post<Appointment>('/api/appointments', appointmentData);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AppointmentService.ts:42',message:'POST request succeeded',data:{appointment_id:response.data?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       return response.data;
     } catch (error: any) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AppointmentService.ts:44',message:'POST request failed',data:{error_message:error?.message,error_status:error?.response?.status,error_data:error?.response?.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       logger.error('Failed to create appointment:', error);
       throw error;
     }

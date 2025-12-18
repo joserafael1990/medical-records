@@ -259,6 +259,17 @@ async def stream_appointment_events(
     """
     raise HTTPException(status_code=501, detail="SSE endpoint disabled in production mode. Use polling-based updates instead.")
 
+# CORS - MUST be added FIRST (executes last due to reverse order) to handle preflight requests
+# This ensures CORS headers are added to all responses, including error responses
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_get_cors_origins(),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"]
+)
+
 if settings.SECURITY_HEADERS_ENABLED and SECURITY_MIDDLEWARE_AVAILABLE:
     app.add_middleware(
         SecurityMiddleware,
@@ -271,16 +282,6 @@ if settings.SECURITY_HEADERS_ENABLED and SECURITY_MIDDLEWARE_AVAILABLE:
         referrer_policy="strict-origin-when-cross-origin",
         permissions_policy="camera=(), microphone=(), geolocation=()"
     )
-
-# CORS - locked down to explicit origins to prevent credential leakage
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_get_cors_origins(),
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"]
-)
 
 # Add enhanced error handling middleware
 app.add_middleware(ErrorHandlingMiddleware, debug=True)
