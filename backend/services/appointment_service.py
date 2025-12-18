@@ -434,6 +434,20 @@ class AppointmentService:
         
         db.commit()
         
+        # Remove from Google Calendar if exists
+        try:
+            from services.google_calendar_service import GoogleCalendarService
+            GoogleCalendarService.delete_calendar_event(db, doctor_id, appointment_id)
+            api_logger.info(
+                "📅 Removed from Google Calendar",
+                extra={"appointment_id": appointment_id, "doctor_id": doctor_id}
+            )
+        except Exception as e:
+            api_logger.error(
+                "❌ Failed to remove event from Google Calendar", 
+                extra={"appointment_id": appointment_id, "error": str(e)}
+            )
+        
         api_logger.info(
             "🗑️ Appointment cancelled",
             extra={"appointment_id": appointment_id, "doctor_id": doctor_id}
