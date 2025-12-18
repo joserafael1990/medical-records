@@ -103,19 +103,35 @@ async def process_webhook_event(request: Request, db: Session):
                             processed_messages += 1
                             
                     elif message_type == 'text':
-                        text_body = message.get('text', {}).get('body', '').lower()
+                        text_body = message.get('text', {}).get('body', '').lower().strip()
                         
                         api_logger.info(
                             "📱 Received text message from WhatsApp",
-                            extra={"from_phone": from_phone, "text": text_body, "timestamp": timestamp}
+                            extra={
+                                "from_phone": from_phone, 
+                                "text": text_body,
+                                "full_message": message # Enhanced logging
+                            }
                         )
                         
-                        if 'cancel' in text_body or 'cancelar' in text_body:
-                            api_logger.info("🚫 Processing cancellation request", extra={"from_phone": from_phone})
+                        # Robust matching for cancellation
+                        is_cancellation = (
+                            ('cancel' in text_body or 'cancelar' in text_body) and
+                            not any(neg in text_body for neg in ['no ', 'no quiero', 'sin '])
+                        )
+                        
+                        # Robust matching for confirmation
+                        is_confirmation = (
+                            any(word in text_body for word in ['confirm', 'si', 'sí', 'ire', 'iré', 'asistire', 'asistiré', 'asistir']) and
+                            not any(neg in text_body for neg in ['no ', 'no voy', 'no asistire', 'no asistiré'])
+                        )
+                        
+                        if is_cancellation:
+                            api_logger.info("🚫 Cancellation request detected", extra={"from_phone": from_phone, "text": text_body})
                             await process_text_cancellation_request(text_body, from_phone, db)
                             processed_messages += 1
-                        elif 'confirm' in text_body or 'si' in text_body or 'sí' in text_body:
-                            api_logger.info("✅ Processing confirmation request", extra={"from_phone": from_phone})
+                        elif is_confirmation:
+                            api_logger.info("✅ Confirmation request detected", extra={"from_phone": from_phone, "text": text_body})
                             await confirm_appointment_via_whatsapp(None, from_phone, db)
                             processed_messages += 1
                         else:

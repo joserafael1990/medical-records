@@ -286,12 +286,15 @@ async def process_text_cancellation_request(text: str, patient_phone: str, db: S
         matching_patient = find_patient_by_phone(patient_phone, db)
         
         if not matching_patient:
+            api_logger.warning("🚫 Cancellation requested but no matching patient found", extra={"phone": patient_phone})
             return
         
         now = utc_now()
         past_threshold = now - timedelta(days=1)
         future_threshold = now + timedelta(days=7)
         recent_threshold = now - timedelta(hours=2)
+        
+        api_logger.info("🔍 Searching for appointment to cancel", extra={"patient_id": matching_patient.id, "text": text})
         
         appointment_with_recent_reminder = db.query(Appointment).join(
             AppointmentReminder
@@ -307,39 +310,59 @@ async def process_text_cancellation_request(text: str, patient_phone: str, db: S
         ).first()
         
         next_appointment = None
+        selection_reason = ""
+        
         if appointment_with_recent_reminder:
             next_appointment = appointment_with_recent_reminder
+            selection_reason = "recent_reminder"
         else:
+            # First look for confirmed upcoming appointments
             next_appointment = db.query(Appointment).filter(
                 Appointment.patient_id == matching_patient.id,
                 Appointment.status == 'confirmada',
                 Appointment.appointment_date >= past_threshold,
                 Appointment.appointment_date <= future_threshold
             ).order_by(Appointment.appointment_date.asc()).first()
+            selection_reason = "upcoming_confirmed" if next_appointment else ""
             
             if not next_appointment:
+                # Then look for any non-cancelled upcoming appointments
                 next_appointment = db.query(Appointment).filter(
                     Appointment.patient_id == matching_patient.id,
                     Appointment.status != 'cancelled',
                     Appointment.appointment_date >= past_threshold,
                     Appointment.appointment_date <= future_threshold
                 ).order_by(Appointment.appointment_date.asc()).first()
+                selection_reason = "upcoming_any" if next_appointment else ""
             
             if not next_appointment:
+                # Fallback to very recent appointments (up to 7 days ago) if no future ones found
                 recent_date = now - timedelta(days=7)
                 next_appointment = db.query(Appointment).filter(
                     Appointment.patient_id == matching_patient.id,
                     Appointment.status != 'cancelled',
                     Appointment.appointment_date >= recent_date
                 ).order_by(Appointment.appointment_date.desc()).first()
+                selection_reason = "recent_fallback_7d" if next_appointment else ""
         
         if not next_appointment:
+            api_logger.info("ℹ️ No eligible appointment found to cancel", extra={"patient_id": matching_patient.id})
             return
+        
+        api_logger.info(
+            "🚫 Cancelling appointment chosen by text request", 
+            extra={
+                "appointment_id": next_appointment.id, 
+                "selection_reason": selection_reason,
+                "appointment_date": next_appointment.appointment_date.isoformat(),
+                "patient_id": matching_patient.id
+            }
+        )
         
         doctor_id = next_appointment.doctor_id
         
         next_appointment.status = 'cancelled'
-        next_appointment.cancelled_reason = 'cancelled by patient'
+        next_appointment.cancelled_reason = f'cancelled by patient via text: "{text}"'
         next_appointment.cancelled_at = utc_now()
         next_appointment.cancelled_by = matching_patient.id
         next_appointment.updated_at = utc_now()
@@ -348,6 +371,7 @@ async def process_text_cancellation_request(text: str, patient_phone: str, db: S
             db.commit()
             db.refresh(next_appointment)
         except Exception as commit_error:
+            api_logger.error("❌ Error committing cancellation", exc_info=True)
             db.rollback()
             raise commit_error
         
@@ -355,8 +379,11 @@ async def process_text_cancellation_request(text: str, patient_phone: str, db: S
             try:
                 from services.google_calendar_service import GoogleCalendarService
                 GoogleCalendarService.delete_calendar_event(db, doctor_id, next_appointment.id)
-            except Exception as e:
-                api_logger.warning("Error al sincronizar eliminación con Google Calendar (no crítico)", exc_info=True)
+            except Exception as google_error:
+                api_logger.warning("⚠️ Error syncing cancellation with Google Calendar", exc_info=True)
+        
+        api_logger.info("✅ Cancellation successful via text", extra={"appointment_id": next_appointment.id})
         
     except Exception as e:
+        api_logger.error("❌ Critical error in process_text_cancellation_request", exc_info=True)
         db.rollback()

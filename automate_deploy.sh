@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Configuration
-SERVER_IP="134.199.196.165"
+SERVER_IP="134.199.203.7"
 SERVER_USER="root"
 export SERVER_PASS='k5Oso5fl3k8wXx6qEn4QFa368h%$GN'
 PROJECT_DIR="medical-records"
@@ -26,7 +26,7 @@ cat << 'EOF' > deploy_script.exp
 #!/usr/bin/expect -f
 
 set timeout 300
-set ip "134.199.196.165"
+set ip "134.199.203.7"
 set user "root"
 set password $env(SERVER_PASS)
 set file "project.tar.gz"
