@@ -475,8 +475,21 @@ class AppointmentService:
             
             should_send = send_time <= now <= window_end
             
+            if not should_send:
+                # Add debug log for why it's not ready
+                api_logger.info(
+                    "⏳ Reminder not ready",
+                    extra={
+                        "reminder_id": reminder.id,
+                        "send_time": send_time.isoformat(),
+                        "now": now.isoformat(),
+                        "window_end": window_end.isoformat(),
+                        "diff_minutes": (now - send_time).total_seconds() / 60
+                    }
+                )
+            
             if should_send:
-                api_logger.debug(
+                api_logger.info(
                     "📤 Reminder ready to send",
                     extra={
                         "reminder_id": reminder.id,
