@@ -119,6 +119,7 @@ class GoogleCalendarService:
         if not token_data:
             return None
         
+        needs_refresh = False
         if token_data.token_expires_at:
             # Asegurar que sea aware para comparación si viene naive de la BD
             expires_at = token_data.token_expires_at
