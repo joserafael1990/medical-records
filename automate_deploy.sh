@@ -16,7 +16,9 @@ tar -czf project.tar.gz \
     --exclude='build' \
     --exclude='dist' \
     --exclude='__pycache__' \
-    --exclude='*.tar.gz' \
+    --exclude='.env*' \
+    --exclude='*.env' \
+    --exclude='._*' \
     .
 
 echo "🚀 Starting deployment to $SERVER_IP..."
@@ -43,22 +45,22 @@ proc login_handle {} {
 }
 
 # 1. Upload project archive
-spawn scp $file $user@$ip:~/
+spawn scp -o PubkeyAuthentication=no $file $user@$ip:~/
 login_handle
 expect eof
 
 # 2. Upload setup script
-spawn scp $setup_script $user@$ip:~/
+spawn scp -o PubkeyAuthentication=no $setup_script $user@$ip:~/
 login_handle
 expect eof
 
 # 3. Upload production compose file
-spawn scp $compose_file $user@$ip:~/
+spawn scp -o PubkeyAuthentication=no $compose_file $user@$ip:~/
 login_handle
 expect eof
 
 # 4. SSH in to setup and unpack
-spawn ssh $user@$ip
+spawn ssh -o PubkeyAuthentication=no $user@$ip
 login_handle
 expect "#"
 
@@ -74,8 +76,6 @@ expect {
 expect "#"
 
 # Prepare app directory
-send "rm -rf app\r"
-expect "#"
 send "mkdir -p app\r"
 expect "#"
 
