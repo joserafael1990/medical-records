@@ -10,7 +10,12 @@ import {
   Switch,
   FormControlLabel,
   Divider,
-  Chip
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions
 } from '@mui/material';
 import {
   CalendarToday as CalendarIcon,
@@ -34,6 +39,8 @@ const GoogleCalendarSettings: React.FC<GoogleCalendarSettingsProps> = ({ doctorI
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  const [openDisconnectDialog, setOpenDisconnectDialog] = useState(false);
 
   // Cargar estado inicial
   useEffect(() => {
@@ -74,10 +81,19 @@ const GoogleCalendarSettings: React.FC<GoogleCalendarSettingsProps> = ({ doctorI
     }
   };
 
-  const handleDisconnect = async () => {
-    if (!window.confirm('¿Estás seguro de que deseas desconectar Google Calendar? Las citas futuras dejarán de sincronizarse.')) {
-      return;
-    }
+  // Open the confirmation dialog
+  const handleDisconnectClick = () => {
+    setOpenDisconnectDialog(true);
+  };
+
+  // Close the dialog without disconnecting
+  const handleCloseDisconnectDialog = () => {
+    setOpenDisconnectDialog(false);
+  };
+
+  // Perform the actual disconnection
+  const handleConfirmDisconnect = async () => {
+    setOpenDisconnectDialog(false);
 
     try {
       setLoading(true);
@@ -98,7 +114,7 @@ const GoogleCalendarSettings: React.FC<GoogleCalendarSettingsProps> = ({ doctorI
       setLoading(true);
       setError(null);
       await apiService.googleCalendar.toggleSync(enabled);
-      
+
       // Track sync toggle in Amplitude
       try {
         if (typeof AmplitudeService !== 'undefined' && AmplitudeService.track) {
@@ -110,7 +126,7 @@ const GoogleCalendarSettings: React.FC<GoogleCalendarSettingsProps> = ({ doctorI
       } catch (error) {
         // Silently fail if AmplitudeService is not available
       }
-      
+
       setSuccess(`Sincronización ${enabled ? 'habilitada' : 'deshabilitada'}`);
       await fetchStatus();
     } catch (err: any) {
@@ -124,7 +140,7 @@ const GoogleCalendarSettings: React.FC<GoogleCalendarSettingsProps> = ({ doctorI
   // Verificar si estamos en el callback de OAuth
   // Usar useRef para evitar procesar el callback múltiples veces (React Strict Mode)
   const callbackProcessed = React.useRef(false);
-  
+
   useEffect(() => {
     // Si ya se procesó el callback, no hacer nada
     if (callbackProcessed.current) {
@@ -147,23 +163,23 @@ const GoogleCalendarSettings: React.FC<GoogleCalendarSettingsProps> = ({ doctorI
     if (code) {
       // Marcar como procesado inmediatamente para evitar doble procesamiento
       callbackProcessed.current = true;
-      
+
       // Procesar el callback de OAuth
       const processCallback = async () => {
         try {
           setConnecting(true);
           setError(null);
-          
+
           const redirectUri = `${window.location.origin}/profile`;
-          
+
           logger.debug('Procesando callback de OAuth', { hasCode: !!code, redirectUri }, 'api');
-          
+
           // Llamar al backend para intercambiar código por tokens
           await apiService.googleCalendar.api.post('/api/google-calendar/oauth/callback', {
             code,
             redirect_uri: redirectUri
           });
-          
+
           // Track Google Calendar connection in Amplitude
           try {
             if (typeof AmplitudeService !== 'undefined' && AmplitudeService.track) {
@@ -174,13 +190,13 @@ const GoogleCalendarSettings: React.FC<GoogleCalendarSettingsProps> = ({ doctorI
           } catch (error) {
             // Silently fail if AmplitudeService is not available
           }
-          
+
           setSuccess('Google Calendar conectado exitosamente');
           await fetchStatus();
         } catch (err: any) {
           logger.error('Error al procesar callback de OAuth', err, 'api');
           const errorMessage = err?.response?.data?.detail || 'Error al conectar Google Calendar';
-          
+
           // Si el error es "invalid_grant", sugerir reconectar
           if (errorMessage.includes('invalid_grant') || errorMessage.includes('código de autorización es inválido')) {
             setError('El código de autorización expiró o ya fue usado. Por favor, intenta conectar nuevamente.');
@@ -193,7 +209,7 @@ const GoogleCalendarSettings: React.FC<GoogleCalendarSettingsProps> = ({ doctorI
           window.history.replaceState({}, document.title, window.location.pathname);
         }
       };
-      
+
       processCallback();
     }
   }, []);
@@ -211,90 +227,117 @@ const GoogleCalendarSettings: React.FC<GoogleCalendarSettingsProps> = ({ doctorI
   }
 
   return (
-    <Card>
-      <CardContent>
-        <Box display="flex" alignItems="center" gap={1} mb={2}>
-          <CalendarIcon color="primary" />
-          <Typography variant="h6">Google Calendar</Typography>
-        </Box>
+    <>
+      <Card>
+        <CardContent>
+          <Box display="flex" alignItems="center" gap={1} mb={2}>
+            <CalendarIcon color="primary" />
+            <Typography variant="h6">Google Calendar</Typography>
+          </Box>
 
-        {error && (
-          <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
+          {error && (
+            <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
 
-        {success && (
-          <Alert severity="success" onClose={() => setSuccess(null)} sx={{ mb: 2 }}>
-            {success}
-          </Alert>
-        )}
+          {success && (
+            <Alert severity="success" onClose={() => setSuccess(null)} sx={{ mb: 2 }}>
+              {success}
+            </Alert>
+          )}
 
-        {status?.connected ? (
-          <>
-            <Box display="flex" alignItems="center" gap={1} mb={2}>
-              <CheckCircleIcon color="success" />
-              <Typography variant="body1" color="success.main">
-                Google Calendar conectado
-              </Typography>
-            </Box>
-
-            {status.last_sync_at && (
-              <Box mb={2}>
-                <Typography variant="body2" color="text.secondary">
-                  Última sincronización: {new Date(status.last_sync_at).toLocaleString('es-MX')}
+          {status?.connected ? (
+            <>
+              <Box display="flex" alignItems="center" gap={1} mb={2}>
+                <CheckCircleIcon color="success" />
+                <Typography variant="body1" color="success.main">
+                  Google Calendar conectado
                 </Typography>
               </Box>
-            )}
 
-            <Divider sx={{ my: 2 }} />
+              {status.last_sync_at && (
+                <Box mb={2}>
+                  <Typography variant="body2" color="text.secondary">
+                    Última sincronización: {new Date(status.last_sync_at).toLocaleString('es-MX')}
+                  </Typography>
+                </Box>
+              )}
 
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={status.sync_enabled ?? true}
-                  onChange={(e) => handleToggleSync(e.target.checked)}
-                  disabled={loading}
-                />
-              }
-              label="Sincronización automática"
-            />
+              <Divider sx={{ my: 2 }} />
 
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 2 }}>
-              Cuando está habilitada, las citas se sincronizan automáticamente con tu Google Calendar
-            </Typography>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={status.sync_enabled ?? true}
+                    onChange={(e) => handleToggleSync(e.target.checked)}
+                    disabled={loading}
+                  />
+                }
+                label="Sincronización automática"
+              />
 
-            <Button
-              variant="outlined"
-              color="error"
-              startIcon={<LinkOffIcon />}
-              onClick={handleDisconnect}
-              disabled={loading}
-            >
-              Desconectar Google Calendar
-            </Button>
-          </>
-        ) : (
-          <>
-            <Alert severity="info" sx={{ mb: 2 }}>
-              Conecta tu Google Calendar para sincronizar automáticamente tus citas médicas.
-              Las citas creadas, actualizadas o canceladas se reflejarán en tu calendario de Google.
-            </Alert>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 2 }}>
+                Cuando está habilitada, las citas se sincronizan automáticamente con tu Google Calendar
+              </Typography>
 
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={connecting ? <CircularProgress size={20} /> : <LinkIcon />}
-              onClick={handleConnect}
-              disabled={connecting || loading}
-              fullWidth
-            >
-              {connecting ? 'Conectando...' : 'Conectar Google Calendar'}
-            </Button>
-          </>
-        )}
-      </CardContent>
-    </Card>
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<LinkOffIcon />}
+                onClick={handleDisconnectClick}
+                disabled={loading}
+              >
+                Desconectar Google Calendar
+              </Button>
+            </>
+          ) : (
+            <>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Conecta tu Google Calendar para sincronizar automáticamente tus citas médicas.
+                Las citas creadas, actualizadas o canceladas se reflejarán en tu calendario de Google.
+              </Alert>
+
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={connecting ? <CircularProgress size={20} /> : <LinkIcon />}
+                onClick={handleConnect}
+                disabled={connecting || loading}
+                fullWidth
+              >
+                {connecting ? 'Conectando...' : 'Conectar Google Calendar'}
+              </Button>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Confirmation Dialog */}
+      <Dialog
+        open={openDisconnectDialog}
+        onClose={handleCloseDisconnectDialog}
+        aria-labelledby="alert-dialog-title"
+        aria-describedby="alert-dialog-description"
+      >
+        <DialogTitle id="alert-dialog-title">
+          {"¿Desconectar Google Calendar?"}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="alert-dialog-description">
+            ¿Estás seguro de que deseas desconectar Google Calendar? Las citas futuras dejarán de sincronizarse y no se actualizarán automáticamente.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDisconnectDialog} color="primary">
+            Cancelar
+          </Button>
+          <Button onClick={handleConfirmDisconnect} color="error" autoFocus>
+            Desconectar
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 };
 
