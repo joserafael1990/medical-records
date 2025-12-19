@@ -102,6 +102,7 @@ export const useAppointmentFormData = (doctorProfile: any): UseAppointmentFormDa
         AmplitudeService.track('appointment_create_button_clicked');
 
         setIsEditingAppointment(false);
+        setSelectedAppointment(null);
         const currentDateTime = getCurrentCDMXDateTime();
 
         setAppointmentFormData({
