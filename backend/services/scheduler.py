@@ -53,24 +53,28 @@ def check_and_send_reminders(db: SessionLocal = None) -> Dict[str, Any]:
                 continue
             
             # Calculate when this reminder should be sent
-            # ASSUMPTION: appointment_date is stored in UTC in the database (or naive UTC)
+            # NOTE: appointment_date is stored as CDMX local time (naive datetime)
+            # We compare using CDMX local time throughout
             
-            # 1. Get current time in UTC
-            now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+            # 1. Get current time in CDMX (naive for comparison)
+            now_cdmx_naive = now_cdmx().replace(tzinfo=None)
             
-            # 2. Treat appointment_date as UTC (if naive)
+            # 2. appointment_date is already in CDMX local time
             appt_date = appointment.appointment_date
             if appt_date.tzinfo:
-                 appt_date = appt_date.astimezone(timezone.utc).replace(tzinfo=None)
+                # If it has timezone info, convert to CDMX
+                import pytz
+                cdmx_tz = pytz.timezone('America/Mexico_City')
+                appt_date = appt_date.astimezone(cdmx_tz).replace(tzinfo=None)
             
-            # 3. Calculate send time in UTC
+            # 3. Calculate send time in CDMX local time
             send_time = appt_date - timedelta(minutes=reminder.offset_minutes)
             
             # 4. Check if we're in the send window (Send time passed, but not more than 6 hours ago)
             # This "Latch" logic ensures we don't miss it if the cron is slightly delayed
             window_end = send_time + timedelta(hours=6)
             
-            should_send = send_time <= now_utc <= window_end
+            should_send = send_time <= now_cdmx_naive <= window_end
             
             if should_send:
                 api_logger.info(
