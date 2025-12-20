@@ -4,7 +4,7 @@ Designed to be triggered by Google Cloud Scheduler or similar cron jobs.
 """
 from typing import Dict, Any
 from sqlalchemy.orm import joinedload
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from database import SessionLocal, Appointment, AppointmentReminder
 from services.appointment_service import AppointmentService
@@ -52,8 +52,25 @@ def check_and_send_reminders(db: SessionLocal = None) -> Dict[str, Any]:
             if not appointment:
                 continue
             
-            # Check if it's time to send
-            should_send = AppointmentService.should_send_reminder_by_id(reminder, appointment)
+            # Calculate when this reminder should be sent
+            # ASSUMPTION: appointment_date is stored in UTC in the database (or naive UTC)
+            
+            # 1. Get current time in UTC
+            now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+            
+            # 2. Treat appointment_date as UTC (if naive)
+            appt_date = appointment.appointment_date
+            if appt_date.tzinfo:
+                 appt_date = appt_date.astimezone(timezone.utc).replace(tzinfo=None)
+            
+            # 3. Calculate send time in UTC
+            send_time = appt_date - timedelta(minutes=reminder.offset_minutes)
+            
+            # 4. Check if we're in the send window (Send time passed, but not more than 6 hours ago)
+            # This "Latch" logic ensures we don't miss it if the cron is slightly delayed
+            window_end = send_time + timedelta(hours=6)
+            
+            should_send = send_time <= now_utc <= window_end
             
             if should_send:
                 api_logger.info(
