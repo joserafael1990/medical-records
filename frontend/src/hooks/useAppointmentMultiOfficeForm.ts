@@ -24,7 +24,7 @@ export interface UseAppointmentMultiOfficeFormReturn {
   setFormData: React.Dispatch<React.SetStateAction<AppointmentFormData>>;
   loading: boolean;
   error: string | null;
-  
+
   // Patient selection state
   isExistingPatient: boolean | null;
   setIsExistingPatient: React.Dispatch<React.SetStateAction<boolean | null>>;
@@ -42,19 +42,19 @@ export interface UseAppointmentMultiOfficeFormReturn {
     phone_country_code: string;
     phone_number: string;
   }>>;
-  
+
   // Catalog data
   appointmentTypes: AppointmentType[];
   offices: Office[];
   patients: Patient[];
-  
+
   // Time management
   availableTimes: any[];
   setAvailableTimes: React.Dispatch<React.SetStateAction<any[]>>;
   loadingTimes: boolean;
   selectedDate: string;
   selectedTime: string;
-  
+
   // Handlers
   handleChange: (field: keyof AppointmentFormData) => (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | any
@@ -62,7 +62,7 @@ export interface UseAppointmentMultiOfficeFormReturn {
   handleDateChange: (newDate: string) => void;
   handleTimeChange: (time: string) => void;
   handleSubmit: () => Promise<void>;
-  
+
   // Computed
   currentFormData: AppointmentFormData;
   currentPatients: Patient[];
@@ -146,7 +146,7 @@ export const useAppointmentMultiOfficeForm = (
   const [appointmentTypes, setAppointmentTypes] = useState<AppointmentType[]>([]);
   const [offices, setOffices] = useState<Office[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
-  
+
   // State for available time slots
   const [availableTimes, setAvailableTimes] = useState<any[]>([]);
   const [loadingTimes, setLoadingTimes] = useState(false);
@@ -159,16 +159,16 @@ export const useAppointmentMultiOfficeForm = (
 
   // Use external data if provided, otherwise use internal state
   const currentFormData = externalFormData || formData;
-  
+
   // Notify parent of form data changes after state update (not during render)
   // This prevents "Cannot update a component while rendering a different component" error
   const onFormDataChangeRef = useRef(onFormDataChange);
-  
+
   // Update ref when callback changes
   useEffect(() => {
     onFormDataChangeRef.current = onFormDataChange;
   }, [onFormDataChange]);
-  
+
   // Notify parent of form data changes after state update
   useEffect(() => {
     if (onFormDataChangeRef.current) {
@@ -186,25 +186,25 @@ export const useAppointmentMultiOfficeForm = (
       setAvailableTimes([]);
       return [];
     }
-    
+
     // Normalize date to YYYY-MM-DD format
     const dateOnly = date.split('T')[0];
-    
+
     try {
       setLoadingTimes(true);
       logger.debug('Loading available times for date', { date: dateOnly, originalDate: date }, 'api');
-      
+
       const response = await apiService.appointments.getAvailableTimesForBooking(dateOnly);
       const times = response?.available_times || [];
-      
+
       logger.debug('Available times loaded', { date: dateOnly, count: times.length, times: times.slice(0, 3) }, 'api');
-      
+
       // Always update availableTimes, even if empty
       setAvailableTimes(times);
-      
+
       // Update lastLoadedDateRef after successful load
       lastLoadedDateRef.current = dateOnly;
-      
+
       return times;
     } catch (error) {
       logger.error('Error loading available times', error, 'api');
@@ -260,18 +260,19 @@ export const useAppointmentMultiOfficeForm = (
     if (open && !hasInitializedRef.current) {
       hasInitializedRef.current = true;
       isInitializingRef.current = true;
-      
+
       if (isEditing && externalFormData) {
         setFormData(externalFormData);
-        setIsExistingPatient(externalFormData.patient_id && externalFormData.patient_id > 0 ? true : null);
-        
+        // When editing, the patient is ALWAYS existing (we're editing an existing appointment)
+        setIsExistingPatient(true);
+
         // Extract time from appointment_date for editing
         if (externalFormData.appointment_date) {
           const appointmentDate = new Date(externalFormData.appointment_date);
           const timeString = appointmentDate.toTimeString().slice(0, 5);
           setSelectedTime(timeString);
           setSelectedDate(externalFormData.appointment_date);
-          
+
           // Load available times for the appointment date
           const dateOnly = externalFormData.appointment_date.split('T')[0];
           loadAvailableTimes(dateOnly).then(() => {
@@ -315,24 +316,24 @@ export const useAppointmentMultiOfficeForm = (
       }
       return;
     }
-    
+
     // Mark as loaded immediately to prevent re-execution
     hasLoadedDefaultTimesRef.current = true;
-    
+
     const today = new Date();
-    const mexicoTimeString = today.toLocaleString("sv-SE", {timeZone: "America/Mexico_City"});
+    const mexicoTimeString = today.toLocaleString("sv-SE", { timeZone: "America/Mexico_City" });
     const todayString = mexicoTimeString.split(' ')[0];
-    
+
     logger.debug('Loading times for default date', { date: todayString, hasInitialized: hasInitializedRef.current }, 'ui');
-    
+
     // Set selected date first
     setSelectedDate(todayString);
-    
+
     // Reset lastLoadedDateRef to ensure fresh load
     lastLoadedDateRef.current = '';
-    
+
     const mexicoDate = new Date(mexicoTimeString);
-    
+
     // Use functional update to avoid stale closure issues
     setFormData((prevFormData) => {
       return {
@@ -340,10 +341,10 @@ export const useAppointmentMultiOfficeForm = (
         appointment_date: mexicoDate.toISOString()
       };
     });
-    
+
     // Clear available times first to show loading state
     setAvailableTimes([]);
-    
+
     // Load available times - use requestAnimationFrame to ensure DOM is ready
     requestAnimationFrame(() => {
       setTimeout(() => {
@@ -403,35 +404,35 @@ export const useAppointmentMultiOfficeForm = (
       lastLoadedDateRef.current = '';
       return;
     }
-    
+
     // Normalize date to YYYY-MM-DD format (remove time component if present)
     const dateOnly = newDate.includes('T') ? newDate.split('T')[0] : newDate;
-    
+
     // Check if this is the same date that was last loaded
     const isSameAsLastLoaded = dateOnly === lastLoadedDateRef.current;
-    
-    logger.debug('Date change triggered', { 
-      newDate, 
-      dateOnly, 
+
+    logger.debug('Date change triggered', {
+      newDate,
+      dateOnly,
       currentSelectedDate: selectedDate,
       lastLoadedDate: lastLoadedDateRef.current,
       isSameAsLastLoaded,
       willReload: true // Always reload
     }, 'ui');
-    
+
     // Always update selectedDate and clear selectedTime
     setSelectedDate(dateOnly);
     setSelectedTime('');
-    
+
     // Always clear availableTimes first to force UI update
     // This ensures the loading state is visible even if it's the same date
     setAvailableTimes([]);
-    
+
     // Always load available times for the selected date, even if it's the same date
     // This ensures times are refreshed when user returns to today after selecting another date
     // Update the last loaded date ref after starting the load
     lastLoadedDateRef.current = dateOnly;
-    
+
     // Use requestAnimationFrame to ensure state updates are processed before API call
     requestAnimationFrame(() => {
       loadAvailableTimes(dateOnly).then((times) => {
@@ -449,7 +450,7 @@ export const useAppointmentMultiOfficeForm = (
   // Handle time selection
   const handleTimeChange = useCallback((time: string) => {
     setSelectedTime(time);
-    
+
     if (selectedDate && time) {
       const newFormData = {
         ...currentFormData,
@@ -463,17 +464,17 @@ export const useAppointmentMultiOfficeForm = (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | any
   ) => {
     const value = event.target.value;
-    
+
     let newFormData = {
       ...currentFormData,
       [field]: value
     };
-    
+
     // Si se selecciona "Primera vez", automáticamente establecer como paciente nuevo
     if (field === 'consultation_type' && value === 'Primera vez') {
       setIsExistingPatient(false);
     }
-    
+
     // Si se selecciona un consultorio, determinar automáticamente el tipo de cita
     if (field === 'office_id' && value && value !== 0) {
       const selectedOffice = offices.find(office => office.id === parseInt(value));
@@ -485,7 +486,7 @@ export const useAppointmentMultiOfficeForm = (
         };
       }
     }
-    
+
     setFormData(newFormData);
   }, [currentFormData, offices]);
 
@@ -493,7 +494,7 @@ export const useAppointmentMultiOfficeForm = (
   const handleSubmit = useCallback(async () => {
     setError(null);
     setLoading(true);
-    
+
     try {
       // Validate date and time are selected
       if (!selectedDate || !selectedTime) {
@@ -511,7 +512,7 @@ export const useAppointmentMultiOfficeForm = (
 
       // Validar datos del paciente
       let finalPatientId = currentFormData.patient_id;
-      
+
       if (isExistingPatient === false) {
         // Validar datos del nuevo paciente
         if (!newPatientData.name.trim()) {
@@ -528,11 +529,11 @@ export const useAppointmentMultiOfficeForm = (
           setError('El número telefónico del paciente es requerido');
           return;
         }
-        
+
         // Crear nuevo paciente
         try {
           const fullPhoneNumber = `${newPatientData.phone_country_code}${newPatientData.phone_number.trim()}`;
-          
+
           const patientData: any = {
             name: newPatientData.name.trim(),
             primary_phone: fullPhoneNumber,
@@ -544,10 +545,10 @@ export const useAppointmentMultiOfficeForm = (
           if (newPatientData.gender) {
             patientData.gender = newPatientData.gender;
           }
-          
+
           const newPatient = await apiService.patients.createPatient(patientData);
           finalPatientId = (newPatient as any).data?.id || (newPatient as any).id;
-          
+
           showSuccess('Paciente creado exitosamente');
         } catch (err) {
           setError('Error al crear el nuevo paciente: ' + (err instanceof Error ? err.message : 'Error desconocido'));
@@ -575,16 +576,16 @@ export const useAppointmentMultiOfficeForm = (
       // Asegurar que appointment_type_id esté definido y que reminders esté incluido
       // Check both currentFormData and formData for reminders
       // Priority: formData.reminders > currentFormData.reminders
-      const remindersToInclude = (formData.reminders && formData.reminders.length > 0) 
-        ? formData.reminders 
+      const remindersToInclude = (formData.reminders && formData.reminders.length > 0)
+        ? formData.reminders
         : (currentFormData.reminders && currentFormData.reminders.length > 0)
           ? currentFormData.reminders
           : undefined;
-      
+
       // Ensure appointment_date is properly constructed from selectedDate and selectedTime
       const dateOnly = selectedDate.split('T')[0]; // Get just the date part
       const appointmentDateTime = `${dateOnly}T${selectedTime}:00`;
-      
+
       // Validate the constructed date
       const testDate = new Date(appointmentDateTime);
       if (isNaN(testDate.getTime())) {
@@ -601,14 +602,14 @@ export const useAppointmentMultiOfficeForm = (
         appointment_type_id: currentFormData.appointment_type_id || 1,
         appointment_date: appointmentDateTime // Ensure appointment_date is properly set
       };
-      
+
       // Only add reminders property if there are actual reminders
       // This prevents undefined from being serialized to null
       if (remindersToInclude && remindersToInclude.length > 0) {
         formDataToSubmit.reminders = remindersToInclude;
       }
       // If no reminders, don't include the property at all (not even as undefined)
-      
+
       // Log for debugging
       logger.debug('Submitting appointment', {
         reminders_count: remindersToInclude?.length || 0,
@@ -619,7 +620,7 @@ export const useAppointmentMultiOfficeForm = (
         formDataToSubmit_keys: Object.keys(formDataToSubmit),
         has_reminders_property: 'reminders' in formDataToSubmit
       }, 'ui');
-      
+
       onSubmit(formDataToSubmit);
       showSuccess('Cita creada exitosamente');
       onClose();
@@ -649,31 +650,31 @@ export const useAppointmentMultiOfficeForm = (
     setFormData,
     loading,
     error,
-    
+
     // Patient selection state
     isExistingPatient,
     setIsExistingPatient,
     newPatientData,
     setNewPatientData,
-    
+
     // Catalog data
     appointmentTypes,
     offices,
     patients,
-    
+
     // Time management
     availableTimes,
     setAvailableTimes,
     loadingTimes,
     selectedDate,
     selectedTime,
-    
+
     // Handlers
     handleChange,
     handleDateChange,
     handleTimeChange,
     handleSubmit,
-    
+
     // Computed
     currentFormData,
     currentPatients,

@@ -239,14 +239,14 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
               </Typography>
             )}
 
-            {/* Existing Patient Selector */}
-            {(isExistingPatient === true || currentFormData.consultation_type === 'Seguimiento') && (
+            {/* Existing Patient Selector - Always show when editing or for Seguimiento */}
+            {(isEditing || isExistingPatient === true || currentFormData.consultation_type === 'Seguimiento') && (
               <PatientSelector
                 patients={currentPatients}
                 selectedPatientId={currentFormData.patient_id}
                 onPatientSelect={(id) => handleChange('patient_id')({ target: { value: id } })}
                 error={currentError}
-                disabled={currentLoading}
+                disabled={currentLoading || isEditing} // Disable when editing to prevent changing patient
               />
             )}
 
