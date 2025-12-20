@@ -1,0 +1,14 @@
+# Substitution variables for Cloud Build
+# These will be configured in the Cloud Build trigger
+
+# IMPORTANT: Set these values in the Cloud Build trigger UI:
+# https://console.cloud.google.com/cloud-build/triggers
+
+_DATABASE_URL: "postgresql://cortex_admin:!E!yDTrN2l6ym4@/cortex_clinic_db?host=/cloudsql/lofty-reserve-479620-a3:us-central1:cortex-db-prod"
+_SECRET_KEY: "DWTRjaImxt6pdYpway+zUFRKkbQ9kgpJDAjdromQsAA="
+_JWT_SECRET_KEY: "Lmww+Ix9PEWiVSarbfJy511TUTRD8au7y3lhjniHOPc="
+_MEDICAL_ENCRYPTION_KEY: "b791dd6f4f4c9c53d44235d349b34ba5cdd9fb266a66818da4433ad6aeb2c136"
+_META_WHATSAPP_TOKEN: "EAAWQZA7pGNZAIBQEpRr4VDGHbQ0NFgjDFZCjwmkHb41j9mujzTUbwE0EgbXUwYh8KQZAE9jFGBpBy9hdK4mIn2vOiwuy3JfGV1OYuWesgyCv2R6H0LLnHZAqVgFUjSiQkuR2qLo3EcZCwpIQDYIV8sqzXPiA20uwdTdgvGvA1qA7fMz55FgE99glt0eOZAdoAZDZD"
+_META_WHATSAPP_VERIFY_TOKEN: "PXz3BJWk4DGjviQMqAxZI18-ozXLLZk_4ptLKV9AjXo"
+_META_WHATSAPP_APP_SECRET: "a16c014184bb470a69ed277e1f11f174"
+_META_WHATSAPP_PHONE_ID: "887537004450086"

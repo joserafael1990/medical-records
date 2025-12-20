@@ -5,7 +5,7 @@ Manages environment variables and application settings
 import os
 import json
 import secrets
-from typing import List, Optional
+from typing import List, Optional, Union
 from pydantic_settings import BaseSettings
 from pydantic import field_validator, model_validator, Field
 
@@ -50,11 +50,11 @@ class Settings(BaseSettings):
     # In production, CORS_ORIGINS must be set via environment variable
     # Format: comma-separated list, e.g., "https://sistema.cortexclinico.com"
     # Or JSON array: '["http://localhost:3000", "https://example.com"]'
-    CORS_ORIGINS: List[str] = Field(default_factory=list)  # Will be set by validator
+    CORS_ORIGINS: Union[str, List[str]] = Field(default_factory=list)  # Will be set by validator
     CORS_ALLOW_CREDENTIALS: bool = True
     
     # Security
-    ALLOWED_HOSTS: List[str] = ["localhost", "127.0.0.1"]
+    ALLOWED_HOSTS: Union[str, List[str]] = Field(default_factory=lambda: ["localhost", "127.0.0.1"])
     
     # Timezone
     DEFAULT_TIMEZONE: str = "America/Mexico_City"
@@ -108,6 +108,10 @@ class Settings(BaseSettings):
     AWS_SECRET_ACCESS_KEY: Optional[str] = None
     AWS_REGION: str = "us-east-1"
     AWS_BUCKET_NAME: Optional[str] = None
+    
+    # GCP Configuration
+    GCP_PROJECT_ID: Optional[str] = None
+    GCP_STORAGE_BUCKET: Optional[str] = None
     
     @model_validator(mode='before')
     @classmethod

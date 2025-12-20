@@ -21,17 +21,14 @@ ENV REACT_APP_SENTRY_ENVIRONMENT=${REACT_APP_SENTRY_ENVIRONMENT}
 ENV REACT_APP_AMPLITUDE_API_KEY=${REACT_APP_AMPLITUDE_API_KEY}
 
 # Install dependencies (use npm ci for deterministic builds)
-COPY --link package.json package-lock.json ./
-RUN --mount=type=cache,target=/root/.npm \
-    npm install
+COPY package.json package-lock.json ./
+RUN npm install
 
 # Copy source files (exclude secrets, .env, .git, etc. via .dockerignore)
-COPY --link . .
+COPY . .
 
 # Build the React app (TypeScript)
-RUN --mount=type=cache,target=/root/.npm \
-    # Remove mocks and tests to prevent build errors
-    rm -rf src/__mocks__ src/**/*.test.tsx src/**/*.test.ts && \
+RUN rm -rf src/__mocks__ src/**/*.test.tsx src/**/*.test.ts && \
     DISABLE_ESLINT_PLUGIN=true GENERATE_SOURCEMAP=false TSC_COMPILE_ON_ERROR=true npm run build
 
 # ----------- Production Stage -----------
@@ -54,7 +51,7 @@ ENV NODE_ENV=production
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 # 1. Install 'serve' globally while you are still ROOT
-RUN --mount=type=cache,target=/root/.npm npm install -g serve
+RUN npm install -g serve
 
 # 2. Verify build directory exists and set correct permissions
 RUN if [ ! -d "/app/build" ]; then \
@@ -68,7 +65,7 @@ RUN if [ ! -d "/app/build" ]; then \
 # 3. NOW switch to the restricted user
 USER appuser
 
-EXPOSE 3000
+EXPOSE 8080
 
 # 4. Use shell form to verify build exists and start serve
 # Use full path to serve and add helpful flags
@@ -77,5 +74,5 @@ CMD if [ ! -d "/app/build" ]; then \
     ls -la /app && \
     exit 1; \
     fi && \
-    echo "Starting serve on port 3000..." && \
-    /usr/local/bin/serve -s /app/build -l tcp://0.0.0.0:3000 --no-clipboard --no-compression
+    echo "Starting serve on port 8080..." && \
+    /usr/local/bin/serve -s /app/build -l tcp://0.0.0.0:8080 --no-clipboard --no-compression

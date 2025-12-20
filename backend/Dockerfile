@@ -29,14 +29,13 @@ RUN apt-get update && apt-get install -y \
     zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --link requirements.txt ./
+COPY requirements.txt ./
 
-RUN --mount=type=cache,target=/root/.cache/pip \
-    python -m venv .venv && \
+RUN python -m venv .venv && \
     .venv/bin/pip install --upgrade pip && \
     .venv/bin/pip install -r requirements.txt
 
-COPY --link . ./
+COPY . ./
 
 # ----------- Final stage -----------
 FROM base AS final
@@ -63,6 +62,6 @@ RUN chown -R appuser:appuser /app && \
     chmod +x /app/entrypoint.sh
 
 USER appuser
-EXPOSE 8000
+EXPOSE 8080
 ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]
-CMD ["/app/.venv/bin/uvicorn", "main_clean_english:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/app/.venv/bin/uvicorn", "main_clean_english:app", "--host", "0.0.0.0", "--port", "8080"]

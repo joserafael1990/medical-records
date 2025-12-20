@@ -113,3 +113,4 @@ archive/
 *_legacy_*.py
 *_complete.py
 crud_backup.py
+cloudbuild-substitutions.yaml

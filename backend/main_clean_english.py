@@ -186,7 +186,22 @@ STATIC_FILES_DIR = BASE_DIR / "static"
 UPLOADS_DIR = BASE_DIR / "uploads"
 
 def _get_cors_origins():
-    configured = [origin for origin in settings.CORS_ORIGINS or [] if origin not in {"*", "null"}]
+    # Handle case where CORS_ORIGINS is a string (e.g. "*")
+    if isinstance(settings.CORS_ORIGINS, str):
+        if settings.CORS_ORIGINS == "*":
+            return ["*"]
+        # If it's a comma-separated string, split it
+        origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
+    else:
+        # It's a list
+        origins = settings.CORS_ORIGINS or []
+
+    # If wildcard is anyway in the list, return it as the only origin for performance/clarity
+    if "*" in origins:
+        return ["*"]
+
+    configured = [origin for origin in origins if origin != "null"]
+    
     if not configured:
         # Sensible default for local development
         default = ["http://localhost:3000"]

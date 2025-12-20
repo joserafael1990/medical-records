@@ -10,7 +10,7 @@ const getDefaultApiUrl = () => {
     return 'http://localhost:8000';
   }
   // In production, use production API
-  return 'https://api.cortexclinico.com';
+  return 'https://cortex-backend-246017659362.us-central1.run.app';
 };
 
 export const API_CONFIG = {

@@ -1,0 +1,56 @@
+# Cloud Build configuration for automatic frontend deployment
+# Triggered on push to main branch
+
+steps:
+  # Step 1: Build the Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/${PROJECT_ID}/cortex-repo/frontend:${SHORT_SHA}'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/${PROJECT_ID}/cortex-repo/frontend:latest'
+      - '.'
+    dir: 'frontend'
+
+  # Step 2: Push the image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'us-central1-docker.pkg.dev/${PROJECT_ID}/cortex-repo/frontend:${SHORT_SHA}'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'us-central1-docker.pkg.dev/${PROJECT_ID}/cortex-repo/frontend:latest'
+
+  # Step 3: Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'cortex-frontend'
+      - '--image=us-central1-docker.pkg.dev/${PROJECT_ID}/cortex-repo/frontend:${SHORT_SHA}'
+      - '--region=us-central1'
+      - '--allow-unauthenticated'
+      - '--memory=2Gi'
+      - '--cpu=1'
+      - '--set-env-vars=NODE_ENV=production,REACT_APP_API_URL=https://cortex-backend-246017659362.us-central1.run.app'
+
+# Build timeout (10 minutes)
+timeout: 600s
+
+# Substitutions (can be overridden)
+substitutions:
+  _REGION: us-central1
+
+# Images to be pushed to Artifact Registry
+images:
+  - 'us-central1-docker.pkg.dev/${PROJECT_ID}/cortex-repo/frontend:${SHORT_SHA}'
+  - 'us-central1-docker.pkg.dev/${PROJECT_ID}/cortex-repo/frontend:latest'
+
+# Options
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY

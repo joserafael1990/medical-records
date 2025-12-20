@@ -336,6 +336,81 @@ class S3StorageService(StorageService):
             return False
 
 
+class GCSStorageService(StorageService):
+    """Google Cloud Storage service for production"""
+
+    def __init__(self, bucket_name: str, project_id: Optional[str] = None):
+        from google.cloud import storage
+        
+        try:
+            if project_id:
+                self.client = storage.Client(project=project_id)
+            else:
+                self.client = storage.Client()
+                
+            self.bucket = self.client.bucket(bucket_name)
+            logger.info(f"GCS storage service initialized for bucket: {bucket_name}")
+        except Exception as e:
+            logger.error(f"GCS client init failed: {e}")
+            raise
+
+    def upload(self, file_content: bytes, key: str, content_type: Optional[str] = None) -> str:
+        """Upload a file to GCS"""
+        try:
+            blob = self.bucket.blob(key)
+            blob.upload_from_string(file_content, content_type=content_type)
+            logger.info(f"GCS storage: uploaded file to gs://{self.bucket.name}/{key}")
+            return key
+        except Exception as e:
+            logger.error(f"GCS storage: error uploading {key}: {e}")
+            raise
+
+    def download(self, key: str) -> Optional[bytes]:
+        """Download a file from GCS"""
+        try:
+            blob = self.bucket.blob(key)
+            if not blob.exists():
+                return None
+            return blob.download_as_bytes()
+        except Exception as e:
+            logger.error(f"GCS storage: error downloading {key}: {e}")
+            return None
+
+    def delete(self, key: str) -> bool:
+        """Delete a file from GCS"""
+        try:
+            blob = self.bucket.blob(key)
+            blob.delete()
+            logger.info(f"GCS storage: deleted file at gs://{self.bucket.name}/{key}")
+            return True
+        except Exception as e:
+            logger.error(f"GCS storage: failed to delete {key}: {e}")
+            return False
+
+    def get_url(self, key: str, expires_in: int = 3600) -> Optional[str]:
+        """Get a signed URL for GCS file"""
+        from datetime import timedelta
+        try:
+            blob = self.bucket.blob(key)
+            url = blob.generate_signed_url(
+                version="v4",
+                expiration=timedelta(seconds=expires_in),
+                method="GET",
+            )
+            return url
+        except Exception as e:
+            logger.error(f"GCS storage: failed to generate signed URL for {key}: {e}")
+            return None
+
+    def exists(self, key: str) -> bool:
+        """Check if file exists in GCS"""
+        try:
+            blob = self.bucket.blob(key)
+            return blob.exists()
+        except:
+            return False
+
+
 # Singleton instance
 _storage_service: Optional[StorageService] = None
 
@@ -356,8 +431,15 @@ def get_storage_service() -> StorageService:
     app_env = os.getenv("APP_ENV", "development").lower()
     is_production = app_env == "production"
     
-    # Use S3 if in production AND AWS bucket is configured
-    if is_production and settings.AWS_BUCKET_NAME:
+    # Prioritize GCS if configured
+    if is_production and settings.GCP_STORAGE_BUCKET:
+        logger.info("Initializing GCS storage service for production")
+        _storage_service = GCSStorageService(
+            bucket_name=settings.GCP_STORAGE_BUCKET,
+            project_id=settings.GCP_PROJECT_ID
+        )
+    # Fallback to S3 if configured
+    elif is_production and settings.AWS_BUCKET_NAME:
         logger.info("Initializing S3 storage service for production")
         _storage_service = S3StorageService(
             bucket_name=settings.AWS_BUCKET_NAME,
