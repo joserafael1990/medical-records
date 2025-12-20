@@ -161,11 +161,7 @@ else:
 # ============================================================================
 # INTERNAL ROUTES (Cloud Scheduler, etc)
 # ============================================================================
-from routes import (
-    auth, users, patients, doctors, appointments,
-    medical_records_router, offices, avatar_router,
-    whatsapp_webhook, internal
-)
+
 from services.google_calendar_service import GoogleCalendarService
 
 @asynccontextmanager
