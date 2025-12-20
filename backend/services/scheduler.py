@@ -1,10 +1,9 @@
 """
-Background scheduler for automatic WhatsApp appointment reminders.
+Scheduler service for automatic WhatsApp appointment reminders.
+Designed to be triggered by Google Cloud Scheduler or similar cron jobs.
 """
-import asyncio
-from typing import Optional
+from typing import Dict, Any
 from sqlalchemy.orm import joinedload
-from sqlalchemy import func
 from datetime import datetime
 
 from database import SessionLocal, Appointment, AppointmentReminder
@@ -16,163 +15,102 @@ from logger import get_logger
 api_logger = get_logger("medical_records.api")
 
 
-class AutoReminderScheduler:
-    def __init__(self) -> None:
-        self._task: Optional[asyncio.Task] = None
+def check_and_send_reminders(db: SessionLocal = None) -> Dict[str, Any]:
+    """
+    Checks for pending appointment reminders and sends them.
+    This function is stateless and should be called periodically (e.g., every 5-10 minutes).
+    """
+    local_db = False
+    if db is None:
+        db = SessionLocal()
+        local_db = True
 
-    async def _run_loop(self) -> None:
-        await asyncio.sleep(5)
-        api_logger.info("🔄 Auto reminder scheduler started", extra={"scheduler": "AutoReminderScheduler"})
-        loop_count = 0
-        while True:
-            try:
-                db = SessionLocal()
-                
-                # NEW: Query individual reminders instead of appointments
-                # Get all enabled reminders that haven't been sent yet
-                # Exclude cancelled appointments - no reminders should be sent for cancelled appointments
-                # Exclude appointments that have already passed - no point in sending reminders for past appointments
-                now = now_cdmx().replace(tzinfo=None)  # Get current time in CDMX (naive datetime for comparison)
-                reminders = db.query(AppointmentReminder).join(Appointment).filter(
-                    AppointmentReminder.enabled == True,
-                    AppointmentReminder.sent == False,
-                    Appointment.status.in_(['por_confirmar', 'confirmada']),  # Only allow reminders for pending and confirmed, exclude cancelled
-                    Appointment.appointment_date > now  # Only include appointments that haven't passed yet
-                ).options(
-                    # Load appointment and related data needed for sending reminders
-                    joinedload(AppointmentReminder.appointment).joinedload(Appointment.patient),
-                    joinedload(AppointmentReminder.appointment).joinedload(Appointment.doctor),
-                    joinedload(AppointmentReminder.appointment).joinedload(Appointment.office)
-                ).all()
-                
-                # Log periodic status every 10 loops (every ~10 minutes)
-                loop_count += 1
-                if loop_count % 10 == 0:
-                    api_logger.info(
-                        "🔄 Scheduler loop running",
-                        extra={"reminders_found": len(reminders), "loop_count": loop_count, "current_time": now.isoformat()}
-                    )
-                elif loop_count == 1:
-                    # Log first loop to confirm scheduler is running
-                    api_logger.info(
-                        "🔄 Scheduler first loop completed",
-                        extra={"reminders_found": len(reminders), "current_time": now.isoformat()}
-                    )
-                
-                # Check reminders (only log when actually sending)
-                for reminder in reminders:
-                    appointment = reminder.appointment
-                    if not appointment:
-                        api_logger.warning(
-                            "⚠️ Reminder has no appointment",
-                            extra={"reminder_id": reminder.id}
-                        )
-                        continue
-                    
-                    # Check reminder (log when checking, not just when sending)
-                    should_send = AppointmentService.should_send_reminder_by_id(reminder, appointment)
-                    if not should_send and loop_count % 10 == 0:
-                        # Log why reminder is not being sent (only every 10 loops to avoid spam)
-                        api_logger.debug(
-                            "⏳ Reminder not ready yet",
-                            extra={
-                                "reminder_id": reminder.id,
-                                "appointment_id": appointment.id,
-                                "appointment_date": appointment.appointment_date.isoformat() if appointment.appointment_date else None,
-                                "offset_minutes": reminder.offset_minutes,
-                                "current_time": now.isoformat()
-                            }
-                        )
-                    
-                    if appointment and should_send:
-                        api_logger.info(
-                            "📤 Sending reminder",
-                            extra={
-                                "reminder_id": reminder.id,
-                                "appointment_id": appointment.id,
-                                "reminder_number": reminder.reminder_number
-                            }
-                        )
-                        success = AppointmentService.send_reminder_by_id(db, reminder.id)
-                        if success:
-                            api_logger.info(
-                                "✅ Auto reminder sent",
-                                extra={
-                                    "reminder_id": reminder.id,
-                                    "appointment_id": appointment.id,
-                                    "reminder_number": reminder.reminder_number
-                                }
-                            )
-                        else:
-                            api_logger.warning(
-                                "⚠️ Auto reminder failed",
-                                extra={
-                                    "reminder_id": reminder.id,
-                                    "appointment_id": appointment.id
-                                }
-                            )
-                
-                # LEGACY: Also check old single-reminder system for backward compatibility
-                # This can be removed after migration is complete
-                # Exclude cancelled appointments - no reminders should be sent for cancelled appointments
-                # Exclude appointments that have already passed - no point in sending reminders for past appointments
-                legacy_candidates = db.query(Appointment).filter(
-                    Appointment.auto_reminder_enabled == True,
-                    Appointment.status.in_(['por_confirmar', 'confirmada']),  # Only allow reminders for pending and confirmed, exclude cancelled
-                    Appointment.appointment_date > now  # Only include appointments that haven't passed yet
-                ).all()
-                for apt in legacy_candidates:
-                    # Only process if no reminders exist (old system)
-                    if not apt.reminders or len(apt.reminders) == 0:
-                        if AppointmentService.should_send_reminder(apt):
-                            success = AppointmentService.send_appointment_reminder(db, apt.id)
-                            if success:
-                                api_logger.info(
-                                    "✅ Legacy auto reminder sent",
-                                    extra={"appointment_id": apt.id}
-                                )
-                            else:
-                                api_logger.warning(
-                                    "⚠️ Legacy auto reminder failed",
-                                    extra={"appointment_id": apt.id}
-                                )
-                
-                db.close()
-            except Exception as e:
-                api_logger.error(
-                    "⚠️ Auto reminder loop error",
-                    extra={"error": str(e), "error_type": type(e).__name__},
-                    exc_info=True
+    try:
+        api_logger.info("🔄 Reminder check started", extra={"scheduler": "CloudScheduler"})
+        
+        # Get current time in CDMX (naive datetime for comparison)
+        now = now_cdmx().replace(tzinfo=None)
+        
+        # 1. NEW SYSTEM: Check AppointmentReminder table
+        reminders = db.query(AppointmentReminder).join(Appointment).filter(
+            AppointmentReminder.enabled == True,
+            AppointmentReminder.sent == False,
+            Appointment.status.in_(['por_confirmar', 'confirmada']),  # Only allow reminders for pending and confirmed
+            Appointment.appointment_date > now  # Only include appointments that haven't passed yet
+        ).options(
+            # Load appointment and related data needed for sending reminders
+            joinedload(AppointmentReminder.appointment).joinedload(Appointment.patient),
+            joinedload(AppointmentReminder.appointment).joinedload(Appointment.doctor),
+            joinedload(AppointmentReminder.appointment).joinedload(Appointment.office)
+        ).all()
+        
+        sent_count = 0
+        failed_count = 0
+        
+        for reminder in reminders:
+            appointment = reminder.appointment
+            if not appointment:
+                continue
+            
+            # Check if it's time to send
+            should_send = AppointmentService.should_send_reminder_by_id(reminder, appointment)
+            
+            if should_send:
+                api_logger.info(
+                    "📤 Sending reminder",
+                    extra={
+                        "reminder_id": reminder.id,
+                        "appointment_id": appointment.id
+                    }
                 )
-            await asyncio.sleep(60)
+                success = AppointmentService.send_reminder_by_id(db, reminder.id)
+                if success:
+                    sent_count += 1
+                    api_logger.info("✅ Auto reminder sent", extra={"reminder_id": reminder.id})
+                else:
+                    failed_count += 1
+                    api_logger.warning("⚠️ Auto reminder failed", extra={"reminder_id": reminder.id})
 
-    def start(self) -> None:
-        if self._task is None or self._task.done():
-            self._task = asyncio.create_task(self._run_loop())
-            api_logger.info("✅ Auto reminder scheduler task created")
+        # 2. LEGACY SYSTEM: Check Appointment table directly
+        # This can be removed after full migration
+        legacy_candidates = db.query(Appointment).filter(
+            Appointment.auto_reminder_enabled == True,
+            Appointment.status.in_(['por_confirmar', 'confirmada']),
+            Appointment.appointment_date > now
+        ).all()
+        
+        legacy_sent = 0
+        
+        for apt in legacy_candidates:
+            # Only process if no reminders exist (old system)
+            if not apt.reminders or len(apt.reminders) == 0:
+                if AppointmentService.should_send_reminder(apt):
+                    success = AppointmentService.send_appointment_reminder(db, apt.id)
+                    if success:
+                        legacy_sent += 1
+                        api_logger.info("✅ Legacy auto reminder sent", extra={"appointment_id": apt.id})
 
-    def stop(self) -> None:
-        if self._task and not self._task.done():
-            self._task.cancel()
-            self._task = None
+        result = {
+            "status": "success",
+            "timestamp": now.isoformat(),
+            "reminders_found": len(reminders),
+            "reminders_sent": sent_count,
+            "reminders_failed": failed_count,
+            "legacy_sent": legacy_sent
+        }
+        
+        api_logger.info("🏁 Reminder check finished", extra=result)
+        return result
 
-
-_scheduler = AutoReminderScheduler()
-
-
-def start_auto_reminder_scheduler(app=None) -> None:
-    """Start the auto reminder loop and optionally store it in app.state."""
-    api_logger.info("🚀 Starting auto reminder scheduler...")
-    _scheduler.start()
-    if app is not None:
-        setattr(app.state, "auto_reminder_scheduler", _scheduler)
-    api_logger.info("✅ Auto reminder scheduler initialized")
-
-
-def stop_auto_reminder_scheduler(app=None) -> None:
-    """Stop the auto reminder loop if running."""
-    _scheduler.stop()
-    if app is not None and hasattr(app.state, "auto_reminder_scheduler"):
-        setattr(app.state, "auto_reminder_scheduler", None)
+    except Exception as e:
+        api_logger.error(
+            "⚠️ Reminder check error",
+            extra={"error": str(e), "error_type": type(e).__name__},
+            exc_info=True
+        )
+        raise e
+    finally:
+        if local_db:
+            db.close()
 
 

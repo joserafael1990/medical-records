@@ -159,15 +159,19 @@ else:
     print("ℹ️ Sentry no configurado (SENTRY_DSN_BACKEND no definido)")
 
 # ============================================================================
-# BACKGROUND SCHEDULER: Auto WhatsApp Appointment Reminders
+# INTERNAL ROUTES (Cloud Scheduler, etc)
 # ============================================================================
-from services.scheduler import start_auto_reminder_scheduler
+from routes import (
+    auth, users, patients, doctors, appointments,
+    medical_records_router, offices, avatar_router,
+    whatsapp_webhook, internal
+)
+from services.google_calendar_service import GoogleCalendarService
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown events"""
     # Startup
-    start_auto_reminder_scheduler(app)
     yield
     # Shutdown (if needed in the future)
     pass
@@ -436,6 +440,10 @@ app.include_router(google_calendar_router)
 # Include audit routes
 from routes.audit import router as audit_router
 app.include_router(audit_router)
+
+# Include internal routes (Cloud Scheduler)
+from routes import internal
+app.include_router(internal.router)
 
 # ============================================================================
 # HEALTH CHECK
