@@ -476,23 +476,26 @@ async def debug_reminders_list(db: Session = Depends(get_db)):
     
     now = now_cdmx().replace(tzinfo=None)
     
+    start_date = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    
     reminders = db.query(AppointmentReminder).join(Appointment).filter(
-        AppointmentReminder.enabled == True,
-        AppointmentReminder.sent == False
+        Appointment.appointment_date >= start_date
     ).limit(50).all()
     
     return {
         "server_time_cdmx": now.isoformat(),
+        "query_date_start": start_date.isoformat(),
         "count": len(reminders),
         "reminders": [
             {
                 "id": r.id,
                 "appt_id": r.appointment_id,
                 "offset": r.offset_minutes,
+                "enabled": r.enabled,
+                "sent": r.sent,
+                "sent_at": r.sent_at.isoformat() if r.sent_at else None,
                 "appt_date": r.appointment.appointment_date.isoformat(),
                 "appt_status": r.appointment.status,
-                "appt_condition": r.appointment.appointment_date > now,
-                "status_condition": r.appointment.status in ['por_confirmar', 'confirmada'],
                 "send_time": (r.appointment.appointment_date - timedelta(minutes=r.offset_minutes)).isoformat()
             } for r in reminders
         ]
