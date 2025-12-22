@@ -559,6 +559,28 @@ class Appointment(AppointmentBase):
     patient: Optional[Person] = None
     doctor: Optional[Person] = None
     reminders: Optional[List[AppointmentReminder]] = None  # Up to 3 reminders
+    
+    @classmethod
+    def model_validate(cls, obj, **kwargs):
+        """Override to ensure appointment_date includes timezone"""
+        import pytz
+        from datetime import datetime as dt
+        
+        # If obj is a database model instance
+        if hasattr(obj, 'appointment_date') and isinstance(obj.appointment_date, dt):
+            cdmx_tz = pytz.timezone('America/Mexico_City')
+            
+            # If the datetime is naive, assume it's in CDMX time
+            if obj.appointment_date.tzinfo is None:
+                localized = cdmx_tz.localize(obj.appointment_date)
+            else:
+                # If it has timezone, convert to CDMX
+                localized = obj.appointment_date.astimezone(cdmx_tz)
+            
+            # Convert to ISO format with timezone offset
+            obj.appointment_date = localized.isoformat()
+        
+        return super().model_validate(obj, **kwargs)
 
 # ============================================================================
 # VITAL SIGNS
