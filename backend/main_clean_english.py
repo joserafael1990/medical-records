@@ -168,9 +168,33 @@ from services.google_calendar_service import GoogleCalendarService
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown events"""
     # Startup
+    # Start the background scheduler task
+    from services.scheduler import check_and_send_reminders
+    
+    async def run_scheduler_loop():
+        """Background task to run reminder checks every 5 minutes"""
+        while True:
+            try:
+                logger.info("⏰ Running automatic reminder check...")
+                await asyncio.to_thread(check_and_send_reminders)
+            except Exception as e:
+                logger.error(f"❌ Error in reminder scheduler loop: {e}", exc_info=True)
+            
+            # Wait 5 minutes before next check
+            await asyncio.sleep(300)
+
+    # Create the background task
+    scheduler_task = asyncio.create_task(run_scheduler_loop())
+    
     yield
-    # Shutdown (if needed in the future)
-    pass
+    
+    # Shutdown
+    # Cancel the scheduler task
+    scheduler_task.cancel()
+    try:
+        await scheduler_task
+    except asyncio.CancelledError:
+        logger.info("🛑 Scheduler task cancelled")
 
 app = FastAPI(
     title="Medical Records API",
