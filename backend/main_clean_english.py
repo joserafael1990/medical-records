@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 import os
 import asyncio
@@ -464,6 +464,39 @@ app.include_router(audit_router)
 # Include internal routes (Cloud Scheduler)
 from routes import internal
 app.include_router(internal.router)
+
+# ============================================================================
+# TEMPORARY DEBUG ENDPOINT
+# ============================================================================
+@app.get("/api/debug/reminders-list")
+async def debug_reminders_list(db: Session = Depends(get_db)):
+    """List all pending reminders for debugging"""
+    from database import AppointmentReminder, Appointment
+    from services.consultation_service import now_cdmx
+    
+    now = now_cdmx().replace(tzinfo=None)
+    
+    reminders = db.query(AppointmentReminder).join(Appointment).filter(
+        AppointmentReminder.enabled == True,
+        AppointmentReminder.sent == False
+    ).limit(50).all()
+    
+    return {
+        "server_time_cdmx": now.isoformat(),
+        "count": len(reminders),
+        "reminders": [
+            {
+                "id": r.id,
+                "appt_id": r.appointment_id,
+                "offset": r.offset_minutes,
+                "appt_date": r.appointment.appointment_date.isoformat(),
+                "appt_status": r.appointment.status,
+                "appt_condition": r.appointment.appointment_date > now,
+                "status_condition": r.appointment.status in ['por_confirmar', 'confirmada'],
+                "send_time": (r.appointment.appointment_date - timedelta(minutes=r.offset_minutes)).isoformat()
+            } for r in reminders
+        ]
+    }
 
 # ============================================================================
 # HEALTH CHECK
