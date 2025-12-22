@@ -121,10 +121,18 @@ export const transformFormDataToUpdatePayload = (
     const appointmentDate = new Date(formData.appointment_date);
     const endTime = new Date(appointmentDate.getTime() + appointmentDuration * 60000);
 
+    // Convert to Mexico City timezone (same as create)
+    const mexicoTimeString = appointmentDate.toLocaleString("sv-SE", { timeZone: "America/Mexico_City" });
+    const mexicoEndTimeString = endTime.toLocaleString("sv-SE", { timeZone: "America/Mexico_City" });
+
+    // Create ISO strings with CDMX timezone offset
+    const cdmxDateISO = mexicoTimeString.replace(' ', 'T') + '-06:00';
+    const cdmxEndDateISO = mexicoEndTimeString.replace(' ', 'T') + '-06:00';
+
     const updateData: any = {
         patient_id: formData.patient_id,
-        appointment_date: appointmentDate.toISOString(),
-        end_time: endTime.toISOString(),
+        appointment_date: cdmxDateISO,
+        end_time: cdmxEndDateISO,
         appointment_type_id: formData.appointment_type_id || 1,
         office_id: formData.office_id || null,
         consultation_type: formData.consultation_type || '',
