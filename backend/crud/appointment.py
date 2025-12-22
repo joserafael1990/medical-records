@@ -263,14 +263,23 @@ def update_appointment(db: Session, appointment_id: int, appointment_data) -> Ap
     
     # Handle datetime conversion for appointment_date with CDMX timezone
     if 'appointment_date' in update_data and isinstance(update_data['appointment_date'], str):
-        update_data['appointment_date'] = datetime.fromisoformat(
-            update_data['appointment_date'].replace('Z', '+00:00')
-        )
-        # Convert to UTC for storage
-        update_data['appointment_date'] = to_utc_for_storage(update_data['appointment_date'])
+        # 1. Parse ISO string to datetime
+        dt_obj = datetime.fromisoformat(update_data['appointment_date'].replace('Z', '+00:00'))
+        
+        # 2. Ensure we have timezone info (assume CDMX if naive for safety, though frontend sends correct offsets now)
+        cdmx_tz = pytz.timezone('America/Mexico_City')
+        if dt_obj.tzinfo is None:
+            dt_aware = cdmx_tz.localize(dt_obj)
+        else:
+            dt_aware = dt_obj.astimezone(cdmx_tz)
+            
+        # 3. Store as NAIVE CDMX time (Wall Clock Time)
+        # This matches how create_appointment works and how the scheduler expects data
+        update_data['appointment_date'] = dt_aware.replace(tzinfo=None)
+        
         api_logger.debug(
-            "🌍 Converted appointment_date to UTC",
-            extra={"appointment_id": appointment_id, "utc_value": update_data['appointment_date'].isoformat()}
+            "🌍 Converted appointment_date to Naive CDMX for storage",
+            extra={"appointment_id": appointment_id, "stored_value": update_data['appointment_date'].isoformat()}
         )
     
     # Recalculate end_time if appointment_date changed (duration comes from doctor's profile)
@@ -281,7 +290,10 @@ def update_appointment(db: Session, appointment_id: int, appointment_data) -> Ap
             duration = appointment.doctor.appointment_duration
         else:
             duration = 30  # Default fallback
+            
+        # start_time is already naive CDMX, so just add duration
         update_data['end_time'] = start_time + timedelta(minutes=duration)
+        
         api_logger.debug(
             "⏰ Recalculated end_time",
             extra={
