@@ -562,23 +562,23 @@ class Appointment(AppointmentBase):
     
     @classmethod
     def model_validate(cls, obj, **kwargs):
-        """Override to ensure appointment_date includes timezone"""
+        """Override to ensure appointment_date includes timezone when loading from DB"""
         import pytz
         from datetime import datetime as dt
         
-        # If obj is a database model instance
+        # If obj is a database model instance with appointment_date
         if hasattr(obj, 'appointment_date') and isinstance(obj.appointment_date, dt):
             cdmx_tz = pytz.timezone('America/Mexico_City')
             
             # If the datetime is naive, assume it's in CDMX time
             if obj.appointment_date.tzinfo is None:
                 localized = cdmx_tz.localize(obj.appointment_date)
-            else:
-                # If it has timezone, convert to CDMX
+                # Store as ISO string with timezone
+                obj.appointment_date = localized.isoformat()
+            elif obj.appointment_date.tzinfo != cdmx_tz:
+                # If it has different timezone, convert to CDMX
                 localized = obj.appointment_date.astimezone(cdmx_tz)
-            
-            # Convert to ISO format with timezone offset
-            obj.appointment_date = localized.isoformat()
+                obj.appointment_date = localized.isoformat()
         
         return super().model_validate(obj, **kwargs)
 

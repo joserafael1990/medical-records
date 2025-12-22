@@ -183,12 +183,34 @@ class AppointmentService:
     @staticmethod
     def serialize_appointment(appointment: Appointment) -> Dict[str, Any]:
         """Serialize Appointment ORM instance to dict for API responses."""
+        import pytz
+        
         patient_name = "Paciente no encontrado"
         if appointment.patient:
             patient_name = appointment.patient.name or "Paciente sin nombre"
 
-        appointment_date_str = appointment.appointment_date.strftime('%Y-%m-%dT%H:%M:%S') if appointment.appointment_date else None
-        end_time_str = appointment.end_time.strftime('%Y-%m-%dT%H:%M:%S') if appointment.end_time else None
+        # Convert appointment_date to CDMX timezone with offset
+        cdmx_tz = pytz.timezone('America/Mexico_City')
+        if appointment.appointment_date:
+            if appointment.appointment_date.tzinfo is None:
+                # If naive, assume it's in CDMX time
+                localized = cdmx_tz.localize(appointment.appointment_date)
+            else:
+                # If has timezone, convert to CDMX
+                localized = appointment.appointment_date.astimezone(cdmx_tz)
+            appointment_date_str = localized.isoformat()
+        else:
+            appointment_date_str = None
+        
+        # Same for end_time
+        if appointment.end_time:
+            if appointment.end_time.tzinfo is None:
+                localized_end = cdmx_tz.localize(appointment.end_time)
+            else:
+                localized_end = appointment.end_time.astimezone(cdmx_tz)
+            end_time_str = localized_end.isoformat()
+        else:
+            end_time_str = None
 
         return {
             "id": str(appointment.id),
