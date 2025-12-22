@@ -64,14 +64,15 @@ export const API_CONFIG = {
 // Date and Time Utilities
 export const formatDateTimeForInput = (dateTimeString: string): string => {
   if (!dateTimeString) return '';
-  // Parse the date string and format it without timezone conversion
+
+  // Parse the date and convert to Mexico City timezone to avoid browser timezone issues
   const date = new Date(dateTimeString);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
+
+  // Use toLocaleString with Mexico City timezone to get the correct local time
+  const mexicoTimeString = date.toLocaleString("sv-SE", { timeZone: "America/Mexico_City" });
+
+  // mexicoTimeString is in format "YYYY-MM-DD HH:mm:ss", convert to "YYYY-MM-DDTHH:mm"
+  return mexicoTimeString.replace(' ', 'T').slice(0, 16);
 };
 
 export const getCurrentCDMXDateTime = (): string => {

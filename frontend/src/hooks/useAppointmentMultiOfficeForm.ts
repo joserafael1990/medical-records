@@ -269,7 +269,9 @@ export const useAppointmentMultiOfficeForm = (
         // Extract time from appointment_date for editing
         if (externalFormData.appointment_date) {
           const appointmentDate = new Date(externalFormData.appointment_date);
-          const timeString = appointmentDate.toTimeString().slice(0, 5);
+          // Use CDMX timezone to get correct time string
+          const cdmxTimeString = appointmentDate.toLocaleString("sv-SE", { timeZone: "America/Mexico_City" });
+          const timeString = cdmxTimeString.split(' ')[1]?.slice(0, 5) || '00:00';
           setSelectedTime(timeString);
           setSelectedDate(externalFormData.appointment_date);
 

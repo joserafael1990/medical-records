@@ -9,9 +9,22 @@ export const transformAppointmentToFormData = (appointment: any): AppointmentFor
         appointment.appointment_date || appointment.date_time
     );
 
+    // Ensure patient_id is a number
+    const patientId = typeof appointment.patient_id === 'number'
+        ? appointment.patient_id
+        : parseInt(appointment.patient_id, 10) || 0;
+
+    // Debug logging
+    console.log('📋 transformAppointmentToFormData:', {
+        original_patient_id: appointment.patient_id,
+        parsed_patient_id: patientId,
+        appointment_date_raw: appointment.appointment_date,
+        appointment_date_formatted: formattedDateTime
+    });
+
     return {
         id: appointment.id,
-        patient_id: appointment.patient_id,
+        patient_id: patientId,
         doctor_id: appointment.doctor_id,
         appointment_date: formattedDateTime,
         appointment_type_id: appointment.appointment_type_id || 1,
@@ -48,13 +61,13 @@ export const transformFormDataToCreatePayload = (
 ) => {
     // Support both date_time (legacy) and appointment_date (current)
     const dateTimeValue = formData.date_time || formData.appointment_date;
-    
+
     if (!dateTimeValue) {
         throw new Error('Missing date/time field: appointment_date or date_time is required');
     }
 
     // Ensure dateTimeValue is a string before calling includes
-    const dateTimeStr = typeof dateTimeValue === 'string' 
+    const dateTimeStr = typeof dateTimeValue === 'string'
         ? (dateTimeValue.includes(':') && !dateTimeValue.includes(':00')
             ? `${dateTimeValue}:00`
             : dateTimeValue)
