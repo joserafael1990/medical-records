@@ -476,7 +476,7 @@ async def debug_reminders_list(db: Session = Depends(get_db)):
     
     now = now_cdmx().replace(tzinfo=None)
     
-    start_date = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
     
     reminders = db.query(AppointmentReminder).join(Appointment).filter(
         Appointment.appointment_date >= start_date
