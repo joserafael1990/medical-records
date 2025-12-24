@@ -24,9 +24,9 @@ class Settings(BaseSettings):
     """
     
     # Database Configuration
-    DATABASE_URL: str = "postgresql://historias_user:historias_pass@postgres-db:5432/historias_clinicas"
+    DATABASE_URL: str = "postgresql://historias_user:historias_pass@localhost:5432/historias_clinicas"
     DB_HOST: str = "localhost"
-    DB_PORT: int = 5433  # Puerto externo (Docker mapea 5433->5432 internamente)
+    DB_PORT: int = 5432
     DB_NAME: str = "historias_clinicas"
     DB_USER: str = "historias_user"
     DB_PASSWORD: str = "historias_pass"
@@ -101,15 +101,7 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE: int = 10485760  # 10MB
     UPLOAD_DIR: str = "uploads"
     
-    # AWS S3 Configuration (Production)
-    # Used for storing clinical study files in production
-    # Set via environment variables in Coolify
-    AWS_ACCESS_KEY_ID: Optional[str] = None
-    AWS_SECRET_ACCESS_KEY: Optional[str] = None
-    AWS_REGION: str = "us-east-1"
-    AWS_BUCKET_NAME: Optional[str] = None
-    
-    # GCP Configuration
+    # Storage Configuration (GCP)
     GCP_PROJECT_ID: Optional[str] = None
     GCP_STORAGE_BUCKET: Optional[str] = None
     

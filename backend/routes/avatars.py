@@ -138,21 +138,27 @@ async def get_preloaded_avatar(filename: str):
 @router.get("/custom/{doctor_id}/{filename}")
 async def get_custom_avatar(doctor_id: int, filename: str):
     """Serve custom avatar images with CORS headers."""
-    BASE_DIR = Path(__file__).resolve().parent.parent
-    avatar_path = BASE_DIR / "uploads" / "doctor_avatars" / str(doctor_id) / filename
+    # Key construction matching avatar_service
+    key = f"doctor_avatars/{doctor_id}/{filename}"
     
-    if not avatar_path.exists() or not avatar_path.is_file():
+    from services.storage_service import get_storage_service
+    storage = get_storage_service()
+    
+    file_content = storage.download(key)
+    
+    if not file_content:
         raise HTTPException(status_code=404, detail="Avatar not found")
     
-    # Verify it's in the doctor's custom directory (security check)
-    try:
-        avatar_path.resolve().relative_to((BASE_DIR / "uploads" / "doctor_avatars" / str(doctor_id)).resolve())
-    except ValueError:
-        raise HTTPException(status_code=403, detail="Access denied")
-    
-    return FileResponse(
-        str(avatar_path),
-        media_type="image/png",
+    # Determine media type
+    import mimetypes
+    media_type, _ = mimetypes.guess_type(filename)
+    if not media_type:
+        media_type = "application/octet-stream"
+        
+    from fastapi.responses import Response
+    return Response(
+        content=file_content,
+        media_type=media_type,
         headers={
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET, OPTIONS",

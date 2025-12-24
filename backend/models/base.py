@@ -12,10 +12,12 @@ def utc_now():
 # Base para modelos
 Base = declarative_base()
 
-# Database URL from environment variable or default
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://historias_user:historias_pass@postgres-db:5432/historias_clinicas")
+# Database URL from environment variable
+# Use postgresql://user:pass@localhost:5432/dbname for local
+# In production Cloud Run, use socket path: postgresql://user:pass@/dbname?host=/cloudsql/project:region:instance
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://historias_user:historias_pass@localhost:5432/historias_clinicas")
 
-# SQLAlchemy setup with connection timeouts for Azure PostgreSQL
+# SQLAlchemy setup with connection timeouts
 engine = create_engine(
     DATABASE_URL,
     echo=False,
@@ -24,8 +26,7 @@ engine = create_engine(
     pool_size=5,         # Max 5 connections in pool
     max_overflow=10,     # Allow 10 additional connections
     connect_args={
-        "connect_timeout": 10,  # 10 second connection timeout
-        "options": "-c statement_timeout=30000"  # 30 second query timeout
+        "connect_timeout": 5
     }
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
