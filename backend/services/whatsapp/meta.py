@@ -205,11 +205,20 @@ class WhatsAppService:
                 logger.warning(f"⚠️ CRITICAL: Message status is 'accepted' - delivery NOT confirmed!")
                 logger.warning(f"⚠️ Message ID: {message_id} | Input phone: {input_phone} | WA ID: {wa_id}")
                 logger.warning(f"⚠️ Meta accepted the message but actual delivery is unknown. Check webhooks for 'delivered' or 'read' status.")
+                
+                # Check if phone was normalized (mismatch between input and wa_id)
+                phone_normalized = input_phone.replace('+', '') != wa_id
+                if phone_normalized:
+                    logger.error(f"🚨 PHONE NUMBER NORMALIZED BY META: {input_phone} → {wa_id}")
+                    logger.error(f"🚨 This suggests Meta expects the number in format: {wa_id}")
+                    logger.error(f"🚨 Verify if your WhatsApp number is actually: +{wa_id} or {input_phone}")
+                
                 logger.warning(f"⚠️ If message doesn't arrive, possible causes:")
-                logger.warning(f"   1. Phone number {wa_id} not registered with WhatsApp")
-                logger.warning(f"   2. Phone number format issue (input {input_phone} was normalized to {wa_id})")
+                logger.warning(f"   1. Phone number mismatch: You think it's {input_phone} but Meta expects {wa_id}")
+                logger.warning(f"   2. Phone number {wa_id} not registered with WhatsApp")
                 logger.warning(f"   3. Message blocked by Meta spam filters")
                 logger.warning(f"   4. Template not approved or recipient not opted in")
+                logger.warning(f"   5. Webhook not configured correctly (no status updates received)")
                 _debug_log("meta.py:130", "Message status is 'accepted' not 'delivered'", {
                     "message_id": message_id,
                     "message_status": message_status,
