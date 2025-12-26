@@ -73,15 +73,13 @@ class WhatsAppService:
         if country_code.startswith('+'):
             country_code = country_code[1:]
         
-        # CRITICAL FIX: Para México (country_code = '52'), asegurar formato 52 + 1 + 10 dígitos
-        # Si el número ya tiene el código de país, verificar formato para México
+        # Para México (country_code = '52'), verificar formato
+        # NOTA: Algunos números mexicanos tienen formato +52 XX XXXX XXXX (sin "1")
+        # y otros tienen +52 1 XX XXXX XXXX (con "1"). No debemos insertar "1" 
+        # automáticamente si el número ya viene completo, solo cuando construimos desde un número local.
         if phone.startswith(country_code):
-            # Para México (country_code = '52'), asegurar formato 52 + 1 + 10 dígitos
-            if country_code == '52' and len(phone) == 12:
-                # Si tiene 12 dígitos (52 + 10 dígitos), insertar "1" después de "52"
-                if phone.startswith('52') and not phone.startswith('521'):
-                    phone = '52' + '1' + phone[2:]
-                    logger.info(f"📞 Fixed Mexico phone format: inserted '1' -> {phone}")
+            # Si el número ya tiene el código de país, devolverlo tal cual
+            # (no insertar "1" automáticamente ya que puede ser incorrecto)
             return phone
         
         # Si el número tiene 10 dígitos (número local), agregar código de país
