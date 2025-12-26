@@ -70,6 +70,58 @@ async def process_webhook_event(request: Request, db: Session):
                 field = change.get('field')
                 value = change.get('value', {})
                 
+                # Process status updates (delivered, read, failed)
+                if field == 'statuses':
+                    statuses = value.get('statuses', [])
+                    for status in statuses:
+                        message_id = status.get('id')
+                        status_type = status.get('status')  # sent, delivered, read, failed
+                        recipient_id = status.get('recipient_id')
+                        timestamp = status.get('timestamp')
+                        
+                        api_logger.info(
+                            f"📊 WhatsApp message status update: {status_type}",
+                            extra={
+                                "message_id": message_id,
+                                "status": status_type,
+                                "recipient_id": recipient_id,
+                                "timestamp": timestamp,
+                                "full_status": status
+                            }
+                        )
+                        
+                        # Log critical statuses
+                        if status_type == 'failed':
+                            error = status.get('errors', [{}])[0] if status.get('errors') else {}
+                            api_logger.error(
+                                f"❌ WhatsApp message FAILED to deliver",
+                                extra={
+                                    "message_id": message_id,
+                                    "recipient_id": recipient_id,
+                                    "error_code": error.get('code'),
+                                    "error_title": error.get('title'),
+                                    "error_message": error.get('message'),
+                                    "error_details": error
+                                }
+                            )
+                        elif status_type == 'delivered':
+                            api_logger.info(
+                                f"✅ WhatsApp message DELIVERED",
+                                extra={
+                                    "message_id": message_id,
+                                    "recipient_id": recipient_id
+                                }
+                            )
+                        elif status_type == 'read':
+                            api_logger.info(
+                                f"👁️ WhatsApp message READ by recipient",
+                                extra={
+                                    "message_id": message_id,
+                                    "recipient_id": recipient_id
+                                }
+                            )
+                    continue
+                
                 if field != 'messages':
                     continue
                 

@@ -133,9 +133,14 @@ class WhatsAppService:
                 'parameters': parameters
             })
         
+        # Meta WhatsApp API accepts E.164 format with or without '+', but standard is with '+'
+        # Adding '+' prefix for proper E.164 format
+        to_phone_e164 = f'+{formatted_phone}' if not formatted_phone.startswith('+') else formatted_phone
+        logger.info(f"📞 E.164 format: {formatted_phone} -> {to_phone_e164}")
+        
         payload = {
             'messaging_product': 'whatsapp',
-            'to': formatted_phone,
+            'to': to_phone_e164,
             'type': 'template',
             'template': {
                 'name': template_name,
@@ -350,11 +355,13 @@ class WhatsAppService:
         
         url = f'{self.base_url}/{self.phone_id}/messages'
         formatted_phone = self._format_phone_number(to_phone, country_code)
-        logger.info(f"📞 Sending simple message to {formatted_phone}")
+        # Meta WhatsApp API accepts E.164 format with or without '+', but standard is with '+'
+        to_phone_e164 = f'+{formatted_phone}' if not formatted_phone.startswith('+') else formatted_phone
+        logger.info(f"📞 Sending simple message to {to_phone_e164}")
         
         payload = {
             'messaging_product': 'whatsapp',
-            'to': formatted_phone,
+            'to': to_phone_e164,
             'type': 'text',
             'text': {
                 'body': message
@@ -729,11 +736,14 @@ class WhatsAppService:
         
         url = f'{self.base_url}/{self.phone_id}/messages'
         
+        # Meta WhatsApp API accepts E.164 format with or without '+', but standard is with '+'
+        to_phone_e164 = f'+{formatted_phone}' if not formatted_phone.startswith('+') else formatted_phone
+        
         # Mensaje con botón interactivo
         payload = {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
-            "to": formatted_phone,
+            "to": to_phone_e164,
             "type": "interactive",
             "interactive": {
                 "type": "button",
@@ -826,11 +836,13 @@ class WhatsAppService:
         
         url = f'{self.base_url}/{self.phone_id}/messages'
         formatted_phone = self._format_phone_number(to_phone, country_code)
+        # Meta WhatsApp API accepts E.164 format with or without '+', but standard is with '+'
+        to_phone_e164 = f'+{formatted_phone}' if not formatted_phone.startswith('+') else formatted_phone
         
         payload = {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
-            "to": formatted_phone,
+            "to": to_phone_e164,
             "type": "text",
             "text": {
                 "preview_url": True,
