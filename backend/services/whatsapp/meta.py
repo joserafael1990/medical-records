@@ -74,12 +74,16 @@ class WhatsAppService:
             country_code = country_code[1:]
         
         # Para México (country_code = '52'), verificar formato
-        # NOTA: Algunos números mexicanos tienen formato +52 XX XXXX XXXX (sin "1")
-        # y otros tienen +52 1 XX XXXX XXXX (con "1"). No debemos insertar "1" 
-        # automáticamente si el número ya viene completo, solo cuando construimos desde un número local.
+        # Meta normaliza números mexicanos móviles a formato 52 + 1 + 10 dígitos
+        # Si el número tiene 12 dígitos (52 + 10 dígitos sin "1"), Meta lo normaliza insertando "1"
+        # Para evitar problemas de entrega, insertamos "1" si el número es de 12 dígitos y no tiene "1"
         if phone.startswith(country_code):
-            # Si el número ya tiene el código de país, devolverlo tal cual
-            # (no insertar "1" automáticamente ya que puede ser incorrecto)
+            if country_code == '52' and len(phone) == 12:
+                # Si tiene 12 dígitos (52 + 10 dígitos), verificar si necesita "1"
+                if phone.startswith('52') and not phone.startswith('521'):
+                    # Insertar "1" para que coincida con el formato que Meta espera
+                    phone = '52' + '1' + phone[2:]
+                    logger.info(f"📞 Inserting '1' for Mexican mobile format: {phone[2:]} -> {phone}")
             return phone
         
         # Si el número tiene 10 dígitos (número local), agregar código de país
