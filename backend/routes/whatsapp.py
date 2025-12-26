@@ -98,13 +98,23 @@ async def whatsapp_webhook_verification(
     
     verify_token = os.getenv('META_WHATSAPP_VERIFY_TOKEN', 'mi_token_secreto_123')
     
+    # Log para debugging (sin exponer el token completo)
+    api_logger.info(
+        f"🔍 Webhook verification attempt - mode: {mode}, token_received: {token[:10] if token else 'None'}..., token_expected: {verify_token[:10] if verify_token else 'None'}..., challenge: {challenge}"
+    )
+    
     if mode == 'subscribe' and token == verify_token:
         api_logger.info("✅ WhatsApp webhook verified successfully")
         return int(challenge)
     
     api_logger.warning(
         "❌ WhatsApp webhook verification failed",
-        extra={"mode": mode, "token": token}
+        extra={
+            "mode": mode, 
+            "token_received": token[:10] + "..." if token else None,
+            "token_expected": verify_token[:10] + "..." if verify_token else None,
+            "tokens_match": token == verify_token if token and verify_token else False
+        }
     )
     return {"status": "error", "message": "Verification failed"}
 
