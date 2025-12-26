@@ -1,10 +1,26 @@
 import os
 import requests
 import logging
+import json
 from typing import Dict, Any, List, Optional
+from pathlib import Path
 
 # Configurar logging
 logger = logging.getLogger(__name__)
+
+def _debug_log(location: str, message: str, data: dict, hypothesis_id: str = "A"):
+    """Write debug log entry to stdout (captured by Cloud Logging)"""
+    try:
+        log_entry = {
+            "location": location,
+            "message": message,
+            "data": data,
+            "hypothesisId": hypothesis_id
+        }
+        # Log to stdout so it appears in Cloud Logging
+        logger.info(f"🔍 DEBUG [{hypothesis_id}] {location}: {message} | Data: {json.dumps(data)}")
+    except Exception:
+        pass  # Fail silently to not break production
 
 class WhatsAppService:
     """Servicio para interactuar con WhatsApp Business API de Meta"""
@@ -41,6 +57,7 @@ class WhatsAppService:
             phone: Número de teléfono a formatear
             country_code: Código de país (sin +). Si es None, usa '52' (México) como fallback
         """
+        original_input = phone
         # Usar código de país por defecto si no se proporciona
         if country_code is None:
             country_code = '52'  # México como fallback
@@ -56,13 +73,24 @@ class WhatsAppService:
         if country_code.startswith('+'):
             country_code = country_code[1:]
         
-        # Si el número ya tiene el código de país, devolverlo
+        # CRITICAL FIX: Para México (country_code = '52'), asegurar formato 52 + 1 + 10 dígitos
+        # Si el número ya tiene el código de país, verificar formato para México
         if phone.startswith(country_code):
+            # Para México (country_code = '52'), asegurar formato 52 + 1 + 10 dígitos
+            if country_code == '52' and len(phone) == 12:
+                # Si tiene 12 dígitos (52 + 10 dígitos), insertar "1" después de "52"
+                if phone.startswith('52') and not phone.startswith('521'):
+                    phone = '52' + '1' + phone[2:]
+                    logger.info(f"📞 Fixed Mexico phone format: inserted '1' -> {phone}")
             return phone
         
         # Si el número tiene 10 dígitos (número local), agregar código de país
         if len(phone) == 10:
             phone = f'{country_code}{phone}'
+            # Para México, insertar "1" entre el código de país y el número
+            if country_code == '52':
+                phone = '52' + '1' + phone[2:]
+                logger.info(f"📞 Fixed Mexico phone format: added country code + '1' -> {phone}")
         
         return phone
     
@@ -87,6 +115,15 @@ class WhatsAppService:
         formatted_phone = self._format_phone_number(to_phone, country_code)
         logger.info(f"📞 Original phone: {to_phone}, Country code: {country_code}, Formatted phone: {formatted_phone}")
         
+        # #region agent log
+        _debug_log("meta.py:87", "Phone number formatting", {
+            "original_phone": to_phone,
+            "country_code": country_code,
+            "formatted_phone": formatted_phone,
+            "phone_id": self.phone_id[:8] + "..." if self.phone_id else None
+        }, "B")
+        # #endregion
+        
         # Construir componentes de la plantilla
         components = []
         if template_params:
@@ -107,6 +144,16 @@ class WhatsAppService:
             }
         }
         
+        # #region agent log
+        _debug_log("meta.py:99", "Before API call", {
+            "template_name": template_name,
+            "language_code": language_code,
+            "formatted_phone": formatted_phone,
+            "template_params_count": len(template_params),
+            "url": url
+        }, "C")
+        # #endregion
+        
         try:
             logger.info(f"📤 Sending WhatsApp to {formatted_phone} using template {template_name}")
             logger.debug(f"📤 Payload: {payload}")
@@ -115,17 +162,95 @@ class WhatsAppService:
             logger.info(f"📤 Response status: {response.status_code}")
             logger.debug(f"📤 Response headers: {dict(response.headers)}")
             
+            # #region agent log
+            _debug_log("meta.py:115", "API response received", {
+                "status_code": response.status_code,
+                "response_headers": dict(response.headers)
+            }, "A")
+            # #endregion
+            
             response.raise_for_status()
             
             result = response.json()
             logger.info(f"📤 Response body: {result}")
             message_id = result.get('messages', [{}])[0].get('id') if result.get('messages') else None
-            logger.info(f"✅ WhatsApp sent successfully. Message ID: {message_id}")
+            message_status = result.get('messages', [{}])[0].get('message_status') if result.get('messages') else None
+            
+            # Check for phone number mismatch (input vs wa_id)
+            contacts = result.get('contacts', [])
+            input_phone = formatted_phone
+            wa_id = None
+            if contacts:
+                wa_id = contacts[0].get('wa_id')
+                input_phone = contacts[0].get('input', formatted_phone)
+            
+            # #region agent log
+            _debug_log("meta.py:123", "API response parsed", {
+                "message_id": message_id,
+                "message_status": message_status,
+                "input_phone": input_phone,
+                "wa_id": wa_id,
+                "phone_mismatch": input_phone != wa_id if wa_id else None,
+                "has_messages": bool(result.get('messages')),
+                "response_keys": list(result.keys()),
+                "full_response": result
+            }, "A")
+            # #endregion
+            
+            # Warn if message_status is only 'accepted' (not delivered)
+            if message_status == 'accepted':
+                logger.warning(f"⚠️ CRITICAL: Message status is 'accepted' - delivery NOT confirmed!")
+                logger.warning(f"⚠️ Message ID: {message_id} | Input phone: {input_phone} | WA ID: {wa_id}")
+                logger.warning(f"⚠️ Meta accepted the message but actual delivery is unknown. Check webhooks for 'delivered' or 'read' status.")
+                logger.warning(f"⚠️ If message doesn't arrive, possible causes:")
+                logger.warning(f"   1. Phone number {wa_id} not registered with WhatsApp")
+                logger.warning(f"   2. Phone number format issue (input {input_phone} was normalized to {wa_id})")
+                logger.warning(f"   3. Message blocked by Meta spam filters")
+                logger.warning(f"   4. Template not approved or recipient not opted in")
+                _debug_log("meta.py:130", "Message status is 'accepted' not 'delivered'", {
+                    "message_id": message_id,
+                    "message_status": message_status,
+                    "input_phone": input_phone,
+                    "wa_id": wa_id,
+                    "note": "Meta accepted the message but delivery status is unknown. Check webhook for delivery confirmation."
+                }, "D")
+            
+            if input_phone != wa_id and wa_id:
+                logger.error(f"❌ CRITICAL: Phone number mismatch detected!")
+                logger.error(f"❌ Input phone: {input_phone} | WhatsApp ID: {wa_id}")
+                logger.error(f"❌ Meta normalized the phone number. Area code changed: {input_phone[:4]} -> {wa_id[:4]}")
+                logger.error(f"❌ This mismatch may cause delivery failures. Verify the original phone number format.")
+                _debug_log("meta.py:135", "Phone number formatting mismatch", {
+                    "input_phone": input_phone,
+                    "wa_id": wa_id,
+                    "area_code_input": input_phone[:4],
+                    "area_code_wa_id": wa_id[:4],
+                    "note": "Meta normalized the phone number. This mismatch may cause delivery issues."
+                }, "B")
+            
+            logger.info(f"✅ WhatsApp sent successfully. Message ID: {message_id}, Status: {message_status}")
+            
+            # If message_status is only 'accepted', try to check actual delivery status after a short delay
+            # Note: This is async, so we return success but log a warning
+            if message_status == 'accepted':
+                logger.warning(f"⚠️ Message status is 'accepted' - delivery not confirmed. Check webhooks for delivery status.")
+                logger.info(f"💡 Tip: Monitor webhook events for 'delivered' or 'read' status updates for message {message_id}")
+            
+            # #region agent log
+            _debug_log("meta.py:150", "Returning success result", {
+                "success": True,
+                "message_id": message_id,
+                "message_status": message_status,
+                "note": f"API returned success with status '{message_status}'. If status is 'accepted', delivery is not yet confirmed."
+            }, "D")
+            # #endregion
             
             return {
                 'success': True,
                 'message_id': message_id,
-                'response': result
+                'message_status': message_status,
+                'response': result,
+                'delivery_confirmed': message_status not in (None, 'accepted')  # Only confirmed if status is 'sent', 'delivered', or 'read'
             }
             
         except requests.exceptions.HTTPError as e:
@@ -141,6 +266,14 @@ class WhatsAppService:
                         error_detail = str(e)
             else:
                 error_detail = str(e)
+            
+            # #region agent log
+            _debug_log("meta.py:132", "HTTP error caught", {
+                "status_code": status_code,
+                "error_detail": error_detail if isinstance(error_detail, str) else str(error_detail),
+                "error_type": type(e).__name__
+            }, "E")
+            # #endregion
             
             # Try to extract status code from error message if not available directly
             if status_code is None and '401' in str(e):
@@ -194,6 +327,12 @@ class WhatsAppService:
                 }
         except Exception as e:
             logger.error(f"Error sending WhatsApp: {str(e)}")
+            # #region agent log
+            _debug_log("meta.py:196", "Unexpected exception", {
+                "error": str(e),
+                "error_type": type(e).__name__
+            }, "F")
+            # #endregion
             return {
                 'success': False,
                 'error': str(e)
@@ -330,6 +469,17 @@ class WhatsAppService:
         # Log what we're trying to send
         logger.info(f"📤 Attempting to send '{template_name}' template with language: '{template_language}' for appointment status: '{appointment_status}'")
         
+        # #region agent log
+        _debug_log("meta.py:333", "Calling send_template_message", {
+            "patient_phone": patient_phone,
+            "template_name": template_name,
+            "template_language": template_language,
+            "country_code": country_code,
+            "appointment_status": appointment_status,
+            "template_params": template_params
+        }, "G")
+        # #endregion
+        
         result = self.send_template_message(
             to_phone=patient_phone,
             template_name=template_name,
@@ -337,6 +487,15 @@ class WhatsAppService:
             language_code=template_language,
             country_code=country_code
         )
+        
+        # #region agent log
+        _debug_log("meta.py:340", "send_template_message returned", {
+            "success": result.get('success'),
+            "message_id": result.get('message_id'),
+            "error": result.get('error'),
+            "has_details": bool(result.get('details'))
+        }, "H")
+        # #endregion
         
         # If it fails with template translation error, try other Spanish variants
         # Check both error message and details for the template translation error
@@ -388,9 +547,29 @@ class WhatsAppService:
                 )
                 if result.get('success'):
                     logger.info(f"✅ Success with language code: '{variant}'")
+                    # #region agent log
+                    _debug_log("meta.py:390", "Template retry succeeded", {
+                        "variant": variant,
+                        "message_id": result.get('message_id')
+                    }, "I")
+                    # #endregion
                     break
                 else:
                     logger.debug(f"❌ Failed with language code '{variant}': {result.get('error')}")
+                    # #region agent log
+                    _debug_log("meta.py:393", "Template retry failed", {
+                        "variant": variant,
+                        "error": result.get('error')
+                    }, "I")
+                    # #endregion
+        
+        # #region agent log
+        _debug_log("meta.py:395", "send_appointment_reminder final result", {
+            "success": result.get('success'),
+            "message_id": result.get('message_id'),
+            "error": result.get('error')
+        }, "J")
+        # #endregion
         
         return result
     
@@ -477,12 +656,29 @@ class WhatsAppService:
         try:
             response = requests.get(url, headers=self._get_headers(), timeout=10)
             response.raise_for_status()
+            result = response.json()
+            
+            # #region agent log
+            _debug_log("meta.py:478", "Message status checked", {
+                "message_id": message_id,
+                "status": result.get('status'),
+                "full_response": result
+            }, "K")
+            # #endregion
+            
             return {
                 'success': True,
-                'data': response.json()
+                'data': result,
+                'status': result.get('status')
             }
         except Exception as e:
             logger.error(f"Error getting message status: {str(e)}")
+            # #region agent log
+            _debug_log("meta.py:490", "Error checking message status", {
+                "message_id": message_id,
+                "error": str(e)
+            }, "K")
+            # #endregion
             return {
                 'success': False,
                 'error': str(e)
