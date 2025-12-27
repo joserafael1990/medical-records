@@ -73,18 +73,12 @@ class WhatsAppService:
         if country_code.startswith('+'):
             country_code = country_code[1:]
         
-        # Para México (country_code = '52'), manejar números móviles
-        # Meta normaliza números mexicanos de 12 dígitos (52 + 10 dígitos) a 13 dígitos (52 + 1 + 10 dígitos)
-        # Por ejemplo: 525579449672 → 5215579449672
-        # Si el número ya viene completo con el código de país, verificar si necesita el "1"
+        # Para México (country_code = '52'), NO insertar "1" automáticamente
+        # El número real del usuario es el que debe enviarse, Meta lo manejará internamente
+        # Si el número ya viene completo con el código de país, devolverlo tal cual
         if phone.startswith(country_code):
-            if country_code == '52' and len(phone) == 12:
-                # Número mexicano de 12 dígitos (52 + 10 dígitos sin "1")
-                # Meta espera formato 13 dígitos (52 + 1 + 10 dígitos) para números móviles
-                # Insertar "1" después del código de país si no existe
-                if not phone.startswith('521'):
-                    phone = '52' + '1' + phone[2:]
-                    logger.warning(f"📞 MEXICO NUMBER FORMAT: Normalizing 12-digit to 13-digit format (Meta requirement): {phone[2:]} -> {phone}")
+            # Devolver el número tal cual si ya tiene el código de país
+            # NO modificar números que ya vienen completos
             return phone
         
         # Si el número tiene 10 dígitos (número local), agregar código de país
@@ -198,7 +192,7 @@ class WhatsAppService:
                 "message_status": message_status,
                 "input_phone": input_phone,
                 "wa_id": wa_id,
-                "phone_mismatch": input_phone != wa_id if wa_id else None,
+                "phone_mismatch": input_phone.replace('+', '') != wa_id if wa_id else None,
                 "has_messages": bool(result.get('messages')),
                 "response_keys": list(result.keys()),
                 "full_response": result
@@ -211,12 +205,15 @@ class WhatsAppService:
                 logger.warning(f"⚠️ Message ID: {message_id} | Input phone: {input_phone} | WA ID: {wa_id}")
                 logger.warning(f"⚠️ Meta accepted the message but actual delivery is unknown. Check webhooks for 'delivered' or 'read' status.")
                 
-                # Check if phone was normalized (mismatch between input and wa_id)
-                phone_normalized = input_phone.replace('+', '') != wa_id
+                # Check if phone was normalized (mismatch between input and wa_id, excluding '+')
+                input_phone_clean = input_phone.replace('+', '')
+                phone_normalized = input_phone_clean != wa_id
                 if phone_normalized:
                     logger.error(f"🚨 PHONE NUMBER NORMALIZED BY META: {input_phone} → {wa_id}")
                     logger.error(f"🚨 This suggests Meta expects the number in format: {wa_id}")
                     logger.error(f"🚨 Verify if your WhatsApp number is actually: +{wa_id} or {input_phone}")
+                else:
+                    logger.info(f"✅ Phone number format matches Meta's wa_id: {input_phone_clean} == {wa_id}")
                 
                 logger.warning(f"⚠️ If message doesn't arrive, possible causes:")
                 logger.warning(f"   1. Phone number mismatch: You think it's {input_phone} but Meta expects {wa_id}")
@@ -232,7 +229,9 @@ class WhatsAppService:
                     "note": "Meta accepted the message but delivery status is unknown. Check webhook for delivery confirmation."
                 }, "D")
             
-            if input_phone != wa_id and wa_id:
+            # Check for real phone mismatch (excluding the '+' prefix)
+            input_phone_clean = input_phone.replace('+', '')
+            if input_phone_clean != wa_id and wa_id:
                 logger.error(f"❌ CRITICAL: Phone number mismatch detected!")
                 logger.error(f"❌ Input phone: {input_phone} | WhatsApp ID: {wa_id}")
                 logger.error(f"❌ Meta normalized the phone number. Area code changed: {input_phone[:4]} -> {wa_id[:4]}")
