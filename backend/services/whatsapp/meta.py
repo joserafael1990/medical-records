@@ -175,6 +175,40 @@ class WhatsAppService:
             
             result = response.json()
             logger.info(f"📤 Response body: {result}")
+            
+            # #region agent log - Capture full response for debugging
+            _debug_log("meta.py:177", "Full Meta API response", {
+                "full_response": result,
+                "response_keys": list(result.keys()),
+                "has_errors": 'error' in result,
+                "has_messages": 'messages' in result,
+                "has_contacts": 'contacts' in result
+            }, "A")
+            # #endregion
+            
+            # Check for errors in response (Meta sometimes includes errors even with 200 OK)
+            if 'error' in result:
+                error_data = result.get('error', {})
+                error_code = error_data.get('code')
+                error_message = error_data.get('message')
+                error_type = error_data.get('type')
+                error_subcode = error_data.get('error_subcode')
+                
+                logger.error(f"🚨 Meta API returned ERROR in response (even though HTTP 200):")
+                logger.error(f"🚨 Error code: {error_code} | Type: {error_type} | Subcode: {error_subcode}")
+                logger.error(f"🚨 Error message: {error_message}")
+                logger.error(f"🚨 Full error: {error_data}")
+                
+                # #region agent log
+                _debug_log("meta.py:195", "Meta API error in response", {
+                    "error_code": error_code,
+                    "error_type": error_type,
+                    "error_subcode": error_subcode,
+                    "error_message": error_message,
+                    "full_error": error_data
+                }, "E")
+                # #endregion
+            
             message_id = result.get('messages', [{}])[0].get('id') if result.get('messages') else None
             message_status = result.get('messages', [{}])[0].get('message_status') if result.get('messages') else None
             
@@ -185,6 +219,21 @@ class WhatsAppService:
             if contacts:
                 wa_id = contacts[0].get('wa_id')
                 input_phone = contacts[0].get('input', formatted_phone)
+                
+                # #region agent log - Check if contact is registered
+                contact_status = contacts[0].get('status', 'unknown')
+                _debug_log("meta.py:215", "Contact information from Meta", {
+                    "input_phone": input_phone,
+                    "wa_id": wa_id,
+                    "contact_status": contact_status,
+                    "full_contact": contacts[0]
+                }, "B")
+                # #endregion
+                
+                # Check if contact status indicates registration issue
+                if contact_status and contact_status != 'valid':
+                    logger.warning(f"⚠️ Contact status from Meta: {contact_status}")
+                    logger.warning(f"⚠️ This may indicate the phone number is not registered with WhatsApp")
             
             # #region agent log
             _debug_log("meta.py:123", "API response parsed", {
