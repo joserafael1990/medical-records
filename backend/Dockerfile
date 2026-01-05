@@ -7,8 +7,7 @@ WORKDIR /app
 # ----------- Builder stage -----------
 FROM base AS builder
 
-# Accept build args that Coolify might pass (even though we don't use them at build time)
-# These are runtime secrets, but Coolify passes them as build args
+# Accept build args (runtime secrets passed as build args)
 ARG META_WHATSAPP_VERIFY_TOKEN
 ARG META_WHATSAPP_TOKEN
 ARG META_WHATSAPP_APP_SECRET

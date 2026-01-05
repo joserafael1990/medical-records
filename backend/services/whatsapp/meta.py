@@ -73,12 +73,17 @@ class WhatsAppService:
         if country_code.startswith('+'):
             country_code = country_code[1:]
         
-        # Para México (country_code = '52'), NO insertar "1" automáticamente
-        # El número real del usuario es el que debe enviarse, Meta lo manejará internamente
-        # Si el número ya viene completo con el código de país, devolverlo tal cual
+        # Para México (country_code = '52'), normalizar al formato que Meta espera
+        # Meta normaliza números mexicanos de 12 dígitos (52 + 10) a 13 dígitos (52 + 1 + 10)
+        # Ejemplo: 525579449672 → 5215579449672
+        # Para evitar el mismatch, enviamos directamente en el formato normalizado
         if phone.startswith(country_code):
-            # Devolver el número tal cual si ya tiene el código de país
-            # NO modificar números que ya vienen completos
+            # Si es un número mexicano de 12 dígitos (52 + 10 dígitos sin "1")
+            # Meta espera formato 13 dígitos (52 + 1 + 10 dígitos) para números móviles
+            if country_code == '52' and len(phone) == 12 and not phone.startswith('521'):
+                original = phone
+                phone = '52' + '1' + phone[2:]
+                logger.warning(f"📞 MEXICO NUMBER NORMALIZATION: {original} -> {phone} (Meta format)")
             return phone
         
         # Si el número tiene 10 dígitos (número local), agregar código de país
@@ -193,6 +198,7 @@ class WhatsAppService:
                 error_message = error_data.get('message')
                 error_type = error_data.get('type')
                 error_subcode = error_data.get('error_subcode')
+                error_fbtrace_id = error_data.get('fbtrace_id')
                 
                 logger.error(f"🚨 Meta API returned ERROR in response (even though HTTP 200):")
                 logger.error(f"🚨 Error code: {error_code} | Type: {error_type} | Subcode: {error_subcode}")
@@ -205,8 +211,18 @@ class WhatsAppService:
                     "error_type": error_type,
                     "error_subcode": error_subcode,
                     "error_message": error_message,
-                    "full_error": error_data
+                    "error_fbtrace_id": error_fbtrace_id,
+                    "full_error": error_data,
+                    "all_error_keys": list(error_data.keys())
                 }, "E")
+                # #endregion
+            else:
+                # #region agent log - Verify no hidden errors
+                _debug_log("meta.py:200", "No errors in response", {
+                    "has_error_key": 'error' in result,
+                    "response_keys": list(result.keys()),
+                    "note": "Response appears successful, but delivery may still fail if template not approved or number not registered"
+                }, "F")
                 # #endregion
             
             message_id = result.get('messages', [{}])[0].get('id') if result.get('messages') else None
@@ -222,18 +238,25 @@ class WhatsAppService:
                 
                 # #region agent log - Check if contact is registered
                 contact_status = contacts[0].get('status', 'unknown')
+                contact_has_status = 'status' in contacts[0]
                 _debug_log("meta.py:215", "Contact information from Meta", {
                     "input_phone": input_phone,
                     "wa_id": wa_id,
                     "contact_status": contact_status,
-                    "full_contact": contacts[0]
+                    "contact_has_status_field": contact_has_status,
+                    "full_contact": contacts[0],
+                    "all_contact_keys": list(contacts[0].keys())
                 }, "B")
                 # #endregion
                 
                 # Check if contact status indicates registration issue
-                if contact_status and contact_status != 'valid':
+                if contact_has_status:
                     logger.warning(f"⚠️ Contact status from Meta: {contact_status}")
-                    logger.warning(f"⚠️ This may indicate the phone number is not registered with WhatsApp")
+                    if contact_status != 'valid':
+                        logger.error(f"🚨 CRITICAL: Contact status is '{contact_status}' - number may not be registered with WhatsApp!")
+                        logger.error(f"🚨 This is likely why messages are not being delivered!")
+                else:
+                    logger.info(f"ℹ️ Meta did not return 'status' field for contact - this is normal for registered numbers")
             
             # #region agent log
             _debug_log("meta.py:123", "API response parsed", {
@@ -285,12 +308,16 @@ class WhatsAppService:
                 logger.error(f"❌ Input phone: {input_phone} | WhatsApp ID: {wa_id}")
                 logger.error(f"❌ Meta normalized the phone number. Area code changed: {input_phone[:4]} -> {wa_id[:4]}")
                 logger.error(f"❌ This mismatch may cause delivery failures. Verify the original phone number format.")
+                logger.error(f"💡 HYPOTHESIS: Meta expects format {wa_id} but we sent {input_phone_clean}")
+                logger.error(f"💡 NEXT STEP: Try sending with format +{wa_id} instead of {input_phone}")
                 _debug_log("meta.py:135", "Phone number formatting mismatch", {
                     "input_phone": input_phone,
                     "wa_id": wa_id,
                     "area_code_input": input_phone[:4],
                     "area_code_wa_id": wa_id[:4],
-                    "note": "Meta normalized the phone number. This mismatch may cause delivery issues."
+                    "normalized_format": f"+{wa_id}",
+                    "original_format": input_phone,
+                    "note": "Meta normalized the phone number. This mismatch may cause delivery issues. Should try sending with normalized format next time."
                 }, "B")
             
             logger.info(f"✅ WhatsApp sent successfully. Message ID: {message_id}, Status: {message_status}")

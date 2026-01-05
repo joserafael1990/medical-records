@@ -28,10 +28,44 @@ class GoogleCalendarService:
     @staticmethod
     def get_oauth_flow(redirect_uri: str) -> Flow:
         """Crear OAuth flow para autenticación"""
+        # #region agent log
+        import json
+        import time
+        log_data = {"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"google_calendar_service.py:31","message":"Checking GOOGLE_CLIENT_ID","data":{"redirect_uri":redirect_uri},"timestamp":int(time.time()*1000)}
+        try:
+            with open('/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps(log_data)+'\n')
+        except: pass
+        api_logger.info("DEBUG: Checking GOOGLE_CLIENT_ID", extra={"hypothesisId":"A","redirect_uri":redirect_uri})
+        # #endregion
         client_id = os.getenv("GOOGLE_CLIENT_ID")
+        # #region agent log
+        log_data = {"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"google_calendar_service.py:32","message":"GOOGLE_CLIENT_ID value","data":{"client_id_present":client_id is not None,"client_id_length":len(client_id) if client_id else 0,"client_id_preview":client_id[:10]+"..." if client_id and len(client_id)>10 else client_id},"timestamp":int(time.time()*1000)}
+        try:
+            with open('/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps(log_data)+'\n')
+        except: pass
+        api_logger.info("DEBUG: GOOGLE_CLIENT_ID value", extra={"hypothesisId":"A","client_id_present":client_id is not None,"client_id_length":len(client_id) if client_id else 0})
+        # #endregion
         client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+        # #region agent log
+        log_data = {"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"google_calendar_service.py:33","message":"GOOGLE_CLIENT_SECRET value","data":{"client_secret_present":client_secret is not None,"client_secret_length":len(client_secret) if client_secret else 0},"timestamp":int(time.time()*1000)}
+        try:
+            with open('/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps(log_data)+'\n')
+        except: pass
+        api_logger.info("DEBUG: GOOGLE_CLIENT_SECRET value", extra={"hypothesisId":"B","client_secret_present":client_secret is not None,"client_secret_length":len(client_secret) if client_secret else 0})
+        # #endregion
         
         if not client_id or not client_secret:
+            # #region agent log
+            log_data = {"sessionId":"debug-session","runId":"run1","hypothesisId":"A,B","location":"google_calendar_service.py:35","message":"Missing credentials - raising ValueError","data":{"client_id_missing":not client_id,"client_secret_missing":not client_secret},"timestamp":int(time.time()*1000)}
+            try:
+                with open('/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log', 'a') as f:
+                    f.write(json.dumps(log_data)+'\n')
+            except: pass
+            api_logger.error("ERROR: Missing Google Calendar credentials", extra={"hypothesisId":"A,B","client_id_missing":not client_id,"client_secret_missing":not client_secret,"client_id_present":client_id is not None,"client_secret_present":client_secret is not None})
+            # #endregion
             raise ValueError("GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET deben estar configurados")
         
         flow = Flow.from_client_config(
@@ -52,12 +86,38 @@ class GoogleCalendarService:
     @staticmethod
     def get_authorization_url(redirect_uri: str) -> str:
         """Obtener URL de autorización de Google"""
+        # #region agent log
+        import json
+        import time
+        log_data = {"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"google_calendar_service.py:53","message":"get_authorization_url called","data":{"redirect_uri":redirect_uri},"timestamp":int(time.time()*1000)}
+        try:
+            with open('/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps(log_data)+'\n')
+        except: pass
+        api_logger.debug("DEBUG: get_authorization_url called", extra={"hypothesisId":"E","redirect_uri":redirect_uri})
+        # #endregion
         flow = GoogleCalendarService.get_oauth_flow(redirect_uri)
+        # #region agent log
+        log_data = {"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"google_calendar_service.py:55","message":"OAuth flow created successfully","data":{},"timestamp":int(time.time()*1000)}
+        try:
+            with open('/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps(log_data)+'\n')
+        except: pass
+        api_logger.debug("DEBUG: OAuth flow created successfully", extra={"hypothesisId":"E"})
+        # #endregion
         authorization_url, _ = flow.authorization_url(
             access_type='offline',
             include_granted_scopes='true',
             prompt='consent'  # Forzar consent para obtener refresh_token
         )
+        # #region agent log
+        log_data = {"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"google_calendar_service.py:61","message":"Authorization URL generated","data":{"authorization_url_length":len(authorization_url) if authorization_url else 0},"timestamp":int(time.time()*1000)}
+        try:
+            with open('/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps(log_data)+'\n')
+        except: pass
+        api_logger.debug("DEBUG: Authorization URL generated", extra={"hypothesisId":"E","authorization_url_length":len(authorization_url) if authorization_url else 0})
+        # #endregion
         return authorization_url
     
     @staticmethod

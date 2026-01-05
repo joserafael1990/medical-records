@@ -28,6 +28,7 @@ import {
 import { apiService, GoogleCalendarStatus, AmplitudeService } from '../../services';
 import { logger } from '../../utils/logger';
 import { API_CONFIG } from '../../constants';
+import { useSimpleToast } from '../common/ToastNotification';
 
 interface GoogleCalendarSettingsProps {
   doctorId?: number;
@@ -41,6 +42,7 @@ const GoogleCalendarSettings: React.FC<GoogleCalendarSettingsProps> = ({ doctorI
   const [success, setSuccess] = useState<string | null>(null);
 
   const [openDisconnectDialog, setOpenDisconnectDialog] = useState(false);
+  const toast = useSimpleToast();
 
   // Cargar estado inicial
   useEffect(() => {
@@ -192,6 +194,8 @@ const GoogleCalendarSettings: React.FC<GoogleCalendarSettingsProps> = ({ doctorI
           }
 
           setSuccess('Google Calendar conectado exitosamente');
+          // Mostrar notificación toast en la esquina superior derecha
+          toast.success('Google Calendar conectado exitosamente');
           await fetchStatus();
         } catch (err: any) {
           logger.error('Error al procesar callback de OAuth', err, 'api');

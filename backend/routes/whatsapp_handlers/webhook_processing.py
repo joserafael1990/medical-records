@@ -60,6 +60,27 @@ async def process_webhook_event(request: Request, db: Session):
             extra={"body_keys": list(body.keys()), "entry_count": len(body.get('entry', []))}
         )
         
+        # #region agent log
+        import json as json_module
+        try:
+            debug_log_path = '/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log'
+            with open(debug_log_path, 'a') as f:
+                f.write(json_module.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "D",
+                    "location": "webhook_processing.py:58",
+                    "message": "Webhook POST received from Meta",
+                    "data": {
+                        "body_keys": list(body.keys()),
+                        "entry_count": len(body.get('entry', [])),
+                        "has_statuses": any('statuses' in entry.get('changes', [{}])[0].get('value', {}) for entry in body.get('entry', []))
+                    },
+                    "timestamp": int(__import__('time').time() * 1000)
+                }) + "\n")
+        except: pass
+        # #endregion
+        
         if 'entry' not in body:
             api_logger.warning("⚠️ Webhook has no 'entry' field, ignoring")
             return {"status": "ignored"}

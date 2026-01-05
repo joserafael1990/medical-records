@@ -32,14 +32,40 @@ async def authorize_google_calendar(
         raise HTTPException(status_code=403, detail="Solo doctores pueden conectar Google Calendar")
     
     try:
+        # #region agent log
+        import json
+        import time
+        log_data = {"sessionId":"debug-session","runId":"run1","hypothesisId":"ALL","location":"google_calendar.py:34","message":"authorize_google_calendar entry","data":{"doctor_id":current_user.id,"redirect_uri":redirect_uri},"timestamp":int(time.time()*1000)}
+        try:
+            with open('/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps(log_data)+'\n')
+        except: pass
+        api_logger.info("DEBUG: authorize_google_calendar entry", extra={"hypothesisId":"ALL","doctor_id":current_user.id,"redirect_uri":redirect_uri})
+        # #endregion
         authorization_url = GoogleCalendarService.get_authorization_url(redirect_uri)
         
         api_logger.info("URL de autorización de Google Calendar generada", extra={
             "doctor_id": current_user.id
         })
         
+        # #region agent log
+        log_data = {"sessionId":"debug-session","runId":"run1","hypothesisId":"ALL","location":"google_calendar.py:41","message":"Authorization URL generated successfully","data":{"doctor_id":current_user.id},"timestamp":int(time.time()*1000)}
+        try:
+            with open('/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps(log_data)+'\n')
+        except: pass
+        api_logger.debug("DEBUG: Authorization URL generated successfully", extra={"hypothesisId":"ALL","doctor_id":current_user.id})
+        # #endregion
         return {"authorization_url": authorization_url}
     except ValueError as e:
+        # #region agent log
+        log_data = {"sessionId":"debug-session","runId":"run1","hypothesisId":"A,B","location":"google_calendar.py:43","message":"ValueError caught","data":{"error_message":str(e),"doctor_id":current_user.id},"timestamp":int(time.time()*1000)}
+        try:
+            with open('/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps(log_data)+'\n')
+        except: pass
+        api_logger.error("ERROR: ValueError caught in Google Calendar OAuth", extra={"hypothesisId":"A,B","error_message":str(e),"doctor_id":current_user.id}, exc_info=True)
+        # #endregion
         api_logger.error("Error de configuración de Google Calendar", exc_info=True)
         raise HTTPException(status_code=500, detail="Google Calendar no está configurado correctamente")
     except Exception as e:

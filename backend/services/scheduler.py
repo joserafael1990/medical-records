@@ -31,6 +31,14 @@ def check_and_send_reminders(db: SessionLocal = None) -> Dict[str, Any]:
         # Get current time in CDMX (naive datetime for comparison)
         now = now_cdmx().replace(tzinfo=None)
         
+        # #region agent log
+        import json
+        try:
+            with open('/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "A", "location": "scheduler.py:32", "message": "Current time in CDMX", "data": {"now": str(now)}, "timestamp": int(datetime.now().timestamp() * 1000)}) + "\n")
+        except: pass
+        # #endregion
+        
         # 1. NEW SYSTEM: Check AppointmentReminder table
         reminders = db.query(AppointmentReminder).join(Appointment).filter(
             AppointmentReminder.enabled == True,
@@ -44,12 +52,25 @@ def check_and_send_reminders(db: SessionLocal = None) -> Dict[str, Any]:
             joinedload(AppointmentReminder.appointment).joinedload(Appointment.office)
         ).all()
         
+        # #region agent log
+        try:
+            with open('/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "A", "location": "scheduler.py:46", "message": "Reminders found from query", "data": {"reminders_count": len(reminders), "reminder_ids": [r.id for r in reminders]}, "timestamp": int(datetime.now().timestamp() * 1000)}) + "\n")
+        except: pass
+        # #endregion
+        
         sent_count = 0
         failed_count = 0
         
         for reminder in reminders:
             appointment = reminder.appointment
             if not appointment:
+                # #region agent log
+                try:
+                    with open('/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log', 'a') as f:
+                        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "A", "location": "scheduler.py:52", "message": "Reminder has no appointment", "data": {"reminder_id": reminder.id}, "timestamp": int(datetime.now().timestamp() * 1000)}) + "\n")
+                except: pass
+                # #endregion
                 continue
             
             # Calculate when this reminder should be sent
@@ -76,7 +97,20 @@ def check_and_send_reminders(db: SessionLocal = None) -> Dict[str, Any]:
             
             should_send = send_time <= now_cdmx_naive <= window_end
             
+            # #region agent log
+            try:
+                with open('/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log', 'a') as f:
+                    f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "B", "location": "scheduler.py:77", "message": "Timing check for reminder", "data": {"reminder_id": reminder.id, "appointment_id": appointment.id, "appt_date": str(appt_date), "offset_minutes": reminder.offset_minutes, "send_time": str(send_time), "now_cdmx_naive": str(now_cdmx_naive), "window_end": str(window_end), "should_send": should_send, "send_time_passed": send_time <= now_cdmx_naive, "within_window": now_cdmx_naive <= window_end}, "timestamp": int(datetime.now().timestamp() * 1000)}) + "\n")
+            except: pass
+            # #endregion
+            
             if should_send:
+                # #region agent log
+                try:
+                    with open('/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log', 'a') as f:
+                        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "scheduler.py:80", "message": "Calling send_reminder_by_id", "data": {"reminder_id": reminder.id, "appointment_id": appointment.id}, "timestamp": int(datetime.now().timestamp() * 1000)}) + "\n")
+                except: pass
+                # #endregion
                 api_logger.info(
                     "📤 Sending reminder",
                     extra={
@@ -85,6 +119,12 @@ def check_and_send_reminders(db: SessionLocal = None) -> Dict[str, Any]:
                     }
                 )
                 success = AppointmentService.send_reminder_by_id(db, reminder.id)
+                # #region agent log
+                try:
+                    with open('/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log', 'a') as f:
+                        f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "scheduler.py:88", "message": "send_reminder_by_id returned", "data": {"reminder_id": reminder.id, "success": success}, "timestamp": int(datetime.now().timestamp() * 1000)}) + "\n")
+                except: pass
+                # #endregion
                 if success:
                     sent_count += 1
                     api_logger.info("✅ Auto reminder sent", extra={"reminder_id": reminder.id})

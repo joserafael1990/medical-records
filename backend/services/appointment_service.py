@@ -533,6 +533,14 @@ class AppointmentService:
     @staticmethod
     def send_reminder_by_id(db: Session, reminder_id: int) -> bool:
         """Send a specific reminder by its ID"""
+        # #region agent log
+        import json
+        from datetime import datetime
+        try:
+            with open('/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "D", "location": "appointment_service.py:534", "message": "send_reminder_by_id called", "data": {"reminder_id": reminder_id}, "timestamp": int(datetime.now().timestamp() * 1000)}) + "\n")
+        except: pass
+        # #endregion
         try:
             # Get the reminder with its appointment
             reminder = db.query(AppointmentReminder).options(
@@ -541,6 +549,13 @@ class AppointmentService:
                 joinedload(AppointmentReminder.appointment).joinedload(Appointment.office),
                 joinedload(AppointmentReminder.appointment).joinedload(Appointment.appointment_type_rel)
             ).filter(AppointmentReminder.id == reminder_id).first()
+            
+            # #region agent log
+            try:
+                with open('/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log', 'a') as f:
+                    f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "D", "location": "appointment_service.py:545", "message": "Reminder query result", "data": {"reminder_id": reminder_id, "reminder_found": reminder is not None, "appointment_found": reminder.appointment is not None if reminder else False}, "timestamp": int(datetime.now().timestamp() * 1000)}) + "\n")
+            except: pass
+            # #endregion
             
             if not reminder or not reminder.appointment:
                 api_logger.warning(
@@ -588,6 +603,12 @@ class AppointmentService:
             maps_url_val = resolve_maps_url(appointment.office, office_address_val) if appointment.office else None
             country_code_val = resolve_country_code(appointment.office) if appointment.office else '52'
             
+            # #region agent log
+            try:
+                with open('/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log', 'a') as f:
+                    f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E", "location": "appointment_service.py:591", "message": "About to call WhatsApp service", "data": {"reminder_id": reminder_id, "patient_phone": appointment.patient.primary_phone if appointment.patient else None, "country_code": country_code_val}, "timestamp": int(datetime.now().timestamp() * 1000)}) + "\n")
+            except: pass
+            # #endregion
             service = get_whatsapp_service()
             resp = service.send_appointment_reminder(
                 patient_phone=appointment.patient.primary_phone if appointment.patient else None,
@@ -601,6 +622,13 @@ class AppointmentService:
                 appointment_type=appointment_type,
                 maps_url=maps_url_val
             )
+            
+            # #region agent log
+            try:
+                with open('/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log', 'a') as f:
+                    f.write(json.dumps({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E", "location": "appointment_service.py:604", "message": "WhatsApp service response", "data": {"reminder_id": reminder_id, "resp": resp, "success": resp.get('success') if resp else None}, "timestamp": int(datetime.now().timestamp() * 1000)}) + "\n")
+            except: pass
+            # #endregion
             
             if resp and resp.get('success'):
                 api_logger.info(
