@@ -60,6 +60,9 @@ async def process_webhook_event(request: Request, db: Session):
             extra={"body_keys": list(body.keys()), "entry_count": len(body.get('entry', []))}
         )
         
+        # DEBUG: Log full webhook body
+        print(f"🔍 WEBHOOK DEBUG: Full body = {json.dumps(body)[:2000]}")
+        
         # #region agent log
         import json as json_module
         try:
@@ -203,15 +206,26 @@ async def process_webhook_event(request: Request, db: Session):
                 
                 messages = value.get('messages', [])
                 
+                # DEBUG: Log messages received
+                if messages:
+                    print(f"🔍 WEBHOOK DEBUG: Processing {len(messages)} messages")
+                    for m in messages:
+                        print(f"🔍 WEBHOOK DEBUG: Message type={m.get('type')}, from={m.get('from')}, data={json.dumps(m)[:500]}")
+                
                 for message in messages:
                     message_type = message.get('type')
                     from_phone = message.get('from')
                     timestamp = message.get('timestamp')
                     
+                    print(f"🔍 WEBHOOK DEBUG: Processing message type={message_type} from={from_phone}")
+                    
                     if message_type == 'interactive':
                         interactive_data = message.get('interactive', {})
                         button_reply = interactive_data.get('button_reply', {})
                         button_id = button_reply.get('id', '')
+                        
+                        print(f"🔍 WEBHOOK DEBUG: Interactive message - button_id={button_id}, interactive_data={json.dumps(interactive_data)[:500]}")
+                        api_logger.info(f"📱 Interactive button pressed: {button_id}", extra={"button_id": button_id, "from_phone": from_phone})
                         
                         parts = button_id.split('_')
                         
