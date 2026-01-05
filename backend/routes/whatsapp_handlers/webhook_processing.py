@@ -219,6 +219,28 @@ async def process_webhook_event(request: Request, db: Session):
                     
                     print(f"🔍 WEBHOOK DEBUG: Processing message type={message_type} from={from_phone}")
                     
+                    # Handle button replies (from quick reply buttons in templates)
+                    if message_type == 'button':
+                        button_data = message.get('button', {})
+                        button_payload = button_data.get('payload', '').lower()
+                        button_text = button_data.get('text', '').lower()
+                        
+                        print(f"🔍 WEBHOOK DEBUG: Button reply - payload={button_payload}, text={button_text}")
+                        api_logger.info(f"📱 Button reply received: {button_payload}", extra={"payload": button_payload, "text": button_text, "from_phone": from_phone})
+                        
+                        # Handle Confirmar/Cancelar buttons
+                        if 'confirm' in button_payload or 'confirmar' in button_payload:
+                            api_logger.info(f"✅ Confirmation button pressed by {from_phone}")
+                            # Find the most recent pending appointment for this user
+                            await confirm_appointment_via_whatsapp(None, from_phone, db)
+                            processed_messages += 1
+                        elif 'cancel' in button_payload or 'cancelar' in button_payload:
+                            api_logger.info(f"🚫 Cancellation button pressed by {from_phone}")
+                            # Find the most recent pending appointment for this user
+                            await cancel_appointment_via_whatsapp(None, from_phone, db)
+                            processed_messages += 1
+                        continue
+                    
                     if message_type == 'interactive':
                         interactive_data = message.get('interactive', {})
                         button_reply = interactive_data.get('button_reply', {})

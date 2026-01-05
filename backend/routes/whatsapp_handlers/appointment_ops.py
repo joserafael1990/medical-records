@@ -53,7 +53,7 @@ async def _find_appointment_by_whatsapp_message_id(whatsapp_message_id: str, db:
         )
         return None
 
-async def cancel_appointment_via_whatsapp(appointment_id: int, patient_phone: str, db: Session):
+async def cancel_appointment_via_whatsapp(appointment_id: Optional[int], patient_phone: str, db: Session):
     """
     Cancelar una cita cuando el paciente responde vía WhatsApp
     """
@@ -63,26 +63,87 @@ async def cancel_appointment_via_whatsapp(appointment_id: int, patient_phone: st
             extra={"appointment_id": appointment_id, "patient_phone": patient_phone}
         )
         
-        # Buscar la cita
-        appointment = db.query(Appointment).filter(
-            Appointment.id == appointment_id
-        ).first()
+        appointment = None
+        patient = None
         
-        if not appointment:
-            api_logger.warning(
-                "❌ Appointment not found when cancelling via WhatsApp",
-                extra={"appointment_id": appointment_id}
-            )
-            return
-        
-        # Verificar que el teléfono corresponde al paciente
-        patient = db.query(Person).filter(Person.id == appointment.patient_id).first()
+        if appointment_id is not None:
+            # Buscar la cita por ID
+            appointment = db.query(Appointment).filter(
+                Appointment.id == appointment_id
+            ).first()
+            
+            if not appointment:
+                api_logger.warning(
+                    "❌ Appointment not found when cancelling via WhatsApp",
+                    extra={"appointment_id": appointment_id}
+                )
+                return
+            
+            # Verificar que el teléfono corresponde al paciente
+            patient = db.query(Person).filter(Person.id == appointment.patient_id).first()
+        else:
+            # Buscar paciente por teléfono
+            matching_patient = find_patient_by_phone(patient_phone, db)
+            
+            if not matching_patient:
+                api_logger.info(
+                    "❌ No matching patient found for cancellation",
+                    extra={"patient_phone": patient_phone}
+                )
+                return
+            
+            # Buscar la cita más reciente pendiente para este paciente
+            now = utc_now()
+            recent_threshold = now - timedelta(hours=2)
+            
+            # Primero buscar citas con recordatorio enviado recientemente
+            appointment_with_recent_reminder = db.query(Appointment).join(
+                AppointmentReminder
+            ).filter(
+                Appointment.patient_id == matching_patient.id,
+                Appointment.status.in_(['por_confirmar', 'confirmada']),
+                AppointmentReminder.sent == True,
+                AppointmentReminder.sent_at >= recent_threshold
+            ).order_by(
+                AppointmentReminder.sent_at.desc()
+            ).first()
+            
+            if appointment_with_recent_reminder:
+                appointment = appointment_with_recent_reminder
+                patient = matching_patient
+            else:
+                # Fallback: buscar cita más próxima
+                past_threshold = now - timedelta(days=1)
+                future_threshold = now + timedelta(days=7)
+                
+                appointment = db.query(Appointment).filter(
+                    Appointment.patient_id == matching_patient.id,
+                    Appointment.status.in_(['por_confirmar', 'confirmada']),
+                    Appointment.appointment_date >= past_threshold,
+                    Appointment.appointment_date <= future_threshold
+                ).order_by(
+                    Appointment.appointment_date.asc()
+                ).first()
+                
+                if appointment:
+                    patient = matching_patient
+                else:
+                    api_logger.warning(
+                        "❌ No pending appointment found for patient",
+                        extra={"patient_phone": patient_phone, "patient_id": matching_patient.id}
+                    )
+                    return
         
         if not patient:
             api_logger.error(
                 "❌ Patient not found for appointment when cancelling via WhatsApp",
                 extra={"appointment_id": appointment_id}
             )
+            return
+        
+        # Check if already cancelled
+        if appointment.status == 'cancelled':
+            api_logger.info("Appointment already cancelled", extra={"appointment_id": appointment.id})
             return
         
         doctor_id = appointment.doctor_id
