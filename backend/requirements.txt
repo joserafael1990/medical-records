@@ -52,7 +52,9 @@ Pillow==10.1.0
 boto3==1.34.0
 # GCP SDK
 google-cloud-storage==2.13.0
-google-cloud-aiplatform==1.38.1
+# Note: vertexai includes google-cloud-aiplatform as a dependency
+# Using compatible versions to avoid conflicts
+google-cloud-aiplatform>=1.38.1
 vertexai>=1.0.0
 # Agent Development Kit (ADK)
 google-genai>=0.2.0
