@@ -60,30 +60,6 @@ async def process_webhook_event(request: Request, db: Session):
             extra={"body_keys": list(body.keys()), "entry_count": len(body.get('entry', []))}
         )
         
-        # DEBUG: Log full webhook body
-        print(f"🔍 WEBHOOK DEBUG: Full body = {json.dumps(body)[:2000]}")
-        
-        # #region agent log
-        import json as json_module
-        try:
-            debug_log_path = '/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log'
-            with open(debug_log_path, 'a') as f:
-                f.write(json_module.dumps({
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "D",
-                    "location": "webhook_processing.py:58",
-                    "message": "Webhook POST received from Meta",
-                    "data": {
-                        "body_keys": list(body.keys()),
-                        "entry_count": len(body.get('entry', [])),
-                        "has_statuses": any('statuses' in entry.get('changes', [{}])[0].get('value', {}) for entry in body.get('entry', []))
-                    },
-                    "timestamp": int(__import__('time').time() * 1000)
-                }) + "\n")
-        except: pass
-        # #endregion
-        
         if 'entry' not in body:
             api_logger.warning("⚠️ Webhook has no 'entry' field, ignoring")
             return {"status": "ignored"}
@@ -206,26 +182,16 @@ async def process_webhook_event(request: Request, db: Session):
                 
                 messages = value.get('messages', [])
                 
-                # DEBUG: Log messages received
-                if messages:
-                    print(f"🔍 WEBHOOK DEBUG: Processing {len(messages)} messages")
-                    for m in messages:
-                        print(f"🔍 WEBHOOK DEBUG: Message type={m.get('type')}, from={m.get('from')}, data={json.dumps(m)[:500]}")
-                
                 for message in messages:
                     message_type = message.get('type')
                     from_phone = message.get('from')
                     timestamp = message.get('timestamp')
-                    
-                    print(f"🔍 WEBHOOK DEBUG: Processing message type={message_type} from={from_phone}")
                     
                     # Handle button replies (from quick reply buttons in templates)
                     if message_type == 'button':
                         button_data = message.get('button', {})
                         button_payload = button_data.get('payload', '').lower()
                         button_text = button_data.get('text', '').lower()
-                        
-                        print(f"🔍 WEBHOOK DEBUG: Button reply - payload={button_payload}, text={button_text}")
                         api_logger.info(f"📱 Button reply received: {button_payload}", extra={"payload": button_payload, "text": button_text, "from_phone": from_phone})
                         
                         # Handle Confirmar/Cancelar buttons
@@ -246,7 +212,6 @@ async def process_webhook_event(request: Request, db: Session):
                         button_reply = interactive_data.get('button_reply', {})
                         button_id = button_reply.get('id', '')
                         
-                        print(f"🔍 WEBHOOK DEBUG: Interactive message - button_id={button_id}, interactive_data={json.dumps(interactive_data)[:500]}")
                         api_logger.info(f"📱 Interactive button pressed: {button_id}", extra={"button_id": button_id, "from_phone": from_phone})
                         
                         parts = button_id.split('_')
