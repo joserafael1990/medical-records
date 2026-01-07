@@ -15,7 +15,6 @@ from .appointment_ops import (
     confirm_appointment_via_whatsapp,
     process_text_cancellation_request
 )
-from services.gemini_bot_service import GeminiBotService
 from whatsapp_service import get_whatsapp_service
 from config import settings
 
@@ -277,11 +276,12 @@ async def process_webhook_event(request: Request, db: Session):
                                 # Get original text (not lowercased) for better context
                                 original_text = message.get('text', {}).get('body', '').strip()
                                 
-                                # Initialize Gemini bot service
-                                gemini_service = GeminiBotService(db)
+                                # Initialize Appointment Agent (ADK)
+                                from agents.appointment_agent import AppointmentAgent
+                                agent = AppointmentAgent(db)
                                 
                                 # Process message and get response
-                                response_text = await gemini_service.process_message(from_phone, original_text)
+                                response_text = await agent.process_message(from_phone, original_text)
                                 
                                 # Send response via WhatsApp
                                 whatsapp_service = get_whatsapp_service()

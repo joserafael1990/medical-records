@@ -126,6 +126,10 @@ class Settings(BaseSettings):
     WHATSAPP_ENABLE_COST_TRACKING: bool = _env_bool("WHATSAPP_ENABLE_COST_TRACKING", True)
     WHATSAPP_ALERT_ON_EXPIRED_CONVERSATIONS: bool = _env_bool("WHATSAPP_ALERT_ON_EXPIRED_CONVERSATIONS", True)
     
+    # Redis Configuration (optional, for session persistence)
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379")
+    REDIS_ENABLED: bool = _env_bool("REDIS_ENABLED", False)
+    
     @model_validator(mode='before')
     @classmethod
     def parse_cors_origins_before(cls, data: dict) -> dict:
