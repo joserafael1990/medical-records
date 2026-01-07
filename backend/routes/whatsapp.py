@@ -237,3 +237,113 @@ async def test_whatsapp_service(
     except Exception as e:
         api_logger.error("❌ Error testing WhatsApp service", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/test-bot")
+async def test_appointment_bot(
+    phone: str,
+    message: str,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """
+    Endpoint de prueba para el Appointment Agent
+    Permite probar el bot sin necesidad de enviar mensajes reales por WhatsApp
+    
+    Ejemplo:
+    POST /api/whatsapp/test-bot?phone=+521234567890&message=Hola
+    """
+    from agents.appointment_agent import AppointmentAgent
+    from config import settings
+    
+    api_logger.info(
+        "🤖 Testing Appointment Agent",
+        extra={"phone": phone, "message": message, "doctor_id": current_user.id}
+    )
+    
+    if not settings.GEMINI_BOT_ENABLED:
+        raise HTTPException(
+            status_code=503,
+            detail="Bot is disabled. Set GEMINI_BOT_ENABLED=true to enable."
+        )
+    
+    try:
+        agent = AppointmentAgent(db)
+        response = await agent.process_message(phone, message)
+        
+        # Obtener estado de la sesión para debugging
+        state_summary = agent.session_state.get_session_summary(phone)
+        
+        return {
+            "success": True,
+            "user_message": message,
+            "bot_response": response,
+            "session_state": state_summary,
+            "message": "Bot response generated successfully"
+        }
+    except Exception as e:
+        api_logger.error(
+            f"❌ Error testing bot: {e}",
+            exc_info=True,
+            extra={"phone": phone, "message": message}
+        )
+        raise HTTPException(status_code=500, detail=f"Error testing bot: {str(e)}")
+
+
+@router.post("/test-bot-dev")
+async def test_appointment_bot_dev(
+    phone: str,
+    message: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint de prueba SIN autenticación (solo para desarrollo)
+    Permite probar el bot sin necesidad de token
+    
+    ⚠️ SOLO USAR EN DESARROLLO - NO EXPONER EN PRODUCCIÓN
+    
+    Ejemplo:
+    POST /api/whatsapp/test-bot-dev?phone=+521234567890&message=Hola
+    """
+    from agents.appointment_agent import AppointmentAgent
+    from config import settings
+    
+    # Solo permitir en desarrollo
+    if settings.is_production:
+        raise HTTPException(
+            status_code=403,
+            detail="This endpoint is only available in development mode"
+        )
+    
+    api_logger.info(
+        "🤖 Testing Appointment Agent (DEV MODE)",
+        extra={"phone": phone, "message": message}
+    )
+    
+    if not settings.GEMINI_BOT_ENABLED:
+        raise HTTPException(
+            status_code=503,
+            detail="Bot is disabled. Set GEMINI_BOT_ENABLED=true to enable."
+        )
+    
+    try:
+        agent = AppointmentAgent(db)
+        response = await agent.process_message(phone, message)
+        
+        # Obtener estado de la sesión para debugging
+        state_summary = agent.session_state.get_session_summary(phone)
+        
+        return {
+            "success": True,
+            "user_message": message,
+            "bot_response": response,
+            "session_state": state_summary,
+            "message": "Bot response generated successfully"
+        }
+    except Exception as e:
+        api_logger.error(
+            f"❌ Error testing bot: {e}",
+            exc_info=True,
+            extra={"phone": phone, "message": message}
+        )
+        raise HTTPException(status_code=500, detail=f"Error testing bot: {str(e)}")

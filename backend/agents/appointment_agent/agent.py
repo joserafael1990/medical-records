@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Any
 from sqlalchemy.orm import Session
 from datetime import datetime
 import vertexai
-from vertexai.generative_models import GenerativeModel, Tool, Part
+from vertexai.generative_models import GenerativeModel, Tool, Part, Content
 from config import settings
 from logger import get_logger
 from .tools import get_all_tools, execute_tool
@@ -116,13 +116,21 @@ Comandos disponibles:
 ¿Listo para comenzar? Escribe cualquier mensaje para empezar."""
             
             # Get conversation history
-            history = self.session_state.get_history(phone_number)
+            history_dicts = self.session_state.get_history(phone_number)
             
-            # Add current message to history
-            history.append({"role": "user", "parts": [message_text]})
+            # Convert history dicts to Content objects
+            history = []
+            if history_dicts:
+                for h in history_dicts:
+                    role = h.get("role", "user")
+                    parts = h.get("parts", [])
+                    # Convert string parts to Part objects
+                    part_objects = [Part.from_text(p) if isinstance(p, str) else p for p in parts]
+                    if part_objects:  # Only add if parts exist
+                        history.append(Content(role=role, parts=part_objects))
             
-            # Start chat with history
-            chat = self.model.start_chat(history=history)
+            # Start chat with history (pass None if empty, which creates a new chat)
+            chat = self.model.start_chat(history=history if history else None)
             
             # Generate response
             response = chat.send_message(message_text)
@@ -167,16 +175,18 @@ Comandos disponibles:
                 if not function_calls_processed and response.text:
                     final_response_text = response.text
                 
-                # Update conversation history
-                updated_history = history + [{"role": "model", "parts": [final_response_text]}]
-                self.session_state.update_history(phone_number, updated_history)
+                # Update conversation history (convert back to dicts for storage)
+                updated_history_dicts = [{"role": "user", "parts": [message_text]}]
+                updated_history_dicts.append({"role": "model", "parts": [final_response_text]})
+                self.session_state.update_history(phone_number, updated_history_dicts)
                 
                 return final_response_text
             
             # Fallback: return text response
             if response.text:
-                updated_history = history + [{"role": "model", "parts": [response.text]}]
-                self.session_state.update_history(phone_number, updated_history)
+                updated_history_dicts = [{"role": "user", "parts": [message_text]}]
+                updated_history_dicts.append({"role": "model", "parts": [response.text]})
+                self.session_state.update_history(phone_number, updated_history_dicts)
                 return response.text
             
             # Fallback message
