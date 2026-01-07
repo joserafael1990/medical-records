@@ -104,6 +104,27 @@ class Settings(BaseSettings):
     # Storage Configuration (GCP)
     GCP_PROJECT_ID: Optional[str] = None
     GCP_STORAGE_BUCKET: Optional[str] = None
+    GCP_REGION: str = os.getenv("GCP_REGION", "us-central1")
+    
+    # Gemini Bot Configuration
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    GEMINI_BOT_ENABLED: bool = _env_bool("GEMINI_BOT_ENABLED", True)
+    GEMINI_BOT_SANDBOX_MODE: bool = _env_bool("GEMINI_BOT_SANDBOX_MODE", False)
+    GEMINI_MAX_APPOINTMENT_DAYS: int = int(os.getenv("GEMINI_MAX_APPOINTMENT_DAYS", "90"))
+    GEMINI_CONVERSATION_TIMEOUT_MINUTES: int = int(os.getenv("GEMINI_CONVERSATION_TIMEOUT_MINUTES", "30"))
+    GEMINI_MAX_CONTEXT_MESSAGES: int = int(os.getenv("GEMINI_MAX_CONTEXT_MESSAGES", "15"))
+    GEMINI_ENABLE_CACHE: bool = _env_bool("GEMINI_ENABLE_CACHE", True)
+    GEMINI_CACHE_TTL_SECONDS: int = int(os.getenv("GEMINI_CACHE_TTL_SECONDS", "300"))
+    GEMINI_RATE_LIMIT_PER_USER: int = int(os.getenv("GEMINI_RATE_LIMIT_PER_USER", "1"))
+    GEMINI_RATE_LIMIT_MESSAGES_PER_MINUTE: int = int(os.getenv("GEMINI_RATE_LIMIT_MESSAGES_PER_MINUTE", "10"))
+    GEMINI_COST_ALERT_THRESHOLD: int = int(os.getenv("GEMINI_COST_ALERT_THRESHOLD", "100000"))
+    GEMINI_MAX_RETRIES: int = int(os.getenv("GEMINI_MAX_RETRIES", "2"))
+    GEMINI_FALLBACK_ENABLED: bool = _env_bool("GEMINI_FALLBACK_ENABLED", True)
+    
+    # WhatsApp Bot Configuration
+    WHATSAPP_CONVERSATION_WINDOW_HOURS: int = int(os.getenv("WHATSAPP_CONVERSATION_WINDOW_HOURS", "24"))
+    WHATSAPP_ENABLE_COST_TRACKING: bool = _env_bool("WHATSAPP_ENABLE_COST_TRACKING", True)
+    WHATSAPP_ALERT_ON_EXPIRED_CONVERSATIONS: bool = _env_bool("WHATSAPP_ALERT_ON_EXPIRED_CONVERSATIONS", True)
     
     @model_validator(mode='before')
     @classmethod

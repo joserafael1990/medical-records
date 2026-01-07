@@ -15,6 +15,9 @@ from .appointment_ops import (
     confirm_appointment_via_whatsapp,
     process_text_cancellation_request
 )
+from services.gemini_bot_service import GeminiBotService
+from whatsapp_service import get_whatsapp_service
+from config import settings
 
 api_logger = get_logger("medical_records.api")
 
@@ -264,10 +267,53 @@ async def process_webhook_event(request: Request, db: Session):
                             await confirm_appointment_via_whatsapp(None, from_phone, db)
                             processed_messages += 1
                         else:
+                            # Process with Gemini bot (conversational appointment scheduling)
                             api_logger.info(
-                                "ℹ️ Text message doesn't match confirm/cancel patterns",
+                                "🤖 Processing text message with Gemini bot",
                                 extra={"from_phone": from_phone, "text": text_body}
                             )
+                            
+                            try:
+                                # Get original text (not lowercased) for better context
+                                original_text = message.get('text', {}).get('body', '').strip()
+                                
+                                # Initialize Gemini bot service
+                                gemini_service = GeminiBotService(db)
+                                
+                                # Process message and get response
+                                response_text = await gemini_service.process_message(from_phone, original_text)
+                                
+                                # Send response via WhatsApp
+                                whatsapp_service = get_whatsapp_service()
+                                whatsapp_service.send_text_message(
+                                    to_phone=from_phone,
+                                    message=response_text
+                                )
+                                
+                                processed_messages += 1
+                                
+                                api_logger.info(
+                                    "✅ Gemini bot response sent",
+                                    extra={"from_phone": from_phone, "response_length": len(response_text)}
+                                )
+                            
+                            except Exception as e:
+                                api_logger.error(
+                                    f"❌ Error processing message with Gemini bot: {e}",
+                                    exc_info=True,
+                                    extra={"from_phone": from_phone}
+                                )
+                                
+                                # Send fallback message if enabled
+                                if settings.GEMINI_FALLBACK_ENABLED:
+                                    try:
+                                        whatsapp_service = get_whatsapp_service()
+                                        whatsapp_service.send_text_message(
+                                            to_phone=from_phone,
+                                            message="Lo siento, hubo un problema técnico. Por favor intenta de nuevo en un momento o contacta directamente."
+                                        )
+                                    except Exception as send_error:
+                                        api_logger.error(f"Error sending fallback message: {send_error}", exc_info=True)
         
         return {"status": "ok", "processed_messages": processed_messages}
         
