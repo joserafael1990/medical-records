@@ -8,7 +8,11 @@ import {
   Box,
   Alert,
   CircularProgress,
-  Typography
+  Typography,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -222,24 +226,74 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
             />
 
             {/* 4. PATIENT SELECTION LOGIC */}
-            {!isEditing && currentFormData.consultation_type === 'Primera vez' && (
-              <>
-                <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>
-                  Datos del Nuevo Paciente
+            
+            {/* For "Primera vez" - Show patient type selector when not yet selected */}
+            {!isEditing && currentFormData.consultation_type === 'Primera vez' && isExistingPatient === null && (
+              <FormControl fullWidth sx={{ mt: 2 }}>
+                <InputLabel>¿Es un paciente nuevo o existente?</InputLabel>
+                <Select
+                  value=""
+                  onChange={(e) => setIsExistingPatient(e.target.value === 'existing')}
+                  label="¿Es un paciente nuevo o existente?"
+                >
+                  <MenuItem value="new">Paciente nuevo (primera consulta)</MenuItem>
+                  <MenuItem value="existing">Paciente existente (reagendar primera vez)</MenuItem>
+                </Select>
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                  Seleccione "Paciente existente" si el paciente tuvo una cita de primera vez cancelada y necesita reagendarla.
                 </Typography>
+              </FormControl>
+            )}
+
+            {/* For "Primera vez" with new patient selected */}
+            {!isEditing && currentFormData.consultation_type === 'Primera vez' && isExistingPatient === false && (
+              <>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2, mb: 1 }}>
+                  <Typography variant="h6">
+                    Datos del Nuevo Paciente
+                  </Typography>
+                  <Button 
+                    size="small" 
+                    onClick={() => setIsExistingPatient(null)}
+                    sx={{ textTransform: 'none' }}
+                  >
+                    Cambiar selección
+                  </Button>
+                </Box>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Como es una consulta de primera vez, complete los datos básicos del nuevo paciente:
+                  Complete los datos básicos del nuevo paciente:
+                </Typography>
+              </>
+            )}
+
+            {/* For "Primera vez" with existing patient selected */}
+            {!isEditing && currentFormData.consultation_type === 'Primera vez' && isExistingPatient === true && (
+              <>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2, mb: 1 }}>
+                  <Typography variant="h6">
+                    Seleccionar Paciente Existente
+                  </Typography>
+                  <Button 
+                    size="small" 
+                    onClick={() => setIsExistingPatient(null)}
+                    sx={{ textTransform: 'none' }}
+                  >
+                    Cambiar selección
+                  </Button>
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Seleccione el paciente que necesita reagendar su cita de primera vez. Solo se muestran pacientes que no tienen consultas previas con este doctor.
                 </Typography>
               </>
             )}
 
             {!isEditing && currentFormData.consultation_type === 'Seguimiento' && (
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 2, mb: 2 }}>
                 Para citas de seguimiento, debe seleccionar un paciente existente
               </Typography>
             )}
 
-            {/* Existing Patient Selector - Always show when editing or for Seguimiento */}
+            {/* Existing Patient Selector - Show when editing, or when existing patient is selected, or for Seguimiento */}
             {(isEditing || isExistingPatient === true || currentFormData.consultation_type === 'Seguimiento') && (
               <PatientSelector
                 patients={currentPatients}

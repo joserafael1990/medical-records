@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { AppointmentFormData, Office, AppointmentType, Patient } from '../types';
 import { apiService } from '../services';
 import { useToast } from '../components/common/ToastNotification';
@@ -146,6 +146,7 @@ export const useAppointmentMultiOfficeForm = (
   const [appointmentTypes, setAppointmentTypes] = useState<AppointmentType[]>([]);
   const [offices, setOffices] = useState<Office[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [consultations, setConsultations] = useState<any[]>([]);
 
   // State for available time slots
   const [availableTimes, setAvailableTimes] = useState<any[]>([]);
@@ -175,7 +176,51 @@ export const useAppointmentMultiOfficeForm = (
       onFormDataChangeRef.current(formData);
     }
   }, [formData]);
-  const currentPatients = externalPatients || patients;
+  
+  // Load consultations to filter patients without previous consultations
+  useEffect(() => {
+    const loadConsultations = async () => {
+      // Only load consultations when needed: "Primera vez" with existing patient
+      if (open && 
+          !isEditing && 
+          currentFormData.consultation_type === 'Primera vez' && 
+          isExistingPatient === true) {
+        try {
+          const consultationsData = await apiService.consultations.getConsultations();
+          setConsultations(consultationsData || []);
+        } catch (err) {
+          logger.error('Error loading consultations for filtering', err, 'api');
+          setConsultations([]);
+        }
+      }
+    };
+    loadConsultations();
+  }, [open, isEditing, currentFormData.consultation_type, isExistingPatient]);
+  
+  // Filter patients: for "Primera vez" with existing patient, only show those without consultations
+  const filteredPatients = useMemo(() => {
+    const basePatients = externalPatients || patients;
+    
+    // If "Primera vez" with existing patient, filter to show only patients without consultations
+    if (!isEditing && 
+        currentFormData.consultation_type === 'Primera vez' && 
+        isExistingPatient === true) {
+      // Get patient IDs that have consultations with this doctor
+      const patientIdsWithConsultations = new Set(
+        consultations.map((c: any) => Number(c.patient_id))
+      );
+      
+      // Filter to only patients WITHOUT consultations
+      return basePatients.filter(patient => 
+        !patientIdsWithConsultations.has(Number(patient.id))
+      );
+    }
+    
+    // Otherwise, return all patients
+    return basePatients;
+  }, [externalPatients, patients, consultations, isEditing, currentFormData.consultation_type, isExistingPatient]);
+  
+  const currentPatients = filteredPatients;
   const currentLoading = loading;
   const currentError = formErrorMessage || error;
 
@@ -380,11 +425,15 @@ export const useAppointmentMultiOfficeForm = (
   }, [open, isEditing, onFormDataChange, loadAvailableTimes]);
 
   // Handle consultation type changes
+  // For "Seguimiento" -> always existing patient
+  // For "Primera vez" -> allow user to choose (null = not yet selected)
   useEffect(() => {
     if (currentFormData.consultation_type === 'Seguimiento') {
       setIsExistingPatient(true);
     } else if (currentFormData.consultation_type === 'Primera vez') {
-      setIsExistingPatient(false);
+      // Don't auto-set to false - allow user to choose between new or existing patient
+      // This enables rebooking first-time appointments for patients with cancelled appointments
+      setIsExistingPatient(null);
     }
   }, [currentFormData.consultation_type]);
 
@@ -489,9 +538,10 @@ export const useAppointmentMultiOfficeForm = (
       [field]: value
     };
 
-    // Si se selecciona "Primera vez", automáticamente establecer como paciente nuevo
+    // Si se selecciona "Primera vez", permitir elegir entre paciente nuevo o existente
+    // Esto permite reagendar citas de primera vez para pacientes con citas canceladas
     if (field === 'consultation_type' && value === 'Primera vez') {
-      setIsExistingPatient(false);
+      setIsExistingPatient(null); // null = no seleccionado, permite elegir
     }
 
     // Si se selecciona un consultorio, determinar automáticamente el tipo de cita
@@ -579,15 +629,20 @@ export const useAppointmentMultiOfficeForm = (
           return;
         }
       } else {
-        // Para consultas de seguimiento, asumir paciente existente
+        // isExistingPatient es null - el usuario no ha seleccionado
         if (currentFormData.consultation_type === 'Seguimiento') {
+          // Para consultas de seguimiento, asumir paciente existente
           if (!currentFormData.patient_id) {
             setError('Seleccione un paciente para la consulta de seguimiento');
             return;
           }
           finalPatientId = currentFormData.patient_id;
+        } else if (currentFormData.consultation_type === 'Primera vez') {
+          // Para primera vez, el usuario debe elegir si es paciente nuevo o existente
+          setError('Seleccione si es un paciente nuevo o existente');
+          return;
         } else {
-          setError('Seleccione si es un paciente existente o nuevo');
+          setError('Seleccione el tipo de consulta');
           return;
         }
       }

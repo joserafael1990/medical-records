@@ -186,6 +186,70 @@ async def get_available_times_for_booking(
     }
 
 
+@router.get("/appointments/can-book-first-time/{patient_id}")
+async def can_book_first_time_appointment(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """
+    Check if a patient can book a first-time appointment with this doctor.
+    
+    Returns True if:
+    - Patient has no completed consultations with this doctor
+    - Patient only has cancelled appointments (can rebook first-time)
+    
+    This enables rebooking first-time appointments for patients whose
+    previous first-time appointment was cancelled.
+    """
+    try:
+        from database import MedicalRecord, Appointment
+        
+        # Check if patient has any completed consultations with this doctor
+        completed_consultations = db.query(MedicalRecord).filter(
+            MedicalRecord.patient_id == patient_id,
+            MedicalRecord.doctor_id == current_user.id
+        ).count()
+        
+        # If patient has completed consultations, they cannot book first-time
+        if completed_consultations > 0:
+            return {
+                "can_book_first_time": False,
+                "reason": "El paciente ya tiene consultas realizadas con este doctor",
+                "completed_consultations": completed_consultations
+            }
+        
+        # Check non-cancelled appointments (excluding first-time logic)
+        non_cancelled_appointments = db.query(Appointment).filter(
+            Appointment.patient_id == patient_id,
+            Appointment.doctor_id == current_user.id,
+            Appointment.status != 'cancelled'
+        ).count()
+        
+        # If patient has non-cancelled appointments but no consultations,
+        # they might have a pending first-time appointment
+        if non_cancelled_appointments > 0:
+            return {
+                "can_book_first_time": False,
+                "reason": "El paciente ya tiene una cita pendiente",
+                "pending_appointments": non_cancelled_appointments
+            }
+        
+        # Patient can book first-time (no consultations, no pending appointments)
+        return {
+            "can_book_first_time": True,
+            "reason": "El paciente puede agendar una cita de primera vez"
+        }
+        
+    except Exception as e:
+        api_logger.error(
+            "❌ Error in can_book_first_time_appointment",
+            extra={"patient_id": patient_id, "doctor_id": current_user.id},
+            exc_info=True
+        )
+        raise HTTPException(status_code=500, detail=f"Error al verificar elegibilidad: {str(e)}")
+
+
 @router.get("/appointments/{appointment_id}")
 async def get_appointment(
     appointment_id: int,
