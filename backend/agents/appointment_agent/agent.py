@@ -34,13 +34,25 @@ class AppointmentAgent:
         if not settings.GCP_PROJECT_ID:
             raise ValueError("GCP_PROJECT_ID must be set in environment variables")
         
+        # #region agent log
+        import json; import time; log_path = '/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log'; open(log_path, 'a').write(json.dumps({"location":"agent.py:37","message":"Initializing Vertex AI","data":{"gcp_project_id":settings.GCP_PROJECT_ID,"gcp_region":settings.GCP_REGION,"gemini_model":settings.GEMINI_MODEL},"timestamp":time.time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+'\n')
+        # #endregion
+        
         vertexai.init(
             project=settings.GCP_PROJECT_ID,
             location=settings.GCP_REGION
         )
         
+        # #region agent log
+        open(log_path, 'a').write(json.dumps({"location":"agent.py:40","message":"Vertex AI initialized, creating tools","data":{},"timestamp":time.time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+'\n')
+        # #endregion
+        
         # Create tools (function declarations) for Gemini
         tools = self._create_tools()
+        
+        # #region agent log
+        open(log_path, 'a').write(json.dumps({"location":"agent.py:45","message":"Creating GenerativeModel","data":{"tools_count":len(tools[0].function_declarations) if tools and tools[0].function_declarations else 0},"timestamp":time.time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+'\n')
+        # #endregion
         
         # Initialize model with system instructions and tools
         self.model = GenerativeModel(
@@ -48,6 +60,10 @@ class AppointmentAgent:
             system_instruction=APPOINTMENT_AGENT_PROMPT,
             tools=tools if tools else None
         )
+        
+        # #region agent log
+        open(log_path, 'a').write(json.dumps({"location":"agent.py:51","message":"GenerativeModel created successfully","data":{},"timestamp":time.time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+'\n')
+        # #endregion
         
         api_logger.info(
             f"Appointment Agent initialized",
@@ -115,8 +131,16 @@ Comandos disponibles:
 
 ¿Listo para comenzar? Escribe cualquier mensaje para empezar."""
             
+            # #region agent log
+            import json; import time; log_path = '/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log'; open(log_path, 'a').write(json.dumps({"location":"agent.py:118","message":"process_message called","data":{"phone_number":phone_number,"message_length":len(message_text)},"timestamp":time.time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"E"})+'\n')
+            # #endregion
+            
             # Get conversation history
             history_dicts = self.session_state.get_history(phone_number)
+            
+            # #region agent log
+            open(log_path, 'a').write(json.dumps({"location":"agent.py:120","message":"Got conversation history","data":{"history_length":len(history_dicts) if history_dicts else 0},"timestamp":time.time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"C"})+'\n')
+            # #endregion
             
             # Convert history dicts to Content objects
             history = []
@@ -129,11 +153,23 @@ Comandos disponibles:
                     if part_objects:  # Only add if parts exist
                         history.append(Content(role=role, parts=part_objects))
             
+            # #region agent log
+            open(log_path, 'a').write(json.dumps({"location":"agent.py:133","message":"History converted to Content objects, starting chat","data":{"history_content_length":len(history)},"timestamp":time.time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"C"})+'\n')
+            # #endregion
+            
             # Start chat with history (pass None if empty, which creates a new chat)
             chat = self.model.start_chat(history=history if history else None)
             
+            # #region agent log
+            open(log_path, 'a').write(json.dumps({"location":"agent.py:136","message":"Chat started, sending message to Gemini","data":{"message_text_length":len(message_text)},"timestamp":time.time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"D"})+'\n')
+            # #endregion
+            
             # Generate response
             response = chat.send_message(message_text)
+            
+            # #region agent log
+            open(log_path, 'a').write(json.dumps({"location":"agent.py:138","message":"Gemini response received","data":{"has_candidates":bool(response.candidates) if response else False,"has_text":bool(response.text) if response else False},"timestamp":time.time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"D"})+'\n')
+            # #endregion
             
             # Process function calls if any
             if response.candidates and response.candidates[0].content.parts:
@@ -196,6 +232,10 @@ Comandos disponibles:
             return "Error procesando mensaje."
         
         except Exception as e:
+            # #region agent log
+            import json; import traceback; import time; log_path = '/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log'; open(log_path, 'a').write(json.dumps({"location":"agent.py:198","message":"Exception in process_message","data":{"phone_number":phone_number,"error_type":type(e).__name__,"error_message":str(e),"traceback":traceback.format_exc()},"timestamp":time.time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"A,B,C,D,E"})+'\n')
+            # #endregion
+            
             api_logger.error(f"Error processing message: {e}", exc_info=True)
             
             if settings.GEMINI_FALLBACK_ENABLED:

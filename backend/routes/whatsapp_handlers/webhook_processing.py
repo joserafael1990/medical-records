@@ -273,15 +273,32 @@ async def process_webhook_event(request: Request, db: Session):
                             )
                             
                             try:
+                                # #region agent log
+                                import json; log_path = '/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log'; open(log_path, 'a').write(json.dumps({"location":"webhook_processing.py:275","message":"Attempting to import AppointmentAgent","data":{"from_phone":from_phone},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+'\n')
+                                # #endregion
+                                
                                 # Get original text (not lowercased) for better context
                                 original_text = message.get('text', {}).get('body', '').strip()
                                 
                                 # Initialize Appointment Agent (ADK)
                                 from agents.appointment_agent import AppointmentAgent
+                                
+                                # #region agent log
+                                open(log_path, 'a').write(json.dumps({"location":"webhook_processing.py:281","message":"AppointmentAgent imported successfully, initializing","data":{"from_phone":from_phone,"message_text":original_text[:50]},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+'\n')
+                                # #endregion
+                                
                                 agent = AppointmentAgent(db)
+                                
+                                # #region agent log
+                                open(log_path, 'a').write(json.dumps({"location":"webhook_processing.py:283","message":"AppointmentAgent initialized, calling process_message","data":{"from_phone":from_phone},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+'\n')
+                                # #endregion
                                 
                                 # Process message and get response
                                 response_text = await agent.process_message(from_phone, original_text)
+                                
+                                # #region agent log
+                                open(log_path, 'a').write(json.dumps({"location":"webhook_processing.py:285","message":"process_message completed successfully","data":{"from_phone":from_phone,"response_length":len(response_text) if response_text else 0},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"E"})+'\n')
+                                # #endregion
                                 
                                 # Send response via WhatsApp
                                 whatsapp_service = get_whatsapp_service()
@@ -298,6 +315,10 @@ async def process_webhook_event(request: Request, db: Session):
                                 )
                             
                             except Exception as e:
+                                # #region agent log
+                                import json; import traceback; log_path = '/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log'; open(log_path, 'a').write(json.dumps({"location":"webhook_processing.py:300","message":"Exception caught in webhook handler","data":{"from_phone":from_phone,"error_type":type(e).__name__,"error_message":str(e),"traceback":traceback.format_exc()},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"A,B,C,D,E"})+'\n')
+                                # #endregion
+                                
                                 api_logger.error(
                                     f"❌ Error processing message with Gemini bot: {e}",
                                     exc_info=True,
