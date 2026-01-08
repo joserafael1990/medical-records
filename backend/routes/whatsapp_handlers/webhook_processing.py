@@ -276,30 +276,15 @@ async def process_webhook_event(request: Request, db: Session):
                                 # Get original text (not lowercased) for better context
                                 original_text = message.get('text', {}).get('body', '').strip()
                                 
-                                # Try to use Agent Engine if available, otherwise use local agent
-                                from services.agent_engine_client import call_agent_engine, is_agent_engine_available
+                                # Use local Appointment Agent (Cloud Run deployment)
+                                api_logger.info(
+                                    "Using local Appointment Agent",
+                                    extra={"from_phone": from_phone, "message_text": original_text[:50]}
+                                )
                                 
-                                response_text = None
-                                
-                                if is_agent_engine_available():
-                                    # Call Agent Engine via HTTP
-                                    api_logger.info(
-                                        "Calling Appointment Agent in Agent Engine",
-                                        extra={"from_phone": from_phone, "message_text": original_text[:50]}
-                                    )
-                                    
-                                    response_text = await call_agent_engine(from_phone, original_text)
-                                
-                                # Fallback to local agent if Agent Engine not available or failed
-                                if not response_text:
-                                    api_logger.info(
-                                        "Using local Appointment Agent (fallback)",
-                                        extra={"from_phone": from_phone, "message_text": original_text[:50]}
-                                    )
-                                    
-                                    from agents.appointment_agent import AppointmentAgent
-                                    agent = AppointmentAgent(db)
-                                    response_text = await agent.process_message(from_phone, original_text)
+                                from agents.appointment_agent import AppointmentAgent
+                                agent = AppointmentAgent(db, use_adk=True)
+                                response_text = await agent.process_message(from_phone, original_text)
                                 
                                 if not response_text:
                                     raise ValueError("No response from agent")
