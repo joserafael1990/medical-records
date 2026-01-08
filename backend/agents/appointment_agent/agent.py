@@ -35,7 +35,17 @@ class AppointmentAgent:
             raise ValueError("GCP_PROJECT_ID must be set in environment variables")
         
         # #region agent log
-        import json; import time; log_path = '/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log'; open(log_path, 'a').write(json.dumps({"location":"agent.py:37","message":"Initializing Vertex AI","data":{"gcp_project_id":settings.GCP_PROJECT_ID,"gcp_region":settings.GCP_REGION,"gemini_model":settings.GEMINI_MODEL},"timestamp":time.time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+'\n')
+        api_logger.info(
+            "🔍 [DEBUG-HYP-B] Initializing Vertex AI",
+            extra={
+                "gcp_project_id": settings.GCP_PROJECT_ID,
+                "gcp_region": settings.GCP_REGION,
+                "gemini_model": settings.GEMINI_MODEL,
+                "hypothesis": "B",
+                "sessionId": "debug-session",
+                "runId": "run1"
+            }
+        )
         # #endregion
         
         vertexai.init(
@@ -44,14 +54,25 @@ class AppointmentAgent:
         )
         
         # #region agent log
-        open(log_path, 'a').write(json.dumps({"location":"agent.py:40","message":"Vertex AI initialized, creating tools","data":{},"timestamp":time.time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+'\n')
+        api_logger.info(
+            "🔍 [DEBUG-HYP-B] Vertex AI initialized, creating tools",
+            extra={"hypothesis": "B", "sessionId": "debug-session", "runId": "run1"}
+        )
         # #endregion
         
         # Create tools (function declarations) for Gemini
         tools = self._create_tools()
         
         # #region agent log
-        open(log_path, 'a').write(json.dumps({"location":"agent.py:45","message":"Creating GenerativeModel","data":{"tools_count":len(tools[0].function_declarations) if tools and tools[0].function_declarations else 0},"timestamp":time.time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+'\n')
+        api_logger.info(
+            "🔍 [DEBUG-HYP-B] Creating GenerativeModel",
+            extra={
+                "tools_count": len(tools[0].function_declarations) if tools and tools[0].function_declarations else 0,
+                "hypothesis": "B",
+                "sessionId": "debug-session",
+                "runId": "run1"
+            }
+        )
         # #endregion
         
         # Initialize model with system instructions and tools
@@ -62,7 +83,10 @@ class AppointmentAgent:
         )
         
         # #region agent log
-        open(log_path, 'a').write(json.dumps({"location":"agent.py:51","message":"GenerativeModel created successfully","data":{},"timestamp":time.time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+'\n')
+        api_logger.info(
+            "🔍 [DEBUG-HYP-B] GenerativeModel created successfully",
+            extra={"hypothesis": "B", "sessionId": "debug-session", "runId": "run1"}
+        )
         # #endregion
         
         api_logger.info(
@@ -132,14 +156,20 @@ Comandos disponibles:
 ¿Listo para comenzar? Escribe cualquier mensaje para empezar."""
             
             # #region agent log
-            import json; import time; log_path = '/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log'; open(log_path, 'a').write(json.dumps({"location":"agent.py:118","message":"process_message called","data":{"phone_number":phone_number,"message_length":len(message_text)},"timestamp":time.time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"E"})+'\n')
+            api_logger.info(
+                "🔍 [DEBUG-HYP-E] process_message called",
+                extra={"phone_number": phone_number, "message_length": len(message_text), "hypothesis": "E", "sessionId": "debug-session", "runId": "run1"}
+            )
             # #endregion
             
             # Get conversation history
             history_dicts = self.session_state.get_history(phone_number)
             
             # #region agent log
-            open(log_path, 'a').write(json.dumps({"location":"agent.py:120","message":"Got conversation history","data":{"history_length":len(history_dicts) if history_dicts else 0},"timestamp":time.time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"C"})+'\n')
+            api_logger.info(
+                "🔍 [DEBUG-HYP-C] Got conversation history",
+                extra={"history_length": len(history_dicts) if history_dicts else 0, "hypothesis": "C", "sessionId": "debug-session", "runId": "run1"}
+            )
             # #endregion
             
             # Convert history dicts to Content objects
@@ -154,21 +184,30 @@ Comandos disponibles:
                         history.append(Content(role=role, parts=part_objects))
             
             # #region agent log
-            open(log_path, 'a').write(json.dumps({"location":"agent.py:133","message":"History converted to Content objects, starting chat","data":{"history_content_length":len(history)},"timestamp":time.time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"C"})+'\n')
+            api_logger.info(
+                "🔍 [DEBUG-HYP-C] History converted to Content objects, starting chat",
+                extra={"history_content_length": len(history), "hypothesis": "C", "sessionId": "debug-session", "runId": "run1"}
+            )
             # #endregion
             
             # Start chat with history (pass None if empty, which creates a new chat)
             chat = self.model.start_chat(history=history if history else None)
             
             # #region agent log
-            open(log_path, 'a').write(json.dumps({"location":"agent.py:136","message":"Chat started, sending message to Gemini","data":{"message_text_length":len(message_text)},"timestamp":time.time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"D"})+'\n')
+            api_logger.info(
+                "🔍 [DEBUG-HYP-D] Chat started, sending message to Gemini",
+                extra={"message_text_length": len(message_text), "hypothesis": "D", "sessionId": "debug-session", "runId": "run1"}
+            )
             # #endregion
             
             # Generate response
             response = chat.send_message(message_text)
             
             # #region agent log
-            open(log_path, 'a').write(json.dumps({"location":"agent.py:138","message":"Gemini response received","data":{"has_candidates":bool(response.candidates) if response else False,"has_text":bool(response.text) if response else False},"timestamp":time.time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"D"})+'\n')
+            api_logger.info(
+                "🔍 [DEBUG-HYP-D] Gemini response received",
+                extra={"has_candidates": bool(response.candidates) if response else False, "has_text": bool(response.text) if response else False, "hypothesis": "D", "sessionId": "debug-session", "runId": "run1"}
+            )
             # #endregion
             
             # Process function calls if any
@@ -233,7 +272,20 @@ Comandos disponibles:
         
         except Exception as e:
             # #region agent log
-            import json; import traceback; import time; log_path = '/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log'; open(log_path, 'a').write(json.dumps({"location":"agent.py:198","message":"Exception in process_message","data":{"phone_number":phone_number,"error_type":type(e).__name__,"error_message":str(e),"traceback":traceback.format_exc()},"timestamp":time.time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"A,B,C,D,E"})+'\n')
+            import traceback
+            api_logger.error(
+                "🔍 [DEBUG-EXCEPTION] Exception in process_message",
+                extra={
+                    "phone_number": phone_number,
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "traceback": traceback.format_exc(),
+                    "hypothesis": "A,B,C,D,E",
+                    "sessionId": "debug-session",
+                    "runId": "run1"
+                },
+                exc_info=True
+            )
             # #endregion
             
             api_logger.error(f"Error processing message: {e}", exc_info=True)

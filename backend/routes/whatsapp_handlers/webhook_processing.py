@@ -274,7 +274,10 @@ async def process_webhook_event(request: Request, db: Session):
                             
                             try:
                                 # #region agent log
-                                import json; log_path = '/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log'; open(log_path, 'a').write(json.dumps({"location":"webhook_processing.py:275","message":"Attempting to import AppointmentAgent","data":{"from_phone":from_phone},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+'\n')
+                                api_logger.info(
+                                    "🔍 [DEBUG-HYP-A] Attempting to import AppointmentAgent",
+                                    extra={"from_phone": from_phone, "hypothesis": "A", "sessionId": "debug-session", "runId": "run1"}
+                                )
                                 # #endregion
                                 
                                 # Get original text (not lowercased) for better context
@@ -284,20 +287,29 @@ async def process_webhook_event(request: Request, db: Session):
                                 from agents.appointment_agent import AppointmentAgent
                                 
                                 # #region agent log
-                                open(log_path, 'a').write(json.dumps({"location":"webhook_processing.py:281","message":"AppointmentAgent imported successfully, initializing","data":{"from_phone":from_phone,"message_text":original_text[:50]},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+'\n')
+                                api_logger.info(
+                                    "🔍 [DEBUG-HYP-B] AppointmentAgent imported successfully, initializing",
+                                    extra={"from_phone": from_phone, "message_text": original_text[:50], "hypothesis": "B", "sessionId": "debug-session", "runId": "run1"}
+                                )
                                 # #endregion
                                 
                                 agent = AppointmentAgent(db)
                                 
                                 # #region agent log
-                                open(log_path, 'a').write(json.dumps({"location":"webhook_processing.py:283","message":"AppointmentAgent initialized, calling process_message","data":{"from_phone":from_phone},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+'\n')
+                                api_logger.info(
+                                    "🔍 [DEBUG-HYP-B] AppointmentAgent initialized, calling process_message",
+                                    extra={"from_phone": from_phone, "hypothesis": "B", "sessionId": "debug-session", "runId": "run1"}
+                                )
                                 # #endregion
                                 
                                 # Process message and get response
                                 response_text = await agent.process_message(from_phone, original_text)
                                 
                                 # #region agent log
-                                open(log_path, 'a').write(json.dumps({"location":"webhook_processing.py:285","message":"process_message completed successfully","data":{"from_phone":from_phone,"response_length":len(response_text) if response_text else 0},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"E"})+'\n')
+                                api_logger.info(
+                                    "🔍 [DEBUG-HYP-E] process_message completed successfully",
+                                    extra={"from_phone": from_phone, "response_length": len(response_text) if response_text else 0, "hypothesis": "E", "sessionId": "debug-session", "runId": "run1"}
+                                )
                                 # #endregion
                                 
                                 # Send response via WhatsApp
@@ -316,7 +328,20 @@ async def process_webhook_event(request: Request, db: Session):
                             
                             except Exception as e:
                                 # #region agent log
-                                import json; import traceback; log_path = '/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log'; open(log_path, 'a').write(json.dumps({"location":"webhook_processing.py:300","message":"Exception caught in webhook handler","data":{"from_phone":from_phone,"error_type":type(e).__name__,"error_message":str(e),"traceback":traceback.format_exc()},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","runId":"run1","hypothesisId":"A,B,C,D,E"})+'\n')
+                                import traceback
+                                api_logger.error(
+                                    "🔍 [DEBUG-EXCEPTION] Exception caught in webhook handler",
+                                    extra={
+                                        "from_phone": from_phone,
+                                        "error_type": type(e).__name__,
+                                        "error_message": str(e),
+                                        "traceback": traceback.format_exc(),
+                                        "hypothesis": "A,B,C,D,E",
+                                        "sessionId": "debug-session",
+                                        "runId": "run1"
+                                    },
+                                    exc_info=True
+                                )
                                 # #endregion
                                 
                                 api_logger.error(
