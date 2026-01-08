@@ -273,44 +273,41 @@ async def process_webhook_event(request: Request, db: Session):
                             )
                             
                             try:
-                                # #region agent log
-                                api_logger.info(
-                                    "🔍 [DEBUG-HYP-A] Attempting to import AppointmentAgent",
-                                    extra={"from_phone": from_phone, "hypothesis": "A", "sessionId": "debug-session", "runId": "run1"}
-                                )
-                                # #endregion
-                                
                                 # Get original text (not lowercased) for better context
                                 original_text = message.get('text', {}).get('body', '').strip()
                                 
-                                # Initialize Appointment Agent (ADK)
-                                from agents.appointment_agent import AppointmentAgent
+                                # Try to use Agent Engine if available, otherwise use local agent
+                                from services.agent_engine_client import call_agent_engine, is_agent_engine_available
                                 
-                                # #region agent log
+                                response_text = None
+                                
+                                if is_agent_engine_available():
+                                    # Call Agent Engine via HTTP
+                                    api_logger.info(
+                                        "Calling Appointment Agent in Agent Engine",
+                                        extra={"from_phone": from_phone, "message_text": original_text[:50]}
+                                    )
+                                    
+                                    response_text = await call_agent_engine(from_phone, original_text)
+                                
+                                # Fallback to local agent if Agent Engine not available or failed
+                                if not response_text:
+                                    api_logger.info(
+                                        "Using local Appointment Agent (fallback)",
+                                        extra={"from_phone": from_phone, "message_text": original_text[:50]}
+                                    )
+                                    
+                                    from agents.appointment_agent import AppointmentAgent
+                                    agent = AppointmentAgent(db)
+                                    response_text = await agent.process_message(from_phone, original_text)
+                                
+                                if not response_text:
+                                    raise ValueError("No response from agent")
+                                
                                 api_logger.info(
-                                    "🔍 [DEBUG-HYP-B] AppointmentAgent imported successfully, initializing",
-                                    extra={"from_phone": from_phone, "message_text": original_text[:50], "hypothesis": "B", "sessionId": "debug-session", "runId": "run1"}
+                                    "Agent response received",
+                                    extra={"from_phone": from_phone, "response_length": len(response_text)}
                                 )
-                                # #endregion
-                                
-                                agent = AppointmentAgent(db)
-                                
-                                # #region agent log
-                                api_logger.info(
-                                    "🔍 [DEBUG-HYP-B] AppointmentAgent initialized, calling process_message",
-                                    extra={"from_phone": from_phone, "hypothesis": "B", "sessionId": "debug-session", "runId": "run1"}
-                                )
-                                # #endregion
-                                
-                                # Process message and get response
-                                response_text = await agent.process_message(from_phone, original_text)
-                                
-                                # #region agent log
-                                api_logger.info(
-                                    "🔍 [DEBUG-HYP-E] process_message completed successfully",
-                                    extra={"from_phone": from_phone, "response_length": len(response_text) if response_text else 0, "hypothesis": "E", "sessionId": "debug-session", "runId": "run1"}
-                                )
-                                # #endregion
                                 
                                 # Send response via WhatsApp
                                 whatsapp_service = get_whatsapp_service()

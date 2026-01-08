@@ -1,10 +1,9 @@
 """
-MCP Tools for Appointment Agent
-These tools wrap the existing gemini_helpers functions for use with ADK
+ADK Tools for Appointment Agent
+These tools wrap the existing gemini_helpers functions for use with ADK Agent Engine
 """
 from typing import List, Dict, Optional, Any
 from sqlalchemy.orm import Session
-from vertexai.generative_models import FunctionDeclaration
 
 # Import existing helper functions
 from services.whatsapp_handlers import gemini_helpers
@@ -12,231 +11,453 @@ from logger import get_logger
 
 api_logger = get_logger("medical_records.adk_agent")
 
+# ADK imports - using google.adk (correct path for ADK 1.21.0+)
+try:
+    from google.adk.tools import FunctionTool
+    ADK_AVAILABLE = True
+except ImportError:
+    try:
+        from google.cloud.aiplatform.adk.tools import FunctionTool
+        ADK_AVAILABLE = True
+    except ImportError:
+        # Fallback: use FunctionDeclaration for now if ADK not available
+        from vertexai.generative_models import FunctionDeclaration
+        ADK_AVAILABLE = False
+        api_logger.warning("ADK FunctionTool not available, using FunctionDeclaration as fallback")
 
-def get_active_doctors_tool() -> FunctionDeclaration:
+
+def get_active_doctors(db: Session) -> List[Dict[str, Any]]:
     """Get list of all active doctors. Use when user wants to see available doctors."""
-    return FunctionDeclaration(
-        name="get_active_doctors",
-        description="Get list of all active doctors. Use this when user wants to see available doctors or select a doctor.",
-        parameters={
-            "type": "object",
-            "properties": {},
-            "required": []
-        }
-    )
+    api_logger.debug("Executing get_active_doctors", extra={"hypothesisId": "D"})
+    return gemini_helpers.get_active_doctors(db)
 
 
-def get_doctor_offices_tool() -> FunctionDeclaration:
+def get_doctor_offices(doctor_id: int, db: Session) -> List[Dict[str, Any]]:
     """Get list of active offices for a specific doctor."""
-    return FunctionDeclaration(
-        name="get_doctor_offices",
-        description="Get list of active offices for a specific doctor. Use this after doctor is selected to check if doctor has multiple offices.",
-        parameters={
-            "type": "object",
-            "properties": {
-                "doctor_id": {
-                    "type": "integer",
-                    "description": "The ID of the doctor"
-                }
-            },
-            "required": ["doctor_id"]
-        }
-    )
+    api_logger.debug(f"Executing get_doctor_offices for doctor_id={doctor_id}", extra={"doctor_id": doctor_id})
+    return gemini_helpers.get_doctor_offices(db, doctor_id)
 
 
-def get_available_slots_tool() -> FunctionDeclaration:
+def get_available_slots(doctor_id: int, office_id: int, date_str: str, db: Session) -> List[Dict[str, Any]]:
     """Get available appointment time slots for a doctor on a specific date."""
-    return FunctionDeclaration(
-        name="get_available_slots",
-        description="Get available appointment time slots for a doctor on a specific date. Use this when user wants to see available times or select a time.",
-        parameters={
-            "type": "object",
-            "properties": {
-                "doctor_id": {
-                    "type": "integer",
-                    "description": "The ID of the doctor"
-                },
-                "office_id": {
-                    "type": "integer",
-                    "description": "The ID of the office"
-                },
-                "date_str": {
-                    "type": "string",
-                    "description": "Date in format YYYY-MM-DD (e.g., '2024-01-15')"
-                }
-            },
-            "required": ["doctor_id", "office_id", "date_str"]
-        }
-    )
+    api_logger.debug(f"Executing get_available_slots for doctor_id={doctor_id}, office_id={office_id}, date={date_str}")
+    return gemini_helpers.get_available_slots(db, doctor_id, office_id, date_str)
 
 
-def find_patient_by_phone_tool() -> FunctionDeclaration:
+def find_patient_by_phone(phone: str, db: Session) -> Optional[Dict[str, Any]]:
     """Find a patient by their phone number."""
-    return FunctionDeclaration(
-        name="find_patient_by_phone",
-        description="Find a patient by their phone number. Use this to check if the user is already registered as a patient.",
-        parameters={
-            "type": "object",
-            "properties": {
-                "phone": {
-                    "type": "string",
-                    "description": "Phone number to search for"
-                }
-            },
-            "required": ["phone"]
-        }
-    )
+    api_logger.debug(f"Executing find_patient_by_phone for phone={phone}")
+    return gemini_helpers.find_patient_by_phone(db, phone)
 
 
-def create_patient_tool() -> FunctionDeclaration:
+def create_patient_from_chat(
+    name: str,
+    phone: str,
+    db: Session,
+    birth_date: Optional[str] = None,
+    contact_phone: Optional[str] = None
+) -> Dict[str, Any]:
     """Create a new patient record."""
-    return FunctionDeclaration(
-        name="create_patient_from_chat",
-        description="Create a new patient record. Use this when user is not registered and provides their information.",
-        parameters={
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string",
-                    "description": "Patient's full name"
-                },
-                "phone": {
-                    "type": "string",
-                    "description": "Patient's primary phone number"
-                },
-                "birth_date": {
-                    "type": "string",
-                    "description": "Birth date in format YYYY-MM-DD (optional)"
-                },
-                "contact_phone": {
-                    "type": "string",
-                    "description": "Contact phone if different from primary phone (optional)"
-                }
-            },
-            "required": ["name", "phone"]
-        }
-    )
+    api_logger.debug(f"Executing create_patient_from_chat for name={name}, phone={phone}")
+    return gemini_helpers.create_patient_from_chat(db, name, phone, birth_date, contact_phone)
 
 
-def check_previous_appointments_tool() -> FunctionDeclaration:
-    """Check if patient has previous completed appointments with a specific doctor."""
-    return FunctionDeclaration(
-        name="check_patient_has_previous_appointments",
-        description="Check if patient has previous COMPLETED appointments with a specific doctor. Use this to determine if appointment is 'Primera vez' or 'Seguimiento'. Only counts appointments with status='completed', not cancelled or pending.",
-        parameters={
-            "type": "object",
-            "properties": {
-                "patient_id": {
-                    "type": "integer",
-                    "description": "The ID of the patient"
-                },
-                "doctor_id": {
-                    "type": "integer",
-                    "description": "The ID of the doctor"
-                }
-            },
-            "required": ["patient_id", "doctor_id"]
-        }
-    )
+def check_patient_has_previous_appointments(patient_id: int, doctor_id: int, db: Session) -> Dict[str, Any]:
+    """Check if patient has previous COMPLETED appointments with a specific doctor."""
+    api_logger.debug(f"Executing check_patient_has_previous_appointments for patient_id={patient_id}, doctor_id={doctor_id}")
+    return gemini_helpers.check_patient_has_previous_appointments(db, patient_id, doctor_id)
 
 
-def validate_slot_tool() -> FunctionDeclaration:
-    """Validate that an appointment slot is still available."""
-    return FunctionDeclaration(
-        name="validate_appointment_slot",
-        description="Validate that an appointment slot is still available before creating. Use this as a double-check before creating the appointment.",
-        parameters={
-            "type": "object",
-            "properties": {
-                "doctor_id": {
-                    "type": "integer",
-                    "description": "The ID of the doctor"
-                },
-                "office_id": {
-                    "type": "integer",
-                    "description": "The ID of the office"
-                },
-                "date_str": {
-                    "type": "string",
-                    "description": "Date in format YYYY-MM-DD"
-                },
-                "time_str": {
-                    "type": "string",
-                    "description": "Time in format HH:MM (24-hour format, e.g., '14:30')"
-                }
-            },
-            "required": ["doctor_id", "office_id", "date_str", "time_str"]
-        }
-    )
+def validate_appointment_slot(
+    doctor_id: int,
+    office_id: int,
+    date_str: str,
+    time_str: str,
+    db: Session
+) -> Dict[str, Any]:
+    """Validate that an appointment slot is still available before creating."""
+    api_logger.debug(f"Executing validate_appointment_slot for doctor_id={doctor_id}, office_id={office_id}, date={date_str}, time={time_str}")
+    return gemini_helpers.validate_appointment_slot(db, doctor_id, office_id, date_str, time_str)
 
 
-def get_appointment_types_tool() -> FunctionDeclaration:
+def get_appointment_types(db: Session) -> List[Dict[str, Any]]:
     """Get list of appointment types."""
-    return FunctionDeclaration(
-        name="get_appointment_types",
-        description="Get list of appointment types (Presencial, En línea). Use this to show options to user.",
-        parameters={
-            "type": "object",
-            "properties": {},
-            "required": []
-        }
+    api_logger.debug("Executing get_appointment_types")
+    return gemini_helpers.get_appointment_types(db)
+
+
+def create_appointment_from_chat(
+    patient_id: int,
+    doctor_id: int,
+    office_id: int,
+    date_str: str,
+    time_str: str,
+    consultation_type: str,
+    appointment_type_id: int,
+    db: Session
+) -> Dict[str, Any]:
+    """Create a new appointment. Use ONLY after all information is collected and user has confirmed."""
+    api_logger.debug(f"Executing create_appointment_from_chat for patient_id={patient_id}, doctor_id={doctor_id}")
+    return gemini_helpers.create_appointment_from_chat(
+        db, patient_id, doctor_id, office_id, date_str, time_str, consultation_type, appointment_type_id
     )
 
 
-def create_appointment_tool() -> FunctionDeclaration:
-    """Create a new appointment."""
-    return FunctionDeclaration(
-        name="create_appointment_from_chat",
-        description="Create a new appointment. Use this ONLY after all information is collected and user has confirmed. Always validate the slot first using validate_appointment_slot.",
-        parameters={
-            "type": "object",
-            "properties": {
-                "patient_id": {
-                    "type": "integer",
-                    "description": "The ID of the patient"
-                },
-                "doctor_id": {
-                    "type": "integer",
-                    "description": "The ID of the doctor"
-                },
-                "office_id": {
-                    "type": "integer",
-                    "description": "The ID of the office"
-                },
-                "date_str": {
-                    "type": "string",
-                    "description": "Date in format YYYY-MM-DD"
-                },
-                "time_str": {
-                    "type": "string",
-                    "description": "Time in format HH:MM (24-hour format, e.g., '14:30')"
-                },
-                "consultation_type": {
-                    "type": "string",
-                    "description": "Type of consultation: 'Primera vez' or 'Seguimiento'"
-                },
-                "appointment_type_id": {
-                    "type": "integer",
-                    "description": "Appointment type ID (1 for Presencial, 2 for En línea, etc.)"
+def create_adk_tools(db: Session) -> List[Any]:
+    """
+    Create ADK FunctionTool objects from the tool functions.
+    This function will be called by the agent with the db session.
+    """
+    tools = []
+    
+    # Check if ADK is available (use global variable)
+    global ADK_AVAILABLE
+    adk_available = ADK_AVAILABLE
+    
+    if adk_available:
+        # Use ADK FunctionTool if available
+        # Note: The exact API may vary - we'll adjust based on actual ADK documentation
+        # For now, create tools with proper descriptions and parameters
+        try:
+            tools = [
+                FunctionTool(
+                    func=lambda: get_active_doctors(db),
+                    name="get_active_doctors",
+                    description="Get list of all active doctors. Use this when user wants to see available doctors or select a doctor."
+                ),
+                FunctionTool(
+                    func=lambda doctor_id: get_doctor_offices(doctor_id, db),
+                    name="get_doctor_offices",
+                    description="Get list of active offices for a specific doctor. Use this after doctor is selected to check if doctor has multiple offices.",
+                    parameters={
+                        "type": "object",
+                        "properties": {
+                            "doctor_id": {"type": "integer", "description": "The ID of the doctor"}
+                        },
+                        "required": ["doctor_id"]
+                    }
+                ),
+                FunctionTool(
+                    func=lambda doctor_id, office_id, date_str: get_available_slots(doctor_id, office_id, date_str, db),
+                    name="get_available_slots",
+                    description="Get available appointment time slots for a doctor on a specific date. Use this when user wants to see available times or select a time.",
+                    parameters={
+                        "type": "object",
+                        "properties": {
+                            "doctor_id": {"type": "integer", "description": "The ID of the doctor"},
+                            "office_id": {"type": "integer", "description": "The ID of the office"},
+                            "date_str": {"type": "string", "description": "Date in format YYYY-MM-DD (e.g., '2024-01-15')"}
+                        },
+                        "required": ["doctor_id", "office_id", "date_str"]
+                    }
+                ),
+                FunctionTool(
+                    func=lambda phone: find_patient_by_phone(phone, db),
+                    name="find_patient_by_phone",
+                    description="Find a patient by their phone number. Use this to check if the user is already registered as a patient.",
+                    parameters={
+                        "type": "object",
+                        "properties": {
+                            "phone": {"type": "string", "description": "Phone number to search for"}
+                        },
+                        "required": ["phone"]
+                    }
+                ),
+                FunctionTool(
+                    func=lambda name, phone, birth_date=None, contact_phone=None: create_patient_from_chat(name, phone, db, birth_date, contact_phone),
+                    name="create_patient_from_chat",
+                    description="Create a new patient record. Use this when user is not registered and provides their information.",
+                    parameters={
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string", "description": "Patient's full name"},
+                            "phone": {"type": "string", "description": "Patient's primary phone number"},
+                            "birth_date": {"type": "string", "description": "Birth date in format YYYY-MM-DD (optional)"},
+                            "contact_phone": {"type": "string", "description": "Contact phone if different from primary phone (optional)"}
+                        },
+                        "required": ["name", "phone"]
+                    }
+                ),
+                FunctionTool(
+                    func=lambda patient_id, doctor_id: check_patient_has_previous_appointments(patient_id, doctor_id, db),
+                    name="check_patient_has_previous_appointments",
+                    description="Check if patient has previous COMPLETED appointments with a specific doctor. Use this to determine if appointment is 'Primera vez' or 'Seguimiento'. Only counts appointments with status='completed', not cancelled or pending.",
+                    parameters={
+                        "type": "object",
+                        "properties": {
+                            "patient_id": {"type": "integer", "description": "The ID of the patient"},
+                            "doctor_id": {"type": "integer", "description": "The ID of the doctor"}
+                        },
+                        "required": ["patient_id", "doctor_id"]
+                    }
+                ),
+                FunctionTool(
+                    func=lambda doctor_id, office_id, date_str, time_str: validate_appointment_slot(doctor_id, office_id, date_str, time_str, db),
+                    name="validate_appointment_slot",
+                    description="Validate that an appointment slot is still available before creating. Use this as a double-check before creating the appointment.",
+                    parameters={
+                        "type": "object",
+                        "properties": {
+                            "doctor_id": {"type": "integer", "description": "The ID of the doctor"},
+                            "office_id": {"type": "integer", "description": "The ID of the office"},
+                            "date_str": {"type": "string", "description": "Date in format YYYY-MM-DD"},
+                            "time_str": {"type": "string", "description": "Time in format HH:MM (24-hour format, e.g., '14:30')"}
+                        },
+                        "required": ["doctor_id", "office_id", "date_str", "time_str"]
+                    }
+                ),
+                FunctionTool(
+                    func=lambda: get_appointment_types(db),
+                    name="get_appointment_types",
+                    description="Get list of appointment types (Presencial, En línea). Use this to show options to user."
+                ),
+                FunctionTool(
+                    func=lambda patient_id, doctor_id, office_id, date_str, time_str, consultation_type, appointment_type_id: create_appointment_from_chat(
+                        patient_id, doctor_id, office_id, date_str, time_str, consultation_type, appointment_type_id, db
+                    ),
+                    name="create_appointment_from_chat",
+                    description="Create a new appointment. Use this ONLY after all information is collected and user has confirmed. Always validate the slot first using validate_appointment_slot.",
+                    parameters={
+                        "type": "object",
+                        "properties": {
+                            "patient_id": {"type": "integer", "description": "The ID of the patient"},
+                            "doctor_id": {"type": "integer", "description": "The ID of the doctor"},
+                            "office_id": {"type": "integer", "description": "The ID of the office"},
+                            "date_str": {"type": "string", "description": "Date in format YYYY-MM-DD"},
+                            "time_str": {"type": "string", "description": "Time in format HH:MM (24-hour format, e.g., '14:30')"},
+                            "consultation_type": {"type": "string", "description": "Type of consultation: 'Primera vez' or 'Seguimiento'"},
+                            "appointment_type_id": {"type": "integer", "description": "Appointment type ID (1 for Presencial, 2 for En línea, etc.)"}
+                        },
+                        "required": ["patient_id", "doctor_id", "office_id", "date_str", "time_str", "consultation_type", "appointment_type_id"]
+                    }
+                )
+            ]
+        except Exception as e:
+            api_logger.error(f"Error creating ADK tools: {e}", exc_info=True)
+            # Fallback to FunctionDeclaration
+            adk_available = False
+    
+    if not adk_available:
+        # Fallback: Use FunctionDeclaration (for backward compatibility)
+        from vertexai.generative_models import FunctionDeclaration
+        tools = [
+            FunctionDeclaration(
+                name="get_active_doctors",
+                description="Get list of all active doctors. Use this when user wants to see available doctors or select a doctor.",
+                parameters={"type": "object", "properties": {}, "required": []}
+            ),
+            FunctionDeclaration(
+                name="get_doctor_offices",
+                description="Get list of active offices for a specific doctor. Use this after doctor is selected to check if doctor has multiple offices.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "doctor_id": {"type": "integer", "description": "The ID of the doctor"}
+                    },
+                    "required": ["doctor_id"]
                 }
-            },
-            "required": ["patient_id", "doctor_id", "office_id", "date_str", "time_str", "consultation_type", "appointment_type_id"]
-        }
-    )
+            ),
+            FunctionDeclaration(
+                name="get_available_slots",
+                description="Get available appointment time slots for a doctor on a specific date. Use this when user wants to see available times or select a time.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "doctor_id": {"type": "integer", "description": "The ID of the doctor"},
+                        "office_id": {"type": "integer", "description": "The ID of the office"},
+                        "date_str": {"type": "string", "description": "Date in format YYYY-MM-DD (e.g., '2024-01-15')"}
+                    },
+                    "required": ["doctor_id", "office_id", "date_str"]
+                }
+            ),
+            FunctionDeclaration(
+                name="find_patient_by_phone",
+                description="Find a patient by their phone number. Use this to check if the user is already registered as a patient.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "phone": {"type": "string", "description": "Phone number to search for"}
+                    },
+                    "required": ["phone"]
+                }
+            ),
+            FunctionDeclaration(
+                name="create_patient_from_chat",
+                description="Create a new patient record. Use this when user is not registered and provides their information.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Patient's full name"},
+                        "phone": {"type": "string", "description": "Patient's primary phone number"},
+                        "birth_date": {"type": "string", "description": "Birth date in format YYYY-MM-DD (optional)"},
+                        "contact_phone": {"type": "string", "description": "Contact phone if different from primary phone (optional)"}
+                    },
+                    "required": ["name", "phone"]
+                }
+            ),
+            FunctionDeclaration(
+                name="check_patient_has_previous_appointments",
+                description="Check if patient has previous COMPLETED appointments with a specific doctor. Use this to determine if appointment is 'Primera vez' or 'Seguimiento'. Only counts appointments with status='completed', not cancelled or pending.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "patient_id": {"type": "integer", "description": "The ID of the patient"},
+                        "doctor_id": {"type": "integer", "description": "The ID of the doctor"}
+                    },
+                    "required": ["patient_id", "doctor_id"]
+                }
+            ),
+            FunctionDeclaration(
+                name="validate_appointment_slot",
+                description="Validate that an appointment slot is still available before creating. Use this as a double-check before creating the appointment.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "doctor_id": {"type": "integer", "description": "The ID of the doctor"},
+                        "office_id": {"type": "integer", "description": "The ID of the office"},
+                        "date_str": {"type": "string", "description": "Date in format YYYY-MM-DD"},
+                        "time_str": {"type": "string", "description": "Time in format HH:MM (24-hour format, e.g., '14:30')"}
+                    },
+                    "required": ["doctor_id", "office_id", "date_str", "time_str"]
+                }
+            ),
+            FunctionDeclaration(
+                name="get_appointment_types",
+                description="Get list of appointment types (Presencial, En línea). Use this to show options to user.",
+                parameters={"type": "object", "properties": {}, "required": []}
+            ),
+            FunctionDeclaration(
+                name="create_appointment_from_chat",
+                description="Create a new appointment. Use this ONLY after all information is collected and user has confirmed. Always validate the slot first using validate_appointment_slot.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "patient_id": {"type": "integer", "description": "The ID of the patient"},
+                        "doctor_id": {"type": "integer", "description": "The ID of the doctor"},
+                        "office_id": {"type": "integer", "description": "The ID of the office"},
+                        "date_str": {"type": "string", "description": "Date in format YYYY-MM-DD"},
+                        "time_str": {"type": "string", "description": "Time in format HH:MM (24-hour format, e.g., '14:30')"},
+                        "consultation_type": {"type": "string", "description": "Type of consultation: 'Primera vez' or 'Seguimiento'"},
+                        "appointment_type_id": {"type": "integer", "description": "Appointment type ID (1 for Presencial, 2 for En línea, etc.)"}
+                    },
+                    "required": ["patient_id", "doctor_id", "office_id", "date_str", "time_str", "consultation_type", "appointment_type_id"]
+                }
+            )
+        ]
+    
+    return tools
 
 
-def get_all_tools() -> List[FunctionDeclaration]:
-    """Get all tool declarations for the appointment agent."""
+def get_all_tools() -> List[Any]:
+    """
+    Get all tool declarations for backward compatibility with GenerativeModel.
+    Returns FunctionDeclaration objects for use with Vertex AI GenerativeModel.
+    """
+    from vertexai.generative_models import FunctionDeclaration
+    
     return [
-        get_active_doctors_tool(),
-        get_doctor_offices_tool(),
-        get_available_slots_tool(),
-        find_patient_by_phone_tool(),
-        create_patient_tool(),
-        check_previous_appointments_tool(),
-        validate_slot_tool(),
-        get_appointment_types_tool(),
-        create_appointment_tool()
+        FunctionDeclaration(
+            name="get_active_doctors",
+            description="Get list of all active doctors. Use this when user wants to see available doctors or select a doctor.",
+            parameters={"type": "object", "properties": {}, "required": []}
+        ),
+        FunctionDeclaration(
+            name="get_doctor_offices",
+            description="Get list of active offices for a specific doctor. Use this after doctor is selected to check if doctor has multiple offices.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "doctor_id": {"type": "integer", "description": "The ID of the doctor"}
+                },
+                "required": ["doctor_id"]
+            }
+        ),
+        FunctionDeclaration(
+            name="get_available_slots",
+            description="Get available appointment time slots for a doctor on a specific date. Use this when user wants to see available times or select a time.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "doctor_id": {"type": "integer", "description": "The ID of the doctor"},
+                    "office_id": {"type": "integer", "description": "The ID of the office"},
+                    "date_str": {"type": "string", "description": "Date in format YYYY-MM-DD (e.g., '2024-01-15')"}
+                },
+                "required": ["doctor_id", "office_id", "date_str"]
+            }
+        ),
+        FunctionDeclaration(
+            name="find_patient_by_phone",
+            description="Find a patient by their phone number. Use this to check if the user is already registered as a patient.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "phone": {"type": "string", "description": "Phone number to search for"}
+                },
+                "required": ["phone"]
+            }
+        ),
+        FunctionDeclaration(
+            name="create_patient_from_chat",
+            description="Create a new patient record. Use this when user is not registered and provides their information.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Patient's full name"},
+                    "phone": {"type": "string", "description": "Patient's primary phone number"},
+                    "birth_date": {"type": "string", "description": "Birth date in format YYYY-MM-DD (optional)"},
+                    "contact_phone": {"type": "string", "description": "Contact phone if different from primary phone (optional)"}
+                },
+                "required": ["name", "phone"]
+            }
+        ),
+        FunctionDeclaration(
+            name="check_patient_has_previous_appointments",
+            description="Check if patient has previous COMPLETED appointments with a specific doctor. Use this to determine if appointment is 'Primera vez' or 'Seguimiento'. Only counts appointments with status='completed', not cancelled or pending.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "patient_id": {"type": "integer", "description": "The ID of the patient"},
+                    "doctor_id": {"type": "integer", "description": "The ID of the doctor"}
+                },
+                "required": ["patient_id", "doctor_id"]
+            }
+        ),
+        FunctionDeclaration(
+            name="validate_appointment_slot",
+            description="Validate that an appointment slot is still available before creating. Use this as a double-check before creating the appointment.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "doctor_id": {"type": "integer", "description": "The ID of the doctor"},
+                    "office_id": {"type": "integer", "description": "The ID of the office"},
+                    "date_str": {"type": "string", "description": "Date in format YYYY-MM-DD"},
+                    "time_str": {"type": "string", "description": "Time in format HH:MM (24-hour format, e.g., '14:30')"}
+                },
+                "required": ["doctor_id", "office_id", "date_str", "time_str"]
+            }
+        ),
+        FunctionDeclaration(
+            name="get_appointment_types",
+            description="Get list of appointment types (Presencial, En línea). Use this to show options to user.",
+            parameters={"type": "object", "properties": {}, "required": []}
+        ),
+        FunctionDeclaration(
+            name="create_appointment_from_chat",
+            description="Create a new appointment. Use this ONLY after all information is collected and user has confirmed. Always validate the slot first using validate_appointment_slot.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "patient_id": {"type": "integer", "description": "The ID of the patient"},
+                    "doctor_id": {"type": "integer", "description": "The ID of the doctor"},
+                    "office_id": {"type": "integer", "description": "The ID of the office"},
+                    "date_str": {"type": "string", "description": "Date in format YYYY-MM-DD"},
+                    "time_str": {"type": "string", "description": "Time in format HH:MM (24-hour format, e.g., '14:30')"},
+                    "consultation_type": {"type": "string", "description": "Type of consultation: 'Primera vez' or 'Seguimiento'"},
+                    "appointment_type_id": {"type": "integer", "description": "Appointment type ID (1 for Presencial, 2 for En línea, etc.)"}
+                },
+                "required": ["patient_id", "doctor_id", "office_id", "date_str", "time_str", "consultation_type", "appointment_type_id"]
+            }
+        )
     ]
 
 
@@ -244,6 +465,7 @@ def execute_tool(db: Session, function_name: str, args: Dict[str, Any]) -> Any:
     """
     Execute a tool function call.
     Maps function names to actual helper functions from gemini_helpers.
+    This is used for backward compatibility with GenerativeModel.
     """
     try:
         if function_name == "get_active_doctors":
@@ -310,4 +532,3 @@ def execute_tool(db: Session, function_name: str, args: Dict[str, Any]) -> Any:
     except Exception as e:
         api_logger.error(f"Error executing function {function_name}: {e}", exc_info=True)
         return {"error": str(e)}
-

@@ -107,7 +107,8 @@ class Settings(BaseSettings):
     GCP_REGION: str = os.getenv("GCP_REGION", "us-central1")
     
     # Gemini Bot Configuration
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    # Updated to gemini-2.0-flash-lite (newest available model in Model Garden)
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite")
     GEMINI_BOT_ENABLED: bool = _env_bool("GEMINI_BOT_ENABLED", True)
     GEMINI_BOT_SANDBOX_MODE: bool = _env_bool("GEMINI_BOT_SANDBOX_MODE", False)
     GEMINI_MAX_APPOINTMENT_DAYS: int = int(os.getenv("GEMINI_MAX_APPOINTMENT_DAYS", "90"))
@@ -129,6 +130,11 @@ class Settings(BaseSettings):
     # Redis Configuration (optional, for session persistence)
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379")
     REDIS_ENABLED: bool = _env_bool("REDIS_ENABLED", False)
+    
+    # Vertex AI Agent Engine Configuration (ADK)
+    AGENT_ENGINE_ENDPOINT: Optional[str] = os.getenv("AGENT_ENGINE_ENDPOINT", None)
+    AGENT_ENGINE_PROJECT_ID: Optional[str] = os.getenv("AGENT_ENGINE_PROJECT_ID", None)
+    AGENT_ENGINE_REGION: str = os.getenv("AGENT_ENGINE_REGION", "us-central1")
     
     @model_validator(mode='before')
     @classmethod
