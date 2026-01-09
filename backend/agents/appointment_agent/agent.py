@@ -142,7 +142,6 @@ class AppointmentAgent:
             "data": {
                 "model_name": settings.GEMINI_MODEL,
                 "tools_count": len(function_declarations) if function_declarations else 0,
-                "tool_names": [f.name for f in function_declarations] if function_declarations else [],
                 "tools_passed": tools is not None and len(tools) > 0
             },
             "timestamp": int(datetime.now().timestamp() * 1000),
