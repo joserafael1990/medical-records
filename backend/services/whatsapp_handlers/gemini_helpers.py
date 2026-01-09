@@ -21,22 +21,160 @@ def get_active_doctors(db: Session) -> List[Dict[str, Any]]:
     Returns list of dicts with id and name.
     """
     try:
+        # #region agent log
+        import json
+        import os
+        log_data = {
+            "location": "gemini_helpers.py:24",
+            "message": "get_active_doctors called - starting query",
+            "data": {"timestamp": str(datetime.now())},
+            "timestamp": int(datetime.now().timestamp() * 1000),
+            "sessionId": "debug-session",
+            "runId": "production-debug",
+            "hypothesisId": "A,B,D"
+        }
+        log_file = "/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log"
+        try:
+            with open(log_file, 'a') as f:
+                f.write(json.dumps(log_data) + '\n')
+        except:
+            pass
+        # #endregion
+        
         doctors = db.query(Person).filter(
             Person.person_type == 'doctor',
             Person.is_active == True
         ).all()
         
+        # #region agent log
+        log_data = {
+            "location": "gemini_helpers.py:35",
+            "message": "get_active_doctors - doctors queried from DB",
+            "data": {"doctor_count": len(doctors), "doctor_ids": [d.id for d in doctors]},
+            "timestamp": int(datetime.now().timestamp() * 1000),
+            "sessionId": "debug-session",
+            "runId": "production-debug",
+            "hypothesisId": "A,D"
+        }
+        try:
+            with open(log_file, 'a') as f:
+                f.write(json.dumps(log_data) + '\n')
+        except:
+            pass
+        # #endregion
+        
         result = []
         for doctor in doctors:
-            result.append({
+            # #region agent log
+            doctor_raw_data = {
                 "id": doctor.id,
-                "name": doctor.full_name or doctor.name,
-                "specialty": doctor.specialty.name if doctor.specialty else None
-            })
+                "name": doctor.name,
+                "title": doctor.title,
+                "full_name_property": doctor.full_name,
+                "has_specialty": doctor.specialty is not None,
+                "specialty_id": doctor.specialty_id,
+                "specialty_name": doctor.specialty.name if doctor.specialty else None
+            }
+            log_data = {
+                "location": "gemini_helpers.py:42",
+                "message": f"get_active_doctors - processing doctor {doctor.id}",
+                "data": doctor_raw_data,
+                "timestamp": int(datetime.now().timestamp() * 1000),
+                "sessionId": "debug-session",
+                "runId": "production-debug",
+                "hypothesisId": "A,B,D"
+            }
+            try:
+                with open(log_file, 'a') as f:
+                    f.write(json.dumps(log_data) + '\n')
+            except:
+                pass
+            # #endregion
+            
+            doctor_name = doctor.full_name or doctor.name
+            specialty_name = None
+            try:
+                if doctor.specialty:
+                    specialty_name = doctor.specialty.name
+            except Exception as spec_error:
+                # #region agent log
+                log_data = {
+                    "location": "gemini_helpers.py:60",
+                    "message": f"get_active_doctors - ERROR accessing specialty for doctor {doctor.id}",
+                    "data": {"doctor_id": doctor.id, "error": str(spec_error), "specialty_id": doctor.specialty_id},
+                    "timestamp": int(datetime.now().timestamp() * 1000),
+                    "sessionId": "debug-session",
+                    "runId": "production-debug",
+                    "hypothesisId": "B"
+                }
+                try:
+                    with open(log_file, 'a') as f:
+                        f.write(json.dumps(log_data) + '\n')
+                except:
+                    pass
+                # #endregion
+                api_logger.warning(f"Error accessing specialty for doctor {doctor.id}: {spec_error}")
+            
+            doctor_dict = {
+                "id": doctor.id,
+                "name": doctor_name,
+                "specialty": specialty_name
+            }
+            result.append(doctor_dict)
+            
+            # #region agent log
+            log_data = {
+                "location": "gemini_helpers.py:78",
+                "message": f"get_active_doctors - doctor {doctor.id} added to result",
+                "data": {"doctor_dict": doctor_dict},
+                "timestamp": int(datetime.now().timestamp() * 1000),
+                "sessionId": "debug-session",
+                "runId": "production-debug",
+                "hypothesisId": "A,D"
+            }
+            try:
+                with open(log_file, 'a') as f:
+                    f.write(json.dumps(log_data) + '\n')
+            except:
+                pass
+            # #endregion
+        
+        # #region agent log
+        log_data = {
+            "location": "gemini_helpers.py:91",
+            "message": "get_active_doctors - final result",
+            "data": {"result_count": len(result), "result": result},
+            "timestamp": int(datetime.now().timestamp() * 1000),
+            "sessionId": "debug-session",
+            "runId": "production-debug",
+            "hypothesisId": "A,D,E"
+        }
+        try:
+            with open(log_file, 'a') as f:
+                f.write(json.dumps(log_data) + '\n')
+        except:
+            pass
+        # #endregion
         
         api_logger.debug(f"Found {len(result)} active doctors")
         return result
     except Exception as e:
+        # #region agent log
+        log_data = {
+            "location": "gemini_helpers.py:107",
+            "message": "get_active_doctors - EXCEPTION caught",
+            "data": {"error_type": type(e).__name__, "error_message": str(e)},
+            "timestamp": int(datetime.now().timestamp() * 1000),
+            "sessionId": "debug-session",
+            "runId": "production-debug",
+            "hypothesisId": "A,B,C"
+        }
+        try:
+            with open(log_file, 'a') as f:
+                f.write(json.dumps(log_data) + '\n')
+        except:
+            pass
+        # #endregion
         api_logger.error(f"Error getting active doctors: {e}", exc_info=True)
         return []
 

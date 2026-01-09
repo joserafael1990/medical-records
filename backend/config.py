@@ -107,8 +107,9 @@ class Settings(BaseSettings):
     GCP_REGION: str = os.getenv("GCP_REGION", "us-central1")
     
     # Gemini Bot Configuration
-    # Updated to gemini-2.0-flash-lite (newest available model in Model Garden)
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite")
+    # Using gemini-1.5-flash for reliable function calling support
+    # gemini-2.0-flash-lite may not fully support function calling yet
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
     GEMINI_BOT_ENABLED: bool = _env_bool("GEMINI_BOT_ENABLED", True)
     GEMINI_BOT_SANDBOX_MODE: bool = _env_bool("GEMINI_BOT_SANDBOX_MODE", False)
     GEMINI_MAX_APPOINTMENT_DAYS: int = int(os.getenv("GEMINI_MAX_APPOINTMENT_DAYS", "90"))

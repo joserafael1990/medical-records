@@ -468,8 +468,61 @@ def execute_tool(db: Session, function_name: str, args: Dict[str, Any]) -> Any:
     This is used for backward compatibility with GenerativeModel.
     """
     try:
+        # #region agent log
+        import json
+        from datetime import datetime
+        log_data = {
+            "location": "tools.py:471",
+            "message": "execute_tool called",
+            "data": {"function_name": function_name, "args": args},
+            "timestamp": int(datetime.now().timestamp() * 1000),
+            "sessionId": "debug-session",
+            "runId": "production-debug",
+            "hypothesisId": "C"
+        }
+        log_file = "/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log"
+        try:
+            with open(log_file, 'a') as f:
+                f.write(json.dumps(log_data) + '\n')
+        except:
+            pass
+        # #endregion
+        
         if function_name == "get_active_doctors":
-            return gemini_helpers.get_active_doctors(db)
+            # #region agent log
+            log_data = {
+                "location": "tools.py:482",
+                "message": "execute_tool - calling get_active_doctors",
+                "data": {},
+                "timestamp": int(datetime.now().timestamp() * 1000),
+                "sessionId": "debug-session",
+                "runId": "production-debug",
+                "hypothesisId": "C"
+            }
+            try:
+                with open(log_file, 'a') as f:
+                    f.write(json.dumps(log_data) + '\n')
+            except:
+                pass
+            # #endregion
+            result = gemini_helpers.get_active_doctors(db)
+            # #region agent log
+            log_data = {
+                "location": "tools.py:496",
+                "message": "execute_tool - get_active_doctors returned",
+                "data": {"result_count": len(result) if result else 0, "result": result},
+                "timestamp": int(datetime.now().timestamp() * 1000),
+                "sessionId": "debug-session",
+                "runId": "production-debug",
+                "hypothesisId": "C,E"
+            }
+            try:
+                with open(log_file, 'a') as f:
+                    f.write(json.dumps(log_data) + '\n')
+            except:
+                pass
+            # #endregion
+            return result
         
         elif function_name == "get_doctor_offices":
             return gemini_helpers.get_doctor_offices(db, args.get("doctor_id"))
