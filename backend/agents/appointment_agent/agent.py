@@ -55,7 +55,19 @@ class AppointmentAgent:
         self.session_state = AppointmentSessionState()
         self.use_adk = use_adk and ADK_AVAILABLE
         
-        # Initialize Vertex AI
+        # Check if sandbox mode is enabled (NO API calls, $0 cost)
+        if settings.GEMINI_BOT_SANDBOX_MODE:
+            api_logger.info(
+                "Initializing Appointment Agent in SANDBOX MODE (no API calls, $0 cost)",
+                extra={
+                    "sandbox_mode": True,
+                    "note": "All responses will be mock responses, no Gemini API will be called"
+                }
+            )
+            # Don't initialize Vertex AI or any models - we'll use mock responses
+            return
+        
+        # Initialize Vertex AI (only if not in sandbox mode)
         if not settings.GCP_PROJECT_ID:
             raise ValueError("GCP_PROJECT_ID must be set in environment variables")
         
@@ -66,7 +78,8 @@ class AppointmentAgent:
                 "gcp_region": settings.GCP_REGION,
                 "gemini_model": settings.GEMINI_MODEL,
                 "use_adk": self.use_adk,
-                "adk_available": ADK_AVAILABLE
+                "adk_available": ADK_AVAILABLE,
+                "sandbox_mode": False
             }
         )
         
@@ -181,6 +194,137 @@ class AppointmentAgent:
         
         return None
     
+    async def _process_message_sandbox(self, phone_number: str, message_text: str) -> str:
+        """
+        Process message in SANDBOX MODE - uses mock responses without calling Gemini API.
+        This mode has $0 cost as it doesn't make any API calls.
+        
+        Args:
+            phone_number: User's phone number
+            message_text: Message text from user
+        
+        Returns:
+            Mock response text (simulates bot behavior)
+        """
+        message_lower = message_text.lower().strip()
+        history = self.session_state.get_history(phone_number)
+        
+        # Get conversation step from history
+        step = len(history) // 2  # Each step = user message + bot response
+        
+        # Simulate conversation flow with mock responses
+        if step == 0:
+            # First message - greeting
+            response = """¡Hola! 👋 Soy tu asistente virtual para agendar citas médicas.
+
+[MODO SANDBOX - Sin costo] 🧪
+
+Estoy aquí para ayudarte a agendar una cita. Para comenzar, necesito algunos datos:
+1. Tu nombre completo
+2. Tu número de teléfono
+3. El doctor con quien deseas agendar
+
+¿Podrías proporcionarme tu nombre completo?"""
+        
+        elif step == 1:
+            # After name provided
+            response = """Perfecto, gracias. Ahora necesito tu número de teléfono para confirmar la cita.
+
+Por favor, compárteme tu número de teléfono (con código de país, por ejemplo: +52 55 1234 5678)."""
+        
+        elif step == 2:
+            # After phone provided
+            response = """Excelente. Ahora necesito saber con qué doctor deseas agendar tu cita.
+
+[MODO SANDBOX] Los doctores disponibles son:
+1. Dr. Juan Pérez - Medicina General
+2. Dra. María González - Cardiología
+3. Dr. Carlos Rodríguez - Pediatría
+
+¿Con cuál doctor te gustaría agendar?"""
+        
+        elif step == 3:
+            # After doctor selected
+            response = """Perfecto. Ahora necesito la fecha en que deseas tu cita.
+
+Por favor, indica la fecha en formato DD/MM/YYYY (por ejemplo: 15/03/2024).
+
+[MODO SANDBOX] Las fechas disponibles son cualquier día de lunes a viernes en los próximos 30 días."""
+        
+        elif step == 4:
+            # After date provided
+            response = """Excelente. Ahora necesito la hora que prefieres.
+
+[MODO SANDBOX] Los horarios disponibles son:
+- 09:00 AM
+- 10:00 AM
+- 11:00 AM
+- 02:00 PM
+- 03:00 PM
+- 04:00 PM
+
+¿Qué hora te conviene más?"""
+        
+        elif step == 5:
+            # After time provided - confirmation
+            response = """Perfecto. Déjame confirmar los datos de tu cita:
+
+📋 **Resumen de la Cita:**
+- Nombre: [Proporcionado anteriormente]
+- Teléfono: [Proporcionado anteriormente]
+- Doctor: [Seleccionado anteriormente]
+- Fecha: [Fecha proporcionada]
+- Hora: [Hora proporcionada]
+
+[MODO SANDBOX] Esta es una simulación. En producción, aquí se confirmaría la cita.
+
+¿Confirmas estos datos? Responde "sí" para confirmar o "no" para modificar algo."""
+        
+        elif step >= 6:
+            # After confirmation
+            if "sí" in message_lower or "si" in message_lower or "confirmo" in message_lower:
+                response = """✅ **¡Cita agendada exitosamente!**
+
+[MODO SANDBOX] En producción, aquí se crearía la cita en el sistema.
+
+Recibirás un recordatorio antes de tu cita. Si necesitas cancelar o modificar, puedes escribirnos.
+
+¿Hay algo más en lo que pueda ayudarte?"""
+            else:
+                response = """Entendido. ¿Qué dato te gustaría modificar?
+
+Puedes decirme:
+- "Cambiar nombre"
+- "Cambiar teléfono"
+- "Cambiar doctor"
+- "Cambiar fecha"
+- "Cambiar hora"
+- "Cancelar" para empezar de nuevo"""
+        
+        else:
+            # Fallback for unexpected steps
+            response = """Entiendo. ¿Podrías ser más específico?
+
+Si necesitas ayuda, escribe "ayuda" para ver las opciones disponibles.
+
+[MODO SANDBOX - Esta es una respuesta simulada]"""
+        
+        # Update conversation history (simulate)
+        updated_history_dicts = [{"role": "user", "parts": [message_text]}]
+        updated_history_dicts.append({"role": "model", "parts": [response]})
+        self.session_state.update_history(phone_number, updated_history_dicts)
+        
+        api_logger.debug(
+            f"Sandbox mode response generated",
+            extra={
+                "phone": phone_number,
+                "step": step,
+                "message_length": len(message_text)
+            }
+        )
+        
+        return response
+    
     async def process_message(self, phone_number: str, message_text: str) -> str:
         """
         Process a WhatsApp message and generate a response.
@@ -216,6 +360,12 @@ Comandos disponibles:
 
 ¿Listo para comenzar? Escribe cualquier mensaje para empezar."""
             
+            # SANDBOX MODE: Use mock responses (NO API calls, $0 cost)
+            if settings.GEMINI_BOT_SANDBOX_MODE:
+                api_logger.debug(f"Sandbox mode: Processing message without API call (phone: {phone_number})")
+                return await self._process_message_sandbox(phone_number, message_text)
+            
+            # Normal mode: Use actual Gemini API
             if self.use_adk:
                 return await self._process_message_adk(phone_number, message_text)
             else:

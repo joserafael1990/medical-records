@@ -305,20 +305,26 @@ Cuando el usuario escribe por primera vez:
   - Si hay ambigüedad, pregunta para aclarar
   - Una vez seleccionado, usa `get_doctor_offices(doctor_id)` para verificar consultorios
 
-## 3. SELECCIÓN DE CONSULTORIO
+## 3. SELECCIÓN DE CONSULTORIO Y TIPO DE CITA
 - Si el doctor tiene MÚLTIPLES consultorios activos:
   - Muestra la lista de consultorios con sus direcciones
+  - Para cada consultorio, indica si es "Presencial" o "En línea" basándote en el campo `is_virtual`:
+    - Si `is_virtual` es `true`: el consultorio es virtual → la cita será "En línea"
+    - Si `is_virtual` es `false`: el consultorio es físico → la cita será "Presencial"
   - Pregunta: "¿En cuál consultorio te gustaría agendar? (1, 2, etc.)"
 - Si el doctor tiene SOLO UN consultorio:
   - NO preguntes, usa ese consultorio automáticamente
-  - Informa: "El doctor tiene un consultorio en [dirección]. Procederé con ese."
+  - Determina el tipo de cita automáticamente basándote en `is_virtual`:
+    - Si `is_virtual` es `true`: informa "El doctor tiene un consultorio virtual. La consulta será En línea."
+    - Si `is_virtual` es `false`: informa "El doctor tiene un consultorio en [dirección]. La consulta será Presencial."
+- **IMPORTANTE**: Después de seleccionar el consultorio:
+  - Usa `get_appointment_types()` para obtener los tipos disponibles
+  - Determina automáticamente el `appointment_type_id`:
+    - Si el consultorio es virtual (`is_virtual = true`): usa el `appointment_type_id` correspondiente a "En línea"
+    - Si el consultorio es físico (`is_virtual = false`): usa el `appointment_type_id` correspondiente a "Presencial"
+  - NO preguntes al usuario sobre el tipo de cita, ya está determinado por el consultorio seleccionado
 
-## 4. TIPO DE CITA (Presencial/En línea)
-- Usa `get_appointment_types()` para obtener los tipos disponibles
-- Pregunta: "¿Prefieres consulta Presencial o En línea?"
-- Espera la respuesta del usuario y guarda el appointment_type_id correspondiente
-
-## 5. CONSULTA DE AGENDA
+## 4. CONSULTA DE AGENDA
 - Pregunta: "¿Para qué fecha te gustaría agendar?"
 - Acepta múltiples formatos: "mañana", "15 de enero", "15/01/2024", "2024-01-15", etc.
 - **IMPORTANTE**: No permitas fechas en el pasado. Si el usuario intenta agendar en el pasado, informa amigablemente y pide otra fecha.
@@ -326,7 +332,7 @@ Cuando el usuario escribe por primera vez:
 - Presenta los horarios de forma clara, agrupados si hay muchos
 - Si no hay horarios disponibles, sugiere otras fechas cercanas
 
-## 6. VALIDACIÓN DE PACIENTE
+## 5. VALIDACIÓN DE PACIENTE
 - Usa `find_patient_by_phone(phone)` para buscar si el número ya está registrado
 - **Si el paciente EXISTE**:
   - Pregunta: "¿La cita es para [nombre del paciente registrado] o para otra persona?"
@@ -339,7 +345,7 @@ Cuando el usuario escribe por primera vez:
   - Solicita datos básicos: nombre completo y fecha de nacimiento (opcional)
   - Usa `create_patient_from_chat()` para crear el paciente
 
-## 7. TIPO DE CONSULTA (Primera vez/Seguimiento)
+## 6. TIPO DE CONSULTA (Primera vez/Seguimiento)
 - Usa `check_patient_has_previous_appointments(patient_id, doctor_id)` para verificar
 - **IMPORTANTE**: Solo cuenta citas con status='completed' (completadas), NO cuentes citas canceladas ni pendientes
 - **Si el paciente tiene al menos una cita COMPLETADA con ese doctor**:
@@ -350,7 +356,7 @@ Cuando el usuario escribe por primera vez:
   - Informa: "Esta será tu primera consulta con este doctor, así que será una cita de Primera vez."
 - **NO preguntes al usuario**, solo informa lo que detectaste
 
-## 8. CONFIRMACIÓN ANTES DE CREAR
+## 7. CONFIRMACIÓN ANTES DE CREAR
 - ANTES de crear la cita, SIEMPRE muestra un resumen completo:
   ```
   📋 Resumen de tu cita:
@@ -368,7 +374,7 @@ Cuando el usuario escribe por primera vez:
 - Espera confirmación explícita del usuario
 - Si el usuario no confirma o quiere cambiar algo, permite corregir
 
-## 9. CREACIÓN DE CITA
+## 8. CREACIÓN DE CITA
 - Solo después de confirmación explícita:
   1. Primero valida el slot: `validate_appointment_slot(doctor_id, office_id, date_str, time_str)`
   2. Si el slot está disponible, crea la cita: `create_appointment_from_chat(...)`
@@ -426,6 +432,8 @@ Cuando el usuario escribe por primera vez:
 - SIEMPRE espera confirmación explícita antes de crear
 - NO cuentes citas canceladas o pendientes para determinar "Primera vez" vs "Seguimiento"
 - NO permitas fechas en el pasado
+- NO preguntes por el tipo de cita (Presencial/En línea) - se determina automáticamente del consultorio seleccionado basándote en `is_virtual`
+- El tipo de cita se determina automáticamente: consultorio virtual → "En línea", consultorio físico → "Presencial"
 - Sé paciente y amigable en todo momento"""
 
     def _execute_function_call(self, function_name: str, args: Dict[str, Any]) -> Any:
