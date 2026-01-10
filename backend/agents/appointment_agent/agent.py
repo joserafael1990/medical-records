@@ -201,11 +201,13 @@ class AppointmentAgent:
                     genai.configure()
                     # Map Vertex AI model names to Generative AI model names
                     model_map = {
+                        "gemini-2.0-flash": "gemini-2.0-flash",
+                        "gemini-2.5-flash": "gemini-2.5-flash",
                         "gemini-1.5-flash": "gemini-1.5-flash",
                         "gemini-1.5-pro": "gemini-1.5-pro",
                         "gemini-pro": "gemini-pro",
                     }
-                    direct_model_name = model_map.get(settings.GEMINI_MODEL, "gemini-1.5-flash")
+                    direct_model_name = model_map.get(settings.GEMINI_MODEL, "gemini-2.0-flash")
                     
                     self.model = genai.GenerativeModel(
                         model_name=direct_model_name,
@@ -577,11 +579,13 @@ Comandos disponibles:
                 try:
                     genai.configure()
                     model_map = {
+                        "gemini-2.0-flash": "gemini-2.0-flash",
+                        "gemini-2.5-flash": "gemini-2.5-flash",
                         "gemini-1.5-flash": "gemini-1.5-flash",
                         "gemini-1.5-pro": "gemini-1.5-pro",
                         "gemini-pro": "gemini-pro",
                     }
-                    direct_model_name = model_map.get(settings.GEMINI_MODEL, "gemini-1.5-flash")
+                    direct_model_name = model_map.get(settings.GEMINI_MODEL, "gemini-2.0-flash")
                     self.model = genai.GenerativeModel(
                         model_name=direct_model_name,
                         system_instruction=APPOINTMENT_AGENT_PROMPT

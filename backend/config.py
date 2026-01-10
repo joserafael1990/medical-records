@@ -107,10 +107,10 @@ class Settings(BaseSettings):
     GCP_REGION: str = os.getenv("GCP_REGION", "us-central1")
     
     # Gemini Bot Configuration
-    # Using gemini-1.5-flash-002 for reliable function calling support in Vertex AI
-    # Note: Vertex AI requires specific version numbers (e.g., -001, -002)
-    # "gemini-1.5-flash" without version may not work - use "gemini-1.5-flash-002"
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash-002")
+    # Using gemini-2.0-flash for reliable function calling support in Vertex AI
+    # Note: gemini-1.5-* models were deprecated in April 2025 for new projects
+    # gemini-2.0-flash is the recommended replacement with function calling support
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
     GEMINI_BOT_ENABLED: bool = _env_bool("GEMINI_BOT_ENABLED", True)
     GEMINI_BOT_SANDBOX_MODE: bool = _env_bool("GEMINI_BOT_SANDBOX_MODE", False)
     GEMINI_MAX_APPOINTMENT_DAYS: int = int(os.getenv("GEMINI_MAX_APPOINTMENT_DAYS", "90"))
