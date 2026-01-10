@@ -532,7 +532,11 @@ Comandos disponibles:
             
             # Start chat with history (pass None if empty, which creates a new chat)
             # Important: pass None explicitly if history is empty, not an empty list
-            chat = self.model.start_chat(history=history if len(history) > 0 else None)
+            # Use response_validation=False to allow blocked/incomplete responses to be added to history
+            chat = self.model.start_chat(
+                history=history if len(history) > 0 else None,
+                response_validation=False
+            )
             
             # #region agent log
             log_data = {
@@ -815,10 +819,14 @@ Comandos disponibles:
                         chat_history.append({"role": role, "parts": [content]})
             
             # Start or continue chat
+            # Use response_validation=False to allow blocked/incomplete responses to be added to history
             if hasattr(self, '_direct_chat') and self._direct_chat:
                 chat = self._direct_chat
             else:
-                chat = self.model.start_chat(history=chat_history if chat_history else None)
+                chat = self.model.start_chat(
+                    history=chat_history if chat_history else None,
+                    response_validation=False
+                )
                 self._direct_chat = chat
             
             # Send message
