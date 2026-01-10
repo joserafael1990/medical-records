@@ -455,15 +455,25 @@ Comandos disponibles:
                 self.use_adk = False
                 return await self._process_message_generative_model(phone_number, message_text)
             
-            # Extract response text
+            # Extract response text (handle multi-part responses safely)
+            response_text = None
             if hasattr(response, 'text'):
-                response_text = response.text
-            elif isinstance(response, str):
-                response_text = response
-            elif isinstance(response, dict):
-                response_text = response.get('text', str(response))
-            else:
-                response_text = str(response)
+                try:
+                    response_text = response.text
+                except ValueError:
+                    # Multi-part response - extract text parts manually
+                    if hasattr(response, 'candidates') and response.candidates and response.candidates[0].content.parts:
+                        text_parts = [p.text for p in response.candidates[0].content.parts if hasattr(p, 'text') and p.text]
+                        if text_parts:
+                            response_text = " ".join(text_parts)
+            
+            if response_text is None:
+                if isinstance(response, str):
+                    response_text = response
+                elif isinstance(response, dict):
+                    response_text = response.get('text', str(response))
+                else:
+                    response_text = str(response)
             
             # Update conversation history
             updated_history_dicts = [{"role": "user", "parts": [message_text]}]
@@ -550,12 +560,23 @@ Comandos disponibles:
             response = chat.send_message(message_text)
             
             # #region agent log
+            # Safely extract text from response (handle multi-part responses)
+            try:
+                response_preview = response.text[:200] if hasattr(response, 'text') and response.text else None
+            except ValueError:
+                # Multi-part response - extract text parts manually
+                response_preview = None
+                if response.candidates and response.candidates[0].content.parts:
+                    text_parts = [p.text for p in response.candidates[0].content.parts if hasattr(p, 'text') and p.text]
+                    if text_parts:
+                        response_preview = text_parts[0][:200]
+            
             log_data = {
                 "location": "agent.py:485",
                 "message": "Response received from GenerativeModel",
                 "data": {
                     "phone": phone_number,
-                    "response_text": response.text[:200] if hasattr(response, 'text') and response.text else None,
+                    "response_text": response_preview,
                     "has_candidates": bool(response.candidates),
                     "parts_count": len(response.candidates[0].content.parts) if (response.candidates and len(response.candidates) > 0 and hasattr(response.candidates[0], 'content') and hasattr(response.candidates[0].content, 'parts')) else 0,
                     "parts_types": [type(p).__name__ for p in (response.candidates[0].content.parts if (response.candidates and len(response.candidates) > 0 and hasattr(response.candidates[0], 'content') and hasattr(response.candidates[0].content, 'parts')) else [])]
@@ -665,8 +686,21 @@ Comandos disponibles:
                     
                     # Get final response after function call
                     follow_up_response = chat.send_message([function_response_part])
-                    if follow_up_response and follow_up_response.text:
-                        final_response_text = follow_up_response.text
+                    
+                    # Safely extract text from follow-up response (handle multi-part)
+                    follow_up_text = None
+                    if follow_up_response:
+                        try:
+                            follow_up_text = follow_up_response.text if hasattr(follow_up_response, 'text') else None
+                        except ValueError:
+                            # Multi-part response - extract text parts
+                            if follow_up_response.candidates and follow_up_response.candidates[0].content.parts:
+                                text_parts = [p.text for p in follow_up_response.candidates[0].content.parts if hasattr(p, 'text') and p.text]
+                                if text_parts:
+                                    follow_up_text = " ".join(text_parts)
+                    
+                    if follow_up_text:
+                        final_response_text = follow_up_text
                         
                         # #region agent log
                         log_data = {
@@ -692,8 +726,14 @@ Comandos disponibles:
                     final_response_text = part.text
             
             # If no function calls, use text response
-            if not function_calls_processed and response.text:
-                final_response_text = response.text
+            # Safely get text (handle multi-part responses)
+            try:
+                simple_text = response.text if hasattr(response, 'text') else None
+            except ValueError:
+                simple_text = None
+            
+            if not function_calls_processed and simple_text:
+                final_response_text = simple_text
                 # #region agent log
                 log_data = {
                     "location": "agent.py:545",
@@ -737,11 +777,22 @@ Comandos disponibles:
             return final_response_text
         
         # Fallback: return text response
-        if response.text:
+        # Safely get text (handle multi-part responses)
+        try:
+            fallback_text = response.text if hasattr(response, 'text') else None
+        except ValueError:
+            # Multi-part response - extract text parts manually
+            fallback_text = None
+            if response.candidates and response.candidates[0].content.parts:
+                text_parts = [p.text for p in response.candidates[0].content.parts if hasattr(p, 'text') and p.text]
+                if text_parts:
+                    fallback_text = " ".join(text_parts)
+        
+        if fallback_text:
             updated_history_dicts = [{"role": "user", "parts": [message_text]}]
-            updated_history_dicts.append({"role": "model", "parts": [response.text]})
+            updated_history_dicts.append({"role": "model", "parts": [fallback_text]})
             self.session_state.update_history(phone_number, updated_history_dicts)
-            return response.text
+            return fallback_text
         
         # Fallback message
         if settings.GEMINI_FALLBACK_ENABLED:
@@ -773,10 +824,19 @@ Comandos disponibles:
             # Send message
             response = chat.send_message(message_text)
             
-            # Extract response text
+            # Extract response text (handle multi-part responses safely)
+            response_text = None
             if hasattr(response, 'text'):
-                response_text = response.text
-            else:
+                try:
+                    response_text = response.text
+                except ValueError:
+                    # Multi-part response - extract text parts manually
+                    if hasattr(response, 'candidates') and response.candidates and response.candidates[0].content.parts:
+                        text_parts = [p.text for p in response.candidates[0].content.parts if hasattr(p, 'text') and p.text]
+                        if text_parts:
+                            response_text = " ".join(text_parts)
+            
+            if response_text is None:
                 response_text = str(response)
             
             # Update conversation history
