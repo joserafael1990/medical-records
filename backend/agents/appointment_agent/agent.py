@@ -560,20 +560,57 @@ Comandos disponibles:
                 pass
             # #endregion
             
-            # Generate response
-            response = chat.send_message(message_text)
+            # Generate response (handle empty responses)
+            response = None
+            try:
+                response = chat.send_message(message_text)
+            except (IndexError, AttributeError) as e:
+                # Response was blocked/empty
+                log_file = "/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log"
+                try:
+                    log_data = {
+                        "location": "agent.py:564",
+                        "message": "Empty response from send_message",
+                        "data": {"error": str(e), "message_text": message_text[:100]},
+                        "timestamp": int(datetime.now().timestamp() * 1000),
+                        "sessionId": "debug-session",
+                        "runId": "production-debug",
+                        "hypothesisId": "F"
+                    }
+                    with open(log_file, 'a') as f:
+                        f.write(json.dumps(log_data) + '\n')
+                except:
+                    pass
+                # Return default response
+                return "Lo siento, no pude procesar tu mensaje. Por favor, intenta de nuevo."
             
             # #region agent log
             # Safely extract text from response (handle multi-part responses)
-            try:
-                response_preview = response.text[:200] if hasattr(response, 'text') and response.text else None
-            except ValueError:
-                # Multi-part response - extract text parts manually
-                response_preview = None
-                if response.candidates and response.candidates[0].content.parts:
-                    text_parts = [p.text for p in response.candidates[0].content.parts if hasattr(p, 'text') and p.text]
-                    if text_parts:
-                        response_preview = text_parts[0][:200]
+            response_preview = None
+            has_candidates = False
+            parts_count = 0
+            parts_types = []
+            
+            if response:
+                try:
+                    response_preview = response.text[:200] if hasattr(response, 'text') and response.text else None
+                except ValueError:
+                    # Multi-part response - extract text parts manually (check candidates exist first)
+                    if (hasattr(response, 'candidates') and 
+                        response.candidates and 
+                        len(response.candidates) > 0 and
+                        hasattr(response.candidates[0], 'content') and
+                        hasattr(response.candidates[0].content, 'parts')):
+                        text_parts = [p.text for p in response.candidates[0].content.parts if hasattr(p, 'text') and p.text]
+                        if text_parts:
+                            response_preview = text_parts[0][:200]
+                
+                # Safe access to candidates for logging
+                if hasattr(response, 'candidates') and response.candidates and len(response.candidates) > 0:
+                    has_candidates = True
+                    if hasattr(response.candidates[0], 'content') and hasattr(response.candidates[0].content, 'parts'):
+                        parts_count = len(response.candidates[0].content.parts)
+                        parts_types = [type(p).__name__ for p in response.candidates[0].content.parts]
             
             log_data = {
                 "location": "agent.py:485",
@@ -581,9 +618,9 @@ Comandos disponibles:
                 "data": {
                     "phone": phone_number,
                     "response_text": response_preview,
-                    "has_candidates": bool(response.candidates),
-                    "parts_count": len(response.candidates[0].content.parts) if (response.candidates and len(response.candidates) > 0 and hasattr(response.candidates[0], 'content') and hasattr(response.candidates[0].content, 'parts')) else 0,
-                    "parts_types": [type(p).__name__ for p in (response.candidates[0].content.parts if (response.candidates and len(response.candidates) > 0 and hasattr(response.candidates[0], 'content') and hasattr(response.candidates[0].content, 'parts')) else [])]
+                    "has_candidates": has_candidates,
+                    "parts_count": parts_count,
+                    "parts_types": parts_types
                 },
                 "timestamp": int(datetime.now().timestamp() * 1000),
                 "sessionId": "debug-session",
@@ -624,10 +661,19 @@ Comandos disponibles:
             else:
                 raise
         
-        # Process function calls if any
-        if response.candidates and response.candidates[0].content.parts:
+        # Initialize response text variable
+        final_response_text = None
+        function_calls_processed = False
+        
+        # Process function calls if any (check response exists first)
+        if (response and 
+            hasattr(response, 'candidates') and 
+            response.candidates and 
+            len(response.candidates) > 0 and
+            hasattr(response.candidates[0], 'content') and
+            hasattr(response.candidates[0].content, 'parts') and
+            response.candidates[0].content.parts):
             final_response_text = ""
-            function_calls_processed = False
             
             for part in response.candidates[0].content.parts:
                 if hasattr(part, 'function_call') and part.function_call is not None:
@@ -689,16 +735,43 @@ Comandos disponibles:
                     )
                     
                     # Get final response after function call
-                    follow_up_response = chat.send_message([function_response_part])
+                    # Handle empty responses when response_validation=False allows blocked responses
+                    follow_up_response = None
+                    follow_up_text = None
+                    try:
+                        follow_up_response = chat.send_message([function_response_part])
+                    except (IndexError, AttributeError) as e:
+                        # Response was blocked/empty - function result was processed but no text response
+                        # Use a default response instead
+                        log_file = "/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log"
+                        try:
+                            log_data = {
+                                "location": "agent.py:692",
+                                "message": "Empty response after function call - using default",
+                                "data": {"function_name": function_name, "error": str(e)},
+                                "timestamp": int(datetime.now().timestamp() * 1000),
+                                "sessionId": "debug-session",
+                                "runId": "production-debug",
+                                "hypothesisId": "F"
+                            }
+                            with open(log_file, 'a') as f:
+                                f.write(json.dumps(log_data) + '\n')
+                        except:
+                            pass
+                        # Continue with function result processing
+                        follow_up_text = None
                     
                     # Safely extract text from follow-up response (handle multi-part)
-                    follow_up_text = None
                     if follow_up_response:
                         try:
                             follow_up_text = follow_up_response.text if hasattr(follow_up_response, 'text') else None
                         except ValueError:
-                            # Multi-part response - extract text parts
-                            if follow_up_response.candidates and follow_up_response.candidates[0].content.parts:
+                            # Multi-part response - extract text parts (check candidates exist first)
+                            if (hasattr(follow_up_response, 'candidates') and 
+                                follow_up_response.candidates and 
+                                len(follow_up_response.candidates) > 0 and
+                                hasattr(follow_up_response.candidates[0], 'content') and
+                                hasattr(follow_up_response.candidates[0].content, 'parts')):
                                 text_parts = [p.text for p in follow_up_response.candidates[0].content.parts if hasattr(p, 'text') and p.text]
                                 if text_parts:
                                     follow_up_text = " ".join(text_parts)
@@ -723,18 +796,52 @@ Comandos disponibles:
                         except:
                             pass
                         # #endregion
+                    else:
+                        # No follow-up text - try to use original response text or generate default
+                        # Extract text from original response if available (check response exists first)
+                        if response:
+                            try:
+                                if hasattr(response, 'text'):
+                                    original_text = response.text
+                                    if original_text:
+                                        final_response_text = original_text
+                            except (ValueError, AttributeError):
+                                # Multi-part original response - extract text parts
+                                if (hasattr(response, 'candidates') and 
+                                    response.candidates and 
+                                    len(response.candidates) > 0):
+                                    try:
+                                        if hasattr(response.candidates[0], 'content') and hasattr(response.candidates[0].content, 'parts'):
+                                            text_parts = [p.text for p in response.candidates[0].content.parts if hasattr(p, 'text') and p.text]
+                                            if text_parts:
+                                                final_response_text = " ".join(text_parts)
+                                    except (AttributeError, IndexError):
+                                        pass
+                        
+                        # If still no response, use default based on function result
+                        if not final_response_text or not final_response_text.strip():
+                            if function_name == "get_active_doctors" and function_result:
+                                doctors_list = function_result.get('doctors', []) if isinstance(function_result, dict) else []
+                                if doctors_list:
+                                    doctor_names = [d.get('full_name', d.get('name', '')) for d in doctors_list if isinstance(d, dict)]
+                                    if doctor_names:
+                                        final_response_text = f"¡Hola! 👋 Soy Cortex Clínico, tu asistente virtual para agendar citas. Tenemos disponibles los siguientes doctores:\n\n" + "\n".join([f"• {name}" for name in doctor_names[:10]]) + "\n\n¿Con cuál doctor deseas agendar tu cita?"
+                            elif not final_response_text:
+                                final_response_text = "¿Cómo puedo ayudarte con tu cita médica?"
                     
                     function_calls_processed = True
                 
                 elif hasattr(part, 'text'):
                     final_response_text = part.text
             
-            # If no function calls, use text response
+            # If no function calls, use text response (check response exists first)
             # Safely get text (handle multi-part responses)
-            try:
-                simple_text = response.text if hasattr(response, 'text') else None
-            except ValueError:
-                simple_text = None
+            simple_text = None
+            if response:
+                try:
+                    simple_text = response.text if hasattr(response, 'text') else None
+                except ValueError:
+                    simple_text = None
             
             if not function_calls_processed and simple_text:
                 final_response_text = simple_text
@@ -755,6 +862,10 @@ Comandos disponibles:
                 except:
                     pass
                 # #endregion
+            
+            # Ensure final_response_text is set before updating history
+            if not final_response_text or not final_response_text.strip():
+                final_response_text = "¿Cómo puedo ayudarte con tu cita médica?"
             
             # Update conversation history (convert back to dicts for storage)
             updated_history_dicts = [{"role": "user", "parts": [message_text]}]
@@ -780,17 +891,23 @@ Comandos disponibles:
             
             return final_response_text
         
-        # Fallback: return text response
+        # Fallback: return text response (check response exists first)
         # Safely get text (handle multi-part responses)
-        try:
-            fallback_text = response.text if hasattr(response, 'text') else None
-        except ValueError:
-            # Multi-part response - extract text parts manually
-            fallback_text = None
-            if response.candidates and response.candidates[0].content.parts:
-                text_parts = [p.text for p in response.candidates[0].content.parts if hasattr(p, 'text') and p.text]
-                if text_parts:
-                    fallback_text = " ".join(text_parts)
+        fallback_text = None
+        if response:
+            try:
+                fallback_text = response.text if hasattr(response, 'text') else None
+            except ValueError:
+                # Multi-part response - extract text parts manually (check candidates exist first)
+                fallback_text = None
+                if (hasattr(response, 'candidates') and 
+                    response.candidates and 
+                    len(response.candidates) > 0 and
+                    hasattr(response.candidates[0], 'content') and
+                    hasattr(response.candidates[0].content, 'parts')):
+                    text_parts = [p.text for p in response.candidates[0].content.parts if hasattr(p, 'text') and p.text]
+                    if text_parts:
+                        fallback_text = " ".join(text_parts)
         
         if fallback_text:
             updated_history_dicts = [{"role": "user", "parts": [message_text]}]
@@ -829,23 +946,51 @@ Comandos disponibles:
                 )
                 self._direct_chat = chat
             
-            # Send message
-            response = chat.send_message(message_text)
+            # Send message (handle empty responses)
+            response = None
+            response_text = None
+            try:
+                response = chat.send_message(message_text)
+            except (IndexError, AttributeError) as e:
+                # Response was blocked/empty
+                log_file = "/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log"
+                try:
+                    log_data = {
+                        "location": "agent.py:891",
+                        "message": "Empty response from send_message (fallback)",
+                        "data": {"error": str(e), "message_text": message_text[:100]},
+                        "timestamp": int(datetime.now().timestamp() * 1000),
+                        "sessionId": "debug-session",
+                        "runId": "production-debug",
+                        "hypothesisId": "F"
+                    }
+                    with open(log_file, 'a') as f:
+                        f.write(json.dumps(log_data) + '\n')
+                except:
+                    pass
+                # Return default response
+                response_text = "Lo siento, no pude procesar tu mensaje. Por favor, intenta de nuevo."
             
             # Extract response text (handle multi-part responses safely)
-            response_text = None
-            if hasattr(response, 'text'):
-                try:
-                    response_text = response.text
-                except ValueError:
-                    # Multi-part response - extract text parts manually
-                    if hasattr(response, 'candidates') and response.candidates and response.candidates[0].content.parts:
-                        text_parts = [p.text for p in response.candidates[0].content.parts if hasattr(p, 'text') and p.text]
-                        if text_parts:
-                            response_text = " ".join(text_parts)
+            if response:
+                if hasattr(response, 'text'):
+                    try:
+                        response_text = response.text
+                    except ValueError:
+                        # Multi-part response - extract text parts manually (check candidates exist first)
+                        if (hasattr(response, 'candidates') and 
+                            response.candidates and 
+                            len(response.candidates) > 0 and
+                            hasattr(response.candidates[0], 'content') and
+                            hasattr(response.candidates[0].content, 'parts')):
+                            text_parts = [p.text for p in response.candidates[0].content.parts if hasattr(p, 'text') and p.text]
+                            if text_parts:
+                                response_text = " ".join(text_parts)
             
-            if response_text is None:
+            if response_text is None and response:
                 response_text = str(response)
+            elif response_text is None:
+                response_text = "Lo siento, no pude procesar tu mensaje. Por favor, intenta de nuevo."
             
             # Update conversation history
             updated_history_dicts = [{"role": "user", "parts": [message_text]}]
