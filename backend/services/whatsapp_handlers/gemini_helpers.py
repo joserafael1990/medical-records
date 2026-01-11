@@ -9,6 +9,7 @@ from typing import List, Dict, Optional, Any
 from database import Person, Office, Appointment, AppointmentType
 from services.appointments.query import get_available_time_slots
 from services.appointments.creation import create_appointment
+from services.appointments.validation import get_doctor_duration
 from crud.person import generate_person_code
 from logger import get_logger
 
@@ -233,8 +234,11 @@ def get_available_slots(
             api_logger.warning(f"Requested date {date_str} is in the past")
             return []
         
-        # Get available slots using existing service
-        slots = get_available_time_slots(db, target_date, str(doctor_id), 30)
+        # Get doctor's appointment duration (defaults to 30 if not set)
+        slot_duration = get_doctor_duration(db, doctor_id)
+        
+        # Get available slots using existing service with doctor's duration
+        slots = get_available_time_slots(db, target_date, str(doctor_id), slot_duration)
         
         # Format for Gemini
         result = []
