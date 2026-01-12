@@ -26,7 +26,7 @@ export interface UseVitalSignsReturn {
   // State
   availableVitalSigns: VitalSign[];
   consultationVitalSigns: ConsultationVitalSign[];
-  temporaryVitalSigns: VitalSignFormData[]; // For new consultations
+  temporaryVitalSigns: (VitalSignFormData & { id: number })[]; // For new consultations
   isLoading: boolean;
   error: string | null;
   vitalSignDialogOpen: boolean;
@@ -44,20 +44,20 @@ export interface UseVitalSignsReturn {
   deleteVitalSign: (consultationId: string, vitalSignId: number) => Promise<void>;
   clearTemporaryVitalSigns: () => void;
   getAllVitalSigns: () => ConsultationVitalSign[];
-  
+
   // Dialog management
   openAddDialog: (vitalSign?: VitalSign) => void;
   openEditDialog: (vitalSign: ConsultationVitalSign) => void;
   closeDialog: () => void;
-  
+
   // Form management
   updateFormData: (data: Partial<VitalSignFormData>) => void;
   submitForm: (consultationId: string) => Promise<void>;
   resetForm: () => void;
-  
+
   // BMI calculation
   calculateBMI: (weight: number, height: number) => number;
-  
+
   // Direct add method (no dialog)
   addTemporaryVitalSign: (vitalSignData: VitalSignFormData & { vital_sign_name: string }) => void;
 }
@@ -66,7 +66,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
   // State
   const [availableVitalSigns, setAvailableVitalSigns] = useState<VitalSign[]>([]);
   const [consultationVitalSigns, setConsultationVitalSigns] = useState<ConsultationVitalSign[]>([]);
-  const [temporaryVitalSigns, setTemporaryVitalSigns] = useState<VitalSignFormData[]>([]);
+  const [temporaryVitalSigns, setTemporaryVitalSigns] = useState<(VitalSignFormData & { id: number })[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [vitalSignDialogOpen, setVitalSignDialogOpen] = useState(false);
@@ -85,10 +85,10 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
   const fetchAvailableVitalSigns = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const response = await apiService.consultations.api.get('/api/vital-signs');
-      
+
       // Handle different response structures
       let vitalSignsData = [];
       if (Array.isArray(response.data)) {
@@ -98,7 +98,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
       } else if (response && Array.isArray(response)) {
         vitalSignsData = response;
       }
-      
+
       setAvailableVitalSigns(vitalSignsData);
     } catch (err: any) {
       logger.error('Error fetching available vital signs', err, 'api');
@@ -123,7 +123,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
 
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const response = await apiService.consultations.api.get(`/api/consultations/${consultationId}/vital-signs`);
       const vitalSignsData = response.data || response;
@@ -140,7 +140,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
   const fetchPatientVitalSignsHistory = useCallback(async (patientId: number): Promise<PatientVitalSignsHistory> => {
     try {
       const response = await apiService.consultations.api.get(`/api/patients/${patientId}/vital-signs/history`);
-      
+
       // Track vital signs viewed
       try {
         const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
@@ -151,7 +151,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
       } catch (e) {
         // Silently fail
       }
-      
+
       return response.data || response;
     } catch (err: any) {
       logger.error('Error fetching patient vital signs history', err, 'api');
@@ -166,10 +166,10 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
       if (!consultationId || consultationId === "temp_consultation" || isNaN(Number(consultationId))) {
         throw new Error("Invalid consultation ID. Please save the consultation first.");
       }
-      
+
       const response = await apiService.consultations.api.post(`/api/consultations/${consultationId}/vital-signs`, vitalSignData);
       const newVitalSign = response.data;
-      
+
       // Track vital signs recorded
       try {
         const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
@@ -181,10 +181,10 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
       } catch (e) {
         // Silently fail
       }
-      
+
       // Add to local state
       setConsultationVitalSigns(prev => [...prev, newVitalSign]);
-      
+
       return newVitalSign;
     } catch (err: any) {
       logger.error('Error creating vital sign', err, 'api');
@@ -195,22 +195,42 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
   // Update an existing vital sign
   const updateVitalSign = useCallback(async (consultationId: string, vitalSignId: number, vitalSignData: VitalSignFormData): Promise<ConsultationVitalSign> => {
     try {
-      
-      // Use POST endpoint which handles both create and update
+      // Handle temporary consultations (for new consultations)
+      if (consultationId === 'temp_consultation' || consultationId === '0') {
+        const matchingAvailable = availableVitalSigns.find(avs => avs.id === vitalSignData.vital_sign_id);
+        const updatedTempVitalSign: ConsultationVitalSign = {
+          id: vitalSignId,
+          consultation_id: 0,
+          vital_sign_id: vitalSignData.vital_sign_id,
+          vital_sign_name: matchingAvailable?.name || 'Signo Vital',
+          value: vitalSignData.value,
+          unit: vitalSignData.unit || '',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        setTemporaryVitalSigns(prev =>
+          prev.map(vs => vs.id === vitalSignId ? { ...vs, ...vitalSignData } : vs)
+        );
+
+        return updatedTempVitalSign;
+      }
+
+      // For existing consultations, use POST endpoint which handles both create and update
       const response = await apiService.consultations.api.post(`/api/consultations/${consultationId}/vital-signs`, vitalSignData);
       const updatedVitalSign = response.data;
-      
+
       // Update local state
-      setConsultationVitalSigns(prev => 
+      setConsultationVitalSigns(prev =>
         prev.map(vs => vs.id === vitalSignId ? updatedVitalSign : vs)
       );
-      
+
       return updatedVitalSign;
     } catch (err: any) {
       logger.error('Error updating vital sign', err, 'api');
       throw err;
     }
-  }, []);
+  }, [availableVitalSigns]);
 
   // Delete a vital sign
   const deleteVitalSign = useCallback(async (consultationId: string, vitalSignId: number): Promise<void> => {
@@ -223,7 +243,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
         });
       } else {
         await apiService.consultations.api.delete(`/api/consultations/${consultationId}/vital-signs/${vitalSignId}`);
-        
+
         // Remove from local state
         setConsultationVitalSigns(prev => prev.filter(vs => vs.id !== vitalSignId));
       }
@@ -235,7 +255,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
 
   // Dialog management
   const openAddDialog = useCallback((vitalSign?: VitalSign) => {
-    
+
     if (vitalSign) {
       setVitalSignFormData({
         vital_sign_id: vitalSign.id,
@@ -249,7 +269,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
         unit: ''
       });
     }
-    
+
     setIsEditingVitalSign(false);
     setSelectedVitalSign(null);
     setVitalSignDialogOpen(true);
@@ -257,13 +277,13 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
   }, [availableVitalSigns]);
 
   const openEditDialog = useCallback((vitalSign: ConsultationVitalSign) => {
-    
+
     setVitalSignFormData({
       vital_sign_id: vitalSign.vital_sign_id,
       value: vitalSign.value,
       unit: vitalSign.unit || ''
     });
-    
+
     setIsEditingVitalSign(true);
     setSelectedVitalSign(vitalSign);
     setVitalSignDialogOpen(true);
@@ -294,15 +314,15 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
   const submitForm = useCallback(async (consultationId: string) => {
     setIsSubmitting(true);
     setError(null);
-    
+
     try {
       if (consultationId === "temp_consultation") {
         // For new consultations, store temporarily
         if (isEditingVitalSign && selectedVitalSign) {
           // Update temporary vital sign - find by vital_sign_id instead of index
-          setTemporaryVitalSigns(prev => 
-            prev.map((vs) => 
-              vs.vital_sign_id === selectedVitalSign.vital_sign_id ? vitalSignFormData : vs
+          setTemporaryVitalSigns(prev =>
+            prev.map((vs) =>
+              vs.vital_sign_id === selectedVitalSign.vital_sign_id ? { ...vs, ...vitalSignFormData } : vs
             )
           );
         } else {
@@ -342,54 +362,54 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
 
   const autoCalculateBMI = useCallback(() => {
     const allVitalSigns = [...consultationVitalSigns, ...temporaryVitalSigns];
-    
+
     // Find weight and height signs
     const weightSign = allVitalSigns.find(vs => {
       const vitalSign = availableVitalSigns.find(avs => avs.id === vs.vital_sign_id);
       return vitalSign && vitalSign.name.toLowerCase().includes('peso');
     });
-    
+
     const heightSign = allVitalSigns.find(vs => {
       const vitalSign = availableVitalSigns.find(avs => avs.id === vs.vital_sign_id);
       return vitalSign && (vitalSign.name.toLowerCase().includes('estatura') || vitalSign.name.toLowerCase().includes('altura'));
     });
-    
-    
+
+
     // Find BMI sign
     const bmiSign = allVitalSigns.find(vs => {
       const vitalSign = availableVitalSigns.find(avs => avs.id === vs.vital_sign_id);
       return vitalSign && (vitalSign.name.toLowerCase().includes('imc') || vitalSign.name.toLowerCase().includes('índice de masa corporal') || vitalSign.name.toLowerCase().includes('bmi'));
     });
-    
-    
+
+
     if (weightSign && heightSign && bmiSign) {
       const weight = parseFloat(weightSign.value);
       const height = parseFloat(heightSign.value);
-      
-      
+
+
       if (!isNaN(weight) && !isNaN(height) && height > 0) {
         const bmi = calculateBMI(weight, height);
-        
+
         // Only auto-update BMI if it's empty or very close to the calculated value (allowing for small manual adjustments)
         const currentBMI = parseFloat(bmiSign.value);
         const isBMICloseToCalculated = Math.abs(currentBMI - bmi) < 0.1; // Allow 0.1 difference
-        
-        
+
+
         if (!bmiSign.value || bmiSign.value.trim() === '' || isBMICloseToCalculated) {
           // For temp consultations, update in local state only
-        if (bmiSign.id && typeof bmiSign.id === 'number' && bmiSign.id > 0) {
-          // This is a saved vital sign - skip auto-update for now
-          // Auto-update only works for temporary vital signs
-        } else {
-          // Update temporary BMI sign in local state
-          setTemporaryVitalSigns(prev => 
-            prev.map(vs => 
-              vs.vital_sign_id === bmiSign.vital_sign_id 
-                ? { ...vs, value: bmi.toString() }
-                : vs
-            )
-          );
-        }
+          if (bmiSign.id && typeof bmiSign.id === 'number' && bmiSign.id > 0) {
+            // This is a saved vital sign - skip auto-update for now
+            // Auto-update only works for temporary vital signs
+          } else {
+            // Update temporary BMI sign in local state
+            setTemporaryVitalSigns(prev =>
+              prev.map(vs =>
+                vs.vital_sign_id === bmiSign.vital_sign_id
+                  ? { ...vs, value: bmi.toString() }
+                  : vs
+              )
+            );
+          }
         }
       }
     }
@@ -418,7 +438,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
   const getAllVitalSigns = useCallback(() => {
     // Always return both consultation and temporary vital signs
     const allVitalSigns = [...(consultationVitalSigns || [])];
-    
+
     // Add temporary vital signs if any
     if (temporaryVitalSigns && temporaryVitalSigns.length > 0) {
       const tempVitalSigns = (temporaryVitalSigns || []).map((vs) => ({
@@ -433,7 +453,7 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
       }));
       allVitalSigns.push(...tempVitalSigns);
     }
-    
+
     return allVitalSigns;
   }, [consultationVitalSigns, temporaryVitalSigns, availableVitalSigns]);
 
@@ -459,20 +479,20 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     deleteVitalSign,
     clearTemporaryVitalSigns,
     getAllVitalSigns,
-    
+
     // Dialog management
     openAddDialog,
     openEditDialog,
     closeDialog,
-    
+
     // Form management
     updateFormData,
     submitForm,
     resetForm,
-    
+
     // BMI calculation
     calculateBMI,
-    
+
     // Direct add method
     addTemporaryVitalSign
   };

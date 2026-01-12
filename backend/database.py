@@ -17,7 +17,8 @@ from models import (
     Medication, ConsultationPrescription,
     AppointmentType, Appointment, AppointmentReminder, 
     GoogleCalendarEventMapping,
-    ClinicalStudy, StudyCategory, StudyCatalog
+    ClinicalStudy, StudyCategory, StudyCatalog,
+    WhatsAppSession
 )
 
 # Re-export logger for compatibility if it was used

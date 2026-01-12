@@ -358,12 +358,12 @@ def get_all_tools() -> List[Any]:
     return [
         FunctionDeclaration(
             name="get_active_doctors",
-            description="Get list of all active doctors. Use this when user wants to see available doctors or select a doctor.",
+            description="Get list of all active doctors with their specialties and office addresses. Use this when user wants to see available doctors or select a doctor.",
             parameters={"type": "object", "properties": {}, "required": []}
         ),
         FunctionDeclaration(
             name="get_doctor_offices",
-            description="Get list of active offices for a specific doctor. Use this after doctor is selected to check if doctor has multiple offices.",
+            description="Get list of active offices for a specific doctor. Each office includes name and physical address.",
             parameters={
                 "type": "object",
                 "properties": {
@@ -387,7 +387,7 @@ def get_all_tools() -> List[Any]:
         ),
         FunctionDeclaration(
             name="find_patient_by_phone",
-            description="Find a patient by their phone number. Use this to check if the user is already registered as a patient.",
+            description="Find patient(s) by their phone number. Returns a list of matching patients (since multiple people can share a phone). Use this to check if user is registered.",
             parameters={
                 "type": "object",
                 "properties": {
@@ -398,12 +398,12 @@ def get_all_tools() -> List[Any]:
         ),
         FunctionDeclaration(
             name="create_patient_from_chat",
-            description="Create a new patient record. Use this when user is not registered and provides their information.",
+            description="Create a new patient record. Use this when user is not registered. Ask for name and verify if they want to use their WhatsApp number or a new contact phone.",
             parameters={
                 "type": "object",
                 "properties": {
                     "name": {"type": "string", "description": "Patient's full name"},
-                    "phone": {"type": "string", "description": "Patient's primary phone number"},
+                    "phone": {"type": "string", "description": "Patient's primary phone number (contact phone specified by user)"},
                     "birth_date": {"type": "string", "description": "Birth date in format YYYY-MM-DD (optional)"},
                     "contact_phone": {"type": "string", "description": "Contact phone if different from primary phone (optional)"}
                 },

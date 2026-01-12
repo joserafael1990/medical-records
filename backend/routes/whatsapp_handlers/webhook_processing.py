@@ -5,6 +5,7 @@ import json
 import os
 import hmac
 import hashlib
+import re # Added for markup parsing
 from fastapi import Request, HTTPException
 from sqlalchemy.orm import Session
 from logger import get_logger
@@ -232,6 +233,14 @@ async def process_webhook_event(request: Request, db: Session):
                             appointment_id = int(parts[2])
                             await confirm_appointment_via_whatsapp(appointment_id, from_phone, db)
                             processed_messages += 1
+                        else:
+                            # Generic interactive handler: pass the ID as if it was text input
+                            # This allows buttons like "id1", "id2" for doctor/office selection
+                            api_logger.info(f"🔄 Routing generic interactive ID to Gemini: {button_id}")
+                            # We'll let the 'else' block for text processing handle it by re-injecting
+                            # Or we can call the agent directly here. Let's redirect to agent call.
+                            await process_agent_interaction(button_id, from_phone, db)
+                            processed_messages += 1
                             
                     elif message_type == 'text':
                         text_body = message.get('text', {}).get('body', '').lower().strip()
@@ -294,12 +303,8 @@ async def process_webhook_event(request: Request, db: Session):
                                     extra={"from_phone": from_phone, "response_length": len(response_text)}
                                 )
                                 
-                                # Send response via WhatsApp
-                                whatsapp_service = get_whatsapp_service()
-                                whatsapp_service.send_text_message(
-                                    to_phone=from_phone,
-                                    message=response_text
-                                )
+                                # Send response via WhatsApp (Handles Interactive Markup)
+                                await parse_and_send_interactive_response(from_phone, response_text)
                                 
                                 processed_messages += 1
                                 
@@ -348,3 +353,101 @@ async def process_webhook_event(request: Request, db: Session):
     except Exception as e:
         api_logger.error("❌ Error processing WhatsApp webhook", exc_info=True)
         return {"status": "error", "message": str(e)}
+
+async def process_agent_interaction(user_input: str, phone: str, db: Session):
+    """Refactored core agent processing to be called from both text and interactive inputs"""
+    try:
+        from agents.appointment_agent import AppointmentAgent
+        agent = AppointmentAgent(db, use_adk=True)
+        response_text = await agent.process_message(phone, user_input)
+        if response_text:
+            await parse_and_send_interactive_response(phone, response_text)
+    except Exception as e:
+        api_logger.error(f"Error in process_agent_interaction: {e}", exc_info=True)
+
+async def parse_and_send_interactive_response(to_phone: str, text: str):
+    """Parses [[LIST: ...]], [[BUTTONS: ...]], [[LOCATION: ...]] and sends accordingly"""
+    whatsapp_service = get_whatsapp_service()
+    
+    # 1. Check for LOCATION
+    loc_match = re.search(r'\[\[LOCATION:\s*(.*?)\s*\]\]', text, re.IGNORECASE)
+    if loc_match:
+        parts = [p.strip() for p in loc_match.group(1).split('|')]
+        api_logger.info(f"📍 Parsing location: {parts}")
+        if len(parts) >= 4:
+            # Name | Address | Lat | Lng
+            whatsapp_service.send_location_message(
+                to_phone=to_phone,
+                name=parts[0],
+                address=parts[1],
+                latitude=float(parts[2]),
+                longitude=float(parts[3])
+            )
+        # Clean the text of the tag
+        text = re.sub(r'\[\[LOCATION:.*?\]\]', '', text, flags=re.IGNORECASE).strip()
+
+    # 2. Check for LIST
+    list_match = re.search(r'\[\[LIST:\s*(.*?)\s*\]\]', text, re.IGNORECASE)
+    if list_match:
+        parts = [p.strip() for p in list_match.group(1).split('|')]
+        api_logger.info(f"📋 Parsing list: {parts}")
+        if len(parts) >= 3:
+            # Body | ButtonText | Item1:id1 | Item2:id2
+            body = parts[0]
+            button_label = parts[1]
+            rows = []
+            for item in parts[2:]:
+                if ':' in item:
+                    title, row_id = item.split(':', 1)
+                    rows.append({"id": row_id.strip(), "title": title.strip()[:24]})
+            
+            sections = [{"title": "Opciones", "rows": rows[:10]}]
+            whatsapp_service.send_interactive_list(
+                to_phone=to_phone,
+                body_text=body,
+                button_text=button_label,
+                sections=sections
+            )
+            return # Don't send the text as simple message if it was converted
+
+    # 3. Check for BUTTONS
+    btn_match = re.search(r'\[\[BUTTONS:\s*(.*?)\s*\]\]', text, re.IGNORECASE)
+    if btn_match:
+        parts = [p.strip() for p in btn_match.group(1).split('|')]
+        api_logger.info(f"🔘 Parsing buttons: {parts}")
+        if len(parts) >= 2:
+            # Body | Title1:id1 | Title2:id2
+            body = parts[0]
+            btns = []
+            for item in parts[1:]:
+                if ':' in item:
+                    title, btn_id = item.split(':', 1)
+                    btns.append({"id": btn_id.strip(), "title": title.strip()[:20]})
+            
+            whatsapp_service.send_interactive_buttons(
+                to_phone=to_phone,
+                body_text=body,
+                buttons=btns[:3]
+            )
+            return # Don't send as text
+
+    # 4. Check for IMAGE
+    image_match = re.search(r'\[\[IMAGE:\s*(.*?)\s*\]\]', text, re.IGNORECASE)
+    if image_match:
+        url = image_match.group(1).strip()
+        api_logger.info(f"🖼️ Parsing image: {url}")
+        whatsapp_service.send_image_message(to_phone=to_phone, image_url=url)
+        text = re.sub(r'\[\[IMAGE:.*?\]\]', '', text, flags=re.IGNORECASE).strip()
+
+    # 5. Check for SUCCESS (random celebration)
+    if '[[SUCCESS]]' in text.upper():
+        api_logger.info(f"🎉 Sending success sticker")
+        # Use a professional medical/success sticker (Public URL)
+        # Note: In a real environment, these would be hosted on the clinic's CDN
+        success_sticker = "https://i.ibb.co/vzG7L8T/success-sticker.webp" # Placeholder or clinic branded
+        whatsapp_service.send_sticker_message(to_phone=to_phone, sticker_url=success_sticker)
+        text = text.replace('[[SUCCESS]]', '').replace('[[success]]', '').strip()
+
+    # Default: Send as plain text if no markup or markup was just location/image
+    if text:
+        whatsapp_service.send_text_message(to_phone=to_phone, message=text)

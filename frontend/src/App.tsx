@@ -9,6 +9,7 @@ import { AppLayout } from './components/layout/AppLayout';
 import { useAuth } from './contexts/AuthContext';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import './styles/disable-payment-detection.css';
+import './styles/disable-recharts-animations.css';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import AuthContainer from './components/auth/AuthContainer';
 import { ToastProvider } from './components/common/ToastNotification';

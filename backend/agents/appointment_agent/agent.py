@@ -52,7 +52,7 @@ class AppointmentAgent:
             use_adk: If True, try to use ADK official. If False or ADK unavailable, use GenerativeModel.
         """
         self.db = db
-        self.session_state = AppointmentSessionState()
+        self.session_state = AppointmentSessionState(db=db)
         self.use_adk = use_adk and ADK_AVAILABLE
         
         # Check if sandbox mode is enabled (NO API calls, $0 cost)
@@ -388,11 +388,20 @@ Si necesitas ayuda, escribe "ayuda" para ver las opciones disponibles.
                 return "Lo siento, el servicio de agendamiento por chat no está disponible en este momento."
             
             # Check for simple commands (bypass LLM for cost optimization)
-            simple_command = self._detect_simple_command(message_text)
-            if simple_command == "cancel":
+            message_lower = message_text.lower().strip()
+            if message_lower in ["cancelar", "salir", "cancel", "exit", "restart"]:
                 self.session_state.reset_session(phone_number)
-                return "✅ Proceso cancelado. Si necesitas agendar una cita más adelante, escríbenos."
-            elif simple_command == "help":
+                if message_lower == "restart":
+                    # If restarting, we'll proceed as a new greeting
+                    message_text = "Hola"
+                else:
+                    return "✅ Proceso cancelado. Si necesitas agendar una cita más adelante, escríbenos."
+            
+            elif message_lower == "resume":
+                # User wants to continue - we'll just send a "continue" signal to LLM
+                message_text = "Continuemos con mi cita"
+                
+            elif message_lower in ["ayuda", "help", "?", "¿"]:
                 return """📋 Ayuda - Agendamiento de Citas
 
 Para agendar una cita, simplemente escribe y te guiaré paso a paso:

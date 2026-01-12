@@ -13,11 +13,33 @@ services:
       - GEMINI_BOT_ENABLED=true
       - GEMINI_MODEL=gemini-2.0-flash-lite
       - GOOGLE_APPLICATION_CREDENTIALS=/app/.gcloud/application_default_credentials.json
+      - DATABASE_URL=postgresql://historias_user:historias_pass@postgres-db:5432/historias_clinicas
     volumes:
       - ~/.config/gcloud:/app/.gcloud:ro
+      - ./.cursor:/app/.cursor:rw
+    depends_on:
+      - postgres-db
+
+  postgres-db:
+    image: postgres:16
+    environment:
+      - POSTGRES_USER=historias_user
+      - POSTGRES_PASSWORD=historias_pass
+      - POSTGRES_DB=historias_clinicas
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
   typescript-frontend:
     image: joserafael1990/medical-records-frontend:latest
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - REACT_APP_API_URL=http://localhost:8000
+    ports:
+      - "3000:8080"
+
+volumes:
+  postgres_data:

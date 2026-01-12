@@ -317,22 +317,71 @@ async def login(
     db: Session = Depends(get_db)
 ):
     """Login user"""
+    # #region agent log
+    import json
+    import os
+    # Detect if running in Docker container or host
+    if os.path.exists('/app/.cursor'):
+        log_path = "/app/.cursor/debug.log"
+    else:
+        log_path = "/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log"
+    try:
+        with open(log_path, "a") as f:
+            f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "routes/auth.py:313", "message": "Login endpoint called", "data": {"email": login_data.email}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "ALL"}) + "\n")
+    except: pass
+    # #endregion
     user = None
     try:
+        # #region agent log
+        try:
+            with open(log_path, "a") as f:
+                f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "routes/auth.py:323", "message": "Before calling auth.login_user", "data": {"email": login_data.email}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "ALL"}) + "\n")
+        except: pass
+        # #endregion
         # Intentar login
         result = auth.login_user(db, login_data.email, login_data.password)
+        # #region agent log
+        try:
+            with open(log_path, "a") as f:
+                f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "routes/auth.py:326", "message": "After auth.login_user success", "data": {"has_result": bool(result), "has_access_token": bool(result.get("access_token")) if result else False}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "ALL"}) + "\n")
+        except: pass
+        # #endregion
         
         # Obtener usuario para auditoría
         user = db.query(Person).filter(Person.email == login_data.email).first()
+        # #region agent log
+        try:
+            with open(log_path, "a") as f:
+                f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "routes/auth.py:327", "message": "User queried for audit", "data": {"user_id": user.id if user else None, "person_type": user.person_type if user else None}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
+        except: pass
+        # #endregion
         
         # Validar licencia para doctores
         if user and user.person_type == 'doctor':
+            # #region agent log
+            try:
+                with open(log_path, "a") as f:
+                    f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "routes/auth.py:329", "message": "Before license validation", "data": {"user_id": user.id, "person_type": user.person_type}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
+            except: pass
+            # #endregion
             from services.license_service import LicenseService
             try:
                 license_result = LicenseService.require_valid_license(db, user.id)
+                # #region agent log
+                try:
+                    with open(log_path, "a") as f:
+                        f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "routes/auth.py:333", "message": "After license validation", "data": {"license_result": "None" if license_result is None else "License found"}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
+                except: pass
+                # #endregion
                 # If license_result is None, it means the licenses table doesn't exist
                 # We skip validation and allow login in this case
             except HTTPException as license_error:
+                # #region agent log
+                try:
+                    with open(log_path, "a") as f:
+                        f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "routes/auth.py:336", "message": "License HTTPException caught", "data": {"status_code": license_error.status_code, "detail": str(license_error.detail)}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
+                except: pass
+                # #endregion
                 # Registrar intento de login bloqueado por licencia
                 # Use a fresh session for audit logging
                 audit_db = next(get_db())
@@ -347,6 +396,14 @@ async def login(
                 finally:
                     audit_db.close()
                 raise license_error
+            except Exception as license_exception:
+                # #region agent log
+                try:
+                    with open(log_path, "a") as f:
+                        f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "routes/auth.py:349", "message": "License non-HTTPException caught", "data": {"error_type": type(license_exception).__name__, "error_message": str(license_exception)}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
+                except: pass
+                # #endregion
+                raise
         
         # 🆕 Registrar login exitoso en auditoría
         audit_service.log_login(
@@ -378,12 +435,28 @@ async def login(
             audit_db.close()
         raise e
     except Exception as e:
+        # #region agent log
+        try:
+            with open(log_path, "a") as f:
+                f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "routes/auth.py:380", "message": "General exception caught in login", "data": {"error_type": type(e).__name__, "error_message": str(e), "traceback": traceback.format_exc()}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "ALL"}) + "\n")
+        except: pass
+        # #endregion
         # 🆕 Registrar error de sistema
         # CRITICAL FIX: Use a fresh database session for audit logging
-        api_logger.error(f"Login failed with unexpected error: {type(e).__name__} - {str(e)}", 
-                        email=login_data.email, 
-                        error_type=type(e).__name__,
-                        traceback=traceback.format_exc())
+        error_traceback = traceback.format_exc()
+        api_logger.error(
+            f"Login failed with unexpected error: {type(e).__name__} - {str(e)}", 
+            extra={
+                "email": login_data.email,
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+                "traceback": error_traceback
+            }
+        )
+        # Print to console for immediate visibility in development
+        print(f"\n❌ LOGIN ERROR: {type(e).__name__}: {str(e)}")
+        print(f"Traceback:\n{error_traceback}\n")
+        
         audit_db = next(get_db())
         try:
             audit_service.log_login(
@@ -391,14 +464,22 @@ async def login(
                 user=user,
                 request=request,
                 success=False,
-                error="Internal server error"
+                error=f"Internal server error: {type(e).__name__}"
             )
         except Exception as audit_error:
             # If audit logging fails, log it but don't crash
             api_logger.error(f"Failed to log system error during login: {str(audit_error)}")
         finally:
             audit_db.close()
-        raise HTTPException(status_code=500, detail="Internal server error")
+        
+        # In development, show more details
+        if os.getenv("APP_ENV", "development").lower() == "development":
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Error interno del servidor: {type(e).__name__}: {str(e)}"
+            )
+        else:
+            raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/auth/me")

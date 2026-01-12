@@ -950,3 +950,221 @@ class WhatsAppService:
         except requests.exceptions.RequestException as e:
             logger.error(f"❌ Error sending text message: {str(e)}")
             return {'success': False, 'error': str(e)}
+
+    def send_interactive_list(
+        self,
+        to_phone: str,
+        body_text: str,
+        button_text: str,
+        sections: List[Dict[str, Any]],
+        header_text: Optional[str] = None,
+        footer_text: Optional[str] = None,
+        country_code: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Enviar un mensaje interactivo de tipo Lista (hasta 10 opciones)
+        """
+        if not self.phone_id or not self.access_token:
+            return {'success': False, 'error': 'WhatsApp not configured'}
+            
+        formatted_phone = self._format_phone_number(to_phone, country_code)
+        to_phone_e164 = f'+{formatted_phone}' if not formatted_phone.startswith('+') else formatted_phone
+        
+        interactive = {
+            "type": "list",
+            "body": {"text": body_text},
+            "action": {
+                "button": button_text,
+                "sections": sections
+            }
+        }
+        
+        if header_text:
+            interactive["header"] = {"type": "text", "text": header_text}
+        if footer_text:
+            interactive["footer"] = {"text": footer_text}
+            
+        payload = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": to_phone_e164,
+            "type": "interactive",
+            "interactive": interactive
+        }
+        
+        try:
+            url = f'{self.base_url}/{self.phone_id}/messages'
+            response = requests.post(url, headers=self._get_headers(), json=payload, timeout=10)
+            response.raise_for_status()
+            return {'success': True, 'message_id': response.json().get('messages', [{}])[0].get('id')}
+        except Exception as e:
+            logger.error(f"Error sending interactive list: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def send_interactive_buttons(
+        self,
+        to_phone: str,
+        body_text: str,
+        buttons: List[Dict[str, Any]],
+        header_text: Optional[str] = None,
+        footer_text: Optional[str] = None,
+        country_code: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Enviar un mensaje interactivo de tipo Botones (hasta 3)
+        Buttons format: [{"id": "btn1", "title": "Option 1"}]
+        """
+        if not self.phone_id or not self.access_token:
+            return {'success': False, 'error': 'WhatsApp not configured'}
+            
+        formatted_phone = self._format_phone_number(to_phone, country_code)
+        to_phone_e164 = f'+{formatted_phone}' if not formatted_phone.startswith('+') else formatted_phone
+        
+        whatsapp_buttons = []
+        for btn in buttons:
+            whatsapp_buttons.append({
+                "type": "reply",
+                "reply": {
+                    "id": btn["id"],
+                    "title": btn["title"]
+                }
+            })
+            
+        interactive = {
+            "type": "button",
+            "body": {"text": body_text},
+            "action": {"buttons": whatsapp_buttons}
+        }
+        
+        if header_text:
+            interactive["header"] = {"type": "text", "text": header_text}
+        if footer_text:
+            interactive["footer"] = {"text": footer_text}
+            
+        payload = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": to_phone_e164,
+            "type": "interactive",
+            "interactive": interactive
+        }
+        
+        try:
+            url = f'{self.base_url}/{self.phone_id}/messages'
+            response = requests.post(url, headers=self._get_headers(), json=payload, timeout=10)
+            response.raise_for_status()
+            return {'success': True, 'message_id': response.json().get('messages', [{}])[0].get('id')}
+        except Exception as e:
+            logger.error(f"Error sending interactive buttons: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def send_location_message(
+        self,
+        to_phone: str,
+        latitude: float,
+        longitude: float,
+        name: str,
+        address: str,
+        country_code: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Enviar un mensaje de ubicación nativo
+        """
+        if not self.phone_id or not self.access_token:
+            return {'success': False, 'error': 'WhatsApp not configured'}
+            
+        formatted_phone = self._format_phone_number(to_phone, country_code)
+        to_phone_e164 = f'+{formatted_phone}' if not formatted_phone.startswith('+') else formatted_phone
+        
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to_phone_e164,
+            "type": "location",
+            "location": {
+                "longitude": longitude,
+                "latitude": latitude,
+                "name": name,
+                "address": address
+            }
+        }
+        
+        try:
+            url = f'{self.base_url}/{self.phone_id}/messages'
+            response = requests.post(url, headers=self._get_headers(), json=payload, timeout=10)
+            response.raise_for_status()
+            return {'success': True, 'message_id': response.json().get('messages', [{}])[0].get('id')}
+        except Exception as e:
+            logger.error(f"Error sending location: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def send_image_message(
+        self,
+        to_phone: str,
+        image_url: str,
+        caption: Optional[str] = None,
+        country_code: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Enviar un mensaje de imagen (vía URL pública)
+        """
+        if not self.phone_id or not self.access_token:
+            return {'success': False, 'error': 'WhatsApp not configured'}
+            
+        formatted_phone = self._format_phone_number(to_phone, country_code)
+        to_phone_e164 = f'+{formatted_phone}' if not formatted_phone.startswith('+') else formatted_phone
+        
+        payload = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": to_phone_e164,
+            "type": "image",
+            "image": {
+                "link": image_url
+            }
+        }
+        if caption:
+            payload["image"]["caption"] = caption
+            
+        try:
+            url = f'{self.base_url}/{self.phone_id}/messages'
+            response = requests.post(url, headers=self._get_headers(), json=payload, timeout=10)
+            response.raise_for_status()
+            return {'success': True, 'message_id': response.json().get('messages', [{}])[0].get('id')}
+        except Exception as e:
+            logger.error(f"Error sending image: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def send_sticker_message(
+        self,
+        to_phone: str,
+        sticker_url: str,
+        country_code: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Enviar un sticker (vía URL pública)
+        Nota: Debe ser un archivo .webp
+        """
+        if not self.phone_id or not self.access_token:
+            return {'success': False, 'error': 'WhatsApp not configured'}
+            
+        formatted_phone = self._format_phone_number(to_phone, country_code)
+        to_phone_e164 = f'+{formatted_phone}' if not formatted_phone.startswith('+') else formatted_phone
+        
+        payload = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": to_phone_e164,
+            "type": "sticker",
+            "sticker": {
+                "link": sticker_url
+            }
+        }
+            
+        try:
+            url = f'{self.base_url}/{self.phone_id}/messages'
+            response = requests.post(url, headers=self._get_headers(), json=payload, timeout=10)
+            response.raise_for_status()
+            return {'success': True, 'message_id': response.json().get('messages', [{}])[0].get('id')}
+        except Exception as e:
+            logger.error(f"Error sending sticker: {e}")
+            return {'success': False, 'error': str(e)}

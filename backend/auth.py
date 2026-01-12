@@ -25,8 +25,15 @@ import hashlib
 # Configuración JWT (desde config - evita problemas de filesystem en Docker macOS)
 from config import settings
 import os
+import secrets
 
-SECRET_KEY = settings.JWT_SECRET_KEY or os.getenv("JWT_SECRET_KEY", "")
+# Get JWT secret key with fallback to auto-generation if empty
+_jwt_secret = settings.JWT_SECRET_KEY or os.getenv("JWT_SECRET_KEY", "")
+if not _jwt_secret or _jwt_secret.strip() == "":
+    # Auto-generate secure key if not provided
+    _jwt_secret = secrets.token_urlsafe(64)
+
+SECRET_KEY = _jwt_secret
 ALGORITHM = settings.JWT_ALGORITHM
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_DAYS", "7"))
@@ -170,7 +177,26 @@ def login_user(db: Session, email: str, password: str) -> Dict[str, Any]:
     Realizar login completo y generar tokens
     Usa email como identificador único - estándar moderno
     """
+    # #region agent log
+    import json
+    import os
+    # Detect if running in Docker container or host
+    if os.path.exists('/app/.cursor'):
+        log_path = "/app/.cursor/debug.log"
+    else:
+        log_path = "/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log"
+    try:
+        with open(log_path, "a") as f:
+            f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "auth.py:168", "message": "login_user called", "data": {"email": email}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "ALL"}) + "\n")
+    except: pass
+    # #endregion
     user = authenticate_user(db, email, password)
+    # #region agent log
+    try:
+        with open(log_path, "a") as f:
+            f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "auth.py:173", "message": "After authenticate_user", "data": {"user_found": bool(user), "user_id": user.id if user else None}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "ALL"}) + "\n")
+    except: pass
+    # #endregion
     if not user:
         raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -185,10 +211,28 @@ def login_user(db: Session, email: str, password: str) -> Dict[str, Any]:
         "person_type": user.person_type,   # ENGLISH: tipo_persona → person_type
         "person_code": user.person_code    # ENGLISH: codigo_persona → person_code
     }
+    # #region agent log
+    try:
+        with open(log_path, "a") as f:
+            f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "auth.py:187", "message": "Before creating tokens", "data": {"has_secret_key": bool(SECRET_KEY), "secret_key_length": len(SECRET_KEY) if SECRET_KEY else 0}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "D"}) + "\n")
+    except: pass
+    # #endregion
     
     # Generar tokens
     access_token = create_access_token(data=token_data)
+    # #region agent log
+    try:
+        with open(log_path, "a") as f:
+            f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "auth.py:190", "message": "After create_access_token", "data": {"access_token_created": bool(access_token)}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "D"}) + "\n")
+    except: pass
+    # #endregion
     refresh_token = create_refresh_token(data=token_data)
+    # #region agent log
+    try:
+        with open(log_path, "a") as f:
+            f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "auth.py:191", "message": "After create_refresh_token", "data": {"refresh_token_created": bool(refresh_token)}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "D"}) + "\n")
+    except: pass
+    # #endregion
     
     # Crear objeto usuario base - ALL ENGLISH FIELD NAMES
     user_data = {
@@ -207,8 +251,20 @@ def login_user(db: Session, email: str, password: str) -> Dict[str, Any]:
     
     # Si es doctor, agregar campos profesionales
     if user.person_type == "doctor":  # FIXED: tipo_persona → person_type
+        # #region agent log
+        try:
+            with open(log_path, "a") as f:
+                f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "auth.py:209", "message": "Processing doctor documents", "data": {"user_id": user.id}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "B"}) + "\n")
+        except: pass
+        # #endregion
         # Get professional documents from person_documents table
         professional_type = db.query(DocumentType).filter(DocumentType.name == 'Profesional').first()
+        # #region agent log
+        try:
+            with open(log_path, "a") as f:
+                f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "auth.py:212", "message": "After querying professional_type", "data": {"professional_type_found": bool(professional_type)}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "B"}) + "\n")
+        except: pass
+        # #endregion
         professional_documents = []
         if professional_type:
             professional_docs = db.query(PersonDocument).join(Document).filter(
@@ -216,17 +272,35 @@ def login_user(db: Session, email: str, password: str) -> Dict[str, Any]:
                 PersonDocument.is_active == True,
                 Document.document_type_id == professional_type.id
             ).all()
+            # #region agent log
+            try:
+                with open(log_path, "a") as f:
+                    f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "auth.py:218", "message": "After querying professional_docs", "data": {"doc_count": len(professional_docs)}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "B"}) + "\n")
+            except: pass
+            # #endregion
             professional_documents = [{"document_name": doc.document.name, "document_value": doc.document_value} for doc in professional_docs]
         
         # Get personal documents (for CURP, RFC)
         personal_type = db.query(DocumentType).filter(DocumentType.name == 'Personal').first()
-        personal_documents = []
+        # #region agent log
+        try:
+            with open(log_path, "a") as f:
+                f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "auth.py:222", "message": "After querying personal_type", "data": {"personal_type_found": bool(personal_type)}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "B"}) + "\n")
+        except: pass
+        # #endregion
+        personal_documents = {}  # Initialize as dict, not list
         if personal_type:
             personal_docs = db.query(PersonDocument).join(Document).filter(
                 PersonDocument.person_id == user.id,
                 PersonDocument.is_active == True,
                 Document.document_type_id == personal_type.id
             ).all()
+            # #region agent log
+            try:
+                with open(log_path, "a") as f:
+                    f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "auth.py:229", "message": "After querying personal_docs", "data": {"doc_count": len(personal_docs)}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "B"}) + "\n")
+            except: pass
+            # #endregion
             personal_documents = {doc.document.name: doc.document_value for doc in personal_docs}
         
         # Legacy fields for backward compatibility (get from documents)
@@ -236,11 +310,38 @@ def login_user(db: Session, email: str, password: str) -> Dict[str, Any]:
                 professional_license = doc["document_value"]
                 break
         
+        # Safely get specialty name
+        specialty_name = None
+        try:
+            # #region agent log
+            try:
+                with open(log_path, "a") as f:
+                    f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "auth.py:241", "message": "Before accessing user.specialty", "data": {"has_specialty_id": bool(user.specialty_id)}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "C"}) + "\n")
+            except: pass
+            # #endregion
+            if user.specialty:
+                specialty_name = getattr(user.specialty, 'name', None)
+                # #region agent log
+                try:
+                    with open(log_path, "a") as f:
+                        f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "auth.py:243", "message": "After accessing user.specialty", "data": {"specialty_name": specialty_name}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "C"}) + "\n")
+                except: pass
+                # #endregion
+        except Exception as specialty_error:
+            # #region agent log
+            try:
+                with open(log_path, "a") as f:
+                    f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "auth.py:245", "message": "Exception accessing user.specialty", "data": {"error_type": type(specialty_error).__name__, "error_message": str(specialty_error)}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "C"}) + "\n")
+            except: pass
+            # #endregion
+            # If relationship fails to load, just use None
+            specialty_name = None
+        
         user_data.update({
             "professional_license": professional_license,  # Legacy field from documents
             "professional_documents": professional_documents,  # New normalized format
             "personal_documents": personal_documents,  # CURP, RFC, etc.
-            "specialty": user.specialty.name if user.specialty else None,      # ENGLISH: especialidad → specialty
+            "specialty": specialty_name,      # ENGLISH: especialidad → specialty
             "university": user.university,
             "graduation_year": user.graduation_year,
             "subspecialty": user.subspecialty if hasattr(user, 'subspecialty') else None,
@@ -249,6 +350,12 @@ def login_user(db: Session, email: str, password: str) -> Dict[str, Any]:
             "rfc": personal_documents.get("RFC", None),  # From documents
         })
     
+    # #region agent log
+    try:
+        with open(log_path, "a") as f:
+            f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "auth.py:261", "message": "Before returning login_user result", "data": {"has_access_token": bool(access_token), "has_refresh_token": bool(refresh_token), "has_user_data": bool(user_data)}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "ALL"}) + "\n")
+    except: pass
+    # #endregion
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,

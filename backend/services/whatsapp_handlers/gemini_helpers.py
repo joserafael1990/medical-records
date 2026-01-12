@@ -116,10 +116,21 @@ def get_active_doctors(db: Session) -> List[Dict[str, Any]]:
                 # #endregion
                 api_logger.warning(f"Error accessing specialty for doctor {doctor.id}: {spec_error}")
             
+            offices = []
+            if hasattr(doctor, 'offices'):
+                for office in doctor.offices:
+                    offices.append({
+                        "id": office.id,
+                        "name": office.name,
+                        "address": office.address or office.city or "Dirección no especificada",
+                        "is_virtual": office.is_virtual
+                    })
+
             doctor_dict = {
                 "id": doctor.id,
                 "name": doctor_name,
-                "specialty": specialty_name
+                "specialty": specialty_name,
+                "offices": offices
             }
             result.append(doctor_dict)
             
@@ -257,40 +268,35 @@ def get_available_slots(
         return []
 
 
-def find_patient_by_phone(db: Session, phone: str) -> Optional[Dict[str, Any]]:
+def find_patient_by_phone(db: Session, phone: str) -> List[Dict[str, Any]]:
     """
     Find patient by phone number.
-    Returns patient info if found, None otherwise.
+    Returns list of patients (may share the same phone).
     """
     try:
         # Normalize phone (remove spaces, dashes, etc.)
         normalized_phone = phone.replace(" ", "").replace("-", "").replace("+", "")
         
-        # Try exact match first
-        patient = db.query(Person).filter(
+        # Try finding all matching patients
+        patients = db.query(Person).filter(
             Person.person_type == 'patient',
-            Person.primary_phone == phone
-        ).first()
+            (Person.primary_phone == phone) | 
+            (func.replace(func.replace(func.replace(Person.primary_phone, " ", ""), "-", ""), "+", "") == normalized_phone)
+        ).all()
         
-        # If not found, try normalized
-        if not patient:
-            patient = db.query(Person).filter(
-                Person.person_type == 'patient',
-                func.replace(func.replace(func.replace(Person.primary_phone, " ", ""), "-", ""), "+", "") == normalized_phone
-            ).first()
-        
-        if patient:
-            return {
+        result = []
+        for patient in patients:
+            result.append({
                 "id": patient.id,
                 "name": patient.full_name or patient.name,
                 "phone": patient.primary_phone,
                 "birth_date": patient.birth_date.isoformat() if patient.birth_date else None
-            }
+            })
         
-        return None
+        return result
     except Exception as e:
         api_logger.error(f"Error finding patient by phone: {e}", exc_info=True)
-        return None
+        return []
 
 
 def create_patient_from_chat(

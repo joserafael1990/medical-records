@@ -19,3 +19,4 @@ from .appointment import (
     GoogleCalendarEventMapping
 )
 from .clinical import ClinicalStudy, StudyCategory, StudyCatalog
+from .whatsapp_session import WhatsAppSession
