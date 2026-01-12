@@ -12,6 +12,8 @@ steps:
       - 'us-central1-docker.pkg.dev/${PROJECT_ID}/cortex-repo/backend:latest'
       - '.'
     dir: 'backend'
+    env:
+      - 'DOCKER_BUILDKIT=1'
 
   # Step 2: Push the image to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
