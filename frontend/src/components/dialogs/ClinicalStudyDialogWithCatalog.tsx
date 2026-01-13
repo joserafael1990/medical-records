@@ -107,7 +107,7 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
 
   const handleCatalogStudiesSelect = (studies: StudyCatalog[]) => {
     setSelectedCatalogStudies(studies);
-    
+
     // If only one study is selected, auto-fill the form
     if (studies.length === 1) {
       const study = studies[0];
@@ -142,14 +142,14 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
         console.log('🔬 Submitting multiple studies:', selectedCatalogStudies.length);
         console.log('🔬 Selected studies:', selectedCatalogStudies.map(s => s.name));
         console.log('🔬 Form data:', formData);
-        
+
         let successCount = 0;
         let errorCount = 0;
-        
+
         for (let i = 0; i < selectedCatalogStudies.length; i++) {
           const catalogStudy = selectedCatalogStudies[i];
           console.log(`🔬 Creating study ${i + 1}/${selectedCatalogStudies.length}:`, catalogStudy.name);
-          
+
           // Map category name to StudyType
           const categoryNameToType = (name: string | undefined): StudyType => {
             if (!name) return 'otro';
@@ -184,7 +184,7 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
             relevant_history: formData.relevant_history,
             created_by: formData.created_by
           };
-          
+
           try {
             await onSubmit(studyData);
             successCount++;
@@ -195,9 +195,9 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
             // Continue with other studies even if one fails
           }
         }
-        
+
         console.log(`🔬 All studies processed - Success: ${successCount}, Errors: ${errorCount}`);
-        
+
         // Close dialog only after all studies are processed
         if (successCount > 0) {
           console.log('🔬 Closing dialog after successful studies creation');
@@ -228,10 +228,10 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
   };
 
   return (
-    <Dialog 
-      open={open} 
-      onClose={preventBackdropClose(onClose)} 
-      maxWidth="lg" 
+    <Dialog
+      open={open}
+      onClose={preventBackdropClose(onClose)}
+      maxWidth="lg"
       fullWidth
       PaperProps={{
         sx: { minHeight: '80vh' }
@@ -253,12 +253,12 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
 
       <DialogContent>
         {error && (
-          <Box 
+          <Box
             data-testid="error-message"
-            sx={{ 
-              mb: 2, 
-              p: 2, 
-              bgcolor: 'error.main', 
+            sx={{
+              mb: 2,
+              p: 2,
+              bgcolor: 'error.main',
               borderRadius: 1,
               backgroundColor: '#d32f2f !important' // Force red background
             }}
@@ -271,14 +271,14 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
 
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs value={tabValue} onChange={handleTabChange} aria-label="study tabs">
-            <Tab 
-              icon={<SearchIcon />} 
-              label="Catálogo de Estudios" 
+            <Tab
+              icon={<SearchIcon />}
+              label="Catálogo de Estudios"
               iconPosition="start"
             />
-            <Tab 
-              icon={<ListIcon />} 
-              label="Estudio Personalizado" 
+            <Tab
+              icon={<ListIcon />}
+              label="Estudio Personalizado"
               iconPosition="start"
             />
           </Tabs>
@@ -304,7 +304,7 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
                 </Typography>
                 <Grid container spacing={2}>
                   {selectedCatalogStudies.map(study => (
-                    <Grid item xs={12} md={6} key={study.id}>
+                    <Grid size={{ xs: 12, md: 6 }} key={study.id}>
                       <Card variant="outlined">
                         <CardContent sx={{ p: 2 }}>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
@@ -313,7 +313,7 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
                             </Typography>
                             <Chip label={study.code} size="small" color="primary" />
                           </Box>
-                          
+
                           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                             {study.description}
                           </Typography>
@@ -325,10 +325,10 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
                             {study.specialty && (
                               <Chip label={study.specialty} size="small" color="info" variant="outlined" />
                             )}
-                            <Chip 
-                              label={getDurationText(study.duration_hours)} 
-                              size="small" 
-                              color="default" 
+                            <Chip
+                              label={getDurationText(study.duration_hours)}
+                              size="small"
+                              color="default"
                               variant="outlined"
                             />
                           </Box>
@@ -357,9 +357,9 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
                   <ScienceIcon sx={{ fontSize: 20, color: 'primary.main' }} />
                   Información del Estudio
                 </Typography>
-                
+
                 <Grid container spacing={3}>
-                  <Grid item xs={12} sm={6}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
                       fullWidth
                       label="Nombre del Estudio"
@@ -370,7 +370,7 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
                     />
                   </Grid>
 
-                  <Grid item xs={12} sm={6}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
                     <FormControl fullWidth required>
                       <InputLabel>Tipo de Estudio</InputLabel>
                       <Select
@@ -387,7 +387,7 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
                     </FormControl>
                   </Grid>
 
-                  <Grid item xs={12}>
+                  <Grid size={{ xs: 12 }}>
                     <TextField
                       fullWidth
                       label="Descripción del Estudio"
@@ -409,9 +409,9 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
                   <MedicalServicesIcon sx={{ fontSize: 20, color: 'secondary.main' }} />
                   Información Clínica
                 </Typography>
-                
+
                 <Grid container spacing={3}>
-                  <Grid item xs={12}>
+                  <Grid size={{ xs: 12 }}>
                     <TextField
                       fullWidth
                       label="Indicación Clínica"
@@ -424,7 +424,7 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
                     />
                   </Grid>
 
-                  <Grid item xs={12} sm={6}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
                       fullWidth
                       label="Antecedentes Relevantes"
@@ -436,7 +436,7 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
                     />
                   </Grid>
 
-                  <Grid item xs={12} sm={6}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
                     <FormControl fullWidth>
                       <InputLabel>Nivel de Urgencia</InputLabel>
                       <Select
@@ -447,13 +447,13 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
                         {URGENCY_LEVELS.map((level) => (
                           <MenuItem key={level.value} value={level.value}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Box 
-                                sx={{ 
-                                  width: 12, 
-                                  height: 12, 
-                                  borderRadius: '50%', 
-                                  bgcolor: level.color 
-                                }} 
+                              <Box
+                                sx={{
+                                  width: 12,
+                                  height: 12,
+                                  borderRadius: '50%',
+                                  bgcolor: level.color
+                                }}
                               />
                               {level.label}
                             </Box>
@@ -473,11 +473,11 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
                   <AttachFileIcon sx={{ fontSize: 20, color: 'info.main' }} />
                   Archivo Adjunto (Opcional)
                 </Typography>
-                
-                <Box sx={{ 
-                  border: '2px dashed #ccc', 
-                  borderRadius: 2, 
-                  p: 4, 
+
+                <Box sx={{
+                  border: '2px dashed #ccc',
+                  borderRadius: 2,
+                  p: 4,
                   textAlign: 'center',
                   bgcolor: 'grey.50',
                   transition: 'all 0.3s ease',
@@ -498,7 +498,7 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
                     startIcon={<AttachFileIcon />}
                     component="label"
                     size="large"
-                    sx={{ 
+                    sx={{
                       minWidth: '200px',
                       '&:hover': {
                         bgcolor: 'primary.50'
@@ -534,9 +534,9 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
           disabled={isSubmitting || (tabValue === 0 && selectedCatalogStudies.length === 0)}
           startIcon={<ScienceIcon />}
         >
-          {isSubmitting 
-            ? 'Guardando...' 
-            : tabValue === 0 
+          {isSubmitting
+            ? 'Guardando...'
+            : tabValue === 0
               ? `Ordenar ${selectedCatalogStudies.length} Estudios`
               : 'Guardar Estudio'
           }

@@ -301,6 +301,7 @@ export interface UpdateClinicalStudyData extends Partial<CreateClinicalStudyData
 export interface StudyCategory {
   id: number;
   name: string;
+  code?: string;
   is_active: boolean;
   created_at: string;
 }
@@ -323,21 +324,36 @@ export interface StudyCatalog {
   id: number;
   name: string;
   category_id: number;
+  code?: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
   category?: StudyCategory;
   description?: string;
+  specialty?: string;
+  subcategory?: string;
+  duration_hours?: number;
+  preparation?: string;
 }
 
-// StudyTemplateItem interface removed - table deleted
-export interface StudyTemplateItem_removed {
+export interface StudyTemplateItem {
   id: number;
   template_id: number;
   study_id: number;
   order_index: number;
   created_at: string;
   study?: StudyCatalog;
+}
+
+export interface StudyTemplate {
+  id: number;
+  name: string;
+  description?: string;
+  specialty?: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+  template_items: StudyTemplateItem[];
 }
 
 // StudyTemplate interface removed - table deleted
@@ -349,7 +365,7 @@ export interface StudyTemplate_removed {
   is_default: boolean;
   created_at: string;
   updated_at: string;
-  template_items: StudyTemplateItem_removed[];
+  template_items: any[];
 }
 
 // StudyTemplateCreate removed - table deleted

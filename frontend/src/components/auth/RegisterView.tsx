@@ -97,7 +97,7 @@ interface RegistrationData {
   email: string;
   password: string;
   confirmPassword: string;
-  
+
   // Step 2: Personal Information
   name: string;
   personal_documents: Array<{ document_id: number | null; document_value: string }>;
@@ -105,14 +105,14 @@ interface RegistrationData {
   birth_date: string;
   phone_country_code: string;
   phone_number: string;
-  
+
   // Step 3: Professional Information
   title: string;
   specialty: string;
   university: string;
   graduation_year: string;
   professional_documents: Array<{ document_id: number | null; document_value: string }>;
-  
+
   // Step 4: Office Data
   office_name: string;
   office_address: string;
@@ -123,7 +123,7 @@ interface RegistrationData {
   office_phone_number: string;
   office_maps_url: string;
   appointment_duration: string;
-  
+
   // Step 5: Schedule Data
   scheduleData: WeeklyScheduleData;
 }
@@ -144,11 +144,11 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
   // Password visibility state removed - now handled in AccountInfoStep component
   const [specialties, setSpecialties] = useState<any[]>([]);
   const [attemptedContinue, setAttemptedContinue] = useState<Set<number>>(new Set());
-  
+
   const { login } = useAuth();
   const { countries, getStatesByCountry, loading: catalogsLoading } = useCatalogs();
   const [selectedOfficeCountry, setSelectedOfficeCountry] = useState<string>('México');
-  
+
   // Auto-scroll to error when it appears
   const errorRef = useScrollToError(error);
 
@@ -157,13 +157,13 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
     const loadSpecialties = async () => {
       try {
         const data = await apiService.catalogs.getSpecialties();
-        // Asegurar que siempre sea un array y filtrar activos
-        const specialtiesArray = Array.isArray(data) ? data : (data?.data || data?.results || []);
+        // specialtiesData is already an array as typed in the service
+        const specialtiesArray = data;
         const activeSpecialties = specialtiesArray.filter((s: any) => s.is_active !== false);
         setSpecialties(activeSpecialties);
-        logger.debug('Especialidades cargadas', { 
+        logger.debug('Especialidades cargadas', {
           total: specialtiesArray.length,
-          active: activeSpecialties.length 
+          active: activeSpecialties.length
         }, 'api');
       } catch (error) {
         logger.error('Error loading specialties', error, 'api');
@@ -172,12 +172,12 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
           const response = await fetch(`${API_CONFIG.BASE_URL}/api/catalogs/specialties`);
           const data = await response.json();
           // Asegurar que siempre sea un array y filtrar activos
-          const specialtiesArray = Array.isArray(data) ? data : (data?.data || data?.results || []);
+          const specialtiesArray = Array.isArray(data) ? data : ((data as any)?.data || (data as any)?.results || []);
           const activeSpecialties = specialtiesArray.filter((s: any) => s.is_active !== false);
           setSpecialties(activeSpecialties);
-          logger.debug('Especialidades cargadas (fallback)', { 
+          logger.debug('Especialidades cargadas (fallback)', {
             total: specialtiesArray.length,
-            active: activeSpecialties.length 
+            active: activeSpecialties.length
           }, 'api');
         } catch (fallbackError) {
           logger.error('Error en fallback de especialidades', fallbackError, 'api');
@@ -193,7 +193,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
     email: '',
     password: '',
     confirmPassword: '',
-    
+
     // Step 2
     name: '',
     personal_documents: [{ document_id: null, document_value: '' }],
@@ -201,14 +201,14 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
     birth_date: '',
     phone_country_code: '+52', // Código de país por defecto (México)
     phone_number: '',
-    
+
     // Step 3
     title: 'Dr.',
     specialty: '',
     university: '',
     graduation_year: '',
     professional_documents: [{ document_id: null, document_value: '' }],
-    
+
     // Step 4
     office_name: '',
     office_address: '',
@@ -219,7 +219,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
     office_phone_number: '',
     office_maps_url: '',
     appointment_duration: '',
-    
+
     // Step 5: Schedule Data
     scheduleData: {}
   });
@@ -227,7 +227,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
   // Funciones para manejo de horarios
   const formatTime = (timeString?: string): Date | null => {
     if (!timeString) return null;
-    
+
     try {
       const [hours, minutes] = timeString.split(':');
       const date = new Date();
@@ -245,7 +245,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
 
   const updateDaySchedule = (dayIndex: number, isActive: boolean) => {
     const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklyScheduleData;
-    
+
     setFormData(prev => ({
       ...prev,
       scheduleData: {
@@ -262,7 +262,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
   const addTimeBlock = (dayIndex: number) => {
     const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklyScheduleData;
     const currentDay = formData.scheduleData[dayKey];
-    
+
     if (currentDay) {
       setFormData(prev => ({
         ...prev,
@@ -280,7 +280,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
   const removeTimeBlock = (dayIndex: number, blockIndex: number) => {
     const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklyScheduleData;
     const currentDay = formData.scheduleData[dayKey];
-    
+
     if (currentDay && currentDay.time_blocks.length > 1) {
       setFormData(prev => ({
         ...prev,
@@ -298,7 +298,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
   const updateTimeBlock = (dayIndex: number, blockIndex: number, field: 'start_time' | 'end_time', value: string) => {
     const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklyScheduleData;
     const currentDay = formData.scheduleData[dayKey];
-    
+
     if (currentDay) {
       const updatedTimeBlocks = currentDay.time_blocks.map((block, index) => {
         if (index === blockIndex) {
@@ -306,7 +306,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
         }
         return block;
       });
-      
+
       setFormData(prev => ({
         ...prev,
         scheduleData: {
@@ -352,8 +352,8 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
   // Handle office country change and reset state
   const handleOfficeCountryChange = (countryName: string) => {
     setSelectedOfficeCountry(countryName);
-    setFormData(prev => ({ 
-      ...prev, 
+    setFormData(prev => ({
+      ...prev,
       office_country: countryName,
       office_state_id: '' // Reset state when country changes
     }));
@@ -385,7 +385,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
           return false;
         }
         return true;
-      
+
       case 1:
         const requiredFields = ['name', 'gender', 'birth_date', 'phone_country_code', 'phone_number'];
         const missingFields = requiredFields.filter(field => !formData[field as keyof RegistrationData]);
@@ -405,7 +405,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
           return false;
         }
         return true;
-      
+
       case 2:
         const requiredStep2Fields = ['title', 'specialty', 'university', 'graduation_year'];
         const missingStep2Fields = requiredStep2Fields.filter(field => !formData[field as keyof RegistrationData]);
@@ -429,7 +429,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
           }
         }
         return true;
-      
+
       case 3:
         const requiredStep3Fields = ['office_name', 'office_address', 'office_city', 'office_state_id', 'office_phone_country_code', 'office_phone_number', 'appointment_duration'];
         const missingStep3Fields = requiredStep3Fields.filter(field => !formData[field as keyof RegistrationData]);
@@ -437,22 +437,22 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
           setError('Por favor, completa todos los campos obligatorios');
           return false;
         }
-        
+
         // Validate office phone number has at least some digits
         if (!formData.office_phone_number || formData.office_phone_number.trim().length < 7) {
           setError('El número telefónico del consultorio debe tener al menos 7 dígitos');
           return false;
         }
-        
+
         // Validate appointment duration is a number and reasonable range
         const duration = parseInt(formData.appointment_duration);
         if (isNaN(duration) || duration < 5 || duration > 300) {
           setError('La duración de la consulta debe ser un número entre 5 y 300 minutos');
           return false;
         }
-        
+
         return true;
-      
+
       case 4:
         // Validate that at least one day has been configured
         const activeDays = Object.values(formData.scheduleData).filter(day => day?.is_active);
@@ -460,16 +460,16 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
           setError('Por favor, configura al menos un día de atención');
           return false;
         }
-        
+
         // Validate that each active day has at least one time block
         const daysWithoutTimeBlocks = activeDays.filter(day => !day.time_blocks || day.time_blocks.length === 0);
         if (daysWithoutTimeBlocks.length > 0) {
           setError('Todos los días activos deben tener al menos un horario configurado');
           return false;
         }
-        
+
         return true;
-      
+
       default:
         return true;
     }
@@ -478,7 +478,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
   const handleNext = () => {
     // Mark that user attempted to continue on this step
     setAttemptedContinue(prev => new Set(prev).add(activeStep));
-    
+
     if (validateStep(activeStep)) {
       setActiveStep(prev => {
         const newStep = prev + 1;
@@ -510,10 +510,10 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
     try {
       // Concatenar código de país con número telefónico personal
       const fullPhoneNumber = `${formData.phone_country_code}${formData.phone_number.trim()}`;
-      
+
       // Concatenar código de país con número telefónico del consultorio
       const fullOfficePhoneNumber = `${formData.office_phone_country_code}${formData.office_phone_number.trim()}`;
-      
+
       // Prepare documents array (filter out empty ones)
       const allDocuments = [
         ...formData.personal_documents.filter(doc => doc.document_id && doc.document_value.trim()),
@@ -565,13 +565,13 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
 
       // Register the doctor (creates profile and handles authentication automatically)
       logger.debug('Sending registration data', { doctorProfileData }, 'auth');
-      
+
       const registrationResponse = await apiService.auth.register(doctorProfileData);
-      
+
       // The registration endpoint already handles login and saves token automatically
       if (registrationResponse.access_token) {
         logger.debug('Registration successful, token saved', undefined, 'auth');
-        
+
         // Track registration completed
         try {
           const { trackAmplitudeEvent } = require('../../utils/amplitudeHelper');
@@ -582,7 +582,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
         } catch (e) {
           // Silently fail
         }
-        
+
         // Force reload to trigger authentication state update
         window.location.reload();
       } else {
@@ -594,9 +594,9 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
       try {
         const { trackAmplitudeEvent } = require('../../utils/amplitudeHelper');
         trackAmplitudeEvent('registration_failed', {
-          error_type: error?.response?.status === 400 ? 'validation_error' : 
-                     error?.response?.status === 409 ? 'duplicate_email' : 
-                     error?.response?.status === 500 ? 'server_error' : 'unknown',
+          error_type: error?.response?.status === 400 ? 'validation_error' :
+            error?.response?.status === 409 ? 'duplicate_email' :
+              error?.response?.status === 500 ? 'server_error' : 'unknown',
           step: currentStep
         });
       } catch (e) {
@@ -616,17 +616,17 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
         errorStatus: error?.status,
         errorStack: error?.stack
       });
-      
+
       logger.error('Registration error', {
         message: error?.message,
         detail: error?.detail,
         response: error?.response?.data,
         status: error?.status || error?.response?.status
       }, 'auth');
-      
+
       // Extract specific error message from API response
       let errorMessage = 'Error durante el registro. Intenta nuevamente.';
-      
+
       // The API service transforms errors into ApiError format with { detail: string, status: number }
       if (error?.detail) {
         // Use the specific error message from the API service
@@ -646,7 +646,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
         logger.debug('Using error.message', { message: error.message }, 'auth');
         errorMessage = error.message;
       }
-      
+
       logger.debug('Final error message', { errorMessage }, 'auth');
       setError(errorMessage);
     } finally {
@@ -803,9 +803,9 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
           py: 4
         }}
       >
-        <Paper 
-          elevation={3} 
-          sx={{ 
+        <Paper
+          elevation={3}
+          sx={{
             width: '100%',
             p: 4,
             borderRadius: 2,
@@ -833,7 +833,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
             </Typography>
 
             {error && (
-              <Box 
+              <Box
                 ref={errorRef}
                 sx={{ width: '100%', mb: 2, p: 2, bgcolor: 'error.main', borderRadius: 1 }}
               >
@@ -855,7 +855,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
                   <Step key={step.label}>
                     <StepLabel
                       onClick={() => handleStepClick(index)}
-                      sx={{ 
+                      sx={{
                         cursor: 'pointer',
                         '&:hover': {
                           bgcolor: 'action.hover',
@@ -869,16 +869,16 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
                         const isActive = index === activeStep;
                         const isCompleted = index < activeStep;
                         const isVisited = visitedSteps.has(index);
-                        
+
                         return (
                           <Avatar
                             sx={{
-                              bgcolor: isCompleted 
-                                ? 'success.main' 
-                                : isActive 
-                                  ? 'primary.main' 
-                                  : isVisited 
-                                    ? 'info.main' 
+                              bgcolor: isCompleted
+                                ? 'success.main'
+                                : isActive
+                                  ? 'primary.main'
+                                  : isVisited
+                                    ? 'info.main'
                                     : 'grey.300',
                               color: 'white',
                               width: 32,
@@ -889,12 +889,12 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
                               borderColor: isActive ? 'primary.dark' : 'transparent',
                               '&:hover': {
                                 transform: 'scale(1.05)',
-                                bgcolor: isCompleted 
-                                  ? 'success.dark' 
-                                  : isActive 
-                                    ? 'primary.dark' 
-                                    : isVisited 
-                                      ? 'info.dark' 
+                                bgcolor: isCompleted
+                                  ? 'success.dark'
+                                  : isActive
+                                    ? 'primary.dark'
+                                    : isVisited
+                                      ? 'info.dark'
                                       : 'grey.400'
                               }
                             }}
@@ -904,9 +904,9 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
                         );
                       }}
                     >
-                      <Typography 
-                        variant="body2" 
-                        sx={{ 
+                      <Typography
+                        variant="body2"
+                        sx={{
                           fontWeight: index === activeStep ? 600 : 400,
                           cursor: 'pointer',
                           '&:hover': {
@@ -919,7 +919,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
                     </StepLabel>
                     <StepContent>
                       {getStepContent(index)}
-                      
+
                       <Box sx={{ mb: 2, mt: 3 }}>
                         <div>
                           {index === steps.length - 1 ? (
@@ -940,7 +940,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
                               Continuar
                             </Button>
                           )}
-                          
+
                           <Button
                             disabled={index === 0 || isLoading}
                             onClick={handleBack}

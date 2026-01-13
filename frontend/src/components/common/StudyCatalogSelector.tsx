@@ -86,7 +86,7 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
     // Always use the studies from the hook (which gets updated by searchStudies)
     const baseStudies = studies || [];
     let filtered = baseStudies;
-    
+
     // Apply specialty filter first
     if (selectedSpecialty && selectedSpecialty.trim()) {
       const normalizedSelectedSpecialty = normalizeText(selectedSpecialty.trim());
@@ -95,12 +95,12 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
         if (!study.specialty || !study.specialty.trim()) {
           return false;
         }
-        
+
         const normalizedStudySpecialty = normalizeText(study.specialty);
-        
+
         // Only show studies that exactly match or contain the selected specialty
         return normalizedStudySpecialty === normalizedSelectedSpecialty ||
-               normalizedStudySpecialty.includes(normalizedSelectedSpecialty);
+          normalizedStudySpecialty.includes(normalizedSelectedSpecialty);
       });
     }
 
@@ -172,6 +172,10 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
   };
 
   // handleTemplateApply removed - StudyTemplate table deleted
+  const handleTemplateApply = (template: any) => {
+    // Mock implementation
+    console.log('Template applied', template);
+  };
 
   const handleRecommendationSelect = (study: StudyCatalog) => {
     handleStudySelect(study);
@@ -185,9 +189,9 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
     return remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days}d`;
   };
 
-  const StudyCard: React.FC<{ study: StudyCatalog; showAddButton?: boolean }> = ({ 
-    study, 
-    showAddButton = true 
+  const StudyCard: React.FC<{ study: StudyCatalog; showAddButton?: boolean }> = ({
+    study,
+    showAddButton = true
   }) => {
     // Add validation to prevent undefined study errors
     if (!study) {
@@ -204,76 +208,76 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
                 <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
                   {study.name || 'Estudio sin nombre'}
                 </Typography>
-                <Chip 
-                  label={study.code || 'N/A'} 
-                  size="small" 
-                  color="primary" 
+                <Chip
+                  label={study.code || 'N/A'}
+                  size="small"
+                  color="primary"
                   variant="outlined"
                 />
               </Box>
-            
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              {study.description || 'Sin descripción'}
-            </Typography>
 
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1 }}>
-              {study.subcategory && (
-                <Chip 
-                  label={study.subcategory} 
-                  size="small" 
-                  color="secondary" 
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                {study.description || 'Sin descripción'}
+              </Typography>
+
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1 }}>
+                {study.subcategory && (
+                  <Chip
+                    label={study.subcategory}
+                    size="small"
+                    color="secondary"
+                    variant="outlined"
+                  />
+                )}
+                {study.specialty && (
+                  <Chip
+                    label={study.specialty}
+                    size="small"
+                    color="info"
+                    variant="outlined"
+                  />
+                )}
+                <Chip
+                  icon={<ScheduleIcon />}
+                  label={getDurationText(study.duration_hours)}
+                  size="small"
+                  color="default"
                   variant="outlined"
                 />
+              </Box>
+
+              {study.preparation && (
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mt: 1 }}>
+                  <InfoIcon color="action" sx={{ fontSize: 16, mt: 0.5 }} />
+                  <Typography variant="caption" color="text.secondary">
+                    <strong>Preparación:</strong> {study.preparation}
+                  </Typography>
+                </Box>
               )}
-              {study.specialty && (
-                <Chip 
-                  label={study.specialty} 
-                  size="small" 
-                  color="info" 
-                  variant="outlined"
-                />
-              )}
-              <Chip 
-                icon={<ScheduleIcon />}
-                label={getDurationText(study.duration_hours)} 
-                size="small" 
-                color="default" 
-                variant="outlined"
-              />
             </Box>
 
-            {study.preparation && (
-              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mt: 1 }}>
-                <InfoIcon color="action" sx={{ fontSize: 16, mt: 0.5 }} />
-                <Typography variant="caption" color="text.secondary">
-                  <strong>Preparación:</strong> {study.preparation}
-                </Typography>
-              </Box>
+            {showAddButton && (
+              <Tooltip title="Agregar estudio">
+                <IconButton
+                  size="small"
+                  color="primary"
+                  onClick={() => handleStudySelect(study)}
+                  disabled={maxSelections ? (selectedStudies?.length || 0) >= maxSelections : false}
+                >
+                  <AddIcon />
+                </IconButton>
+              </Tooltip>
             )}
           </Box>
-
-          {showAddButton && (
-            <Tooltip title="Agregar estudio">
-              <IconButton
-                size="small"
-                color="primary"
-                onClick={() => handleStudySelect(study)}
-                disabled={maxSelections ? (selectedStudies?.length || 0) >= maxSelections : false}
-              >
-                <AddIcon />
-              </IconButton>
-            </Tooltip>
-          )}
-        </Box>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
     );
   };
 
   return (
     <Box>
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => {}}>
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => { }}>
           {error}
         </Alert>
       )}
@@ -303,8 +307,8 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
       )}
 
       {/* Search Section */}
-      <Accordion 
-        expanded={expandedSection === 'search'} 
+      <Accordion
+        expanded={expandedSection === 'search'}
         onChange={() => setExpandedSection(expandedSection === 'search' ? false : 'search')}
       >
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -315,7 +319,7 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
         </AccordionSummary>
         <AccordionDetails sx={{ p: 3 }}>
           <Grid container spacing={2} sx={{ mb: 3 }}>
-            <Grid item xs={12} sm={12} md={6} lg={4}>
+            <Grid size={{ xs: 12, sm: 12, md: 6, lg: 4 }}>
               <TextField
                 fullWidth
                 label="Buscar estudios"
@@ -325,7 +329,7 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
                 InputProps={{
                   startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />
                 }}
-                sx={{ 
+                sx={{
                   mb: 1,
                   '& .MuiInputBase-root': {
                     minWidth: '200px'
@@ -333,16 +337,16 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
                 }}
               />
             </Grid>
-            <Grid item xs={12} sm={6} md={3} lg={4}>
+            <Grid size={{ xs: 12, sm: 6, md: 3, lg: 4 }}>
               <Autocomplete
                 options={categories || []}
                 getOptionLabel={(option) => option.name}
                 value={selectedCategory}
                 onChange={(_, newValue) => setSelectedCategory(newValue)}
                 renderInput={(params) => (
-                  <TextField 
-                    {...params} 
-                    label="Categoría" 
+                  <TextField
+                    {...params}
+                    label="Categoría"
                     sx={{
                       '& .MuiInputBase-root': {
                         minWidth: '180px'
@@ -363,20 +367,20 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
                     </Box>
                   );
                 }}
-                sx={{ 
+                sx={{
                   mb: 1,
                   minWidth: '180px'
                 }}
               />
             </Grid>
-            <Grid item xs={12} sm={6} md={3} lg={4}>
+            <Grid size={{ xs: 12, sm: 6, md: 3, lg: 4 }}>
               <TextField
                 fullWidth
                 label="Especialidad"
                 value={selectedSpecialty}
                 onChange={(e) => setSelectedSpecialty(e.target.value)}
                 placeholder="Ej: Cardiología, Endocrinología..."
-                sx={{ 
+                sx={{
                   mb: 1,
                   '& .MuiInputBase-root': {
                     minWidth: '180px'
@@ -414,8 +418,8 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
 
       {/* Recommendations Section */}
       {showRecommendations && (recommendations?.length || 0) > 0 && (
-        <Accordion 
-          expanded={expandedSection === 'recommendations'} 
+        <Accordion
+          expanded={expandedSection === 'recommendations'}
           onChange={() => setExpandedSection(expandedSection === 'recommendations' ? false : 'recommendations')}
         >
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -438,8 +442,8 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
 
       {/* Templates Section */}
       {showTemplates && (templates?.length || 0) > 0 && (
-        <Accordion 
-          expanded={expandedSection === 'templates'} 
+        <Accordion
+          expanded={expandedSection === 'templates'}
           onChange={() => setExpandedSection(expandedSection === 'templates' ? false : 'templates')}
         >
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -451,7 +455,7 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
           <AccordionDetails sx={{ p: 3 }}>
             <Grid container spacing={3}>
               {(templates || []).filter(template => template).map(template => (
-                <Grid item xs={12} sm={6} md={6} key={template.id}>
+                <Grid size={{ xs: 12, sm: 6, md: 6 }} key={template.id}>
                   <Card sx={{ border: '1px solid #e0e0e0', height: '100%' }}>
                     <CardContent sx={{ p: 2 }}>
                       <Typography variant="h6" sx={{ mb: 1 }}>
@@ -463,10 +467,10 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
                         </Typography>
                       )}
                       {template.specialty && (
-                        <Chip 
-                          label={template.specialty} 
-                          size="small" 
-                          color="info" 
+                        <Chip
+                          label={template.specialty}
+                          size="small"
+                          color="info"
                           variant="outlined"
                           sx={{ mb: 1 }}
                         />

@@ -65,11 +65,11 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
   // Get all vital signs - existing ones and available ones to add
   const getAllVitalSigns = () => {
     const existingIds = vitalSigns.map(vs => vs.vital_sign_id);
-    
+
     // Include saved vital signs that are waiting for backend response
     const allExistingIds = new Set([...existingIds, ...Array.from(savedVitalSigns)]);
     const availableToAdd = availableVitalSigns.filter(vs => !allExistingIds.has(vs.id));
-    
+
     // Combine existing and available, with existing first
     const allItems = [
       ...vitalSigns.map(vs => ({
@@ -106,7 +106,7 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
         isExisting: false
       }))
     ];
-    
+
     // Sort by priority: Altura (1), Peso (2), IMC (3), then all others (999)
     return allItems.sort((a, b) => {
       const priorityA = getVitalSignPriority(a.name);
@@ -127,25 +127,25 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
       if (name.includes('peso') || name.includes('estatura') || name.includes('altura') || name.includes('talla')) {
         const allSigns = getAllVitalSigns();
         const weightSign = allSigns.find(vs => vs.name.toLowerCase().includes('peso'));
-        const heightSign = allSigns.find(vs => 
-          vs.name.toLowerCase().includes('estatura') || 
+        const heightSign = allSigns.find(vs =>
+          vs.name.toLowerCase().includes('estatura') ||
           vs.name.toLowerCase().includes('altura') ||
           vs.name.toLowerCase().includes('talla')
         );
-        const bmiSign = availableVitalSigns.find(vs => 
-          vs.name.toLowerCase().includes('imc') || 
-          vs.name.toLowerCase().includes('índice de masa corporal') || 
+        const bmiSign = availableVitalSigns.find(vs =>
+          vs.name.toLowerCase().includes('imc') ||
+          vs.name.toLowerCase().includes('índice de masa corporal') ||
           vs.name.toLowerCase().includes('bmi')
         );
 
         if (weightSign && heightSign && bmiSign) {
           const weight = parseFloat(name.includes('peso') ? value : weightSign.value);
           const height = parseFloat((name.includes('estatura') || name.includes('altura') || name.includes('talla')) ? value : heightSign.value);
-          
+
           if (!isNaN(weight) && !isNaN(height) && height > 0) {
             const heightInMeters = height / 100;
             const bmi = Math.round((weight / (heightInMeters * heightInMeters)) * 10) / 10;
-            
+
             // Auto-fill BMI value
             setVitalSignValues(prev => ({
               ...prev,
@@ -164,10 +164,10 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
       const vitalSign = availableVitalSigns.find(vs => vs.id === vitalSignId);
       if (vitalSign) {
         const autoUnit = getVitalSignUnit(vitalSign.name);
-        
+
         // Mark as saved immediately to prevent visual change
-        setSavedVitalSigns(prev => new Set([...prev, vitalSignId]));
-        
+        setSavedVitalSigns(prev => new Set([...Array.from(prev), vitalSignId]));
+
         console.log('[VitalSignsSection] Calling onAddVitalSign', { vitalSignId, value: value.trim(), unit: autoUnit });
         // Call the parent callback to save
         onAddVitalSign({
@@ -176,7 +176,7 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
           unit: autoUnit
         });
         console.log('[VitalSignsSection] onAddVitalSign called (returned)');
-        
+
         // Keep the value in the state - it will be cleared when real data comes from backend
         setVitalSignValues(prev => ({
           ...prev,
@@ -267,7 +267,7 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
         const updatedValues = { ...prevValues };
         idsToRemove.forEach(id => {
           delete updatedValues[id];
-      });
+        });
         return updatedValues;
       });
 
@@ -301,15 +301,15 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
         {getAllVitalSigns().map((item) => {
           const color = getVitalSignColor(item.name);
           const IconComponent = getVitalSignIcon(item.name);
-          
+
           // Get current value - always from state or item value
           const hasValue = item.value && item.value.trim() !== '';
           const currentValue = vitalSignValues[item.vital_sign_id] ?? (hasValue ? item.value : '');
 
           return (
-            <Grid item xs={12} sm={6} md={4} lg={3} key={`${item.isExisting ? 'existing' : 'new'}-${item.vital_sign_id}`}>
-              <Card 
-                sx={{ 
+            <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={`${item.isExisting ? 'existing' : 'new'}-${item.vital_sign_id}`}>
+              <Card
+                sx={{
                   border: hasValue ? `2px solid ${color}` : '2px solid #e0e0e0',
                   backgroundColor: hasValue ? `${color}08` : '#fafafa',
                   height: '100%'
@@ -379,13 +379,13 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
                         )
                       }}
                     />
-                    
+
                     {/* Delete button for saved vital signs */}
                     {hasValue && item.isExisting && item.id && (
                       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
                         <Tooltip title="Eliminar">
-                          <IconButton 
-                            size="small" 
+                          <IconButton
+                            size="small"
                             onClick={() => {
                               const existingVitalSign = vitalSigns.find(vs => vs.id === item.id);
                               if (existingVitalSign) {
@@ -399,13 +399,13 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
                         </Tooltip>
                       </Box>
                     )}
-                    
+
                     {/* Delete button for saved but not yet in backend */}
                     {hasValue && savedVitalSigns.has(item.vital_sign_id) && !item.isExisting && (
                       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
                         <Tooltip title="Eliminar">
-                          <IconButton 
-                            size="small" 
+                          <IconButton
+                            size="small"
                             onClick={() => {
                               setSavedVitalSigns(prev => {
                                 const updated = new Set(prev);

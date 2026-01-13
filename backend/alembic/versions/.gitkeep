@@ -1,6 +1,0 @@
-# This directory contains Alembic migration files
-# Migration files will be created here when you run:
-# alembic revision --autogenerate -m "description"
-# or
-# alembic revision -m "description"
-

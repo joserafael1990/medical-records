@@ -177,7 +177,7 @@ const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
                 <Autocomplete
                   freeSolo
                   options={medications}
-                  getOptionLabel={(option) => option.name || ''}
+                  getOptionLabel={(option) => typeof option === 'string' ? option : (option.name || '')}
                   value={selectedMedication}
                   onChange={handleMedicationChange}
                   onInputChange={(_event, newInputValue) => {
@@ -268,7 +268,7 @@ const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
                 />
               </Box>
             </Box>
-            
+
             {/* Third row: Instrucciones and Add button */}
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
               <TextField
@@ -304,9 +304,9 @@ const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
       ) : (
         <Grid container spacing={2}>
           {prescriptions.map((prescription) => (
-            <Grid item xs={12} md={6} key={prescription.id}>
-              <Card 
-                sx={{ 
+            <Grid size={{ xs: 12, md: 6 }} key={prescription.id}>
+              <Card
+                sx={{
                   border: '2px solid #2196f3',
                   backgroundColor: '#2196f308',
                   '&:hover': {
@@ -326,7 +326,7 @@ const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
                   {/* Dosage, Frequency, Duration */}
                   <Box sx={{ mt: 2 }}>
                     <Grid container spacing={1}>
-                      <Grid item xs={12} sm={4}>
+                      <Grid size={{ xs: 12, sm: 4 }}>
                         <Typography variant="caption" color="text.secondary" display="block">
                           Dosis
                         </Typography>
@@ -334,7 +334,7 @@ const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
                           {prescription.dosage}
                         </Typography>
                       </Grid>
-                      <Grid item xs={12} sm={4}>
+                      <Grid size={{ xs: 12, sm: 4 }}>
                         <Typography variant="caption" color="text.secondary" display="block">
                           Frecuencia
                         </Typography>
@@ -342,7 +342,7 @@ const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
                           {prescription.frequency}
                         </Typography>
                       </Grid>
-                      <Grid item xs={12} sm={4}>
+                      <Grid size={{ xs: 12, sm: 4 }}>
                         <Typography variant="caption" color="text.secondary" display="block">
                           Duración
                         </Typography>
@@ -358,26 +358,26 @@ const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
                     <Box sx={{ mt: 2 }}>
                       <Grid container spacing={1}>
                         {prescription.quantity && (
-                          <Grid item xs={6}>
+                          <Grid size={{ xs: 6 }}>
                             <Typography variant="caption" color="text.secondary" display="block">
                               Cantidad
                             </Typography>
-                            <Chip 
-                              label={`${prescription.quantity}`} 
-                              size="small" 
+                            <Chip
+                              label={`${prescription.quantity}`}
+                              size="small"
                               color="primary"
                               variant="outlined"
                             />
                           </Grid>
                         )}
                         {prescription.via_administracion && (
-                          <Grid item xs={6}>
+                          <Grid size={{ xs: 6 }}>
                             <Typography variant="caption" color="text.secondary" display="block">
                               Vía
                             </Typography>
-                            <Chip 
-                              label={prescription.via_administracion} 
-                              size="small" 
+                            <Chip
+                              label={prescription.via_administracion}
+                              size="small"
                               color="secondary"
                               variant="outlined"
                             />
@@ -401,8 +401,8 @@ const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
                 </CardContent>
                 <CardContent sx={{ p: 1, pt: 0, display: 'flex', justifyContent: 'flex-end' }}>
                   <Tooltip title="Eliminar">
-                    <IconButton 
-                      size="small" 
+                    <IconButton
+                      size="small"
                       onClick={() => onDeletePrescription(prescription.id)}
                       sx={{ color: '#f44336' }}
                     >

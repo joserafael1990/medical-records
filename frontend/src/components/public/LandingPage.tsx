@@ -80,7 +80,7 @@ export const LandingPage: React.FC = () => {
 
       <Container maxWidth="lg" sx={{ py: { xs: 8, md: 12 } }}>
         <Grid container spacing={6} alignItems="center">
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Chip
               label="Cumple NOM-004 · WhatsApp Business API"
               color="success"
@@ -123,7 +123,7 @@ export const LandingPage: React.FC = () => {
               ))}
             </Stack>
           </Grid>
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card elevation={3} sx={{ p: 4, borderRadius: 4, bgcolor: 'white' }}>
               <Typography variant="overline" color="primary">
                 Flujo automatizado
@@ -163,7 +163,7 @@ export const LandingPage: React.FC = () => {
           </Typography>
           <Grid container spacing={4}>
             {features.map((feature) => (
-              <Grid item xs={12} md={6} key={feature.title}>
+              <Grid size={{ xs: 12, md: 6 }} key={feature.title}>
                 <Card elevation={1} sx={{ p: 3, height: '100%' }}>
                   <Typography variant="h5" sx={{ fontWeight: 700 }}>
                     {feature.title}
@@ -181,7 +181,7 @@ export const LandingPage: React.FC = () => {
       <Container maxWidth="lg" sx={{ py: 10 }}>
         <Grid container spacing={4}>
           {testimonials.map((testimonial) => (
-            <Grid item xs={12} md={6} key={testimonial.author}>
+            <Grid size={{ xs: 12, md: 6 }} key={testimonial.author}>
               <Card elevation={0} sx={{ p: 4, bgcolor: '#eef4ff', height: '100%' }}>
                 <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
                   “{testimonial.quote}”
