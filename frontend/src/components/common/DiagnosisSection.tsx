@@ -59,12 +59,12 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
   // Debounced search
   // Use useRef to store the searchDiagnoses method to avoid dependency issues
   const searchDiagnosesRef = React.useRef(diagnosisCatalog.searchDiagnoses);
-  
+
   // Update ref when method changes (should be stable due to useCallback in hook)
   React.useEffect(() => {
     searchDiagnosesRef.current = diagnosisCatalog.searchDiagnoses;
   }, [diagnosisCatalog.searchDiagnoses]);
-  
+
   useEffect(() => {
     if (!searchTerm || searchTerm.length < 2) {
       setSearchResults([]);
@@ -118,7 +118,7 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
     try {
       setIsCreatingDiagnosis(true);
       const newDiagnosis = await onCreateDiagnosis(searchTerm.trim());
-      
+
       // Convert to DiagnosisCatalog format and add
       const diagnosisToAdd: DiagnosisCatalog = {
         id: newDiagnosis.id,
@@ -143,8 +143,8 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
 
   const handleDiagnosisSelect = useCallback((diagnosis: DiagnosisSearchResult) => {
     // Check if already selected (by code or by name if code is empty)
-    const isAlreadySelected = diagnoses.some(d => 
-      d.code === diagnosis.code || 
+    const isAlreadySelected = diagnoses.some(d =>
+      d.code === diagnosis.code ||
       (d.code === '' && d.name.toLowerCase().trim() === diagnosis.name.toLowerCase().trim())
     );
     if (isAlreadySelected) {
@@ -185,9 +185,9 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
         <Box display="flex" alignItems="center" gap={1}>
           <MedicalServicesIcon color="primary" />
           <Typography variant="h6">{title}</Typography>
-          <Chip 
-            label={`${diagnoses.length}`} 
-            size="small" 
+          <Chip
+            label={`${diagnoses.length}`}
+            size="small"
             color={diagnoses.length >= maxSelections ? 'error' : 'primary'}
           />
         </Box>
@@ -292,9 +292,9 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
         <Grid container spacing={2}>
           {diagnoses.map((diagnosis) => {
             return (
-              <Grid item xs={12} sm={6} md={4} key={String(diagnosis.id)}>
-                <Card 
-                  sx={{ 
+              <Grid size={{ xs: 12, sm: 6, md: 4 }} key={String(diagnosis.id)}>
+                <Card
+                  sx={{
                     height: '100%',
                     '&:hover': {
                       boxShadow: 2
@@ -308,8 +308,8 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
                       </Typography>
                       <Box>
                         <Tooltip title="Eliminar diagnóstico">
-                          <IconButton 
-                            size="small" 
+                          <IconButton
+                            size="small"
                             color="error"
                             onClick={() => onRemoveDiagnosis(String(diagnosis.id))}
                           >
@@ -318,7 +318,7 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
                         </Tooltip>
                       </Box>
                     </Box>
-                    
+
                     <Typography variant="body2" sx={{ mb: 1, minHeight: '2.5em' }}>
                       {diagnosis.name}
                     </Typography>

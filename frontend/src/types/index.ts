@@ -197,7 +197,7 @@ export interface MedicalRecordFormData {
 }
 
 export interface ConsultationFormData {
-  patient_id: string | number;
+  patient_id: string;
   patient_document_id?: number | null;
   patient_document_value?: string;
   patient_document_name?: string;

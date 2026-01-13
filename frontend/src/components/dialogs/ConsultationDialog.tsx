@@ -414,10 +414,10 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 clinicalStudiesHook.downloadFile((study as any).file_url, (study as any).study_name || 'estudio');
               }
             }}
-            doctorName={String(doctorProfile?.full_name || doctorProfile?.name
-              ? `${doctorProfile?.title || 'Dr.'} ${doctorProfile?.full_name || doctorProfile?.name}`.trim()
-              : 'Dr. Usuario')}
-            patientId={Number(formHook.selectedPatient?.id) || parseInt(formHook.formData.patient_id) || 0}
+            doctorName={doctorProfile?.full_name || doctorProfile?.name
+              ? String(`${doctorProfile?.title || 'Dr.'} ${doctorProfile?.full_name || doctorProfile?.name}`.trim())
+              : 'Dr. Usuario'}
+            patientId={Number(formHook.selectedPatient?.id) || Number(formHook.formData.patient_id) || 0}
             doctorProfile={doctorProfile}
             onAppointmentsChange={setFollowUpAppointments}
             initialAppointments={followUpAppointments}

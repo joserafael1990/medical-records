@@ -124,7 +124,7 @@ export const LicenseForm: React.FC<LicenseFormProps> = ({
         <Grid container spacing={2}>
           {/* Primera línea: Doctor, Tipo, Estado, Fecha Inicio, Fecha Expiración */}
           {!license && (
-            <Grid item xs={12} sm={6} md={2.4}>
+            <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
               <FormControl fullWidth>
                 <InputLabel>Doctor *</InputLabel>
                 <Select
@@ -161,10 +161,10 @@ export const LicenseForm: React.FC<LicenseFormProps> = ({
                               {name}
                             </Typography>
                             {doctor.email && (
-                              <Typography 
-                                variant="body2" 
-                                sx={{ 
-                                  color: 'text.secondary', 
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  color: 'text.secondary',
                                   fontSize: '0.875rem',
                                   lineHeight: 1.2,
                                   mt: 0.5
@@ -183,7 +183,7 @@ export const LicenseForm: React.FC<LicenseFormProps> = ({
             </Grid>
           )}
 
-          <Grid item xs={12} sm={6} md={license ? 3 : 2.4}>
+          <Grid size={{ xs: 12, sm: 6, md: license ? 3 : 2.4 }}>
             <FormControl fullWidth>
               <InputLabel>Tipo de Licencia</InputLabel>
               <Select
@@ -199,7 +199,7 @@ export const LicenseForm: React.FC<LicenseFormProps> = ({
             </FormControl>
           </Grid>
 
-          <Grid item xs={12} sm={6} md={license ? 3 : 2.4}>
+          <Grid size={{ xs: 12, sm: 6, md: license ? 3 : 2.4 }}>
             <FormControl fullWidth>
               <InputLabel>Estado</InputLabel>
               <Select
@@ -216,49 +216,49 @@ export const LicenseForm: React.FC<LicenseFormProps> = ({
             </FormControl>
           </Grid>
 
-          <Grid item xs={12} sm={6} md={license ? 3 : 2.4}>
+          <Grid size={{ xs: 12, sm: 6, md: license ? 3 : 2.4 }}>
             <DatePicker
               label="Fecha de Inicio *"
               value={formData.start_date ? new Date(formData.start_date) : null}
               onChange={(date) => setFormData({ ...formData, start_date: date?.toISOString().split('T')[0] || '' })}
-              slotProps={{ 
-                textField: { 
-                  fullWidth: true, 
+              slotProps={{
+                textField: {
+                  fullWidth: true,
                   required: true
-                } 
+                }
               }}
             />
           </Grid>
 
-          <Grid item xs={12} sm={6} md={license ? 3 : 2.4}>
+          <Grid size={{ xs: 12, sm: 6, md: license ? 3 : 2.4 }}>
             <DatePicker
               label="Fecha de Expiración *"
               value={formData.expiration_date ? new Date(formData.expiration_date) : null}
               onChange={(date) => setFormData({ ...formData, expiration_date: date?.toISOString().split('T')[0] || '' })}
-              slotProps={{ 
-                textField: { 
-                  fullWidth: true, 
+              slotProps={{
+                textField: {
+                  fullWidth: true,
                   required: true
-                } 
+                }
               }}
             />
           </Grid>
 
           {/* Segunda línea: Fecha de Pago (izquierda) y Notas (derecha) */}
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <DatePicker
               label="Fecha de Pago"
               value={formData.payment_date ? new Date(formData.payment_date) : null}
               onChange={(date) => setFormData({ ...formData, payment_date: date?.toISOString().split('T')[0] || null })}
-              slotProps={{ 
-                textField: { 
+              slotProps={{
+                textField: {
                   fullWidth: true
-                } 
+                }
               }}
             />
           </Grid>
 
-          <Grid item xs={12} sm={6} md={9}>
+          <Grid size={{ xs: 12, sm: 6, md: 9 }}>
             <TextField
               fullWidth
               label="Notas"

@@ -60,7 +60,7 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
   const [scheduledAppointments, setScheduledAppointments] = useState<any[]>(initialAppointments);
   const [editingAppointmentId, setEditingAppointmentId] = useState<number | null>(null);
   const [reminders, setReminders] = useState<AppointmentReminderFormData[]>([]);
-  
+
   // Use refs to track previous values and prevent infinite loops
   const prevScheduledAppointmentsRef = useRef<any[]>(scheduledAppointments);
   const onAppointmentsChangeRef = useRef(onAppointmentsChange);
@@ -74,13 +74,13 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
   // Notify parent of changes, but only when scheduledAppointments actually changes
   useEffect(() => {
     // Only notify if the array reference or content actually changed
-    const hasChanged = 
+    const hasChanged =
       prevScheduledAppointmentsRef.current.length !== scheduledAppointments.length ||
       prevScheduledAppointmentsRef.current.some((app, index) => {
         const newApp = scheduledAppointments[index];
         return !newApp || app.id !== newApp.id || app.status !== newApp.status;
       });
-    
+
     if (hasChanged) {
       prevScheduledAppointmentsRef.current = scheduledAppointments;
       onAppointmentsChangeRef.current?.(scheduledAppointments);
@@ -93,7 +93,7 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
     // Only update if the filtered result is actually different
     const currentIds = scheduledAppointments.map(app => app.id).sort().join(',');
     const newIds = filtered.map(app => app.id).sort().join(',');
-    
+
     if (currentIds !== newIds) {
       setScheduledAppointments(filtered);
     }
@@ -129,7 +129,7 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
     setSelectedDate(appointment.appointment_date?.split('T')[0] || '');
     const timePart = appointment.appointment_date?.split('T')[1]?.substring(0, 5) || '';
     setSelectedTime(timePart);
-    
+
     // Load reminders if they exist
     if (appointment.reminders && Array.isArray(appointment.reminders) && appointment.reminders.length > 0) {
       const loadedReminders = appointment.reminders.map((r: any) => ({
@@ -153,10 +153,10 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
         ]);
         setAppointmentTypes(typesData);
         setOffices(officesData);
-        
+
         // Set default appointment type to "Seguimiento" if available
-        const seguimientoType = typesData.find(type => 
-          type.name.toLowerCase().includes('seguimiento') || 
+        const seguimientoType = typesData.find(type =>
+          type.name.toLowerCase().includes('seguimiento') ||
           type.code?.toLowerCase().includes('seguimiento')
         );
         if (seguimientoType) {
@@ -165,7 +165,7 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
           // Use first available type if no "Seguimiento" found
           setAppointmentFormData(prev => ({ ...prev, appointment_type_id: typesData[0].id }));
         }
-        
+
         // Set default office if available
         if (officesData.length > 0 && officesData[0].id) {
           setAppointmentFormData(prev => ({ ...prev, office_id: officesData[0].id || undefined }));
@@ -175,7 +175,7 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
         setError('Error al cargar tipos de cita y oficinas');
       }
     };
-    
+
     if (patientId && patientId > 0) {
       loadData();
     }
@@ -188,7 +188,7 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
         setAvailableTimes([]);
         return;
       }
-      
+
       try {
         setLoadingTimes(true);
         const dateOnly = selectedDate.split('T')[0];
@@ -201,7 +201,7 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
         setLoadingTimes(false);
       }
     };
-    
+
     loadTimes();
   }, [selectedDate]);
 
@@ -210,40 +210,40 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
       setError('Se debe seleccionar un paciente');
       return;
     }
-    
+
     if (!selectedDate || !selectedTime) {
       setError('Debe seleccionar fecha y hora');
       return;
     }
-    
+
     if (!appointmentFormData.appointment_type_id) {
       setError('Debe seleccionar un tipo de cita');
       return;
     }
-    
+
     try {
       setIsSubmitting(true);
       setError(null);
-      
+
       // Combine date and time
       const appointmentDateTime = new Date(`${selectedDate.split('T')[0]}T${selectedTime}`);
       if (isNaN(appointmentDateTime.getTime())) {
         setError('Fecha y hora inválidas');
         return;
       }
-      
+
       // Get doctor's appointment duration
       const doctorDuration = doctorProfile?.appointment_duration || 30;
       const endTime = new Date(appointmentDateTime.getTime() + doctorDuration * 60000);
-      
+
       // Get doctor_id from user context or doctorProfile
       const doctorId = user?.doctor?.id || doctorProfile?.id || user?.id || 0;
-      
+
       if (!doctorId || doctorId === 0) {
         setError('No se pudo identificar al doctor');
         return;
       }
-      
+
       const appointmentData: AppointmentFormData = {
         patient_id: patientId,
         doctor_id: doctorId,
@@ -259,7 +259,7 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
         // New multiple reminders system
         reminders: reminders.length > 0 ? reminders : undefined
       };
-      
+
       if (editingAppointmentId) {
         const updated = await apiService.appointments.updateAgendaAppointment(
           String(editingAppointmentId),
@@ -327,17 +327,17 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
         <CalendarIcon sx={{ fontSize: 20 }} />
         Agendar Cita de Seguimiento
       </Typography>
-      
+
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
           {error}
         </Alert>
       )}
-      
+
       <Card sx={{ border: '1px dashed', borderColor: 'grey.300', backgroundColor: '#fafafa' }}>
         <CardContent sx={{ p: 2 }}>
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <TextField
                 type="date"
                 label="Fecha"
@@ -353,10 +353,7 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
               />
             </Grid>
             <Grid
-              item
-              xs={12}
-              sm={6}
-              md={3}
+              size={{ xs: 12, sm: 6, md: 3 }}
               sx={{
                 flexGrow: 1,
                 minWidth: { xs: '100%', sm: 200, md: 240 }
@@ -388,10 +385,7 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
               </FormControl>
             </Grid>
             <Grid
-              item
-              xs={12}
-              sm={6}
-              md={offices.length > 0 ? 2 : 3}
+              size={{ xs: 12, sm: 6, md: offices.length > 0 ? 2 : 3 }}
               sx={{ minWidth: { xs: '100%', sm: 200, md: 220 } }}
             >
               <FormControl fullWidth size="small" sx={{ minWidth: { sm: 200, md: 220 } }}>
@@ -412,10 +406,7 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
             </Grid>
             {offices.length > 0 && (
               <Grid
-                item
-                xs={12}
-                sm={6}
-                md={2}
+                size={{ xs: 12, sm: 6, md: 2 }}
                 sx={{ minWidth: { xs: '100%', sm: 200, md: 220 } }}
               >
                 <FormControl fullWidth size="small" sx={{ minWidth: { sm: 200, md: 220 } }}>
@@ -434,10 +425,10 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
                 </FormControl>
               </Grid>
             )}
-            
+
             {/* Reminders Configuration */}
             {selectedDate && selectedTime && (
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <RemindersConfig
                   reminders={reminders}
                   onChange={setReminders}
@@ -469,10 +460,10 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
                 />
               </Grid>
             )}
-            
+
             {/* Agendar button when reminders are not shown */}
             {(!selectedDate || !selectedTime) && (
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <Box
                   sx={{
                     display: 'flex',
