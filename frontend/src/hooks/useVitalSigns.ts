@@ -2,7 +2,7 @@
 // VITAL SIGNS HOOK - Gestión de signos vitales
 // ============================================================================
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { VitalSign, ConsultationVitalSign, VitalSignFormData } from '../types';
 import { apiService } from '../services';
 import { logger } from '../utils/logger';
@@ -27,6 +27,7 @@ export interface UseVitalSignsReturn {
   availableVitalSigns: VitalSign[];
   consultationVitalSigns: ConsultationVitalSign[];
   temporaryVitalSigns: (VitalSignFormData & { id: number })[]; // For new consultations
+  allVitalSigns: ConsultationVitalSign[]; // Reactive combined list
   isLoading: boolean;
   error: string | null;
   vitalSignDialogOpen: boolean;
@@ -108,15 +109,18 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     }
   }, []);
 
-  // Load available vital signs when dialog opens (only once)
+  // Load available vital signs on initialization
   useEffect(() => {
-    if (vitalSignDialogOpen && availableVitalSigns.length === 0) {
+    if (availableVitalSigns.length === 0) {
       fetchAvailableVitalSigns();
     }
-  }, [vitalSignDialogOpen]); // Removed availableVitalSigns and fetchAvailableVitalSigns from dependencies
+  }, [fetchAvailableVitalSigns, availableVitalSigns.length]);
 
   // Fetch consultation vital signs
   const fetchConsultationVitalSigns = useCallback(async (consultationId: string) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useVitalSigns.ts:120',message:'fetchConsultationVitalSigns called',data:{consultationId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
     if (consultationId === 'temp_consultation') {
       return;
     }
@@ -127,7 +131,13 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     try {
       const response = await apiService.consultations.api.get(`/api/consultations/${consultationId}/vital-signs`);
       const vitalSignsData = response.data || response;
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useVitalSigns.ts:131',message:'Before setConsultationVitalSigns (fetch)',data:{vitalSignsCount:vitalSignsData?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
       setConsultationVitalSigns(vitalSignsData);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useVitalSigns.ts:132',message:'After setConsultationVitalSigns (fetch)',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
     } catch (err: any) {
       logger.error('Error fetching consultation vital signs', err, 'api');
       setError(err.message || 'Error fetching consultation vital signs');
@@ -161,6 +171,9 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
 
   // Create a new vital sign
   const createVitalSign = useCallback(async (consultationId: string, vitalSignData: VitalSignFormData): Promise<ConsultationVitalSign> => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useVitalSigns.ts:164',message:'createVitalSign called',data:{consultationId,vitalSignId:vitalSignData.vital_sign_id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,C'})}).catch(()=>{});
+    // #endregion
     try {
       // Validate consultation ID
       if (!consultationId || consultationId === "temp_consultation" || isNaN(Number(consultationId))) {
@@ -169,6 +182,9 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
 
       const response = await apiService.consultations.api.post(`/api/consultations/${consultationId}/vital-signs`, vitalSignData);
       const newVitalSign = response.data;
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useVitalSigns.ts:172',message:'createVitalSign response received',data:{newVitalSignId:newVitalSign?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,C'})}).catch(()=>{});
+      // #endregion
 
       // Track vital signs recorded
       try {
@@ -183,7 +199,18 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
       }
 
       // Add to local state
-      setConsultationVitalSigns(prev => [...prev, newVitalSign]);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useVitalSigns.ts:187',message:'Before setConsultationVitalSigns',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,C'})}).catch(()=>{});
+      // #endregion
+      setConsultationVitalSigns(prev => {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useVitalSigns.ts:189',message:'setConsultationVitalSigns callback',data:{prevLength:prev.length,newVitalSignId:newVitalSign?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,C'})}).catch(()=>{});
+        // #endregion
+        return [...prev, newVitalSign];
+      });
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useVitalSigns.ts:193',message:'After setConsultationVitalSigns',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,C'})}).catch(()=>{});
+      // #endregion
 
       return newVitalSign;
     } catch (err: any) {
@@ -422,11 +449,35 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
 
   // Direct add method for temporary vital signs (no dialog)
   const addTemporaryVitalSign = useCallback((vitalSignData: VitalSignFormData & { vital_sign_name: string }) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useVitalSigns.ts:451',message:'addTemporaryVitalSign called',data:{vitalSignId:vitalSignData.vital_sign_id,value:vitalSignData.value},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+    console.log('[useVitalSigns] addTemporaryVitalSign called', vitalSignData);
     const newTempVitalSign = {
       ...vitalSignData,
       id: Date.now() + Math.random()
     };
-    setTemporaryVitalSigns(prev => [...prev, newTempVitalSign]);
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useVitalSigns.ts:456',message:'Before setTemporaryVitalSigns',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+    setTemporaryVitalSigns(prev => {
+      // Remove any existing temporary vital sign with the same vital_sign_id to avoid duplicates
+      const filtered = prev.filter(vs => vs.vital_sign_id !== vitalSignData.vital_sign_id);
+      const updated = [...filtered, newTempVitalSign];
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useVitalSigns.ts:458',message:'setTemporaryVitalSigns callback',data:{prevLength:prev.length,filteredLength:filtered.length,updatedLength:updated.length,newVitalSignId:newTempVitalSign.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+      console.log('[useVitalSigns] setTemporaryVitalSigns updating', {
+        prevLength: prev.length,
+        filteredLength: filtered.length,
+        updatedLength: updated.length,
+        newVitalSign: newTempVitalSign
+      });
+      return updated;
+    });
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useVitalSigns.ts:461',message:'After setTemporaryVitalSigns',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
   }, []);
 
   // Clear temporary vital signs (for new consultations)
@@ -434,13 +485,30 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
     setTemporaryVitalSigns([]);
   }, []);
 
-  // Get all vital signs (both consultation and temporary)
-  const getAllVitalSigns = useCallback(() => {
+  // Get all vital signs (both consultation and temporary) - memoized for reactivity
+  const allVitalSigns = useMemo(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useVitalSigns.ts:456',message:'allVitalSigns recomputing',data:{consultationVitalSignsLength:consultationVitalSigns?.length,temporaryVitalSignsLength:temporaryVitalSigns?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+    console.log('[useVitalSigns] allVitalSigns recomputing', {
+      consultationVitalSigns: consultationVitalSigns?.length,
+      temporaryVitalSigns: temporaryVitalSigns?.length,
+      availableVitalSigns: availableVitalSigns?.length,
+      temporaryVitalSignsData: temporaryVitalSigns?.map(vs => ({ id: vs.id, vital_sign_id: vs.vital_sign_id, value: vs.value }))
+    });
+
     // Always return both consultation and temporary vital signs
-    const allVitalSigns = [...(consultationVitalSigns || [])];
+    // Create a completely new array to ensure React detects the change
+    const combined: ConsultationVitalSign[] = [];
+
+    // Add consultation vital signs
+    if (consultationVitalSigns && consultationVitalSigns.length > 0) {
+      combined.push(...consultationVitalSigns.map(vs => ({ ...vs })));
+    }
 
     // Add temporary vital signs if any
     if (temporaryVitalSigns && temporaryVitalSigns.length > 0) {
+      console.log('[useVitalSigns] Adding temporary vital signs:', temporaryVitalSigns);
       const tempVitalSigns = (temporaryVitalSigns || []).map((vs) => ({
         id: vs.id, // Use the actual ID from temporary vital sign
         consultation_id: 0,
@@ -451,17 +519,31 @@ export const useVitalSigns = (): UseVitalSignsReturn => {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }));
-      allVitalSigns.push(...tempVitalSigns);
+      combined.push(...tempVitalSigns);
     }
 
-    return allVitalSigns;
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useVitalSigns.ts:476',message:'allVitalSigns result',data:{combinedLength:combined.length,combinedData:combined.map(vs=>({id:vs.id,vital_sign_id:vs.vital_sign_id,value:vs.value}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+    console.log('[useVitalSigns] allVitalSigns result:', {
+      length: combined.length,
+      data: combined.map(vs => ({ id: vs.id, vital_sign_id: vs.vital_sign_id, value: vs.value }))
+    });
+    // Always return a new array reference
+    return [...combined];
   }, [consultationVitalSigns, temporaryVitalSigns, availableVitalSigns]);
+
+  // Keep the function for backwards compatibility
+  const getAllVitalSigns = useCallback(() => {
+    return allVitalSigns;
+  }, [allVitalSigns]);
 
   return {
     // State
     availableVitalSigns,
     consultationVitalSigns,
     temporaryVitalSigns,
+    allVitalSigns, // Reactive combined list
     isLoading,
     error,
     vitalSignDialogOpen,

@@ -95,14 +95,6 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [hasPreviousVitalSigns, setHasPreviousVitalSigns] = useState(false);
   const vitalSignsHook = useVitalSigns();
-  // Track vital signs changes to force re-render
-  const [vitalSignsUpdateCounter, setVitalSignsUpdateCounter] = React.useState(0);
-  
-  // Increment counter when vitalSigns change
-  React.useEffect(() => {
-    setVitalSignsUpdateCounter(prev => prev + 1);
-    console.log('[ConsultationSections] vitalSigns changed, counter:', vitalSignsUpdateCounter + 1, 'vitalSigns:', vitalSigns?.map(vs => ({ id: vs.id, vital_sign_id: vs.vital_sign_id, value: vs.value })));
-  }, [vitalSigns]);
   
   // Use ref to store fetchPatientVitalSignsHistory to break the dependency cycle
   // This prevents infinite re-renders caused by vitalSignsHook changing on every render
@@ -112,6 +104,7 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
   // Function to load vital signs history - CRITICAL: removed vitalSignsHook from deps to break cycle
   const loadVitalSignsHistory = React.useCallback(async () => {
     // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConsultationSections.tsx:100',message:'loadVitalSignsHistory called',data:{selectedPatientId,isEditing,consultationId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
     // #endregion
     
     if (!selectedPatientId) {
@@ -123,6 +116,7 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
     try {
       setLoadingHistory(true);
       // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConsultationSections.tsx:109',message:'Fetching vital signs history',data:{selectedPatientId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
       // #endregion
       // Use ref to access the latest fetch function without adding it to dependencies
       const history = await fetchHistoryRef.current(selectedPatientId);
@@ -133,6 +127,7 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
       );
       
       // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConsultationSections.tsx:118',message:'Vital signs history loaded',data:{hasHistory,vitalSignsHistoryCount:history?.vital_signs_history?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
       // #endregion
       
       setHasPreviousVitalSigns(hasHistory);
@@ -144,6 +139,7 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
         return;
       }
       // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConsultationSections.tsx:127',message:'Error loading vital signs history',data:{error:error?.message||'unknown'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
       // #endregion
       // Silently fail - don't show charts if we can't load
       setHasPreviousVitalSigns(false);
@@ -179,10 +175,12 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
   
   useEffect(() => {
     // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConsultationSections.tsx:154',message:'Vital signs refresh effect triggered',data:{selectedPatientId,hasPreviousVitalSigns,isEditing,consultationId,vitalSignsCount:vitalSigns.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
     // #endregion
     
     if (!selectedPatientId || !hasPreviousVitalSigns || !isEditing || !consultationId) {
       // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConsultationSections.tsx:158',message:'Vital signs refresh effect early return',data:{reason:'missing_conditions',selectedPatientId:!!selectedPatientId,hasPreviousVitalSigns,isEditing,hasConsultationId:!!consultationId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
       // #endregion
       return;
     }
@@ -193,6 +191,7 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
     // Only refresh if vital signs actually changed (not just reference change)
     if (prevVitalSignsRef.current === vitalSignsKey) {
       // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConsultationSections.tsx:166',message:'Vital signs unchanged, skipping refresh',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
       // #endregion
       return;
     }
@@ -200,11 +199,13 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
     prevVitalSignsRef.current = vitalSignsKey;
 
     // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConsultationSections.tsx:172',message:'Scheduling vital signs history refresh',data:{vitalSignsKey:vitalSignsKey.substring(0,100)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
     // #endregion
 
     // Debounce to avoid too many refreshes
     const timeoutId = setTimeout(() => {
       // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConsultationSections.tsx:176',message:'Executing loadVitalSignsHistory',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
       // #endregion
       loadVitalSignsHistory();
     }, 500); // Increased debounce to 500ms to avoid rapid successive calls
@@ -257,20 +258,7 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
       {/* Evolution Charts - Show inline if there are previous vital signs */}
       {hasPreviousVitalSigns && selectedPatientId && memoizedVitalSignsHistory && (
         <Box sx={{ mb: 3 }}>
-          {/* #region agent log */}
-          {(() => {
-            const evolutionKey = `vital-signs-evolution-${vitalSigns.map(vs => `${vs.id}:${vs.value}`).join('|')}`;
-            fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConsultationSections.tsx:252',message:'Rendering VitalSignsEvolutionView',data:{vitalSignsCount:vitalSigns?.length,vitalSignsIds:vitalSigns?.map(vs=>vs.id),evolutionKey},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-            console.log('[ConsultationSections] Rendering VitalSignsEvolutionView', {
-              vitalSignsCount: vitalSigns?.length,
-              vitalSigns: vitalSigns?.map(vs => ({ id: vs.id, vital_sign_id: vs.vital_sign_id, value: vs.value })),
-              evolutionKey
-            });
-            return null;
-          })()}
-          {/* #endregion */}
           <VitalSignsEvolutionView
-            key={`vital-signs-evolution-${vitalSigns.map(vs => `${vs.id}:${vs.value}`).join('|')}-${vitalSignsUpdateCounter}`} // Force re-render when vital signs change
             patientId={selectedPatientId}
             patientName=""
             onBack={undefined} // No back button needed - inline display

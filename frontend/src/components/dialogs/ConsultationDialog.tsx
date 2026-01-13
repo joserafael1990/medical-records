@@ -257,7 +257,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
               onAddStudy={async (studyData) => {
                 const consultationIdStr = formHook.isEditing && consultation?.id ? String(consultation.id) : null;
                 const patientId = formHook.selectedPatient?.id?.toString() || '';
-                const doctorName = doctorProfile?.full_name || doctorProfile?.name 
+                const doctorName = doctorProfile?.full_name || doctorProfile?.name
                   ? `${doctorProfile?.title || 'Dr.'} ${doctorProfile?.full_name || doctorProfile?.name}`.trim()
                   : 'Dr. Usuario';
 
@@ -300,7 +300,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   await previousStudiesHook.fetchPatientStudies(formHook.selectedPatient.id.toString());
                 }
               }}
-              doctorName={doctorProfile?.full_name || doctorProfile?.name 
+              doctorName={doctorProfile?.full_name || doctorProfile?.name
                 ? `${doctorProfile?.title || 'Dr.'} ${doctorProfile?.full_name || doctorProfile?.name}`.trim()
                 : 'Dr. Usuario'}
               consultationId={formHook.isEditing && consultation?.id ? String(consultation.id) : null}
@@ -332,10 +332,22 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             consultationId={formHook.currentConsultationId || consultation?.id || null}
             selectedPatientId={formHook.selectedPatient?.id || null}
             formDataPatientId={formHook.formData.patient_id}
-            vitalSigns={vitalSignsHook.getAllVitalSigns() || []}
+            vitalSigns={React.useMemo(() => {
+              const allVitalSigns = vitalSignsHook.allVitalSigns || [];
+              console.log('[ConsultationDialog] Passing vitalSigns to ConsultationSections', {
+                count: allVitalSigns.length,
+                vitalSigns: allVitalSigns.map(vs => ({ id: vs.id, vital_sign_id: vs.vital_sign_id, value: vs.value })),
+                allVitalSignsRef: allVitalSigns
+              });
+              // Always return a new array reference to ensure React detects changes
+              return [...allVitalSigns];
+            }, [vitalSignsHook.allVitalSigns])}
             availableVitalSigns={vitalSignsHook.availableVitalSigns || []}
             vitalSignsLoading={vitalSignsHook.isLoading}
             onAddVitalSign={async (vitalSignData) => {
+              // #region agent log
+              fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConsultationDialog.tsx:338',message:'onAddVitalSign called',data:{vitalSignId:vitalSignData.vital_sign_id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,C'})}).catch(()=>{});
+              // #endregion
               const resolvedId = formHook.currentConsultationId || consultation?.id;
               const consultationIdStr = resolvedId ? String(resolvedId) : TEMP_IDS.CONSULTATION;
 
@@ -348,8 +360,17 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   });
                 }
               } else {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConsultationDialog.tsx:351',message:'Before createVitalSign',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,C'})}).catch(()=>{});
+                // #endregion
                 await vitalSignsHook.createVitalSign(consultationIdStr, vitalSignData);
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConsultationDialog.tsx:352',message:'After createVitalSign, before fetchConsultationVitalSigns',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                // #endregion
                 await vitalSignsHook.fetchConsultationVitalSigns(consultationIdStr);
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConsultationDialog.tsx:353',message:'After fetchConsultationVitalSigns',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                // #endregion
               }
             }}
             onEditVitalSign={(vitalSign, vitalSignData) => {
@@ -405,7 +426,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 clinicalStudiesHook.downloadFile((study as any).file_url, (study as any).study_name || 'estudio');
               }
             }}
-            doctorName={doctorProfile?.full_name || doctorProfile?.name 
+            doctorName={doctorProfile?.full_name || doctorProfile?.name
               ? `${doctorProfile?.title || 'Dr.'} ${doctorProfile?.full_name || doctorProfile?.name}`.trim()
               : 'Dr. Usuario'}
             patientId={formHook.selectedPatient?.id || parseInt(formHook.formData.patient_id) || 0}

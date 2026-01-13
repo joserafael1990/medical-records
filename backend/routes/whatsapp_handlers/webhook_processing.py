@@ -212,12 +212,19 @@ async def process_webhook_event(request: Request, db: Session):
                     
                     if message_type == 'interactive':
                         interactive_data = message.get('interactive', {})
+                        
+                        # Handle both button_reply (from Quick Reply Buttons) and list_reply (from List Messages)
                         button_reply = interactive_data.get('button_reply', {})
-                        button_id = button_reply.get('id', '')
+                        list_reply = interactive_data.get('list_reply', {})
                         
-                        api_logger.info(f"📱 Interactive button pressed: {button_id}", extra={"button_id": button_id, "from_phone": from_phone})
+                        # Determine which type of reply we received
+                        reply_id = button_reply.get('id') or list_reply.get('id') or ''
+                        reply_title = button_reply.get('title') or list_reply.get('title') or ''
                         
-                        parts = button_id.split('_')
+                        api_logger.info(f"📱 Interactive reply received: id='{reply_id}', title='{reply_title}'", 
+                                       extra={"reply_id": reply_id, "reply_title": reply_title, "from_phone": from_phone})
+                        
+                        parts = reply_id.split('_') if reply_id else []
                         
                         if len(parts) >= 3 and parts[0] == 'accept' and parts[1] == 'privacy':
                             consent_id = int(parts[2])
@@ -233,14 +240,13 @@ async def process_webhook_event(request: Request, db: Session):
                             appointment_id = int(parts[2])
                             await confirm_appointment_via_whatsapp(appointment_id, from_phone, db)
                             processed_messages += 1
-                        else:
-                            # Generic interactive handler: pass the ID as if it was text input
-                            # This allows buttons like "id1", "id2" for doctor/office selection
-                            api_logger.info(f"🔄 Routing generic interactive ID to Gemini: {button_id}")
-                            # We'll let the 'else' block for text processing handle it by re-injecting
-                            # Or we can call the agent directly here. Let's redirect to agent call.
-                            await process_agent_interaction(button_id, from_phone, db)
+                        elif reply_id:
+                            # Generic interactive handler: pass the ID to the agent
+                            api_logger.info(f"🔄 Routing generic interactive ID to Gemini: {reply_id}")
+                            await process_agent_interaction(reply_id, from_phone, db)
                             processed_messages += 1
+                        else:
+                            api_logger.warning(f"⚠️ Interactive message received but no ID found: {interactive_data}")
                             
                     elif message_type == 'text':
                         text_body = message.get('text', {}).get('body', '').lower().strip()
@@ -387,6 +393,7 @@ async def parse_and_send_interactive_response(to_phone: str, text: str):
         text = re.sub(r'\[\[LOCATION:.*?\]\]', '', text, flags=re.IGNORECASE).strip()
 
     # 2. Check for LIST
+    # Extended format: [[LIST: Body | ButtonText | Title ~ Description : id | Title2 ~ Desc2 : id2 ...]]
     list_match = re.search(r'\[\[LIST:\s*(.*?)\s*\]\]', text, re.IGNORECASE)
     if list_match:
         parts = [p.strip() for p in list_match.group(1).split('|')]
@@ -398,8 +405,22 @@ async def parse_and_send_interactive_response(to_phone: str, text: str):
             rows = []
             for item in parts[2:]:
                 if ':' in item:
-                    title, row_id = item.split(':', 1)
-                    rows.append({"id": row_id.strip(), "title": title.strip()[:24]})
+                    # Split into title_part and row_id
+                    title_part, row_id = item.rsplit(':', 1)
+                    
+                    # Check for description separator (~)
+                    if '~' in title_part:
+                        title, description = title_part.split('~', 1)
+                        rows.append({
+                            "id": row_id.strip(), 
+                            "title": title.strip()[:24],
+                            "description": description.strip()[:72]
+                        })
+                    else:
+                        rows.append({
+                            "id": row_id.strip(), 
+                            "title": title_part.strip()[:24]
+                        })
             
             sections = [{"title": "Opciones", "rows": rows[:10]}]
             whatsapp_service.send_interactive_list(

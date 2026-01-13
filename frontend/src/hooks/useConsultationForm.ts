@@ -1350,17 +1350,14 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
       };
 
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useConsultationForm.ts:1352',message:'Calling onSubmit to create consultation',data:{patientId:finalPatientId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'N'})}).catch(()=>{});
       // #endregion
       const createdConsultation = await onSubmit(finalFormData);
 
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useConsultationForm.ts:1356',message:'Consultation created',data:{consultationId:createdConsultation?.id,hasCurrentConsultationId:!!currentConsultationId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'O'})}).catch(()=>{});
       // #endregion
 
       if (createdConsultation?.id) {
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useConsultationForm.ts:1360',message:'Setting currentConsultationId',data:{newConsultationId:createdConsultation.id,oldConsultationId:currentConsultationId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'P'})}).catch(()=>{});
         // #endregion
         setCurrentConsultationId(createdConsultation.id);
       }
