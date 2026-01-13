@@ -10,7 +10,7 @@ import vertexai
 from vertexai.generative_models import GenerativeModel, Tool, Part, Content
 from config import settings
 from logger import get_logger
-from .tools import get_all_tools, execute_tool, create_adk_tools
+from .tools import get_all_tools, execute_tool, create_adk_tools, get_all_tools_dict
 from .prompts import APPOINTMENT_AGENT_PROMPT
 from .state import AppointmentSessionState
 
