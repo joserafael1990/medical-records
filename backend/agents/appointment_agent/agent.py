@@ -53,7 +53,8 @@ class AppointmentAgent:
         """
         self.db = db
         self.session_state = AppointmentSessionState(db=db)
-        self.use_adk = use_adk and ADK_AVAILABLE
+        # FORCE FALLBACK: ADK is failing to use tools, so we force use of GenerativeModel
+        self.use_adk = False # use_adk and ADK_AVAILABLE
         
         # Check if sandbox mode is enabled (NO API calls, $0 cost)
         if settings.GEMINI_BOT_SANDBOX_MODE:

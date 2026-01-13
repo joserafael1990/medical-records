@@ -37,7 +37,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     .venv/bin/pip install --no-cache-dir -r requirements.txt
 
 # Force cache invalidation for source code
-ENV CACHE_DATE=2026-01-13-v1
+ENV CACHE_DATE=2026-01-13-v2
 
 COPY . ./
 
