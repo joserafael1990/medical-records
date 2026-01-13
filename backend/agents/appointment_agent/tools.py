@@ -356,26 +356,35 @@ def get_all_tools() -> List[Any]:
     from vertexai.generative_models import FunctionDeclaration
     
     return [
-        FunctionDeclaration(
-            name="get_active_doctors",
-            description="Get list of all active doctors with their specialties and office addresses. Use this when user wants to see available doctors or select a doctor.",
-            parameters={"type": "object", "properties": {}, "required": []}
-        ),
-        FunctionDeclaration(
-            name="get_doctor_offices",
-            description="Get list of active offices for a specific doctor. Each office includes name and physical address.",
-            parameters={
+        FunctionDeclaration(**tool) for tool in get_all_tools_dict()
+    ]
+
+
+def get_all_tools_dict() -> List[Dict[str, Any]]:
+    """
+    Get all tool declarations as plain dictionaries for cross-library compatibility.
+    """
+    return [
+        {
+            "name": "get_active_doctors",
+            "description": "Get list of all active doctors with their specialties and office addresses. Use this when user wants to see available doctors or select a doctor.",
+            "parameters": {"type": "object", "properties": {}, "required": []}
+        },
+        {
+            "name": "get_doctor_offices",
+            "description": "Get list of active offices for a specific doctor. Each office includes name and physical address.",
+            "parameters": {
                 "type": "object",
                 "properties": {
                     "doctor_id": {"type": "integer", "description": "The ID of the doctor"}
                 },
                 "required": ["doctor_id"]
             }
-        ),
-        FunctionDeclaration(
-            name="get_available_slots",
-            description="Get available appointment time slots for a doctor on a specific date. Use this when user wants to see available times or select a time.",
-            parameters={
+        },
+        {
+            "name": "get_available_slots",
+            "description": "Get available appointment time slots for a doctor on a specific date. Use this when user wants to see available times or select a time.",
+            "parameters": {
                 "type": "object",
                 "properties": {
                     "doctor_id": {"type": "integer", "description": "The ID of the doctor"},
@@ -384,22 +393,22 @@ def get_all_tools() -> List[Any]:
                 },
                 "required": ["doctor_id", "office_id", "date_str"]
             }
-        ),
-        FunctionDeclaration(
-            name="find_patient_by_phone",
-            description="Find patient(s) by their phone number. Returns a list of matching patients (since multiple people can share a phone). Use this to check if user is registered.",
-            parameters={
+        },
+        {
+            "name": "find_patient_by_phone",
+            "description": "Find patient(s) by their phone number. Returns a list of matching patients (since multiple people can share a phone). Use this to check if user is registered.",
+            "parameters": {
                 "type": "object",
                 "properties": {
                     "phone": {"type": "string", "description": "Phone number to search for"}
                 },
                 "required": ["phone"]
             }
-        ),
-        FunctionDeclaration(
-            name="create_patient_from_chat",
-            description="Create a new patient record. Use this when user is not registered. Ask for name and verify if they want to use their WhatsApp number or a new contact phone.",
-            parameters={
+        },
+        {
+            "name": "create_patient_from_chat",
+            "description": "Create a new patient record. Use this when user is not registered. Ask for name and verify if they want to use their WhatsApp number or a new contact phone.",
+            "parameters": {
                 "type": "object",
                 "properties": {
                     "name": {"type": "string", "description": "Patient's full name"},
@@ -409,11 +418,11 @@ def get_all_tools() -> List[Any]:
                 },
                 "required": ["name", "phone"]
             }
-        ),
-        FunctionDeclaration(
-            name="check_patient_has_previous_appointments",
-            description="Check if patient has previous COMPLETED appointments with a specific doctor. Use this to determine if appointment is 'Primera vez' or 'Seguimiento'. Only counts appointments with status='completed', not cancelled or pending.",
-            parameters={
+        },
+        {
+            "name": "check_patient_has_previous_appointments",
+            "description": "Check if patient has previous COMPLETED appointments with a specific doctor. Use this to determine if appointment is 'Primera vez' or 'Seguimiento'. Only counts appointments with status='completed', not cancelled or pending.",
+            "parameters": {
                 "type": "object",
                 "properties": {
                     "patient_id": {"type": "integer", "description": "The ID of the patient"},
@@ -421,11 +430,11 @@ def get_all_tools() -> List[Any]:
                 },
                 "required": ["patient_id", "doctor_id"]
             }
-        ),
-        FunctionDeclaration(
-            name="validate_appointment_slot",
-            description="Validate that an appointment slot is still available before creating. Use this as a double-check before creating the appointment.",
-            parameters={
+        },
+        {
+            "name": "validate_appointment_slot",
+            "description": "Validate that an appointment slot is still available before creating. Use this as a double-check before creating the appointment.",
+            "parameters": {
                 "type": "object",
                 "properties": {
                     "doctor_id": {"type": "integer", "description": "The ID of the doctor"},
@@ -435,29 +444,29 @@ def get_all_tools() -> List[Any]:
                 },
                 "required": ["doctor_id", "office_id", "date_str", "time_str"]
             }
-        ),
-        FunctionDeclaration(
-            name="get_appointment_types",
-            description="Get list of appointment types (Presencial, En línea). Use this to show options to user.",
-            parameters={"type": "object", "properties": {}, "required": []}
-        ),
-        FunctionDeclaration(
-            name="create_appointment_from_chat",
-            description="Create a new appointment. Use this ONLY after all information is collected and user has confirmed. Always validate the slot first using validate_appointment_slot.",
-            parameters={
+        },
+        {
+            "name": "get_appointment_types",
+            "description": "Get list of appointment types (Presencial, En línea). Use this to show options to user.",
+            "parameters": {"type": "object", "properties": {}, "required": []}
+        },
+        {
+            "name": "create_appointment_from_chat",
+            "description": "Finalize and create the appointment in the database. Call this ONLY after having all required information (patient, doctor, office, date, time, type).",
+            "parameters": {
                 "type": "object",
                 "properties": {
                     "patient_id": {"type": "integer", "description": "The ID of the patient"},
                     "doctor_id": {"type": "integer", "description": "The ID of the doctor"},
                     "office_id": {"type": "integer", "description": "The ID of the office"},
                     "date_str": {"type": "string", "description": "Date in format YYYY-MM-DD"},
-                    "time_str": {"type": "string", "description": "Time in format HH:MM (24-hour format, e.g., '14:30')"},
-                    "consultation_type": {"type": "string", "description": "Type of consultation: 'Primera vez' or 'Seguimiento'"},
-                    "appointment_type_id": {"type": "integer", "description": "Appointment type ID (1 for Presencial, 2 for En línea, etc.)"}
+                    "time_str": {"type": "string", "description": "Time in format HH:MM"},
+                    "consultation_type": {"type": "string", "description": "Presencial or En línea"},
+                    "appointment_type_id": {"type": "integer", "description": "ID of the appointment type"}
                 },
                 "required": ["patient_id", "doctor_id", "office_id", "date_str", "time_str", "consultation_type", "appointment_type_id"]
             }
-        )
+        }
     ]
 
 
@@ -468,60 +477,11 @@ def execute_tool(db: Session, function_name: str, args: Dict[str, Any]) -> Any:
     This is used for backward compatibility with GenerativeModel.
     """
     try:
-        # #region agent log
-        import json
-        from datetime import datetime
-        log_data = {
-            "location": "tools.py:471",
-            "message": "execute_tool called",
-            "data": {"function_name": function_name, "args": args},
-            "timestamp": int(datetime.now().timestamp() * 1000),
-            "sessionId": "debug-session",
-            "runId": "production-debug",
-            "hypothesisId": "C"
-        }
-        log_file = "/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log"
-        try:
-            with open(log_file, 'a') as f:
-                f.write(json.dumps(log_data) + '\n')
-        except:
-            pass
-        # #endregion
+        api_logger.info(f"Executing tool: {function_name}", extra={"args": args})
         
         if function_name == "get_active_doctors":
-            # #region agent log
-            log_data = {
-                "location": "tools.py:482",
-                "message": "execute_tool - calling get_active_doctors",
-                "data": {},
-                "timestamp": int(datetime.now().timestamp() * 1000),
-                "sessionId": "debug-session",
-                "runId": "production-debug",
-                "hypothesisId": "C"
-            }
-            try:
-                with open(log_file, 'a') as f:
-                    f.write(json.dumps(log_data) + '\n')
-            except:
-                pass
-            # #endregion
             result = gemini_helpers.get_active_doctors(db)
-            # #region agent log
-            log_data = {
-                "location": "tools.py:496",
-                "message": "execute_tool - get_active_doctors returned",
-                "data": {"result_count": len(result) if result else 0, "result": result},
-                "timestamp": int(datetime.now().timestamp() * 1000),
-                "sessionId": "debug-session",
-                "runId": "production-debug",
-                "hypothesisId": "C,E"
-            }
-            try:
-                with open(log_file, 'a') as f:
-                    f.write(json.dumps(log_data) + '\n')
-            except:
-                pass
-            # #endregion
+            api_logger.info(f"Tool {function_name} returned {len(result) if result else 0} results")
             return result
         
         elif function_name == "get_doctor_offices":

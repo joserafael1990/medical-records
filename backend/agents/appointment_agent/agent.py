@@ -131,98 +131,42 @@ class AppointmentAgent:
     
     def _init_generative_model(self):
         """Initialize agent using GenerativeModel (fallback)."""
-        # Create tools (FunctionDeclaration for GenerativeModel)
-        function_declarations = get_all_tools()
-        tools = [Tool(function_declarations=function_declarations)] if function_declarations else []
+        # Create tools from dictionary for compatibility
+        tool_dicts = get_all_tools_dict()
         
-        # #region agent log
-        import json
-        log_data = {
-            "location": "agent.py:136",
-            "message": "Initializing GenerativeModel with tools",
-            "data": {
-                "model_name": settings.GEMINI_MODEL,
-                "tools_count": len(function_declarations) if function_declarations else 0,
-                "tools_passed": tools is not None and len(tools) > 0
-            },
-            "timestamp": int(datetime.now().timestamp() * 1000),
-            "sessionId": "debug-session",
-            "runId": "production-debug",
-            "hypothesisId": "C"
-        }
-        log_file = "/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log"
-        try:
-            with open(log_file, 'a') as f:
-                f.write(json.dumps(log_data) + '\n')
-        except:
-            pass
-        # #endregion
+        # Vertex AI configuration
+        vertex_tools = [Tool(function_declarations=[FunctionDeclaration(**t) for t in tool_dicts])] if tool_dicts else []
         
-        # Try to initialize Vertex AI model first, but don't fail if it doesn't work
-        # We'll test it when we actually use it
+        api_logger.info("Initializing GenerativeModel with tools", extra={"model_name": settings.GEMINI_MODEL, "tools_count": len(tool_dicts)})
+        
         try:
             self.model = GenerativeModel(
                 model_name=settings.GEMINI_MODEL,
                 system_instruction=APPOINTMENT_AGENT_PROMPT,
-                tools=tools if tools else None
+                tools=vertex_tools if vertex_tools else None
             )
             self.use_direct_api = False
-            self.vertex_ai_available = True
-            api_logger.info("Vertex AI GenerativeModel initialized (will test on first use)")
-            
-            # #region agent log
-            log_data = {
-                "location": "agent.py:149",
-                "message": "GenerativeModel initialized successfully",
-                "data": {
-                    "model_name": settings.GEMINI_MODEL,
-                    "tools_count": len(function_declarations) if function_declarations else 0,
-                    "has_tools": tools is not None and len(tools) > 0
-                },
-                "timestamp": int(datetime.now().timestamp() * 1000),
-                "sessionId": "debug-session",
-                "runId": "production-debug",
-                "hypothesisId": "C"
-            }
-            try:
-                with open(log_file, 'a') as f:
-                    f.write(json.dumps(log_data) + '\n')
-            except:
-                pass
-            # #endregion
+            api_logger.info("Vertex AI GenerativeModel initialized successfully")
         except Exception as e:
-            api_logger.warning(f"Vertex AI model initialization failed: {e}. Will use direct Generative AI API as fallback.")
-            self.vertex_ai_available = False
+            api_logger.warning(f"Vertex AI initialization failed ({e}), falling back to direct API")
+            self.use_direct_api = True
             
-            # Initialize direct Generative AI API as fallback
+            # Initialize direct API
             if GENERATIVE_AI_AVAILABLE:
                 try:
-                    # Configure direct API - use Application Default Credentials
-                    # The API will use GOOGLE_APPLICATION_CREDENTIALS automatically
+                    import google.generativeai as genai
                     genai.configure()
-                    # Map Vertex AI model names to Generative AI model names
-                    model_map = {
-                        "gemini-2.0-flash": "gemini-2.0-flash",
-                        "gemini-2.5-flash": "gemini-2.5-flash",
-                        "gemini-1.5-flash": "gemini-1.5-flash",
-                        "gemini-1.5-pro": "gemini-1.5-pro",
-                        "gemini-pro": "gemini-pro",
-                    }
-                    direct_model_name = model_map.get(settings.GEMINI_MODEL, "gemini-2.0-flash")
                     
+                    # Use plain dictionaries for direct API tools
                     self.model = genai.GenerativeModel(
-                        model_name=direct_model_name,
-                        system_instruction=APPOINTMENT_AGENT_PROMPT
+                        model_name=settings.GEMINI_MODEL.replace("gemini-1.5-", "gemini-1.5-"), # Simple mapping
+                        system_instruction=APPOINTMENT_AGENT_PROMPT,
+                        tools=tool_dicts
                     )
-                    self.use_direct_api = True
-                    api_logger.info(f"Using direct Generative AI API with model: {direct_model_name}")
+                    api_logger.info(f"Direct Generative AI API initialized with tools ({len(tool_dicts)})")
                 except Exception as e2:
-                    api_logger.error(f"Direct Generative AI API also failed: {e2}", exc_info=True)
-                    # Store the error but don't raise - we'll try again on first use
-                    self.direct_api_error = e2
-            else:
-                api_logger.error("Direct Generative AI API not available")
-                raise
+                    api_logger.error(f"Direct API also failed: {e2}")
+                    raise e2
     
     def _detect_simple_command(self, message: str) -> Optional[str]:
         """
@@ -501,24 +445,6 @@ Comandos disponibles:
     
     async def _process_message_generative_model(self, phone_number: str, message_text: str) -> str:
         """Process message using GenerativeModel (fallback)."""
-        # #region agent log
-        import json
-        log_data = {
-            "location": "agent.py:437",
-            "message": "_process_message_generative_model called",
-            "data": {"phone": phone_number, "message": message_text[:100]},
-            "timestamp": int(datetime.now().timestamp() * 1000),
-            "sessionId": "debug-session",
-            "runId": "production-debug",
-            "hypothesisId": "C"
-        }
-        log_file = "/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log"
-        try:
-            with open(log_file, 'a') as f:
-                f.write(json.dumps(log_data) + '\n')
-        except:
-            pass
-        # #endregion
         
         # Get conversation history
         history_dicts = self.session_state.get_history(phone_number)
@@ -548,27 +474,6 @@ Comandos disponibles:
                 response_validation=False
             )
             
-            # #region agent log
-            log_data = {
-                "location": "agent.py:481",
-                "message": "Sending message to GenerativeModel",
-                "data": {
-                    "phone": phone_number,
-                    "message_text": message_text[:100],
-                    "history_length": len(history),
-                    "model_has_tools": hasattr(self.model, 'tools') or (hasattr(self.model, '_tools') if hasattr(self.model, '_tools') else False)
-                },
-                "timestamp": int(datetime.now().timestamp() * 1000),
-                "sessionId": "debug-session",
-                "runId": "production-debug",
-                "hypothesisId": "C"
-            }
-            try:
-                with open(log_file, 'a') as f:
-                    f.write(json.dumps(log_data) + '\n')
-            except:
-                pass
-            # #endregion
             
             # Generate response (handle empty responses)
             response = None
@@ -594,55 +499,6 @@ Comandos disponibles:
                 # Return default response
                 return "Lo siento, no pude procesar tu mensaje. Por favor, intenta de nuevo."
             
-            # #region agent log
-            # Safely extract text from response (handle multi-part responses)
-            response_preview = None
-            has_candidates = False
-            parts_count = 0
-            parts_types = []
-            
-            if response:
-                try:
-                    response_preview = response.text[:200] if hasattr(response, 'text') and response.text else None
-                except ValueError:
-                    # Multi-part response - extract text parts manually (check candidates exist first)
-                    if (hasattr(response, 'candidates') and 
-                        response.candidates and 
-                        len(response.candidates) > 0 and
-                        hasattr(response.candidates[0], 'content') and
-                        hasattr(response.candidates[0].content, 'parts')):
-                        text_parts = [p.text for p in response.candidates[0].content.parts if hasattr(p, 'text') and p.text]
-                        if text_parts:
-                            response_preview = text_parts[0][:200]
-                
-                # Safe access to candidates for logging
-                if hasattr(response, 'candidates') and response.candidates and len(response.candidates) > 0:
-                    has_candidates = True
-                    if hasattr(response.candidates[0], 'content') and hasattr(response.candidates[0].content, 'parts'):
-                        parts_count = len(response.candidates[0].content.parts)
-                        parts_types = [type(p).__name__ for p in response.candidates[0].content.parts]
-            
-            log_data = {
-                "location": "agent.py:485",
-                "message": "Response received from GenerativeModel",
-                "data": {
-                    "phone": phone_number,
-                    "response_text": response_preview,
-                    "has_candidates": has_candidates,
-                    "parts_count": parts_count,
-                    "parts_types": parts_types
-                },
-                "timestamp": int(datetime.now().timestamp() * 1000),
-                "sessionId": "debug-session",
-                "runId": "production-debug",
-                "hypothesisId": "C"
-            }
-            try:
-                with open(log_file, 'a') as f:
-                    f.write(json.dumps(log_data) + '\n')
-            except:
-                pass
-            # #endregion
         except Exception as e:
             # Vertex AI failed, try direct API as fallback
             api_logger.warning(f"Vertex AI failed: {e}. Falling back to direct Generative AI API...")
@@ -699,44 +555,10 @@ Comandos disponibles:
                         extra={"args": function_args, "phone": phone_number}
                     )
                     
-                    # #region agent log
-                    import json
-                    log_data = {
-                        "location": "agent.py:509",
-                        "message": "Function call detected by GenerativeModel",
-                        "data": {"function_name": function_name, "function_args": function_args, "phone": phone_number},
-                        "timestamp": int(datetime.now().timestamp() * 1000),
-                        "sessionId": "debug-session",
-                        "runId": "production-debug",
-                        "hypothesisId": "C"
-                    }
-                    log_file = "/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log"
-                    try:
-                        with open(log_file, 'a') as f:
-                            f.write(json.dumps(log_data) + '\n')
-                    except:
-                        pass
-                    # #endregion
                     
                     # Execute function
                     function_result = execute_tool(self.db, function_name, function_args)
                     
-                    # #region agent log
-                    log_data = {
-                        "location": "agent.py:527",
-                        "message": "Function executed - result received",
-                        "data": {"function_name": function_name, "result_type": type(function_result).__name__, "result_preview": str(function_result)[:200] if function_result else None},
-                        "timestamp": int(datetime.now().timestamp() * 1000),
-                        "sessionId": "debug-session",
-                        "runId": "production-debug",
-                        "hypothesisId": "C,E"
-                    }
-                    try:
-                        with open(log_file, 'a') as f:
-                            f.write(json.dumps(log_data) + '\n')
-                    except:
-                        pass
-                    # #endregion
                     
                     # Add function result to conversation
                     function_response_part = Part.from_function_response(
@@ -789,23 +611,6 @@ Comandos disponibles:
                     if follow_up_text:
                         final_response_text = follow_up_text
                         
-                        # #region agent log
-                        log_data = {
-                            "location": "agent.py:523",
-                            "message": "Final response generated after function call",
-                            "data": {"function_name": function_name, "response_text": final_response_text[:500]},
-                            "timestamp": int(datetime.now().timestamp() * 1000),
-                            "sessionId": "debug-session",
-                            "runId": "production-debug",
-                            "hypothesisId": "E"
-                        }
-                        log_file = "/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log"
-                        try:
-                            with open(log_file, 'a') as f:
-                                f.write(json.dumps(log_data) + '\n')
-                        except:
-                            pass
-                        # #endregion
                     else:
                         # No follow-up text - try to use original response text or generate default
                         # Extract text from original response if available (check response exists first)
@@ -855,23 +660,6 @@ Comandos disponibles:
             
             if not function_calls_processed and simple_text:
                 final_response_text = simple_text
-                # #region agent log
-                log_data = {
-                    "location": "agent.py:545",
-                    "message": "Using direct text response (no function calls)",
-                    "data": {"response_text": final_response_text[:500]},
-                    "timestamp": int(datetime.now().timestamp() * 1000),
-                    "sessionId": "debug-session",
-                    "runId": "production-debug",
-                    "hypothesisId": "C"
-                }
-                log_file = "/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log"
-                try:
-                    with open(log_file, 'a') as f:
-                        f.write(json.dumps(log_data) + '\n')
-                except:
-                    pass
-                # #endregion
             
             # Ensure final_response_text is set before updating history
             if not final_response_text or not final_response_text.strip():
@@ -882,22 +670,6 @@ Comandos disponibles:
             updated_history_dicts.append({"role": "model", "parts": [final_response_text]})
             self.session_state.update_history(phone_number, updated_history_dicts)
             
-            # #region agent log
-            log_data = {
-                "location": "agent.py:561",
-                "message": "Returning final response to user",
-                "data": {"phone": phone_number, "final_response": final_response_text[:500]},
-                "timestamp": int(datetime.now().timestamp() * 1000),
-                "sessionId": "debug-session",
-                "runId": "production-debug",
-                "hypothesisId": "E"
-            }
-            try:
-                with open(log_file, 'a') as f:
-                    f.write(json.dumps(log_data) + '\n')
-            except:
-                pass
-            # #endregion
             
             return final_response_text
         
@@ -946,61 +718,45 @@ Comandos disponibles:
                         chat_history.append({"role": role, "parts": [content]})
             
             # Start or continue chat
-            # Use response_validation=False to allow blocked/incomplete responses to be added to history
             if hasattr(self, '_direct_chat') and self._direct_chat:
                 chat = self._direct_chat
             else:
                 chat = self.model.start_chat(
-                    history=chat_history if chat_history else None,
-                    response_validation=False
+                    history=chat_history if chat_history else None
                 )
                 self._direct_chat = chat
             
-            # Send message (handle empty responses)
-            response = None
-            response_text = None
-            try:
-                response = chat.send_message(message_text)
-            except (IndexError, AttributeError) as e:
-                # Response was blocked/empty
-                log_file = "/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log"
-                try:
-                    log_data = {
-                        "location": "agent.py:891",
-                        "message": "Empty response from send_message (fallback)",
-                        "data": {"error": str(e), "message_text": message_text[:100]},
-                        "timestamp": int(datetime.now().timestamp() * 1000),
-                        "sessionId": "debug-session",
-                        "runId": "production-debug",
-                        "hypothesisId": "F"
-                    }
-                    with open(log_file, 'a') as f:
-                        f.write(json.dumps(log_data) + '\n')
-                except:
-                    pass
-                # Return default response
-                response_text = "Lo siento, no pude procesar tu mensaje. Por favor, intenta de nuevo."
+            # Send message and handle potential function calls
+            response = chat.send_message(message_text)
             
-            # Extract response text (handle multi-part responses safely)
-            if response:
-                if hasattr(response, 'text'):
-                    try:
-                        response_text = response.text
-                    except ValueError:
-                        # Multi-part response - extract text parts manually (check candidates exist first)
-                        if (hasattr(response, 'candidates') and 
-                            response.candidates and 
-                            len(response.candidates) > 0 and
-                            hasattr(response.candidates[0], 'content') and
-                            hasattr(response.candidates[0].content, 'parts')):
-                            text_parts = [p.text for p in response.candidates[0].content.parts if hasattr(p, 'text') and p.text]
-                            if text_parts:
-                                response_text = " ".join(text_parts)
-            
-            if response_text is None and response:
-                response_text = str(response)
-            elif response_text is None:
-                response_text = "Lo siento, no pude procesar tu mensaje. Por favor, intenta de nuevo."
+            # Handle function calls if any
+            # The direct API handles this via a loop similar to Vertex AI
+            max_turns = 5
+            for _ in range(max_turns):
+                if not response.candidates or not response.candidates[0].content.parts:
+                    break
+                    
+                function_calls = [p.function_call for p in response.candidates[0].content.parts if p.function_call]
+                if not function_calls:
+                    break
+                    
+                responses = []
+                for fc in function_calls:
+                    api_logger.info(f"Direct API calling tool: {fc.name}", extra={"args": dict(fc.args)})
+                    from .tools import execute_tool
+                    result = execute_tool(self.db, fc.name, dict(fc.args))
+                    responses.append(
+                        genai.protos.Part(
+                            function_response=genai.protos.FunctionResponse(
+                                name=fc.name,
+                                response={'result': result}
+                            )
+                        )
+                    )
+                
+                response = chat.send_message(responses)
+                
+            response_text = response.text if hasattr(response, 'text') else str(response)
             
             # Update conversation history
             updated_history_dicts = [{"role": "user", "parts": [message_text]}]
@@ -1008,7 +764,7 @@ Comandos disponibles:
             self.session_state.update_history(phone_number, updated_history_dicts)
             
             return response_text
-            
+                
         except Exception as e:
             api_logger.error(f"Error in direct API: {e}", exc_info=True)
             raise
