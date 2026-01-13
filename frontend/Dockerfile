@@ -29,7 +29,12 @@ COPY . .
 
 # Build the React app (TypeScript)
 RUN rm -rf src/__mocks__ src/**/*.test.tsx src/**/*.test.ts && \
-    DISABLE_ESLINT_PLUGIN=true GENERATE_SOURCEMAP=false TSC_COMPILE_ON_ERROR=true npm run build
+    DISABLE_ESLINT_PLUGIN=true GENERATE_SOURCEMAP=false npm run build && \
+    if [ ! -f "build/index.html" ]; then \
+    echo "ERROR: build/index.html not found after npm run build!" && \
+    ls -la build && \
+    exit 1; \
+    fi
 
 # ----------- Production Stage -----------
 FROM node:${NODE_VERSION}-slim AS final

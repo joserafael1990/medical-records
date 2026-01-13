@@ -11,6 +11,10 @@ steps:
       - '-t'
       - 'us-central1-docker.pkg.dev/${PROJECT_ID}/cortex-repo/frontend:latest'
       - '.'
+      - '--build-arg'
+      - 'REACT_APP_API_URL=https://cortex-backend-246017659362.us-central1.run.app'
+      - '--build-arg'
+      - 'NODE_ENV=production'
     dir: 'frontend'
 
   # Step 2: Push the image to Artifact Registry

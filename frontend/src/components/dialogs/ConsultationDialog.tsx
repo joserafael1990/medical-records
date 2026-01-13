@@ -345,9 +345,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             availableVitalSigns={vitalSignsHook.availableVitalSigns || []}
             vitalSignsLoading={vitalSignsHook.isLoading}
             onAddVitalSign={async (vitalSignData) => {
-              // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConsultationDialog.tsx:338',message:'onAddVitalSign called',data:{vitalSignId:vitalSignData.vital_sign_id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,C'})}).catch(()=>{});
-              // #endregion
               const resolvedId = formHook.currentConsultationId || consultation?.id;
               const consultationIdStr = resolvedId ? String(resolvedId) : TEMP_IDS.CONSULTATION;
 
@@ -360,17 +357,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                   });
                 }
               } else {
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConsultationDialog.tsx:351',message:'Before createVitalSign',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,C'})}).catch(()=>{});
-                // #endregion
                 await vitalSignsHook.createVitalSign(consultationIdStr, vitalSignData);
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConsultationDialog.tsx:352',message:'After createVitalSign, before fetchConsultationVitalSigns',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-                // #endregion
-                await vitalSignsHook.fetchConsultationVitalSigns(consultationIdStr);
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConsultationDialog.tsx:353',message:'After fetchConsultationVitalSigns',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-                // #endregion
               }
             }}
             onEditVitalSign={(vitalSign, vitalSignData) => {

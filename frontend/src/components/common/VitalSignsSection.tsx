@@ -158,9 +158,6 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
   };
 
   const handleSaveNewVitalSign = (vitalSignId: number) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VitalSignsSection.tsx:160',message:'handleSaveNewVitalSign called',data:{vitalSignId,value:vitalSignValues[vitalSignId]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
     console.log('[VitalSignsSection] handleSaveNewVitalSign called', { vitalSignId, value: vitalSignValues[vitalSignId] });
     const value = vitalSignValues[vitalSignId];
     if (value && value.trim()) {
@@ -171,9 +168,6 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
         // Mark as saved immediately to prevent visual change
         setSavedVitalSigns(prev => new Set([...prev, vitalSignId]));
         
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VitalSignsSection.tsx:171',message:'Calling onAddVitalSign',data:{vitalSignId,value:value.trim(),unit:autoUnit},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-        // #endregion
         console.log('[VitalSignsSection] Calling onAddVitalSign', { vitalSignId, value: value.trim(), unit: autoUnit });
         // Call the parent callback to save
         onAddVitalSign({

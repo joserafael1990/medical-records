@@ -40,7 +40,9 @@ const NoAnimationChart: React.FC<{
   vitalSign: PatientVitalSignsHistory['vital_signs_history'][0];
   chartData: Array<{ date: string; value: number; fullDate: string | null }>;
   unit: string | null;
-}> = ({ vitalSign, chartData, unit }) => {
+  displayHistoryVersion?: number; // Added prop
+  currentVitalSignsVersion?: number; // Added prop
+}> = ({ vitalSign, chartData, unit, displayHistoryVersion = 0, currentVitalSignsVersion = 0 }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
 
   // Track if animations have been disabled to avoid repeated work
@@ -49,14 +51,14 @@ const NoAnimationChart: React.FC<{
 
   // Track data changes to force re-render
   const [dataVersion, setDataVersion] = React.useState(0);
-  const prevChartDataRef = React.useRef<string>('');
+  const prevChartDataRef2 = React.useRef<string>('');
 
   useEffect(() => {
     // Reset animation disabled flag when chartData actually changes
     const chartDataKey = JSON.stringify(chartData.map(d => ({ date: d.date, value: d.value })));
-    if (chartDataKey !== prevChartDataRef.current) {
+    if (chartDataKey !== prevChartDataRef2.current) {
       animationsDisabledRef.current = false;
-      prevChartDataRef.current = chartDataKey;
+      prevChartDataRef2.current = chartDataKey;
       setDataVersion(prev => prev + 1);
       console.log('[NoAnimationChart] ⚠️ Chart data changed, resetting animation flag and incrementing version', {
         vitalSignId: vitalSign.vital_sign_id,
@@ -69,8 +71,6 @@ const NoAnimationChart: React.FC<{
 
     if (!containerRef.current) return;
 
-    // #region agent log
-    // #endregion
 
     let throttledTimeout: NodeJS.Timeout | null = null;
 
@@ -103,8 +103,6 @@ const NoAnimationChart: React.FC<{
         // Mark as processed
         pathEl.dataset.animationDisabled = 'true';
 
-        // #region agent log
-        // #endregion
       });
 
       // Remove all animate elements (only once per render cycle)
@@ -151,10 +149,10 @@ const NoAnimationChart: React.FC<{
       observer.disconnect();
       animationsDisabledRef.current = false; // Reset on cleanup
     };
-  }, [chartData.length, vitalSign.vital_sign_id, JSON.stringify(chartData.map(d => ({ date: d.date, value: d.value })))]); // Depend on data content to detect changes
+  }, [chartData.length, vitalSign.vital_sign_id, JSON.stringify(chartData.map(d => ({ date: d.date, value: d.value }))), dataVersion, displayHistoryVersion, currentVitalSignsVersion]); // Depend on data content and version to detect changes
 
   return (
-    <div ref={containerRef} key={`chart-container-${vitalSign.vital_sign_id}-${dataVersion}`} style={{ width: '100%', height: '100%' }}>
+    <div ref={containerRef} key={`chart-container-${vitalSign.vital_sign_id}-${dataVersion}-v${displayHistoryVersion}-cv${currentVitalSignsVersion}`} style={{ width: '100%', height: '100%' }}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
           key={`chart-${vitalSign.vital_sign_id}-${chartData.length}-${chartData[chartData.length - 1]?.value || ''}-${chartData[chartData.length - 1]?.date || ''}-v${displayHistoryVersion}-cv${currentVitalSignsVersion}-dv${dataVersion}`}
@@ -244,9 +242,6 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
       });
     }
     
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VitalSignsEvolutionView.tsx:200',message:'currentVitalSigns changed',data:{currentVitalSignsCount:currentVitalSigns?.length,currentVitalSignsIds:currentVitalSigns?.map(vs=>vs.id),version:currentVitalSignsVersion},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D,E'})}).catch(()=>{});
-    // #endregion
   }, [currentVitalSigns]);
 
   // Create a stable key from currentVitalSigns to ensure mergedHistory recomputes when content changes
@@ -263,18 +258,12 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
     }, {} as Record<number, typeof currentVitalSigns[0]>);
     const latestVitalSigns = Object.values(latestVitalSignsByType);
     const key = latestVitalSigns.map(vs => `${vs.vital_sign_id}:${vs.value}:${vs.id}`).join('|');
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VitalSignsEvolutionView.tsx:210',message:'currentVitalSignsKey computed',data:{key,currentVitalSignsCount:currentVitalSigns.length,latestVitalSignsCount:latestVitalSigns.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
     console.log('[VitalSignsEvolutionView] currentVitalSignsKey:', key, 'from', currentVitalSigns, 'filtered to', latestVitalSigns);
     return key;
   }, [currentVitalSigns]);
 
   // Merge current vital signs with historical data
   const mergedHistory = React.useMemo(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VitalSignsEvolutionView.tsx:205',message:'mergedHistory recomputing',data:{hasHistory:!!history,currentVitalSignsCount:currentVitalSigns?.length,currentVitalSignsKey},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D,E'})}).catch(()=>{});
-    // #endregion
     console.log('[VitalSignsEvolutionView] mergedHistory recomputing', {
       hasHistory: !!history,
       currentVitalSignsCount: currentVitalSigns?.length,
@@ -338,18 +327,12 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
         consultation_id: 0 // 0 indicates this is a temporary/current vital sign not yet saved
       };
 
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VitalSignsEvolutionView.tsx:260',message:'Merging vital sign data point',data:{vitalSignId:vsHistory.vital_sign_id,existingTodayIndex,currentValue,newDataPointDate:newDataPoint.date},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-      // #endregion
 
       if (existingTodayIndex >= 0) {
         // Update existing today's point - create completely new array with new object
         const newData = vsHistory.data.map((item, index) => 
           index === existingTodayIndex ? { ...newDataPoint } : { ...item }
         );
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VitalSignsEvolutionView.tsx:270',message:'Updating existing today point',data:{vitalSignId:vsHistory.vital_sign_id,newDataLength:newData.length,oldValue:vsHistory.data[existingTodayIndex]?.value,newValue:newDataPoint.value},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-        // #endregion
         const oldValue = vsHistory.data[existingTodayIndex]?.value;
         console.log('[VitalSignsEvolutionView] ⚠️ UPDATING EXISTING TODAY POINT', {
           vitalSignId: vsHistory.vital_sign_id,
@@ -370,9 +353,6 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
         };
       } else {
         // Add new point for today
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VitalSignsEvolutionView.tsx:278',message:'Adding new today point',data:{vitalSignId:vsHistory.vital_sign_id,oldDataLength:vsHistory.data?.length,newDataLength:(vsHistory.data?.length || 0) + 1},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-        // #endregion
         return {
           ...vsHistory,
           data: [...(vsHistory.data || []), newDataPoint]
@@ -407,9 +387,6 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
       mergedVitalSignsHistory.push(...newVitalSignHistories);
     }
 
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VitalSignsEvolutionView.tsx:316',message:'mergedHistory result computed',data:{mergedHistoryLength:mergedVitalSignsHistory.length,newVitalSignTypesAdded:newVitalSignTypes.length,currentVitalSignsVersion},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
     console.log('[VitalSignsEvolutionView] mergedHistory computed', {
       mergedHistoryLength: mergedVitalSignsHistory.length,
       newVitalSignTypesAdded: newVitalSignTypes.length,
@@ -438,8 +415,6 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
   const prevPatientIdRef = React.useRef<number | null>(null);
 
   useEffect(() => {
-    // #region agent log
-    // #endregion
 
     // If initialHistory is provided, use it (but only if it actually changed)
     if (initialHistory) {
@@ -452,15 +427,11 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
 
       // Only update if initialHistory content actually changed (deep comparison)
       if (prevInitialHistorySerializedRef.current !== initialHistorySerialized) {
-        // #region agent log
-        // #endregion
         prevInitialHistorySerializedRef.current = initialHistorySerialized;
         setHistory(initialHistory);
         setLoading(false);
         return;
       } else {
-        // #region agent log
-        // #endregion
         return;
       }
     } else {
@@ -470,23 +441,15 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
 
     // Only fetch if patientId changed and we don't have initialHistory
     if (patientId && patientId !== prevPatientIdRef.current) {
-      // #region agent log
-      // #endregion
       prevPatientIdRef.current = patientId;
 
       const loadHistory = async () => {
         setLoading(true);
         setError(null);
         try {
-          // #region agent log
-          // #endregion
           const data = await fetchHistory(patientId);
-          // #region agent log
-          // #endregion
           setHistory(data);
         } catch (err: any) {
-          // #region agent log
-          // #endregion
           setError(err.message || 'Error al cargar el historial de signos vitales');
         } finally {
           setLoading(false);
@@ -504,8 +467,6 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
   useEffect(() => {
     if (!history || animationsDisabledRef.current) return;
 
-    // #region agent log
-    // #endregion
 
     // Disable all animations in recharts SVG elements via CSS (only once)
     const disableAnimationsCSS = () => {
@@ -695,22 +656,6 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
     }
   }, [mergedHistory]);
   
-  // #region agent log
-  React.useEffect(() => {
-    fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VitalSignsEvolutionView.tsx:565',message:'displayHistory updated',data:{hasMergedHistory:!!mergedHistory,hasHistory:!!history,displayHistoryVitalSignsCount:displayHistory?.vital_signs_history?.length,displayHistoryVersion},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D,E'})}).catch(()=>{});
-    console.log('[VitalSignsEvolutionView] displayHistory updated:', {
-      hasMergedHistory: !!mergedHistory,
-      hasHistory: !!history,
-      displayHistoryVitalSignsCount: displayHistory?.vital_signs_history?.length,
-      displayHistoryVersion,
-      mergedHistorySerialized: mergedHistory ? JSON.stringify(mergedHistory.vital_signs_history?.map((vs: any) => ({
-        vital_sign_id: vs.vital_sign_id,
-        data_length: vs.data?.length,
-        last_value: vs.data?.[vs.data.length - 1]?.value
-      }))) : null
-    });
-  }, [displayHistory, mergedHistory, history, displayHistoryVersion]);
-  // #endregion
 
   if (!displayHistory || !displayHistory.vital_signs_history || displayHistory.vital_signs_history.length === 0) {
     return (
@@ -765,9 +710,6 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
           const rawChartData = prepareChartData(vitalSign);
           const chartData = rawChartData.map(item => ({ ...item })); // Create new object references
 
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VitalSignsEvolutionView.tsx:614',message:'Rendering chart',data:{vitalSignId:vitalSign.vital_sign_id,vitalSignName:vitalSign.vital_sign_name,chartDataLength:chartData.length,isAnimationActive:true,animationDuration:300,displayHistoryVersion,currentVitalSignsVersion,lastValue:chartData[chartData.length - 1]?.value},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,B,E'})}).catch(()=>{});
-          // #endregion
           console.log('[VitalSignsEvolutionView] Rendering chart for', vitalSign.vital_sign_name, {
             chartDataLength: chartData.length,
             lastValue: chartData[chartData.length - 1]?.value,
@@ -838,6 +780,8 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
                     vitalSign={vitalSign}
                     chartData={chartData}
                     unit={unit}
+                    displayHistoryVersion={displayHistoryVersion}
+                    currentVitalSignsVersion={currentVitalSignsVersion}
                   />
                 </Box>
               </CardContent>

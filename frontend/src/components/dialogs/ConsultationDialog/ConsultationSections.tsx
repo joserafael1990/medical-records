@@ -111,8 +111,6 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
 
   // Function to load vital signs history - CRITICAL: removed vitalSignsHook from deps to break cycle
   const loadVitalSignsHistory = React.useCallback(async () => {
-    // #region agent log
-    // #endregion
     
     if (!selectedPatientId) {
       setHasPreviousVitalSigns(false);
@@ -122,8 +120,6 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
 
     try {
       setLoadingHistory(true);
-      // #region agent log
-      // #endregion
       // Use ref to access the latest fetch function without adding it to dependencies
       const history = await fetchHistoryRef.current(selectedPatientId);
       
@@ -132,8 +128,6 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
         vsHistory.data && vsHistory.data.length > 0
       );
       
-      // #region agent log
-      // #endregion
       
       setHasPreviousVitalSigns(hasHistory);
       setVitalSignsHistory(history);
@@ -143,8 +137,6 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
         console.warn('Rate limited when fetching vital signs history, will retry later');
         return;
       }
-      // #region agent log
-      // #endregion
       // Silently fail - don't show charts if we can't load
       setHasPreviousVitalSigns(false);
       setVitalSignsHistory(null);
@@ -178,12 +170,8 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
   const prevVitalSignsRef = React.useRef<string>('');
   
   useEffect(() => {
-    // #region agent log
-    // #endregion
     
     if (!selectedPatientId || !hasPreviousVitalSigns || !isEditing || !consultationId) {
-      // #region agent log
-      // #endregion
       return;
     }
 
@@ -192,20 +180,14 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
     
     // Only refresh if vital signs actually changed (not just reference change)
     if (prevVitalSignsRef.current === vitalSignsKey) {
-      // #region agent log
-      // #endregion
       return;
     }
     
     prevVitalSignsRef.current = vitalSignsKey;
 
-    // #region agent log
-    // #endregion
 
     // Debounce to avoid too many refreshes
     const timeoutId = setTimeout(() => {
-      // #region agent log
-      // #endregion
       loadVitalSignsHistory();
     }, 500); // Increased debounce to 500ms to avoid rapid successive calls
 
