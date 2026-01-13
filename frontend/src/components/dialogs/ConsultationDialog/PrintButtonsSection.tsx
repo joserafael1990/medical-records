@@ -3,7 +3,7 @@ import {
   Box
 } from '@mui/material';
 import { PrintButtons } from '../../common/PrintButtons';
-import type { ConsultationVitalSign } from '../../../types';
+import type { ConsultationVitalSign, ConsultationFormData } from '../../../types';
 
 interface PrintButtonsSectionProps {
   // Show condition
@@ -19,18 +19,13 @@ interface PrintButtonsSectionProps {
   // Consultation data
   consultation: any;
   consultationId: number | null;
-  formData: {
-    date: string;
-    chief_complaint: string;
-    primary_diagnosis: string;
-    treatment_plan: string;
-  };
+  formData: ConsultationFormData;
   nextAppointmentDate?: string | null;
-  personalDocument?: { document_id: number | null; document_value: string };
-  
+  personalDocument?: { document_id: number | null; document_value: string; document_name?: string };
+
   // Prescriptions
   prescriptions: any[];
-  
+
   // Clinical studies
   studies: any[];
 
@@ -179,24 +174,24 @@ export const PrintButtonsSection: React.FC<PrintButtonsSectionProps> = ({
     if (consultation?.patient_name && consultation.patient_name.trim() !== '' && consultation.patient_name !== 'Paciente No Identificado') {
       return consultation.patient_name.trim();
     }
-    
+
     // Priority 2: Use selectedPatient.name if available
     if (selectedPatient?.name && selectedPatient.name.trim() !== '' && selectedPatient.name !== 'Paciente') {
       return selectedPatient.name.trim();
     }
-    
+
     // Priority 3: Use selectedPatient.full_name if available
     if (selectedPatient?.full_name && selectedPatient.full_name.trim() !== '' && selectedPatient.full_name !== 'Paciente') {
       return selectedPatient.full_name.trim();
     }
-    
+
     // Priority 4: Use name or full_name directly
     const constructedName = selectedPatient?.name || selectedPatient?.full_name || 'Paciente sin nombre'
       .trim();
     if (constructedName) {
       return constructedName;
     }
-    
+
     // Last resort: fallback to 'Paciente'
     return 'Paciente';
   }, [selectedPatient, consultation?.patient_name]);
@@ -271,10 +266,10 @@ export const PrintButtonsSection: React.FC<PrintButtonsSectionProps> = ({
           time: consultationForPrint?.time || '10:00',
           type: consultationForPrint?.consultation_type || 'Seguimiento',
           reason: consultationForPrint?.chief_complaint || formData.chief_complaint || '',
-          diagnosis: (consultationForPrint?.primary_diagnosis && consultationForPrint.primary_diagnosis.trim() !== '') 
-            ? consultationForPrint.primary_diagnosis 
-            : (formData.primary_diagnosis && formData.primary_diagnosis.trim() !== '') 
-              ? formData.primary_diagnosis 
+          diagnosis: (consultationForPrint?.primary_diagnosis && consultationForPrint.primary_diagnosis.trim() !== '')
+            ? consultationForPrint.primary_diagnosis
+            : (formData.primary_diagnosis && formData.primary_diagnosis.trim() !== '')
+              ? formData.primary_diagnosis
               : 'No especificado',
           notes: consultationForPrint?.notes || '',
           treatment_plan: consultationForPrint?.treatment_plan || formData.treatment_plan || '',

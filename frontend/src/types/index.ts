@@ -16,13 +16,37 @@ export interface Patient {
   created_by: number;
   created_at: string;
   updated_at: string;
+  documents?: Array<{
+    document_id: number;
+    document_value: string;
+    document_name?: string;
+    document?: {
+      name: string;
+    };
+  }>;
+  personal_documents?: Array<{
+    document_id: number;
+    document_value: string;
+    document_name?: string;
+    document?: {
+      name: string;
+    };
+  }>;
+  professional_documents?: Array<{
+    document_id: number;
+    document_value: string;
+    document_name?: string;
+    document?: {
+      name: string;
+    };
+  }>;
 }
 
 export interface PatientFormData {
   name: string;
   title?: string;
   email?: string;
-  birth_date: string;
+  birth_date?: string;
   primary_phone?: string;
   gender?: string;
   civil_status?: string;
@@ -44,6 +68,17 @@ export interface PatientFormData {
   documents?: Array<{
     document_id: number;
     document_value: string;
+    document_name?: string;
+  }>;
+  personal_documents?: Array<{
+    document_id: number;
+    document_value: string;
+    document_name?: string;
+  }>;
+  professional_documents?: Array<{
+    document_id: number;
+    document_value: string;
+    document_name?: string;
   }>;
 }
 
@@ -53,7 +88,21 @@ export type CompletePatientData = Patient & {
   documents?: Array<{
     document_id: number;
     document_value: string;
-    document_type?: string;
+    document_name?: string;
+    document_type_id?: number;
+    file_path?: string;
+    is_active?: boolean;
+    created_at?: string;
+  }>;
+  personal_documents?: Array<{
+    document_id: number;
+    document_value: string;
+    document_name?: string;
+  }>;
+  professional_documents?: Array<{
+    document_id: number;
+    document_value: string;
+    document_name?: string;
   }>;
   consultations?: Consultation[];
   appointments?: Appointment[];
@@ -151,6 +200,7 @@ export interface ConsultationFormData {
   patient_id: string | number;
   patient_document_id?: number | null;
   patient_document_value?: string;
+  patient_document_name?: string;
   date?: string;
   chief_complaint?: string;
   history_present_illness?: string;
@@ -170,6 +220,14 @@ export interface ConsultationFormData {
   notes?: string;
   folio?: string;
   nextAppointmentDate?: string | null;
+  doctor_name?: string;
+  doctor_professional_license?: string;
+  doctor_specialty?: string;
+  has_appointment?: boolean;
+  appointment_id?: string;
+  consultation_type?: string;
+  primary_diagnoses?: any[]; // Use any[] here to avoid circular dependency if needed, or import DiagnosisCatalog
+  secondary_diagnoses_list?: any[];
 }
 
 // ============================================================================
@@ -213,6 +271,7 @@ export interface CreateClinicalStudyData {
   study_type: StudyType;
   study_name: string;
   ordered_date: string;
+  performed_date?: string;
   status?: StudyStatus;
   ordering_doctor: string;
   urgency?: UrgencyLevel;
@@ -224,10 +283,15 @@ export interface CreateClinicalStudyData {
   interpretation?: string;
   relevant_history?: string;
   file?: File;
+  file_name?: string;
+  file_path?: string;
+  file_type?: string;
+  file_size?: number;
+  created_by?: string;
 }
 
 export interface UpdateClinicalStudyData extends Partial<CreateClinicalStudyData> {
-  id: string;
+  id?: string;
 }
 
 // ============================================================================

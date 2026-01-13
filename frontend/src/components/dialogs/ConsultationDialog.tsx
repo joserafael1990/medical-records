@@ -32,7 +32,8 @@ import { PrintButtonsSection } from './ConsultationDialog/PrintButtonsSection';
 import { VitalSignsDialogs } from './ConsultationDialog/VitalSignsDialogs';
 import { ConsultationSections } from './ConsultationDialog/ConsultationSections';
 import { PrivacyConsentStatusSection } from './ConsultationDialog/PrivacyConsentStatusSection';
-import { useConsultationForm, ConsultationFormData } from '../../hooks/useConsultationForm';
+import { ConsultationFormData } from '../../types';
+import { useConsultationForm } from '../../hooks/useConsultationForm';
 import { useDiagnosisCatalog } from '../../hooks/useDiagnosisCatalog';
 import { useClinicalStudiesManager } from '../../hooks/useClinicalStudiesManager';
 import { usePreviousStudiesLoader } from '../../hooks/usePreviousStudiesLoader';
@@ -329,9 +330,9 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           {/* Consultation Sections (Vital Signs, Prescriptions, Studies, Schedule) */}
           <ConsultationSections
             isEditing={formHook.isEditing}
-            consultationId={formHook.currentConsultationId || consultation?.id || null}
-            selectedPatientId={formHook.selectedPatient?.id || null}
-            formDataPatientId={formHook.formData.patient_id}
+            consultationId={formHook.currentConsultationId || (consultation?.id ? Number(consultation.id) : null)}
+            selectedPatientId={formHook.selectedPatient?.id ? Number(formHook.selectedPatient.id) : null}
+            formDataPatientId={String(formHook.formData.patient_id)}
             vitalSigns={React.useMemo(() => {
               const allVitalSigns = vitalSignsHook.allVitalSigns || [];
               console.log('[ConsultationDialog] Passing vitalSigns to ConsultationSections', {
@@ -413,10 +414,10 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 clinicalStudiesHook.downloadFile((study as any).file_url, (study as any).study_name || 'estudio');
               }
             }}
-            doctorName={doctorProfile?.full_name || doctorProfile?.name
+            doctorName={String(doctorProfile?.full_name || doctorProfile?.name
               ? `${doctorProfile?.title || 'Dr.'} ${doctorProfile?.full_name || doctorProfile?.name}`.trim()
-              : 'Dr. Usuario'}
-            patientId={formHook.selectedPatient?.id || parseInt(formHook.formData.patient_id) || 0}
+              : 'Dr. Usuario')}
+            patientId={Number(formHook.selectedPatient?.id) || parseInt(formHook.formData.patient_id) || 0}
             doctorProfile={doctorProfile}
             onAppointmentsChange={setFollowUpAppointments}
             initialAppointments={followUpAppointments}
@@ -435,7 +436,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           doctorProfile={doctorProfile}
           appointmentOffice={formHook.appointmentOffice}
           consultation={consultation}
-          consultationId={formHook.currentConsultationId || consultation?.id || null}
+          consultationId={formHook.currentConsultationId || (consultation?.id ? Number(consultation.id) : null)}
           formData={formHook.formData}
           personalDocument={formHook.personalDocument}
           prescriptions={prescriptionsHook.prescriptions || []}

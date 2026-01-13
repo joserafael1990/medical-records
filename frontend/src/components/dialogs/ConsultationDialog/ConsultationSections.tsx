@@ -6,8 +6,7 @@ import PrescriptionsSection from '../../common/PrescriptionsSection';
 import ClinicalStudiesSection from '../../common/ClinicalStudiesSection';
 import ScheduleAppointmentSection from '../../common/ScheduleAppointmentSection';
 import VitalSignsEvolutionView from '../../views/VitalSignsEvolutionView';
-import { ConsultationVitalSign, VitalSign, ConsultationPrescription, ClinicalStudy, Medication } from '../../../types';
-import { CreateClinicalStudyData } from '../../../types';
+import { ConsultationVitalSign, VitalSign, ConsultationPrescription, ClinicalStudy, Medication, CreateClinicalStudyData } from '../../../types';
 import { TEMP_IDS } from '../../../utils/vitalSignUtils';
 import { useVitalSigns } from '../../../hooks/useVitalSigns';
 
@@ -17,7 +16,7 @@ interface ConsultationSectionsProps {
   consultationId: number | null;
   selectedPatientId: number | null;
   formDataPatientId: string;
-  
+
   // Vital Signs
   vitalSigns: ConsultationVitalSign[];
   availableVitalSigns: VitalSign[];
@@ -25,7 +24,7 @@ interface ConsultationSectionsProps {
   onAddVitalSign: (vitalSignData: { vital_sign_id: number; value: string; unit: string }) => Promise<void>;
   onEditVitalSign: (vitalSign: ConsultationVitalSign, vitalSignData: { vital_sign_id: number; value: string; unit: string }) => void;
   onDeleteVitalSign: (vitalSignId: number) => void;
-  
+
   // Prescriptions
   prescriptions: ConsultationPrescription[];
   prescriptionsLoading: boolean;
@@ -35,10 +34,10 @@ interface ConsultationSectionsProps {
   onFetchMedications: (search?: string) => Promise<void>;
   onCreateMedication: (name: string) => Promise<Medication>;
   treatmentPlan: string;
-  onTreatmentPlanChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  onTreatmentPlanChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | { name?: string; value: unknown }>) => void;
   followUpInstructions: string;
-  onFollowUpInstructionsChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
-  
+  onFollowUpInstructionsChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | { name?: string; value: unknown }>) => void;
+
   // Clinical Studies
   studies: ClinicalStudy[];
   studiesLoading: boolean;
@@ -47,7 +46,7 @@ interface ConsultationSectionsProps {
   onViewStudyFile: (studyId: number) => void;
   onDownloadStudyFile: (studyId: number) => void;
   doctorName: string;
-  
+
   // Schedule Appointment
   patientId: number;
   doctorProfile: any;
@@ -97,13 +96,13 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
   const vitalSignsHook = useVitalSigns();
   // Track vital signs changes to force re-render
   const [vitalSignsUpdateCounter, setVitalSignsUpdateCounter] = React.useState(0);
-  
+
   // Increment counter when vitalSigns change
   React.useEffect(() => {
     setVitalSignsUpdateCounter(prev => prev + 1);
     console.log('[ConsultationSections] vitalSigns changed, counter:', vitalSignsUpdateCounter + 1, 'vitalSigns:', vitalSigns?.map(vs => ({ id: vs.id, vital_sign_id: vs.vital_sign_id, value: vs.value })));
   }, [vitalSigns]);
-  
+
   // Use ref to store fetchPatientVitalSignsHistory to break the dependency cycle
   // This prevents infinite re-renders caused by vitalSignsHook changing on every render
   const fetchHistoryRef = React.useRef(vitalSignsHook.fetchPatientVitalSignsHistory);
@@ -111,7 +110,7 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
 
   // Function to load vital signs history - CRITICAL: removed vitalSignsHook from deps to break cycle
   const loadVitalSignsHistory = React.useCallback(async () => {
-    
+
     if (!selectedPatientId) {
       setHasPreviousVitalSigns(false);
       setVitalSignsHistory(null);
@@ -122,13 +121,13 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
       setLoadingHistory(true);
       // Use ref to access the latest fetch function without adding it to dependencies
       const history = await fetchHistoryRef.current(selectedPatientId);
-      
+
       // Check if patient has any vital signs history at all (from previous consultations)
-      const hasHistory = history.vital_signs_history && history.vital_signs_history.some((vsHistory: any) => 
+      const hasHistory = history.vital_signs_history && history.vital_signs_history.some((vsHistory: any) =>
         vsHistory.data && vsHistory.data.length > 0
       );
-      
-      
+
+
       setHasPreviousVitalSigns(hasHistory);
       setVitalSignsHistory(history);
     } catch (error: any) {
@@ -168,21 +167,21 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
   // Refresh history when vital signs change (add, edit, delete) - but only if we're editing an existing consultation
   // Don't refresh when creating a new consultation to avoid infinite loops
   const prevVitalSignsRef = React.useRef<string>('');
-  
+
   useEffect(() => {
-    
+
     if (!selectedPatientId || !hasPreviousVitalSigns || !isEditing || !consultationId) {
       return;
     }
 
     // Serialize vitalSigns to compare actual changes
     const vitalSignsKey = JSON.stringify(vitalSigns.map(vs => ({ id: vs.id, vital_sign_id: vs.vital_sign_id, value: vs.value })));
-    
+
     // Only refresh if vital signs actually changed (not just reference change)
     if (prevVitalSignsRef.current === vitalSignsKey) {
       return;
     }
-    
+
     prevVitalSignsRef.current = vitalSignsKey;
 
 
@@ -239,18 +238,6 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
       {/* Evolution Charts - Show inline if there are previous vital signs */}
       {hasPreviousVitalSigns && selectedPatientId && memoizedVitalSignsHistory && (
         <Box sx={{ mb: 3 }}>
-          {/* #region agent log */}
-          {(() => {
-            const evolutionKey = `vital-signs-evolution-${vitalSigns.map(vs => `${vs.id}:${vs.value}`).join('|')}`;
-            fetch('http://127.0.0.1:7242/ingest/79e99ab8-1534-4ccf-9bf5-0f1b2624c453',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConsultationSections.tsx:252',message:'Rendering VitalSignsEvolutionView',data:{vitalSignsCount:vitalSigns?.length,vitalSignsIds:vitalSigns?.map(vs=>vs.id),evolutionKey},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-            console.log('[ConsultationSections] Rendering VitalSignsEvolutionView', {
-              vitalSignsCount: vitalSigns?.length,
-              vitalSigns: vitalSigns?.map(vs => ({ id: vs.id, vital_sign_id: vs.vital_sign_id, value: vs.value })),
-              evolutionKey
-            });
-            return null;
-          })()}
-          {/* #endregion */}
           <VitalSignsEvolutionView
             key={`vital-signs-evolution-${vitalSigns.map(vs => `${vs.id}:${vs.value}`).join('|')}-${vitalSignsUpdateCounter}`} // Force re-render when vital signs change
             patientId={selectedPatientId}
@@ -316,7 +303,7 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
       {/* Clinical Studies Section - Always show */}
       <Box sx={{ mt: 3 }}>
         <Divider sx={{ mb: 2 }} />
-        
+
         <ClinicalStudiesSection
           consultationId={consultationIdStr}
           patientId={patientIdStr}

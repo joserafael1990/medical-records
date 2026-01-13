@@ -5,13 +5,18 @@ import { logger } from '../utils/logger';
 // DiagnosisCategory removed - diagnosis_categories table eliminated (not required by law)
 
 export interface DiagnosisCatalog {
-  id: number;
+  id: number | string;
   code: string;  // CIE-10 code (required by law)
   name: string;  // Diagnosis description (required by law)
-  is_active: boolean;
-  created_by: number;  // 0 = system, doctor_id = doctor who created it
-  created_at: string;
-  updated_at: string;
+  is_active?: boolean;
+  created_by?: number;  // 0 = system, doctor_id = doctor who created it
+  created_at?: string;
+  updated_at?: string;
+  description?: string;
+  category?: string;
+  specialty?: string;
+  severity_level?: string;
+  is_chronic?: boolean;
 }
 
 // DiagnosisRecommendation and DiagnosisDifferential removed - tables deleted
@@ -51,7 +56,7 @@ export const useDiagnosisCatalog = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const params = new URLSearchParams();
       if (filters) {
         Object.entries(filters).forEach(([key, value]) => {
@@ -60,7 +65,7 @@ export const useDiagnosisCatalog = () => {
           }
         });
       }
-      
+
       const response = await apiService.consultations.api.get(`/api/diagnosis/catalog?${params.toString()}`);
       setDiagnoses(response.data);
       return response.data;
@@ -78,7 +83,7 @@ export const useDiagnosisCatalog = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const response = await apiService.consultations.api.get(`/api/diagnosis/catalog/${diagnosisId}`);
       return response.data;
     } catch (err: any) {
@@ -95,15 +100,15 @@ export const useDiagnosisCatalog = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const response = await apiService.consultations.api.post('/api/diagnosis/catalog', {
         code: '', // Empty code for custom diagnoses
         name: name.trim(),
         is_active: true
       });
-      
+
       const newDiagnosis = response.data as DiagnosisCatalog;
-      
+
       // Add to local state
       setDiagnoses(prev => {
         const nameLower = (newDiagnosis.name || '').toLowerCase().trim();
@@ -113,7 +118,7 @@ export const useDiagnosisCatalog = () => {
         }
         return prev;
       });
-      
+
       return newDiagnosis;
     } catch (err: any) {
       const errorMessage = err.response?.data?.detail || 'Error creating diagnosis';
@@ -129,9 +134,9 @@ export const useDiagnosisCatalog = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const response = await apiService.consultations.api.post('/api/diagnosis/search', searchRequest);
-      
+
       // Handle different response structures
       let searchResults = [];
       if (Array.isArray(response.data)) {
@@ -225,7 +230,7 @@ export const useDiagnosisCatalog = () => {
     stats,
     loading,
     error,
-    
+
     // Actions
     getDiagnoses,
     getDiagnosis,
@@ -233,7 +238,7 @@ export const useDiagnosisCatalog = () => {
     searchDiagnoses,
     // getDiagnosisRecommendations and getDiagnosisDifferentials removed - tables deleted
     getStats,
-    
+
     // Utilities
     clearError: () => setError(null)
   };

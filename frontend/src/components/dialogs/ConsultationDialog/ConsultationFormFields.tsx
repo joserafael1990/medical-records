@@ -4,6 +4,7 @@ import {
   Typography,
   TextField
 } from '@mui/material';
+import { ConsultationFormData } from '../../../types';
 import {
   Notes as NotesIcon,
   MedicalServices as MedicalServicesIcon,
@@ -14,19 +15,7 @@ import {
 } from '@mui/icons-material';
 
 interface ConsultationFormFieldsProps {
-  formData: {
-    chief_complaint: string;
-    history_present_illness: string;
-    family_history: string;
-    perinatal_history: string;
-    gynecological_and_obstetric_history: string;
-    personal_pathological_history: string;
-    personal_non_pathological_history: string;
-    physical_examination: string;
-    treatment_plan: string;
-    therapeutic_plan?: string;
-    interconsultations?: string;
-  };
+  formData: ConsultationFormData;
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | { name?: string; value: unknown }>) => void;
   shouldShowFirstTimeFields: () => boolean;
   error?: string | null;
@@ -50,15 +39,15 @@ export const ConsultationFormFields: React.FC<ConsultationFormFieldsProps> = ({
         <TextField
           name="chief_complaint"
           label="Motivo de consulta"
-          value={formData.chief_complaint}
+          value={formData.chief_complaint || ''}
           onChange={onChange}
           size="small"
           fullWidth
           multiline
           rows={2}
           required
-          error={!!error && !formData.chief_complaint.trim()}
-          helperText={error && !formData.chief_complaint.trim() ? 'Campo requerido' : ''}
+          error={!!error && !(formData.chief_complaint || '').trim()}
+          helperText={error && !(formData.chief_complaint || '').trim() ? 'Campo requerido' : ''}
         />
       </Box>
 

@@ -8,7 +8,7 @@ const mapPatientDocument = (
   document_value: fallbackValue ?? doc?.document_value ?? '',
   document_name: doc?.document_name || doc?.document?.name || fallbackName
 });
-import { Patient, PatientFormData, ClinicalStudy } from '../types';
+import { Patient, PatientFormData, ClinicalStudy, ConsultationFormData } from '../types';
 import { DiagnosisCatalog } from './useDiagnosisCatalog';
 import { apiService } from '../services';
 import { useToast } from '../components/common/ToastNotification';
@@ -17,36 +17,6 @@ import { disablePaymentDetection } from '../utils/disablePaymentDetection';
 import { usePatientPreviousStudies } from './usePatientPreviousStudies';
 import { parseBackendDate } from '../utils/formatters';
 
-// Re-export ConsultationFormData interface from component
-export interface ConsultationFormData {
-  patient_id: string;
-  patient_document_id: number | null;
-  patient_document_value: string;
-  patient_document_name?: string;
-  date: string;
-  chief_complaint: string;
-  history_present_illness: string;
-  family_history: string;
-  perinatal_history: string;
-  gynecological_and_obstetric_history: string;
-  personal_pathological_history: string;
-  personal_non_pathological_history: string;
-  physical_examination: string;
-  primary_diagnosis: string;
-  secondary_diagnoses: string;
-  treatment_plan: string;
-  follow_up_instructions: string;
-  therapeutic_plan: string;
-  interconsultations: string;
-  doctor_name: string;
-  doctor_professional_license: string;
-  doctor_specialty: string;
-  has_appointment: boolean;
-  appointment_id: string;
-  consultation_type?: string;
-  primary_diagnoses: DiagnosisCatalog[];
-  secondary_diagnoses_list: DiagnosisCatalog[];
-}
 
 export interface UseConsultationFormProps {
   consultation?: any | null;
@@ -494,7 +464,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
                     {
                       document_id: matchingDocument.document_id,
                       document_value: matchingDocument.document_value,
-                      document_name: matchingDocument.document_name || matchingDocument.document?.name
+                      document_name: matchingDocument.document_name
                     },
                     resolvedConsultation.patient_document_value || '',
                     resolvedConsultation.patient_document_name
@@ -534,7 +504,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
             }, 'api');
           }
         } else {
-          logger.warning('⚠️ No patient_id available to load patient data', {
+          logger.warn('⚠️ No patient_id available to load patient data', {
             consultationId: finalConsultationId,
             resolved_patient_id: resolvedConsultation.patient_id,
             formData_patient_id: formData.patient_id
@@ -773,7 +743,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
             return [];
           })
         ]);
-        
+
         if (isMounted) {
           setCountries(countriesData);
           setEmergencyRelationships(relationshipsData);
@@ -921,11 +891,11 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
 
   const handlePatientChange = useCallback(async (patient: Patient | null) => {
     setSelectedPatient(patient);
-    setFormData((prev: ConsultationFormData) => ({ ...prev, patient_id: patient?.id || '' }));
+    setFormData((prev: ConsultationFormData) => ({ ...prev, patient_id: patient?.id ? String(patient.id) : '' }));
 
     if (patient) {
       try {
-        const fullPatientData = await apiService.patients.getPatientById(patient.id);
+        const fullPatientData = await apiService.patients.getPatientById(String(patient.id));
         setPatientEditData(fullPatientData);
         if (fullPatientData.personal_documents && fullPatientData.personal_documents.length > 0) {
           const primaryDocument = fullPatientData.personal_documents[0];
@@ -987,7 +957,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
         }
 
         try {
-          const fullPatientData = await apiService.patients.getPatientById(patient.id);
+          const fullPatientData = await apiService.patients.getPatientById(String(patient.id));
           setPatientEditData(fullPatientData);
           if (fullPatientData.personal_documents && fullPatientData.personal_documents.length > 0) {
             const primaryDocument = fullPatientData.personal_documents[0];
@@ -1349,16 +1319,9 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
         secondary_diagnoses_list: formData.secondary_diagnoses_list
       };
 
-      // #region agent log
-      // #endregion
       const createdConsultation = await onSubmit(finalFormData);
 
-      // #region agent log
-      // #endregion
-
       if (createdConsultation?.id) {
-        // #region agent log
-        // #endregion
         setCurrentConsultationId(createdConsultation.id);
       }
 

@@ -24,20 +24,20 @@ export interface UseClinicalStudiesReturn {
   createStudy: (studyData: CreateClinicalStudyData) => Promise<ClinicalStudy>;
   updateStudy: (studyId: string, studyData: UpdateClinicalStudyData) => Promise<ClinicalStudy>;
   deleteStudy: (studyId: string) => Promise<void>;
-  
+
   // Dialog management
   openAddDialog: (consultationId: string, patientId: string, doctorName: string) => void;
   openEditDialog: (study: ClinicalStudy) => void;
   closeDialog: () => void;
-  
+
   // Form management
   updateFormData: (data: Partial<CreateClinicalStudyData>) => void;
   submitForm: (studyData?: CreateClinicalStudyData) => Promise<void>;
-  
+
   // Utility functions
   clearTemporaryStudies: () => void;
   addTemporaryStudy: (study: ClinicalStudy) => void;
-  
+
   // File operations
   downloadFile: (fileUrl: string, fileName: string) => void;
   viewFile: (fileUrl: string) => void;
@@ -70,14 +70,13 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
     urgency: 'routine',
     clinical_indication: '',
     relevant_history: '',
-    created_by: ''
   });
 
   // Fetch studies for a consultation
   const fetchStudies = useCallback(async (consultationId: string) => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const studiesData = await apiService.clinicalStudies.getClinicalStudiesByConsultation(consultationId);
       setStudies(studiesData || []);
@@ -94,7 +93,7 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
   const fetchPatientStudies = useCallback(async (patientId: string) => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const studiesData = await apiService.clinicalStudies.getClinicalStudiesByPatient(patientId);
       setStudies(studiesData || []);
@@ -124,10 +123,10 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
       }
       const newStudy = await apiService.clinicalStudies.createClinicalStudy(dataToSend);
       logger.debug('Clinical study created successfully', { id: newStudy.id }, 'api');
-      
+
       // Add to local state
       setStudies(prev => [...prev, newStudy]);
-      
+
       return newStudy;
     } catch (err: any) {
       logger.error('Error creating clinical study', err, 'api');
@@ -141,7 +140,7 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
       logger.debug('Updating clinical study', { studyId }, 'api');
       const updatedStudy = await apiService.clinicalStudies.updateClinicalStudy(studyId, studyData);
       logger.debug('Clinical study updated successfully', { id: updatedStudy.id }, 'api');
-      
+
       // Track clinical study updated
       try {
         const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
@@ -152,12 +151,12 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
       } catch (e) {
         // Silently fail
       }
-      
+
       // Update local state
-      setStudies(prev => prev.map(study => 
+      setStudies(prev => prev.map(study =>
         study.id === studyId ? updatedStudy : study
       ));
-      
+
       return updatedStudy;
     } catch (err: any) {
       logger.error('Error updating clinical study', err, 'api');
@@ -175,12 +174,12 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
         setStudies(prev => prev.filter(study => study.id !== studyId));
         return;
       }
-      
+
       // For persistent studies, call the API
       logger.debug('Deleting clinical study', { studyId }, 'api');
       await apiService.clinicalStudies.deleteClinicalStudy(studyId);
       logger.debug('Clinical study deleted successfully', { studyId }, 'api');
-      
+
       // Track clinical study deleted
       try {
         const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
@@ -190,10 +189,10 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
       } catch (e) {
         // Silently fail
       }
-      
+
       // Remove from local state
       setStudies(prev => prev.filter(study => study.id !== studyId));
-      
+
     } catch (err: any) {
       logger.error('Error deleting clinical study', err, 'api');
       throw err;
@@ -202,7 +201,7 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
 
   // Dialog management
   const openAddDialog = useCallback((consultationId: string, patientId: string, doctorName: string) => {
-    
+
     setClinicalStudyFormData({
       consultation_id: consultationId,
       patient_id: patientId,
@@ -224,7 +223,7 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
     setIsEditingClinicalStudy(false);
     setSelectedClinicalStudy(null);
     setClinicalStudyDialogOpen(true);
-    
+
   }, []);
 
   const openEditDialog = useCallback((study: ClinicalStudy) => {
@@ -279,10 +278,10 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
   const submitForm = useCallback(async (studyData?: CreateClinicalStudyData) => {
     setIsSubmitting(true);
     setError(null);
-    
+
     // Use provided studyData or fall back to internal form data
     const dataToSubmit = studyData || clinicalStudyFormData;
-    
+
     try {
       if (isEditingClinicalStudy && selectedClinicalStudy) {
         await updateStudy(selectedClinicalStudy.id, dataToSubmit);
@@ -295,7 +294,7 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
         if (dataToSubmit.consultation_id === 'temp_consultation') {
           // Generate unique ID with timestamp and random component
           const uniqueId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-          
+
           const tempStudy: ClinicalStudy = {
             id: uniqueId,
             consultation_id: dataToSubmit.consultation_id,
@@ -318,11 +317,11 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
             file_path: dataToSubmit.file_path,
             file_type: dataToSubmit.file_type,
             file_size: dataToSubmit.file_size,
-            created_by: dataToSubmit.created_by,
+            created_by: dataToSubmit.created_by || '',
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           };
-          
+
           setStudies(prev => [...prev, tempStudy]);
         } else {
           // For existing consultations, create in database and refresh
@@ -351,7 +350,7 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
+
       // Track clinical study downloaded
       try {
         const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
@@ -369,7 +368,7 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
   const viewFile = useCallback((fileUrl: string) => {
     try {
       window.open(fileUrl, '_blank');
-      
+
       // Track clinical study viewed
       try {
         const { trackAmplitudeEvent } = require('../utils/amplitudeHelper');
@@ -401,20 +400,20 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
     createStudy,
     updateStudy,
     deleteStudy,
-    
+
     // Dialog management
     openAddDialog,
     openEditDialog,
     closeDialog,
-    
+
     // Form management
     updateFormData,
     submitForm,
-    
+
     // Utility functions
     clearTemporaryStudies,
     addTemporaryStudy,
-    
+
     // File operations
     downloadFile,
     viewFile
