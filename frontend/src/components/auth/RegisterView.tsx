@@ -556,7 +556,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
       try {
         const { trackAmplitudeEvent } = require('../../utils/amplitudeHelper');
         trackAmplitudeEvent('registration_started', {
-          step: currentStep,
+          step: activeStep,
           total_steps: 5
         });
       } catch (e) {
@@ -597,7 +597,7 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
           error_type: error?.response?.status === 400 ? 'validation_error' :
             error?.response?.status === 409 ? 'duplicate_email' :
               error?.response?.status === 500 ? 'server_error' : 'unknown',
-          step: currentStep
+          step: activeStep
         });
       } catch (e) {
         // Silently fail
