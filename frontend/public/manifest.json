@@ -1,0 +1,33 @@
+{
+  "short_name": "CORTEX",
+  "name": "CORTEX - Sistema de Historias Clínicas",
+  "description": "La IA que devuelve el tiempo a la salud  ",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "logo192.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192"
+    },
+    {
+      "src": "logo512.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#1e3a8a",
+  "background_color": "#ffffff",
+  "categories": ["medical", "health", "productivity"],
+  "orientation": "portrait-primary"
+}
