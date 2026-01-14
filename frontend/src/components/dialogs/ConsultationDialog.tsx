@@ -196,7 +196,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 hasSelectedPatient: !!formHook.selectedPatient,
                 hasPatientEditData: !!formHook.patientEditData,
                 selectedPatientId: formHook.selectedPatient?.id,
-                patientEditDataId: formHook.patientEditData?.id,
+                patientEditDataId: (formHook.patientEditData as any)?.id,
                 formDataPatientId: formHook.formData.patient_id,
                 consultationPatientId: consultation?.patient_id
               });

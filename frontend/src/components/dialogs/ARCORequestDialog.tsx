@@ -287,7 +287,7 @@ export const ARCORequestDialog: React.FC<ARCORequestDialogProps> = ({
                 Paciente
               </Typography>
               <Typography variant="body1" fontWeight={500}>
-                {patient.name || patient.full_name || 'Paciente sin nombre'}
+                {patient.name || 'Paciente sin nombre'}
               </Typography>
               {patient.email && (
                 <Typography variant="body2" color="text.secondary">

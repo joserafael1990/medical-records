@@ -237,7 +237,8 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
       const endTime = new Date(appointmentDateTime.getTime() + doctorDuration * 60000);
 
       // Get doctor_id from user context or doctorProfile
-      const doctorId = user?.doctor?.id || doctorProfile?.id || user?.id || 0;
+      // Note: user?.doctor?.id is a string, doctorProfile?.id is a number
+      const doctorId = doctorProfile?.id || (user?.doctor?.id ? Number(user.doctor.id) : 0);
 
       if (!doctorId || doctorId === 0) {
         setError('No se pudo identificar al doctor');
@@ -267,7 +268,7 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
         );
         const normalizedUpdated = {
           ...updated,
-          appointment_type_name: updated.appointment_type_name || appointmentTypes.find(type => type.id === updated.appointment_type_id)?.name || 'Seguimiento'
+          appointment_type_name: updated.appointment_type_rel?.name || appointmentTypes.find(type => type.id === updated.appointment_type_id)?.name || 'Seguimiento'
         };
         if (allowedStatuses.includes(normalizedUpdated.status)) {
           showSuccess('Cita actualizada exitosamente');
@@ -281,7 +282,7 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
         const created = await apiService.appointments.createAgendaAppointment(appointmentData);
         const normalizedCreated = {
           ...created,
-          appointment_type_name: created.appointment_type_name || appointmentTypes.find(type => type.id === created.appointment_type_id)?.name || 'Seguimiento'
+          appointment_type_name: created.appointment_type_rel?.name || appointmentTypes.find(type => type.id === created.appointment_type_id)?.name || 'Seguimiento'
         };
         if (allowedStatuses.includes(normalizedCreated.status)) {
           showSuccess('Cita agendada exitosamente');
@@ -501,7 +502,7 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
               hour: '2-digit',
               minute: '2-digit'
             });
-            const appointmentTypeName = appointment.appointment_type_name || appointmentTypes.find(type => type.id === appointment.appointment_type_id)?.name || 'Seguimiento';
+            const appointmentTypeName = appointment.appointment_type_rel?.name || appointmentTypes.find(type => type.id === appointment.appointment_type_id)?.name || 'Seguimiento';
             const statusLabel = appointment.status === 'confirmada' ? 'Confirmada' : appointment.status === 'por_confirmar' ? 'Por confirmar' : appointment.status;
             const statusColor = appointment.status === 'confirmada' ? 'success' : 'primary';
 

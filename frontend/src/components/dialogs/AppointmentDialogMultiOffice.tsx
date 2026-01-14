@@ -232,7 +232,7 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
               <FormControl fullWidth sx={{ mt: 2 }}>
                 <InputLabel>¿Es un paciente nuevo o existente?</InputLabel>
                 <Select
-                  value=""
+                  value={isExistingPatient === null ? '' : (isExistingPatient ? 'existing' : 'new')}
                   onChange={(e) => setIsExistingPatient(e.target.value === 'existing')}
                   label="¿Es un paciente nuevo o existente?"
                 >
