@@ -15,6 +15,12 @@ steps:
       - 'REACT_APP_API_URL=https://cortex-backend-246017659362.us-central1.run.app'
       - '--build-arg'
       - 'NODE_ENV=production'
+      - '--build-arg'
+      - 'REACT_APP_SENTRY_DSN=${_REACT_APP_SENTRY_DSN}'
+      - '--build-arg'
+      - 'REACT_APP_SENTRY_ENVIRONMENT=${_REACT_APP_SENTRY_ENVIRONMENT}'
+      - '--build-arg'
+      - 'REACT_APP_AMPLITUDE_API_KEY=${_REACT_APP_AMPLITUDE_API_KEY}'
     dir: 'frontend'
 
   # Step 2: Push the image to Artifact Registry
@@ -46,7 +52,11 @@ steps:
 timeout: 600s
 
 # Substitutions (can be overridden)
-# _REGION is not used in the template, removed to avoid errors
+# These can be set in Cloud Build trigger configuration or via --substitutions flag
+substitutions:
+  _REACT_APP_SENTRY_DSN: ''  # Set in Cloud Build trigger secrets
+  _REACT_APP_SENTRY_ENVIRONMENT: 'production'
+  _REACT_APP_AMPLITUDE_API_KEY: ''  # Set in Cloud Build trigger secrets
 
 # Images to be pushed to Artifact Registry
 images:
