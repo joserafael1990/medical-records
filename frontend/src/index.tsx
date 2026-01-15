@@ -15,7 +15,8 @@ const isProduction =
   process.env.REACT_APP_SENTRY_ENVIRONMENT === 'production';
 
 // Solo habilitar Sentry en producción
-const isSentryEnabled = Boolean(sentryDsn) && isProduction;
+// Verificar que DSN no esté vacío (puede ser string vacío si no está configurado)
+const isSentryEnabled = Boolean(sentryDsn && sentryDsn.trim() !== '') && isProduction;
 
 Sentry.init({
   dsn: sentryDsn,
@@ -106,7 +107,12 @@ initializeGlobalErrorHandlers();
 // Log Sentry configuration for debugging
 console.log('🔍 Sentry Configuration:', {
   hasDsn: !!sentryDsn,
+  dsnLength: sentryDsn?.length || 0,
+  dsnPreview: sentryDsn ? `${sentryDsn.substring(0, 20)}...` : 'undefined',
   isProduction,
+  nodeEnv: process.env.NODE_ENV,
+  reactAppEnv: process.env.REACT_APP_ENV,
+  sentryEnvironment: process.env.REACT_APP_SENTRY_ENVIRONMENT,
   isSentryEnabled,
   environment: process.env.REACT_APP_SENTRY_ENVIRONMENT || 'production',
   feedbackWidgetEnabled: isSentryEnabled
@@ -116,7 +122,14 @@ if (isSentryEnabled) {
   console.log('✅ Sentry está habilitado para producción - El widget de feedback debería estar visible');
   console.log('📍 Busca el botón "Reportar un problema" en la esquina inferior derecha');
 } else {
-  console.log('ℹ️ Sentry está deshabilitado (solo se activa en producción)');
+  if (!sentryDsn || sentryDsn.trim() === '') {
+    console.warn('⚠️ Sentry DSN no está configurado. El widget de feedback no aparecerá.');
+    console.warn('💡 Para habilitarlo, configura REACT_APP_SENTRY_DSN en el trigger de Cloud Build');
+  } else if (!isProduction) {
+    console.log('ℹ️ Sentry está deshabilitado (solo se activa en producción)');
+  } else {
+    console.warn('⚠️ Sentry no está habilitado por alguna razón desconocida');
+  }
 }
 
 console.log('🚀 Iniciando CORTEX con React + Material-UI...');
