@@ -28,6 +28,8 @@ Sentry.init({
   replaysSessionSampleRate: 0.0, // No queremos replays de sesión completa
   replaysOnErrorSampleRate: 0.1, // 10% de replays cuando hay errores (para feedback)
   enabled: isSentryEnabled, // Solo habilitar en producción
+  // Debug mode para ver qué está pasando con el widget
+  debug: false, // Cambiar a true temporalmente para debugging si es necesario
   integrations: isSentryEnabled
     ? [
         // User Feedback Widget con textos personalizados en español
@@ -35,6 +37,8 @@ Sentry.init({
         Sentry.feedbackIntegration({
           colorScheme: 'system',
           showBranding: false,
+          // Forzar que el widget aparezca siempre
+          autoInject: true,
           // Textos personalizados en español
           triggerLabel: 'Reportar un problema',
               triggerAriaLabel: 'Reportar un problema',
