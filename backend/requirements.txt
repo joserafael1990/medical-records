@@ -1,0 +1,70 @@
+# Dependencias para Backend Optimizado
+# FastAPI y servidor
+# Updated to 0.123.10 for compatibility with google-cloud-aiplatform 1.132.0 (google-adk requires >=0.115.0,<0.124.0)
+fastapi==0.123.10
+# Updated to 0.34.3 for compatibility with google-cloud-aiplatform 1.132.0 (google-adk requires >=0.34.0)
+uvicorn[standard]==0.34.3
+starlette==0.41.2
+
+# Base de datos y ORM
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+alembic==1.13.1
+
+# Validación y serialización
+pydantic==2.12.3
+pydantic[email]==2.12.3
+pydantic-settings==2.11.0
+
+# Autenticación y seguridad
+bcrypt==3.2.2  # Pinned to 3.x for passlib compatibility (4.x breaks passlib)
+python-jose[cryptography]==3.3.0
+python-multipart==0.0.6
+passlib==1.7.4
+
+# Utilidades
+# Updated to 2.9.0.post0 for compatibility with google-cloud-aiplatform 1.132.0 (google-adk requires >=2.9.0.post0)
+python-dateutil==2.9.0.post0
+pytz==2023.3
+structlog==23.2.0
+cryptography==41.0.7
+
+# AI/LLM
+anthropic==0.39.0
+google-generativeai==0.8.3  # Direct Gemini API (fallback when Vertex AI models not available)
+
+# Testing
+requests==2.31.0
+# Updated to 0.28.1 for compatibility with google-cloud-aiplatform 1.132.0 (google-genai requires >=0.28.1)
+httpx==0.28.1  # Async HTTP client for Agent Engine calls
+pytest==7.4.3
+pytest-asyncio==0.21.1
+
+# Desarrollo
+python-dotenv==1.0.0
+twilio==8.11.0
+sentry-sdk==1.45.0
+
+# Google Calendar API
+# Updated to 2.47.0 for compatibility with google-cloud-aiplatform 1.132.0 (requires >=2.45.0)
+google-auth==2.47.0
+google-auth-oauthlib==1.1.0
+# Updated to 0.3.0 for compatibility with google-api-python-client 2.187.0 (requires >=0.2.0)
+google-auth-httplib2==0.3.0
+# Updated to 2.187.0 for compatibility with google-cloud-aiplatform 1.132.0 (google-adk requires >=2.157.0)
+google-api-python-client==2.187.0
+
+# Image Processing
+Pillow==10.1.0
+
+# AWS SDK
+boto3==1.34.0
+# GCP SDK
+# Updated to 2.19.0 for compatibility with google-cloud-aiplatform 1.132.0 (google-adk requires >=2.18.0,<3.0.0)
+google-cloud-storage==2.19.0
+# Agent Development Kit (ADK) - Official Google ADK with Agent Engine support
+# Note: This includes vertexai and google-cloud-aiplatform as dependencies
+# Fixed version for reproducible builds and faster dependency resolution
+google-cloud-aiplatform[agent_engines,adk]==1.132.0
+deprecated==1.3.1  # Required by google.adk
+redis==7.0.1
