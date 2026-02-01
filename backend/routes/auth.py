@@ -665,8 +665,14 @@ async def confirm_password_reset(
                 detail="Token inválido"
             )
         
-        # Cambiar contraseña
-        success = auth.reset_user_password(db, user_id, reset_data.new_password)
+        # Cambiar contraseña (strip to match login behavior)
+        new_password_clean = (reset_data.new_password or "").strip()
+        if len(new_password_clean) < 6:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La contraseña debe tener al menos 6 caracteres"
+            )
+        success = auth.reset_user_password(db, user_id, new_password_clean)
         
         if not success:
             raise HTTPException(

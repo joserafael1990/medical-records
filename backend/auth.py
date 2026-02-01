@@ -64,8 +64,10 @@ def authenticate_user(db: Session, email: str, password: str) -> Union[Person, b
     Retorna el usuario si es válido, False si no
     """
     user = db.query(Person).filter(Person.email == email).first()
-    
+
     if not user:
+        return False
+    if not user.hashed_password:
         return False
     if not verify_password(password, user.hashed_password):
         return False
@@ -592,8 +594,8 @@ def verify_password_reset_token(token: str) -> Optional[Dict[str, Any]]:
 
 def reset_user_password(db: Session, user_id: int, new_password: str) -> bool:
     """
-    Cambiar la contraseña de un usuario
-    Retorna True si fue exitoso
+    Cambiar la contraseña de un usuario.
+    Usa el mismo hashing que registro (bcrypt) para que login verifique correctamente.
     """
     uid = int(user_id) if user_id is not None else None
     if uid is None:
@@ -601,10 +603,15 @@ def reset_user_password(db: Session, user_id: int, new_password: str) -> bool:
     user = db.query(Person).filter(Person.id == uid).first()
     if not user:
         return False
-    
-    # Hash nueva contraseña
-    user.hashed_password = get_password_hash(new_password)
+
+    # Strip to avoid mismatch with login (same as registration)
+    password_clean = (new_password or "").strip()
+    if not password_clean:
+        return False
+
+    # Use same hashing as registration (crud/base) so login verification matches
+    from crud.base import hash_password as bcrypt_hash
+    user.hashed_password = bcrypt_hash(password_clean)
     db.commit()
-    # No refresh needed; we don't use user after commit. Avoids session/DB issues in production.
-    
+
     return True
