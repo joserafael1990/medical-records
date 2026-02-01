@@ -1,0 +1,17 @@
+
+> frontend@0.1.0 build
+> react-scripts build
+
+Creating an optimized production build...
+node:internal/process/promises:391
+    triggerUncaughtException(err, true /* fromPromise */);
+    ^
+
+RpcIpcMessagePortClosedError: Cannot send the message - the message port has been closed for the process 54318.
+    at /Users/rafaelgarcia/Documents/Software projects/medical-records-main/frontend/node_modules/fork-ts-checker-webpack-plugin/lib/rpc/rpc-ipc/RpcIpcMessagePort.js:47:47
+    at process.processTicksAndRejections (node:internal/process/task_queues:81:21) {
+  code: undefined,
+  signal: undefined
+}
+
+Node.js v20.18.0

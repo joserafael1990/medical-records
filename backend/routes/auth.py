@@ -652,7 +652,14 @@ async def confirm_password_reset(
             )
         
         user_id = payload.get("user_id")
-        if not user_id:
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Token inválido"
+            )
+        try:
+            user_id = int(user_id)
+        except (TypeError, ValueError):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Token inválido"
@@ -673,7 +680,11 @@ async def confirm_password_reset(
     except HTTPException:
         raise
     except Exception as e:
-        api_logger.error("Error in password reset confirmation", error=str(e))
+        api_logger.error(
+            "Error in password reset confirmation",
+            error=str(e),
+            exc_info=True
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error al restablecer contraseña"

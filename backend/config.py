@@ -95,7 +95,7 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SMTP_USERNAME: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
-    EMAIL_FROM: str = "noreply@cortex-medical.com"
+    EMAIL_FROM: str = "info@cortexclinico.com"
     
     # File Upload Configuration
     MAX_FILE_SIZE: int = 10485760  # 10MB

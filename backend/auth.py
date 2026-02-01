@@ -595,13 +595,16 @@ def reset_user_password(db: Session, user_id: int, new_password: str) -> bool:
     Cambiar la contraseña de un usuario
     Retorna True si fue exitoso
     """
-    user = db.query(Person).filter(Person.id == user_id).first()
+    uid = int(user_id) if user_id is not None else None
+    if uid is None:
+        return False
+    user = db.query(Person).filter(Person.id == uid).first()
     if not user:
         return False
     
     # Hash nueva contraseña
     user.hashed_password = get_password_hash(new_password)
     db.commit()
-    db.refresh(user)
+    # No refresh needed; we don't use user after commit. Avoids session/DB issues in production.
     
     return True

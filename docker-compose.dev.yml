@@ -1,0 +1,49 @@
+# Docker Compose para DESARROLLO LOCAL - Optimizado para testing del agente
+# Uso: docker-compose -f docker-compose.dev.yml up
+
+services:
+  python-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      # Habilitar BuildKit para cache mounts
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    ports:
+      - "8000:8080"
+    environment:
+      - APP_ENV=development
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID:-lofty-reserve-479620-a3}
+      - GCP_REGION=us-central1
+      - GEMINI_BOT_ENABLED=true
+      # 💰 Para desarrollo sin costo, habilita sandbox mode:
+      # - GEMINI_BOT_SANDBOX_MODE=true  # $0 costo - usa respuestas mock
+      - GEMINI_BOT_SANDBOX_MODE=${GEMINI_BOT_SANDBOX_MODE:-false}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.0-flash-lite}
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/.gcloud/application_default_credentials.json
+      - DATABASE_URL=${DATABASE_URL:-postgresql://historias_user:historias_pass@postgres-db:5432/historias_clinicas}
+      - LOG_LEVEL=debug
+      - ENABLE_DEBUG_LOGGING=true
+    volumes:
+      # ✅ OPTIMIZACIÓN: Montar código como volumen para hot-reload (opcional)
+      # Descomenta si quieres que los cambios se reflejen sin rebuild:
+      # - ./backend:/app:ro
+      - ~/.config/gcloud:/app/.gcloud:ro
+    depends_on:
+      - postgres-db
+    # Habilitar hot-reload si montas el volumen (requiere uvicorn --reload)
+    # command: ["/app/.venv/bin/uvicorn", "main_clean_english:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
+
+  postgres-db:
+    image: postgres:16
+    environment:
+      - POSTGRES_USER=historias_user
+      - POSTGRES_PASSWORD=historias_pass
+      - POSTGRES_DB=historias_clinicas
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

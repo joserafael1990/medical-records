@@ -5,6 +5,13 @@ import json
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 
+# Import Sentry for error tracking (optional, fails gracefully if not configured)
+try:
+    import sentry_sdk
+    SENTRY_AVAILABLE = True
+except ImportError:
+    SENTRY_AVAILABLE = False
+
 # Configurar logging
 logger = logging.getLogger(__name__)
 
