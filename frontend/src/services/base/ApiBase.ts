@@ -392,8 +392,12 @@ export class ApiBase {
     }
 
     if (status >= 500) {
+      let message = ERROR_MESSAGES.SERVER_ERROR;
+      if (isErrorResponse(responseData) && typeof responseData.detail === 'string') {
+        message = responseData.detail;
+      }
       return {
-        message: ERROR_MESSAGES.SERVER_ERROR,
+        message,
         status,
         statusText,
         details: responseData

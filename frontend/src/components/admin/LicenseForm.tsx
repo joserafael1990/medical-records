@@ -18,6 +18,7 @@ import { es } from 'date-fns/locale';
 import { ApiService } from '../../services/ApiService';
 import { LicenseService } from '../../services/licenses/LicenseService';
 import { License, LicenseCreate, LicenseUpdate, LicenseType, LicenseStatus } from '../../types/license';
+import { parseApiError } from '../../utils/errorHandling';
 
 const apiService = new ApiService();
 const licenseService = new LicenseService();
@@ -106,7 +107,9 @@ export const LicenseForm: React.FC<LicenseFormProps> = ({
       }
       onSuccess();
     } catch (err: any) {
-      setError(err.message || 'Error al guardar licencia');
+      // err may be transformed ApiError (has message) or axios error (has response)
+      const message = err?.message ?? (err?.response ? parseApiError(err).message : null) ?? 'Error al guardar licencia';
+      setError(message);
     } finally {
       setLoading(false);
     }

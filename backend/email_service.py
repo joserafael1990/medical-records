@@ -47,9 +47,20 @@ class EmailService:
         """
         if not self.is_configured():
             # In development, log email instead of sending
+            try:
+                from logger import get_logger
+                get_logger("email").warning(
+                    "Email NOT sent: SMTP not configured",
+                    to_email=to_email,
+                    subject=subject,
+                    smtp_host_set=bool(self.smtp_host),
+                    smtp_username_set=bool(self.smtp_username),
+                    smtp_password_set=bool(self.smtp_password),
+                )
+            except Exception:
+                pass
             print(f"📧 [DEV MODE] Email would be sent to: {to_email}")
             print(f"📧 Subject: {subject}")
-            print(f"📧 Body:\n{text_body or html_body}")
             return {
                 "success": True,
                 "message": "Email service not configured. Email logged in development mode."

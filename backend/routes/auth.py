@@ -598,6 +598,10 @@ async def request_password_reset(
         )
         
         if email_result["success"]:
+            api_logger.info(
+                "Password reset email sent",
+                email=reset_data.email,
+            )
             return {
                 "message": "Si el correo existe, recibirás un enlace para restablecer tu contraseña"
             }
@@ -605,15 +609,20 @@ async def request_password_reset(
             # Log error pero no exponerlo al usuario
             api_logger.error(
                 "Error sending password reset email",
-                email=email,
+                email=reset_data.email,
                 error=email_result.get('error')
             )
             return {
                 "message": "Si el correo existe, recibirás un enlace para restablecer tu contraseña"
             }
-            
+
     except Exception as e:
-        api_logger.error("Error in password reset request", email=email, error=str(e))
+        api_logger.error(
+            "Error in password reset request",
+            email=getattr(reset_data, 'email', None),
+            error=str(e),
+            exc_info=True
+        )
         # Por seguridad, retornar siempre éxito
         return {
             "message": "Si el correo existe, recibirás un enlace para restablecer tu contraseña"

@@ -68,8 +68,12 @@ export const parseApiError = (error: any): ApiError => {
         message = `Error del servidor (${error.response.status})`;
     }
   } else if (error.request) {
-    // Network error
-    message = 'Error de conexión. Verifica tu conexión a internet.';
+    // Network error or timeout
+    if (error.code === 'ECONNABORTED') {
+      message = 'El servidor tardó demasiado en responder. Intenta de nuevo.';
+    } else {
+      message = 'Error de conexión. Verifica tu conexión a internet.';
+    }
   } else if (error.message) {
     message = error.message;
   }

@@ -4,6 +4,7 @@ License management endpoints
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 from datetime import date
 
@@ -27,17 +28,32 @@ def create_license(
     current_user: Person = Depends(get_current_user)
 ):
     """Create a new license for a doctor"""
-    # Verify doctor exists and is a doctor
-    doctor = db.query(Person).filter(
-        Person.id == license_data.doctor_id,
-        Person.person_type == 'doctor'
-    ).first()
-    
-    if not doctor:
-        raise HTTPException(status_code=404, detail="Doctor not found")
-    
-    license = crud.create_license(db, license_data, current_user.id)
-    return license
+    try:
+        # Verify doctor exists and is a doctor
+        doctor = db.query(Person).filter(
+            Person.id == license_data.doctor_id,
+            Person.person_type == 'doctor'
+        ).first()
+
+        if not doctor:
+            raise HTTPException(status_code=404, detail="Doctor not found")
+
+        license = crud.create_license(db, license_data, current_user.id)
+        return license
+    except HTTPException:
+        raise
+    except IntegrityError as e:
+        api_logger.warning("License integrity error (e.g. duplicate doctor)", error=str(e))
+        raise HTTPException(
+            status_code=409,
+            detail="El doctor ya tiene una licencia. Edita la existente o desactívala primero."
+        )
+    except Exception as e:
+        api_logger.error("Error creating license", error=str(e), exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Error al crear la licencia. Verifica que la tabla de licencias exista y vuelve a intentar."
+        )
 
 @router.get("", response_model=List[schemas.LicenseResponse])
 def get_licenses(
