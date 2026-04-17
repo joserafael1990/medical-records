@@ -656,7 +656,7 @@ const PreviousStudiesSection: React.FC<PreviousStudiesSectionProps> = ({
                         </Box>
                         {study.file_path && (
                           <Tooltip title="Ver archivo">
-                            <IconButton 
+                            <IconButton aria-label="Ver archivo" 
                               size="small" 
                               onClick={() => handleViewFile(study.id)}
                             >
@@ -706,7 +706,7 @@ const PreviousStudiesSection: React.FC<PreviousStudiesSectionProps> = ({
                   </Box>
                   <Box sx={{ display: 'flex', gap: 0.5 }}>
                     <Tooltip title="Eliminar estudio">
-                      <IconButton size="small" color="error" onClick={() => onRemoveStudy(study.id)}>
+                      <IconButton aria-label="Eliminar" size="small" color="error" onClick={() => onRemoveStudy(study.id)}>
                         <DeleteIcon sx={{ fontSize: 16 }} />
                       </IconButton>
                     </Tooltip>

@@ -107,7 +107,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({
         {/* Left side - Logo and Navigation */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           {showBackButton && onBack && (
-            <IconButton onClick={onBack} sx={{ color: 'primary.main' }}>
+            <IconButton aria-label="Regresar" onClick={onBack} sx={{ color: 'primary.main' }}>
               <ArrowBackIcon />
             </IconButton>
           )}
@@ -131,7 +131,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           {/* Quick Add Button */}
           {canAddNew && (
-            <IconButton
+            <IconButton aria-label="Agregar"
               onClick={getAddAction()}
               sx={{
                 bgcolor: 'primary.main',
@@ -159,7 +159,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({
               </Typography>
             </Box>
             
-            <IconButton onClick={handleProfileMenuOpen}>
+            <IconButton aria-label="Menú de usuario" onClick={handleProfileMenuOpen}>
               <Avatar sx={{ width: 40, height: 40, bgcolor: 'primary.main' }}>
                 {doctorProfile ? 
                   doctorProfile.name?.split(' ').slice(0, 2).map(n => n[0]).join('') || 'U' :

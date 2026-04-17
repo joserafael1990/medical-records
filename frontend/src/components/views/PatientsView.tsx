@@ -256,7 +256,7 @@ const PatientsView: React.FC<PatientsViewProps> = ({
               {successMessage}
             </Typography>
           </Box>
-          <IconButton 
+          <IconButton aria-label="Cerrar" 
             size="small" 
             onClick={() => setSuccessMessage('')}
             sx={{ color: '#155724' }}

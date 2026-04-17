@@ -100,7 +100,7 @@ const AvatarGridItem: React.FC<{
       </Typography>
       {deletable && onDelete && (
         <Tooltip title="Eliminar avatar">
-          <IconButton
+          <IconButton aria-label="Eliminar"
             size="small"
             onClick={(event) => {
               event.stopPropagation();

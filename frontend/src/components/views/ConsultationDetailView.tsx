@@ -121,7 +121,7 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
     <Box>
       {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <IconButton 
+        <IconButton aria-label="Regresar" 
           onClick={onBack} 
           sx={{ mr: 2, bgcolor: 'action.hover' }}
           size="large"

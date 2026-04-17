@@ -317,7 +317,7 @@ export const RemindersConfig: React.FC<RemindersConfigProps> = ({
                           </Typography>
                         </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <IconButton
+                          <IconButton aria-label="Eliminar"
                             size="small"
                             onClick={() => handleDeleteReminder(reminder.reminder_number)}
                             disabled={disabled}

@@ -255,7 +255,7 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
 
             {showAddButton && (
               <Tooltip title="Agregar estudio">
-                <IconButton
+                <IconButton aria-label="Agregar"
                   size="small"
                   color="primary"
                   onClick={() => handleStudySelect(study)}

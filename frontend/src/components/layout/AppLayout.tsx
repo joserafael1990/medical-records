@@ -183,12 +183,44 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      
+
+      {/* Skip-to-content link for keyboard / screen-reader users. Visible only when focused. */}
+      <Box
+        component="a"
+        href="#main-content"
+        sx={{
+          position: 'absolute',
+          left: -10000,
+          top: 'auto',
+          width: 1,
+          height: 1,
+          overflow: 'hidden',
+          '&:focus': {
+            position: 'fixed',
+            left: 16,
+            top: 16,
+            width: 'auto',
+            height: 'auto',
+            zIndex: (t) => t.zIndex.tooltip + 1,
+            px: 2,
+            py: 1,
+            bgcolor: 'primary.main',
+            color: 'primary.contrastText',
+            borderRadius: 1,
+            textDecoration: 'none',
+            boxShadow: 3,
+            fontWeight: 600
+          }
+        }}
+      >
+        Saltar al contenido principal
+      </Box>
+
       {/* Top App Bar */}
       <AppBar position="static" elevation={1}>
         <Toolbar>
           {isMobile && (
-            <IconButton
+            <IconButton aria-label="Abrir menú"
               color="inherit"
               edge="start"
               onClick={handleToggleMobileNav}
@@ -210,7 +242,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           </Box>
 
           {/* Notification icon */}
-          <IconButton color="inherit" sx={{ mr: 1 }}>
+          <IconButton aria-label="Notificaciones" color="inherit" sx={{ mr: 1 }}>
             <NotificationIcon />
           </IconButton>
 
@@ -260,7 +292,14 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       />
 
       {/* Main Content */}
-      <Container maxWidth="xl" sx={{ mt: 3, mb: 3 }}>
+      <Container
+        id="main-content"
+        component="main"
+        role="main"
+        maxWidth="xl"
+        sx={{ mt: 3, mb: 3, scrollMarginTop: 80 }}
+        tabIndex={-1}
+      >
         <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', md: 'row' } }}>
           <Drawer
             anchor="left"

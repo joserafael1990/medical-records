@@ -630,7 +630,7 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
                         <Box sx={{ display: 'flex', gap: 0.5 }}>
                           {study.file_path && (
                             <Tooltip title="Ver archivo">
-                              <IconButton 
+                              <IconButton aria-label="Ver archivo" 
                                 size="small" 
                                 onClick={() => handleViewFile(study.id)}
                               >
@@ -640,7 +640,7 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
                           )}
                           {study.file_path && study.file_name && (
                             <Tooltip title="Descargar archivo">
-                              <IconButton 
+                              <IconButton aria-label="Descargar" 
                                 size="small" 
                                 onClick={() => handleViewFile(study.id)}
                               >
@@ -666,7 +666,7 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
                   </Box>
                   <Box sx={{ display: 'flex', gap: 0.5 }}>
                     <Tooltip title="Eliminar estudio">
-                      <IconButton size="small" color="error" onClick={() => onRemoveStudy(study.id)}>
+                      <IconButton aria-label="Eliminar" size="small" color="error" onClick={() => onRemoveStudy(study.id)}>
                         <DeleteIcon sx={{ fontSize: 16 }} />
                       </IconButton>
                     </Tooltip>

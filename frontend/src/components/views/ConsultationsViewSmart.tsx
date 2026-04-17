@@ -432,7 +432,7 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
                   ),
                   endAdornment: searchTerm && (
                     <InputAdornment position="end">
-                      <IconButton
+                      <IconButton aria-label="Limpiar"
                         size="small"
                         onClick={() => setSearchTerm('')}
                       >

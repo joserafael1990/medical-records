@@ -401,7 +401,7 @@ const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
                 </CardContent>
                 <CardContent sx={{ p: 1, pt: 0, display: 'flex', justifyContent: 'flex-end' }}>
                   <Tooltip title="Eliminar">
-                    <IconButton
+                    <IconButton aria-label="Eliminar"
                       size="small"
                       onClick={() => onDeletePrescription(prescription.id)}
                       sx={{ color: '#f44336' }}

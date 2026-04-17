@@ -84,7 +84,7 @@ export const AccountInfoStep: React.FC<AccountInfoStepProps> = ({
         InputProps={{
           endAdornment: (
             <InputAdornment position="end">
-              <IconButton
+              <IconButton aria-label="Ocultar contraseña"
                 onClick={() => setShowPassword(!showPassword)}
                 edge="end"
               >
@@ -147,7 +147,7 @@ export const AccountInfoStep: React.FC<AccountInfoStepProps> = ({
         InputProps={{
           endAdornment: (
             <InputAdornment position="end">
-              <IconButton
+              <IconButton aria-label="Ocultar contraseña"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                 edge="end"
               >

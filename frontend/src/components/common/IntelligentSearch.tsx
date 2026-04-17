@@ -112,7 +112,7 @@ export const IntelligentSearch: React.FC<IntelligentSearchProps> = ({
                 {/* Botón de limpiar */}
                 {searchTerm && (
                   <Fade in={!!searchTerm}>
-                    <IconButton
+                    <IconButton aria-label="Limpiar"
                       size="small"
                       onClick={handleClear}
                       disabled={disabled}
@@ -128,7 +128,7 @@ export const IntelligentSearch: React.FC<IntelligentSearchProps> = ({
                 
                 {/* Botón de filtros */}
                 {showFilterButton && onFilterClick && (
-                  <IconButton
+                  <IconButton aria-label="Restablecer filtros"
                     size="small"
                     onClick={onFilterClick}
                     disabled={disabled}

@@ -143,7 +143,7 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
             {isEditing ? 'Editar Estudio Clínico' : 'Nuevo Estudio Clínico'}
           </Typography>
         </Box>
-        <IconButton onClick={onClose} size="small">
+        <IconButton aria-label="Cerrar" onClick={onClose} size="small">
           <CloseIcon />
         </IconButton>
       </DialogTitle>

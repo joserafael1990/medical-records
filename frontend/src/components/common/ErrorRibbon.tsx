@@ -96,7 +96,7 @@ export const ErrorRibbon: React.FC<ErrorRibbonProps> = ({
         </Typography>
       </Box>
       {onClose && (
-        <IconButton 
+        <IconButton aria-label="Cerrar" 
           size="small" 
           onClick={onClose}
           sx={{ color: config.color }}

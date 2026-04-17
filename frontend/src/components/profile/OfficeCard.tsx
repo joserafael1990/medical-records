@@ -72,7 +72,7 @@ export const OfficeCard: React.FC<OfficeCardProps> = ({ office, onEdit, onDelete
                         />
                     </Box>
                 </Box>
-                <IconButton
+                <IconButton aria-label="Eliminar"
                     size="small"
                     onClick={(e) => {
                         e.stopPropagation();

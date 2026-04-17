@@ -151,6 +151,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     {toast.action && (
                       <IconButton
+                        aria-label={toast.action.label}
                         size="small"
                         onClick={toast.action.onClick}
                         sx={{ color: 'inherit' }}
@@ -158,7 +159,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                         {toast.action.label}
                       </IconButton>
                     )}
-                    <IconButton
+                    <IconButton aria-label="Cerrar"
                       size="small"
                       onClick={() => hideToast(toast.id)}
                       sx={{ color: 'inherit' }}
