@@ -427,7 +427,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <IconButton onClick={() => handleDateNavigation('prev')} size="small">
+              <IconButton aria-label="Día anterior" onClick={() => handleDateNavigation('prev')} size="small">
                 <ChevronLeftIcon />
               </IconButton>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 300, justifyContent: 'center' }}>
@@ -436,7 +436,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                   {dateRangeTitle}
                 </Typography>
               </Box>
-              <IconButton onClick={() => handleDateNavigation('next')} size="small">
+              <IconButton aria-label="Día siguiente" onClick={() => handleDateNavigation('next')} size="small">
                 <ChevronRightIcon />
               </IconButton>
               <Button

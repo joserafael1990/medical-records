@@ -140,7 +140,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             {formHook.isEditing ? 'Editar Consulta' : 'Nueva Consulta'}
           </Typography>
         </Box>
-        <IconButton onClick={handleClose} size="small">
+        <IconButton aria-label="Cerrar" onClick={handleClose} size="small">
           <CloseIcon />
         </IconButton>
       </DialogTitle>

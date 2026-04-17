@@ -157,7 +157,7 @@ export const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
                         </Typography>
                       )}
                     </Box>
-                    <IconButton
+                    <IconButton aria-label="Eliminar"
                       size="small"
                       onClick={() => handleRemovePrescription(prescription.id)}
                       color="error"

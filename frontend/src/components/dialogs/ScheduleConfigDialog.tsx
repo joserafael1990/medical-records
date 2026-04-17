@@ -227,7 +227,7 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
                       <Typography variant="subtitle2" color="primary" sx={{ fontWeight: 600 }}>
                         Horario {blockIndex + 1}
                       </Typography>
-                      <IconButton
+                      <IconButton aria-label="Cerrar"
                         size="small"
                         color="error"
                         onClick={() => removeTimeBlock(day.index, blockIndex)}
@@ -341,7 +341,7 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
             Configuración de Horarios
           </Typography>
         </Box>
-        <IconButton onClick={finalHandleClose} size="small">
+        <IconButton aria-label="Cerrar" onClick={finalHandleClose} size="small">
           <CloseIcon />
         </IconButton>
       </DialogTitle>

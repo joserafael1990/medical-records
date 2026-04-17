@@ -308,7 +308,7 @@ const DiagnosisSection: React.FC<DiagnosisSectionProps> = ({
                       </Typography>
                       <Box>
                         <Tooltip title="Eliminar diagnóstico">
-                          <IconButton
+                          <IconButton aria-label="Eliminar"
                             size="small"
                             color="error"
                             onClick={() => onRemoveDiagnosis(String(diagnosis.id))}

@@ -255,7 +255,7 @@ export const PrivacyConsentDialog: React.FC<PrivacyConsentDialogProps> = ({
               Consentimiento de Privacidad
             </Typography>
           </Box>
-          <IconButton onClick={onClose} size="small">
+          <IconButton aria-label="Cerrar" onClick={onClose} size="small">
             <CloseIcon />
           </IconButton>
         </Box>

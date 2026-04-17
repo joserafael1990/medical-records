@@ -242,7 +242,7 @@ export const EnhancedErrorDisplay: React.FC<EnhancedErrorDisplayProps> = ({
                 </Button>
               )}
               {showDetails && (
-                <IconButton
+                <IconButton aria-label="Más información"
                   color="inherit"
                   size="small"
                   onClick={() => setShowDetailDialog(true)}
@@ -251,7 +251,7 @@ export const EnhancedErrorDisplay: React.FC<EnhancedErrorDisplayProps> = ({
                 </IconButton>
               )}
               {onClose && (
-                <IconButton
+                <IconButton aria-label="Cerrar"
                   color="inherit"
                   size="small"
                   onClick={onClose}
@@ -295,7 +295,7 @@ export const EnhancedErrorDisplay: React.FC<EnhancedErrorDisplayProps> = ({
         >
           <DialogTitle>
             Detalles del Problema Técnico
-            <IconButton
+            <IconButton aria-label="Cerrar"
               sx={{ position: 'absolute', right: 8, top: 8 }}
               onClick={() => setShowDetailDialog(false)}
             >
@@ -369,7 +369,7 @@ export const EnhancedErrorDisplay: React.FC<EnhancedErrorDisplayProps> = ({
                 Ir al Error
               </Button>
             )}
-            <IconButton
+            <IconButton aria-label="Contraer"
               color="inherit"
               size="small"
               onClick={() => setExpanded(!expanded)}

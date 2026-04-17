@@ -167,7 +167,7 @@ export const SmartTable = <T extends Record<string, any>>({
                 Ordenado por: <strong>{columns.find(col => col.key === sortConfig.field)?.label || 'columna'}</strong>
               </Typography>
               <Tooltip title="Limpiar ordenamiento">
-                <IconButton size="small" onClick={resetSort}>
+                <IconButton aria-label="Restablecer filtros" size="small" onClick={resetSort}>
                   <FilterIcon fontSize="small" />
                 </IconButton>
               </Tooltip>

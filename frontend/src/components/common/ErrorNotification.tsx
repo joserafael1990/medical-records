@@ -116,7 +116,7 @@ export const ErrorNotification: React.FC<ErrorNotificationProps> = ({
               </Button>
             )}
             {showDetails && (
-              <IconButton
+              <IconButton aria-label="Contraer"
                 color="inherit"
                 size="small"
                 onClick={() => setExpanded(!expanded)}

@@ -149,7 +149,7 @@ const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
         <Typography variant="h6">
           {isEditing ? 'Editar Consultorio' : 'Nuevo Consultorio'}
         </Typography>
-        <IconButton onClick={onClose} size="small">
+        <IconButton aria-label="Cerrar" onClick={onClose} size="small">
           <CloseIcon />
         </IconButton>
       </DialogTitle>

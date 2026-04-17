@@ -381,7 +381,7 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
                     {hasValue && item.isExisting && item.id && (
                       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
                         <Tooltip title="Eliminar">
-                          <IconButton
+                          <IconButton aria-label="Eliminar"
                             size="small"
                             onClick={() => {
                               const existingVitalSign = vitalSigns.find(vs => vs.id === item.id);
@@ -402,6 +402,7 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
                       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
                         <Tooltip title="Eliminar">
                           <IconButton
+                            aria-label="Eliminar"
                             size="small"
                             onClick={() => {
                               setSavedVitalSigns(prev => {

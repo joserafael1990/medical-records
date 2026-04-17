@@ -289,7 +289,7 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
             {isEditing ? 'Editar Perfil Profesional' : 'Crear Perfil Profesional'}
           </Typography>
         </Box>
-        <IconButton onClick={handleClose} size="small">
+        <IconButton aria-label="Cerrar" onClick={handleClose} size="small">
           <CloseIcon />
         </IconButton>
       </DialogTitle>

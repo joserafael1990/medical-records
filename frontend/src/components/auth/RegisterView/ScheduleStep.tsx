@@ -224,7 +224,7 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                             <Typography variant="subtitle2" color="primary" sx={{ fontWeight: 600 }}>
                               Horario {blockIndex + 1}
                             </Typography>
-                            <IconButton
+                            <IconButton aria-label="Cancelar"
                               size="small"
                               color="error"
                               onClick={() => onRemoveTimeBlock(day.index, blockIndex)}

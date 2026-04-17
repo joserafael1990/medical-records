@@ -285,7 +285,7 @@ const DigitalSignatureDialog: React.FC<DigitalSignatureDialogProps> = ({
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton
+                    <IconButton aria-label="Ocultar contraseña"
                       onClick={() => setShowPassword(!showPassword)}
                       edge="end"
                     >
@@ -313,7 +313,7 @@ const DigitalSignatureDialog: React.FC<DigitalSignatureDialogProps> = ({
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton
+                    <IconButton aria-label="Ocultar contraseña"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                       edge="end"
                     >
@@ -452,7 +452,7 @@ const DigitalSignatureDialog: React.FC<DigitalSignatureDialogProps> = ({
             InputProps={{
               endAdornment: (
                 <InputAdornment position="end">
-                  <IconButton
+                  <IconButton aria-label="Ocultar contraseña"
                     onClick={() => setShowPassword(!showPassword)}
                     edge="end"
                   >
@@ -491,7 +491,7 @@ const DigitalSignatureDialog: React.FC<DigitalSignatureDialogProps> = ({
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton
+                    <IconButton aria-label="Ocultar contraseña"
                       onClick={() => setShowPassword(!showPassword)}
                       edge="end"
                     >

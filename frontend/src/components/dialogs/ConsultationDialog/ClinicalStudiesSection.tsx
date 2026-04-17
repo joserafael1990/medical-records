@@ -114,7 +114,7 @@ export const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
                         <Chip label="Nuevo" size="small" color="primary" sx={{ mt: 0.5 }} />
                       )}
                     </Box>
-                    <IconButton
+                    <IconButton aria-label="Eliminar"
                       size="small"
                       onClick={() => handleRemoveStudy(study.id)}
                       color="error"

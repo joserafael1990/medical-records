@@ -236,7 +236,7 @@ export const LicenseManagement: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <Tooltip title="Editar licencia">
-                          <IconButton
+                          <IconButton aria-label="Editar"
                             size="small"
                             onClick={() => handleEdit(license)}
                             color="primary"

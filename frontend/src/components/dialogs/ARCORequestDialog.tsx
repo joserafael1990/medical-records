@@ -255,7 +255,7 @@ export const ARCORequestDialog: React.FC<ARCORequestDialogProps> = ({
               Derechos ARCO
             </Typography>
           </Box>
-          <IconButton onClick={onClose} size="small">
+          <IconButton aria-label="Cerrar" onClick={onClose} size="small">
             <CloseIcon />
           </IconButton>
         </Box>

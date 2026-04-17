@@ -137,7 +137,7 @@ const PrescriptionDialog: React.FC<PrescriptionDialogProps> = ({
             {isEditing ? 'Editar Medicamento' : 'Agregar Medicamento'}
           </Typography>
         </Box>
-        <IconButton onClick={onClose} size="small">
+        <IconButton aria-label="Cerrar" onClick={onClose} size="small">
           <CloseIcon />
         </IconButton>
       </DialogTitle>
