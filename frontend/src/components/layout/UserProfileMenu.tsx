@@ -173,6 +173,13 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
                   Cédula: {doctorProfile?.professional_license || user?.person?.professional_license}
                 </Typography>
               )}
+              {(doctorProfile?.last_login || user?.person?.last_login) && (
+                <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2, display: 'block' }}>
+                  Última conexión: {new Date(doctorProfile?.last_login || user?.person?.last_login).toLocaleString('es-MX', {
+                    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                  })}
+                </Typography>
+              )}
             </Box>
           </Box>
         </Box>
