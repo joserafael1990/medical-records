@@ -14,7 +14,6 @@ import {
   Assignment as AssignmentIcon,
   CalendarToday as CalendarIcon,
   Analytics as AnalyticsIcon,
-  Palette as StyleGuideIcon,
   VpnKey as LicenseIcon,
 } from '@mui/icons-material';
 

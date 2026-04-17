@@ -49,13 +49,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const { user } = useAuth();
 
-  // Debug: Log props when component renders
-  //   onNewAppointment: !!onNewAppointment,
-  //   onNewConsultation: !!onNewConsultation,
-  //   onNewPatient: !!onNewPatient,
-  //   appointmentsCount: appointments.length
-  // });
-
   const today = new Date();
   const todayAppointments = appointments.filter(apt => {
     const aptDate = new Date(apt.date_time);
@@ -63,7 +56,39 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   });
 
   const confirmedAppointments = todayAppointments.filter(apt => apt.status === 'confirmada');
-  
+
+  // Upcoming appointments: from now, next 5 ordered chronologically.
+  const upcomingAppointments = useMemo(() => {
+    const now = Date.now();
+    return [...appointments]
+      .filter((apt) => new Date(apt.date_time).getTime() >= now)
+      .sort((a, b) => new Date(a.date_time).getTime() - new Date(b.date_time).getTime())
+      .slice(0, 5);
+  }, [appointments]);
+
+  const startOfWeek = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.getTime();
+  }, []);
+
+  const consultationsThisWeek = consultations.filter((c: any) => {
+    const d = c.consultation_date || c.created_at;
+    return d && new Date(d).getTime() >= startOfWeek;
+  }).length;
+
+  const newPatientsThisWeek = useMemo(() => {
+    // Infer from consultations: unique patient_ids whose earliest consultation is <7 days old.
+    const byPatient: Record<string, number> = {};
+    for (const c of consultations as any[]) {
+      if (!c.patient_id) continue;
+      const d = new Date(c.consultation_date || c.created_at || 0).getTime();
+      const key = String(c.patient_id);
+      if (!(key in byPatient) || d < byPatient[key]) byPatient[key] = d;
+    }
+    return Object.values(byPatient).filter((t) => t >= startOfWeek).length;
+  }, [consultations, startOfWeek]);
+
   // Calcular consultas completadas - total de consultas (no solo las de hoy)
   const completedConsultations = consultations.length;
 
@@ -247,7 +272,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         </Box>
 
         <Box sx={{ flex: 1, minWidth: 200 }}>
-          <Card sx={{ 
+          <Card sx={{
             bgcolor: 'background.paper',
             '&:hover': {
               boxShadow: '0 1px 3px rgba(0,0,0,0.12)'
@@ -256,10 +281,29 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             <CardContent sx={{ textAlign: 'center', py: 3 }}>
               <HospitalIcon sx={{ fontSize: 40, mb: 1, color: 'primary.main' }} />
               <Typography variant="h2" sx={{ mb: 1, color: 'text.primary' }}>
-                {completedConsultations}
+                {consultationsThisWeek}
               </Typography>
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                Consultas Completadas
+                Consultas esta semana
+              </Typography>
+            </CardContent>
+          </Card>
+        </Box>
+
+        <Box sx={{ flex: 1, minWidth: 200 }}>
+          <Card sx={{
+            bgcolor: 'background.paper',
+            '&:hover': {
+              boxShadow: '0 1px 3px rgba(0,0,0,0.12)'
+            }
+          }}>
+            <CardContent sx={{ textAlign: 'center', py: 3 }}>
+              <PersonIcon sx={{ fontSize: 40, mb: 1, color: 'info.main' }} />
+              <Typography variant="h2" sx={{ mb: 1, color: 'text.primary' }}>
+                {newPatientsThisWeek}
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                Pacientes nuevos esta semana
               </Typography>
             </CardContent>
           </Card>
@@ -315,65 +359,80 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         </CardContent>
       </Card>
 
-      {/* Today's Schedule Preview */}
+      {/* Upcoming Appointments */}
       <Card>
         <CardContent sx={{ p: 4 }}>
           <Typography variant="h4" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1, color: 'text.primary' }}>
             <CalendarIcon color="primary" />
-            Agenda de Hoy
+            Próximas citas
           </Typography>
-          
-          {todayAppointments.length === 0 ? (
+
+          {upcomingAppointments.length === 0 ? (
             <Box sx={{ textAlign: 'center', py: 4 }}>
               <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-                No tienes citas programadas para hoy 
+                No tienes citas próximas
               </Typography>
               <Button
                 variant="contained"
                 startIcon={<AddIcon />}
                 onClick={onNewAppointment}
               >
-                Programar Primera Cita
+                Programar nueva cita
               </Button>
             </Box>
           ) : (
             <Box>
-              {todayAppointments.map((appointment, index) => (
-                <Box
-                  key={appointment.id || index}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 2,
-                    p: 2,
-                    border: 1,
-                    borderColor: 'divider',
-                    borderRadius: 2,
-                    mb: 2,
-                    '&:last-child': { mb: 0 },
-                    '&:hover': {
-                      bgcolor: 'action.hover'
-                    }
-                  }}
-                >
-                  <Avatar sx={{ bgcolor: 'primary.main' }}>
-                    {(appointment.patient_name || appointment.patient?.name || 'P')[0].toUpperCase()}
-                  </Avatar>
-                  <Box sx={{ flex: 1 }}>
-                    <Typography variant="body1" sx={{ color: 'text.primary' }}>
-                      {appointment.patient_name || appointment.patient?.name || 'Paciente'}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {formatTime(appointment.date_time)} - {appointment.appointment_type_name || 'Cita'}
-                    </Typography>
+              {upcomingAppointments.map((appointment, index) => {
+                const apptDate = new Date(appointment.date_time);
+                const isToday = apptDate.toDateString() === today.toDateString();
+                const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+                const isTomorrow = apptDate.toDateString() === tomorrow.toDateString();
+                const dayLabel = isToday
+                  ? 'Hoy'
+                  : isTomorrow
+                    ? 'Mañana'
+                    : format(apptDate, "EEE d MMM", { locale: es });
+                return (
+                  <Box
+                    key={appointment.id || index}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 2,
+                      p: 2,
+                      border: 1,
+                      borderColor: 'divider',
+                      borderRadius: 2,
+                      mb: 2,
+                      '&:last-child': { mb: 0 },
+                      '&:hover': {
+                        bgcolor: 'action.hover'
+                      }
+                    }}
+                  >
+                    <Avatar sx={{ bgcolor: 'primary.main' }}>
+                      {(appointment.patient_name || appointment.patient?.name || 'P')[0].toUpperCase()}
+                    </Avatar>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="body1" sx={{ color: 'text.primary' }} noWrap>
+                        {appointment.patient_name || appointment.patient?.name || 'Paciente'}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        <Box component="span" sx={{ fontWeight: 600, color: isToday ? 'primary.main' : 'text.secondary' }}>
+                          {dayLabel}
+                        </Box>
+                        {' · '}{formatTime(appointment.date_time)}
+                        {' · '}{appointment.appointment_type_name || 'Cita'}
+                      </Typography>
+                    </Box>
+                    <Chip
+                      label={appointment.status === 'confirmada' ? 'Confirmada' : appointment.status === 'por_confirmar' ? 'Por confirmar' : appointment.status}
+                      color={appointment.status === 'confirmada' ? 'success' : appointment.status === 'por_confirmar' ? 'primary' : 'default'}
+                      size="small"
+                    />
                   </Box>
-                  <Chip
-                    label={appointment.status === 'confirmada' ? 'Confirmada' : appointment.status === 'por_confirmar' ? 'Por confirmar' : appointment.status}
-                    color={appointment.status === 'confirmada' ? 'success' : appointment.status === 'por_confirmar' ? 'primary' : 'default'}
-                    size="small"
-                  />
-                </Box>
-              ))}
+                );
+              })}
             </Box>
           )}
         </CardContent>

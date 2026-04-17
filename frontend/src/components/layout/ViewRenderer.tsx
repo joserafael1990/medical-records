@@ -6,8 +6,7 @@ import {
   PatientsViewSmart,
   ConsultationsViewSmart,
   AgendaView,
-  DoctorProfileView,
-  StyleGuideView
+  DoctorProfileView
 } from '../lazy';
 import PatientsView from '../views/PatientsView';
 import { ConsultationDetailView } from '../';
@@ -143,12 +142,6 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
           />
         </Suspense>
       )}
-
-             {activeView === 'styleguide' && (
-               <LazyWrapper>
-                 <StyleGuideView />
-               </LazyWrapper>
-             )}
 
       {activeView === 'analytics' && (
         <Suspense fallback={<LoadingFallback message="Cargando analíticas..." />}>

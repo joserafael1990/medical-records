@@ -37,7 +37,7 @@ import { usePatientManagement } from '../../hooks/usePatientManagement';
 import { useConsultationManagement } from '../../hooks/useConsultationManagement';
 import { useAppointmentManager } from '../../hooks/useAppointmentManager';
 import { useAuth } from '../../contexts/AuthContext';
-import CortexBrainLogo from '../common/CortexBrainLogo';
+import CortexLogo from '../common/CortexLogo';
 import { API_CONFIG } from '../../constants';
 // Dialog imports
 import PatientDialog from '../dialogs/PatientDialog'; // ✅ Now implemented!
@@ -152,7 +152,7 @@ const AppLayoutInner: React.FC<AppLayoutProps> = ({
       onKeyDown={handleCloseMobileNav}
     >
       <Box sx={{ p: 2 }}>
-        <CortexBrainLogo sx={{ fontSize: 44 }} />
+        <CortexLogo variant="full" sx={{ fontSize: 44 }} />
       </Box>
       <Divider />
       <List>
@@ -229,7 +229,7 @@ const AppLayoutInner: React.FC<AppLayoutProps> = ({
               <MenuIcon />
             </IconButton>
           )}
-          <CortexBrainLogo sx={{ flexGrow: 1 }} />
+          <CortexLogo variant="full" sx={{ flexGrow: 1 }} />
           
           {/* Status indicators */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mr: 2 }}>
