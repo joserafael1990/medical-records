@@ -205,7 +205,15 @@ def login_user(db: Session, email: str, password: str) -> Dict[str, Any]:
             detail="Credenciales inválidas",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    
+
+    # Registrar último login exitoso (CDMX timezone, consistente con resto del sistema)
+    try:
+        import pytz
+        user.last_login = datetime.now(pytz.timezone('America/Mexico_City')).replace(tzinfo=None)
+        db.commit()
+    except Exception:
+        db.rollback()
+
     # Crear payload para tokens - ALL ENGLISH FIELD NAMES
     token_data = {
         "sub": user.email,  # Use email as username/subject
