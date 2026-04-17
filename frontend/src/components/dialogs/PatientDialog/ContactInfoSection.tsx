@@ -38,7 +38,7 @@ export const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
       
       <Grid container spacing={2}>
         {/* Email */}
-        <Grid item xs={12} sm={6}>
+        <Grid size={{ xs: 12, sm: 6 }}>
           <TextField
             label="Correo Electrónico"
             type="email"
@@ -52,7 +52,7 @@ export const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
         </Grid>
         
         {/* Primary Phone */}
-        <Grid item xs={12} sm={6}>
+        <Grid size={{ xs: 12, sm: 6 }}>
           <TextField
             label="Teléfono Principal"
             type="tel"
@@ -67,7 +67,7 @@ export const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
         </Grid>
         
         {/* Home Address */}
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <TextField
             label="Dirección"
             value={formData.home_address}
@@ -82,7 +82,7 @@ export const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
         </Grid>
         
         {/* City */}
-        <Grid item xs={12} sm={6}>
+        <Grid size={{ xs: 12, sm: 6 }}>
           <TextField
             label="Ciudad"
             value={formData.address_city}
@@ -94,7 +94,7 @@ export const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
         </Grid>
         
         {/* Postal Code */}
-        <Grid item xs={12} sm={6}>
+        <Grid size={{ xs: 12, sm: 6 }}>
           <TextField
             label="Código Postal"
             value={formData.address_postal_code}

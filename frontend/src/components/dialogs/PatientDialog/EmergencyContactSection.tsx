@@ -47,7 +47,7 @@ export const EmergencyContactSection: React.FC<EmergencyContactSectionProps> = (
       
       <Grid container spacing={2}>
         {/* Emergency Contact Name */}
-        <Grid item xs={12} sm={6}>
+        <Grid size={{ xs: 12, sm: 6 }}>
           <TextField
             label="Nombre del Contacto"
             value={formData.emergency_contact_name}
@@ -59,7 +59,7 @@ export const EmergencyContactSection: React.FC<EmergencyContactSectionProps> = (
         </Grid>
         
         {/* Emergency Contact Phone */}
-        <Grid item xs={12} sm={6}>
+        <Grid size={{ xs: 12, sm: 6 }}>
           <TextField
             label="Teléfono del Contacto"
             type="tel"
@@ -73,7 +73,7 @@ export const EmergencyContactSection: React.FC<EmergencyContactSectionProps> = (
         </Grid>
         
         {/* Emergency Contact Relationship */}
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <FormControl fullWidth error={!!errors.emergency_contact_relationship}>
             <InputLabel>Relación</InputLabel>
             <Select

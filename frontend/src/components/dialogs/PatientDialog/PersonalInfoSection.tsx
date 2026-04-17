@@ -69,7 +69,7 @@ export const PersonalInfoSection: React.FC<PersonalInfoSectionProps> = ({
       
       <Grid container spacing={2}>
         {/* Full Name */}
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <TextField
             label="Nombre Completo"
             value={formData.name}
@@ -82,7 +82,7 @@ export const PersonalInfoSection: React.FC<PersonalInfoSectionProps> = ({
         </Grid>
         
         {/* Birth Date */}
-        <Grid item xs={12} sm={6}>
+        <Grid size={{ xs: 12, sm: 6 }}>
           <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
             <DatePicker
               label="Fecha de Nacimiento"
@@ -101,7 +101,7 @@ export const PersonalInfoSection: React.FC<PersonalInfoSectionProps> = ({
         </Grid>
         
         {/* Gender */}
-        <Grid item xs={12} sm={6}>
+        <Grid size={{ xs: 12, sm: 6 }}>
           <FormControl fullWidth error={!!errors.gender}>
             <InputLabel>Género</InputLabel>
             <Select
@@ -120,7 +120,7 @@ export const PersonalInfoSection: React.FC<PersonalInfoSectionProps> = ({
         </Grid>
         
         {/* Civil Status */}
-        <Grid item xs={12} sm={6}>
+        <Grid size={{ xs: 12, sm: 6 }}>
           <FormControl fullWidth>
             <InputLabel>Estado Civil</InputLabel>
             <Select
@@ -138,7 +138,7 @@ export const PersonalInfoSection: React.FC<PersonalInfoSectionProps> = ({
         </Grid>
         
         {/* CURP - Usado para búsquedas y visualización de pacientes */}
-        <Grid item xs={12} sm={6}>
+        <Grid size={{ xs: 12, sm: 6 }}>
           <TextField
             label="CURP"
             value={formData.curp}
@@ -151,7 +151,7 @@ export const PersonalInfoSection: React.FC<PersonalInfoSectionProps> = ({
         </Grid>
         
         {/* RFC - Usado para búsquedas y visualización de pacientes */}
-        <Grid item xs={12} sm={6}>
+        <Grid size={{ xs: 12, sm: 6 }}>
           <TextField
             label="RFC"
             value={formData.rfc}

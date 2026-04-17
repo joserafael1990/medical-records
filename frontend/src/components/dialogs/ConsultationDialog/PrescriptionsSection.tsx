@@ -135,7 +135,7 @@ export const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
         ) : (
           <Grid container spacing={2}>
             {prescriptions.map((prescription) => (
-              <Grid item xs={12} sm={6} md={4} key={prescription.id}>
+              <Grid key={prescription.id} size={{ xs: 12, sm: 6, md: 4 }}>
                 <Card variant="outlined" sx={{ p: 2 }}>
                   <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -198,7 +198,7 @@ export const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
               />
               
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField
                     label="Dosis"
                     value={prescriptionData.dosage}
@@ -208,7 +208,7 @@ export const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
                   />
                 </Grid>
                 
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <FormControl fullWidth size="small">
                     <InputLabel>Frecuencia</InputLabel>
                     <Select
@@ -225,7 +225,7 @@ export const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
                   </FormControl>
                 </Grid>
                 
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField
                     label="Duración"
                     value={prescriptionData.duration}
@@ -236,7 +236,7 @@ export const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
                   />
                 </Grid>
                 
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField
                     label="Cantidad"
                     type="number"
@@ -247,7 +247,7 @@ export const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
                   />
                 </Grid>
                 
-                <Grid item xs={12}>
+                <Grid size={{ xs: 12 }}>
                   <FormControl fullWidth size="small">
                     <InputLabel>Vía de Administración</InputLabel>
                     <Select
@@ -264,7 +264,7 @@ export const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
                   </FormControl>
                 </Grid>
                 
-                <Grid item xs={12}>
+                <Grid size={{ xs: 12 }}>
                   <TextField
                     label="Instrucciones adicionales"
                     multiline

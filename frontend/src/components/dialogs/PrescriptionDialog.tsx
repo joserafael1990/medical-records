@@ -205,7 +205,7 @@ const PrescriptionDialog: React.FC<PrescriptionDialogProps> = ({
 
           {/* Dosage, Frequency, Duration */}
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <TextField
                 fullWidth
                 required
@@ -216,7 +216,7 @@ const PrescriptionDialog: React.FC<PrescriptionDialogProps> = ({
                 helperText="Ej: 500mg, 1 tableta, 10ml"
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <TextField
                 fullWidth
                 required
@@ -227,7 +227,7 @@ const PrescriptionDialog: React.FC<PrescriptionDialogProps> = ({
                 helperText="Ej: Cada 8 horas, 2 veces al día"
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <TextField
                 fullWidth
                 required
@@ -242,7 +242,7 @@ const PrescriptionDialog: React.FC<PrescriptionDialogProps> = ({
 
           {/* Quantity and Via de Administración */}
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 fullWidth
                 type="number"
@@ -253,7 +253,7 @@ const PrescriptionDialog: React.FC<PrescriptionDialogProps> = ({
                 helperText="Cantidad total a surtir"
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <FormControl fullWidth>
                 <InputLabel 
                   id="via-administracion-label"

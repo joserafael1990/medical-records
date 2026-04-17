@@ -95,7 +95,7 @@ export const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
         ) : (
           <Grid container spacing={1}>
             {studies.map((study) => (
-              <Grid item xs={12} sm={6} md={4} key={study.id}>
+              <Grid key={study.id} size={{ xs: 12, sm: 6, md: 4 }}>
                 <Card variant="outlined" sx={{ p: 1 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>

@@ -48,7 +48,7 @@ export const LocationInfoSection: React.FC<LocationInfoSectionProps> = ({
       
       <Grid container spacing={2}>
         {/* Address Country */}
-        <Grid item xs={12} sm={6}>
+        <Grid size={{ xs: 12, sm: 6 }}>
           <FormControl fullWidth error={!!errors.address_country_id}>
             <InputLabel>País de Residencia</InputLabel>
             <Select
@@ -67,7 +67,7 @@ export const LocationInfoSection: React.FC<LocationInfoSectionProps> = ({
         </Grid>
         
         {/* Address State */}
-        <Grid item xs={12} sm={6}>
+        <Grid size={{ xs: 12, sm: 6 }}>
           <FormControl fullWidth error={!!errors.address_state_id}>
             <InputLabel>Estado de Residencia</InputLabel>
             <Select
@@ -87,7 +87,7 @@ export const LocationInfoSection: React.FC<LocationInfoSectionProps> = ({
         </Grid>
         
         {/* Birth City */}
-        <Grid item xs={12} sm={6}>
+        <Grid size={{ xs: 12, sm: 6 }}>
           <TextField
             label="Ciudad de Nacimiento"
             value={formData.birth_city}
@@ -99,7 +99,7 @@ export const LocationInfoSection: React.FC<LocationInfoSectionProps> = ({
         </Grid>
         
         {/* Birth Country */}
-        <Grid item xs={12} sm={6}>
+        <Grid size={{ xs: 12, sm: 6 }}>
           <FormControl fullWidth error={!!errors.birth_country_id}>
             <InputLabel>País de Nacimiento</InputLabel>
             <Select
@@ -118,7 +118,7 @@ export const LocationInfoSection: React.FC<LocationInfoSectionProps> = ({
         </Grid>
         
         {/* Birth State */}
-        <Grid item xs={12} sm={6}>
+        <Grid size={{ xs: 12, sm: 6 }}>
           <FormControl fullWidth error={!!errors.birth_state_id}>
             <InputLabel>Estado de Nacimiento</InputLabel>
             <Select

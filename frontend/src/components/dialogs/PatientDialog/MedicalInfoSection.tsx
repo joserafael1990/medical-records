@@ -35,7 +35,7 @@ export const MedicalInfoSection: React.FC<MedicalInfoSectionProps> = ({
       
       <Grid container spacing={2}>
         {/* Medical History */}
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <TextField
             label="Historial Médico"
             value={formData.medical_history}
@@ -49,7 +49,7 @@ export const MedicalInfoSection: React.FC<MedicalInfoSectionProps> = ({
         </Grid>
         
         {/* Insurance Provider */}
-        <Grid item xs={12} sm={6}>
+        <Grid size={{ xs: 12, sm: 6 }}>
           <TextField
             label="Aseguradora"
             value={formData.insurance_provider}
@@ -62,7 +62,7 @@ export const MedicalInfoSection: React.FC<MedicalInfoSectionProps> = ({
         </Grid>
         
         {/* Insurance Number */}
-        <Grid item xs={12} sm={6}>
+        <Grid size={{ xs: 12, sm: 6 }}>
           <TextField
             label="Número de Seguro"
             value={formData.insurance_number}

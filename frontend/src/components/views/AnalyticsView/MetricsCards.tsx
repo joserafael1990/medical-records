@@ -51,7 +51,7 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({ metrics }) => {
   return (
     <Grid container spacing={{ xs: 2, md: 3 }} sx={{ mb: 3 }}>
       {cards.map((card, index) => (
-        <Grid item xs={12} sm={6} md={3} key={index}>
+        <Grid key={index} size={{ xs: 12, sm: 6, md: 3 }}>
           <Card sx={{ height: '100%', boxShadow: 2 }}>
             <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <Box

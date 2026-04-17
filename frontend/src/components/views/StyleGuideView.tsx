@@ -206,7 +206,7 @@ const StyleGuideView: React.FC = () => {
         
         <Grid container spacing={3}>
           {colorPalette.map((color, index) => (
-            <Grid item xs={12} sm={6} md={4} key={index}>
+            <Grid key={index} size={{ xs: 12, sm: 6, md: 4 }}>
               <Card>
                 <CardContent>
                   <Box
@@ -243,7 +243,7 @@ const StyleGuideView: React.FC = () => {
             Ejemplos de Uso
           </Typography>
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <Alert severity="success" sx={{ mb: 2 }}>
                 <CheckIcon sx={{ mr: 1 }} />
                 Operación exitosa
@@ -261,7 +261,7 @@ const StyleGuideView: React.FC = () => {
                 Información útil
               </Alert>
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                 <Chip label="Paciente Activo" color="primary" />
                 <Chip label="Cita Programada" color="secondary" />
@@ -285,7 +285,7 @@ const StyleGuideView: React.FC = () => {
 
         <Grid container spacing={3}>
           {typographySamples.map((sample, index) => (
-            <Grid item xs={12} key={index}>
+            <Grid key={index} size={{ xs: 12 }}>
               <Card>
                 <CardContent>
                   <Typography variant={sample.variant as any} gutterBottom>
@@ -386,7 +386,7 @@ const StyleGuideView: React.FC = () => {
             Controles de Formulario
           </Typography>
           <Grid container spacing={3}>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 fullWidth
                 label="Campo de texto"
@@ -411,7 +411,7 @@ const StyleGuideView: React.FC = () => {
                 )}
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <FormControlLabel
                 control={
                   <Switch
@@ -440,7 +440,7 @@ const StyleGuideView: React.FC = () => {
             Tarjetas y Contenido
           </Typography>
           <Grid container spacing={3}>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
@@ -452,7 +452,7 @@ const StyleGuideView: React.FC = () => {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <Paper sx={{ p: 2 }}>
                 <Typography variant="h6" gutterBottom>
                   Papel Simple
@@ -472,7 +472,7 @@ const StyleGuideView: React.FC = () => {
           </Typography>
           <Grid container spacing={2}>
             {iconSamples.map((iconItem, index) => (
-              <Grid item xs={6} sm={4} md={3} key={index}>
+              <Grid key={index} size={{ xs: 6, sm: 4, md: 3 }}>
                 <Card sx={{ textAlign: 'center', p: 2 }}>
                   <iconItem.icon sx={{ fontSize: 40, mb: 1, color: 'primary.main' }} />
                   <Typography variant="body2" gutterBottom>
@@ -493,7 +493,7 @@ const StyleGuideView: React.FC = () => {
             Navegación
           </Typography>
           <Grid container spacing={3}>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <Typography variant="h6" gutterBottom>
                 Chips
               </Typography>
@@ -506,7 +506,7 @@ const StyleGuideView: React.FC = () => {
                 <Chip label="Error" color="error" />
               </Box>
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <Typography variant="h6" gutterBottom>
                 Avatares
               </Typography>
@@ -532,7 +532,7 @@ const StyleGuideView: React.FC = () => {
             Indicadores de Progreso
           </Typography>
           <Grid container spacing={3}>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <Typography variant="h6" gutterBottom>
                 Circular Progress
               </Typography>
@@ -542,7 +542,7 @@ const StyleGuideView: React.FC = () => {
                 <CircularProgress size={24} color="success" />
               </Box>
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <Typography variant="h6" gutterBottom>
                 Linear Progress
               </Typography>
@@ -594,7 +594,7 @@ const StyleGuideView: React.FC = () => {
         </Typography>
 
         <Grid container spacing={3}>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <Card sx={{ 
               transition: 'all 0.3s ease-in-out',
               '&:hover': {
@@ -612,7 +612,7 @@ const StyleGuideView: React.FC = () => {
               </CardContent>
             </Card>
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <Card sx={{
               animation: 'pulse 2s infinite',
               '@keyframes pulse': {
@@ -639,7 +639,7 @@ const StyleGuideView: React.FC = () => {
             Estados de Carga
           </Typography>
           <Grid container spacing={3}>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
@@ -651,7 +651,7 @@ const StyleGuideView: React.FC = () => {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
@@ -663,7 +663,7 @@ const StyleGuideView: React.FC = () => {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
@@ -687,7 +687,7 @@ const StyleGuideView: React.FC = () => {
         </Typography>
 
         <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
@@ -724,7 +724,7 @@ const MyComponent: React.FC<MyComponentProps> = ({
               </CardContent>
             </Card>
           </Grid>
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
@@ -834,7 +834,7 @@ const MyComponent = () => {
             </AccordionSummary>
             <AccordionDetails>
               <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Typography variant="subtitle2" gutterBottom color="primary">
                     <strong>Comunicación y Documentación</strong>
                   </Typography>
@@ -853,7 +853,7 @@ const MyComponent = () => {
                     </ListItem>
                   </List>
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Typography variant="subtitle2" gutterBottom color="primary">
                     <strong>Desarrollo y Compilación</strong>
                   </Typography>
@@ -872,7 +872,7 @@ const MyComponent = () => {
                     </ListItem>
                   </List>
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Typography variant="subtitle2" gutterBottom color="primary">
                     <strong>Backend (FastAPI + Python)</strong>
                   </Typography>
@@ -899,7 +899,7 @@ const MyComponent = () => {
                     </ListItem>
                   </List>
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Typography variant="subtitle2" gutterBottom color="primary">
                     <strong>Frontend (React + TypeScript)</strong>
                   </Typography>
@@ -933,7 +933,7 @@ const MyComponent = () => {
             </AccordionSummary>
             <AccordionDetails>
               <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Typography variant="subtitle2" gutterBottom color="primary">
                     <strong>Validación Médica</strong>
                   </Typography>
@@ -956,7 +956,7 @@ const MyComponent = () => {
                     </ListItem>
                   </List>
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Typography variant="subtitle2" gutterBottom color="primary">
                     <strong>Manejo de Errores</strong>
                   </Typography>
@@ -979,7 +979,7 @@ const MyComponent = () => {
                     </ListItem>
                   </List>
                 </Grid>
-                <Grid item xs={12}>
+                <Grid size={{ xs: 12 }}>
                   <Typography variant="subtitle2" gutterBottom color="primary">
                     <strong>Estructura de Archivos</strong>
                   </Typography>
