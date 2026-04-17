@@ -13,6 +13,7 @@ import './styles/disable-recharts-animations.css';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import AuthContainer from './components/auth/AuthContainer';
 import { ToastProvider } from './components/common/ToastNotification';
+import { SnackbarProvider } from './contexts/SnackbarContext';
 import { twitterTheme } from './themes/twitterTheme';
 import { PublicPrivacyNotice } from './components/public/PublicPrivacyNotice';
 import { LandingPage } from './components/public/LandingPage';
@@ -52,9 +53,11 @@ const App: React.FC = () => {
         <CssBaseline />
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
           <ToastProvider>
-            <AuthProvider>
-              <AppWithAuth />
-            </AuthProvider>
+            <SnackbarProvider>
+              <AuthProvider>
+                <AppWithAuth />
+              </AuthProvider>
+            </SnackbarProvider>
           </ToastProvider>
         </LocalizationProvider>
       </ThemeProvider>

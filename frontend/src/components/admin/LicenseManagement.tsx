@@ -19,7 +19,6 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  Alert,
   Tooltip
 } from '@mui/material';
 import {
@@ -33,13 +32,14 @@ import {
 import { ApiService } from '../../services/ApiService';
 import { License, LicenseStatus, DoctorLicenseRow } from '../../types/license';
 import { LicenseForm } from './LicenseForm';
+import { useSnackbar } from '../../contexts/SnackbarContext';
 
 const apiService = new ApiService();
 
 export const LicenseManagement: React.FC = () => {
+  const snackbar = useSnackbar();
   const [rows, setRows] = useState<DoctorLicenseRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingLicense, setEditingLicense] = useState<License | null>(null);
   const [preselectedDoctorId, setPreselectedDoctorId] = useState<number | undefined>(undefined);
@@ -50,12 +50,11 @@ export const LicenseManagement: React.FC = () => {
 
   const loadRows = async () => {
     setLoading(true);
-    setError(null);
     try {
       const data = await apiService.licenses.getDoctorsWithLicenses(filters);
       setRows(data);
     } catch (err: any) {
-      setError(err.message || 'Error al cargar la lista de doctores');
+      snackbar.error(err?.message || 'Error al cargar la lista de doctores');
     } finally {
       setLoading(false);
     }
@@ -136,12 +135,6 @@ export const LicenseManagement: React.FC = () => {
           Nueva Licencia
         </Button>
       </Box>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
