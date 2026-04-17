@@ -12,7 +12,6 @@ export const PatientsViewSmart = lazy(() => import('../views/PatientsViewSmart')
 export const ConsultationsViewSmart = lazy(() => import('../views/ConsultationsViewSmart'));
 export const AgendaView = lazy(() => import('../views/AgendaView'));
 export const DoctorProfileView = lazy(() => import('../views/DoctorProfileView'));
-export const StyleGuideView = lazy(() => import('../views/StyleGuideView'));
 
 // Lazy load auth components
 export const RegisterView = lazy(() => import('../auth/RegisterView'));
