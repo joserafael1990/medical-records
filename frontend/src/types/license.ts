@@ -42,6 +42,17 @@ export interface LicenseUpdate {
   notes?: string | null;
 }
 
+export interface DoctorLicenseRow {
+  doctor: {
+    id: number;
+    name: string;
+    email: string;
+    person_type: string;
+    last_login: string | null;
+  };
+  license: License | null;
+}
+
 
 
 

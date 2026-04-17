@@ -111,6 +111,70 @@ def get_licenses(
     
     return result
 
+@router.get("/doctors")
+def get_doctors_with_licenses(
+    status: Optional[str] = Query(None),
+    license_type: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """
+    List every active doctor with their license (or null if none exists yet).
+
+    This powers the License Management view so that doctors without a license
+    still appear in the grid and can be granted one inline.
+
+    Filters by license status/type only exclude doctors that have no license
+    when a filter is supplied; otherwise doctors with null licenses are kept.
+    """
+    doctors = db.query(Person).filter(
+        Person.person_type == 'doctor',
+        Person.is_active == True
+    ).order_by(Person.name.asc()).all()
+
+    filtering = bool(status or license_type)
+    result = []
+
+    for doctor in doctors:
+        license = db.query(License).filter(License.doctor_id == doctor.id).first()
+
+        if filtering and not license:
+            continue
+
+        if license:
+            LicenseService.check_and_update_status(db, license)
+            if status and license.status != status:
+                continue
+            if license_type and license.license_type != license_type:
+                continue
+
+        result.append({
+            "doctor": {
+                "id": doctor.id,
+                "name": doctor.name,
+                "email": doctor.email,
+                "person_type": doctor.person_type,
+                "last_login": doctor.last_login.isoformat() if doctor.last_login else None,
+            },
+            "license": None if not license else {
+                "id": license.id,
+                "doctor_id": license.doctor_id,
+                "license_type": license.license_type,
+                "start_date": license.start_date.isoformat() if license.start_date else None,
+                "expiration_date": license.expiration_date.isoformat() if license.expiration_date else None,
+                "payment_date": license.payment_date.isoformat() if license.payment_date else None,
+                "status": license.status,
+                "is_active": license.is_active,
+                "notes": license.notes,
+                "created_at": license.created_at.isoformat() if license.created_at else None,
+                "updated_at": license.updated_at.isoformat() if license.updated_at else None,
+                "created_by": license.created_by,
+            },
+        })
+
+    return result
+
+
 @router.get("/doctor/{doctor_id}", response_model=schemas.LicenseResponse)
 def get_doctor_license(
     doctor_id: int,

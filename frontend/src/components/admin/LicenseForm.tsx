@@ -25,17 +25,19 @@ const licenseService = new LicenseService();
 
 interface LicenseFormProps {
   license?: License | null;
+  initialDoctorId?: number;
   onSuccess: () => void;
   onCancel: () => void;
 }
 
 export const LicenseForm: React.FC<LicenseFormProps> = ({
   license,
+  initialDoctorId,
   onSuccess,
   onCancel
 }) => {
   const [formData, setFormData] = useState<Partial<LicenseCreate>>({
-    doctor_id: license?.doctor_id || 0,
+    doctor_id: license?.doctor_id || initialDoctorId || 0,
     license_type: license?.license_type || 'trial',
     start_date: license?.start_date || '',
     expiration_date: license?.expiration_date || '',
