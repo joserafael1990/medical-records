@@ -33,6 +33,7 @@ import { ApiService } from '../../services/ApiService';
 import { License, LicenseStatus, DoctorLicenseRow } from '../../types/license';
 import { LicenseForm } from './LicenseForm';
 import { useSnackbar } from '../../contexts/SnackbarContext';
+import { TableSkeleton } from '../common/TableSkeleton';
 
 const apiService = new ApiService();
 
@@ -187,11 +188,7 @@ export const LicenseManagement: React.FC = () => {
           </TableHead>
           <TableBody>
             {loading ? (
-              <TableRow>
-                <TableCell colSpan={8} align="center">
-                  Cargando...
-                </TableCell>
-              </TableRow>
+              <TableSkeleton rows={5} cols={8} />
             ) : rows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={8} align="center">
