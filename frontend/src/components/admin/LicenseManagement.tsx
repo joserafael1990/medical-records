@@ -12,7 +12,6 @@ import {
   TableRow,
   Chip,
   IconButton,
-  TextField,
   MenuItem,
   Select,
   FormControl,
@@ -20,96 +19,107 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
-  Alert
+  Alert,
+  Tooltip
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
-  Warning as WarningIcon
+  Warning as WarningIcon,
+  AddCircleOutline as AddCircleOutlineIcon
 } from '@mui/icons-material';
 import { ApiService } from '../../services/ApiService';
-import { License, LicenseType, LicenseStatus } from '../../types/license';
+import { License, LicenseStatus, DoctorLicenseRow } from '../../types/license';
 import { LicenseForm } from './LicenseForm';
 
 const apiService = new ApiService();
 
 export const LicenseManagement: React.FC = () => {
-  const [licenses, setLicenses] = useState<License[]>([]);
+  const [rows, setRows] = useState<DoctorLicenseRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingLicense, setEditingLicense] = useState<License | null>(null);
+  const [preselectedDoctorId, setPreselectedDoctorId] = useState<number | undefined>(undefined);
   const [filters, setFilters] = useState<{
     status?: string;
     license_type?: string;
   }>({});
 
-  const loadLicenses = async () => {
+  const loadRows = async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiService.licenses.getLicenses(filters);
-      setLicenses(data);
+      const data = await apiService.licenses.getDoctorsWithLicenses(filters);
+      setRows(data);
     } catch (err: any) {
-      setError(err.message || 'Error al cargar licencias');
+      setError(err.message || 'Error al cargar la lista de doctores');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadLicenses();
+    loadRows();
   }, [filters]);
 
   const handleCreate = () => {
     setEditingLicense(null);
+    setPreselectedDoctorId(undefined);
+    setDialogOpen(true);
+  };
+
+  const handleCreateForDoctor = (doctorId: number) => {
+    setEditingLicense(null);
+    setPreselectedDoctorId(doctorId);
     setDialogOpen(true);
   };
 
   const handleEdit = (license: License) => {
     setEditingLicense(license);
+    setPreselectedDoctorId(undefined);
     setDialogOpen(true);
   };
 
   const handleCloseDialog = () => {
     setDialogOpen(false);
     setEditingLicense(null);
-    loadLicenses();
+    setPreselectedDoctorId(undefined);
+    loadRows();
   };
 
   const getStatusColor = (status: LicenseStatus) => {
     switch (status) {
-      case 'active':
-        return 'success';
-      case 'inactive':
-        return 'default';
-      case 'expired':
-        return 'error';
-      case 'suspended':
-        return 'warning';
-      default:
-        return 'default';
+      case 'active': return 'success';
+      case 'inactive': return 'default';
+      case 'expired': return 'error';
+      case 'suspended': return 'warning';
+      default: return 'default';
     }
   };
 
   const getStatusIcon = (status: LicenseStatus) => {
     switch (status) {
-      case 'active':
-        return <CheckCircleIcon fontSize="small" />;
-      case 'expired':
-        return <CancelIcon fontSize="small" />;
-      case 'suspended':
-        return <WarningIcon fontSize="small" />;
-      default:
-        return null;
+      case 'active': return <CheckCircleIcon fontSize="small" />;
+      case 'expired': return <CancelIcon fontSize="small" />;
+      case 'suspended': return <WarningIcon fontSize="small" />;
+      default: return undefined;
     }
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null | undefined) => {
+    if (!dateString) return '-';
     return new Date(dateString).toLocaleDateString('es-MX');
+  };
+
+  const formatDateTime = (dateString: string | null | undefined) => {
+    if (!dateString) return 'Nunca';
+    return new Date(dateString).toLocaleString('es-MX', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit'
+    });
   };
 
   return (
@@ -163,6 +173,9 @@ export const LicenseManagement: React.FC = () => {
             </Select>
           </FormControl>
         </Box>
+        <Typography variant="caption" color="text.secondary">
+          Los filtros aplican únicamente sobre doctores con licencia. Con filtros activos, los que no tienen licencia no aparecen.
+        </Typography>
       </Paper>
 
       <TableContainer component={Paper}>
@@ -170,6 +183,7 @@ export const LicenseManagement: React.FC = () => {
           <TableHead>
             <TableRow>
               <TableCell>Doctor</TableCell>
+              <TableCell>Último Inicio de Sesión</TableCell>
               <TableCell>Tipo</TableCell>
               <TableCell>Fecha Inicio</TableCell>
               <TableCell>Fecha Expiración</TableCell>
@@ -181,52 +195,81 @@ export const LicenseManagement: React.FC = () => {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} align="center">
+                <TableCell colSpan={8} align="center">
                   Cargando...
                 </TableCell>
               </TableRow>
-            ) : licenses.length === 0 ? (
+            ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} align="center">
-                  No hay licencias registradas
+                <TableCell colSpan={8} align="center">
+                  No hay doctores registrados
                 </TableCell>
               </TableRow>
             ) : (
-              licenses.map((license) => (
-                <TableRow key={license.id}>
+              rows.map(({ doctor, license }) => (
+                <TableRow key={doctor.id}>
                   <TableCell>
-                    {license.doctor?.name || `Doctor ID: ${license.doctor_id}`}
+                    <Typography variant="body2">{doctor.name}</Typography>
+                    <Typography variant="caption" color="text.secondary">{doctor.email}</Typography>
                   </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={license.license_type.toUpperCase()}
-                      size="small"
-                      color="primary"
-                      variant="outlined"
-                    />
-                  </TableCell>
-                  <TableCell>{formatDate(license.start_date)}</TableCell>
-                  <TableCell>{formatDate(license.expiration_date)}</TableCell>
-                  <TableCell>
-                    {license.payment_date ? formatDate(license.payment_date) : '-'}
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      icon={getStatusIcon(license.status)}
-                      label={license.status}
-                      color={getStatusColor(license.status) as any}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <IconButton
-                      size="small"
-                      onClick={() => handleEdit(license)}
-                      color="primary"
-                    >
-                      <EditIcon />
-                    </IconButton>
-                  </TableCell>
+                  <TableCell>{formatDateTime(doctor.last_login)}</TableCell>
+                  {license ? (
+                    <>
+                      <TableCell>
+                        <Chip
+                          label={license.license_type.toUpperCase()}
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                        />
+                      </TableCell>
+                      <TableCell>{formatDate(license.start_date)}</TableCell>
+                      <TableCell>{formatDate(license.expiration_date)}</TableCell>
+                      <TableCell>{formatDate(license.payment_date)}</TableCell>
+                      <TableCell>
+                        <Chip
+                          icon={getStatusIcon(license.status)}
+                          label={license.status}
+                          color={getStatusColor(license.status) as any}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Tooltip title="Editar licencia">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleEdit(license)}
+                            color="primary"
+                          >
+                            <EditIcon />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
+                    </>
+                  ) : (
+                    <>
+                      <TableCell colSpan={5}>
+                        <Chip
+                          label="SIN LICENCIA"
+                          size="small"
+                          color="default"
+                          variant="outlined"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Tooltip title="Crear licencia para este doctor">
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<AddCircleOutlineIcon />}
+                            onClick={() => handleCreateForDoctor(doctor.id)}
+                          >
+                            Crear
+                          </Button>
+                        </Tooltip>
+                      </TableCell>
+                    </>
+                  )}
                 </TableRow>
               ))
             )}
@@ -234,10 +277,10 @@ export const LicenseManagement: React.FC = () => {
         </Table>
       </TableContainer>
 
-      <Dialog 
-        open={dialogOpen} 
-        onClose={handleCloseDialog} 
-        maxWidth="lg" 
+      <Dialog
+        open={dialogOpen}
+        onClose={handleCloseDialog}
+        maxWidth="lg"
         fullWidth
         PaperProps={{
           sx: {
@@ -249,32 +292,13 @@ export const LicenseManagement: React.FC = () => {
           }
         }}
       >
-        <DialogTitle 
-          sx={{ 
-            pb: 1,
-            pt: 2.5,
-            px: 3,
-            '&.MuiDialogTitle-root': {
-              paddingTop: '20px'
-            }
-          }}
-        >
+        <DialogTitle sx={{ pb: 1, pt: 2.5, px: 3 }}>
           {editingLicense ? 'Editar Licencia' : 'Nueva Licencia'}
         </DialogTitle>
-        <DialogContent 
-          sx={{ 
-            pt: 1,
-            pb: 2,
-            px: 3,
-            overflow: 'auto',
-            flex: 1,
-            '&.MuiDialogContent-root': {
-              paddingTop: '8px'
-            }
-          }}
-        >
+        <DialogContent sx={{ pt: 1, pb: 2, px: 3, overflow: 'auto', flex: 1 }}>
           <LicenseForm
             license={editingLicense}
+            initialDoctorId={preselectedDoctorId}
             onSuccess={handleCloseDialog}
             onCancel={handleCloseDialog}
           />
@@ -283,4 +307,3 @@ export const LicenseManagement: React.FC = () => {
     </Box>
   );
 };
-
