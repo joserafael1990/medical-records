@@ -8,7 +8,6 @@ import {
   FormControl,
   InputLabel,
   Grid,
-  Alert,
   Typography
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -19,6 +18,7 @@ import { ApiService } from '../../services/ApiService';
 import { LicenseService } from '../../services/licenses/LicenseService';
 import { License, LicenseCreate, LicenseUpdate, LicenseType, LicenseStatus } from '../../types/license';
 import { parseApiError } from '../../utils/errorHandling';
+import { useSnackbar } from '../../contexts/SnackbarContext';
 
 const apiService = new ApiService();
 const licenseService = new LicenseService();
@@ -49,7 +49,7 @@ export const LicenseForm: React.FC<LicenseFormProps> = ({
   const [doctors, setDoctors] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingDoctors, setLoadingDoctors] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const snackbar = useSnackbar();
 
   useEffect(() => {
     loadDoctors();
@@ -58,15 +58,11 @@ export const LicenseForm: React.FC<LicenseFormProps> = ({
   const loadDoctors = async () => {
     setLoadingDoctors(true);
     try {
-      // Use admin endpoint to get all doctors
       const response = await licenseService.api.get('/api/admin/doctors');
       const doctorsList = Array.isArray(response.data) ? response.data : [];
       setDoctors(doctorsList);
-      if (doctorsList.length === 0) {
-      }
     } catch (err: any) {
-      console.error('Error loading doctors:', err);
-      setError(`Error al cargar doctores: ${err.message || 'Error desconocido'}`);
+      snackbar.error(`Error al cargar doctores: ${err?.message || 'Error desconocido'}`);
       setDoctors([]);
     } finally {
       setLoadingDoctors(false);
@@ -76,11 +72,8 @@ export const LicenseForm: React.FC<LicenseFormProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
-
     try {
       if (license) {
-        // Update existing license
         const updateData: LicenseUpdate = {
           license_type: formData.license_type,
           start_date: formData.start_date,
@@ -91,8 +84,8 @@ export const LicenseForm: React.FC<LicenseFormProps> = ({
           notes: formData.notes || null
         };
         await apiService.licenses.updateLicense(license.id, updateData);
+        snackbar.success('Licencia actualizada');
       } else {
-        // Create new license
         const createData: LicenseCreate = {
           doctor_id: formData.doctor_id!,
           license_type: formData.license_type!,
@@ -104,12 +97,12 @@ export const LicenseForm: React.FC<LicenseFormProps> = ({
           notes: formData.notes || null
         };
         await apiService.licenses.createLicense(createData);
+        snackbar.success('Licencia creada');
       }
       onSuccess();
     } catch (err: any) {
-      // err may be transformed ApiError (has message) or axios error (has response)
       const message = err?.message ?? (err?.response ? parseApiError(err).message : null) ?? 'Error al guardar licencia';
-      setError(message);
+      snackbar.error(message);
     } finally {
       setLoading(false);
     }
@@ -118,12 +111,6 @@ export const LicenseForm: React.FC<LicenseFormProps> = ({
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
       <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%', pt: 0, mt: 0 }}>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
-
         <Grid container spacing={2}>
           {/* Primera línea: Doctor, Tipo, Estado, Fecha Inicio, Fecha Expiración */}
           {!license && (

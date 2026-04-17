@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import {
   Box,
   Typography,
-  CircularProgress,
-  Alert
+  Alert,
+  Skeleton,
+  Stack
 } from '@mui/material';
 import { useAnalytics } from '../../hooks/useAnalytics';
 import { MetricsCards } from './AnalyticsView/MetricsCards';
@@ -28,8 +29,18 @@ export const AnalyticsView: React.FC = () => {
 
   if (isLoading && !metrics) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
-        <CircularProgress />
+      <Box sx={{ p: 3 }}>
+        <Skeleton variant="text" width={280} height={40} sx={{ mb: 3 }} />
+        <Stack direction="row" spacing={2} sx={{ mb: 3, flexWrap: 'wrap' }}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} variant="rectangular" height={110} sx={{ flex: 1, minWidth: 180, borderRadius: 2 }} />
+          ))}
+        </Stack>
+        <Stack spacing={{ xs: 2, md: 3 }}>
+          <Skeleton variant="rectangular" height={320} sx={{ borderRadius: 2 }} />
+          <Skeleton variant="rectangular" height={320} sx={{ borderRadius: 2 }} />
+          <Skeleton variant="rectangular" height={320} sx={{ borderRadius: 2 }} />
+        </Stack>
       </Box>
     );
   }
