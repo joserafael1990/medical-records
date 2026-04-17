@@ -197,6 +197,9 @@ export const twitterTheme = createTheme({
 
 // Tema dark mode inspirado en Twitter
 export const twitterDarkTheme = createTheme({
+  // Inherit typography and components from light theme first...
+  ...twitterTheme,
+  // ...then override the palette so the dark mode actually wins.
   palette: {
     mode: 'dark',
     primary: {
@@ -214,6 +217,4 @@ export const twitterDarkTheme = createTheme({
     },
     divider: '#2f3336',
   },
-  // Inherit typography and components from light theme
-  ...twitterTheme,
 });

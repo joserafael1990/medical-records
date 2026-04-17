@@ -13,10 +13,13 @@ import {
 import {
   Settings as SettingsIcon,
   Logout as LogoutIcon,
-  PhotoCamera as PhotoCameraIcon
+  PhotoCamera as PhotoCameraIcon,
+  DarkMode as DarkModeIcon,
+  LightMode as LightModeIcon
 } from '@mui/icons-material';
 import { AvatarManagerDialog } from '../dialogs/AvatarManagerDialog';
 import { API_CONFIG } from '../../constants';
+import { useThemeMode } from '../../contexts/ThemeModeContext';
 
 interface UserProfileMenuProps {
   anchorEl: HTMLElement | null;
@@ -40,6 +43,7 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
   onAvatarUpdated
 }) => {
   const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
+  const { mode, toggleMode } = useThemeMode();
 
   const rawAvatarUrl = useMemo(() => {
     const candidates = [
@@ -188,6 +192,17 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
           </ListItemIcon>
           <ListItemText>
             <Typography variant="body2">Cambiar avatar</Typography>
+          </ListItemText>
+        </MenuItem>
+
+        <MenuItem onClick={toggleMode}>
+          <ListItemIcon>
+            {mode === 'dark' ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
+          </ListItemIcon>
+          <ListItemText>
+            <Typography variant="body2">
+              {mode === 'dark' ? 'Modo claro' : 'Modo oscuro'}
+            </Typography>
           </ListItemText>
         </MenuItem>
 
