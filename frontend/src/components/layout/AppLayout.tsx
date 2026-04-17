@@ -21,7 +21,8 @@ import {
   Divider,
   useMediaQuery
 } from '@mui/material';
-import { twitterTheme } from '../../themes/twitterTheme';
+import { twitterTheme, twitterDarkTheme } from '../../themes/twitterTheme';
+import { ThemeModeProvider, useThemeMode } from '../../contexts/ThemeModeContext';
 import {
   AccountCircle as ProfileIcon,
   NotificationsNone as NotificationIcon,
@@ -43,17 +44,16 @@ import PatientDialog from '../dialogs/PatientDialog'; // ✅ Now implemented!
 import ConsultationDialog from '../dialogs/ConsultationDialog'; // ✅ Now implemented!  
 import AppointmentDialogMultiOffice from '../dialogs/AppointmentDialogMultiOffice'; // ✅ Multi-office support!
 
-// Use Twitter-inspired theme
-const theme = twitterTheme;
-
 interface AppLayoutProps {
   // Opcional: se puede pasar onLogout desde AuthContext
   onLogout?: () => void;
 }
 
-export const AppLayout: React.FC<AppLayoutProps> = ({
+const AppLayoutInner: React.FC<AppLayoutProps> = ({
   onLogout
 }) => {
+  const { mode } = useThemeMode();
+  const theme = mode === 'dark' ? twitterDarkTheme : twitterTheme;
   // Initialize all hooks internally
   const { user } = useAuth();
   const appState = useAppState();
@@ -409,3 +409,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     </ThemeProvider>
   );
 };
+
+export const AppLayout: React.FC<AppLayoutProps> = (props) => (
+  <ThemeModeProvider>
+    <AppLayoutInner {...props} />
+  </ThemeModeProvider>
+);

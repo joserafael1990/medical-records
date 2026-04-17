@@ -1,5 +1,7 @@
 import React, { useMemo } from 'react';
 import {
+  Alert,
+  AlertTitle,
   Box,
   Typography,
   Card,
@@ -8,7 +10,8 @@ import {
   Avatar,
   Chip,
   Paper,
-  LinearProgress
+  LinearProgress,
+  Stack
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -16,7 +19,8 @@ import {
   CalendarToday as CalendarIcon,
   TrendingUp as TrendingIcon,
   LocalHospital as HospitalIcon,
-  Notifications as NotificationIcon
+  Notifications as NotificationIcon,
+  Badge as BadgeIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { formatTime } from '../../utils/formatters';
@@ -138,8 +142,31 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 
   ];
 
+  // Compliance alerts (NOM-004 requires cédula profesional on every signed record).
+  const missingLicense = !doctorProfile?.professional_license
+    && !user?.person?.professional_license;
+  const alerts: { severity: 'warning' | 'error' | 'info'; title: string; body: React.ReactNode }[] = [];
+  if (missingLicense) {
+    alerts.push({
+      severity: 'warning',
+      title: 'Falta tu cédula profesional',
+      body: 'NOM-004-SSA3-2012 exige la cédula en cada expediente firmado. Agrégala desde tu perfil para evitar un hallazgo en auditoría.',
+    });
+  }
+
   return (
     <Box sx={{ p: 3 }}>
+      {alerts.length > 0 && (
+        <Stack spacing={2} sx={{ mb: 3 }}>
+          {alerts.map((alert, i) => (
+            <Alert key={i} severity={alert.severity} icon={<BadgeIcon fontSize="inherit" />}>
+              <AlertTitle>{alert.title}</AlertTitle>
+              {alert.body}
+            </Alert>
+          ))}
+        </Stack>
+      )}
+
       {/* Welcome Section */}
       <Paper
         sx={{
@@ -170,7 +197,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               {shouldShowInitials ? avatarInitials : undefined}
             </Avatar>
             <Box>
-              <Typography variant="h3" sx={{ mb: 1 }}>
+              <Typography variant="h5" sx={{ mb: 1, fontWeight: 600 }}>
                 ¡Bienvenido, {doctorName}! 👋
               </Typography>
               <Typography variant="body1" sx={{ opacity: 0.9 }}>
@@ -249,7 +276,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           
           <Box sx={{ 
             display: 'grid', 
-            gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: '1fr 1fr 1fr 1fr' },
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' },
             gap: 2 
           }}>
             {quickActions.map((action, index) => (
