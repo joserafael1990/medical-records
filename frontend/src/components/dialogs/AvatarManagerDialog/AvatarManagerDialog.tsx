@@ -220,7 +220,7 @@ export const AvatarManagerDialog: React.FC<AvatarManagerDialogProps> = ({
       return (
         <Grid container spacing={2} sx={{ mt: 1 }}>
           {preloaded.map((option) => (
-            <Grid item xs={4} sm={3} md={2} key={option.templateKey ?? option.key}>
+            <Grid key={option.templateKey ?? option.key} size={{ xs: 4, sm: 3, md: 2 }}>
               <AvatarGridItem
                 option={option}
                 selected={isCurrent('preloaded', option)}
@@ -229,7 +229,7 @@ export const AvatarManagerDialog: React.FC<AvatarManagerDialogProps> = ({
             </Grid>
           ))}
           {preloaded.length === 0 && (
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <Typography variant="body2" color="text.secondary" align="center">
                 No hay avatares predefinidos disponibles.
               </Typography>
@@ -258,7 +258,7 @@ export const AvatarManagerDialog: React.FC<AvatarManagerDialogProps> = ({
         />
         <Grid container spacing={2}>
           {custom.map((option) => (
-            <Grid item xs={4} sm={3} md={2} key={option.relativePath ?? option.relative_path}>
+            <Grid key={option.relativePath ?? option.relative_path} size={{ xs: 4, sm: 3, md: 2 }}>
               <AvatarGridItem
                 option={option}
                 selected={isCurrent('custom', option)}
@@ -269,7 +269,7 @@ export const AvatarManagerDialog: React.FC<AvatarManagerDialogProps> = ({
             </Grid>
           ))}
           {custom.length === 0 && (
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <Typography variant="body2" color="text.secondary" align="center">
                 Aún no has subido avatares personalizados.
               </Typography>

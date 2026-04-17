@@ -47,7 +47,7 @@ export const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
         <Divider sx={{ mb: 2 }} />
         
         <Grid container spacing={2}>
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <TextField
               label="Presión Sistólica"
               type="number"
@@ -60,7 +60,7 @@ export const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
             />
           </Grid>
           
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <TextField
               label="Presión Diastólica"
               type="number"
@@ -73,7 +73,7 @@ export const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
             />
           </Grid>
           
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <TextField
               label="Frecuencia Cardíaca"
               type="number"
@@ -86,7 +86,7 @@ export const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
             />
           </Grid>
           
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <TextField
               label="Temperatura (°C)"
               type="number"
@@ -99,7 +99,7 @@ export const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
             />
           </Grid>
           
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <TextField
               label="Estatura (cm)"
               type="number"
@@ -112,7 +112,7 @@ export const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
             />
           </Grid>
           
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <TextField
               label="Peso (kg)"
               type="number"
@@ -125,7 +125,7 @@ export const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
             />
           </Grid>
           
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <TextField
               label="IMC"
               type="number"
