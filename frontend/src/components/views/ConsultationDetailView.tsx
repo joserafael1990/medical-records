@@ -64,19 +64,12 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
 
   // Load clinical studies when consultation changes
   useEffect(() => {
-    console.log('🔬 ConsultationDetailView useEffect triggered');
-    console.log('🔬 Consultation object:', consultation);
-    console.log('🔬 Consultation ID:', consultation?.id);
     
     if (consultation?.id) {
-      console.log('🔬 Loading clinical studies for consultation:', consultation.id);
-      console.log('🔬 Consultation ID type:', typeof consultation.id);
       // Convert to string if it's a number
       const consultationId = String(consultation.id);
-      console.log('🔬 Converted consultation ID:', consultationId);
       clinicalStudiesHook.fetchStudies(consultationId);
     } else {
-      console.log('🔬 No consultation ID found, skipping fetchStudies');
     }
   }, [consultation?.id, clinicalStudiesHook.fetchStudies]);
 

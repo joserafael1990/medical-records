@@ -291,7 +291,6 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
         onClose={() => setScheduleConfigDialogOpen(false)}
         onSave={() => setScheduleConfigDialogOpen(false)}
         onScheduleUpdated={() => {
-          console.log("📅 Schedule updated, refetching data...");
           refetchSchedule();
         }}
       />

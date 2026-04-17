@@ -192,14 +192,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           {(() => {
             // Debug: Log patient data state
             if (open && consultation) {
-              console.log('🔍 Patient Data Debug:', {
-                hasSelectedPatient: !!formHook.selectedPatient,
-                hasPatientEditData: !!formHook.patientEditData,
-                selectedPatientId: formHook.selectedPatient?.id,
-                patientEditDataId: (formHook.patientEditData as any)?.id,
-                formDataPatientId: formHook.formData.patient_id,
-                consultationPatientId: consultation?.patient_id
-              });
             }
             return null;
           })()}
@@ -335,11 +327,6 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             formDataPatientId={String(formHook.formData.patient_id)}
             vitalSigns={React.useMemo(() => {
               const allVitalSigns = vitalSignsHook.allVitalSigns || [];
-              console.log('[ConsultationDialog] Passing vitalSigns to ConsultationSections', {
-                count: allVitalSigns.length,
-                vitalSigns: allVitalSigns.map(vs => ({ id: vs.id, vital_sign_id: vs.vital_sign_id, value: vs.value })),
-                allVitalSignsRef: allVitalSigns
-              });
               // Always return a new array reference to ensure React detects changes
               return [...allVitalSigns];
             }, [vitalSignsHook.allVitalSigns])}

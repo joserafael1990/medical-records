@@ -48,7 +48,6 @@ export function usePatientManagementComponent(
 
   // Load patients function
   const loadPatients = useCallback(async () => {
-    console.log('📋 Cargando lista de pacientes...');
     
     const result = await executeApiCall(
       () => apiService.patients.getPatients(''),
@@ -62,7 +61,6 @@ export function usePatientManagementComponent(
 
   // Handle view patient details
   const handleViewPatientDetails = useCallback((patient: Patient) => {
-    console.log('👁️ Viendo detalles del paciente:', patient.name || patient.full_name || 'Paciente sin nombre');
     setSelectedPatient(patient);
     setSelectedPatientData({
       patient: patient,

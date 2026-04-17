@@ -54,13 +54,10 @@ const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    console.log('🏢 OfficeManagementDialog useEffect:', { open, isEditing, office });
     if (open) {
-      console.log('🏢 Dialog opened, loading catalogs...');
       loadCatalogs();
       setError(null);
       if (isEditing && office) {
-        console.log('🏢 Setting form data for editing office:', office);
         setFormData({
           name: office.name || '',
           address: office.address || '',
@@ -72,7 +69,6 @@ const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
           timezone: office.timezone || 'America/Mexico_City'
         });
       } else {
-        console.log('🏢 Setting form data for new office');
         setFormData({
           name: '',
           address: '',
@@ -90,7 +86,6 @@ const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
   // Load states when country is set (including default)
   useEffect(() => {
     if (formData.country_id && countries.length > 0) {
-      console.log('🏢 Loading states for country:', formData.country_id);
       fetchStates(formData.country_id);
     }
   }, [formData.country_id, countries.length, fetchStates]);
@@ -119,18 +114,13 @@ const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
       setError(null);
 
       if (isEditing && office) {
-        console.log('🏢 Updating office:', office.id, formData);
         await updateOffice(office.id, formData);
-        console.log('🏢 Office updated successfully');
       } else {
-        console.log('🏢 Creating new office:', formData);
         await createOffice(formData);
-        console.log('🏢 Office created successfully');
       }
 
       // Call the callback to refresh parent data
       if (onOfficeUpdated) {
-        console.log('🏢 Calling onOfficeUpdated callback');
         onOfficeUpdated();
       }
 

@@ -42,11 +42,9 @@ export const PublicPrivacyNotice: React.FC = () => {
     try {
       // This endpoint doesn't require authentication
       const response = await apiService.patients.api.get('/api/privacy/public-notice');
-      console.log('✅ Public privacy notice loaded:', response);
       
       // ApiBase returns AxiosResponse, extract data property
       const noticeData = response.data;
-      console.log('✅ Extracted notice data:', noticeData);
       
       if (!noticeData) {
         throw new Error('No data received from API');
@@ -66,7 +64,6 @@ export const PublicPrivacyNotice: React.FC = () => {
         updated_at: noticeData.updated_at
       };
       
-      console.log('✅ Mapped notice:', mappedNotice);
       setNotice(mappedNotice);
     } catch (err: any) {
       const errorMsg = err?.detail || err?.message || 'Error al cargar el aviso de privacidad';

@@ -97,11 +97,9 @@ export function useConsultationManagement(
   const fetchConsultations = useCallback(async () => {
     // Skip if no success handler (means not authenticated)
     if (!showSuccessMessage) {
-      console.log('🔒 ConsultationManagement - No auth context, skipping consultation load');
       return;
     }
     
-    console.log('📋 Cargando lista de consultas...');
     
     const result = await executeApiCall(
       () => apiService.consultations.getConsultations(),
@@ -115,7 +113,6 @@ export function useConsultationManagement(
 
   // Handle new consultation
   const handleNewConsultation = useCallback(async () => {
-    console.log('🆕 Iniciando nueva consulta...');
     
     // Track consultation create button clicked in Amplitude
     const { AmplitudeService } = await import('../../services/analytics/AmplitudeService');
@@ -150,7 +147,6 @@ export function useConsultationManagement(
 
   // Handle edit consultation
   const handleEditConsultation = useCallback(async (consultation: any) => {
-    console.log('✏️ Editando consulta:', consultation.id);
     try {
       setSelectedConsultation(consultation);
       setIsEditingConsultation(true);
@@ -170,7 +166,6 @@ export function useConsultationManagement(
 
   // Handle view consultation
   const handleViewConsultation = useCallback(async (consultation: any) => {
-    console.log('👁️ Viendo consulta completa:', consultation.id);
     setSelectedConsultation(consultation);
     setConsultationDetailView(true);
   }, []);
@@ -179,7 +174,6 @@ export function useConsultationManagement(
   const handleDeleteConsultation = useCallback(async (consultation: any) => {
     if (window.confirm('¿Estás seguro de que quieres eliminar esta consulta? Esta acción no se puede deshacer.')) {
       try {
-        console.log('🗑️ Eliminando consulta:', consultation.id);
         await apiService.deleteConsultation(consultation.id.toString());
         
         // Track consultation deletion in Amplitude
@@ -198,7 +192,6 @@ export function useConsultationManagement(
 
   // Handle back from consultation detail
   const handleBackFromConsultationDetail = useCallback(() => {
-    console.log('🔙 Regresando de vista detalle de consulta');
     setConsultationDetailView(false);
     setSelectedConsultation(null);
   }, []);

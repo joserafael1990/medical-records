@@ -100,7 +100,6 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
   // Increment counter when vitalSigns change
   React.useEffect(() => {
     setVitalSignsUpdateCounter(prev => prev + 1);
-    console.log('[ConsultationSections] vitalSigns changed, counter:', vitalSignsUpdateCounter + 1, 'vitalSigns:', vitalSigns?.map(vs => ({ id: vs.id, vital_sign_id: vs.vital_sign_id, value: vs.value })));
   }, [vitalSigns]);
 
   // Use ref to store fetchPatientVitalSignsHistory to break the dependency cycle
@@ -133,7 +132,6 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
     } catch (error: any) {
       // Ignore 429 errors (rate limiting) - will retry later
       if (error?.response?.status === 429) {
-        console.warn('Rate limited when fetching vital signs history, will retry later');
         return;
       }
       // Silently fail - don't show charts if we can't load

@@ -28,13 +28,6 @@ export const PatientSelector: React.FC<PatientSelectorProps> = ({
     const selectedPatient = patients.find(p => p.id === selectedPatientId) || null;
 
     // Debug logging
-    console.log('🔍 PatientSelector:', {
-        selectedPatientId,
-        selectedPatientId_type: typeof selectedPatientId,
-        patientsCount: patients.length,
-        patientIds: patients.slice(0, 5).map(p => ({ id: p.id, id_type: typeof p.id })),
-        selectedPatient: selectedPatient ? { id: selectedPatient.id, name: selectedPatient.name } : null
-    });
 
     return (
         <Box>

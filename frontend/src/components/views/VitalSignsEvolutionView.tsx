@@ -60,13 +60,6 @@ const NoAnimationChart: React.FC<{
       animationsDisabledRef.current = false;
       prevChartDataRef2.current = chartDataKey;
       setDataVersion(prev => prev + 1);
-      console.log('[NoAnimationChart] ⚠️ Chart data changed, resetting animation flag and incrementing version', {
-        vitalSignId: vitalSign.vital_sign_id,
-        chartDataLength: chartData.length,
-        lastValue: chartData[chartData.length - 1]?.value,
-        newVersion: dataVersion + 1,
-        chartDataKey
-      });
     }
 
     if (!containerRef.current) return;
@@ -223,19 +216,12 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
   useEffect(() => {
     const serialized = JSON.stringify(currentVitalSigns?.map(vs => ({ id: vs.id, vital_sign_id: vs.vital_sign_id, value: vs.value })) || []);
     
-    console.log('[VitalSignsEvolutionView] currentVitalSigns useEffect triggered', {
-      serialized,
-      prevSerialized: prevCurrentVitalSignsSerializedRef.current,
-      currentVitalSigns: currentVitalSigns?.map(vs => ({ id: vs.id, vital_sign_id: vs.vital_sign_id, value: vs.value })),
-      changed: serialized !== prevCurrentVitalSignsSerializedRef.current
-    });
     
     // Only update version if content actually changed
     if (serialized !== prevCurrentVitalSignsSerializedRef.current) {
       prevCurrentVitalSignsSerializedRef.current = serialized;
       setCurrentVitalSignsVersion(prev => {
         const newVersion = prev + 1;
-        console.log('[VitalSignsEvolutionView] currentVitalSigns changed, version:', newVersion, 'data:', currentVitalSigns);
         // Force a re-render by updating forceUpdate
         setForceUpdate(newVersion);
         return newVersion;
@@ -258,18 +244,11 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
     }, {} as Record<number, typeof currentVitalSigns[0]>);
     const latestVitalSigns = Object.values(latestVitalSignsByType);
     const key = latestVitalSigns.map(vs => `${vs.vital_sign_id}:${vs.value}:${vs.id}`).join('|');
-    console.log('[VitalSignsEvolutionView] currentVitalSignsKey:', key, 'from', currentVitalSigns, 'filtered to', latestVitalSigns);
     return key;
   }, [currentVitalSigns]);
 
   // Merge current vital signs with historical data
   const mergedHistory = React.useMemo(() => {
-    console.log('[VitalSignsEvolutionView] mergedHistory recomputing', {
-      hasHistory: !!history,
-      currentVitalSignsCount: currentVitalSigns?.length,
-      currentVitalSignsKey,
-      currentVitalSigns: currentVitalSigns?.map(vs => ({ id: vs.id, vital_sign_id: vs.vital_sign_id, value: vs.value }))
-    });
     if (!history) return null;
 
     // If no current vital signs, return history as-is
@@ -334,16 +313,6 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
           index === existingTodayIndex ? { ...newDataPoint } : { ...item }
         );
         const oldValue = vsHistory.data[existingTodayIndex]?.value;
-        console.log('[VitalSignsEvolutionView] ⚠️ UPDATING EXISTING TODAY POINT', {
-          vitalSignId: vsHistory.vital_sign_id,
-          vitalSignName: vsHistory.vital_sign_name,
-          oldValue,
-          newValue: newDataPoint.value,
-          newDataLength: newData.length,
-          existingTodayIndex,
-          oldDataLength: vsHistory.data?.length,
-          newData: newData.map(d => ({ date: d.date, value: d.value }))
-        });
         // CRITICAL: Return completely new object to ensure React detects the change
         return {
           ...vsHistory,
@@ -387,26 +356,11 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
       mergedVitalSignsHistory.push(...newVitalSignHistories);
     }
 
-    console.log('[VitalSignsEvolutionView] mergedHistory computed', {
-      mergedHistoryLength: mergedVitalSignsHistory.length,
-      newVitalSignTypesAdded: newVitalSignTypes.length,
-      currentVitalSignsVersion,
-      currentVitalSignsKey,
-      latestVitalSigns: latestVitalSigns.map(vs => ({ id: vs.id, vital_sign_id: vs.vital_sign_id, value: vs.value }))
-    });
     // Always create a new object reference to ensure React detects the change
     const result = {
       ...history,
       vital_signs_history: [...mergedVitalSignsHistory] // Create new array reference
     };
-    console.log('[VitalSignsEvolutionView] mergedHistory computed result', {
-      vitalSignsHistoryLength: result.vital_signs_history.length,
-      firstVitalSign: result.vital_signs_history[0] ? {
-        vital_sign_id: result.vital_signs_history[0].vital_sign_id,
-        data_length: result.vital_signs_history[0].data?.length,
-        lastValue: result.vital_signs_history[0].data?.[result.vital_signs_history[0].data.length - 1]?.value
-      } : null
-    });
     return result;
   }, [history, currentVitalSignsKey, currentVitalSignsVersion, JSON.stringify(currentVitalSigns?.map(vs => ({ id: vs.id, vital_sign_id: vs.vital_sign_id, value: vs.value })) || [])]); // Include serialized currentVitalSigns as fallback
 
@@ -649,7 +603,6 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
         prevMergedHistorySerializedRef.current = serialized;
         setDisplayHistoryVersion(prev => {
           const newVersion = prev + 1;
-          console.log('[VitalSignsEvolutionView] displayHistoryVersion changed:', newVersion, 'serialized:', serialized);
           return newVersion;
         });
       }
@@ -710,17 +663,6 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
           const rawChartData = prepareChartData(vitalSign);
           const chartData = rawChartData.map(item => ({ ...item })); // Create new object references
 
-          console.log('[VitalSignsEvolutionView] Rendering chart for', vitalSign.vital_sign_name, {
-            chartDataLength: chartData.length,
-            lastValue: chartData[chartData.length - 1]?.value,
-            lastDate: chartData[chartData.length - 1]?.date,
-            displayHistoryVersion,
-            currentVitalSignsVersion,
-            vitalSignDataLength: vitalSign.data?.length,
-            chartDataRef: chartData,
-            rawChartDataLength: rawChartData.length,
-            vitalSignData: vitalSign.data?.map(d => ({ date: d.date, value: d.value }))
-          });
 
           if (chartData.length === 0) {
             return null;
