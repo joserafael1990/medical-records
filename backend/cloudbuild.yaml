@@ -1,5 +1,9 @@
 # Cloud Build configuration for automatic backend deployment
 # Triggered on push to main branch
+#
+# Secrets live in Secret Manager (see cortex-* secrets). Non-secret env vars
+# stay inline below. Do NOT add raw secret values here or in the trigger
+# substitutions — the Cloud Build history retains them permanently.
 
 steps:
   # Step 1: Build the Docker image
@@ -42,14 +46,24 @@ steps:
       - '--max-instances=20'
       - '--concurrency=20'
       - '--timeout=120'
-
       - '--add-cloudsql-instances=${PROJECT_ID}:us-central1:cortex-db-prod'
-      - '--set-env-vars=APP_ENV=production,DATABASE_URL=${_DATABASE_URL},GCP_PROJECT_ID=${PROJECT_ID},GCP_REGION=us-central1,GCP_STORAGE_BUCKET=cortex-medical-records-prod,SECRET_KEY=${_SECRET_KEY},JWT_SECRET_KEY=${_JWT_SECRET_KEY},MEDICAL_ENCRYPTION_KEY=${_MEDICAL_ENCRYPTION_KEY},ENABLE_ENCRYPTION=true,META_WHATSAPP_TOKEN=${_META_WHATSAPP_TOKEN},META_WHATSAPP_VERIFY_TOKEN=${_META_WHATSAPP_VERIFY_TOKEN},META_WHATSAPP_APP_SECRET=${_META_WHATSAPP_APP_SECRET},META_WHATSAPP_PHONE_ID=${_META_WHATSAPP_PHONE_ID},GOOGLE_CLIENT_ID=${_GOOGLE_CLIENT_ID},GOOGLE_CLIENT_SECRET=${_GOOGLE_CLIENT_SECRET},GEMINI_MODEL=gemini-2.0-flash,GEMINI_BOT_ENABLED=true,GEMINI_MAX_APPOINTMENT_DAYS=90,GEMINI_CONVERSATION_TIMEOUT_MINUTES=30,GEMINI_MAX_CONTEXT_MESSAGES=15,GEMINI_ENABLE_CACHE=true,GEMINI_CACHE_TTL_SECONDS=300,GEMINI_RATE_LIMIT_PER_USER=1,GEMINI_RATE_LIMIT_MESSAGES_PER_MINUTE=10,GEMINI_COST_ALERT_THRESHOLD=100000,GEMINI_MAX_RETRIES=2,GEMINI_FALLBACK_ENABLED=true,WHATSAPP_CONVERSATION_WINDOW_HOURS=24,WHATSAPP_ENABLE_COST_TRACKING=true,WHATSAPP_ALERT_ON_EXPIRED_CONVERSATIONS=true,CORS_ORIGINS=*,LOG_LEVEL=info,SMTP_HOST=smtp.gmail.com,SMTP_PORT=587,SMTP_USERNAME=joserafaelgarciacastro@gmail.com,SMTP_PASSWORD=${_SMTP_PASSWORD},EMAIL_FROM=info@cortexclinico.com,FRONTEND_URL=https://cortex-frontend-246017659362.us-central1.run.app'
+      # Non-sensitive env vars (safe to keep inline).
+      - '--set-env-vars=APP_ENV=production,GCP_PROJECT_ID=${PROJECT_ID},GCP_REGION=us-central1,GCP_STORAGE_BUCKET=cortex-medical-records-prod,ENABLE_ENCRYPTION=true,META_WHATSAPP_PHONE_ID=${_META_WHATSAPP_PHONE_ID},GOOGLE_CLIENT_ID=${_GOOGLE_CLIENT_ID},GEMINI_MODEL=gemini-2.0-flash,GEMINI_BOT_ENABLED=true,GEMINI_MAX_APPOINTMENT_DAYS=90,GEMINI_CONVERSATION_TIMEOUT_MINUTES=30,GEMINI_MAX_CONTEXT_MESSAGES=15,GEMINI_ENABLE_CACHE=true,GEMINI_CACHE_TTL_SECONDS=300,GEMINI_RATE_LIMIT_PER_USER=1,GEMINI_RATE_LIMIT_MESSAGES_PER_MINUTE=10,GEMINI_COST_ALERT_THRESHOLD=100000,GEMINI_MAX_RETRIES=2,GEMINI_FALLBACK_ENABLED=true,WHATSAPP_CONVERSATION_WINDOW_HOURS=24,WHATSAPP_ENABLE_COST_TRACKING=true,WHATSAPP_ALERT_ON_EXPIRED_CONVERSATIONS=true,CORS_ORIGINS=*,LOG_LEVEL=info,SMTP_HOST=smtp.gmail.com,SMTP_PORT=587,SMTP_USERNAME=joserafaelgarciacastro@gmail.com,EMAIL_FROM=info@cortexclinico.com,FRONTEND_URL=https://cortex-frontend-246017659362.us-central1.run.app'
+      # Secrets pulled from Secret Manager at container start.
+      # The runtime service account needs roles/secretmanager.secretAccessor
+      # on each of these secrets (already granted to the compute default SA).
+      - '--set-secrets=DATABASE_URL=cortex-database-url:latest,SECRET_KEY=cortex-secret-key:latest,JWT_SECRET_KEY=cortex-jwt-secret-key:latest,MEDICAL_ENCRYPTION_KEY=cortex-medical-encryption-key:latest,META_WHATSAPP_TOKEN=cortex-meta-whatsapp-token:latest,META_WHATSAPP_VERIFY_TOKEN=cortex-meta-whatsapp-verify-token:latest,META_WHATSAPP_APP_SECRET=cortex-meta-whatsapp-app-secret:latest,GOOGLE_CLIENT_SECRET=cortex-google-client-secret:latest'
 
 # Build timeout (10 minutes)
 timeout: 600s
 
 # Substitutions (can be overridden)
+# _GOOGLE_CLIENT_ID and _META_WHATSAPP_PHONE_ID are non-secret identifiers
+# and remain as substitutions so they can be tweaked per environment.
+# All prior _JWT_SECRET_KEY / _MEDICAL_ENCRYPTION_KEY / _META_WHATSAPP_* /
+# _GOOGLE_CLIENT_SECRET / _DATABASE_URL / _SECRET_KEY / _SMTP_PASSWORD
+# substitutions must be removed from the backend-deploy trigger so they
+# stop leaking into the build history.
 substitutions:
   _REGION: us-central1
 
