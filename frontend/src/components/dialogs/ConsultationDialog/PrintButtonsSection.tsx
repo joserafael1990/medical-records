@@ -163,11 +163,6 @@ export const PrintButtonsSection: React.FC<PrintButtonsSectionProps> = ({
   // Build patient name from available fields
   const patientName = useMemo(() => {
     // Debug: Log consultation data
-    console.log('🔍 Debug consultation data:', {
-      consultation,
-      patient_name: consultation?.patient_name,
-      patient_id: consultation?.patient_id
-    });
 
     // Priority 1: Use consultation.patient_name if available (most reliable when editing)
     // This comes from the backend when loading a consultation

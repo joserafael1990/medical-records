@@ -62,9 +62,7 @@ export const LicenseForm: React.FC<LicenseFormProps> = ({
       const response = await licenseService.api.get('/api/admin/doctors');
       const doctorsList = Array.isArray(response.data) ? response.data : [];
       setDoctors(doctorsList);
-      console.log('Doctors loaded:', doctorsList.length);
       if (doctorsList.length === 0) {
-        console.warn('No doctors found in the system');
       }
     } catch (err: any) {
       console.error('Error loading doctors:', err);

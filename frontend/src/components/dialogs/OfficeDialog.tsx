@@ -69,7 +69,6 @@ const OfficeDialog: React.FC<OfficeDialogProps> = ({
   useEffect(() => {
     if (open && countries.length > 0) {
       if (isEditing && office) {
-        console.log('🔍 Editing office:', office);
         setFormData({
           name: office.name,
           address: office.address || '',
@@ -152,8 +151,6 @@ const OfficeDialog: React.FC<OfficeDialogProps> = ({
 
     try {
       if (isEditing && office && office.id) {
-        console.log('🔍 Editing office with ID:', office.id);
-        console.log('🔍 Form data:', formData);
         const updateData: OfficeUpdate = {
           name: formData.name,
           address: formData.address,
@@ -167,7 +164,6 @@ const OfficeDialog: React.FC<OfficeDialogProps> = ({
           is_virtual: formData.is_virtual,
           virtual_url: formData.virtual_url
         };
-        console.log('🔍 Update data:', updateData);
         onSave({ ...updateData, id: office.id });
         toast.success('Consultorio actualizado exitosamente');
       } else {
@@ -186,8 +182,6 @@ const OfficeDialog: React.FC<OfficeDialogProps> = ({
           virtual_url: formData.virtual_url || null
         };
         
-        console.log('🔍 Sending office data:', cleanData);
-        console.log('🔍 Form data before cleaning:', formData);
         onSave(cleanData);
         toast.success('Consultorio creado exitosamente');
       }

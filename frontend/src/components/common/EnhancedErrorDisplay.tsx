@@ -162,7 +162,6 @@ export const EnhancedErrorDisplay: React.FC<EnhancedErrorDisplayProps> = ({
     if (autoNavigateToError && (Object.keys(fieldErrors).length > 0 || Object.keys(validationErrors).length > 0)) {
       const navigated = scrollToFirstError(fieldErrors, validationErrors);
       if (!navigated) {
-        console.warn('Could not navigate to first error');
       }
     }
   }, [error, fieldErrors, validationErrors, autoNavigateToError, scrollToFirstError]);

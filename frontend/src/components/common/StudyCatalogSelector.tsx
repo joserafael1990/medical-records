@@ -113,7 +113,6 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
       if (searchTerm && searchTerm.trim()) {
         try {
           setIsSearching(true);
-          console.log('🔍 Searching studies with term:', searchTerm);
           await searchStudies(searchTerm.trim(), {
             specialty: selectedSpecialty || undefined,
             category_id: selectedCategory?.id
@@ -174,7 +173,6 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
   // handleTemplateApply removed - StudyTemplate table deleted
   const handleTemplateApply = (template: any) => {
     // Mock implementation
-    console.log('Template applied', template);
   };
 
   const handleRecommendationSelect = (study: StudyCatalog) => {
@@ -195,7 +193,6 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
   }) => {
     // Add validation to prevent undefined study errors
     if (!study) {
-      console.warn('StudyCard received undefined study');
       return null;
     }
 

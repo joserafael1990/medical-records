@@ -72,7 +72,6 @@ Se extiende la presente para los fines que al interesado convengan.`;
     setIsGenerating(false);
 
     if (result.success) {
-      console.log(result.message);
       handleCloseDialog();
       // Reset fields
       setCertificateTitle('CONSTANCIA MÉDICA');

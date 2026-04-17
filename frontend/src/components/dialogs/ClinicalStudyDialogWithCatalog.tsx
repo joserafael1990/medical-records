@@ -139,16 +139,12 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
     try {
       if (useCatalog && selectedCatalogStudies.length > 0) {
         // Submit multiple studies from catalog
-        console.log('🔬 Submitting multiple studies:', selectedCatalogStudies.length);
-        console.log('🔬 Selected studies:', selectedCatalogStudies.map(s => s.name));
-        console.log('🔬 Form data:', formData);
 
         let successCount = 0;
         let errorCount = 0;
 
         for (let i = 0; i < selectedCatalogStudies.length; i++) {
           const catalogStudy = selectedCatalogStudies[i];
-          console.log(`🔬 Creating study ${i + 1}/${selectedCatalogStudies.length}:`, catalogStudy.name);
 
           // Map category name to StudyType
           const categoryNameToType = (name: string | undefined): StudyType => {
@@ -196,21 +192,16 @@ const ClinicalStudyDialogWithCatalog: React.FC<ClinicalStudyDialogWithCatalogPro
           }
         }
 
-        console.log(`🔬 All studies processed - Success: ${successCount}, Errors: ${errorCount}`);
 
         // Close dialog only after all studies are processed
         if (successCount > 0) {
-          console.log('🔬 Closing dialog after successful studies creation');
           onClose();
         } else {
-          console.log('🔬 No studies were created successfully, keeping dialog open');
         }
       } else {
         // Submit single custom study
-        console.log('🔬 Submitting single custom study');
         await onSubmit(formData);
         // Close dialog after single study submission
-        console.log('🔬 Closing dialog after single study submission');
         onClose();
       }
     } catch (error) {

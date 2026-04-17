@@ -158,7 +158,6 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
   };
 
   const handleSaveNewVitalSign = (vitalSignId: number) => {
-    console.log('[VitalSignsSection] handleSaveNewVitalSign called', { vitalSignId, value: vitalSignValues[vitalSignId] });
     const value = vitalSignValues[vitalSignId];
     if (value && value.trim()) {
       const vitalSign = availableVitalSigns.find(vs => vs.id === vitalSignId);
@@ -168,14 +167,12 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
         // Mark as saved immediately to prevent visual change
         setSavedVitalSigns(prev => new Set([...Array.from(prev), vitalSignId]));
 
-        console.log('[VitalSignsSection] Calling onAddVitalSign', { vitalSignId, value: value.trim(), unit: autoUnit });
         // Call the parent callback to save
         onAddVitalSign({
           vital_sign_id: vitalSignId,
           value: value.trim(),
           unit: autoUnit
         });
-        console.log('[VitalSignsSection] onAddVitalSign called (returned)');
 
         // Keep the value in the state - it will be cleared when real data comes from backend
         setVitalSignValues(prev => ({
