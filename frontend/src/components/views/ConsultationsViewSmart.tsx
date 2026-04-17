@@ -597,9 +597,7 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
           {consultations.length === 0 ? (
             <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'grey.50' }}>
               <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-                {consultations === null || consultations === undefined 
-                  ? 'Cargando consultas...' 
-                  : 'No hay consultas registradas'}
+                No hay consultas registradas
               </Typography>
               <Button
                 variant="outlined"

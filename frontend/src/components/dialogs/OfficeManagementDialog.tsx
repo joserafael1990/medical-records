@@ -12,7 +12,6 @@ import {
   MenuItem,
   Box,
   Typography,
-  Alert,
   CircularProgress,
   IconButton
 } from '@mui/material';
@@ -20,6 +19,7 @@ import { Close as CloseIcon } from '@mui/icons-material';
 import { useOfficeManagement, OfficeFormData } from '../../hooks/useOfficeManagement';
 import { useLocationCatalogs } from '../../hooks/useLocationCatalogs';
 import { preventBackdropClose } from '../../utils/dialogHelpers';
+import { useSnackbar } from '../../contexts/SnackbarContext';
 
 interface OfficeManagementDialogProps {
   open: boolean;
@@ -50,13 +50,12 @@ const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
     maps_url: '',
     timezone: 'America/Mexico_City'
   });
-  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const snackbar = useSnackbar();
 
   useEffect(() => {
     if (open) {
       loadCatalogs();
-      setError(null);
       if (isEditing && office) {
         setFormData({
           name: office.name || '',
@@ -111,23 +110,21 @@ const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
   const handleSubmit = async () => {
     try {
       setIsSubmitting(true);
-      setError(null);
-
       if (isEditing && office) {
         await updateOffice(office.id, formData);
+        snackbar.success('Consultorio actualizado');
       } else {
         await createOffice(formData);
+        snackbar.success('Consultorio creado');
       }
 
-      // Call the callback to refresh parent data
       if (onOfficeUpdated) {
         onOfficeUpdated();
       }
 
       onClose();
     } catch (err: any) {
-      console.error('Error saving office:', err);
-      setError(err.message || 'Error al guardar el consultorio');
+      snackbar.error(err?.message || 'Error al guardar el consultorio');
     } finally {
       setIsSubmitting(false);
     }
@@ -155,12 +152,6 @@ const OfficeManagementDialog: React.FC<OfficeManagementDialogProps> = ({
       </DialogTitle>
 
       <DialogContent>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
-
         {catalogsLoading && (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
             <CircularProgress size={24} />
