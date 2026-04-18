@@ -31,7 +31,10 @@ export interface ConsultationManagementActions {
   handleNewConsultation: () => void;
   handleEditConsultation: (consultation: any) => Promise<void>;
   handleViewConsultation: (consultation: any) => Promise<void>;
-  handleDeleteConsultation: (consultation: any) => Promise<void>;
+  handleDeleteConsultation: (
+    consultation: any,
+    options?: { confirm?: (message: string) => Promise<boolean> | boolean }
+  ) => Promise<void>;
   handleBackFromConsultationDetail: () => void;
   fetchConsultations: () => Promise<void>;
 }
@@ -96,16 +99,13 @@ export function useConsultationManagement(
   // Fetch consultations
   const fetchConsultations = useCallback(async () => {
     // Skip if no success handler (means not authenticated)
-    if (!showSuccessMessage) {
-      return;
-    }
-    
-    
+    if (!showSuccessMessage) return;
+
     const result = await executeApiCall(
       () => apiService.consultations.getConsultations(),
       undefined // No mostrar mensaje de éxito para carga inicial
     );
-    
+
     if (result) {
       setConsultations(result);
     }
@@ -113,7 +113,6 @@ export function useConsultationManagement(
 
   // Handle new consultation
   const handleNewConsultation = useCallback(async () => {
-    
     // Track consultation create button clicked in Amplitude
     const { AmplitudeService } = await import('../../services/analytics/AmplitudeService');
     AmplitudeService.track('consultation_create_button_clicked');
@@ -170,23 +169,32 @@ export function useConsultationManagement(
     setConsultationDetailView(true);
   }, []);
 
-  // Handle delete consultation
-  const handleDeleteConsultation = useCallback(async (consultation: any) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar esta consulta? Esta acción no se puede deshacer.')) {
-      try {
-        await apiService.deleteConsultation(consultation.id.toString());
-        
-        // Track consultation deletion in Amplitude
-        const { AmplitudeService } = await import('../../services/analytics/AmplitudeService');
-        AmplitudeService.track('consultation_deleted', {
-          consultation_id: consultation.id
-        });
-        
-        setConsultations(prev => prev.filter(c => c.id !== consultation.id));
-        showSuccessMessage?.('Consulta eliminada exitosamente');
-      } catch (error) {
-        console.error('❌ Error eliminando consulta:', error);
-      }
+  // Handle delete consultation.
+  // Pass `options.confirm` (e.g. a function that resolves from a MUI Dialog) to
+  // avoid the native `window.confirm` fallback. The fallback is kept for
+  // backwards compatibility with callers that predate the optional parameter.
+  const handleDeleteConsultation = useCallback(async (
+    consultation: any,
+    options?: { confirm?: (message: string) => Promise<boolean> | boolean }
+  ) => {
+    const message = '¿Estás seguro de que quieres eliminar esta consulta? Esta acción no se puede deshacer.';
+    const confirmed = options?.confirm
+      ? await options.confirm(message)
+      : window.confirm(message);
+    if (!confirmed) return;
+    try {
+      await apiService.deleteConsultation(consultation.id.toString());
+
+      // Track consultation deletion in Amplitude
+      const { AmplitudeService } = await import('../../services/analytics/AmplitudeService');
+      AmplitudeService.track('consultation_deleted', {
+        consultation_id: consultation.id
+      });
+
+      setConsultations(prev => prev.filter(c => c.id !== consultation.id));
+      showSuccessMessage?.('Consulta eliminada exitosamente');
+    } catch (error) {
+      console.error('❌ Error eliminando consulta:', error);
     }
   }, [showSuccessMessage]);
 

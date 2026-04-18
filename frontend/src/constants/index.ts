@@ -242,4 +242,27 @@ export const FEATURE_FLAGS = {
 // Environment
 export const isProduction = process.env.NODE_ENV === 'production';
 
+// Display fallbacks for empty/missing data
+export const PLACEHOLDER_TEXT = {
+  PATIENT_NO_NAME: 'Paciente sin nombre',
+  PATIENT_NOT_FOUND: 'Paciente no encontrado',
+  DOCTOR_NO_NAME: 'Doctor sin nombre',
+  NO_DIAGNOSIS: 'Sin diagnóstico registrado',
+  NO_DATA: 'Sin información'
+} as const;
+
+/**
+ * Returns a display name for a patient-like object, falling back to a consistent
+ * "Paciente sin nombre" label if none of the known name fields are populated.
+ * Pass `null`/`undefined` when the patient record couldn't be loaded to get
+ * "Paciente no encontrado" instead.
+ */
+export const getPatientDisplayName = (
+  patient: { name?: string | null; full_name?: string | null } | null | undefined
+): string => {
+  if (!patient) return PLACEHOLDER_TEXT.PATIENT_NOT_FOUND;
+  const name = (patient.name || patient.full_name || '').trim();
+  return name || PLACEHOLDER_TEXT.PATIENT_NO_NAME;
+};
+
 export default API_CONFIG;

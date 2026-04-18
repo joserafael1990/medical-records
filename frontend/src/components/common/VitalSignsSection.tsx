@@ -10,7 +10,12 @@ import {
   LinearProgress,
   Grid,
   TextField,
-  Button
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions
 } from '@mui/material';
 import {
   Favorite as HeartIcon,
@@ -52,6 +57,7 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [vitalSignValues, setVitalSignValues] = useState<{ [key: number]: string }>({});
   const [savedVitalSigns, setSavedVitalSigns] = useState<Set<number>>(new Set());
+  const [vitalSignToDelete, setVitalSignToDelete] = useState<ConsultationVitalSign | null>(null);
 
   // Get priority order for vital signs
   const getVitalSignPriority = (name: string): number => {
@@ -227,8 +233,13 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
   };
 
   const handleDelete = (vitalSign: ConsultationVitalSign) => {
-    if (window.confirm(`¿Estás seguro de eliminar ${vitalSign.vital_sign_name}?`)) {
-      onDeleteVitalSign(vitalSign.id);
+    setVitalSignToDelete(vitalSign);
+  };
+
+  const confirmDeleteVitalSign = () => {
+    if (vitalSignToDelete) {
+      onDeleteVitalSign(vitalSignToDelete.id);
+      setVitalSignToDelete(null);
     }
   };
 
@@ -302,6 +313,11 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
           // Get current value - always from state or item value
           const hasValue = item.value && item.value.trim() !== '';
           const currentValue = vitalSignValues[item.vital_sign_id] ?? (hasValue ? item.value : '');
+          const trimmed = (currentValue || '').trim();
+          const savedValue = (item.value || '').trim();
+          const isDirty = trimmed !== '' && (
+            item.isExisting ? trimmed !== savedValue : !savedVitalSigns.has(item.vital_sign_id)
+          );
 
           return (
             <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={`${item.isExisting ? 'existing' : 'new'}-${item.vital_sign_id}`}>
@@ -314,12 +330,38 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
               >
                 <CardContent sx={{ p: 2 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                    <Box sx={{ color, display: 'flex', alignItems: 'center' }}>
+                    <Box sx={{ color, display: 'flex', alignItems: 'center' }} aria-hidden="true">
                       {React.createElement(IconComponent, { sx: { fontSize: 20 } })}
                     </Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, flex: 1 }}>
                       {item.name}
                     </Typography>
+                    {isDirty && (
+                      <Tooltip title="Se guardará automáticamente al salir del campo">
+                        <Box
+                          role="status"
+                          aria-label={`${item.name}: cambios sin guardar`}
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 0.5,
+                            px: 0.75,
+                            py: 0.25,
+                            borderRadius: 1,
+                            bgcolor: 'warning.50',
+                            color: 'warning.dark',
+                            fontSize: '0.65rem',
+                            fontWeight: 600,
+                            lineHeight: 1,
+                            border: '1px solid',
+                            borderColor: 'warning.light'
+                          }}
+                        >
+                          <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'warning.main' }} />
+                          sin guardar
+                        </Box>
+                      </Tooltip>
+                    )}
                   </Box>
 
                   <Box>
@@ -381,7 +423,7 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
                     {hasValue && item.isExisting && item.id && (
                       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
                         <Tooltip title="Eliminar">
-                          <IconButton aria-label="Eliminar"
+                          <IconButton
                             size="small"
                             onClick={() => {
                               const existingVitalSign = vitalSigns.find(vs => vs.id === item.id);
@@ -402,7 +444,6 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
                       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
                         <Tooltip title="Eliminar">
                           <IconButton
-                            aria-label="Eliminar"
                             size="small"
                             onClick={() => {
                               setSavedVitalSigns(prev => {
@@ -440,6 +481,27 @@ const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
           </Typography>
         </Card>
       )}
+
+      <Dialog
+        open={!!vitalSignToDelete}
+        onClose={() => setVitalSignToDelete(null)}
+        aria-labelledby="vital-sign-delete-title"
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle id="vital-sign-delete-title">Eliminar signo vital</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            ¿Seguro que deseas eliminar {vitalSignToDelete?.vital_sign_name}? Esta acción no se puede deshacer.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setVitalSignToDelete(null)} color="inherit">Cancelar</Button>
+          <Button onClick={confirmDeleteVitalSign} color="error" variant="contained" autoFocus>
+            Eliminar
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

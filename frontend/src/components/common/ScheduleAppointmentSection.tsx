@@ -7,6 +7,7 @@ import {
   Grid,
   TextField,
   FormControl,
+  FormHelperText,
   InputLabel,
   Select,
   MenuItem,
@@ -360,13 +361,12 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
                 minWidth: { xs: '100%', sm: 200, md: 240 }
               }}
             >
-              <FormControl fullWidth size="small" sx={{ minWidth: { sm: 200, md: 240 } }}>
+              <FormControl fullWidth size="small" sx={{ minWidth: { sm: 200, md: 240 } }} disabled={!selectedDate || loadingTimes}>
                 <InputLabel>Hora</InputLabel>
                 <Select
                   value={selectedTime}
                   onChange={(e) => setSelectedTime(e.target.value)}
                   label="Hora"
-                  disabled={!selectedDate || loadingTimes}
                   required
                 >
                   {loadingTimes ? (
@@ -383,6 +383,12 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
                     ))
                   )}
                 </Select>
+                {!selectedDate && (
+                  <FormHelperText>Primero selecciona una fecha</FormHelperText>
+                )}
+                {selectedDate && !loadingTimes && availableTimes.length === 0 && (
+                  <FormHelperText>No hay horarios disponibles este día</FormHelperText>
+                )}
               </FormControl>
             </Grid>
             <Grid

@@ -308,8 +308,12 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
       />
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
-        <DialogTitle>Confirmar Eliminación</DialogTitle>
+      <Dialog
+        open={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        aria-labelledby="office-delete-title"
+      >
+        <DialogTitle id="office-delete-title">Confirmar Eliminación</DialogTitle>
         <DialogContent>
           <Typography>
             ¿Estás seguro de que deseas eliminar el consultorio "{officeToDelete?.name}"?

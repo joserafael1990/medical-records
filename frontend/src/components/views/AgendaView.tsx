@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
@@ -18,7 +18,12 @@ import {
   TableCell,
   TableContainer,
   TableHead,
-  TableRow
+  TableRow,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -61,6 +66,31 @@ const AgendaView: React.FC<AgendaViewProps> = ({
   refreshAppointments,
   forceRefresh
 }) => {
+  const [appointmentToCancel, setAppointmentToCancel] = useState<any | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  const requestCancel = (appointment: any) => {
+    setAppointmentToCancel(appointment);
+  };
+
+  const closeCancelDialog = () => {
+    if (!isCancelling) setAppointmentToCancel(null);
+  };
+
+  const confirmCancel = async () => {
+    if (!appointmentToCancel?.id || !cancelAppointment) {
+      setAppointmentToCancel(null);
+      return;
+    }
+    try {
+      setIsCancelling(true);
+      await cancelAppointment(appointmentToCancel.id);
+    } finally {
+      setIsCancelling(false);
+      setAppointmentToCancel(null);
+    }
+  };
+
   // Use the custom hook for all agenda logic
   const agendaHook = useAgendaView({
     appointments,
@@ -170,12 +200,20 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                                 {appointment.office.is_virtual && ' (Virtual)'}
                               </Typography>
                             )}
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5, flexWrap: 'wrap' }}>
                               <Chip
                                 label={getStatusLabel(appointment.status)}
                                 size="small"
                                 sx={{ fontSize: '0.65rem', height: 16 }}
                               />
+                              {isPast && (
+                                <Chip
+                                  label="PASADA"
+                                  size="small"
+                                  variant="outlined"
+                                  sx={{ fontSize: '0.6rem', height: 16, fontWeight: 600, borderColor: 'grey.500' }}
+                                />
+                              )}
                             </Box>
                           </Card>
                         );
@@ -346,6 +384,14 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                       size="small"
                       sx={{ opacity: isPast ? 0.7 : 1 }}
                     />
+                    {isPast && (
+                      <Chip
+                        label="PASADA"
+                        size="small"
+                        variant="outlined"
+                        sx={{ fontWeight: 600, letterSpacing: 0.5, color: 'text.secondary', borderColor: 'grey.500' }}
+                      />
+                    )}
                   </Box>
                 }
                 secondary={
@@ -379,9 +425,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                       startIcon={<CancelIcon />}
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (cancelAppointment && appointment.id) {
-                          cancelAppointment(appointment.id);
-                        }
+                        requestCancel(appointment);
                       }}
                     >
                       Cancelar
@@ -427,7 +471,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <IconButton aria-label="Día anterior" onClick={() => handleDateNavigation('prev')} size="small">
+              <IconButton onClick={() => handleDateNavigation('prev')} size="small" aria-label="Período anterior">
                 <ChevronLeftIcon />
               </IconButton>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 300, justifyContent: 'center' }}>
@@ -436,7 +480,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                   {dateRangeTitle}
                 </Typography>
               </Box>
-              <IconButton aria-label="Día siguiente" onClick={() => handleDateNavigation('next')} size="small">
+              <IconButton onClick={() => handleDateNavigation('next')} size="small" aria-label="Período siguiente">
                 <ChevronRightIcon />
               </IconButton>
               <Button
@@ -514,6 +558,36 @@ const AgendaView: React.FC<AgendaViewProps> = ({
           </Card>
         </Box>
       </Box>
+
+      {/* Confirm cancel dialog */}
+      <Dialog
+        open={!!appointmentToCancel}
+        onClose={closeCancelDialog}
+        aria-labelledby="cancel-appointment-title"
+        aria-describedby="cancel-appointment-description"
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle id="cancel-appointment-title">Cancelar cita</DialogTitle>
+        <DialogContent>
+          <DialogContentText id="cancel-appointment-description">
+            ¿Seguro que deseas cancelar la cita
+            {appointmentToCancel?.patient?.name ? ` de ${appointmentToCancel.patient.name}` : ''}
+            {appointmentToCancel?.date_time || appointmentToCancel?.appointment_date
+              ? ` el ${formatTime(appointmentToCancel.date_time || appointmentToCancel.appointment_date)}`
+              : ''}
+            ? Esta acción no se puede deshacer.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeCancelDialog} disabled={isCancelling} color="inherit">
+            Volver
+          </Button>
+          <Button onClick={confirmCancel} disabled={isCancelling} color="error" variant="contained" autoFocus>
+            {isCancelling ? 'Cancelando...' : 'Sí, cancelar cita'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Appointments View */}
       <Card sx={{ boxShadow: 1 }}>

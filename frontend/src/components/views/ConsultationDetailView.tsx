@@ -1,4 +1,4 @@
-import React, { memo, useEffect } from 'react';
+import React, { memo, useEffect, useState } from 'react';
 import {
   Box,
   Typography,
@@ -17,7 +17,12 @@ import {
   ListItemIcon,
   Accordion,
   AccordionSummary,
-  AccordionDetails
+  AccordionDetails,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -64,12 +69,8 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
 
   // Load clinical studies when consultation changes
   useEffect(() => {
-    
     if (consultation?.id) {
-      // Convert to string if it's a number
-      const consultationId = String(consultation.id);
-      clinicalStudiesHook.fetchStudies(consultationId);
-    } else {
+      clinicalStudiesHook.fetchStudies(String(consultation.id));
     }
   }, [consultation?.id, clinicalStudiesHook.fetchStudies]);
 
@@ -86,13 +87,23 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
     clinicalStudiesHook.openEditDialog(study);
   };
 
+  const [studyToDeleteId, setStudyToDeleteId] = useState<string | null>(null);
+  const [isDeletingStudy, setIsDeletingStudy] = useState(false);
+
   const handleDeleteStudy = async (studyId: string) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar este estudio clínico?')) {
-      try {
-        await clinicalStudiesHook.deleteStudy(studyId);
-      } catch (error) {
-        console.error('Error deleting clinical study:', error);
-      }
+    setStudyToDeleteId(studyId);
+  };
+
+  const confirmDeleteStudy = async () => {
+    if (!studyToDeleteId) return;
+    try {
+      setIsDeletingStudy(true);
+      await clinicalStudiesHook.deleteStudy(studyToDeleteId);
+    } catch (error) {
+      console.error('Error deleting clinical study:', error);
+    } finally {
+      setIsDeletingStudy(false);
+      setStudyToDeleteId(null);
     }
   };
 
@@ -121,10 +132,11 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
     <Box>
       {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <IconButton aria-label="Regresar" 
-          onClick={onBack} 
+        <IconButton
+          onClick={onBack}
           sx={{ mr: 2, bgcolor: 'action.hover' }}
           size="large"
+          aria-label="Regresar"
         >
           <ArrowBackIcon />
         </IconButton>
@@ -465,6 +477,29 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
         isSubmitting={clinicalStudiesHook.isSubmitting}
         error={clinicalStudiesHook.error}
       />
+
+      <Dialog
+        open={!!studyToDeleteId}
+        onClose={() => { if (!isDeletingStudy) setStudyToDeleteId(null); }}
+        aria-labelledby="study-delete-title"
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle id="study-delete-title">Eliminar estudio clínico</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            ¿Seguro que deseas eliminar este estudio clínico? Esta acción no se puede deshacer.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStudyToDeleteId(null)} disabled={isDeletingStudy} color="inherit">
+            Cancelar
+          </Button>
+          <Button onClick={confirmDeleteStudy} disabled={isDeletingStudy} color="error" variant="contained" autoFocus>
+            {isDeletingStudy ? 'Eliminando...' : 'Eliminar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

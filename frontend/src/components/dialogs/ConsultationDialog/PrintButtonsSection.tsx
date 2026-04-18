@@ -4,6 +4,7 @@ import {
 } from '@mui/material';
 import { PrintButtons } from '../../common/PrintButtons';
 import type { ConsultationVitalSign, ConsultationFormData } from '../../../types';
+import { getPatientDisplayName } from '../../../constants';
 
 interface PrintButtonsSectionProps {
   // Show condition
@@ -162,8 +163,6 @@ export const PrintButtonsSection: React.FC<PrintButtonsSectionProps> = ({
 
   // Build patient name from available fields
   const patientName = useMemo(() => {
-    // Debug: Log consultation data
-
     // Priority 1: Use consultation.patient_name if available (most reliable when editing)
     // This comes from the backend when loading a consultation
     if (consultation?.patient_name && consultation.patient_name.trim() !== '' && consultation.patient_name !== 'Paciente No Identificado') {
@@ -181,8 +180,7 @@ export const PrintButtonsSection: React.FC<PrintButtonsSectionProps> = ({
     }
 
     // Priority 4: Use name or full_name directly
-    const constructedName = selectedPatient?.name || selectedPatient?.full_name || 'Paciente sin nombre'
-      .trim();
+    const constructedName = getPatientDisplayName(selectedPatient);
     if (constructedName) {
       return constructedName;
     }

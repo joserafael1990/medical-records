@@ -59,6 +59,37 @@ interface ScheduleStepProps {
   formatTimeToString: (date: Date | null) => string;
 }
 
+const toMinutes = (hhmm?: string): number | null => {
+  if (!hhmm) return null;
+  const match = hhmm.match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const h = parseInt(match[1], 10);
+  const m = parseInt(match[2], 10);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return h * 60 + m;
+};
+
+const getBlockError = (
+  block: TimeBlock,
+  index: number,
+  allBlocks: TimeBlock[]
+): string | null => {
+  const start = toMinutes(block.start_time);
+  const end = toMinutes(block.end_time);
+  if (start === null || end === null) return null;
+  if (end <= start) return 'La hora de fin debe ser posterior a la de inicio';
+  for (let i = 0; i < allBlocks.length; i++) {
+    if (i === index) continue;
+    const otherStart = toMinutes(allBlocks[i].start_time);
+    const otherEnd = toMinutes(allBlocks[i].end_time);
+    if (otherStart === null || otherEnd === null) continue;
+    if (start < otherEnd && end > otherStart) {
+      return `Se traslapa con el horario ${i + 1}`;
+    }
+  }
+  return null;
+};
+
 export const ScheduleStep: React.FC<ScheduleStepProps> = ({
   scheduleData,
   onUpdateDaySchedule,
@@ -217,18 +248,26 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                       </Alert>
                     )}
 
-                    {timeBlocks.map((block, blockIndex) => (
-                      <Card key={blockIndex} sx={{ mb: 2, border: '1px solid', borderColor: 'divider', backgroundColor: 'background.default' }}>
+                    {timeBlocks.map((block, blockIndex) => {
+                      const blockError = getBlockError(block, blockIndex, timeBlocks);
+                      return (
+                      <Card key={blockIndex} sx={{
+                        mb: 2,
+                        border: blockError ? '1px solid' : '1px solid',
+                        borderColor: blockError ? 'error.main' : 'divider',
+                        backgroundColor: 'background.default'
+                      }}>
                         <CardContent sx={{ py: 2 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                            <Typography variant="subtitle2" color="primary" sx={{ fontWeight: 600 }}>
+                            <Typography variant="subtitle2" color={blockError ? 'error' : 'primary'} sx={{ fontWeight: 600 }}>
                               Horario {blockIndex + 1}
                             </Typography>
-                            <IconButton aria-label="Cancelar"
+                            <IconButton
                               size="small"
                               color="error"
                               onClick={() => onRemoveTimeBlock(day.index, blockIndex)}
                               disabled={timeBlocks.length === 1}
+                              aria-label={`Eliminar horario ${blockIndex + 1}`}
                               sx={{
                                 '&:hover': {
                                   backgroundColor: 'error.50'
@@ -289,9 +328,15 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                               </LocalizationProvider>
                             </Box>
                           </Box>
+                          {blockError && (
+                            <Typography variant="caption" color="error" sx={{ display: 'block', mt: 1 }}>
+                              {blockError}
+                            </Typography>
+                          )}
                         </CardContent>
                       </Card>
-                    ))}
+                      );
+                    })}
                     
                     {timeBlocks.length > 0 && (
                       <Alert severity="success" icon={<AccessTime />} sx={{ mt: 2 }}>

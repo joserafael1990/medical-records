@@ -56,6 +56,7 @@ import { PersonalInfoStep } from './RegisterView/PersonalInfoStep';
 import { ProfessionalInfoStep } from './RegisterView/ProfessionalInfoStep';
 import { OfficeInfoStep } from './RegisterView/OfficeInfoStep';
 import { ScheduleStep } from './RegisterView/ScheduleStep';
+import QuickRegisterView from './QuickRegisterView';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -137,6 +138,9 @@ interface PasswordValidation {
 }
 
 const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }) => {
+  // Default to the legally-minimum quick flow (NOM-004 + LFPDPPP). Doctors who
+  // want to configure everything upfront can switch to the full 5-step form.
+  const [mode, setMode] = useState<'quick' | 'full'>('quick');
   const [activeStep, setActiveStep] = useState(0);
   const [visitedSteps, setVisitedSteps] = useState<Set<number>>(new Set([0]));
   const [isLoading, setIsLoading] = useState(false);
@@ -791,6 +795,15 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
     }
   };
 
+  if (mode === 'quick') {
+    return (
+      <QuickRegisterView
+        onBackToLogin={onBackToLogin}
+        onSwitchToFull={() => setMode('full')}
+      />
+    );
+  }
+
   return (
     <Container component="main" maxWidth="md">
       <Box
@@ -831,6 +844,20 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
             <Typography variant="body2" color="text.secondary" gutterBottom>
               Únete a CORTEX y gestiona tu práctica médica de manera profesional
             </Typography>
+
+            <Alert severity="info" sx={{ width: '100%', mt: 2, mb: 1 }}>
+              <Typography variant="body2">
+                Estás usando el <strong>registro completo</strong> (5 pasos). Si prefieres crear
+                la cuenta con lo mínimo legal y completar el resto después:{' '}
+                <Button
+                  size="small"
+                  onClick={() => setMode('quick')}
+                  sx={{ textTransform: 'none', p: 0, minWidth: 0, verticalAlign: 'baseline' }}
+                >
+                  usar registro rápido
+                </Button>
+              </Typography>
+            </Alert>
 
             {error && (
               <Box

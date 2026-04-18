@@ -215,8 +215,7 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
   // Debug logging and version tracking
   useEffect(() => {
     const serialized = JSON.stringify(currentVitalSigns?.map(vs => ({ id: vs.id, vital_sign_id: vs.vital_sign_id, value: vs.value })) || []);
-    
-    
+
     // Only update version if content actually changed
     if (serialized !== prevCurrentVitalSignsSerializedRef.current) {
       prevCurrentVitalSignsSerializedRef.current = serialized;
@@ -227,7 +226,6 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
         return newVersion;
       });
     }
-    
   }, [currentVitalSigns]);
 
   // Create a stable key from currentVitalSigns to ensure mergedHistory recomputes when content changes
@@ -309,10 +307,9 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
 
       if (existingTodayIndex >= 0) {
         // Update existing today's point - create completely new array with new object
-        const newData = vsHistory.data.map((item, index) => 
+        const newData = vsHistory.data.map((item, index) =>
           index === existingTodayIndex ? { ...newDataPoint } : { ...item }
         );
-        const oldValue = vsHistory.data[existingTodayIndex]?.value;
         // CRITICAL: Return completely new object to ensure React detects the change
         return {
           ...vsHistory,
@@ -357,11 +354,10 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
     }
 
     // Always create a new object reference to ensure React detects the change
-    const result = {
+    return {
       ...history,
       vital_signs_history: [...mergedVitalSignsHistory] // Create new array reference
     };
-    return result;
   }, [history, currentVitalSignsKey, currentVitalSignsVersion, JSON.stringify(currentVitalSigns?.map(vs => ({ id: vs.id, vital_sign_id: vs.vital_sign_id, value: vs.value })) || [])]); // Include serialized currentVitalSigns as fallback
 
   // Use ref to track previous initialHistory serialized content to avoid unnecessary updates
@@ -601,10 +597,7 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
       // Only update version if the serialized content actually changed
       if (serialized !== prevMergedHistorySerializedRef.current) {
         prevMergedHistorySerializedRef.current = serialized;
-        setDisplayHistoryVersion(prev => {
-          const newVersion = prev + 1;
-          return newVersion;
-        });
+        setDisplayHistoryVersion(prev => prev + 1);
       }
     }
   }, [mergedHistory]);
@@ -662,7 +655,6 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
           // Force new array reference by spreading and ensure each object is new
           const rawChartData = prepareChartData(vitalSign);
           const chartData = rawChartData.map(item => ({ ...item })); // Create new object references
-
 
           if (chartData.length === 0) {
             return null;

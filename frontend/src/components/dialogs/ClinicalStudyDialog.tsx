@@ -123,18 +123,19 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
   };
 
   return (
-    <Dialog 
-      open={open} 
-      onClose={onClose} 
-      maxWidth="lg" 
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="lg"
       fullWidth
+      aria-labelledby="clinical-study-dialog-title"
       PaperProps={{
         sx: { minHeight: '600px' }
       }}
     >
-      <DialogTitle sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
+      <DialogTitle id="clinical-study-dialog-title" sx={{
+        display: 'flex',
+        justifyContent: 'space-between',
         alignItems: 'center'
       }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -143,7 +144,7 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
             {isEditing ? 'Editar Estudio Clínico' : 'Nuevo Estudio Clínico'}
           </Typography>
         </Box>
-        <IconButton aria-label="Cerrar" onClick={onClose} size="small">
+        <IconButton onClick={onClose} size="small" aria-label="Cerrar">
           <CloseIcon />
         </IconButton>
       </DialogTitle>

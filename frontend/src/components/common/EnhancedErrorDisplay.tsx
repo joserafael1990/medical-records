@@ -162,6 +162,7 @@ export const EnhancedErrorDisplay: React.FC<EnhancedErrorDisplayProps> = ({
     if (autoNavigateToError && (Object.keys(fieldErrors).length > 0 || Object.keys(validationErrors).length > 0)) {
       const navigated = scrollToFirstError(fieldErrors, validationErrors);
       if (!navigated) {
+        console.warn('Could not navigate to first error');
       }
     }
   }, [error, fieldErrors, validationErrors, autoNavigateToError, scrollToFirstError]);
@@ -242,19 +243,21 @@ export const EnhancedErrorDisplay: React.FC<EnhancedErrorDisplayProps> = ({
                 </Button>
               )}
               {showDetails && (
-                <IconButton aria-label="Más información"
+                <IconButton
                   color="inherit"
                   size="small"
                   onClick={() => setShowDetailDialog(true)}
+                  aria-label="Ver detalles del error"
                 >
                   <InfoIcon />
                 </IconButton>
               )}
               {onClose && (
-                <IconButton aria-label="Cerrar"
+                <IconButton
                   color="inherit"
                   size="small"
                   onClick={onClose}
+                  aria-label="Cerrar"
                 >
                   <CloseIcon />
                 </IconButton>
@@ -287,17 +290,19 @@ export const EnhancedErrorDisplay: React.FC<EnhancedErrorDisplayProps> = ({
         </Alert>
 
         {/* Detail Dialog */}
-        <Dialog 
-          open={showDetailDialog} 
+        <Dialog
+          open={showDetailDialog}
           onClose={() => setShowDetailDialog(false)}
           maxWidth="md"
           fullWidth
+          aria-labelledby="enhanced-error-detail-title"
         >
-          <DialogTitle>
+          <DialogTitle id="enhanced-error-detail-title">
             Detalles del Problema Técnico
-            <IconButton aria-label="Cerrar"
+            <IconButton
               sx={{ position: 'absolute', right: 8, top: 8 }}
               onClick={() => setShowDetailDialog(false)}
+              aria-label="Cerrar"
             >
               <CloseIcon />
             </IconButton>
@@ -369,10 +374,12 @@ export const EnhancedErrorDisplay: React.FC<EnhancedErrorDisplayProps> = ({
                 Ir al Error
               </Button>
             )}
-            <IconButton aria-label="Contraer"
+            <IconButton
               color="inherit"
               size="small"
               onClick={() => setExpanded(!expanded)}
+              aria-label={expanded ? 'Ocultar lista de errores' : 'Mostrar lista de errores'}
+              aria-expanded={expanded}
             >
               {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
             </IconButton>

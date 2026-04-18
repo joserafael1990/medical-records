@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiService } from '../services';
 import { logger } from '../utils/logger';
+import { extractErrorMessage } from '../utils/errorMessages';
 import type { PrivacyConsent, SendPrivacyNoticeRequest } from '../types';
 
 interface UsePrivacyConsentReturn {
@@ -70,7 +71,7 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
         logger.debug('No consent found for patient (expected for new patients)', { patientId }, 'api');
       } else {
         // Only show error for unexpected errors
-        const errorMsg = err?.detail || err?.response?.data?.detail || err?.message || 'Error al obtener el estado del consentimiento';
+        const errorMsg = extractErrorMessage(err, 'Error al obtener el estado del consentimiento');
         setError(errorMsg);
         setConsent(null);
       }
@@ -84,7 +85,6 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
    * Send privacy notice via WhatsApp
    */
   const sendWhatsAppNotice = useCallback(async (patientId: number, patientPhone: string) => {
-    console.log('📤 Sending WhatsApp privacy notice to patient:', patientId);
     setIsLoading(true);
     setError(null);
 
@@ -95,8 +95,7 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
       };
 
       const response = await apiService.patients.api.post('/api/privacy/send-whatsapp-notice', payload);
-      console.log('✅ WhatsApp notice sent:', response);
-      
+
       // Update consent state with the newly created consent
       if (response.consent) {
         setConsent(response.consent);
@@ -104,7 +103,7 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
 
       return response;
     } catch (err: any) {
-      const errorMsg = err?.detail || err?.message || 'Error al enviar el aviso de privacidad por WhatsApp';
+      const errorMsg = extractErrorMessage(err, 'Error al enviar el aviso de privacidad por WhatsApp');
       setError(errorMsg);
       throw err;
     } finally {
@@ -116,7 +115,6 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
    * Revoke consent
    */
   const revokeConsent = useCallback(async (patientId: number, reason: string) => {
-    console.log('🚫 Revoking consent for patient:', patientId);
     setIsLoading(true);
     setError(null);
 
@@ -127,8 +125,7 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
       };
 
       const response = await apiService.patients.api.post('/api/privacy/revoke', payload);
-      console.log('✅ Consent revoked:', response);
-      
+
       // Update consent state
       if (consent) {
         setConsent({
@@ -141,7 +138,7 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
 
       return response;
     } catch (err: any) {
-      const errorMsg = err?.detail || err?.message || 'Error al revocar el consentimiento';
+      const errorMsg = extractErrorMessage(err, 'Error al revocar el consentimiento');
       setError(errorMsg);
       throw err;
     } finally {
