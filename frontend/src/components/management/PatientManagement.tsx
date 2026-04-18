@@ -48,12 +48,11 @@ export function usePatientManagementComponent(
 
   // Load patients function
   const loadPatients = useCallback(async () => {
-    
     const result = await executeApiCall(
       () => apiService.patients.getPatients(''),
       undefined // No mostrar mensaje de éxito para carga inicial
     );
-    
+
     if (result) {
       setPatients(result);
     }

@@ -164,13 +164,14 @@ Atentamente,`;
         </Button>
       </Tooltip>
 
-      <Dialog 
-        open={dialogOpen} 
+      <Dialog
+        open={dialogOpen}
         onClose={handleCloseDialog}
         maxWidth="md"
         fullWidth
+        aria-labelledby="print-certificate-title"
       >
-        <DialogTitle>
+        <DialogTitle id="print-certificate-title">
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <CertificateIcon />
             Generar Constancia Médica

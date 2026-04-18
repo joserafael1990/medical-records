@@ -26,6 +26,7 @@ import { PatientSelector } from '../appointments/PatientSelector';
 import { NewPatientForm } from '../appointments/NewPatientForm';
 import { AppointmentFormFields } from '../appointments/AppointmentFormFields';
 import { useAppointmentReminders } from '../../hooks/useAppointmentReminders';
+import { useProfileCompletion } from '../../hooks/useProfileCompletion';
 
 interface AppointmentDialogMultiOfficeProps {
   open: boolean;
@@ -58,6 +59,16 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
   onFormDataChange,
   doctorProfile
 }) => {
+  // Profile-completion gate: block appointment creation when the doctor hasn't
+  // configured at least one office and a weekly schedule. The banner on the
+  // dashboard nudges them to complete; this is the defensive check at the
+  // point of action.
+  const { missing } = useProfileCompletion(doctorProfile);
+  const appointmentBlockers = missing.filter(
+    m => m.id === 'office' || m.id === 'schedule' || m.id === 'specialty' || m.id === 'cedula'
+  );
+  const isBlocked = !isEditing && appointmentBlockers.length > 0;
+
   // Use extracted hook for reminders logic
   const {
     reminders,
@@ -176,6 +187,7 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
       maxWidth="sm"
       fullWidth
       fullScreen={window.innerWidth < 600}
+      aria-labelledby="appointment-dialog-title"
       sx={{
         '& .MuiDialog-paper': {
           margin: { xs: 0, sm: 2 },
@@ -185,7 +197,7 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
         }
       }}
     >
-      <DialogTitle>
+      <DialogTitle id="appointment-dialog-title">
         {isEditing ? 'Editar Cita' : 'Nueva Cita'}
       </DialogTitle>
 
@@ -205,6 +217,24 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
         {currentError && (
           <Alert severity="error" sx={{ mb: 2 }} ref={errorRef}>
             {currentError}
+          </Alert>
+        )}
+
+        {isBlocked && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+              Completa tu perfil para agendar citas
+            </Typography>
+            <Typography variant="body2">
+              Te falta configurar:{' '}
+              {appointmentBlockers.map((b, i) => (
+                <span key={b.id}>
+                  <strong>{b.label.toLowerCase()}</strong>
+                  {i < appointmentBlockers.length - 1 ? ', ' : ''}
+                </span>
+              ))}
+              .
+            </Typography>
           </Alert>
         )}
 
@@ -335,7 +365,7 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
         <Button
           onClick={handleSubmit}
           variant="contained"
-          disabled={currentLoading}
+          disabled={currentLoading || isBlocked}
         >
           {currentLoading ? (
             <CircularProgress size={20} />

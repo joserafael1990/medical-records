@@ -38,13 +38,14 @@ export const VitalSignsDialogs: React.FC<VitalSignsDialogsProps> = ({
   return (
     <>
       {/* Vital Signs Selection Dialog */}
-      <Dialog 
-        open={vitalSignsHook.vitalSignDialogOpen && !vitalSignsHook.isEditingVitalSign} 
-        onClose={vitalSignsHook.closeDialog} 
-        maxWidth="md" 
+      <Dialog
+        open={vitalSignsHook.vitalSignDialogOpen && !vitalSignsHook.isEditingVitalSign}
+        onClose={vitalSignsHook.closeDialog}
+        maxWidth="md"
         fullWidth
+        aria-labelledby="vital-sign-select-title"
       >
-        <DialogTitle>Seleccionar Signo Vital</DialogTitle>
+        <DialogTitle id="vital-sign-select-title">Seleccionar Signo Vital</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Selecciona el tipo de signo vital que deseas agregar:
@@ -162,13 +163,14 @@ export const VitalSignsDialogs: React.FC<VitalSignsDialogsProps> = ({
       </Dialog>
 
       {/* Vital Sign Form Dialog */}
-      <Dialog 
-        open={vitalSignsHook.vitalSignDialogOpen && vitalSignsHook.vitalSignFormData.vital_sign_id > 0} 
-        onClose={vitalSignsHook.closeDialog} 
-        maxWidth="sm" 
+      <Dialog
+        open={vitalSignsHook.vitalSignDialogOpen && vitalSignsHook.vitalSignFormData.vital_sign_id > 0}
+        onClose={vitalSignsHook.closeDialog}
+        maxWidth="sm"
         fullWidth
+        aria-labelledby="vital-sign-form-title"
       >
-        <DialogTitle>
+        <DialogTitle id="vital-sign-form-title">
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             {(() => {
               const selectedVitalSign = (vitalSignsHook.availableVitalSigns || []).find(

@@ -4,6 +4,7 @@ import { apiService } from '../services';
 import { useToast } from '../components/common/ToastNotification';
 import { logger } from '../utils/logger';
 import { extractCountryCode } from '../utils/countryCodes';
+import { PLACEHOLDER_TEXT } from '../constants';
 
 export interface UseAppointmentMultiOfficeFormProps {
   open: boolean;
@@ -98,7 +99,7 @@ const formatPatientNameWithAge = (patient: Patient): string => {
     ? patient.name.trim()
     : '';
 
-  const safeName = baseName || 'Paciente sin nombre';
+  const safeName = baseName || PLACEHOLDER_TEXT.PATIENT_NO_NAME;
   const age = calculateAge(patient.birth_date);
 
   return age !== null ? `${safeName} (${age} años)` : safeName;
@@ -279,11 +280,6 @@ export const useAppointmentMultiOfficeForm = (
               apiService.patients.getPatients()
             ]);
 
-            console.log('🔄 Patients loaded:', {
-              count: patientsData?.length || 0,
-              first5: patientsData?.slice(0, 5).map(p => ({ id: p.id, name: p.name })) || []
-            });
-
             setAppointmentTypes(appointmentTypesData || []);
             setOffices(officesData || []);
             setPatients(patientsData || []);
@@ -292,11 +288,6 @@ export const useAppointmentMultiOfficeForm = (
               appointmentTypesPromise,
               officesPromise
             ]);
-
-            console.log('🔄 Using external patients:', {
-              count: externalPatients?.length || 0,
-              first5: externalPatients?.slice(0, 5).map(p => ({ id: p.id, name: p.name })) || []
-            });
 
             setAppointmentTypes(appointmentTypesData || []);
             setOffices(officesData || []);
@@ -317,13 +308,6 @@ export const useAppointmentMultiOfficeForm = (
       isInitializingRef.current = true;
 
       if (isEditing && externalFormData) {
-        console.log('📝 Initializing form for editing:', {
-          patient_id: externalFormData.patient_id,
-          patient_id_type: typeof externalFormData.patient_id,
-          appointment_date: externalFormData.appointment_date,
-          currentPatientsCount: patients.length
-        });
-
         setFormData(externalFormData);
         // When editing, the patient is ALWAYS existing (we're editing an existing appointment)
         setIsExistingPatient(true);

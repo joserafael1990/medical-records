@@ -177,19 +177,8 @@ export const useAgendaView = (
   }, [currentDate]);
 
   const filteredAppointments = useMemo(() => {
-    const filtered = getFilteredAppointments(currentDate, agendaView);
-    // Debug logging
-    if (appointments.length > 0 && filtered.length === 0) {
-      console.log('🔍 Debug: Appointments exist but none filtered', {
-        totalAppointments: appointments.length,
-        currentDate: currentDate.toISOString(),
-        agendaView,
-        sampleAppointment: appointments[0],
-        sampleDateField: appointments[0]?.date_time || appointments[0]?.appointment_date
-      });
-    }
-    return filtered;
-  }, [currentDate, agendaView, getFilteredAppointments, appointments]);
+    return getFilteredAppointments(currentDate, agendaView);
+  }, [currentDate, agendaView, getFilteredAppointments]);
 
   // Navegación de fechas
   const handleDateNavigation = useCallback((direction: 'prev' | 'next') => {

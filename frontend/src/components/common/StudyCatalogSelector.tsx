@@ -171,8 +171,8 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
   };
 
   // handleTemplateApply removed - StudyTemplate table deleted
-  const handleTemplateApply = (template: any) => {
-    // Mock implementation
+  const handleTemplateApply = (_template: any) => {
+    // Mock implementation (no-op since the StudyTemplate table was dropped)
   };
 
   const handleRecommendationSelect = (study: StudyCatalog) => {
@@ -193,6 +193,7 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
   }) => {
     // Add validation to prevent undefined study errors
     if (!study) {
+      console.warn('StudyCard received undefined study');
       return null;
     }
 
@@ -255,7 +256,7 @@ export const StudyCatalogSelector: React.FC<StudyCatalogSelectorProps> = ({
 
             {showAddButton && (
               <Tooltip title="Agregar estudio">
-                <IconButton aria-label="Agregar"
+                <IconButton
                   size="small"
                   color="primary"
                   onClick={() => handleStudySelect(study)}

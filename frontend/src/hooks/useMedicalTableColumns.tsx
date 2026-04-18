@@ -4,7 +4,7 @@ import { Phone as PhoneIcon, Email as EmailIcon } from '@mui/icons-material';
 import { TableColumn } from '../components/common/SmartTable';
 import { Patient, Consultation } from '../types';
 import { calculateAge, formatDate } from '../utils';
-import { formatAppointmentTime, formatAppointmentTimeRange } from '../constants';
+import { formatAppointmentTime, formatAppointmentTimeRange, getPatientDisplayName } from '../constants';
 
 /**
  * Hook que proporciona configuraciones de columnas para tablas médicas
@@ -25,7 +25,7 @@ export const useMedicalTableColumns = () => {
           </Avatar>
           <Box>
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              {patient.name || patient.full_name || 'Paciente sin nombre'}
+              {getPatientDisplayName(patient)}
             </Typography>
             <Typography variant="caption" color="text.secondary">
               ID: {patient.id}
@@ -240,7 +240,7 @@ export const useMedicalTableColumns = () => {
       sortable: true,
       render: (value: Patient[keyof Patient], patient: Patient, index: number) => (
         <Typography variant="body2" sx={{ fontWeight: 600 }}>
-          {patient.name || patient.full_name || 'Paciente sin nombre'}
+          {getPatientDisplayName(patient)}
         </Typography>
       )
     },

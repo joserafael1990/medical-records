@@ -28,6 +28,7 @@ import { formatDateTimeShort } from '../../utils/dateHelpers';
 import { SmartTable, TableColumn } from '../common/SmartTable';
 import { useDebounce } from '../../hooks/useDebounce';
 import { normalizeText } from '../../utils';
+import { PLACEHOLDER_TEXT, getPatientDisplayName } from '../../constants';
 
 interface ConsultationsViewSmartProps {
   consultations?: any[];
@@ -126,7 +127,7 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
           <PersonIcon color="action" />
           <Box>
             <Typography variant="subtitle2">
-              {consultation.patient_name || 'Paciente no encontrado'}
+              {consultation.patient_name || PLACEHOLDER_TEXT.PATIENT_NOT_FOUND}
             </Typography>
             <Typography variant="caption" color="text.secondary">
               ID: {consultation.patient_id}
@@ -348,7 +349,7 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
 
       {/* Statistics Cards - Responsive */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+        <Grid item xs={12} sm={6} md={4}>
           <Card sx={{ boxShadow: 1, height: '100%' }}>
             <CardContent sx={{ textAlign: 'center' }}>
               <Typography variant="h6" gutterBottom>
@@ -360,7 +361,7 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
             </CardContent>
           </Card>
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+        <Grid item xs={12} sm={6} md={4}>
           <Card sx={{ boxShadow: 1, height: '100%' }}>
             <CardContent sx={{ textAlign: 'center' }}>
               <Typography variant="h6" gutterBottom>
@@ -372,7 +373,7 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
             </CardContent>
           </Card>
         </Grid>
-        <Grid size={{ xs: 12, sm: 12, md: 4 }}>
+        <Grid item xs={12} sm={12} md={4}>
           <Card sx={{ boxShadow: 1, height: '100%' }}>
             <CardContent sx={{ textAlign: 'center' }}>
               <Typography variant="h6" gutterBottom>
@@ -432,9 +433,10 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
                   ),
                   endAdornment: searchTerm && (
                     <InputAdornment position="end">
-                      <IconButton aria-label="Limpiar"
+                      <IconButton
                         size="small"
                         onClick={() => setSearchTerm('')}
+                        aria-label="Limpiar búsqueda"
                       >
                         <ClearIcon />
                       </IconButton>
@@ -473,7 +475,7 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
                     </MenuItem>
                     {patients.map((patient) => (
                       <MenuItem key={patient.id} value={patient.id}>
-                        {patient.name || patient.full_name || 'Paciente sin nombre'}
+                        {getPatientDisplayName(patient)}
                       </MenuItem>
                     ))}
                   </Select>
@@ -597,7 +599,9 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
           {consultations.length === 0 ? (
             <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'grey.50' }}>
               <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-                No hay consultas registradas
+                {consultations === null || consultations === undefined 
+                  ? 'Cargando consultas...' 
+                  : 'No hay consultas registradas'}
               </Typography>
               <Button
                 variant="outlined"

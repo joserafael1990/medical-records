@@ -2,12 +2,10 @@ import React from 'react';
 import {
   Box,
   Typography,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Button,
-  IconButton
+  IconButton,
+  Autocomplete,
+  TextField
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -16,6 +14,7 @@ import {
   LocalHospital as HospitalIcon
 } from '@mui/icons-material';
 import { parseBackendDate } from '../../../utils/formatters';
+import { getPatientDisplayName } from '../../../constants';
 
 interface ConsultationFormHeaderProps {
   isEditing: boolean;
@@ -94,40 +93,48 @@ export const ConsultationFormHeader: React.FC<ConsultationFormHeaderProps> = ({
               </Button>
             </Box>
           ) : (
-            <FormControl size="small" fullWidth>
-              <InputLabel>Citas Programadas</InputLabel>
-              <Select
-                value={selectedAppointmentId || ''}
-                onChange={(e: any) => {
-                  onAppointmentChange(e.target.value);
-                }}
-                label="Citas Programadas"
-              >
-                {availableAppointments.map((appointment: any) => {
-                  const patient = appointment.patient;
-                  
-                  const appointmentDate = parseBackendDate(appointment.appointment_date).toLocaleDateString('es-ES', {
-                    timeZone: 'America/Mexico_City'
-                  });
-                  const appointmentTime = parseBackendDate(appointment.appointment_date).toLocaleTimeString('es-ES', { 
-                    hour: '2-digit', 
-                    minute: '2-digit',
-                    timeZone: 'America/Mexico_City'
-                  });
-                  
-                  const consultationType = getConsultationTypeDisplay(appointment.consultation_type);
-                  
-                  const patientName = appointment.patient_name || 
-                    (patient ? (patient.name || patient.full_name || 'Paciente sin nombre') : 'Paciente no encontrado');
-                  
-                  return (
-                    <MenuItem key={appointment.id} value={appointment.id.toString()}>
-                      {patientName} - {appointmentDate} {appointmentTime} - {consultationType}
-                    </MenuItem>
-                  );
-                })}
-              </Select>
-            </FormControl>
+            (() => {
+              const buildLabel = (appointment: any) => {
+                const patient = appointment.patient;
+                const appointmentDate = parseBackendDate(appointment.appointment_date).toLocaleDateString('es-MX', {
+                  timeZone: 'America/Mexico_City'
+                });
+                const appointmentTime = parseBackendDate(appointment.appointment_date).toLocaleTimeString('es-MX', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  timeZone: 'America/Mexico_City'
+                });
+                const consultationType = getConsultationTypeDisplay(appointment.consultation_type);
+                const patientName = appointment.patient_name || getPatientDisplayName(patient);
+                return `${patientName} - ${appointmentDate} ${appointmentTime} - ${consultationType}`;
+              };
+
+              const selected = availableAppointments.find(
+                (a: any) => a.id?.toString() === (selectedAppointmentId || '')
+              ) || null;
+
+              return (
+                <Autocomplete
+                  size="small"
+                  fullWidth
+                  options={availableAppointments}
+                  value={selected}
+                  onChange={(_, newValue: any) => {
+                    onAppointmentChange(newValue?.id ? newValue.id.toString() : '');
+                  }}
+                  getOptionLabel={(option: any) => (option ? buildLabel(option) : '')}
+                  isOptionEqualToValue={(option: any, value: any) => option?.id === value?.id}
+                  noOptionsText="Sin coincidencias"
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Citas Programadas"
+                      placeholder="Buscar por paciente, fecha o tipo..."
+                    />
+                  )}
+                />
+              );
+            })()
           )}
         </Box>
       )}
