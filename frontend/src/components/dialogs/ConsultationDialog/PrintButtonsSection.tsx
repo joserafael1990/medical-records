@@ -48,12 +48,6 @@ export const PrintButtonsSection: React.FC<PrintButtonsSectionProps> = ({
   vitalSigns,
   nextAppointmentDate
 }) => {
-  if (!show) {
-    return null;
-  }
-
-  // Debug: Log the data to see what we're receiving
-
   const vitalSignsSummary = useMemo(() => {
     const normalize = (value: string) =>
       value
@@ -188,6 +182,10 @@ export const PrintButtonsSection: React.FC<PrintButtonsSectionProps> = ({
     // Last resort: fallback to 'Paciente'
     return 'Paciente';
   }, [selectedPatient, consultation?.patient_name]);
+
+  if (!show) {
+    return null;
+  }
 
   return (
     <Box sx={{ width: '100%' }}>
