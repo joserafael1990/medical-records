@@ -465,6 +465,10 @@ app.include_router(audit_router)
 from routes import internal
 app.include_router(internal.router)
 
+# Include pre-consultation intake questionnaire routes
+from routes.intake import router as intake_router
+app.include_router(intake_router)
+
 # ============================================================================
 # TEMPORARY DEBUG ENDPOINT
 # ============================================================================
