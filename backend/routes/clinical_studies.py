@@ -39,6 +39,7 @@ router = APIRouter(prefix="/api", tags=["clinical-studies"])
 @router.get("/clinical-studies/patient/{patient_id}")
 async def get_clinical_studies_by_patient(
     patient_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
@@ -90,8 +91,16 @@ async def get_clinical_studies_by_patient(
             studies_data.append(study_data)
         
         api_logger.info("Found clinical studies for patient", patient_id=patient_id, count=len(studies_data))
+        # NOM-004 audit: PHI read.
+        try:
+            audit_service.log_clinical_studies_access(
+                db=db, user=current_user, request=request,
+                result_count=len(studies_data), patient_id=patient_id,
+            )
+        except Exception as audit_err:
+            api_logger.warning("Failed to audit clinical studies (patient) access: %s", audit_err)
         return studies_data
-        
+
     except Exception as e:
         api_logger.error("Error getting clinical studies for patient", patient_id=patient_id, error=str(e), exc_info=True)
         return []
@@ -100,6 +109,7 @@ async def get_clinical_studies_by_patient(
 @router.get("/clinical-studies/consultation/{consultation_id}")
 async def get_clinical_studies_by_consultation(
     consultation_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
@@ -150,8 +160,15 @@ async def get_clinical_studies_by_consultation(
             studies_data.append(study_data)
         
         api_logger.info("Found clinical studies for consultation", consultation_id=consultation_id, count=len(studies_data))
+        try:
+            audit_service.log_clinical_studies_access(
+                db=db, user=current_user, request=request,
+                result_count=len(studies_data), consultation_id=consultation_id,
+            )
+        except Exception as audit_err:
+            api_logger.warning("Failed to audit clinical studies (consultation) access: %s", audit_err)
         return studies_data
-        
+
     except Exception as e:
         api_logger.error("Error getting clinical studies for consultation", consultation_id=consultation_id, error=str(e), exc_info=True)
         return []

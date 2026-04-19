@@ -486,7 +486,63 @@ class AuditService:
             metadata={"result_count": result_count, "consultation_id": consultation_id},
             security_level='INFO',
         )
-    
+
+    @staticmethod
+    def log_clinical_studies_access(
+        db: Session,
+        user: Optional[Person],
+        request: Request,
+        result_count: int,
+        patient_id: Optional[int] = None,
+        consultation_id: Optional[int] = None,
+    ):
+        """Log de acceso al listado de estudios clínicos (PHI diagnóstico)."""
+        AuditService.log_action(
+            db=db,
+            action="READ",
+            user=user,
+            request=request,
+            table_name="clinical_studies",
+            record_id=consultation_id or patient_id,
+            operation_type="clinical_studies_access",
+            affected_patient_id=patient_id,
+            metadata={
+                "result_count": result_count,
+                "scope": "consultation" if consultation_id else ("patient" if patient_id else "unknown"),
+                "patient_id": patient_id,
+                "consultation_id": consultation_id,
+            },
+            security_level='INFO',
+        )
+
+    @staticmethod
+    def log_vital_signs_access(
+        db: Session,
+        user: Optional[Person],
+        request: Request,
+        result_count: int,
+        patient_id: Optional[int] = None,
+        consultation_id: Optional[int] = None,
+    ):
+        """Log de acceso a signos vitales (PHI)."""
+        AuditService.log_action(
+            db=db,
+            action="READ",
+            user=user,
+            request=request,
+            table_name="consultation_vital_signs",
+            record_id=consultation_id or patient_id,
+            operation_type="vital_signs_access",
+            affected_patient_id=patient_id,
+            metadata={
+                "result_count": result_count,
+                "scope": "consultation" if consultation_id else ("patient_history" if patient_id else "unknown"),
+                "patient_id": patient_id,
+                "consultation_id": consultation_id,
+            },
+            security_level='INFO',
+        )
+
     @staticmethod
     def log_patient_create(
         db: Session,
