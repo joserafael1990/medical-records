@@ -16,6 +16,7 @@ import { ToastProvider } from './components/common/ToastNotification';
 import { SnackbarProvider } from './contexts/SnackbarContext';
 import { twitterTheme } from './themes/twitterTheme';
 import { PublicPrivacyNotice } from './components/public/PublicPrivacyNotice';
+import { PublicTermsOfService } from './components/public/PublicTermsOfService';
 import { LandingPage } from './components/public/LandingPage';
 
 // Use Twitter-inspired theme consistently
@@ -26,13 +27,19 @@ const AppWithAuth: React.FC = () => {
   const currentPath = window.location.pathname;
   
   // Check if we're on a public privacy notice page
-  const isPrivacyNoticePage = currentPath.startsWith('/privacy-notice') || 
+  const isPrivacyNoticePage = currentPath.startsWith('/privacy-notice') ||
                                currentPath === '/privacy' ||
                                currentPath === '/aviso-privacidad';
-  
+
   // If public privacy notice page, show it regardless of auth status
   if (isPrivacyNoticePage) {
     return <PublicPrivacyNotice />;
+  }
+
+  // Public terms of service — linked from QuickRegisterView consent footer.
+  const isTermsPage = currentPath === '/terms' || currentPath === '/terminos';
+  if (isTermsPage) {
+    return <PublicTermsOfService />;
   }
   
   // If not authenticated, show auth container (login, register, forgot password, reset password)

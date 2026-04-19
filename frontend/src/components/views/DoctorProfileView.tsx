@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -97,6 +97,21 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
     formatDate
   } = viewHook;
 
+  // When ProfileCompletionBanner (or any deep link) navigates here with
+  // `#offices` / `#schedule`, scroll the matching section into view after
+  // the view renders. Not a rules-of-hooks issue: declared before any
+  // early return.
+  useEffect(() => {
+    if (isLoading || !doctorProfile) return;
+    const hash = window.location.hash.replace('#', '');
+    if (!hash) return;
+    const timer = window.setTimeout(() => {
+      const el = document.getElementById(hash);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [isLoading, doctorProfile]);
+
   if (isLoading) {
     return (
       <Box sx={{ p: 3 }}>
@@ -147,7 +162,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
         </Box>
 
         {/* Office Management */}
-        <Card sx={{ mt: 3 }}>
+        <Card id="offices" sx={{ mt: 3, scrollMarginTop: 24 }}>
           <CardContent>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -204,7 +219,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
         </Card>
 
         {/* Schedule Management */}
-        <Card sx={{ mt: 3 }}>
+        <Card id="schedule" sx={{ mt: 3, scrollMarginTop: 24 }}>
           <CardContent>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
