@@ -362,3 +362,26 @@ def serialize_observation(
         out["valueString"] = str(raw_value)
 
     return out
+
+
+# ---------------------------------------------------------------------------
+# Bundle helpers
+# ---------------------------------------------------------------------------
+
+def build_searchset_bundle(
+    entries: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Wrap a list of FHIR resources in a searchset Bundle.
+
+    Each entry is tagged with `search.mode = "match"` as required by the
+    R4 spec for search-type Bundles.
+    """
+    return {
+        "resourceType": "Bundle",
+        "type": "searchset",
+        "total": len(entries),
+        "entry": [
+            {"resource": r, "search": {"mode": "match"}}
+            for r in entries
+        ],
+    }

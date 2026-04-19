@@ -2,24 +2,28 @@
 FHIR R4 endpoints (NOM-024-SSA3-2012 interoperability).
 
 Resources exposed:
-- Patient, Practitioner (read)
-- Encounter (read) — one per clinical consultation
-- Patient/$everything operation — Bundle of Patient + Encounters (+
-  involved Practitioners).
+- Patient      read + search (identifier, CURP system only)
+- Practitioner read
+- Encounter    read + search (patient)
+- MedicationRequest  read + search (patient)
+- Observation        read + search (patient)
+- Patient/$everything operation — full clinical Bundle
 
 Auth model: doctor-only. A doctor can read their own Practitioner record,
 any Patient they own (`persons.created_by`) or have consulted, and any
-Encounter belonging to those patients. Admins bypass ownership checks.
+Encounter/MedicationRequest/Observation belonging to those patients.
+Admins bypass ownership checks. Patient search returns only patients the
+caller is allowed to read.
 
-Not in this cut: MedicationRequest/Observation resource types, FHIR search
-parameters beyond id, SMART-on-FHIR auth, Bundle `transaction` writes.
+Not in scope: LOINC/RxNorm codings, SMART-on-FHIR auth,
+Bundle transaction writes, resource _history.
 """
 
 from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -27,8 +31,10 @@ from audit_service import audit_service
 from database import (
     ConsultationPrescription,
     ConsultationVitalSign,
+    Document,
     MedicalRecord,
     Person,
+    PersonDocument,
     get_db,
 )
 from dependencies import get_current_user
@@ -39,6 +45,7 @@ from services.fhir_service import (
     build_encounter_view,
     build_everything_bundle,
     build_patient_view,
+    build_searchset_bundle,
     fix_encounter_keys,
     serialize_medication_request,
     serialize_observation,
@@ -167,6 +174,76 @@ def _doctor_can_read_patient(db: Session, doctor: Person, patient: Person) -> bo
         is not None
     )
     return has_consultation
+
+
+# Patient.identifier system for Mexican CURP (matches the system URI
+# that `InteroperabilityService.patient_to_fhir_patient` emits).
+CURP_IDENTIFIER_SYSTEM = "urn:oid:2.16.840.1.113883.4.629"
+
+
+@router.get("/Patient")
+async def search_patients(
+    identifier: str = Query(..., description="identifier as system|value or bare value (CURP)"),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user),
+):
+    """Search Patients by identifier. Currently only CURP is supported.
+
+    Accepts FHIR's `system|value` token syntax or a bare `value`. A
+    provided `system` that isn't the CURP OID yields an empty Bundle
+    (no error) — that matches FHIR search semantics for unknown systems.
+    """
+    if current_user.person_type not in ("doctor", "admin"):
+        return JSONResponse(
+            status_code=403,
+            content=_operation_outcome(403, "Not authorized"),
+            media_type=FHIR_CONTENT_TYPE,
+        )
+    if "|" in identifier:
+        system, value = identifier.split("|", 1)
+    else:
+        system, value = "", identifier
+    value = value.strip()
+    if not value:
+        return JSONResponse(
+            status_code=400,
+            content=_operation_outcome(400, "identifier value is required"),
+            media_type=FHIR_CONTENT_TYPE,
+        )
+    if system and system != CURP_IDENTIFIER_SYSTEM:
+        return _fhir_response(build_searchset_bundle([]))
+
+    rows = (
+        db.query(Person)
+        .join(PersonDocument, PersonDocument.person_id == Person.id)
+        .join(Document, Document.id == PersonDocument.document_id)
+        .filter(
+            Person.person_type == "patient",
+            Document.name == "CURP",
+            PersonDocument.is_active.is_(True),
+            PersonDocument.document_value == value,
+        )
+        .all()
+    )
+    visible = [p for p in rows if _doctor_can_read_patient(db, current_user, p)]
+    resources: List[Dict[str, Any]] = []
+    for pat in visible:
+        view = build_patient_view(db, pat)
+        resources.append(
+            InteroperabilityService.patient_to_fhir_patient(view).model_dump(exclude_none=True)
+        )
+    try:
+        audit_service.log_action(
+            db=db, action="READ", user=current_user, request=request,
+            table_name="persons", record_id=None,
+            operation_type="fhir_patient_search",
+            metadata={"count": len(resources), "identifier_value": value},
+            security_level="INFO",
+        )
+    except Exception as audit_err:
+        api_logger.warning("Failed to audit Patient search: %s", audit_err)
+    return _fhir_response(build_searchset_bundle(resources))
 
 
 @router.get("/Patient/{patient_id}")
@@ -393,6 +470,246 @@ async def patient_everything(
 
 
 # ---------------------------------------------------------------------------
+# Encounter search — GET /Encounter?patient={id}
+# ---------------------------------------------------------------------------
+
+@router.get("/Encounter")
+async def search_encounters(
+    patient: int = Query(..., description="Patient resource id"),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user),
+):
+    """Return a searchset Bundle of Encounters for the given patient."""
+    pat = db.query(Person).filter(Person.id == patient, Person.person_type == "patient").first()
+    if not pat:
+        return JSONResponse(
+            status_code=404,
+            content=_operation_outcome(404, "Patient not found"),
+            media_type=FHIR_CONTENT_TYPE,
+        )
+    if not _doctor_can_read_patient(db, current_user, pat):
+        return JSONResponse(
+            status_code=403,
+            content=_operation_outcome(403, "Not authorized to read this patient's Encounters"),
+            media_type=FHIR_CONTENT_TYPE,
+        )
+    q = db.query(MedicalRecord).filter(MedicalRecord.patient_id == patient)
+    if current_user.person_type != "admin":
+        q = q.filter(MedicalRecord.doctor_id == current_user.id)
+    consultations = q.order_by(MedicalRecord.consultation_date.asc()).all()
+    encounters = [_fhir_encounter_for(c) for c in consultations]
+    try:
+        audit_service.log_action(
+            db=db, action="READ", user=current_user, request=request,
+            table_name="medical_records", record_id=None,
+            affected_patient_id=patient,
+            operation_type="fhir_encounter_search",
+            metadata={"count": len(encounters)},
+            security_level="INFO",
+        )
+    except Exception as audit_err:
+        api_logger.warning("Failed to audit Encounter search: %s", audit_err)
+    return _fhir_response(build_searchset_bundle(encounters))
+
+
+# ---------------------------------------------------------------------------
+# MedicationRequest — search + read
+# ---------------------------------------------------------------------------
+
+def _rx_patient_id(db: Session, rx: ConsultationPrescription) -> int | None:
+    """Resolve the patient_id for a prescription via its parent encounter."""
+    consultation = db.query(MedicalRecord).filter(
+        MedicalRecord.id == rx.consultation_id
+    ).first()
+    return consultation.patient_id if consultation else None
+
+
+@router.get("/MedicationRequest")
+async def search_medication_requests(
+    patient: int = Query(..., description="Patient resource id"),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user),
+):
+    """Return a searchset Bundle of MedicationRequests for the given patient."""
+    pat = db.query(Person).filter(Person.id == patient, Person.person_type == "patient").first()
+    if not pat:
+        return JSONResponse(
+            status_code=404,
+            content=_operation_outcome(404, "Patient not found"),
+            media_type=FHIR_CONTENT_TYPE,
+        )
+    if not _doctor_can_read_patient(db, current_user, pat):
+        return JSONResponse(
+            status_code=403,
+            content=_operation_outcome(403, "Not authorized"),
+            media_type=FHIR_CONTENT_TYPE,
+        )
+    q = db.query(MedicalRecord).filter(MedicalRecord.patient_id == patient)
+    if current_user.person_type != "admin":
+        q = q.filter(MedicalRecord.doctor_id == current_user.id)
+    consultations = q.all()
+    enc_ids = [c.id for c in consultations]
+    consultation_doctor = {c.id: c.doctor_id for c in consultations}
+    rx_rows = (
+        db.query(ConsultationPrescription)
+        .filter(ConsultationPrescription.consultation_id.in_(enc_ids))
+        .all()
+    ) if enc_ids else []
+    resources = [
+        serialize_medication_request(rx, patient, consultation_doctor.get(rx.consultation_id))
+        for rx in rx_rows
+    ]
+    try:
+        audit_service.log_action(
+            db=db, action="READ", user=current_user, request=request,
+            table_name="consultation_prescriptions", record_id=None,
+            affected_patient_id=patient,
+            operation_type="fhir_medication_request_search",
+            metadata={"count": len(resources)},
+            security_level="INFO",
+        )
+    except Exception as audit_err:
+        api_logger.warning("Failed to audit MedicationRequest search: %s", audit_err)
+    return _fhir_response(build_searchset_bundle(resources))
+
+
+@router.get("/MedicationRequest/{rx_id}")
+async def get_medication_request(
+    rx_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user),
+):
+    """Return a single MedicationRequest resource."""
+    rx = db.query(ConsultationPrescription).filter(ConsultationPrescription.id == rx_id).first()
+    if not rx:
+        return JSONResponse(
+            status_code=404,
+            content=_operation_outcome(404, "MedicationRequest not found"),
+            media_type=FHIR_CONTENT_TYPE,
+        )
+    consultation = db.query(MedicalRecord).filter(MedicalRecord.id == rx.consultation_id).first()
+    if not consultation:
+        return JSONResponse(
+            status_code=404,
+            content=_operation_outcome(404, "Parent encounter not found"),
+            media_type=FHIR_CONTENT_TYPE,
+        )
+    if current_user.person_type != "admin" and consultation.doctor_id != current_user.id:
+        return JSONResponse(
+            status_code=403,
+            content=_operation_outcome(403, "Not authorized to read this MedicationRequest"),
+            media_type=FHIR_CONTENT_TYPE,
+        )
+    resource = serialize_medication_request(rx, consultation.patient_id, consultation.doctor_id)
+    try:
+        audit_service.log_action(
+            db=db, action="READ", user=current_user, request=request,
+            table_name="consultation_prescriptions", record_id=rx_id,
+            affected_patient_id=consultation.patient_id,
+            operation_type="fhir_medication_request_access",
+            security_level="INFO",
+        )
+    except Exception as audit_err:
+        api_logger.warning("Failed to audit MedicationRequest access: %s", audit_err)
+    return _fhir_response(resource)
+
+
+# ---------------------------------------------------------------------------
+# Observation — search + read
+# ---------------------------------------------------------------------------
+
+@router.get("/Observation")
+async def search_observations(
+    patient: int = Query(..., description="Patient resource id"),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user),
+):
+    """Return a searchset Bundle of Observations for the given patient."""
+    pat = db.query(Person).filter(Person.id == patient, Person.person_type == "patient").first()
+    if not pat:
+        return JSONResponse(
+            status_code=404,
+            content=_operation_outcome(404, "Patient not found"),
+            media_type=FHIR_CONTENT_TYPE,
+        )
+    if not _doctor_can_read_patient(db, current_user, pat):
+        return JSONResponse(
+            status_code=403,
+            content=_operation_outcome(403, "Not authorized"),
+            media_type=FHIR_CONTENT_TYPE,
+        )
+    q = db.query(MedicalRecord).filter(MedicalRecord.patient_id == patient)
+    if current_user.person_type != "admin":
+        q = q.filter(MedicalRecord.doctor_id == current_user.id)
+    consultations = q.all()
+    enc_ids = [c.id for c in consultations]
+    vs_rows = (
+        db.query(ConsultationVitalSign)
+        .filter(ConsultationVitalSign.consultation_id.in_(enc_ids))
+        .all()
+    ) if enc_ids else []
+    resources = [serialize_observation(vs, patient) for vs in vs_rows]
+    try:
+        audit_service.log_action(
+            db=db, action="READ", user=current_user, request=request,
+            table_name="consultation_vital_signs", record_id=None,
+            affected_patient_id=patient,
+            operation_type="fhir_observation_search",
+            metadata={"count": len(resources)},
+            security_level="INFO",
+        )
+    except Exception as audit_err:
+        api_logger.warning("Failed to audit Observation search: %s", audit_err)
+    return _fhir_response(build_searchset_bundle(resources))
+
+
+@router.get("/Observation/{vs_id}")
+async def get_observation(
+    vs_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user),
+):
+    """Return a single Observation resource."""
+    vs = db.query(ConsultationVitalSign).filter(ConsultationVitalSign.id == vs_id).first()
+    if not vs:
+        return JSONResponse(
+            status_code=404,
+            content=_operation_outcome(404, "Observation not found"),
+            media_type=FHIR_CONTENT_TYPE,
+        )
+    consultation = db.query(MedicalRecord).filter(MedicalRecord.id == vs.consultation_id).first()
+    if not consultation:
+        return JSONResponse(
+            status_code=404,
+            content=_operation_outcome(404, "Parent encounter not found"),
+            media_type=FHIR_CONTENT_TYPE,
+        )
+    if current_user.person_type != "admin" and consultation.doctor_id != current_user.id:
+        return JSONResponse(
+            status_code=403,
+            content=_operation_outcome(403, "Not authorized to read this Observation"),
+            media_type=FHIR_CONTENT_TYPE,
+        )
+    resource = serialize_observation(vs, consultation.patient_id)
+    try:
+        audit_service.log_action(
+            db=db, action="READ", user=current_user, request=request,
+            table_name="consultation_vital_signs", record_id=vs_id,
+            affected_patient_id=consultation.patient_id,
+            operation_type="fhir_observation_access",
+            security_level="INFO",
+        )
+    except Exception as audit_err:
+        api_logger.warning("Failed to audit Observation access: %s", audit_err)
+    return _fhir_response(resource)
+
+
+# ---------------------------------------------------------------------------
 # CapabilityStatement — minimum FHIR conformance claim.
 # ---------------------------------------------------------------------------
 
@@ -412,7 +729,11 @@ async def capability_statement():
                 "resource": [
                     {
                         "type": "Patient",
-                        "interaction": [{"code": "read"}],
+                        "interaction": [
+                            {"code": "read"},
+                            {"code": "search-type"},
+                        ],
+                        "searchParam": [{"name": "identifier", "type": "token"}],
                         "operation": [{"name": "everything", "definition": "Patient/$everything"}],
                     },
                     {
@@ -421,16 +742,26 @@ async def capability_statement():
                     },
                     {
                         "type": "Encounter",
-                        "interaction": [{"code": "read"}],
+                        "interaction": [
+                            {"code": "read"},
+                            {"code": "search-type"},
+                        ],
+                        "searchParam": [{"name": "patient", "type": "reference"}],
                     },
                     {
                         "type": "MedicationRequest",
-                        "interaction": [{"code": "search-type"}],
+                        "interaction": [
+                            {"code": "read"},
+                            {"code": "search-type"},
+                        ],
                         "searchParam": [{"name": "patient", "type": "reference"}],
                     },
                     {
                         "type": "Observation",
-                        "interaction": [{"code": "search-type"}],
+                        "interaction": [
+                            {"code": "read"},
+                            {"code": "search-type"},
+                        ],
                         "searchParam": [{"name": "patient", "type": "reference"}],
                     },
                 ],
