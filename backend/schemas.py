@@ -233,34 +233,50 @@ class PersonBase(BaseSchema):
             raise ValueError('Email inválido')
         return v.strip().lower()
 
+# LFPDPPP privacy consent payload for registration
+class PrivacyConsentPayload(BaseSchema):
+    accepted: bool
+    accepted_at: Optional[datetime] = None
+    notice_version: Optional[str] = None
+    user_agent: Optional[str] = None
+    timezone: Optional[str] = None
+
+    @field_validator('accepted')
+    @classmethod
+    def must_be_accepted(cls, v: bool) -> bool:
+        if v is not True:
+            raise ValueError('El consentimiento al aviso de privacidad es obligatorio (LFPDPPP Art. 8)')
+        return v
+
+
 # Professional data for doctors
 class DoctorCreate(PersonBase):
     person_type: Literal['doctor'] = 'doctor'
-    
+
     # Authentication fields (required for registration)
     username: Optional[str] = None
     password: str
-    
+
     # Online consultation
     online_consultation_url: Optional[str] = None
     appointment_duration: Optional[int] = None  # Duration in minutes
-    
+
     # Avatar configuration
     avatar_type: Literal['initials', 'preloaded', 'custom'] = 'initials'
     avatar_template_key: Optional[str] = None
     avatar_file_path: Optional[str] = None
-    
+
     # Professional data
     specialty_id: Optional[int] = None
     university: Optional[str] = None
     graduation_year: Optional[int] = None
-    
+
     # Documents (normalized)
     documents: List[PersonDocumentCreate] = []
-    
+
     # Schedule data (for registration)
     schedule_data: Optional[dict] = None
-    
+
     # Office data (for registration)
     office_name: Optional[str] = None
     office_address: Optional[str] = None
@@ -268,6 +284,11 @@ class DoctorCreate(PersonBase):
     office_state_id: Optional[int] = None
     office_phone: Optional[str] = None
     office_maps_url: Optional[str] = None
+
+    # Progressive registration (NOM-004/024 minimum + LFPDPPP consent).
+    # When true, office/schedule/personal docs are deferred to profile completion.
+    quick_registration: bool = False
+    privacy_consent: Optional[PrivacyConsentPayload] = None
 
 # Professional data for doctor updates (optional fields for partial updates)
 class DoctorUpdate(BaseSchema):
