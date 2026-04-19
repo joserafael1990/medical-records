@@ -276,26 +276,7 @@ async def create_appointment(
     current_user: Person = Depends(get_current_user)
 ):
     """Create new appointment"""
-    # #region agent log
-    import json
-    import traceback
-    log_path = '/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log'
     try:
-        with open(log_path, 'a') as f:
-            f.write(json.dumps({"location":"appointments.py:208","message":"create_appointment endpoint called","data":{"doctor_id":current_user.id,"appointment_date":str(appointment_data.appointment_date) if hasattr(appointment_data,'appointment_date') else None,"patient_id":appointment_data.patient_id if hasattr(appointment_data,'patient_id') else None,"appointment_type_id":appointment_data.appointment_type_id if hasattr(appointment_data,'appointment_type_id') else None,"appointment_date_type":type(appointment_data.appointment_date).__name__ if hasattr(appointment_data,'appointment_date') else None,"appointment_data_dict":appointment_data.model_dump() if hasattr(appointment_data,'model_dump') else str(appointment_data)},"timestamp":datetime.now().isoformat(),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"}) + '\n')
-    except Exception as e:
-        try:
-            with open(log_path, 'a') as f:
-                f.write(json.dumps({"location":"appointments.py:208","message":"create_appointment endpoint called - logging error","data":{"error":str(e),"traceback":traceback.format_exc()},"timestamp":datetime.now().isoformat(),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"}) + '\n')
-        except: pass
-    # #endregion
-    try:
-        # #region agent log
-        try:
-            with open(log_path, 'a') as f:
-                f.write(json.dumps({"location":"appointments.py:215","message":"calling create_appointment_with_reminders","data":{"doctor_id":current_user.id},"timestamp":datetime.now().isoformat(),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"}) + '\n')
-        except: pass
-        # #endregion
         result = AppointmentService.create_appointment_with_reminders(
             db=db,
             appointment_data=appointment_data,
@@ -349,15 +330,6 @@ async def create_appointment(
     except HTTPException:
         raise
     except Exception as e:
-        # #region agent log
-        import json
-        import traceback
-        log_path = '/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log'
-        try:
-            with open(log_path, 'a') as f:
-                f.write(json.dumps({"location":"appointments.py:268","message":"create_appointment exception caught","data":{"error_type":type(e).__name__,"error_message":str(e),"error_traceback":traceback.format_exc(),"doctor_id":current_user.id},"timestamp":datetime.now().isoformat(),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"}) + '\n')
-        except: pass
-        # #endregion
         api_logger.error(
             "❌ Error in create_appointment",
             extra={"doctor_id": current_user.id, "error": str(e), "error_type": type(e).__name__},
