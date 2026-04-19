@@ -154,3 +154,57 @@ def wrap_as_bundle(resource_type: str, entries: List[Dict[str, Any]]) -> Dict[st
             for e in entries
         ],
     }
+
+
+# ---------------------------------------------------------------------------
+# Encounter (consultation → FHIR).
+# ---------------------------------------------------------------------------
+
+def build_encounter_view(consultation: Any) -> SimpleNamespace:
+    """Build the view `InteroperabilityService.consultation_to_fhir_encounter` expects.
+
+    The legacy conversion reads `.date` but `MedicalRecord` stores the visit
+    date as `consultation_date`. It also expects `id` to be stringifiable
+    into `FHIREncounter.id` (typed `str`).
+    """
+    return SimpleNamespace(
+        id=str(consultation.id),
+        date=getattr(consultation, "consultation_date", None),
+        chief_complaint=getattr(consultation, "chief_complaint", None),
+    )
+
+
+def fix_encounter_keys(encounter: Dict[str, Any]) -> Dict[str, Any]:
+    """FHIR Encounter uses the `class` key, but Python can't use that as a
+    Pydantic field name, so the model stores it as `class_`. Rename back
+    before returning to wire. Non-destructive — returns a new dict."""
+    out = dict(encounter)
+    if "class_" in out:
+        out["class"] = out.pop("class_")
+    return out
+
+
+def build_everything_bundle(
+    patient_fhir: Dict[str, Any],
+    encounter_fhirs: List[Dict[str, Any]],
+    practitioner_fhirs: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """Build a FHIR R4 `searchset` Bundle for the `Patient/$everything` op.
+
+    Contains the Patient (mode=match) plus all their Encounters and any
+    involved Practitioners (mode=include). Prescriptions / Observations
+    are a follow-up.
+    """
+    entries: List[Dict[str, Any]] = [
+        {"resource": patient_fhir, "search": {"mode": "match"}}
+    ]
+    for enc in encounter_fhirs:
+        entries.append({"resource": enc, "search": {"mode": "include"}})
+    for prac in practitioner_fhirs or []:
+        entries.append({"resource": prac, "search": {"mode": "include"}})
+    return {
+        "resourceType": "Bundle",
+        "type": "searchset",
+        "total": len(entries),
+        "entry": entries,
+    }

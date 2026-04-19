@@ -1,20 +1,23 @@
 """
 FHIR R4 endpoints (NOM-024-SSA3-2012 interoperability).
 
-Scope of this initial cut:
-- Doctor-authenticated only. No patient-facing auth, no public endpoints.
-- Two resource types: Patient and Practitioner.
-- Authorization: a doctor can read their own Practitioner record (and admins
-  can read anyone's) and any Patient they own (`persons.created_by`) or have
-  consulted. Same ownership rules as the ARCO export.
+Resources exposed:
+- Patient, Practitioner (read)
+- Encounter (read) — one per clinical consultation
+- Patient/$everything operation — Bundle of Patient + Encounters (+
+  involved Practitioners).
 
-Not in this cut: Encounter/MedicationRequest/Observation resources, FHIR
-search parameters beyond id, SMART-on-FHIR auth, CapabilityStatement.
+Auth model: doctor-only. A doctor can read their own Practitioner record,
+any Patient they own (`persons.created_by`) or have consulted, and any
+Encounter belonging to those patients. Admins bypass ownership checks.
+
+Not in this cut: MedicationRequest/Observation resource types, FHIR search
+parameters beyond id, SMART-on-FHIR auth, Bundle `transaction` writes.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -25,7 +28,13 @@ from database import MedicalRecord, Person, get_db
 from dependencies import get_current_user
 from interoperability import InteroperabilityService
 from logger import get_logger
-from services.fhir_service import build_doctor_view, build_patient_view
+from services.fhir_service import (
+    build_doctor_view,
+    build_encounter_view,
+    build_everything_bundle,
+    build_patient_view,
+    fix_encounter_keys,
+)
 
 api_logger = get_logger("medical_records.api")
 
@@ -199,6 +208,148 @@ async def get_fhir_patient(
 
 
 # ---------------------------------------------------------------------------
+# Encounter
+# ---------------------------------------------------------------------------
+
+def _fhir_encounter_for(
+    consultation: MedicalRecord,
+) -> Dict[str, Any]:
+    """Convert a MedicalRecord row into a FHIR Encounter dict (with `class` key)."""
+    view = build_encounter_view(consultation)
+    fhir_model = InteroperabilityService.consultation_to_fhir_encounter(
+        view,
+        patient_id=str(consultation.patient_id),
+        doctor_id=str(consultation.doctor_id),
+    )
+    return fix_encounter_keys(fhir_model.model_dump(exclude_none=True))
+
+
+@router.get("/Encounter/{encounter_id}")
+async def get_fhir_encounter(
+    encounter_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user),
+):
+    """Return a single Encounter resource. Doctors only see their own."""
+    consultation = (
+        db.query(MedicalRecord)
+        .filter(MedicalRecord.id == encounter_id)
+        .first()
+    )
+    if not consultation:
+        return JSONResponse(
+            status_code=404,
+            content=_operation_outcome(404, "Encounter not found"),
+            media_type=FHIR_CONTENT_TYPE,
+        )
+    if current_user.person_type != "admin" and consultation.doctor_id != current_user.id:
+        return JSONResponse(
+            status_code=403,
+            content=_operation_outcome(403, "Not authorized to read this Encounter"),
+            media_type=FHIR_CONTENT_TYPE,
+        )
+    encounter = _fhir_encounter_for(consultation)
+    try:
+        audit_service.log_action(
+            db=db,
+            action="READ",
+            user=current_user,
+            request=request,
+            table_name="medical_records",
+            record_id=encounter_id,
+            affected_patient_id=consultation.patient_id,
+            operation_type="fhir_encounter_access",
+            security_level="INFO",
+        )
+    except Exception as audit_err:
+        api_logger.warning("Failed to audit Encounter access: %s", audit_err)
+    return _fhir_response(encounter)
+
+
+# ---------------------------------------------------------------------------
+# Patient/$everything — FHIR operation returning a Bundle.
+# ---------------------------------------------------------------------------
+
+@router.get("/Patient/{patient_id}/$everything")
+async def patient_everything(
+    patient_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user),
+):
+    """Return all data the server has about a Patient as a FHIR Bundle.
+
+    This is the FHIR-native counterpart to the ARCO export in #21, and is
+    the analog of the equivalent HL7 `Patient/$everything` operation. Scope
+    is Patient + Encounters + involved Practitioners for v1.
+    """
+    patient = (
+        db.query(Person)
+        .filter(Person.id == patient_id, Person.person_type == "patient")
+        .first()
+    )
+    if not patient:
+        return JSONResponse(
+            status_code=404,
+            content=_operation_outcome(404, "Patient not found"),
+            media_type=FHIR_CONTENT_TYPE,
+        )
+    if not _doctor_can_read_patient(db, current_user, patient):
+        return JSONResponse(
+            status_code=403,
+            content=_operation_outcome(403, "Not authorized to read this patient"),
+            media_type=FHIR_CONTENT_TYPE,
+        )
+
+    # Patient
+    patient_view = build_patient_view(db, patient)
+    patient_fhir = InteroperabilityService.patient_to_fhir_patient(patient_view).model_dump(
+        exclude_none=True
+    )
+
+    # Encounters: only those the calling doctor authored (unless admin).
+    q = db.query(MedicalRecord).filter(MedicalRecord.patient_id == patient_id)
+    if current_user.person_type != "admin":
+        q = q.filter(MedicalRecord.doctor_id == current_user.id)
+    consultations = q.order_by(MedicalRecord.consultation_date.asc()).all()
+    encounters: List[Dict[str, Any]] = [_fhir_encounter_for(c) for c in consultations]
+
+    # Involved Practitioners (unique doctor ids in the encounter list).
+    doctor_ids = sorted({c.doctor_id for c in consultations})
+    practitioners: List[Dict[str, Any]] = []
+    for did in doctor_ids:
+        doc = db.query(Person).filter(Person.id == did, Person.person_type == "doctor").first()
+        if not doc:
+            continue
+        view = build_doctor_view(db, doc)
+        practitioners.append(
+            InteroperabilityService.doctor_to_fhir_practitioner(view).model_dump(exclude_none=True)
+        )
+
+    bundle = build_everything_bundle(patient_fhir, encounters, practitioners)
+
+    try:
+        audit_service.log_action(
+            db=db,
+            action="READ",
+            user=current_user,
+            request=request,
+            table_name="persons",
+            record_id=patient_id,
+            affected_patient_id=patient_id,
+            affected_patient_name=patient.name,
+            operation_type="fhir_patient_everything",
+            metadata={"encounters": len(encounters), "practitioners": len(practitioners)},
+            security_level="INFO",
+        )
+    except Exception as audit_err:
+        api_logger.warning("Failed to audit Patient/$everything: %s", audit_err)
+
+    return _fhir_response(bundle)
+
+
+# ---------------------------------------------------------------------------
 # CapabilityStatement — minimum FHIR conformance claim.
 # ---------------------------------------------------------------------------
 
@@ -219,9 +370,14 @@ async def capability_statement():
                     {
                         "type": "Patient",
                         "interaction": [{"code": "read"}],
+                        "operation": [{"name": "everything", "definition": "Patient/$everything"}],
                     },
                     {
                         "type": "Practitioner",
+                        "interaction": [{"code": "read"}],
+                    },
+                    {
+                        "type": "Encounter",
                         "interaction": [{"code": "read"}],
                     },
                 ],

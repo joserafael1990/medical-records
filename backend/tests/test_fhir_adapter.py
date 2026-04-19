@@ -31,7 +31,10 @@ from services.fhir_service import (  # noqa: E402
     _load_documents_by_name,
     _normalize_gender,
     build_doctor_view,
+    build_encounter_view,
+    build_everything_bundle,
     build_patient_view,
+    fix_encounter_keys,
     wrap_as_bundle,
 )
 from interoperability import InteroperabilityService  # noqa: E402
@@ -249,3 +252,81 @@ def test_wrap_as_bundle_empty():
     b = wrap_as_bundle("Patient", [])
     assert b["total"] == 0
     assert b["entry"] == []
+
+
+# ---------------------------------------------------------------------------
+# Encounter
+# ---------------------------------------------------------------------------
+
+def test_build_encounter_view_aliases_consultation_date_to_date():
+    consultation = SimpleNamespace(
+        id=100, patient_id=42, doctor_id=7,
+        consultation_date=date(2026, 3, 1),
+        chief_complaint="Dolor torácico",
+    )
+    view = build_encounter_view(consultation)
+    assert view.id == "100"
+    assert view.date == date(2026, 3, 1)
+    assert view.chief_complaint == "Dolor torácico"
+
+
+def test_fix_encounter_keys_renames_class_underscore_to_class():
+    raw = {
+        "resourceType": "Encounter",
+        "id": "100",
+        "class_": {"code": "AMB"},
+        "subject": {"reference": "Patient/42"},
+    }
+    fixed = fix_encounter_keys(raw)
+    assert "class" in fixed
+    assert "class_" not in fixed
+    assert fixed["class"] == {"code": "AMB"}
+    # Non-destructive.
+    assert "class_" in raw
+
+
+def test_encounter_end_to_end_produces_valid_fhir_shape():
+    consultation = SimpleNamespace(
+        id=100, patient_id=42, doctor_id=7,
+        consultation_date=date(2026, 3, 1),
+        chief_complaint="Cefalea",
+    )
+    view = build_encounter_view(consultation)
+    enc = InteroperabilityService.consultation_to_fhir_encounter(
+        view, patient_id="42", doctor_id="7",
+    )
+    out = fix_encounter_keys(enc.model_dump(exclude_none=True))
+    assert out["resourceType"] == "Encounter"
+    assert out["id"] == "100"
+    assert out["subject"] == {"reference": "Patient/42"}
+    assert out["class"]["code"] == "AMB"
+    # Period should carry the consultation date as ISO on both bounds.
+    assert out["period"]["start"].startswith("2026-03-01")
+    # Reason code threaded through.
+    assert out["reasonCode"][0]["text"] == "Cefalea"
+
+
+# ---------------------------------------------------------------------------
+# build_everything_bundle
+# ---------------------------------------------------------------------------
+
+def test_everything_bundle_tags_patient_as_match_and_rest_as_include():
+    patient = {"resourceType": "Patient", "id": "42"}
+    encs = [{"resourceType": "Encounter", "id": "100"}, {"resourceType": "Encounter", "id": "101"}]
+    pracs = [{"resourceType": "Practitioner", "id": "7"}]
+    bundle = build_everything_bundle(patient, encs, pracs)
+    assert bundle["resourceType"] == "Bundle"
+    assert bundle["type"] == "searchset"
+    assert bundle["total"] == 4  # 1 patient + 2 encounters + 1 practitioner
+    assert bundle["entry"][0]["search"]["mode"] == "match"
+    assert bundle["entry"][0]["resource"]["resourceType"] == "Patient"
+    for e in bundle["entry"][1:]:
+        assert e["search"]["mode"] == "include"
+
+
+def test_everything_bundle_handles_no_encounters_or_practitioners():
+    patient = {"resourceType": "Patient", "id": "42"}
+    bundle = build_everything_bundle(patient, [], None)
+    assert bundle["total"] == 1
+    assert bundle["entry"][0]["resource"]["id"] == "42"
+    assert bundle["entry"][0]["search"]["mode"] == "match"
