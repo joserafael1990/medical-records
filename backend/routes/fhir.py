@@ -24,7 +24,13 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from audit_service import audit_service
-from database import MedicalRecord, Person, get_db
+from database import (
+    ConsultationPrescription,
+    ConsultationVitalSign,
+    MedicalRecord,
+    Person,
+    get_db,
+)
 from dependencies import get_current_user
 from interoperability import InteroperabilityService
 from logger import get_logger
@@ -34,6 +40,8 @@ from services.fhir_service import (
     build_everything_bundle,
     build_patient_view,
     fix_encounter_keys,
+    serialize_medication_request,
+    serialize_observation,
 )
 
 api_logger = get_logger("medical_records.api")
@@ -280,9 +288,10 @@ async def patient_everything(
 ):
     """Return all data the server has about a Patient as a FHIR Bundle.
 
-    This is the FHIR-native counterpart to the ARCO export in #21, and is
-    the analog of the equivalent HL7 `Patient/$everything` operation. Scope
-    is Patient + Encounters + involved Practitioners for v1.
+    FHIR-native counterpart to the ARCO export in #21. Scope: Patient +
+    Encounters + MedicationRequests + Observations + involved
+    Practitioners. Non-admin callers only see Encounters (and their
+    child resources) they authored.
     """
     patient = (
         db.query(Person)
@@ -314,6 +323,29 @@ async def patient_everything(
         q = q.filter(MedicalRecord.doctor_id == current_user.id)
     consultations = q.order_by(MedicalRecord.consultation_date.asc()).all()
     encounters: List[Dict[str, Any]] = [_fhir_encounter_for(c) for c in consultations]
+    encounter_ids = [c.id for c in consultations]
+
+    # MedicationRequests + Observations anchored to those encounters.
+    medication_requests: List[Dict[str, Any]] = []
+    observations: List[Dict[str, Any]] = []
+    if encounter_ids:
+        rx_rows = (
+            db.query(ConsultationPrescription)
+            .filter(ConsultationPrescription.consultation_id.in_(encounter_ids))
+            .all()
+        )
+        # doctor_id is carried by the encounter, not the prescription row.
+        consultation_doctor = {c.id: c.doctor_id for c in consultations}
+        medication_requests = [
+            serialize_medication_request(rx, patient_id, consultation_doctor.get(rx.consultation_id))
+            for rx in rx_rows
+        ]
+        vs_rows = (
+            db.query(ConsultationVitalSign)
+            .filter(ConsultationVitalSign.consultation_id.in_(encounter_ids))
+            .all()
+        )
+        observations = [serialize_observation(vs, patient_id) for vs in vs_rows]
 
     # Involved Practitioners (unique doctor ids in the encounter list).
     doctor_ids = sorted({c.doctor_id for c in consultations})
@@ -327,7 +359,13 @@ async def patient_everything(
             InteroperabilityService.doctor_to_fhir_practitioner(view).model_dump(exclude_none=True)
         )
 
-    bundle = build_everything_bundle(patient_fhir, encounters, practitioners)
+    bundle = build_everything_bundle(
+        patient_fhir,
+        encounters,
+        practitioners,
+        medication_request_fhirs=medication_requests,
+        observation_fhirs=observations,
+    )
 
     try:
         audit_service.log_action(
@@ -340,7 +378,12 @@ async def patient_everything(
             affected_patient_id=patient_id,
             affected_patient_name=patient.name,
             operation_type="fhir_patient_everything",
-            metadata={"encounters": len(encounters), "practitioners": len(practitioners)},
+            metadata={
+                "encounters": len(encounters),
+                "medication_requests": len(medication_requests),
+                "observations": len(observations),
+                "practitioners": len(practitioners),
+            },
             security_level="INFO",
         )
     except Exception as audit_err:
@@ -379,6 +422,16 @@ async def capability_statement():
                     {
                         "type": "Encounter",
                         "interaction": [{"code": "read"}],
+                    },
+                    {
+                        "type": "MedicationRequest",
+                        "interaction": [{"code": "search-type"}],
+                        "searchParam": [{"name": "patient", "type": "reference"}],
+                    },
+                    {
+                        "type": "Observation",
+                        "interaction": [{"code": "search-type"}],
+                        "searchParam": [{"name": "patient", "type": "reference"}],
                     },
                 ],
             }

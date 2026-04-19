@@ -35,6 +35,8 @@ from services.fhir_service import (  # noqa: E402
     build_everything_bundle,
     build_patient_view,
     fix_encounter_keys,
+    serialize_medication_request,
+    serialize_observation,
     wrap_as_bundle,
 )
 from interoperability import InteroperabilityService  # noqa: E402
@@ -330,3 +332,138 @@ def test_everything_bundle_handles_no_encounters_or_practitioners():
     assert bundle["total"] == 1
     assert bundle["entry"][0]["resource"]["id"] == "42"
     assert bundle["entry"][0]["search"]["mode"] == "match"
+
+
+def test_everything_bundle_includes_medication_requests_and_observations():
+    patient = {"resourceType": "Patient", "id": "42"}
+    mr = [{"resourceType": "MedicationRequest", "id": "1"}]
+    obs = [
+        {"resourceType": "Observation", "id": "10"},
+        {"resourceType": "Observation", "id": "11"},
+    ]
+    bundle = build_everything_bundle(
+        patient, [], None,
+        medication_request_fhirs=mr, observation_fhirs=obs,
+    )
+    kinds = [e["resource"]["resourceType"] for e in bundle["entry"]]
+    assert kinds == ["Patient", "MedicationRequest", "Observation", "Observation"]
+    assert bundle["entry"][0]["search"]["mode"] == "match"
+    assert all(e["search"]["mode"] == "include" for e in bundle["entry"][1:])
+
+
+# ---------------------------------------------------------------------------
+# MedicationRequest
+# ---------------------------------------------------------------------------
+
+def _fake_prescription(**overrides):
+    base = dict(
+        id=77, consultation_id=100,
+        medication_id=9,
+        medication=SimpleNamespace(name="Paracetamol 500mg"),
+        dosage="500mg", frequency="c/8h", duration="5 días",
+        instructions="Tomar con alimentos", quantity=15,
+        via_administracion="oral",
+        created_at=date(2026, 3, 1),
+    )
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+def test_medication_request_has_required_fhir_fields():
+    rx = _fake_prescription()
+    out = serialize_medication_request(rx, patient_id=42, doctor_id=7)
+    assert out["resourceType"] == "MedicationRequest"
+    assert out["id"] == "77"
+    assert out["status"] == "active"
+    assert out["intent"] == "order"
+    assert out["subject"] == {"reference": "Patient/42"}
+    assert out["requester"] == {"reference": "Practitioner/7"}
+    assert out["encounter"] == {"reference": "Encounter/100"}
+    assert out["medicationCodeableConcept"]["text"] == "Paracetamol 500mg"
+    assert out["authoredOn"].startswith("2026-03-01")
+
+
+def test_medication_request_composes_dosage_instruction_text():
+    rx = _fake_prescription()
+    out = serialize_medication_request(rx, 42, 7)
+    di = out["dosageInstruction"][0]
+    # dosage, frequency, duration joined in order.
+    assert di["text"] == "500mg, c/8h, 5 días"
+    assert di["route"] == {"text": "oral"}
+    assert di["patientInstruction"] == "Tomar con alimentos"
+
+
+def test_medication_request_dispense_quantity_surfaces():
+    rx = _fake_prescription(quantity=30)
+    out = serialize_medication_request(rx, 42, 7)
+    assert out["dispenseRequest"]["quantity"]["value"] == 30
+
+
+def test_medication_request_omits_optional_fields_when_missing():
+    rx = _fake_prescription(
+        medication=None, dosage=None, frequency=None, duration=None,
+        instructions=None, via_administracion=None, quantity=None,
+        created_at=None,
+    )
+    out = serialize_medication_request(rx, 42, 7)
+    # Required FHIR fields still present.
+    assert "subject" in out and "requester" in out
+    # Optional fields absent, not set to None.
+    assert "medicationCodeableConcept" not in out
+    assert "authoredOn" not in out
+    assert "dispenseRequest" not in out
+    assert "dosageInstruction" not in out
+
+
+# ---------------------------------------------------------------------------
+# Observation
+# ---------------------------------------------------------------------------
+
+def _fake_vital_sign(**overrides):
+    base = dict(
+        id=55, consultation_id=100, vital_sign_id=3,
+        vital_sign=SimpleNamespace(name="Presión arterial sistólica"),
+        value="120", unit="mmHg",
+        created_at=date(2026, 3, 1),
+    )
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+def test_observation_uses_value_quantity_for_numeric_values():
+    vs = _fake_vital_sign(value="120", unit="mmHg")
+    out = serialize_observation(vs, patient_id=42)
+    assert out["resourceType"] == "Observation"
+    assert out["id"] == "55"
+    assert out["status"] == "final"
+    assert out["category"][0]["coding"][0]["code"] == "vital-signs"
+    assert out["code"]["text"] == "Presión arterial sistólica"
+    assert out["subject"] == {"reference": "Patient/42"}
+    assert out["encounter"] == {"reference": "Encounter/100"}
+    assert out["valueQuantity"] == {"value": 120.0, "unit": "mmHg"}
+
+
+def test_observation_accepts_decimal_with_comma():
+    vs = _fake_vital_sign(value="36,5", unit="°C")
+    out = serialize_observation(vs, 42)
+    assert out["valueQuantity"]["value"] == pytest.approx(36.5)
+
+
+def test_observation_falls_back_to_value_string_for_non_numeric():
+    vs = _fake_vital_sign(value="120/80", unit="mmHg")
+    out = serialize_observation(vs, 42)
+    # Blood-pressure-style values don't parse as float; preserve as valueString.
+    assert "valueQuantity" not in out
+    assert out["valueString"] == "120/80"
+
+
+def test_observation_without_unit_still_valid():
+    vs = _fake_vital_sign(value="70", unit=None)
+    out = serialize_observation(vs, 42)
+    assert out["valueQuantity"] == {"value": 70.0}
+
+
+def test_observation_handles_missing_vital_sign_name():
+    vs = _fake_vital_sign(vital_sign=None)
+    out = serialize_observation(vs, 42)
+    assert out["code"]["text"] == "Vital sign"

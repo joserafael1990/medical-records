@@ -188,18 +188,24 @@ def build_everything_bundle(
     patient_fhir: Dict[str, Any],
     encounter_fhirs: List[Dict[str, Any]],
     practitioner_fhirs: Optional[List[Dict[str, Any]]] = None,
+    medication_request_fhirs: Optional[List[Dict[str, Any]]] = None,
+    observation_fhirs: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """Build a FHIR R4 `searchset` Bundle for the `Patient/$everything` op.
 
-    Contains the Patient (mode=match) plus all their Encounters and any
-    involved Practitioners (mode=include). Prescriptions / Observations
-    are a follow-up.
+    Contains the Patient (mode=match) plus all their Encounters,
+    MedicationRequests, Observations and any involved Practitioners (all
+    mode=include).
     """
     entries: List[Dict[str, Any]] = [
         {"resource": patient_fhir, "search": {"mode": "match"}}
     ]
     for enc in encounter_fhirs:
         entries.append({"resource": enc, "search": {"mode": "include"}})
+    for mr in medication_request_fhirs or []:
+        entries.append({"resource": mr, "search": {"mode": "include"}})
+    for obs in observation_fhirs or []:
+        entries.append({"resource": obs, "search": {"mode": "include"}})
     for prac in practitioner_fhirs or []:
         entries.append({"resource": prac, "search": {"mode": "include"}})
     return {
@@ -208,3 +214,151 @@ def build_everything_bundle(
         "total": len(entries),
         "entry": entries,
     }
+
+
+# ---------------------------------------------------------------------------
+# MedicationRequest (ConsultationPrescription → FHIR).
+# ---------------------------------------------------------------------------
+
+def _isoformat(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value)
+
+
+def serialize_medication_request(
+    prescription: Any,
+    patient_id: int,
+    doctor_id: int,
+) -> Dict[str, Any]:
+    """Convert a `ConsultationPrescription` row to a FHIR R4 MedicationRequest.
+
+    Shape is intentionally minimal — no RxNorm / SNOMED coding. We keep the
+    medication as `medicationCodeableConcept.text` and the dosage as a free
+    text `dosageInstruction[0].text`, which is FHIR-valid and matches how the
+    data is captured in CORTEX today.
+    """
+    med_name = getattr(getattr(prescription, "medication", None), "name", None)
+    parts = []
+    for attr in ("dosage", "frequency", "duration"):
+        val = getattr(prescription, attr, None)
+        if val:
+            parts.append(str(val))
+    dosage_text = ", ".join(parts) if parts else None
+
+    out: Dict[str, Any] = {
+        "resourceType": "MedicationRequest",
+        "id": str(getattr(prescription, "id", "")),
+        "status": "active",
+        "intent": "order",
+        "subject": {"reference": f"Patient/{patient_id}"},
+        "requester": {"reference": f"Practitioner/{doctor_id}"},
+    }
+
+    encounter_id = getattr(prescription, "consultation_id", None)
+    if encounter_id is not None:
+        out["encounter"] = {"reference": f"Encounter/{encounter_id}"}
+
+    if med_name:
+        out["medicationCodeableConcept"] = {"text": med_name}
+
+    authored = _isoformat(getattr(prescription, "created_at", None))
+    if authored:
+        out["authoredOn"] = authored
+
+    dosage_instruction: Dict[str, Any] = {}
+    if dosage_text:
+        dosage_instruction["text"] = dosage_text
+    route = getattr(prescription, "via_administracion", None)
+    if route:
+        dosage_instruction["route"] = {"text": route}
+    extra_instructions = getattr(prescription, "instructions", None)
+    if extra_instructions:
+        dosage_instruction["patientInstruction"] = extra_instructions
+    if dosage_instruction:
+        out["dosageInstruction"] = [dosage_instruction]
+
+    quantity = getattr(prescription, "quantity", None)
+    if quantity is not None:
+        out["dispenseRequest"] = {"quantity": {"value": quantity}}
+
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Observation (ConsultationVitalSign → FHIR).
+# ---------------------------------------------------------------------------
+
+_VITAL_SIGNS_CATEGORY = {
+    "coding": [
+        {
+            "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+            "code": "vital-signs",
+            "display": "Vital Signs",
+        }
+    ],
+    "text": "Vital Signs",
+}
+
+
+def _coerce_numeric(value: Any) -> Optional[float]:
+    """Try to turn a stored vital-sign value into a number for FHIR valueQuantity.
+
+    CORTEX stores vital-sign values as strings (e.g. "120", "36.5", "120/80").
+    A blood-pressure-style "120/80" fails here and we fall back to valueString
+    so no information is dropped.
+    """
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(str(value).replace(",", "."))
+    except (ValueError, TypeError):
+        return None
+
+
+def serialize_observation(
+    vital_sign: Any,
+    patient_id: int,
+) -> Dict[str, Any]:
+    """Convert a `ConsultationVitalSign` row to a FHIR R4 Observation.
+
+    The code is kept as free text (matching how CORTEX stores vital sign names
+    today). A future PR can add LOINC/SNOMED coding by mapping on
+    `vital_sign.name`.
+    """
+    name = getattr(getattr(vital_sign, "vital_sign", None), "name", None) or "Vital sign"
+    raw_value = getattr(vital_sign, "value", None)
+    unit = getattr(vital_sign, "unit", None)
+
+    out: Dict[str, Any] = {
+        "resourceType": "Observation",
+        "id": str(getattr(vital_sign, "id", "")),
+        "status": "final",
+        "category": [_VITAL_SIGNS_CATEGORY],
+        "code": {"text": name},
+        "subject": {"reference": f"Patient/{patient_id}"},
+    }
+
+    encounter_id = getattr(vital_sign, "consultation_id", None)
+    if encounter_id is not None:
+        out["encounter"] = {"reference": f"Encounter/{encounter_id}"}
+
+    effective = _isoformat(getattr(vital_sign, "created_at", None))
+    if effective:
+        out["effectiveDateTime"] = effective
+
+    numeric = _coerce_numeric(raw_value)
+    if numeric is not None:
+        quantity = {"value": numeric}
+        if unit:
+            quantity["unit"] = unit
+        out["valueQuantity"] = quantity
+    elif raw_value is not None:
+        # Blood pressure ("120/80"), free-text notes, etc.
+        out["valueString"] = str(raw_value)
+
+    return out
