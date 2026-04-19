@@ -369,6 +369,7 @@ const AppLayoutInner: React.FC<AppLayoutProps> = ({
             consultationManagement.closeConsultationDialog();
             appointmentManager.handleNewAppointment();
           }}
+          onEditPatient={(patient) => patientManagement.openPatientDialog(patient)}
           onSubmit={async (data) => {
             if (consultationManagement.selectedConsultation) {
               const updatedConsultation = await consultationManagement.updateConsultation(consultationManagement.selectedConsultation.id, data);
