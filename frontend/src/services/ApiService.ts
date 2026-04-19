@@ -15,6 +15,7 @@ import { LicenseService } from './licenses/LicenseService';
 import { HealthService } from './health/HealthService';
 import { TestService } from './test/TestService';
 import { DashboardService } from './dashboard/DashboardService';
+import { ExpedienteService } from './expediente/ExpedienteService';
 import { logger } from '../utils/logger';
 
 /**
@@ -39,6 +40,7 @@ export class ApiService {
   public health: HealthService;
   public test: TestService;
   public dashboard: DashboardService;
+  public expediente: ExpedienteService;
 
   constructor() {
     this.auth = new AuthService();
@@ -58,6 +60,7 @@ export class ApiService {
     this.health = new HealthService();
     this.test = new TestService();
     this.dashboard = new DashboardService();
+    this.expediente = new ExpedienteService();
   }
 
   // Convenience methods for common operations
@@ -131,4 +134,6 @@ export { AvatarService } from './avatars/AvatarService';
 export { HealthService } from './health/HealthService';
 export { TestService } from './test/TestService';
 export { DashboardService } from './dashboard/DashboardService';
+export { ExpedienteService } from './expediente/ExpedienteService';
 export type { DashboardMetrics } from './analytics/AnalyticsService';
+export type { ExpedienteCompletoPayload } from './pdf/generators/ExpedienteCompletoGenerator';
