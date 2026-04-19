@@ -405,6 +405,34 @@ class AuditService:
         )
     
     @staticmethod
+    def log_arco_export(
+        db: Session,
+        user: Optional[Person],
+        patient_id: int,
+        patient_name: Optional[str],
+        request: Request,
+        counts: Optional[Dict] = None,
+    ):
+        """Log ARCO access export (LFPDPPP Art. 15).
+
+        Security-critical — must leave an indelible trail whenever PHI is
+        bulk-exported to a third party.
+        """
+        AuditService.log_action(
+            db=db,
+            action="EXPORT",
+            user=user,
+            request=request,
+            table_name="persons",
+            record_id=patient_id,
+            affected_patient_id=patient_id,
+            affected_patient_name=patient_name,
+            operation_type="arco_export",
+            metadata={"counts": counts or {}},
+            security_level='CRITICAL',
+        )
+
+    @staticmethod
     def log_patient_create(
         db: Session,
         user: Person,
