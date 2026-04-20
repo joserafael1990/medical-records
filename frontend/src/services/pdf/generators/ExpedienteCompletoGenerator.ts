@@ -121,7 +121,9 @@ export class ExpedienteCompletoGenerator extends BasePDFGenerator {
     this.save(`Expediente_${safeName}_${today}.pdf`);
   }
 
-  protected save(fileName: string): void {
+  // Public to match the parent class visibility. The generator exposes
+  // `save` for callers that want to trigger the download manually.
+  public save(fileName: string): void {
     this.doc.save(fileName);
   }
 
