@@ -465,6 +465,10 @@ app.include_router(audit_router)
 from routes import internal
 app.include_router(internal.router)
 
+# Include practice analytics (deep 12-month dashboard)
+from routes.practice_analytics import router as practice_analytics_router
+app.include_router(practice_analytics_router)
+
 # Include expediente PDF export (JSON aggregator — frontend renders the PDF)
 from routes.expediente import router as expediente_router
 app.include_router(expediente_router)
