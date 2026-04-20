@@ -15,6 +15,7 @@ import {
   CalendarToday as CalendarIcon,
   Analytics as AnalyticsIcon,
   VpnKey as LicenseIcon,
+  BusinessCenter as PracticeIcon,
 } from '@mui/icons-material';
 
 export interface NavigationItem {
@@ -48,6 +49,11 @@ export const MAIN_NAVIGATION_ITEMS: NavigationItem[] = [
     id: 'analytics',
     label: 'Analíticas',
     icon: <AnalyticsIcon />
+  },
+  {
+    id: 'practice',
+    label: 'Mi consultorio',
+    icon: <PracticeIcon />
   },
   {
     id: 'licenses',

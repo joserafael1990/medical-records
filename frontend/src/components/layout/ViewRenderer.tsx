@@ -13,6 +13,7 @@ import { ConsultationDetailView } from '../';
 import { LoadingFallback } from '../';
 import { LazyWrapper } from '../common/LazyWrapper';
 import { AnalyticsView } from '../views/AnalyticsView';
+import { PracticeDashboard } from '../views/PracticeDashboard';
 import { LicenseManagement } from '../admin/LicenseManagement';
 
 interface ViewRendererProps {
@@ -147,6 +148,10 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
         <Suspense fallback={<LoadingFallback message="Cargando analíticas..." />}>
           <AnalyticsView />
         </Suspense>
+      )}
+
+      {activeView === 'practice' && (
+        <PracticeDashboard />
       )}
 
       {activeView === 'licenses' && personType === 'admin' && (
