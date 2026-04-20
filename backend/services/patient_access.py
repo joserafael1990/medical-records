@@ -2,10 +2,11 @@
 Patient access control helpers.
 
 Single source of truth for the rule `can doctor X read patient Y?`.
-Used by the FHIR routes, the ARCO export, and the doctor assistant.
+Used by FHIR routes, ARCO exports, the doctor assistant, and the
+expediente PDF export.
 
-Rule: doctors see only patients they created or have consulted. Admins
-see everyone. Anyone else is denied.
+Rule: doctors see only patients they created or have consulted.
+Admins see everyone. Anyone else is denied.
 """
 
 from __future__ import annotations

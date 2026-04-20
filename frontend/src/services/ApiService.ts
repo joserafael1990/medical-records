@@ -15,6 +15,7 @@ import { LicenseService } from './licenses/LicenseService';
 import { HealthService } from './health/HealthService';
 import { TestService } from './test/TestService';
 import { DashboardService } from './dashboard/DashboardService';
+import { ExpedienteService } from './expediente/ExpedienteService';
 import { IntakeService } from './intake/IntakeService';
 import { AssistantService } from './assistant/AssistantService';
 import { logger } from '../utils/logger';
@@ -41,6 +42,7 @@ export class ApiService {
   public health: HealthService;
   public test: TestService;
   public dashboard: DashboardService;
+  public expediente: ExpedienteService;
   public intake: IntakeService;
   public assistant: AssistantService;
 
@@ -62,6 +64,7 @@ export class ApiService {
     this.health = new HealthService();
     this.test = new TestService();
     this.dashboard = new DashboardService();
+    this.expediente = new ExpedienteService();
     this.intake = new IntakeService();
     this.assistant = new AssistantService();
   }
@@ -137,9 +140,11 @@ export { AvatarService } from './avatars/AvatarService';
 export { HealthService } from './health/HealthService';
 export { TestService } from './test/TestService';
 export { DashboardService } from './dashboard/DashboardService';
+export { ExpedienteService } from './expediente/ExpedienteService';
 export { IntakeService } from './intake/IntakeService';
 export { AssistantService } from './assistant/AssistantService';
 export type { DashboardMetrics } from './analytics/AnalyticsService';
+export type { ExpedienteCompletoPayload } from './pdf/generators/ExpedienteCompletoGenerator';
 export type {
   IntakeQuestion,
   IntakeQuestionType,
