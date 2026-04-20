@@ -469,6 +469,10 @@ app.include_router(internal.router)
 from routes.practice_analytics import router as practice_analytics_router
 app.include_router(practice_analytics_router)
 
+# Cohort lookup by diagnosis — powers the clickable top-diagnoses chart
+from routes.patients_by_diagnosis import router as patients_by_diagnosis_router
+app.include_router(patients_by_diagnosis_router)
+
 # Include expediente PDF export (JSON aggregator — frontend renders the PDF)
 from routes.expediente import router as expediente_router
 app.include_router(expediente_router)

@@ -45,6 +45,7 @@ import { apiService } from '../../services/ApiService';
 import type { PracticeSummary } from '../../services/ApiService';
 import { logger } from '../../utils/logger';
 import { AppointmentsAnalyticsSection } from './PracticeDashboard/AppointmentsAnalyticsSection';
+import { DiagnosisCohortDialog } from './PracticeDashboard/DiagnosisCohortDialog';
 
 const PIE_COLORS = ['#1976d2', '#9c27b0', '#ff9800', '#4caf50', '#f44336', '#9e9e9e'];
 
@@ -52,6 +53,9 @@ export const PracticeDashboard: React.FC = () => {
   const [data, setData] = useState<PracticeSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Diagnosis cohort drill-down. Set when the user clicks a bar in the
+  // "Top diagnósticos" chart; a dialog renders the patient list.
+  const [cohortDx, setCohortDx] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -143,7 +147,10 @@ export const PracticeDashboard: React.FC = () => {
         </Grid>
 
         <Grid size={{ xs: 12, md: 6 }}>
-          <DashboardCard title="Top diagnósticos (últimos 12 meses)">
+          <DashboardCard
+            title="Top diagnósticos (últimos 12 meses)"
+            subtitle="Haz click en una barra para ver los pacientes con ese diagnóstico."
+          >
             {data.top_diagnoses.length > 0 ? (
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart
@@ -160,7 +167,15 @@ export const PracticeDashboard: React.FC = () => {
                     tick={{ fontSize: 10 }}
                   />
                   <Tooltip />
-                  <Bar dataKey="count" fill="#9c27b0" />
+                  <Bar
+                    dataKey="count"
+                    fill="#9c27b0"
+                    cursor="pointer"
+                    onClick={(payload: any) => {
+                      const dx = payload?.payload?.diagnosis || payload?.diagnosis;
+                      if (dx) setCohortDx(dx);
+                    }}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -210,6 +225,13 @@ export const PracticeDashboard: React.FC = () => {
 
       {/* Appointment-centric analytics — merged from the old "Analíticas" view */}
       <AppointmentsAnalyticsSection />
+
+      {/* Drill-down dialog for the "Top diagnósticos" bar chart */}
+      <DiagnosisCohortDialog
+        open={cohortDx !== null}
+        diagnosis={cohortDx}
+        onClose={() => setCohortDx(null)}
+      />
     </Box>
   );
 };
@@ -299,15 +321,21 @@ const KPICard: React.FC<KPICardProps> = ({ icon, label, value, delta }) => {
 };
 
 
-const DashboardCard: React.FC<{ title: string; children: React.ReactNode }> = ({
-  title,
-  children,
-}) => (
+const DashboardCard: React.FC<{
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}> = ({ title, subtitle, children }) => (
   <Card variant="outlined" sx={{ height: '100%' }}>
     <CardContent>
-      <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+      <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: subtitle ? 0 : 1 }}>
         {title}
       </Typography>
+      {subtitle && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+          {subtitle}
+        </Typography>
+      )}
       {children}
     </CardContent>
   </Card>
