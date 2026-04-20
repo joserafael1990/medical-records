@@ -16,6 +16,7 @@ import { HealthService } from './health/HealthService';
 import { TestService } from './test/TestService';
 import { DashboardService } from './dashboard/DashboardService';
 import { IntakeService } from './intake/IntakeService';
+import { AssistantService } from './assistant/AssistantService';
 import { logger } from '../utils/logger';
 
 /**
@@ -41,6 +42,7 @@ export class ApiService {
   public test: TestService;
   public dashboard: DashboardService;
   public intake: IntakeService;
+  public assistant: AssistantService;
 
   constructor() {
     this.auth = new AuthService();
@@ -61,6 +63,7 @@ export class ApiService {
     this.test = new TestService();
     this.dashboard = new DashboardService();
     this.intake = new IntakeService();
+    this.assistant = new AssistantService();
   }
 
   // Convenience methods for common operations
@@ -135,6 +138,7 @@ export { HealthService } from './health/HealthService';
 export { TestService } from './test/TestService';
 export { DashboardService } from './dashboard/DashboardService';
 export { IntakeService } from './intake/IntakeService';
+export { AssistantService } from './assistant/AssistantService';
 export type { DashboardMetrics } from './analytics/AnalyticsService';
 export type {
   IntakeQuestion,
@@ -144,3 +148,8 @@ export type {
   PublicIntakePayload,
   SendIntakeResponse,
 } from './intake/IntakeService';
+export type {
+  AssistantChatRequest,
+  AssistantChatResponse,
+  AssistantToolCall,
+} from './assistant/AssistantService';

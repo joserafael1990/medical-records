@@ -41,8 +41,9 @@ import CortexLogo from '../common/CortexLogo';
 import { API_CONFIG } from '../../constants';
 // Dialog imports
 import PatientDialog from '../dialogs/PatientDialog'; // ✅ Now implemented!
-import ConsultationDialog from '../dialogs/ConsultationDialog'; // ✅ Now implemented!  
+import ConsultationDialog from '../dialogs/ConsultationDialog'; // ✅ Now implemented!
 import AppointmentDialogMultiOffice from '../dialogs/AppointmentDialogMultiOffice'; // ✅ Multi-office support!
+import { AssistantPanel } from '../assistant/AssistantPanel';
 
 interface AppLayoutProps {
   // Opcional: se puede pasar onLogout desde AuthContext
@@ -386,6 +387,13 @@ const AppLayoutInner: React.FC<AppLayoutProps> = ({
               return createdConsultation;
             }
           }}
+        />
+      )}
+
+      {/* Doctor Assistant — read-only copilot, available globally for doctors/admins */}
+      {(user?.doctor?.person_type === 'doctor' || user?.doctor?.person_type === 'admin') && (
+        <AssistantPanel
+          currentPatientId={patientManagement.selectedPatient?.id ?? null}
         />
       )}
 
