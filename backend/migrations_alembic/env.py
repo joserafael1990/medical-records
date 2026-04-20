@@ -93,16 +93,13 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        # CRITICAL: Disable transactional DDL to prevent rollback of successful operations
-        # This allows operations like table creation to persist even if later operations fail
-        # We configure WITHOUT transaction_per_migration and WITHOUT begin_transaction wrapper
         context.configure(
-            connection=connection, 
-            target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            # Each migration runs in its own transaction so partial runs leave
+            # earlier migrations committed even if a later one fails.
+            transaction_per_migration=True,
         )
-
-        # Run migrations WITHOUT transaction wrapper - each operation commits immediately
-        # This ensures appointment_reminders table creation persists even if migration fails
         context.run_migrations()
 
 
