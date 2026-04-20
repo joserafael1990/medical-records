@@ -43,6 +43,21 @@ export interface PracticeSummary {
   scope: 'doctor' | 'admin';
 }
 
+export interface PatientByDiagnosis {
+  patient_id: number;
+  name: string;
+  gender?: string | null;
+  birth_date?: string | null;
+  visits_with_dx: number;
+  last_visit_date?: string | null;
+}
+
+export interface PatientsByDiagnosisResponse {
+  query: string;
+  count: number;
+  patients: PatientByDiagnosis[];
+}
+
 export class PracticeAnalyticsService extends ApiBase {
   async getPracticeSummary(): Promise<PracticeSummary> {
     try {
@@ -52,6 +67,27 @@ export class PracticeAnalyticsService extends ApiBase {
       return response.data;
     } catch (error) {
       logger.error('Error fetching practice summary', error, 'api');
+      throw error;
+    }
+  }
+
+  /**
+   * Cohort lookup: patients whose primary diagnosis matches the query.
+   * Wraps the same aggregator the doctor assistant exposes as a tool,
+   * so ACL + audit are identical.
+   */
+  async getPatientsByDiagnosis(
+    dx: string,
+    limit: number = 20
+  ): Promise<PatientsByDiagnosisResponse> {
+    try {
+      const response = await this.api.get<PatientsByDiagnosisResponse>(
+        '/api/analytics/patients-by-diagnosis',
+        { params: { dx, limit } }
+      );
+      return response.data;
+    } catch (error) {
+      logger.error('Error fetching patients-by-diagnosis cohort', error, 'api');
       throw error;
     }
   }
