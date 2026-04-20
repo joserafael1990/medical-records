@@ -20,3 +20,4 @@ from .appointment import (
 )
 from .clinical import ClinicalStudy, StudyCategory, StudyCatalog
 from .whatsapp_session import WhatsAppSession
+from .intake import IntakeQuestionnaireResponse

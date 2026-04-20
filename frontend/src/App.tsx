@@ -17,6 +17,7 @@ import { SnackbarProvider } from './contexts/SnackbarContext';
 import { twitterTheme } from './themes/twitterTheme';
 import { PublicPrivacyNotice } from './components/public/PublicPrivacyNotice';
 import { LandingPage } from './components/public/LandingPage';
+import { PublicIntakeForm } from './components/public/PublicIntakeForm';
 
 // Use Twitter-inspired theme consistently
 const theme = twitterTheme;
@@ -26,13 +27,18 @@ const AppWithAuth: React.FC = () => {
   const currentPath = window.location.pathname;
   
   // Check if we're on a public privacy notice page
-  const isPrivacyNoticePage = currentPath.startsWith('/privacy-notice') || 
+  const isPrivacyNoticePage = currentPath.startsWith('/privacy-notice') ||
                                currentPath === '/privacy' ||
                                currentPath === '/aviso-privacidad';
-  
+
   // If public privacy notice page, show it regardless of auth status
   if (isPrivacyNoticePage) {
     return <PublicPrivacyNotice />;
+  }
+
+  // Pre-consultation intake form — public, token in the URL, no auth.
+  if (currentPath.startsWith('/public/intake/')) {
+    return <PublicIntakeForm />;
   }
   
   // If not authenticated, show auth container (login, register, forgot password, reset password)

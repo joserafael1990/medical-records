@@ -27,6 +27,7 @@ import { NewPatientForm } from '../appointments/NewPatientForm';
 import { AppointmentFormFields } from '../appointments/AppointmentFormFields';
 import { useAppointmentReminders } from '../../hooks/useAppointmentReminders';
 import { useProfileCompletion } from '../../hooks/useProfileCompletion';
+import { DoctorIntakePanel } from '../intake/DoctorIntakePanel';
 
 interface AppointmentDialogMultiOfficeProps {
   open: boolean;
@@ -37,6 +38,12 @@ interface AppointmentDialogMultiOfficeProps {
   formData?: AppointmentFormData;
   patients?: Patient[];
   isEditing?: boolean;
+  /**
+   * ID of the appointment being edited. Required to render the
+   * pre-consultation intake panel (which talks to the backend by id).
+   * Ignored when creating a new appointment.
+   */
+  appointmentId?: number | null;
   loading?: boolean;
   formErrorMessage?: string | null;
   fieldErrors?: Record<string, string>;
@@ -53,6 +60,7 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
   formData: externalFormData,
   patients: externalPatients,
   isEditing = false,
+  appointmentId = null,
   loading: externalLoading = false,
   formErrorMessage,
   fieldErrors,
@@ -351,6 +359,18 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
                   onChange={(newReminders) => handleRemindersChange(newReminders, currentFormData, setFormData)}
                   appointmentDate={currentFormData.appointment_date || (selectedDate && selectedTime ? `${selectedDate.split('T')[0]}T${selectedTime}:00` : undefined)}
                   disabled={currentLoading}
+                />
+              </Box>
+            )}
+
+            {/* 6. PRE-CONSULTATION INTAKE QUESTIONNAIRE — only for existing appointments */}
+            {isEditing && appointmentId && currentFormData.patient_id && (
+              <Box sx={{ mt: 2 }}>
+                <DoctorIntakePanel
+                  appointmentId={appointmentId}
+                  patientHasPhone={Boolean(
+                    currentPatients.find((p) => p.id === currentFormData.patient_id)?.primary_phone
+                  )}
                 />
               </Box>
             )}
