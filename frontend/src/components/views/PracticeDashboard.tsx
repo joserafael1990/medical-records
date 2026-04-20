@@ -46,6 +46,7 @@ import type { PracticeSummary } from '../../services/ApiService';
 import { logger } from '../../utils/logger';
 import { AppointmentsAnalyticsSection } from './PracticeDashboard/AppointmentsAnalyticsSection';
 import { DiagnosisCohortDialog } from './PracticeDashboard/DiagnosisCohortDialog';
+import { BusyHoursHeatmap } from './PracticeDashboard/BusyHoursHeatmap';
 
 const PIE_COLORS = ['#1976d2', '#9c27b0', '#ff9800', '#4caf50', '#f44336', '#9e9e9e'];
 
@@ -216,9 +217,12 @@ export const PracticeDashboard: React.FC = () => {
           </DashboardCard>
         </Grid>
 
-        <Grid size={{ xs: 12, md: 4 }}>
-          <DashboardCard title="Horas con mayor carga (últimos 3 meses)">
-            <BusyHoursList rows={data.busy_heatmap} />
+        <Grid size={{ xs: 12 }}>
+          <DashboardCard
+            title="Horas con mayor carga (últimos 3 meses)"
+            subtitle="Color más oscuro = más citas en esa franja."
+          >
+            <BusyHoursHeatmap rows={data.busy_heatmap} />
           </DashboardCard>
         </Grid>
       </Grid>
@@ -350,38 +354,5 @@ const EmptyState: React.FC<{ text: string }> = ({ text }) => (
   </Box>
 );
 
-
-const BusyHoursList: React.FC<{ rows: PracticeSummary['busy_heatmap'] }> = ({ rows }) => {
-  const sorted = [...rows].sort((a, b) => b.count - a.count).slice(0, 8);
-  if (sorted.length === 0) {
-    return <EmptyState text="Sin datos de horarios aún." />;
-  }
-  const max = sorted[0].count || 1;
-  return (
-    <Stack spacing={1} sx={{ mt: 1 }}>
-      {sorted.map((r) => (
-        <Box key={`${r.weekday}-${r.hour}`}>
-          <Stack direction="row" justifyContent="space-between">
-            <Typography variant="body2">
-              {r.weekday} · {String(r.hour).padStart(2, '0')}:00
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {r.count}
-            </Typography>
-          </Stack>
-          <Box
-            sx={{
-              mt: 0.5,
-              height: 6,
-              width: `${Math.round((r.count / max) * 100)}%`,
-              bgcolor: 'primary.main',
-              borderRadius: 3,
-            }}
-          />
-        </Box>
-      ))}
-    </Stack>
-  );
-};
 
 export default PracticeDashboard;
