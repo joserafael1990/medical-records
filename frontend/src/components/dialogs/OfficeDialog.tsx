@@ -14,7 +14,9 @@ import {
   Box,
   Typography,
   Alert,
-  CircularProgress
+  CircularProgress,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import { Office, OfficeCreate, OfficeUpdate } from '../../types';
 import { apiService } from '../../services';
@@ -25,7 +27,13 @@ import { preventBackdropClose } from '../../utils/dialogHelpers';
 interface OfficeDialogProps {
   open: boolean;
   onClose: () => void;
-  onSave: (office: Office) => void;
+  // The dialog emits a payload ready for the API: either a full
+  // `Office` (on edit, includes id) or an `OfficeCreate`. We don't
+  // require the server-side fields (doctor_id, created_at, etc.)
+  // because the backend fills them.
+  onSave: (
+    office: OfficeCreate | (OfficeUpdate & { id: number })
+  ) => void;
   office?: Office | null;
   isEditing?: boolean;
 }
@@ -53,6 +61,8 @@ const OfficeDialog: React.FC<OfficeDialogProps> = ({
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
   // Hook para notificaciones de éxito
   const toast = useSimpleToast();
@@ -199,7 +209,7 @@ const OfficeDialog: React.FC<OfficeDialogProps> = ({
       onClose={preventBackdropClose(onClose)} 
       maxWidth="sm" 
       fullWidth
-      fullScreen={{ xs: true, sm: false }}
+      fullScreen={isMobile}
       sx={{
         '& .MuiDialog-paper': {
           margin: { xs: 0, sm: 2 },
@@ -462,7 +472,7 @@ const OfficeDialog: React.FC<OfficeDialogProps> = ({
         <Button 
           onClick={onClose} 
           disabled={loading}
-          fullWidth={{ xs: true, sm: false }}
+          fullWidth={isMobile}
           size="large"
         >
           Cancelar
@@ -471,7 +481,7 @@ const OfficeDialog: React.FC<OfficeDialogProps> = ({
           onClick={handleSubmit}
           variant="contained"
           disabled={loading || !formData.name}
-          fullWidth={{ xs: true, sm: false }}
+          fullWidth={isMobile}
           size="large"
         >
           {loading ? (

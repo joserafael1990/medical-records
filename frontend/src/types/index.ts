@@ -45,6 +45,11 @@ export interface Patient {
   person_type?: 'patient' | 'doctor' | 'admin';
   /** Optional free-form medical history summary returned by some endpoints. */
   medical_history?: any;
+  /** Computed by the table renderer from `birth_date`. Not emitted by the API. */
+  age?: number;
+  /** Count of consultations; emitted by some listing endpoints as an aggregate. */
+  total_visits?: number;
+  last_visit?: number | string;
   created_by: number;
   created_at: string;
   updated_at: string;
@@ -265,6 +270,8 @@ export interface ConsultationFormData {
   follow_up_instructions?: string;
   therapeutic_plan?: string;
   laboratory_results?: string;
+  imaging_studies?: string;
+  prognosis?: string;
   interconsultations?: string;
   notes?: string;
   folio?: string;
