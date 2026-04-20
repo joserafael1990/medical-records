@@ -190,11 +190,11 @@ export const useRegisterForm = (): UseRegisterFormReturn => {
           const data = await response.json();
           setSpecialties(data);
         } else {
-          setSpecialties(MEDICAL_SPECIALTIES);
+          setSpecialties([...MEDICAL_SPECIALTIES]);
         }
       } catch (error) {
         console.error('Error loading specialties:', error);
-        setSpecialties(MEDICAL_SPECIALTIES);
+        setSpecialties([...MEDICAL_SPECIALTIES]);
       }
     };
     
@@ -384,7 +384,7 @@ export const useRegisterForm = (): UseRegisterFormReturn => {
   // Handle next step
   const handleNext = useCallback(() => {
     if (validateStep(activeStep)) {
-      setVisitedSteps(prev => new Set([...prev, activeStep + 1]));
+      setVisitedSteps(prev => new Set([...Array.from(prev), activeStep + 1]));
       setActiveStep(prev => prev + 1);
     }
   }, [activeStep, validateStep]);

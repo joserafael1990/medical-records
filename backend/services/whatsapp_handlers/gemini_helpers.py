@@ -179,54 +179,71 @@ def find_patient_by_phone(db: Session, phone: str) -> List[Dict[str, Any]]:
 
 
 def create_patient_from_chat(
-    db: Session, 
-    name: str, 
-    phone: str, 
+    db: Session,
+    name: str,
+    phone: str,
     birth_date: Optional[str] = None,
-    contact_phone: Optional[str] = None
+    contact_phone: Optional[str] = None,
+    created_by_doctor_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
-    Create a new patient from chat data.
+    Create a new patient from a WhatsApp conversation.
+
+    This path intentionally keeps the minimum-field contract the bot has
+    always offered (name + phone are enough). It shares the person_code
+    helper with the rest of the system and, when the bot knows which
+    doctor is being booked, populates `created_by` so the new patient
+    is visible on that doctor's dashboard (it's filtered by
+    `Person.created_by`).
+
     Args:
-        db: Database session
-        name: Patient full name
-        phone: Primary phone number
-        birth_date: Birth date in format "YYYY-MM-DD" (optional)
-        contact_phone: Contact phone if different from primary phone (optional)
+        db: Database session.
+        name: Patient full name (single word accepted — relaxed validator
+            lets first-time callers book with whatever the doctor has).
+        phone: Primary phone number.
+        birth_date: Birth date in format "YYYY-MM-DD" (optional).
+        contact_phone: Contact phone if different from primary phone
+            (optional; not persisted separately yet — placeholder).
+        created_by_doctor_id: Doctor id to stamp as the creator. When
+            None (legacy callers that don't yet thread session state),
+            the patient is created unowned and the caller is expected
+            to reconcile it later.
+
     Returns:
-        Dict with patient id and name
+        Dict with patient id and name.
     """
     try:
-        # Generate person code
         person_code = generate_person_code(db, 'patient')
-        
-        # Parse birth date if provided
+
         birth_date_obj = None
         if birth_date:
             try:
                 birth_date_obj = datetime.strptime(birth_date, "%Y-%m-%d").date()
             except ValueError:
                 api_logger.warning(f"Invalid birth date format: {birth_date}")
-        
-        # Create patient
+
         patient = Person(
             person_code=person_code,
             person_type='patient',
             name=name,
             primary_phone=phone,
             birth_date=birth_date_obj,
-            is_active=True
+            is_active=True,
+            created_by=created_by_doctor_id,
         )
-        
+
         db.add(patient)
         db.commit()
         db.refresh(patient)
-        
-        api_logger.info(f"Created new patient: {patient.id} - {name}")
-        
+
+        api_logger.info(
+            f"Created new patient via WhatsApp flow: "
+            f"id={patient.id}, name={name}, created_by={created_by_doctor_id}"
+        )
+
         return {
             "id": patient.id,
-            "name": patient.full_name or patient.name
+            "name": patient.full_name or patient.name,
         }
     except Exception as e:
         db.rollback()

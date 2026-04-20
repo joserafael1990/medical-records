@@ -223,7 +223,10 @@ export const useDoctorProfileCache = (): UseDoctorProfileReturn => {
         office_city: doctorProfile.office_city || '',
         office_state_id: String(doctorProfile.office_state_id || ''),
         office_postal_code: doctorProfile.office_postal_code || '',
-        office_country: doctorProfile.office_country || 'México',
+        // Previously read `office_country` (no such field). The canonical
+        // field is `office_country_id`; callers expecting a display label
+        // should resolve it from the countries catalog.
+        office_country: String(doctorProfile.office_country_id || 'México'),
         appointment_duration: String(doctorProfile.appointment_duration || '')
       };
       

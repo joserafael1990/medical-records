@@ -16,8 +16,10 @@ export { usePatientManagement } from './usePatientManagement';
 export { useConsultationManagement } from './useConsultationManagement';
 export { useEmergencyRelationships } from './useEmergencyRelationships';
 
-// Consultation form hooks (extracted from ConsultationDialog)
-export { useConsultationForm, type ConsultationFormData } from './useConsultationForm';
+// Consultation form hooks (extracted from ConsultationDialog).
+// `ConsultationFormData` lives in `types/index.ts`; re-export from there.
+export { useConsultationForm } from './useConsultationForm';
+export type { ConsultationFormData } from '../types';
 export { usePatientPreviousStudies } from './usePatientPreviousStudies';
 
 // Patient form hooks (extracted from PatientDialog)

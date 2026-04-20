@@ -28,6 +28,7 @@ import { BirthInformationSection } from '../patient/BirthInformationSection';
 import { EmergencyContactSection } from '../patient/EmergencyContactSection';
 import { MedicalInformationSection } from '../patient/MedicalInformationSection';
 import { PatientActions } from '../patient/PatientActions';
+import { IncompleteProfileChip } from '../patient/IncompleteProfileChip';
 
 interface PatientDialogProps {
   open: boolean;
@@ -112,11 +113,12 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
   return (
     <Dialog open={open} onClose={preventBackdropClose(handleClose)} maxWidth="lg" fullWidth>
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
           <PersonIcon color="primary" />
           <Typography variant="h6">
             {isEditing ? 'Editar Paciente' : 'Nuevo Paciente'}
           </Typography>
+          {isEditing && <IncompleteProfileChip patient={patient} />}
         </Box>
         <IconButton aria-label="Cerrar" onClick={handleClose} size="small">
           <CloseIcon />

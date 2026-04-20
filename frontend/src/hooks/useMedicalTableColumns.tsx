@@ -162,20 +162,15 @@ export const useMedicalTableColumns = () => {
         const isToday = date.toDateString() === new Date().toDateString();
         const rawValue = String(value);
 
-        // Create a temporary object with the consultation data for time formatting
-        // Now consultations have end_time calculated (30 minutes duration by default)
-        const consultationForTime = {
-          date_time: rawValue,
-          end_time: row.end_time || null // Use actual end_time if available
-        };
-
+        // `formatAppointmentTimeRange` takes (startTime, durationMinutes).
+        // Default duration = 30 min is baked into the helper.
         return (
           <Box>
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              {formatDate(String(value))}
+              {formatDate(rawValue)}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              {formatAppointmentTimeRange(consultationForTime)}
+              {formatAppointmentTimeRange(rawValue)}
             </Typography>
             {isToday && (
               <Chip label="Hoy" size="small" color="primary" variant="filled" sx={{ mt: 0.5 }} />

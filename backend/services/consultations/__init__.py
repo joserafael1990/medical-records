@@ -10,7 +10,8 @@ from .timezone_utils import now_cdmx, cdmx_datetime
 from .security import (
     encrypt_sensitive_data,
     decrypt_sensitive_data,
-    sign_medical_document
+    sign_medical_document,
+    verify_medical_document_signature,
 )
 
 # Decryption helpers
@@ -63,6 +64,7 @@ __all__ = [
     'encrypt_sensitive_data',
     'decrypt_sensitive_data',
     'sign_medical_document',
+    'verify_medical_document_signature',
     # Decryption
     'decrypt_patient_data',
     'decrypt_consultation_data',

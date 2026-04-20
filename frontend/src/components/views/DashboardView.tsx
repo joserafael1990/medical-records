@@ -27,6 +27,7 @@ import { formatTime } from '../../utils/formatters';
 import { es } from 'date-fns/locale';
 import { API_CONFIG } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
+import { DashboardAgendaWidget } from './DashboardAgendaWidget';
 
 interface DashboardViewProps {
   dashboardData?: any;
@@ -35,6 +36,9 @@ interface DashboardViewProps {
   onNewAppointment?: () => void;
   onNewConsultation?: () => void;
   onNewPatient?: () => void;
+  /** Navigate to the full AgendaView (agenda tab). Used by the
+   *  dashboard agenda widget's "Ver todas" CTA. */
+  onNavigateToAgenda?: () => void;
   doctorProfile?: any;
 }
 
@@ -45,6 +49,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   onNewAppointment,
   onNewConsultation,
   onNewPatient,
+  onNavigateToAgenda,
   doctorProfile
 }) => {
   const { user } = useAuth();
@@ -359,84 +364,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         </CardContent>
       </Card>
 
-      {/* Upcoming Appointments */}
-      <Card>
-        <CardContent sx={{ p: 4 }}>
-          <Typography variant="h4" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1, color: 'text.primary' }}>
-            <CalendarIcon color="primary" />
-            Próximas citas
-          </Typography>
-
-          {upcomingAppointments.length === 0 ? (
-            <Box sx={{ textAlign: 'center', py: 4 }}>
-              <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-                No tienes citas próximas
-              </Typography>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={onNewAppointment}
-              >
-                Programar nueva cita
-              </Button>
-            </Box>
-          ) : (
-            <Box>
-              {upcomingAppointments.map((appointment, index) => {
-                const apptDate = new Date(appointment.date_time);
-                const isToday = apptDate.toDateString() === today.toDateString();
-                const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
-                const isTomorrow = apptDate.toDateString() === tomorrow.toDateString();
-                const dayLabel = isToday
-                  ? 'Hoy'
-                  : isTomorrow
-                    ? 'Mañana'
-                    : format(apptDate, "EEE d MMM", { locale: es });
-                return (
-                  <Box
-                    key={appointment.id || index}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 2,
-                      p: 2,
-                      border: 1,
-                      borderColor: 'divider',
-                      borderRadius: 2,
-                      mb: 2,
-                      '&:last-child': { mb: 0 },
-                      '&:hover': {
-                        bgcolor: 'action.hover'
-                      }
-                    }}
-                  >
-                    <Avatar sx={{ bgcolor: 'primary.main' }}>
-                      {(appointment.patient_name || appointment.patient?.name || 'P')[0].toUpperCase()}
-                    </Avatar>
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography variant="body1" sx={{ color: 'text.primary' }} noWrap>
-                        {appointment.patient_name || appointment.patient?.name || 'Paciente'}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        <Box component="span" sx={{ fontWeight: 600, color: isToday ? 'primary.main' : 'text.secondary' }}>
-                          {dayLabel}
-                        </Box>
-                        {' · '}{formatTime(appointment.date_time)}
-                        {' · '}{appointment.appointment_type_name || 'Cita'}
-                      </Typography>
-                    </Box>
-                    <Chip
-                      label={appointment.status === 'confirmada' ? 'Confirmada' : appointment.status === 'por_confirmar' ? 'Por confirmar' : appointment.status}
-                      color={appointment.status === 'confirmada' ? 'success' : appointment.status === 'por_confirmar' ? 'primary' : 'default'}
-                      size="small"
-                    />
-                  </Box>
-                );
-              })}
-            </Box>
-          )}
-        </CardContent>
-      </Card>
+      {/* Agenda — compact Day / Week / Month quick view */}
+      <DashboardAgendaWidget
+        appointments={appointments}
+        onNewAppointment={onNewAppointment}
+        onViewAllInAgenda={onNavigateToAgenda}
+      />
     </Box>
   );
 };

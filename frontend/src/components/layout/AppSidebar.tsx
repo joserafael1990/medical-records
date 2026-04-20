@@ -65,8 +65,8 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
       badge: dashboardData?.pending_appointments || null
     },
     {
-      id: 'analytics',
-      label: 'Analíticas',
+      id: 'practice',
+      label: 'Mi consultorio',
       icon: <AnalyticsIcon />,
       badge: null
     }
