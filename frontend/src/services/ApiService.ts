@@ -15,6 +15,7 @@ import { LicenseService } from './licenses/LicenseService';
 import { HealthService } from './health/HealthService';
 import { TestService } from './test/TestService';
 import { DashboardService } from './dashboard/DashboardService';
+import { IntakeService } from './intake/IntakeService';
 import { AssistantService } from './assistant/AssistantService';
 import { logger } from '../utils/logger';
 
@@ -40,6 +41,7 @@ export class ApiService {
   public health: HealthService;
   public test: TestService;
   public dashboard: DashboardService;
+  public intake: IntakeService;
   public assistant: AssistantService;
 
   constructor() {
@@ -60,6 +62,7 @@ export class ApiService {
     this.health = new HealthService();
     this.test = new TestService();
     this.dashboard = new DashboardService();
+    this.intake = new IntakeService();
     this.assistant = new AssistantService();
   }
 
@@ -134,8 +137,17 @@ export { AvatarService } from './avatars/AvatarService';
 export { HealthService } from './health/HealthService';
 export { TestService } from './test/TestService';
 export { DashboardService } from './dashboard/DashboardService';
+export { IntakeService } from './intake/IntakeService';
 export { AssistantService } from './assistant/AssistantService';
 export type { DashboardMetrics } from './analytics/AnalyticsService';
+export type {
+  IntakeQuestion,
+  IntakeQuestionType,
+  IntakeSelectOption,
+  IntakeAppointmentResponse,
+  PublicIntakePayload,
+  SendIntakeResponse,
+} from './intake/IntakeService';
 export type {
   AssistantChatRequest,
   AssistantChatResponse,

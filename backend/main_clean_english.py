@@ -465,6 +465,10 @@ app.include_router(audit_router)
 from routes import internal
 app.include_router(internal.router)
 
+# Include pre-consultation intake questionnaire routes
+from routes.intake import router as intake_router
+app.include_router(intake_router)
+
 # Include doctor assistant routes (read-only chatbot for authenticated doctors)
 from routes.assistant import router as assistant_router
 app.include_router(assistant_router)

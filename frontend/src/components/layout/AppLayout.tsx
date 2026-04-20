@@ -407,6 +407,7 @@ const AppLayoutInner: React.FC<AppLayoutProps> = ({
           formData={appointmentManager.appointmentFormData}
           patients={patientManagement.patients}
           isEditing={appointmentManager.isEditingAppointment}
+          appointmentId={appointmentManager.selectedAppointment?.id ?? null}
           loading={appointmentManager.isSubmitting}
           formErrorMessage={appointmentManager.formErrorMessage || undefined}
           fieldErrors={appointmentManager.fieldErrors}
