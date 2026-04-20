@@ -169,4 +169,7 @@ export type {
   AssistantChatRequest,
   AssistantChatResponse,
   AssistantToolCall,
+  AssistantConversationSummary,
+  AssistantConversationMessage,
+  AssistantConversationDetail,
 } from './assistant/AssistantService';

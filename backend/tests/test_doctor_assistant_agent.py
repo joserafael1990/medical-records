@@ -1,10 +1,10 @@
 """
 Unit tests for the Doctor Assistant agent wrapper.
 
-Sliver 1 path: we only test the sandbox mode behaviour + the
-function-calling loop with Gemini stubbed out. Real Vertex AI calls
-are covered by the end-to-end smoke test in the docker-compose env,
-not here.
+Phase B: state is DB-backed, so the agent tests stub the state with
+a MagicMock that mirrors the repo API (`get_or_create`, `append_turn`).
+Persistence behaviour is exercised separately in
+`test_doctor_assistant_state.py`.
 """
 
 from __future__ import annotations
@@ -15,7 +15,28 @@ from unittest.mock import MagicMock
 import pytest
 
 from agents.doctor_assistant import agent as agent_module
-from agents.doctor_assistant.state import AssistantSessionState
+from agents.doctor_assistant.state import Conversation
+
+
+def _make_stub_state(existing_patient_id=None):
+    """Return a MagicMock state that tracks calls and returns a stable
+    Conversation dataclass on get_or_create."""
+    state = MagicMock()
+    conv = Conversation(
+        doctor_id=1,
+        conversation_id="42",
+        history=[],
+        current_patient_id=existing_patient_id,
+    )
+
+    def _get_or_create(db, doctor_id, conversation_id=None, current_patient_id=None):
+        if current_patient_id is not None:
+            conv.current_patient_id = current_patient_id
+        return conv
+
+    state.get_or_create.side_effect = _get_or_create
+    state._conv = conv
+    return state
 
 
 # ---------------------------------------------------------------------------
@@ -37,7 +58,7 @@ def test_sandbox_agent_does_not_init_vertex(monkeypatch):
 @pytest.mark.asyncio
 async def test_sandbox_chat_returns_deterministic_mock(monkeypatch):
     monkeypatch.setattr(agent_module.settings, "GEMINI_BOT_SANDBOX_MODE", True)
-    state = AssistantSessionState()
+    state = _make_stub_state()
     agent = agent_module.DoctorAssistant(db=MagicMock(), session_state=state)
 
     doctor = SimpleNamespace(id=1, person_type="doctor", name="Dr T", email="d@t")
@@ -49,17 +70,22 @@ async def test_sandbox_chat_returns_deterministic_mock(monkeypatch):
     )
     assert out["sandbox"] is True
     assert "sandbox" in out["reply"].lower() or "modo prueba" in out["reply"].lower()
-    assert out["conversation_id"]
-    conv = state.get_or_create(
-        doctor_id=1, conversation_id=out["conversation_id"]
-    )
-    assert len(conv.history) == 2
+    assert out["conversation_id"] == "42"
+
+    # append_turn should have been called with both the user message and the
+    # bot's mock reply.
+    state.append_turn.assert_called_once()
+    kwargs = state.append_turn.call_args.kwargs
+    assert kwargs["user_message"] == "Hola"
+    assert kwargs["model_response"]
+    assert kwargs["conversation_id"] == "42"
 
 
 @pytest.mark.asyncio
 async def test_sandbox_echoes_patient_context(monkeypatch):
     monkeypatch.setattr(agent_module.settings, "GEMINI_BOT_SANDBOX_MODE", True)
-    agent = agent_module.DoctorAssistant(db=MagicMock())
+    state = _make_stub_state()
+    agent = agent_module.DoctorAssistant(db=MagicMock(), session_state=state)
     doctor = SimpleNamespace(id=1, person_type="doctor", name="Dr T", email="d@t")
 
     out = await agent.chat(
@@ -119,8 +145,9 @@ def _make_agent_with_fake_model(monkeypatch, scripted_responses):
     monkeypatch.setattr(
         agent_module, "GenerativeModel", lambda **kw: fake_model
     )
-    agent = agent_module.DoctorAssistant(db=MagicMock())
-    return agent, fake_chat
+    state = _make_stub_state()
+    agent = agent_module.DoctorAssistant(db=MagicMock(), session_state=state)
+    return agent, fake_chat, state
 
 
 @pytest.mark.asyncio
@@ -132,7 +159,7 @@ async def test_chat_resolves_function_call_and_returns_final_text(monkeypatch):
         ))
     ])
     final_response = _FakeResponse([_FakePart(text="Encontré a Juan Pérez.")])
-    agent, fake_chat = _make_agent_with_fake_model(
+    agent, fake_chat, state = _make_agent_with_fake_model(
         monkeypatch, [fn_call_response, final_response]
     )
 
@@ -157,12 +184,15 @@ async def test_chat_resolves_function_call_and_returns_final_text(monkeypatch):
     assert out["tool_calls"] == [{"name": "search_patients", "args": {"query": "Juan", "limit": 5}}]
     assert called["name"] == "search_patients"
     assert len(fake_chat.messages_sent) == 2
+    # tool_calls should be persisted too
+    kwargs = state.append_turn.call_args.kwargs
+    assert kwargs["tool_calls"] == [{"name": "search_patients", "args": {"query": "Juan", "limit": 5}}]
 
 
 @pytest.mark.asyncio
 async def test_chat_handles_direct_text_response(monkeypatch):
     direct = _FakeResponse([_FakePart(text="No puedo ofrecer recomendaciones clínicas.")])
-    agent, _ = _make_agent_with_fake_model(monkeypatch, [direct])
+    agent, _, _ = _make_agent_with_fake_model(monkeypatch, [direct])
 
     doctor = SimpleNamespace(id=1, person_type="doctor", name="Dr T", email="d@t")
     out = await agent.chat(

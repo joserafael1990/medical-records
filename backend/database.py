@@ -20,6 +20,7 @@ from models import (
     ClinicalStudy, StudyCategory, StudyCatalog,
     WhatsAppSession,
     IntakeQuestionnaireResponse,
+    AssistantConversation, AssistantMessage,
 )
 
 # Re-export logger for compatibility if it was used
