@@ -109,8 +109,12 @@ export const PrivacyConsentStatusSection: React.FC<PrivacyConsentStatusSectionPr
     return null;
   }
 
-  const hasAcceptedConsent = consent?.consent_given === true;
-  const isPending = consent && !hasAcceptedConsent;
+  // PrivacyConsent carries `consent_status` ('accepted' | 'pending' | ...);
+  // the old code checked a `consent_given` boolean that doesn't exist on
+  // the type. Map the status to the accepted/pending booleans the UI
+  // needs.
+  const hasAcceptedConsent = consent?.consent_status === 'accepted';
+  const isPending = Boolean(consent) && !hasAcceptedConsent;
 
   return (
     <Card sx={{ mb: 3, border: '1px solid', borderColor: hasAcceptedConsent ? 'success.main' : 'warning.main' }}>

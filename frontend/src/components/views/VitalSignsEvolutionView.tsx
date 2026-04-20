@@ -562,6 +562,38 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
       });
   };
 
+  // ------------------------------------------------------------------
+  // Hooks MUST be called on every render — declare them before any
+  // early return. Previously these were below the `if (loading)` /
+  // `if (error)` guards which caused a `react-hooks/rules-of-hooks`
+  // violation and unpredictable hook ordering.
+  // ------------------------------------------------------------------
+
+  // Use mergedHistory for display (includes current vital signs).
+  const displayHistory = mergedHistory || history;
+
+  // Force re-render when currentVitalSigns changes by tracking a
+  // serialized version.
+  const [displayHistoryVersion, setDisplayHistoryVersion] = React.useState(0);
+  const prevMergedHistorySerializedRef = React.useRef<string>('');
+
+  React.useEffect(() => {
+    if (mergedHistory) {
+      const serialized = JSON.stringify(mergedHistory.vital_signs_history?.map((vs: any) => ({
+        vital_sign_id: vs.vital_sign_id,
+        data_length: vs.data?.length,
+        last_value: vs.data?.[vs.data.length - 1]?.value,
+        last_date: vs.data?.[vs.data.length - 1]?.date
+      })));
+
+      // Only update version if the serialized content actually changed.
+      if (serialized !== prevMergedHistorySerializedRef.current) {
+        prevMergedHistorySerializedRef.current = serialized;
+        setDisplayHistoryVersion(prev => prev + 1);
+      }
+    }
+  }, [mergedHistory]);
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
@@ -577,31 +609,6 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
       </Box>
     );
   }
-
-  // Use mergedHistory for display (includes current vital signs)
-  const displayHistory = mergedHistory || history;
-  
-  // Force re-render when currentVitalSigns changes by tracking a serialized version
-  const [displayHistoryVersion, setDisplayHistoryVersion] = React.useState(0);
-  const prevMergedHistorySerializedRef = React.useRef<string>('');
-  
-  React.useEffect(() => {
-    if (mergedHistory) {
-      const serialized = JSON.stringify(mergedHistory.vital_signs_history?.map((vs: any) => ({
-        vital_sign_id: vs.vital_sign_id,
-        data_length: vs.data?.length,
-        last_value: vs.data?.[vs.data.length - 1]?.value,
-        last_date: vs.data?.[vs.data.length - 1]?.date
-      })));
-      
-      // Only update version if the serialized content actually changed
-      if (serialized !== prevMergedHistorySerializedRef.current) {
-        prevMergedHistorySerializedRef.current = serialized;
-        setDisplayHistoryVersion(prev => prev + 1);
-      }
-    }
-  }, [mergedHistory]);
-  
 
   if (!displayHistory || !displayHistory.vital_signs_history || displayHistory.vital_signs_history.length === 0) {
     return (
