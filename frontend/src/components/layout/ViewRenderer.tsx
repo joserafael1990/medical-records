@@ -12,7 +12,6 @@ import PatientsView from '../views/PatientsView';
 import { ConsultationDetailView } from '../';
 import { LoadingFallback } from '../';
 import { LazyWrapper } from '../common/LazyWrapper';
-import { AnalyticsView } from '../views/AnalyticsView';
 import { PracticeDashboard } from '../views/PracticeDashboard';
 import { LicenseManagement } from '../admin/LicenseManagement';
 
@@ -149,13 +148,10 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
         </Suspense>
       )}
 
-      {activeView === 'analytics' && (
-        <Suspense fallback={<LoadingFallback message="Cargando analíticas..." />}>
-          <AnalyticsView />
-        </Suspense>
-      )}
-
-      {activeView === 'practice' && (
+      {/* The old "analytics" view was folded into "Mi consultorio" so we
+          redirect any stale `activeView === 'analytics'` (from bookmarks
+          or in-progress nav state) to the consolidated dashboard. */}
+      {(activeView === 'practice' || activeView === 'analytics') && (
         <PracticeDashboard />
       )}
 

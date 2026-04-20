@@ -13,7 +13,6 @@ import {
   People as PatientIcon,
   Assignment as AssignmentIcon,
   CalendarToday as CalendarIcon,
-  Analytics as AnalyticsIcon,
   VpnKey as LicenseIcon,
   BusinessCenter as PracticeIcon,
 } from '@mui/icons-material';
@@ -44,11 +43,6 @@ export const MAIN_NAVIGATION_ITEMS: NavigationItem[] = [
     id: 'agenda',
     label: 'Citas',
     icon: <CalendarIcon />
-  },
-  {
-    id: 'analytics',
-    label: 'Analíticas',
-    icon: <AnalyticsIcon />
   },
   {
     id: 'practice',

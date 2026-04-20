@@ -44,6 +44,7 @@ import {
 import { apiService } from '../../services/ApiService';
 import type { PracticeSummary } from '../../services/ApiService';
 import { logger } from '../../utils/logger';
+import { AppointmentsAnalyticsSection } from './PracticeDashboard/AppointmentsAnalyticsSection';
 
 const PIE_COLORS = ['#1976d2', '#9c27b0', '#ff9800', '#4caf50', '#f44336', '#9e9e9e'];
 
@@ -206,6 +207,9 @@ export const PracticeDashboard: React.FC = () => {
           </DashboardCard>
         </Grid>
       </Grid>
+
+      {/* Appointment-centric analytics — merged from the old "Analíticas" view */}
+      <AppointmentsAnalyticsSection />
     </Box>
   );
 };
