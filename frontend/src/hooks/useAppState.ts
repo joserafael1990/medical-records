@@ -4,7 +4,7 @@ export interface UseAppStateReturn {
   // Navigation state
   activeView: string;
   setActiveView: (view: string) => void;
-  navigateToView: (view: string) => void;
+  navigateToView: (view: string, anchor?: string) => void;
   
   // Message state
   successMessage: string;
@@ -63,11 +63,13 @@ export const useAppState = (): UseAppStateReturn => {
     window.history.replaceState({ view }, '', url.toString());
   };
   
-  // Function to navigate and add to history
-  const navigateToView = (view: string) => {
+  // Function to navigate and add to history. Optional anchor (without the `#`)
+  // becomes part of the URL hash so the destination view can scroll to it.
+  const navigateToView = (view: string, anchor?: string) => {
     setActiveView(view);
     const url = new URL(window.location.href);
     url.searchParams.set('view', view);
+    url.hash = anchor ? `#${anchor}` : '';
     window.history.pushState({ view }, '', url.toString());
   };
 

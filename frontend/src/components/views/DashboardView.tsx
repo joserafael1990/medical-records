@@ -27,6 +27,7 @@ import { formatTime } from '../../utils/formatters';
 import { es } from 'date-fns/locale';
 import { API_CONFIG } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
+import ProfileCompletionBanner from '../common/ProfileCompletionBanner';
 import { DashboardAgendaWidget } from './DashboardAgendaWidget';
 
 interface DashboardViewProps {
@@ -40,6 +41,7 @@ interface DashboardViewProps {
    *  dashboard agenda widget's "Ver todas" CTA. */
   onNavigateToAgenda?: () => void;
   doctorProfile?: any;
+  onNavigateToProfile?: (anchor?: string) => void;
 }
 
 const DashboardView: React.FC<DashboardViewProps> = ({
@@ -50,7 +52,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   onNewConsultation,
   onNewPatient,
   onNavigateToAgenda,
-  doctorProfile
+  doctorProfile,
+  onNavigateToProfile
 }) => {
   const { user } = useAuth();
 
@@ -186,6 +189,10 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <Box sx={{ p: 3 }}>
+      <ProfileCompletionBanner
+        doctorProfile={doctorProfile}
+        onNavigateToProfile={onNavigateToProfile}
+      />
       {alerts.length > 0 && (
         <Stack spacing={2} sx={{ mb: 3 }}>
           {alerts.map((alert, i) => (

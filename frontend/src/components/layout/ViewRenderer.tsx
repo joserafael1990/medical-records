@@ -26,6 +26,7 @@ interface ViewRendererProps {
   onSaveProfile: (profile: any) => void;
   doctorProfileHook: any;
   personType?: string; // 'doctor', 'patient', 'admin'
+  onNavigateToProfile?: (anchor?: string) => void;
   /** Navigate to another top-level view by id (e.g. 'agenda'). Used by
    *  cards inside DashboardView that link to a full view. */
   navigateToView?: (view: string) => void;
@@ -42,6 +43,7 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
   onSaveProfile,
   doctorProfileHook,
   personType,
+  onNavigateToProfile,
   navigateToView,
 }) => {
   // Track view navigation
@@ -65,6 +67,7 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
             onNewPatient={patientManagement.openPatientDialog}
             onNavigateToAgenda={navigateToView ? () => navigateToView('agenda') : undefined}
             doctorProfile={doctorProfile}
+            onNavigateToProfile={onNavigateToProfile}
           />
         </Suspense>
       )}

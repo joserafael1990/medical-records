@@ -16,6 +16,7 @@ import { ToastProvider } from './components/common/ToastNotification';
 import { SnackbarProvider } from './contexts/SnackbarContext';
 import { twitterTheme } from './themes/twitterTheme';
 import { PublicPrivacyNotice } from './components/public/PublicPrivacyNotice';
+import { PublicTermsOfService } from './components/public/PublicTermsOfService';
 import { LandingPage } from './components/public/LandingPage';
 import { PublicIntakeForm } from './components/public/PublicIntakeForm';
 
@@ -34,6 +35,12 @@ const AppWithAuth: React.FC = () => {
   // If public privacy notice page, show it regardless of auth status
   if (isPrivacyNoticePage) {
     return <PublicPrivacyNotice />;
+  }
+
+  // Public terms of service — linked from QuickRegisterView consent footer.
+  const isTermsPage = currentPath === '/terms' || currentPath === '/terminos';
+  if (isTermsPage) {
+    return <PublicTermsOfService />;
   }
 
   // Pre-consultation intake form — public, token in the URL, no auth.
