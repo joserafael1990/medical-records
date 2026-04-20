@@ -334,6 +334,7 @@ const AppLayoutInner: React.FC<AppLayoutProps> = ({
             onSaveProfile={doctorProfileHook.handleSubmit}
             doctorProfileHook={doctorProfileHook}
             personType={user?.doctor?.person_type}
+            navigateToView={navigateToView}
           />
         </Box>
       </Container>

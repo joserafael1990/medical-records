@@ -26,6 +26,9 @@ interface ViewRendererProps {
   onSaveProfile: (profile: any) => void;
   doctorProfileHook: any;
   personType?: string; // 'doctor', 'patient', 'admin'
+  /** Navigate to another top-level view by id (e.g. 'agenda'). Used by
+   *  cards inside DashboardView that link to a full view. */
+  navigateToView?: (view: string) => void;
 }
 
 export const ViewRenderer: React.FC<ViewRendererProps> = ({
@@ -38,7 +41,8 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
   doctorProfile,
   onSaveProfile,
   doctorProfileHook,
-  personType
+  personType,
+  navigateToView,
 }) => {
   // Track view navigation
   useEffect(() => {
@@ -52,13 +56,14 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
     <Box sx={{ width: { xs: '100%', md: '75%' } }}>
       {activeView === 'dashboard' && (
         <Suspense fallback={<LoadingFallback message="Cargando dashboard..." />}>
-          <DashboardView 
+          <DashboardView
             dashboardData={dashboardData}
             appointments={appointmentManager.appointments}
             consultations={consultationManagement.consultations}
             onNewAppointment={appointmentManager.handleNewAppointment}
             onNewConsultation={consultationManagement.handleNewConsultation}
             onNewPatient={patientManagement.openPatientDialog}
+            onNavigateToAgenda={navigateToView ? () => navigateToView('agenda') : undefined}
             doctorProfile={doctorProfile}
           />
         </Suspense>
