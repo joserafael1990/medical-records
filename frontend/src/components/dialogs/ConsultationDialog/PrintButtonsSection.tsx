@@ -48,11 +48,10 @@ export const PrintButtonsSection: React.FC<PrintButtonsSectionProps> = ({
   vitalSigns,
   nextAppointmentDate
 }) => {
-  if (!show) {
-    return null;
-  }
+  // NOTE: do NOT early-return here — useMemo hooks below must be called
+  // in the same order on every render. The `if (!show)` guard moved
+  // below, right before the JSX return.
 
-  // Debug: Log the data to see what we're receiving
 
   const vitalSignsSummary = useMemo(() => {
     const normalize = (value: string) =>
@@ -188,6 +187,11 @@ export const PrintButtonsSection: React.FC<PrintButtonsSectionProps> = ({
     // Last resort: fallback to 'Paciente'
     return 'Paciente';
   }, [selectedPatient, consultation?.patient_name]);
+
+  // Guard moved here so all hooks above run on every render.
+  if (!show) {
+    return null;
+  }
 
   return (
     <Box sx={{ width: '100%' }}>

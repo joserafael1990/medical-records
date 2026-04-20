@@ -320,22 +320,6 @@ async def process_webhook_event(request: Request, db: Session):
                                 )
                             
                             except Exception as e:
-                                # #region agent log
-                                import traceback
-                                api_logger.error(
-                                    "🔍 [DEBUG-EXCEPTION] Exception caught in webhook handler",
-                                    extra={
-                                        "from_phone": from_phone,
-                                        "error_type": type(e).__name__,
-                                        "error_message": str(e),
-                                        "traceback": traceback.format_exc(),
-                                        "hypothesis": "A,B,C,D,E",
-                                        "sessionId": "debug-session",
-                                        "runId": "run1"
-                                    },
-                                    exc_info=True
-                                )
-                                # #endregion
                                 
                                 api_logger.error(
                                     f"❌ Error processing message with Gemini bot: {e}",

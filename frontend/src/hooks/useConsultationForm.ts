@@ -1,13 +1,4 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-const mapPatientDocument = (
-  doc: any | null | undefined,
-  fallbackValue?: string,
-  fallbackName?: string
-): { document_id: number | null; document_value: string; document_name?: string } => ({
-  document_id: doc?.document_id ?? doc?.id ?? null,
-  document_value: fallbackValue ?? doc?.document_value ?? '',
-  document_name: doc?.document_name || doc?.document?.name || fallbackName
-});
 import { Patient, PatientFormData, ClinicalStudy, ConsultationFormData } from '../types';
 import { DiagnosisCatalog } from './useDiagnosisCatalog';
 import { apiService } from '../services';
@@ -16,116 +7,19 @@ import { logger } from '../utils/logger';
 import { disablePaymentDetection } from '../utils/disablePaymentDetection';
 import { usePatientPreviousStudies } from './usePatientPreviousStudies';
 import { parseBackendDate } from '../utils/formatters';
+import {
+  mapPatientDocument,
+  getCDMXDateTime,
+  DEFAULT_PHYSICAL_EXAMINATION,
+} from './useConsultationForm.helpers';
+import type {
+  UseConsultationFormProps,
+  UseConsultationFormReturn,
+} from './useConsultationForm.types';
 
-
-export interface UseConsultationFormProps {
-  consultation?: any | null;
-  onSubmit: (data: ConsultationFormData) => Promise<any>;
-  doctorProfile?: any;
-  patients: Patient[];
-  appointments?: any[];
-  onNewPatient?: () => void;
-  onNewAppointment?: () => void;
-  onSuccess?: () => void;
-  open: boolean;
-  // Diagnosis hooks
-  primaryDiagnosesHook: any;
-  secondaryDiagnosesHook: any;
-  // Section hooks
-  clinicalStudiesHook: any;
-  vitalSignsHook: any;
-  prescriptionsHook: any;
-}
-
-export interface UseConsultationFormReturn {
-  // Form state
-  formData: ConsultationFormData;
-  setFormData: React.Dispatch<React.SetStateAction<ConsultationFormData>>;
-  errors: Record<string, string>;
-  loading: boolean;
-  error: string | null;
-  setError: (error: string | null) => void;
-  currentConsultationId: number | null;
-
-  // Patient state
-  selectedPatient: Patient | null;
-  patientEditData: PatientFormData | null;
-  personalDocument: { document_id: number | null; document_value: string };
-  setPersonalDocument: (doc: { document_id: number | null; document_value: string; document_name?: string }) => void;
-  showAdvancedPatientData: boolean;
-  setShowAdvancedPatientData: (show: boolean) => void;
-
-  // Appointment state
-  selectedAppointment: any | null;
-  appointmentOffice: any | null;
-  availableAppointments: any[];
-
-  // Catalog data
-  countries: any[];
-  states: any[];
-  birthStates: any[];
-  emergencyRelationships: any[];
-  appointmentPatients: any[];
-
-  // Previous studies (from hook)
-  patientPreviousStudies: ClinicalStudy[];
-  loadingPreviousStudies: boolean;
-  patientHasPreviousConsultations: boolean;
-
-  // Handlers
-  handleChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | { name?: string; value: unknown }>) => void;
-  handleDateChange: (date: Date | null) => void;
-  handlePatientChange: (patient: Patient | null) => Promise<void>;
-  handleAppointmentChange: (appointment: any | null) => Promise<void>;
-  handleSubmit: () => Promise<void>;
-
-  // Patient data handlers
-  handlePatientDataChange: (field: keyof any, value: any) => void;
-  handlePatientDataChangeWrapper: (field: string, value: any) => void;
-  handleCountryChange: (field: 'address_country_id' | 'birth_country_id', countryId: string) => Promise<void>;
-  getPatientData: (field: string) => any;
-
-  // Study handlers (delegated to previous studies hook)
-  handleUploadStudyFile: (studyId: string, file: File) => Promise<void>;
-  handleUpdateStudyStatus: (studyId: string, status: string) => Promise<void>;
-  handleViewStudyFile: (studyId: string) => Promise<void>;
-  handleViewPreviousConsultations: () => void;
-
-  // Diagnosis handlers
-  handleAddPrimaryDiagnosis: (diagnosis: DiagnosisCatalog) => void;
-  handleRemovePrimaryDiagnosis: (diagnosisId: string) => void;
-  handleAddSecondaryDiagnosis: (diagnosis: DiagnosisCatalog) => void;
-  handleRemoveSecondaryDiagnosis: (diagnosisId: string) => void;
-
-  // Utilities
-  shouldShowFirstTimeFields: () => boolean;
-  shouldShowPreviousConsultationsButton: () => boolean;
-  shouldShowOnlyBasicPatientData: () => boolean;
-  isEditing: boolean;
-}
-
-// Helper function to get current date in CDMX timezone
-const getCDMXDateTime = (): string => {
-  const now = new Date();
-  const cdmxTimeString = now.toLocaleString("sv-SE", { timeZone: "America/Mexico_City" });
-  const cdmxDate = new Date(cdmxTimeString);
-  return cdmxDate.toISOString();
-};
-
-const DEFAULT_PHYSICAL_EXAMINATION = [
-  'Paciente en buenas condiciones generales, alerta, orientada en persona, tiempo y espacio, cooperadora, con marcha y postura normales.',
-  'Cabeza normocéfala, simétrica, sin lesiones ni deformidades.',
-  'Pupilas isocóricas y normorreactivas a la luz.',
-  'Pabellones auriculares sin alteraciones, conductos auditivos limpios y tímpanos íntegros.',
-  'Nariz alineada, mucosa rosada, sin secreción ni congestión.',
-  'Mucosa oral húmeda y rosada, dentadura en buen estado, faringe sin hiperemia ni exudado.',
-  'Cuello simétrico, sin masas ni adenomegalias, tiroides no palpable, pulsos carotídeos presentes y simétricos.',
-  'Tórax simétrico con movimientos respiratorios adecuados; murmullo vesicular bien distribuido, sin ruidos agregados.',
-  'Ruidos cardiacos rítmicos, de buena intensidad, sin soplos ni galope.',
-  'Abdomen plano, blando, depresible, no doloroso a la palpación, sin visceromegalias ni masas palpables, con ruidos peristálticos presentes y normales.',
-  'Extremidades simétricas, sin edema, cianosis ni deformidades; pulsos periféricos palpables y simétricos, fuerza y tono muscular conservados.',
-  'Sistema nervioso íntegro, con fuerza 5/5 en las cuatro extremidades, sensibilidad y reflejos osteotendinosos normales, marcha coordinada.'
-].join('\n\n');
+// Re-export types for backward compatibility so callers can still do
+// `import { UseConsultationFormProps } from '../hooks/useConsultationForm'`.
+export type { UseConsultationFormProps, UseConsultationFormReturn };
 
 export const useConsultationForm = (props: UseConsultationFormProps): UseConsultationFormReturn => {
   const {
@@ -809,7 +703,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
       try {
         // Only load if country_id has actually changed and is valid
         if (patientEditData.address_country_id) {
-          const countryId = parseInt(patientEditData.address_country_id);
+          const countryId = parseInt(String(patientEditData.address_country_id));
           if (!isNaN(countryId) && countryId > 0) {
             try {
               const addressStatesData = await apiService.catalogs.getStates(countryId);
@@ -826,7 +720,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
         }
 
         if (patientEditData.birth_country_id) {
-          const countryId = parseInt(patientEditData.birth_country_id);
+          const countryId = parseInt(String(patientEditData.birth_country_id));
           if (!isNaN(countryId) && countryId > 0) {
             try {
               const birthStatesData = await apiService.catalogs.getStates(countryId);

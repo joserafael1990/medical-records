@@ -5,14 +5,51 @@
 export interface Patient {
   id: number;
   name: string;
+  full_name?: string;
   title?: string;
   email?: string;
   primary_phone?: string;
   birth_date?: string;
   gender?: string;
+  civil_status?: string;
+  birth_city?: string;
+  birth_state_id?: number | null;
+  birth_country_id?: number | null;
+  // Personal address (all optional — many patients book with just name
+  // + phone under the "quick patient" flow).
+  home_address?: string;
+  address_city?: string;
+  address_state_id?: number | null;
+  address_country_id?: number | null;
+  address_postal_code?: string;
+  // Identity documents captured at the top level for convenience;
+  // the normalised source of truth lives under `personal_documents`.
+  curp?: string;
+  rfc?: string;
+  // Medical / insurance
+  insurance_provider?: string;
+  insurance_number?: string;
+  // Emergency contact
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
   emergency_contact_relationship?: string;
+  // Avatar
+  avatar_type?: 'initials' | 'preloaded' | 'custom';
+  avatar_template_key?: string | null;
+  avatar_file_path?: string | null;
+  avatar_url?: string | null;
+  // System flags
+  is_active?: boolean;
+  /** Legacy alias used by older components / backend payloads. Prefer `is_active`. */
+  active?: boolean;
+  person_type?: 'patient' | 'doctor' | 'admin';
+  /** Optional free-form medical history summary returned by some endpoints. */
+  medical_history?: any;
+  /** Computed by the table renderer from `birth_date`. Not emitted by the API. */
+  age?: number;
+  /** Count of consultations; emitted by some listing endpoints as an aggregate. */
+  total_visits?: number;
+  last_visit?: number | string;
   created_by: number;
   created_at: string;
   updated_at: string;
@@ -44,27 +81,44 @@ export interface Patient {
 
 export interface PatientFormData {
   name: string;
+  // Some forms split name into first/paternal/maternal; the backend accepts
+  // either (concatenated into `name`) or all three separately.
+  first_name?: string;
+  paternal_surname?: string;
+  maternal_surname?: string;
   title?: string;
   email?: string;
   birth_date?: string;
+  // Legacy alias that some hooks still use.
+  date_of_birth?: string;
   primary_phone?: string;
+  phone?: string; // alias
   gender?: string;
   civil_status?: string;
   home_address?: string;
   address_city?: string;
-  address_state_id?: string;
+  address_state_id?: string | number | null;
   address_postal_code?: string;
-  address_country_id?: string;
+  address_country_id?: string | number | null;
   birth_city?: string;
-  birth_state_id?: string;
-  birth_country_id?: string;
+  birth_state_id?: string | number | null;
+  birth_country_id?: string | number | null;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
   emergency_contact_relationship?: string;
   insurance_provider?: string;
   insurance_number?: string;
+  curp?: string;
+  rfc?: string;
+  // Legacy flat aliases (some forms render separate city/state/zip fields
+  // and others use address_*). Accept both shapes.
+  city?: string;
+  state?: string;
+  zip_code?: string;
+  country?: string;
   active?: boolean;
   is_active?: boolean;
+  medical_history?: any;
   documents?: Array<{
     document_id: number;
     document_value: string;
@@ -216,6 +270,8 @@ export interface ConsultationFormData {
   follow_up_instructions?: string;
   therapeutic_plan?: string;
   laboratory_results?: string;
+  imaging_studies?: string;
+  prognosis?: string;
   interconsultations?: string;
   notes?: string;
   folio?: string;
@@ -293,6 +349,13 @@ export interface CreateClinicalStudyData {
 export interface UpdateClinicalStudyData extends Partial<CreateClinicalStudyData> {
   id?: string;
 }
+
+/**
+ * Shape used by form hooks for per-field validation error messages.
+ * Keyed by form field name (e.g., "email", "curp") with the localised
+ * error string as the value.
+ */
+export type FieldErrors = Record<string, string>;
 
 // ============================================================================
 // STUDY CATALOG TYPES
@@ -768,6 +831,23 @@ export interface DoctorProfile {
   created_by?: number;
   offices?: Office[];
   specialty?: string; // Para compatibilidad con componentes que usan specialty directamente
+  specialty_name?: string;
+  // Campos de contacto profesional adicionales usados por los hooks de
+  // perfil y el formulario de edición (se derivan de la oficina primaria
+  // o el perfil directo).
+  professional_email?: string;
+  office_name?: string;
+  office_phone?: string;
+  office_address?: string;
+  office_city?: string;
+  office_state_id?: number | null;
+  office_country_id?: number | null;
+  office_postal_code?: string;
+  office_timezone?: string;
+  office_maps_url?: string;
+  // Alias used by some callers that stored the URL as `avatarUrl` in
+  // camelCase — preserved for backwards compat.
+  avatarUrl?: string;
   avatar_type?: 'initials' | 'preloaded' | 'custom';
   avatar_template_key?: string | null;
   avatar_file_path?: string | null;
