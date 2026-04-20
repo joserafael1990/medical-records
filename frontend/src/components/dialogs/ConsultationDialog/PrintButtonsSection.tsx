@@ -52,6 +52,7 @@ export const PrintButtonsSection: React.FC<PrintButtonsSectionProps> = ({
   // in the same order on every render. The `if (!show)` guard moved
   // below, right before the JSX return.
 
+
   const vitalSignsSummary = useMemo(() => {
     const normalize = (value: string) =>
       value
