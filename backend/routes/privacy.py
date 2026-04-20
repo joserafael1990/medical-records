@@ -11,11 +11,25 @@ from datetime import datetime
 import uuid
 import os
 
-from database import get_db, Person, PrivacyNotice, PrivacyConsent, ARCORequest, MedicalRecord
+from database import (
+    get_db, Person, PrivacyNotice, PrivacyConsent, ARCORequest,
+    MedicalRecord, ClinicalStudy, ConsultationPrescription,
+    ConsultationVitalSign, PersonDocument,
+)
 from utils.datetime_utils import utc_now
 from dependencies import get_current_user
 from logger import get_logger
 from audit_service import audit_service
+from services.arco_export_service import (
+    ARCOExportBundle,
+    build_zip as arco_build_zip,
+    serialize_clinical_study,
+    serialize_consultation,
+    serialize_patient,
+    serialize_prescription,
+    serialize_privacy_consent,
+    serialize_vital_sign,
+)
 
 api_logger = get_logger("api")
 
@@ -744,6 +758,118 @@ async def update_arco_request(
     except Exception as e:
         api_logger.error(f"Error updating ARCO request: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _decrypt_safe(ciphertext: str) -> str:
+    """Lazy import so the export endpoint doesn't pull the whole consultation
+    service on module load (which in turn pulls encryption keys)."""
+    from services.consultation_service import decrypt_sensitive_data
+    return decrypt_sensitive_data(ciphertext)
+
+
+@router.post("/privacy/arco/export/{patient_id}")
+async def export_patient_arco(
+    patient_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user),
+):
+    """Export all PHI for a patient as a ZIP (LFPDPPP Art. 15 — derecho de acceso).
+
+    Authorization: the calling doctor must own the patient (`created_by`) or
+    have at least one consultation with them. Admins bypass ownership. Every
+    export is logged at CRITICAL severity in the audit trail.
+    """
+    from fastapi.responses import Response
+
+    # Fetch patient
+    patient = db.query(Person).filter(
+        Person.id == patient_id,
+        Person.person_type == 'patient',
+    ).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Paciente no encontrado")
+
+    # Ownership check (mirrors create_arco_request)
+    if current_user.person_type == 'doctor':
+        has_consultation = db.query(MedicalRecord).filter(
+            MedicalRecord.patient_id == patient_id,
+            MedicalRecord.doctor_id == current_user.id,
+        ).first() is not None
+        is_creator = patient.created_by == current_user.id
+        if not has_consultation and not is_creator:
+            raise HTTPException(status_code=403, detail="No tiene acceso a este paciente")
+    elif current_user.person_type not in ('doctor', 'admin'):
+        raise HTTPException(status_code=403, detail="Solo doctores o administradores pueden ejecutar exportaciones ARCO")
+
+    # Gather PHI
+    documents = db.query(PersonDocument).filter(
+        PersonDocument.person_id == patient_id,
+        PersonDocument.is_active.is_(True),
+    ).all()
+    consultations = db.query(MedicalRecord).filter(
+        MedicalRecord.patient_id == patient_id,
+    ).order_by(MedicalRecord.consultation_date.asc()).all()
+    consultation_ids = [c.id for c in consultations]
+    prescriptions = []
+    clinical_studies = []
+    vital_signs = []
+    if consultation_ids:
+        prescriptions = db.query(ConsultationPrescription).filter(
+            ConsultationPrescription.consultation_id.in_(consultation_ids),
+        ).all()
+        clinical_studies = db.query(ClinicalStudy).filter(
+            ClinicalStudy.consultation_id.in_(consultation_ids),
+        ).all()
+        vital_signs = db.query(ConsultationVitalSign).filter(
+            ConsultationVitalSign.consultation_id.in_(consultation_ids),
+        ).all()
+    # Studies can exist without a consultation (patient-level) — include those too.
+    orphan_studies = db.query(ClinicalStudy).filter(
+        ClinicalStudy.patient_id == patient_id,
+        ClinicalStudy.consultation_id.is_(None),
+    ).all()
+    consents = db.query(PrivacyConsent).filter(
+        PrivacyConsent.patient_id == patient_id,
+    ).order_by(PrivacyConsent.consent_date.asc()).all()
+
+    bundle = ARCOExportBundle(
+        patient=serialize_patient(patient, documents),
+        consultations=[serialize_consultation(c, decrypt_fn=_decrypt_safe) for c in consultations],
+        prescriptions=[serialize_prescription(rx) for rx in prescriptions],
+        clinical_studies=[serialize_clinical_study(s) for s in (clinical_studies + orphan_studies)],
+        vital_signs=[serialize_vital_sign(vs) for vs in vital_signs],
+        privacy_consents=[serialize_privacy_consent(c) for c in consents],
+        generated_by_doctor_id=current_user.id,
+    )
+    payload = arco_build_zip(bundle)
+
+    # CRITICAL audit — bulk PHI export is the highest-sensitivity operation.
+    try:
+        audit_service.log_arco_export(
+            db=db,
+            user=current_user,
+            patient_id=patient_id,
+            patient_name=patient.name,
+            request=request,
+            counts=bundle.counts(),
+        )
+    except Exception as audit_err:
+        api_logger.error(
+            "CRITICAL: failed to audit ARCO export — aborting to preserve traceability",
+            extra={"patient_id": patient_id, "doctor_id": current_user.id, "error": str(audit_err)},
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="No fue posible registrar la exportación en la bitácora de auditoría. Intenta nuevamente.",
+        )
+
+    filename = f"arco-export-patient-{patient_id}-{datetime.utcnow().strftime('%Y%m%d-%H%M%SZ')}.zip"
+    return Response(
+        content=payload,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/privacy/public-notice")
