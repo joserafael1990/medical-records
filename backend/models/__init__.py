@@ -22,4 +22,3 @@ from .clinical import ClinicalStudy, StudyCategory, StudyCatalog
 from .whatsapp_session import WhatsAppSession
 from .intake import IntakeQuestionnaireResponse
 from .assistant import AssistantConversation, AssistantMessage
-from .llm_trace import LLMTrace

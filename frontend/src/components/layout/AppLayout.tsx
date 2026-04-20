@@ -143,10 +143,8 @@ const AppLayoutInner: React.FC<AppLayoutProps> = ({
     if (personType === 'admin') {
       return MAIN_NAVIGATION_ITEMS; // Admins see all options
     }
-    // Non-admins don't see "Licencias" nor "Monitoreo LLM"
-    return MAIN_NAVIGATION_ITEMS.filter(
-      (item) => item.id !== 'licenses' && item.id !== 'admin-llm-traces',
-    );
+    // Non-admins don't see "Licencias"
+    return MAIN_NAVIGATION_ITEMS.filter(item => item.id !== 'licenses');
   }, [user?.doctor?.person_type]);
 
   const renderMobileDrawer = (

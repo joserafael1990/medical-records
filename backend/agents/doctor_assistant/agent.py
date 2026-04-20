@@ -29,7 +29,6 @@ from vertexai.generative_models import (
 
 from config import settings
 from logger import get_logger
-from services.llm_tracing import LLMTracer
 
 from .prompts import DOCTOR_ASSISTANT_PROMPT
 from .state import AssistantSessionState, session_state as default_session_state
@@ -124,28 +123,12 @@ class DoctorAssistant:
                 "sandbox": True,
             }
 
-        # One LLMTracer per user turn — _run_live_turn may issue multiple
-        # Gemini calls (tool-use), all sharing the same trace_id.
-        with LLMTracer(
-            db=self.db,
-            source="doctor_assistant",
-            user_id=doctor.id,
-            patient_id=current_patient_id or conv.current_patient_id,
-            session_id=conv.conversation_id,
-            system_prompt=DOCTOR_ASSISTANT_PROMPT,
-            user_input=message,
-            conversation_history=conv.history,
-            model=getattr(settings, "GEMINI_MODEL", None) or "gemini-2.5-flash",
-        ) as tracer:
-            reply, tool_calls, tool_results = self._run_live_turn(
-                doctor=doctor,
-                history=conv.history,
-                message=message,
-                current_patient_id=current_patient_id or conv.current_patient_id,
-                tracer=tracer,
-            )
-            tracer.set_response_text(reply)
-            tracer.extend_tool_calls(tool_calls, tool_results)
+        reply, tool_calls, tool_results = self._run_live_turn(
+            doctor=doctor,
+            history=conv.history,
+            message=message,
+            current_patient_id=current_patient_id or conv.current_patient_id,
+        )
         self.state.append_turn(
             db=self.db,
             doctor_id=doctor.id,
@@ -211,14 +194,11 @@ class DoctorAssistant:
         history: List[Dict[str, Any]],
         message: str,
         current_patient_id: Optional[int],
-        tracer: Optional["LLMTracer"] = None,
     ) -> tuple[str, List[Dict[str, Any]], List[Dict[str, Any]]]:
         """Run one user turn against Gemini, resolving any function calls.
 
         Returns (reply_text, tool_calls, tool_results) so callers can
-        persist results alongside calls for multi-turn context. If a
-        `tracer` is supplied, token usage from every Gemini call in
-        the loop is accumulated into it.
+        persist results alongside calls for multi-turn context.
         """
         if self.model is None:
             raise RuntimeError("Model not initialised")
@@ -231,8 +211,6 @@ class DoctorAssistant:
         tool_calls: List[Dict[str, Any]] = []
         tool_results: List[Dict[str, Any]] = []
         response = chat.send_message(prompt)
-        if tracer is not None:
-            tracer.capture_response(response)
 
         for _turn in range(MAX_FUNCTION_CALL_TURNS):
             function_call_part = self._extract_function_call(response)
@@ -247,8 +225,6 @@ class DoctorAssistant:
             response = chat.send_message([
                 Part.from_function_response(name=name, response={"result": result})
             ])
-            if tracer is not None:
-                tracer.capture_response(response)
         reply_text = self._extract_text(response) or (
             "No pude generar una respuesta. Intenta reformular la pregunta."
         )

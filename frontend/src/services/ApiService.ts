@@ -19,7 +19,6 @@ import { PracticeAnalyticsService } from './practiceAnalytics/PracticeAnalyticsS
 import { ExpedienteService } from './expediente/ExpedienteService';
 import { IntakeService } from './intake/IntakeService';
 import { AssistantService } from './assistant/AssistantService';
-import { LLMTracesService } from './admin/LLMTracesService';
 import { logger } from '../utils/logger';
 
 /**
@@ -48,7 +47,6 @@ export class ApiService {
   public expediente: ExpedienteService;
   public intake: IntakeService;
   public assistant: AssistantService;
-  public llmTraces: LLMTracesService;
 
   constructor() {
     this.auth = new AuthService();
@@ -72,7 +70,6 @@ export class ApiService {
     this.expediente = new ExpedienteService();
     this.intake = new IntakeService();
     this.assistant = new AssistantService();
-    this.llmTraces = new LLMTracesService();
   }
 
   // Convenience methods for common operations

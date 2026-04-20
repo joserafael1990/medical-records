@@ -15,7 +15,6 @@ import {
   CalendarToday as CalendarIcon,
   VpnKey as LicenseIcon,
   BusinessCenter as PracticeIcon,
-  Psychology as LLMIcon,
 } from '@mui/icons-material';
 
 export interface NavigationItem {
@@ -54,11 +53,6 @@ export const MAIN_NAVIGATION_ITEMS: NavigationItem[] = [
     id: 'licenses',
     label: 'Licencias',
     icon: <LicenseIcon />
-  },
-  {
-    id: 'admin-llm-traces',
-    label: 'Monitoreo LLM',
-    icon: <LLMIcon />
   }
 ];
 
@@ -81,10 +75,8 @@ export const MainNavigation: React.FC<MainNavigationProps> = ({
     if (personType === 'admin') {
       return items; // Admins see all options
     }
-    // Non-admins don't see "Licencias" nor "Monitoreo LLM"
-    return items.filter(
-      (item) => item.id !== 'licenses' && item.id !== 'admin-llm-traces',
-    );
+    // Non-admins don't see "Licencias"
+    return items.filter(item => item.id !== 'licenses');
   }, [items, personType]);
 
   return (
