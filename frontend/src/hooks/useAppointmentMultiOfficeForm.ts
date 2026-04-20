@@ -567,15 +567,17 @@ export const useAppointmentMultiOfficeForm = (
       let finalPatientId = currentFormData.patient_id;
 
       if (isExistingPatient === false) {
-        // Validar datos del nuevo paciente
-        if (!newPatientData.name.trim()) {
-          setError('El nombre completo del paciente es requerido');
+        // Validar datos mínimos del paciente exprés. Solo nombre + teléfono
+        // son requeridos aquí; el resto (CURP, apellidos completos, fecha de
+        // nacimiento, género) se completa antes de firmar la consulta vía el
+        // guard de compliance.
+        const trimmedName = newPatientData.name.trim();
+        if (!trimmedName) {
+          setError('El nombre del paciente es requerido');
           return;
         }
-        // Validar que el nombre tenga al menos dos palabras
-        const nameParts = newPatientData.name.trim().split(/\s+/);
-        if (nameParts.length < 2) {
-          setError('Ingresa al menos nombre y apellido');
+        if (trimmedName.length < 2) {
+          setError('El nombre debe tener al menos 2 caracteres');
           return;
         }
         if (!newPatientData.phone_number.trim()) {

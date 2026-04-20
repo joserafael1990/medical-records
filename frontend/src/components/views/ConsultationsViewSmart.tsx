@@ -349,7 +349,7 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
 
       {/* Statistics Cards - Responsive */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} md={4}>
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <Card sx={{ boxShadow: 1, height: '100%' }}>
             <CardContent sx={{ textAlign: 'center' }}>
               <Typography variant="h6" gutterBottom>
@@ -361,7 +361,7 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} sm={6} md={4}>
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <Card sx={{ boxShadow: 1, height: '100%' }}>
             <CardContent sx={{ textAlign: 'center' }}>
               <Typography variant="h6" gutterBottom>
@@ -373,7 +373,7 @@ const ConsultationsViewSmart: React.FC<ConsultationsViewSmartProps> = ({
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} sm={12} md={4}>
+        <Grid size={{ xs: 12, sm: 12, md: 4 }}>
           <Card sx={{ boxShadow: 1, height: '100%' }}>
             <CardContent sx={{ textAlign: 'center' }}>
               <Typography variant="h6" gutterBottom>

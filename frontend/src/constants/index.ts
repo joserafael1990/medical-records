@@ -58,6 +58,9 @@ export const API_CONFIG = {
 
     // Dashboard
     DASHBOARD: '/api/dashboard',
+
+    // Assistant (read-only doctor copilot)
+    ASSISTANT_CHAT: '/api/assistant/chat',
   }
 };
 

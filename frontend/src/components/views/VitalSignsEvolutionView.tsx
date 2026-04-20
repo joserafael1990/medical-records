@@ -562,11 +562,18 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
       });
   };
 
-  // Use mergedHistory for display (includes current vital signs)
+  // ------------------------------------------------------------------
+  // Hooks MUST be called on every render — declare them before any
+  // early return. Previously these were below the `if (loading)` /
+  // `if (error)` guards which caused a `react-hooks/rules-of-hooks`
+  // violation and unpredictable hook ordering.
+  // ------------------------------------------------------------------
+
+  // Use mergedHistory for display (includes current vital signs).
   const displayHistory = mergedHistory || history;
 
-  // Force re-render when currentVitalSigns changes by tracking a serialized version.
-  // Must sit above any early returns to satisfy react-hooks/rules-of-hooks.
+  // Force re-render when currentVitalSigns changes by tracking a
+  // serialized version.
   const [displayHistoryVersion, setDisplayHistoryVersion] = React.useState(0);
   const prevMergedHistorySerializedRef = React.useRef<string>('');
 
@@ -579,7 +586,7 @@ const VitalSignsEvolutionView: React.FC<VitalSignsEvolutionViewProps> = ({
         last_date: vs.data?.[vs.data.length - 1]?.date
       })));
 
-      // Only update version if the serialized content actually changed
+      // Only update version if the serialized content actually changed.
       if (serialized !== prevMergedHistorySerializedRef.current) {
         prevMergedHistorySerializedRef.current = serialized;
         setDisplayHistoryVersion(prev => prev + 1);

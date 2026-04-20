@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Button } from '@mui/material';
 import { Security as SecurityIcon, Gavel as GavelIcon } from '@mui/icons-material';
 import { PrintCertificateButtonPatient } from '../common/PrintCertificateButtonPatient';
+import { DownloadExpedienteButton } from './DownloadExpedienteButton';
 import type { Patient } from '../../types';
 
 interface PatientActionsProps {
@@ -44,6 +45,15 @@ export const PatientActions: React.FC<PatientActionsProps> = ({
             >
                 Derechos ARCO
             </Button>
+
+            {/* Download full expediente as PDF */}
+            {doctorProfile && patient?.id && (
+                <DownloadExpedienteButton
+                    patientId={patient.id}
+                    patientName={patient.name || 'Paciente'}
+                    doctorProfile={doctorProfile}
+                />
+            )}
 
             {/* Generate Certificate Button */}
             {doctorProfile && (

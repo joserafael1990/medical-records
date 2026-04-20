@@ -6,7 +6,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { apiService } from '../services';
 import { logger } from '../utils/logger';
-import type { ConsultationFormData } from '../hooks/useConsultationForm';
+import type { ConsultationFormData } from '../types';
 type Consultation = {
   id: number | string;
   [key: string]: any;
@@ -346,9 +346,10 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
         doctor_specialty: consultation.doctor_specialty || ''
       });
       
-      // Load clinical studies for this consultation
+      // Load clinical studies for this consultation. `id` is typed as
+      // `number | string`; coerce to string.
       if (consultation.id) {
-        loadConsultationStudies(consultation.id);
+        loadConsultationStudies(String(consultation.id));
       }
     } else {
       resetConsultationForm();
@@ -383,8 +384,9 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
       setIsEditingConsultation(true);
       setConsultationDialogOpen(true);
       
-      // Fetch complete consultation data from backend
-      const fullConsultationData = await apiService.consultations.getConsultationById(consultation.id);
+      // Fetch complete consultation data from backend. `id` may be
+      // number in some list payloads; coerce to string for the service.
+      const fullConsultationData = await apiService.consultations.getConsultationById(String(consultation.id));
       // Update the selectedConsultation with the fresh data so the dialog's useEffect will re-run
       setSelectedConsultation(fullConsultationData);
     } catch (error) {

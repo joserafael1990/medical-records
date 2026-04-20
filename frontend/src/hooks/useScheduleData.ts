@@ -84,7 +84,7 @@ export const useScheduleData = () => {
       const data = await response.json();
       
       // Check if we have any schedule data
-      const hasScheduleData = Object.values(data).some(day => day && day.is_active);
+      const hasScheduleData = Object.values(data).some((day: any) => day && day.is_active);
       
       if (hasScheduleData) {
         setScheduleData(data);
