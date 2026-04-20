@@ -159,7 +159,7 @@ class WhatsAppService:
                 logger.error(f"🚨 Error code: {error_code} | Type: {error_type} | Subcode: {error_subcode}")
                 logger.error(f"🚨 Error message: {error_message}")
                 logger.error(f"🚨 Full error: {error_data}")
-                
+
 
             message_id = result.get('messages', [{}])[0].get('id') if result.get('messages') else None
             message_status = result.get('messages', [{}])[0].get('message_status') if result.get('messages') else None
