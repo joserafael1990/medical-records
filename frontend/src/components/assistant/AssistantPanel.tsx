@@ -120,7 +120,9 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ currentPatientId
           onClick={() => setOpen(true)}
           sx={{
             position: 'fixed',
-            bottom: 24,
+            // Offset above Sentry's "Reportar un problema" feedback widget
+            // (which also pins itself to bottom-right and was overlapping this FAB).
+            bottom: 88,
             right: 24,
             zIndex: (t) => t.zIndex.drawer - 1,
           }}
