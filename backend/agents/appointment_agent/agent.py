@@ -481,21 +481,6 @@ Comandos disponibles:
                 response = chat.send_message(message_text)
             except (IndexError, AttributeError) as e:
                 # Response was blocked/empty
-                log_file = "/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log"
-                try:
-                    log_data = {
-                        "location": "agent.py:564",
-                        "message": "Empty response from send_message",
-                        "data": {"error": str(e), "message_text": message_text[:100]},
-                        "timestamp": int(datetime.now().timestamp() * 1000),
-                        "sessionId": "debug-session",
-                        "runId": "production-debug",
-                        "hypothesisId": "F"
-                    }
-                    with open(log_file, 'a') as f:
-                        f.write(json.dumps(log_data) + '\n')
-                except:
-                    pass
                 # Return default response
                 return "Lo siento, no pude procesar tu mensaje. Por favor, intenta de nuevo."
             
@@ -575,21 +560,6 @@ Comandos disponibles:
                     except (IndexError, AttributeError) as e:
                         # Response was blocked/empty - function result was processed but no text response
                         # Use a default response instead
-                        log_file = "/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log"
-                        try:
-                            log_data = {
-                                "location": "agent.py:692",
-                                "message": "Empty response after function call - using default",
-                                "data": {"function_name": function_name, "error": str(e)},
-                                "timestamp": int(datetime.now().timestamp() * 1000),
-                                "sessionId": "debug-session",
-                                "runId": "production-debug",
-                                "hypothesisId": "F"
-                            }
-                            with open(log_file, 'a') as f:
-                                f.write(json.dumps(log_data) + '\n')
-                        except:
-                            pass
                         # Continue with function result processing
                         follow_up_text = None
                     

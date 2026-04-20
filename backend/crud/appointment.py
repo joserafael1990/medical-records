@@ -18,26 +18,12 @@ api_logger = get_logger("medical_records.api")
 
 def create_appointment(db: Session, appointment_data: Union[schemas.AppointmentCreate, Dict[str, Any]], doctor_id: int) -> Appointment:
     """Create a new appointment"""
-    # #region agent log
-    import json
-    log_path = '/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log'
-    try:
-        with open(log_path, 'a') as f:
-            f.write(json.dumps({"location":"appointment.py:19","message":"create_appointment entry","data":{"doctor_id":doctor_id,"appointment_data_type":type(appointment_data).__name__},"timestamp":datetime.now().isoformat(),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"}) + '\n')
-    except: pass
-    # #endregion
     # Handle both Pydantic model and dict
     if isinstance(appointment_data, dict):
         data = appointment_data.copy()
     else:
         data = appointment_data.model_dump()
     
-    # #region agent log
-    try:
-        with open(log_path, 'a') as f:
-            f.write(json.dumps({"location":"appointment.py:26","message":"data extracted","data":{"appointment_date":str(data.get('appointment_date')),"appointment_date_type":type(data.get('appointment_date')).__name__,"patient_id":data.get('patient_id'),"appointment_type_id":data.get('appointment_type_id'),"office_id":data.get('office_id'),"data_keys":list(data.keys())},"timestamp":datetime.now().isoformat(),"sessionId":"debug-session","runId":"run1","hypothesisId":"A"}) + '\n')
-    except: pass
-    # #endregion
         
     data['doctor_id'] = doctor_id
     
@@ -66,22 +52,10 @@ def create_appointment(db: Session, appointment_data: Union[schemas.AppointmentC
     # Calculate end_time if not provided
     if 'end_time' not in data:
         start_time = data.get('appointment_date')
-        # #region agent log
-        try:
-            with open(log_path, 'a') as f:
-                f.write(json.dumps({"location":"appointment.py:31","message":"calculating end_time","data":{"start_time":str(start_time),"start_time_type":type(start_time).__name__ if start_time else None},"timestamp":datetime.now().isoformat(),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"}) + '\n')
-        except: pass
-        # #endregion
         if start_time:
             # Get doctor's appointment duration
             doctor = db.query(Person).filter(Person.id == doctor_id).first()
             duration = doctor.appointment_duration if doctor and doctor.appointment_duration else 30
-            # #region agent log
-            try:
-                with open(log_path, 'a') as f:
-                    f.write(json.dumps({"location":"appointment.py:36","message":"before timedelta calculation","data":{"start_time":str(start_time),"duration":duration,"start_time_type":type(start_time).__name__},"timestamp":datetime.now().isoformat(),"sessionId":"debug-session","runId":"run1","hypothesisId":"B"}) + '\n')
-            except: pass
-            # #endregion
             # start_time is now a datetime object, so we can do arithmetic
             if isinstance(start_time, datetime):
                 # Calculate end_time in the same timezone
@@ -114,44 +88,14 @@ def create_appointment(db: Session, appointment_data: Union[schemas.AppointmentC
     
     filtered_data = {k: v for k, v in data.items() if k in valid_fields}
     
-    # #region agent log
-    try:
-        with open(log_path, 'a') as f:
-            f.write(json.dumps({"location":"appointment.py:47","message":"before Appointment creation","data":{"filtered_keys":list(filtered_data.keys()),"appointment_date":str(filtered_data.get('appointment_date')),"appointment_date_type":type(filtered_data.get('appointment_date')).__name__ if filtered_data.get('appointment_date') else None,"end_time":str(filtered_data.get('end_time')),"end_time_type":type(filtered_data.get('end_time')).__name__ if filtered_data.get('end_time') else None},"timestamp":datetime.now().isoformat(),"sessionId":"debug-session","runId":"run1","hypothesisId":"C"}) + '\n')
-    except: pass
-    # #endregion
     
     db_appointment = Appointment(**filtered_data)
     
-    # #region agent log
-    try:
-        with open(log_path, 'a') as f:
-            f.write(json.dumps({"location":"appointment.py:49","message":"Appointment object created, before db.add","data":{},"timestamp":datetime.now().isoformat(),"sessionId":"debug-session","runId":"run1","hypothesisId":"C"}) + '\n')
-    except: pass
-    # #endregion
     
     db.add(db_appointment)
-    # #region agent log
-    try:
-        with open(log_path, 'a') as f:
-            f.write(json.dumps({"location":"appointment.py:51","message":"before db.commit","data":{},"timestamp":datetime.now().isoformat(),"sessionId":"debug-session","runId":"run1","hypothesisId":"D"}) + '\n')
-    except: pass
-    # #endregion
     try:
         db.commit()
-        # #region agent log
-        try:
-            with open(log_path, 'a') as f:
-                f.write(json.dumps({"location":"appointment.py:52","message":"after db.commit","data":{"appointment_id":db_appointment.id},"timestamp":datetime.now().isoformat(),"sessionId":"debug-session","runId":"run1","hypothesisId":"D"}) + '\n')
-        except: pass
-        # #endregion
     except Exception as e:
-        # #region agent log
-        try:
-            with open(log_path, 'a') as f:
-                f.write(json.dumps({"location":"appointment.py:52","message":"db.commit failed","data":{"error_type":type(e).__name__,"error_message":str(e)},"timestamp":datetime.now().isoformat(),"sessionId":"debug-session","runId":"run1","hypothesisId":"D"}) + '\n')
-        except: pass
-        # #endregion
         raise
     db.refresh(db_appointment)
     

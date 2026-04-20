@@ -6,6 +6,7 @@ Migrated from main_clean_english.py to improve code organization
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from typing import Optional
 import os
 import traceback
 from psycopg2.extras import Json
@@ -13,10 +14,29 @@ from psycopg2.extras import Json
 from database import get_db, Person, Office, Specialty, DocumentType, Document, PersonDocument
 from dependencies import get_current_user
 from logger import get_logger
+from models.system import PrivacyConsent, PrivacyNotice
+from utils.document_validators import (
+    CURP_DOCUMENT_NAME,
+    PROFESSIONAL_LICENSE_DOCUMENT_NAME,
+    validate_curp_format,
+    validate_professional_license_format,
+)
 import auth
 import crud
 import schemas
 from audit_service import audit_service
+
+
+def _client_ip(request: Request) -> Optional[str]:
+    """Server-side IP capture for LFPDPPP consent audit (never trust client payload)."""
+    if request is None:
+        return None
+    forwarded = request.headers.get('x-forwarded-for') if request.headers else None
+    if forwarded:
+        return forwarded.split(',')[0].strip() or None
+    if request.client and request.client.host:
+        return request.client.host
+    return None
 
 api_logger = get_logger("medical_records.api")
 
@@ -26,13 +46,26 @@ router = APIRouter(prefix="/api", tags=["auth"])
 @router.post("/auth/register")
 async def register_doctor(
     doctor_data: schemas.DoctorCreate,
+    request: Request,
     db: Session = Depends(get_db)
 ):
-    """Register new doctor with automatic login"""
+    """Register new doctor with automatic login.
+
+    Supports two modes:
+    - Full (default): requires office/schedule/personal+professional documents.
+    - Quick (`quick_registration=True`): requires only the NOM-004/024 minimum
+      (email, password, name, specialty, cédula profesional) plus an explicit
+      LFPDPPP privacy_consent. Office/schedule are deferred.
+    """
     try:
-        api_logger.info("Registration attempt", email=doctor_data.email)
+        quick_mode = bool(getattr(doctor_data, 'quick_registration', False))
+        api_logger.info(
+            "Registration attempt",
+            email=doctor_data.email,
+            quick_mode=quick_mode,
+        )
         db.begin()
-        
+
         # Check if email already exists
         existing_email = db.query(Person).filter(Person.email == doctor_data.email).first()
         api_logger.debug("Email existence check completed", email=doctor_data.email, exists=bool(existing_email))
@@ -43,46 +76,96 @@ async def register_doctor(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="El email ya está registrado en el sistema"
             )
-        
-        # Validate documents: require at least 1 personal and 1 professional document
-        if not hasattr(doctor_data, 'documents') or not doctor_data.documents:
+
+        # Quick mode requires explicit privacy consent and specialty (NOM-004).
+        if quick_mode:
+            if not doctor_data.privacy_consent or not doctor_data.privacy_consent.accepted:
                 db.rollback()
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Se requiere al menos un documento personal y un documento profesional"
+                    detail="Debes aceptar el aviso de privacidad (LFPDPPP)",
+                )
+            if not doctor_data.specialty_id:
+                db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="La especialidad es obligatoria (NOM-004-SSA3-2012)",
+                )
+
+        # Validate documents: full mode requires personal+professional; quick mode requires cédula only.
+        if not hasattr(doctor_data, 'documents') or not doctor_data.documents:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Se requiere la cédula profesional" if quick_mode
+                else "Se requiere al menos un documento personal y un documento profesional",
             )
-        
+
         # Get document types
         personal_type = db.query(DocumentType).filter(DocumentType.name == 'Personal').first()
         professional_type = db.query(DocumentType).filter(DocumentType.name == 'Profesional').first()
-        
+
         if not personal_type or not professional_type:
             db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Error en configuración de tipos de documento"
             )
-        
+
         # Check documents - get all documents of each type to verify
-        personal_doc_ids = [doc.id for doc in crud.get_documents_by_type(db, personal_type.id)]
-        professional_doc_ids = [doc.id for doc in crud.get_documents_by_type(db, professional_type.id)]
-        
+        personal_docs_catalog = crud.get_documents_by_type(db, personal_type.id)
+        professional_docs_catalog = crud.get_documents_by_type(db, professional_type.id)
+        personal_doc_ids = [doc.id for doc in personal_docs_catalog]
+        professional_doc_ids = [doc.id for doc in professional_docs_catalog]
+
         personal_docs = [d for d in doctor_data.documents if d.document_id in personal_doc_ids]
         professional_docs = [d for d in doctor_data.documents if d.document_id in professional_doc_ids]
-        
-        if not personal_docs:
+
+        if not quick_mode and not personal_docs:
             db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Se requiere al menos un documento personal"
             )
-        
+
         if not professional_docs:
             db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Se requiere al menos un documento profesional"
             )
+
+        # Format validation (NOM-024): cédula profesional 7-8 digits; CURP full structure.
+        catalog_by_id = {d.id: d for d in (personal_docs_catalog + professional_docs_catalog)}
+        for doc in doctor_data.documents:
+            catalog_doc = catalog_by_id.get(doc.document_id)
+            if not catalog_doc:
+                continue
+            name = (catalog_doc.name or '').strip()
+            if name == PROFESSIONAL_LICENSE_DOCUMENT_NAME:
+                ok, err = validate_professional_license_format(doc.document_value or '')
+                if not ok:
+                    db.rollback()
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=err)
+            elif name == CURP_DOCUMENT_NAME:
+                ok, err = validate_curp_format(doc.document_value or '')
+                if not ok:
+                    db.rollback()
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=err)
+
+        # Quick mode must include cédula profesional specifically.
+        if quick_mode:
+            has_cedula = any(
+                (catalog_by_id.get(d.document_id) and
+                 (catalog_by_id[d.document_id].name or '').strip() == PROFESSIONAL_LICENSE_DOCUMENT_NAME)
+                for d in doctor_data.documents
+            )
+            if not has_cedula:
+                db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="La cédula profesional es obligatoria (NOM-024-SSA3-2012)",
+                )
         
         # Check for duplicate document values (same document_id only, not across different document types)
         # Ejemplo: C.I="12345" y C.I.E="12345" pueden coexistir, pero no dos C.I="12345"
@@ -102,10 +185,53 @@ async def register_doctor(
         
         # Create doctor
         doctor = crud.create_doctor_safe(db, doctor_data)
-        
+
         # Commit doctor creation first
         db.commit()
         api_logger.info(f"Doctor {doctor.id} created successfully")
+
+        # Persist LFPDPPP privacy consent with server-captured IP (never trust client IP).
+        if doctor_data.privacy_consent and doctor_data.privacy_consent.accepted:
+            try:
+                notice = None
+                requested_version = (doctor_data.privacy_consent.notice_version or '').strip()
+                if requested_version:
+                    notice = db.query(PrivacyNotice).filter(
+                        PrivacyNotice.version == requested_version
+                    ).first()
+                if notice is None:
+                    notice = db.query(PrivacyNotice).filter(
+                        PrivacyNotice.is_active.is_(True)
+                    ).order_by(PrivacyNotice.effective_date.desc()).first()
+
+                consent_ip = _client_ip(request)
+                user_agent = doctor_data.privacy_consent.user_agent or (
+                    request.headers.get('user-agent') if request and request.headers else None
+                )
+                accepted_at = doctor_data.privacy_consent.accepted_at or __import__('datetime').datetime.utcnow()
+
+                consent = PrivacyConsent(
+                    patient_id=doctor.id,  # persons.id is unified across doctor/patient
+                    notice_id=notice.id if notice else None,
+                    consent_given=True,
+                    consent_date=accepted_at,
+                    ip_address=consent_ip,
+                    user_agent=user_agent,
+                )
+                db.add(consent)
+                db.commit()
+                api_logger.info(
+                    "Privacy consent recorded",
+                    doctor_id=doctor.id,
+                    notice_version=notice.version if notice else None,
+                )
+            except Exception as consent_error:
+                api_logger.error(
+                    "Failed to persist privacy consent (doctor registration continues)",
+                    doctor_id=doctor.id,
+                    error=str(consent_error),
+                )
+                db.rollback()
         
         # Create office FIRST if office data is provided (needed for schedule templates)
         office_data = {
@@ -317,71 +443,22 @@ async def login(
     db: Session = Depends(get_db)
 ):
     """Login user"""
-    # #region agent log
-    import json
-    import os
-    # Detect if running in Docker container or host
-    if os.path.exists('/app/.cursor'):
-        log_path = "/app/.cursor/debug.log"
-    else:
-        log_path = "/Users/rafaelgarcia/Documents/Software projects/medical-records-main/.cursor/debug.log"
-    try:
-        with open(log_path, "a") as f:
-            f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "routes/auth.py:313", "message": "Login endpoint called", "data": {"email": login_data.email}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "ALL"}) + "\n")
-    except: pass
-    # #endregion
     user = None
     try:
-        # #region agent log
-        try:
-            with open(log_path, "a") as f:
-                f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "routes/auth.py:323", "message": "Before calling auth.login_user", "data": {"email": login_data.email}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "ALL"}) + "\n")
-        except: pass
-        # #endregion
         # Intentar login
         result = auth.login_user(db, login_data.email, login_data.password)
-        # #region agent log
-        try:
-            with open(log_path, "a") as f:
-                f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "routes/auth.py:326", "message": "After auth.login_user success", "data": {"has_result": bool(result), "has_access_token": bool(result.get("access_token")) if result else False}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "ALL"}) + "\n")
-        except: pass
-        # #endregion
-        
+
         # Obtener usuario para auditoría
         user = db.query(Person).filter(Person.email == login_data.email).first()
-        # #region agent log
-        try:
-            with open(log_path, "a") as f:
-                f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "routes/auth.py:327", "message": "User queried for audit", "data": {"user_id": user.id if user else None, "person_type": user.person_type if user else None}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
-        except: pass
-        # #endregion
-        
+
         # Validar licencia para doctores
         if user and user.person_type == 'doctor':
-            # #region agent log
-            try:
-                with open(log_path, "a") as f:
-                    f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "routes/auth.py:329", "message": "Before license validation", "data": {"user_id": user.id, "person_type": user.person_type}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
-            except: pass
-            # #endregion
             from services.license_service import LicenseService
             try:
-                license_result = LicenseService.require_valid_license(db, user.id)
-                # #region agent log
-                try:
-                    with open(log_path, "a") as f:
-                        f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "routes/auth.py:333", "message": "After license validation", "data": {"license_result": "None" if license_result is None else "License found"}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
-                except: pass
-                # #endregion
+                LicenseService.require_valid_license(db, user.id)
                 # If license_result is None, it means the licenses table doesn't exist
                 # We skip validation and allow login in this case
             except HTTPException as license_error:
-                # #region agent log
-                try:
-                    with open(log_path, "a") as f:
-                        f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "routes/auth.py:336", "message": "License HTTPException caught", "data": {"status_code": license_error.status_code, "detail": str(license_error.detail)}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
-                except: pass
-                # #endregion
                 # Registrar intento de login bloqueado por licencia
                 # Use a fresh session for audit logging
                 audit_db = next(get_db())
@@ -396,13 +473,7 @@ async def login(
                 finally:
                     audit_db.close()
                 raise license_error
-            except Exception as license_exception:
-                # #region agent log
-                try:
-                    with open(log_path, "a") as f:
-                        f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "routes/auth.py:349", "message": "License non-HTTPException caught", "data": {"error_type": type(license_exception).__name__, "error_message": str(license_exception)}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + "\n")
-                except: pass
-                # #endregion
+            except Exception:
                 raise
         
         # 🆕 Registrar login exitoso en auditoría
@@ -435,12 +506,6 @@ async def login(
             audit_db.close()
         raise e
     except Exception as e:
-        # #region agent log
-        try:
-            with open(log_path, "a") as f:
-                f.write(json.dumps({"timestamp": __import__("time").time() * 1000, "location": "routes/auth.py:380", "message": "General exception caught in login", "data": {"error_type": type(e).__name__, "error_message": str(e), "traceback": traceback.format_exc()}, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "ALL"}) + "\n")
-        except: pass
-        # #endregion
         # 🆕 Registrar error de sistema
         # CRITICAL FIX: Use a fresh database session for audit logging
         error_traceback = traceback.format_exc()

@@ -5,7 +5,11 @@ import { logger } from '../utils/logger';
 export interface Country {
   id: number;
   name: string;
-  code: string;
+  // `code` (ISO 3166) is not emitted by all of our catalog endpoints;
+  // `is_active` is emitted by the admin-managed table. Keep both
+  // optional so the hook accepts either payload shape.
+  code?: string;
+  is_active?: boolean;
 }
 
 export interface State {

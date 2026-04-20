@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -30,6 +30,8 @@ import { ConsultationDateSection } from './ConsultationDialog/ConsultationDateSe
 import { ConsultationDiagnosisSection } from './ConsultationDialog/DiagnosisSection';
 import { PrintButtonsSection } from './ConsultationDialog/PrintButtonsSection';
 import { VitalSignsDialogs } from './ConsultationDialog/VitalSignsDialogs';
+import { IncompletePatientGuardDialog } from '../patient/IncompletePatientGuardDialog';
+import { isPatientProfileComplete } from '../../utils/patientProfileCompleteness';
 import { ConsultationSections } from './ConsultationDialog/ConsultationSections';
 import { PrivacyConsentStatusSection } from './ConsultationDialog/PrivacyConsentStatusSection';
 import { ConsultationFormData } from '../../types';
@@ -49,6 +51,12 @@ export interface ConsultationDialogProps {
   doctorProfile?: any;
   onNewPatient?: () => void;
   onNewAppointment?: () => void;
+  /**
+   * Open the PatientDialog in edit mode. Called by the NOM-004 guard
+   * when the selected patient is missing mandatory fields (CURP,
+   * birth_date, gender).
+   */
+  onEditPatient?: (patient: Patient) => void;
   appointments?: any[];
 }
 
@@ -61,6 +69,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   doctorProfile,
   onNewPatient,
   onNewAppointment,
+  onEditPatient,
   appointments = []
 }: ConsultationDialogProps) => {
   // Follow-up appointments management
@@ -127,8 +136,36 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   // Auto-scroll to error when it appears
   const { errorRef } = useScrollToErrorInDialog(formHook.error);
 
+  // NOM-004 safety net: if the doctor selects a patient that was created
+  // in "quick" mode (missing CURP, birth_date or gender), stop them before
+  // they fill the whole form. Only fires for NEW consultations — editing
+  // an existing signed expediente keeps whatever was captured at the time.
+  const [showIncompleteGuard, setShowIncompleteGuard] = useState(false);
+  useEffect(() => {
+    if (!open) {
+      setShowIncompleteGuard(false);
+      return;
+    }
+    if (consultation) return; // editing — don't gate
+    const pt = formHook.selectedPatient;
+    if (pt && !isPatientProfileComplete(pt as any)) {
+      setShowIncompleteGuard(true);
+    } else {
+      setShowIncompleteGuard(false);
+    }
+  }, [open, consultation, formHook.selectedPatient]);
+
   const handleClose = () => {
     onClose();
+  };
+
+  const handleGuardCompleteNow = () => {
+    const pt = formHook.selectedPatient as Patient | null;
+    setShowIncompleteGuard(false);
+    onClose();
+    if (pt && onEditPatient) {
+      onEditPatient(pt);
+    }
   };
 
   return (
@@ -446,6 +483,17 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         vitalSignsHook={vitalSignsHook}
         isEditing={formHook.isEditing}
         consultationId={consultation?.id ? String(consultation.id) : null}
+      />
+
+      {/* NOM-004 safety net for quick-registered patients */}
+      <IncompletePatientGuardDialog
+        open={showIncompleteGuard}
+        patient={formHook.selectedPatient as Patient | null}
+        onClose={() => {
+          setShowIncompleteGuard(false);
+          onClose();
+        }}
+        onCompleteNow={handleGuardCompleteNow}
       />
     </Dialog>
   );

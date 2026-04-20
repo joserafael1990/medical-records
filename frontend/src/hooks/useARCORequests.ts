@@ -14,8 +14,8 @@ interface UseARCORequestsReturn {
   
   // Actions
   fetchARCORequests: (patientId: number) => Promise<void>;
-  createARCORequest: (data: CreateARCORequestData) => Promise<void>;
-  updateARCORequest: (requestId: number, data: UpdateARCORequestData) => Promise<void>;
+  createARCORequest: (data: CreateARCORequestData) => Promise<any>;
+  updateARCORequest: (requestId: number, data: UpdateARCORequestData) => Promise<any>;
   clearError: () => void;
   
   // Dialog state
@@ -41,8 +41,8 @@ export const useARCORequests = (): UseARCORequestsReturn => {
     try {
       const response = await apiService.patients.api.get(`/api/privacy/arco-requests/${patientId}`);
       console.log('✅ ARCO requests:', response);
-      
-      setARCORequests(response.arco_requests || []);
+
+      setARCORequests(response.data?.arco_requests || []);
     } catch (err: any) {
       const errorMsg = err?.detail || err?.message || 'Error al obtener las solicitudes ARCO';
       console.error('❌ Error fetching ARCO requests:', errorMsg);
@@ -64,12 +64,13 @@ export const useARCORequests = (): UseARCORequestsReturn => {
     try {
       const response = await apiService.patients.api.post('/api/privacy/arco-request', data);
       console.log('✅ ARCO request created:', response);
-      
+
       // Add to local state
-      if (response.arco_request) {
-        setARCORequests(prev => [response.arco_request, ...prev]);
+      const created = response.data?.arco_request;
+      if (created) {
+        setARCORequests(prev => [created, ...prev]);
       }
-      
+
       return response;
     } catch (err: any) {
       const errorMsg = err?.detail || err?.message || 'Error al crear la solicitud ARCO';
@@ -92,16 +93,17 @@ export const useARCORequests = (): UseARCORequestsReturn => {
     try {
       const response = await apiService.patients.api.put(`/api/privacy/arco-request/${requestId}`, data);
       console.log('✅ ARCO request updated:', response);
-      
+
       // Update in local state
-      setARCORequests(prev => 
-        prev.map(req => 
-          req.id === requestId 
-            ? { ...req, ...response.arco_request, updated_at: new Date().toISOString() }
+      const updated = response.data?.arco_request;
+      setARCORequests(prev =>
+        prev.map(req =>
+          req.id === requestId
+            ? { ...req, ...(updated || {}), updated_at: new Date().toISOString() }
             : req
         )
       );
-      
+
       return response;
     } catch (err: any) {
       const errorMsg = err?.detail || err?.message || 'Error al actualizar la solicitud ARCO';

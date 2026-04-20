@@ -18,6 +18,7 @@ import { twitterTheme } from './themes/twitterTheme';
 import { PublicPrivacyNotice } from './components/public/PublicPrivacyNotice';
 import { PublicTermsOfService } from './components/public/PublicTermsOfService';
 import { LandingPage } from './components/public/LandingPage';
+import { PublicIntakeForm } from './components/public/PublicIntakeForm';
 
 // Use Twitter-inspired theme consistently
 const theme = twitterTheme;
@@ -40,6 +41,11 @@ const AppWithAuth: React.FC = () => {
   const isTermsPage = currentPath === '/terms' || currentPath === '/terminos';
   if (isTermsPage) {
     return <PublicTermsOfService />;
+  }
+
+  // Pre-consultation intake form — public, token in the URL, no auth.
+  if (currentPath.startsWith('/public/intake/')) {
+    return <PublicIntakeForm />;
   }
   
   // If not authenticated, show auth container (login, register, forgot password, reset password)

@@ -18,7 +18,9 @@ from models import (
     AppointmentType, Appointment, AppointmentReminder, 
     GoogleCalendarEventMapping,
     ClinicalStudy, StudyCategory, StudyCatalog,
-    WhatsAppSession
+    WhatsAppSession,
+    IntakeQuestionnaireResponse,
+    AssistantConversation, AssistantMessage,
 )
 
 # Re-export logger for compatibility if it was used

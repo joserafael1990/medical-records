@@ -41,8 +41,9 @@ import CortexLogo from '../common/CortexLogo';
 import { API_CONFIG } from '../../constants';
 // Dialog imports
 import PatientDialog from '../dialogs/PatientDialog'; // ✅ Now implemented!
-import ConsultationDialog from '../dialogs/ConsultationDialog'; // ✅ Now implemented!  
+import ConsultationDialog from '../dialogs/ConsultationDialog'; // ✅ Now implemented!
 import AppointmentDialogMultiOffice from '../dialogs/AppointmentDialogMultiOffice'; // ✅ Multi-office support!
+import { AssistantPanel } from '../assistant/AssistantPanel';
 
 interface AppLayoutProps {
   // Opcional: se puede pasar onLogout desde AuthContext
@@ -104,7 +105,9 @@ const AppLayoutInner: React.FC<AppLayoutProps> = ({
     const cacheKey = doctorProfile?.avatar_file_path || doctorProfile?.avatar_template_key || doctorProfile?.updated_at;
     if (cacheKey) {
       const separator = url.includes('?') ? '&' : '?';
-      url = `${url}${separator}_t=${typeof cacheKey === 'string' ? cacheKey : cacheKey?.toString() || Date.now()}`;
+      // TS narrows cacheKey to `never` after the string branch because
+      // the type union gets exhausted; `String()` sidesteps the narrow.
+      url = `${url}${separator}_t=${typeof cacheKey === 'string' ? cacheKey : (cacheKey ? String(cacheKey) : Date.now())}`;
     }
     return url;
   }, [rawHeaderAvatarUrl, doctorProfile?.avatar_file_path, doctorProfile?.avatar_template_key, doctorProfile?.updated_at]);
@@ -284,10 +287,12 @@ const AppLayoutInner: React.FC<AppLayoutProps> = ({
         doctorProfile={doctorProfile}
         user={user}
         onAvatarUpdated={async () => {
-          // Small delay to ensure backend has processed the avatar update
+          // Small delay to ensure backend has processed the avatar update.
           await new Promise(resolve => setTimeout(resolve, 300));
-          // Force refresh profile to get updated avatar (bypass cache)
-          await doctorProfileHook.fetchProfile(true);
+          // Force refresh profile to get updated avatar. `fetchProfile`
+          // takes no args per its interface; the previous `true` flag
+          // was a no-op.
+          await doctorProfileHook.fetchProfile();
         }}
       />
 
@@ -335,6 +340,7 @@ const AppLayoutInner: React.FC<AppLayoutProps> = ({
             doctorProfileHook={doctorProfileHook}
             personType={user?.doctor?.person_type}
             onNavigateToProfile={(anchor) => navigateToView('profile', anchor)}
+            navigateToView={navigateToView}
           />
         </Box>
       </Container>
@@ -370,9 +376,10 @@ const AppLayoutInner: React.FC<AppLayoutProps> = ({
             consultationManagement.closeConsultationDialog();
             appointmentManager.handleNewAppointment();
           }}
+          onEditPatient={(patient) => patientManagement.openPatientDialog(patient)}
           onSubmit={async (data) => {
             if (consultationManagement.selectedConsultation) {
-              const updatedConsultation = await consultationManagement.updateConsultation(consultationManagement.selectedConsultation.id, data);
+              const updatedConsultation = await consultationManagement.updateConsultation(String(consultationManagement.selectedConsultation.id), data);
               consultationManagement.closeConsultationDialog();
               consultationManagement.fetchConsultations();
               // Also refresh patients list in case a new patient was created
@@ -390,6 +397,13 @@ const AppLayoutInner: React.FC<AppLayoutProps> = ({
         />
       )}
 
+      {/* Doctor Assistant — read-only copilot, available globally for doctors/admins */}
+      {(user?.doctor?.person_type === 'doctor' || user?.doctor?.person_type === 'admin') && (
+        <AssistantPanel
+          currentPatientId={patientManagement.selectedPatient?.id ?? null}
+        />
+      )}
+
       {appointmentManager.appointmentDialogOpen && (
         <AppointmentDialogMultiOffice
           open={appointmentManager.appointmentDialogOpen}
@@ -400,6 +414,7 @@ const AppLayoutInner: React.FC<AppLayoutProps> = ({
           formData={appointmentManager.appointmentFormData}
           patients={patientManagement.patients}
           isEditing={appointmentManager.isEditingAppointment}
+          appointmentId={appointmentManager.selectedAppointment?.id ?? null}
           loading={appointmentManager.isSubmitting}
           formErrorMessage={appointmentManager.formErrorMessage || undefined}
           fieldErrors={appointmentManager.fieldErrors}

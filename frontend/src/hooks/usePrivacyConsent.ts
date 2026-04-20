@@ -16,8 +16,8 @@ interface UsePrivacyConsentReturn {
   
   // Actions
   fetchConsentStatus: (patientId: number) => Promise<void>;
-  sendWhatsAppNotice: (patientId: number, patientPhone: string) => Promise<void>;
-  revokeConsent: (patientId: number, reason: string) => Promise<void>;
+  sendWhatsAppNotice: (patientId: number, patientPhone: string) => Promise<any>;
+  revokeConsent: (patientId: number, reason: string) => Promise<any>;
   clearError: () => void;
   
   // Polling
@@ -97,8 +97,8 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
       const response = await apiService.patients.api.post('/api/privacy/send-whatsapp-notice', payload);
 
       // Update consent state with the newly created consent
-      if (response.consent) {
-        setConsent(response.consent);
+      if (response.data?.consent) {
+        setConsent(response.data.consent);
       }
 
       return response;
@@ -173,16 +173,15 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
 
   /**
    * Check if patient has accepted consent
-   * Support both new format (consent_given) and legacy format (consent_status)
+   * Based on the canonical `consent_status` field — `consent_given` was
+   * removed from the type in types/index.ts.
    */
-  const hasAcceptedConsent = consent?.consent_given === true || 
-                             (consent?.consent_status === 'accepted' && !consent?.is_revoked);
-  
+  const hasAcceptedConsent = consent?.consent_status === 'accepted' && !consent?.is_revoked;
+
   /**
-   * Check if consent is pending (sent but not accepted)
+   * Check if consent is pending (sent but not accepted).
    */
-  const isPendingConsent = consent?.consent_given === false || 
-                           consent?.consent_status === 'pending';
+  const isPendingConsent = consent?.consent_status === 'pending';
 
   /**
    * Get human-readable consent status

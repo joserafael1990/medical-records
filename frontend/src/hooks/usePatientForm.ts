@@ -165,15 +165,20 @@ export const usePatientForm = (props: UsePatientFormProps): UsePatientFormReturn
   useEffect(() => {
     const loadStatesForCountries = async () => {
       try {
-        // Load states for address country
+        // Load states for address country. Field can be string or number
+        // depending on the form path that set it; coerce before the API call.
         if (formData.address_country_id) {
-          const addressStatesData = await apiService.catalogs.getStates(parseInt(formData.address_country_id));
+          const addressStatesData = await apiService.catalogs.getStates(
+            Number(formData.address_country_id)
+          );
           setStates(addressStatesData);
         }
-        
-        // Load states for birth country
+
+        // Load states for birth country.
         if (formData.birth_country_id) {
-          const birthStatesData = await apiService.catalogs.getStates(parseInt(formData.birth_country_id));
+          const birthStatesData = await apiService.catalogs.getStates(
+            Number(formData.birth_country_id)
+          );
           setBirthStates(birthStatesData);
         }
       } catch (error) {
@@ -343,9 +348,12 @@ export const usePatientForm = (props: UsePatientFormProps): UsePatientFormReturn
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
     
-    // Real-time validation for gender
+    // Real-time validation for gender. `value` is typed as `unknown` to
+    // accept the wider MUI Select event shape; coerce to string before
+    // calling `.trim()`.
     if (field === 'gender') {
-      if (!value || value.trim() === '') {
+      const genderStr = typeof value === 'string' ? value : String(value ?? '');
+      if (!genderStr.trim()) {
         setErrors(prev => ({ ...prev, gender: 'El género es obligatorio' }));
       } else {
         setErrors(prev => ({ ...prev, gender: '' }));
@@ -445,7 +453,11 @@ export const usePatientForm = (props: UsePatientFormProps): UsePatientFormReturn
         delete formDataToSubmit.birth_date;
       }
       
-      await onSubmit(formDataToSubmit);
+      // `formDataToSubmit` is built as a loose Record because we mutate
+      // it (numeric coercion, phone concat, delete of empty fields).
+      // Cast back to PatientFormData for the caller — all the required
+      // `name` field is already in place from the spread above.
+      await onSubmit(formDataToSubmit as PatientFormData);
       
       // Save/update documents after patient is created/updated
       const finalPatientId = patient?.id || (await apiService.patients.getPatients()).find(p => 

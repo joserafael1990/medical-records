@@ -12,7 +12,7 @@ import PatientsView from '../views/PatientsView';
 import { ConsultationDetailView } from '../';
 import { LoadingFallback } from '../';
 import { LazyWrapper } from '../common/LazyWrapper';
-import { AnalyticsView } from '../views/AnalyticsView';
+import { PracticeDashboard } from '../views/PracticeDashboard';
 import { LicenseManagement } from '../admin/LicenseManagement';
 
 interface ViewRendererProps {
@@ -27,6 +27,9 @@ interface ViewRendererProps {
   doctorProfileHook: any;
   personType?: string; // 'doctor', 'patient', 'admin'
   onNavigateToProfile?: (anchor?: string) => void;
+  /** Navigate to another top-level view by id (e.g. 'agenda'). Used by
+   *  cards inside DashboardView that link to a full view. */
+  navigateToView?: (view: string) => void;
 }
 
 export const ViewRenderer: React.FC<ViewRendererProps> = ({
@@ -40,7 +43,8 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
   onSaveProfile,
   doctorProfileHook,
   personType,
-  onNavigateToProfile
+  onNavigateToProfile,
+  navigateToView,
 }) => {
   // Track view navigation
   useEffect(() => {
@@ -61,6 +65,7 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
             onNewAppointment={appointmentManager.handleNewAppointment}
             onNewConsultation={consultationManagement.handleNewConsultation}
             onNewPatient={patientManagement.openPatientDialog}
+            onNavigateToAgenda={navigateToView ? () => navigateToView('agenda') : undefined}
             doctorProfile={doctorProfile}
             onNavigateToProfile={onNavigateToProfile}
           />
@@ -146,10 +151,11 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
         </Suspense>
       )}
 
-      {activeView === 'analytics' && (
-        <Suspense fallback={<LoadingFallback message="Cargando analíticas..." />}>
-          <AnalyticsView />
-        </Suspense>
+      {/* The old "analytics" view was folded into "Mi consultorio" so we
+          redirect any stale `activeView === 'analytics'` (from bookmarks
+          or in-progress nav state) to the consolidated dashboard. */}
+      {(activeView === 'practice' || activeView === 'analytics') && (
+        <PracticeDashboard />
       )}
 
       {activeView === 'licenses' && personType === 'admin' && (
