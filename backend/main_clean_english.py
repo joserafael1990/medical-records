@@ -170,7 +170,8 @@ async def lifespan(app: FastAPI):
     # Startup
     # Start the background scheduler task
     from services.scheduler import check_and_send_reminders
-    
+    from services.llm_tracing import purge_old_traces
+
     async def run_scheduler_loop():
         """Background task to run reminder checks every 5 minutes"""
         while True:
@@ -179,22 +180,39 @@ async def lifespan(app: FastAPI):
                 await asyncio.to_thread(check_and_send_reminders)
             except Exception as e:
                 logger.error(f"❌ Error in reminder scheduler loop: {e}", exc_info=True)
-            
+
             # Wait 5 minutes before next check
             await asyncio.sleep(300)
 
-    # Create the background task
+    async def run_llm_traces_retention_loop():
+        """Daily purge of llm_traces older than 90 days (LFPDPPP minimization)."""
+        while True:
+            try:
+                deleted = await asyncio.to_thread(purge_old_traces, None, 90)
+                if deleted:
+                    logger.info(f"🧹 Purged {deleted} llm_traces (>90d)")
+            except Exception as e:
+                logger.error(f"❌ Error in llm_traces retention loop: {e}", exc_info=True)
+            # Run once per day (24h)
+            await asyncio.sleep(86400)
+
+    # Create the background tasks
     scheduler_task = asyncio.create_task(run_scheduler_loop())
+    llm_retention_task = asyncio.create_task(run_llm_traces_retention_loop())
     
     yield
     
     # Shutdown
-    # Cancel the scheduler task
-    scheduler_task.cancel()
-    try:
-        await scheduler_task
-    except asyncio.CancelledError:
-        logger.info("🛑 Scheduler task cancelled")
+    # Cancel the background tasks
+    for bg_task, label in (
+        (scheduler_task, "Scheduler"),
+        (llm_retention_task, "LLM retention"),
+    ):
+        bg_task.cancel()
+        try:
+            await bg_task
+        except asyncio.CancelledError:
+            logger.info(f"🛑 {label} task cancelled")
 
 app = FastAPI(
     title="Medical Records API",
@@ -488,6 +506,10 @@ app.include_router(assistant_router)
 # Include FHIR R4 interoperability routes (NOM-024-SSA3-2012)
 from routes.fhir import router as fhir_router
 app.include_router(fhir_router)
+
+# Admin-only LLM observability (traces for Gemini calls; 90-day retention)
+from routes.admin_llm_traces import router as admin_llm_traces_router
+app.include_router(admin_llm_traces_router)
 
 # ============================================================================
 # TEMPORARY DEBUG ENDPOINT

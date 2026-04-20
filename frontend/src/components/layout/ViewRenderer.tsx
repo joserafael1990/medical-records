@@ -14,6 +14,7 @@ import { LoadingFallback } from '../';
 import { LazyWrapper } from '../common/LazyWrapper';
 import { PracticeDashboard } from '../views/PracticeDashboard';
 import { LicenseManagement } from '../admin/LicenseManagement';
+import { LLMTracesView } from '../views/admin/LLMTracesView';
 
 interface ViewRendererProps {
   activeView: string;
@@ -171,6 +172,19 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
           </Typography>
           <Typography variant="body1" color="text.secondary">
             No tienes permisos para acceder a esta sección.
+          </Typography>
+        </Box>
+      )}
+
+      {activeView === 'admin-llm-traces' && personType === 'admin' && <LLMTracesView />}
+
+      {activeView === 'admin-llm-traces' && personType !== 'admin' && (
+        <Box sx={{ p: 3, textAlign: 'center' }}>
+          <Typography variant="h5" color="error" gutterBottom>
+            Acceso Denegado
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Solo administradores pueden ver el monitoreo de LLM.
           </Typography>
         </Box>
       )}
