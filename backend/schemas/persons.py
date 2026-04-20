@@ -32,12 +32,17 @@ class PersonBase(BaseSchema):
     @field_validator('name')
     @classmethod
     def validate_name(cls, v):
+        # Relaxed: accepts single-word names so a doctor can book an appointment
+        # with minimal patient data (e.g., only first name is known when the
+        # patient calls). NOM-004 completeness (full name + apellidos paterno
+        # y materno) is enforced downstream by the compliance guard before a
+        # consultation can be signed, not here.
         if not v or not v.strip():
-            raise ValueError('El nombre completo es requerido')
-        words = v.strip().split()
-        if len(words) < 2:
-            raise ValueError('Ingresa al menos nombre y apellido')
-        return v.strip()
+            raise ValueError('El nombre es requerido')
+        trimmed = v.strip()
+        if len(trimmed) < 2:
+            raise ValueError('El nombre debe tener al menos 2 caracteres')
+        return trimmed
 
     # Birth location
     birth_state_id: Optional[int] = None
