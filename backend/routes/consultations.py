@@ -16,8 +16,9 @@ from services.consultation_service import (
     cdmx_datetime,
     encrypt_sensitive_data,
     decrypt_sensitive_data,
-    sign_medical_document
+    sign_medical_document,
 )
+from services.consultations.security import verify_medical_document_signature
 from audit_service import audit_service
 
 api_logger = get_logger("medical_records.api")
@@ -197,3 +198,40 @@ async def get_document_folio(
             exc_info=True
         )
         raise HTTPException(status_code=500, detail=f"Error generating folio: {str(e)}")
+
+
+@router.get("/consultations/{consultation_id}/integrity")
+async def verify_consultation_integrity(
+    consultation_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user),
+):
+    """Re-hash a consultation and verify it matches the stored integrity stamp.
+
+    Intended for compliance reports and admin audits. Returns
+    `{valid, reason, ...}`; never 500s on a mismatch — the intent is to surface
+    tampering, not hide it.
+
+    Note: this validates the integrity stamp produced by
+    `sign_medical_document`. It is NOT a validation of a SAT e.firma.
+    """
+    consultation = ConsultationService.get_consultation_by_id(
+        db=db,
+        consultation_id=consultation_id,
+        doctor_id=current_user.id,
+        decrypt_sensitive_data_fn=decrypt_sensitive_data,
+    )
+    if not consultation:
+        raise HTTPException(status_code=404, detail="Consultation not found")
+
+    signature = consultation.get("digital_signature") if isinstance(consultation, dict) else None
+    if not signature:
+        return {"valid": False, "reason": "no_stamp_stored", "consultation_id": consultation_id}
+
+    # The service response already decrypted PHI, matching what was stamped at
+    # close-time. Strip the stamp itself from the payload before rehashing so
+    # the canonical form is reproducible.
+    payload = {k: v for k, v in consultation.items() if k not in ("digital_signature", "signature")}
+    result = verify_medical_document_signature(payload, signature)
+    result["consultation_id"] = consultation_id
+    return result
