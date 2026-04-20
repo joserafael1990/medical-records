@@ -15,19 +15,6 @@ except ImportError:
 # Configurar logging
 logger = logging.getLogger(__name__)
 
-def _debug_log(location: str, message: str, data: dict, hypothesis_id: str = "A"):
-    """Write debug log entry to stdout (captured by Cloud Logging)"""
-    try:
-        log_entry = {
-            "location": location,
-            "message": message,
-            "data": data,
-            "hypothesisId": hypothesis_id
-        }
-        # Log to stdout so it appears in Cloud Logging
-        logger.info(f"🔍 DEBUG [{hypothesis_id}] {location}: {message} | Data: {json.dumps(data)}")
-    except Exception:
-        pass  # Fail silently to not break production
 
 class WhatsAppService:
     """Servicio para interactuar con WhatsApp Business API de Meta"""
@@ -173,6 +160,7 @@ class WhatsAppService:
                 logger.error(f"🚨 Error message: {error_message}")
                 logger.error(f"🚨 Full error: {error_data}")
 
+
             message_id = result.get('messages', [{}])[0].get('id') if result.get('messages') else None
             message_status = result.get('messages', [{}])[0].get('message_status') if result.get('messages') else None
             
@@ -183,7 +171,9 @@ class WhatsAppService:
             if contacts:
                 wa_id = contacts[0].get('wa_id')
                 input_phone = contacts[0].get('input', formatted_phone)
-                
+                contact_status = contacts[0].get('status', 'unknown')
+                contact_has_status = 'status' in contacts[0]
+
                 
                 # Check if contact status indicates registration issue
                 if contact_has_status:
@@ -217,14 +207,7 @@ class WhatsAppService:
                 logger.warning(f"   3. Message blocked by Meta spam filters")
                 logger.warning(f"   4. Template not approved or recipient not opted in")
                 logger.warning(f"   5. Webhook not configured correctly (no status updates received)")
-                _debug_log("meta.py:130", "Message status is 'accepted' not 'delivered'", {
-                    "message_id": message_id,
-                    "message_status": message_status,
-                    "input_phone": input_phone,
-                    "wa_id": wa_id,
-                    "note": "Meta accepted the message but delivery status is unknown. Check webhook for delivery confirmation."
-                }, "D")
-            
+
             # Check for real phone mismatch (excluding the '+' prefix)
             input_phone_clean = input_phone.replace('+', '')
             if input_phone_clean != wa_id and wa_id:
@@ -234,16 +217,7 @@ class WhatsAppService:
                 logger.error(f"❌ This mismatch may cause delivery failures. Verify the original phone number format.")
                 logger.error(f"💡 HYPOTHESIS: Meta expects format {wa_id} but we sent {input_phone_clean}")
                 logger.error(f"💡 NEXT STEP: Try sending with format +{wa_id} instead of {input_phone}")
-                _debug_log("meta.py:135", "Phone number formatting mismatch", {
-                    "input_phone": input_phone,
-                    "wa_id": wa_id,
-                    "area_code_input": input_phone[:4],
-                    "area_code_wa_id": wa_id[:4],
-                    "normalized_format": f"+{wa_id}",
-                    "original_format": input_phone,
-                    "note": "Meta normalized the phone number. This mismatch may cause delivery issues. Should try sending with normalized format next time."
-                }, "B")
-            
+
             logger.info(f"✅ WhatsApp sent successfully. Message ID: {message_id}, Status: {message_status}")
             
             # If message_status is only 'accepted', try to check actual delivery status after a short delay
