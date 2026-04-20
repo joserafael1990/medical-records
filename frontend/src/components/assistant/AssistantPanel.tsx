@@ -1,13 +1,18 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
   CircularProgress,
+  Divider,
   Drawer,
   Fab,
   IconButton,
   InputAdornment,
+  List,
+  ListItemButton,
+  ListItemText,
   Paper,
+  Stack,
   TextField,
   Tooltip,
   Typography,
@@ -17,9 +22,16 @@ import {
   Send as SendIcon,
   SmartToy as BotIcon,
   Refresh as RefreshIcon,
+  History as HistoryIcon,
+  AddCircleOutline as NewChatIcon,
+  DeleteOutline as DeleteIcon,
 } from '@mui/icons-material';
 import { apiService } from '../../services/ApiService';
-import type { AssistantChatResponse, AssistantToolCall } from '../../services/ApiService';
+import type {
+  AssistantChatResponse,
+  AssistantToolCall,
+  AssistantConversationSummary,
+} from '../../services/ApiService';
 import { logger } from '../../utils/logger';
 
 interface AssistantPanelProps {
@@ -40,11 +52,14 @@ const DISCLAIMER =
 
 export const AssistantPanel: React.FC<AssistantPanelProps> = ({ currentPatientId = null }) => {
   const [open, setOpen] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<AssistantConversationSummary[]>([]);
+  const [loadingConversations, setLoadingConversations] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const scrollToBottom = useCallback(() => {
@@ -54,6 +69,50 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ currentPatientId
   useEffect(() => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
+
+  // Context greeting: when the panel is opened on an empty conversation
+  // with a patient in scope, show a welcome line so the doctor knows the
+  // bot already has context.
+  const contextGreetingShown = useRef(false);
+  useEffect(() => {
+    if (!open) {
+      contextGreetingShown.current = false;
+      return;
+    }
+    if (
+      currentPatientId != null &&
+      messages.length === 0 &&
+      !contextGreetingShown.current
+    ) {
+      contextGreetingShown.current = true;
+      setMessages([
+        {
+          role: 'system',
+          text:
+            'Ya tengo abierto al paciente que estás viendo. Puedes preguntar por ' +
+            'su historia, medicamentos o últimas consultas sin repetir el nombre.',
+        },
+      ]);
+    }
+  }, [open, currentPatientId, messages.length]);
+
+  const refreshConversations = useCallback(async () => {
+    setLoadingConversations(true);
+    try {
+      const rows = await apiService.assistant.listConversations(20);
+      setConversations(rows);
+    } catch (err) {
+      logger.error('Failed to load assistant conversations', err, 'ui');
+    } finally {
+      setLoadingConversations(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open && showHistory) {
+      refreshConversations();
+    }
+  }, [open, showHistory, refreshConversations]);
 
   const handleSend = useCallback(async () => {
     const trimmed = draft.trim();
@@ -74,15 +133,13 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ currentPatientId
         { role: 'assistant', text: res.reply, toolCalls: res.tool_calls },
       ]);
       if (res.sandbox) {
-        // Surface sandbox mode once, the first time.
         setMessages((prev) =>
-          prev.some((m) => m.role === 'system')
+          prev.some((m) => m.role === 'system' && m.text.includes('sandbox'))
             ? prev
             : [
                 {
                   role: 'system',
-                  text:
-                    'Modo sandbox activo — respuestas simuladas, sin llamadas a Gemini.',
+                  text: 'Modo sandbox activo — respuestas simuladas, sin llamadas a Gemini.',
                 },
                 ...prev,
               ]
@@ -98,11 +155,50 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ currentPatientId
     }
   }, [draft, loading, conversationId, currentPatientId]);
 
-  const handleReset = useCallback(() => {
+  const handleNewConversation = useCallback(() => {
     setConversationId(null);
     setMessages([]);
     setError(null);
+    contextGreetingShown.current = false;
   }, []);
+
+  const handleLoadConversation = useCallback(async (id: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const detail = await apiService.assistant.getConversation(id);
+      const loaded: Message[] = detail.messages.map((m) => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        text: m.content,
+        toolCalls: m.tool_calls ?? undefined,
+      }));
+      setConversationId(detail.conversation_id);
+      setMessages(loaded);
+      setShowHistory(false);
+      contextGreetingShown.current = true; // Don't prepend greeting to loaded chat.
+    } catch (err) {
+      logger.error('Failed to load conversation', err, 'ui');
+      setError('No pude cargar esa conversación.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleDeleteConversation = useCallback(
+    async (id: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      try {
+        await apiService.assistant.deleteConversation(id);
+        setConversations((prev) => prev.filter((c) => c.conversation_id !== id));
+        if (conversationId === id) {
+          handleNewConversation();
+        }
+      } catch (err) {
+        logger.error('Failed to delete conversation', err, 'ui');
+      }
+    },
+    [conversationId, handleNewConversation]
+  );
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -110,6 +206,11 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ currentPatientId
       handleSend();
     }
   };
+
+  const headerTitle = useMemo(() => {
+    if (showHistory) return 'Historial';
+    return 'Asistente CORTEX';
+  }, [showHistory]);
 
   return (
     <>
@@ -120,8 +221,7 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ currentPatientId
           onClick={() => setOpen(true)}
           sx={{
             position: 'fixed',
-            // Offset above Sentry's "Reportar un problema" feedback widget
-            // (which also pins itself to bottom-right and was overlapping this FAB).
+            // Offset above Sentry's "Reportar un problema" feedback widget.
             bottom: 88,
             right: 24,
             zIndex: (t) => t.zIndex.drawer - 1,
@@ -137,7 +237,7 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ currentPatientId
         onClose={() => setOpen(false)}
         ModalProps={{ keepMounted: true }}
         PaperProps={{
-          sx: { width: { xs: '100%', sm: 420 } },
+          sx: { width: { xs: '100%', sm: 460 } },
         }}
       >
         <Box
@@ -160,102 +260,148 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ currentPatientId
           >
             <BotIcon color="primary" />
             <Typography variant="subtitle1" sx={{ flexGrow: 1, fontWeight: 600 }}>
-              Asistente CORTEX
+              {headerTitle}
             </Typography>
-            <Tooltip title="Nueva conversación">
-              <span>
+            {!showHistory && (
+              <>
+                <Tooltip title="Nueva conversación">
+                  <IconButton
+                    size="small"
+                    onClick={handleNewConversation}
+                    disabled={messages.length === 0}
+                    aria-label="Nueva conversación"
+                  >
+                    <NewChatIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Ver historial de conversaciones">
+                  <IconButton
+                    size="small"
+                    onClick={() => setShowHistory(true)}
+                    aria-label="Ver historial"
+                  >
+                    <HistoryIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </>
+            )}
+            {showHistory && (
+              <Tooltip title="Actualizar lista">
                 <IconButton
                   size="small"
-                  onClick={handleReset}
-                  disabled={messages.length === 0}
-                  aria-label="Reiniciar conversación"
+                  onClick={refreshConversations}
+                  disabled={loadingConversations}
+                  aria-label="Actualizar historial"
                 >
                   <RefreshIcon fontSize="small" />
                 </IconButton>
-              </span>
-            </Tooltip>
+              </Tooltip>
+            )}
             <IconButton
               size="small"
-              onClick={() => setOpen(false)}
-              aria-label="Cerrar asistente"
+              onClick={() => (showHistory ? setShowHistory(false) : setOpen(false))}
+              aria-label={showHistory ? 'Cerrar historial' : 'Cerrar asistente'}
             >
               <CloseIcon fontSize="small" />
             </IconButton>
           </Box>
 
-          <Alert severity="info" sx={{ m: 2, mb: 0 }}>
-            {DISCLAIMER}
-          </Alert>
-
-          <Box
-            ref={scrollRef}
-            sx={{
-              flexGrow: 1,
-              overflowY: 'auto',
-              px: 2,
-              py: 2,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 1.5,
-            }}
-          >
-            {messages.length === 0 && (
-              <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 4 }}>
-                Pregúntame sobre tus pacientes, consultas recientes o
-                medicamentos.
-                <br />
-                Ejemplo: "Resume la historia de Juan Pérez".
-              </Typography>
-            )}
-            {messages.map((m, idx) => (
-              <MessageBubble key={idx} message={m} />
-            ))}
-            {loading && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary' }}>
-                <CircularProgress size={16} />
-                <Typography variant="body2">Pensando…</Typography>
-              </Box>
-            )}
-            {error && (
-              <Alert severity="error" onClose={() => setError(null)}>
-                {error}
+          {!showHistory && (
+            <>
+              <Alert severity="info" sx={{ m: 2, mb: 0 }}>
+                {DISCLAIMER}
               </Alert>
-            )}
-          </Box>
 
-          <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
-            <TextField
-              fullWidth
-              multiline
-              maxRows={4}
-              size="small"
-              placeholder="Escribe tu pregunta…"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={loading}
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      size="small"
-                      color="primary"
-                      onClick={handleSend}
-                      disabled={loading || draft.trim().length === 0}
-                      aria-label="Enviar"
-                    >
-                      <SendIcon fontSize="small" />
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
+              <Box
+                ref={scrollRef}
+                sx={{
+                  flexGrow: 1,
+                  overflowY: 'auto',
+                  px: 2,
+                  py: 2,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 1.5,
+                }}
+              >
+                {messages.length === 0 && (
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ textAlign: 'center', mt: 4 }}
+                  >
+                    Pregúntame sobre tus pacientes, consultas recientes o medicamentos.
+                    <br />
+                    Ejemplo: "¿Qué tengo hoy?" o "Resume la historia de Juan Pérez".
+                  </Typography>
+                )}
+                {messages.map((m, idx) => (
+                  <MessageBubble key={idx} message={m} />
+                ))}
+                {loading && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary' }}>
+                    <CircularProgress size={16} />
+                    <Typography variant="body2">Pensando…</Typography>
+                  </Box>
+                )}
+                {error && (
+                  <Alert severity="error" onClose={() => setError(null)}>
+                    {error}
+                  </Alert>
+                )}
+              </Box>
+
+              <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
+                <TextField
+                  fullWidth
+                  multiline
+                  maxRows={4}
+                  size="small"
+                  placeholder="Escribe tu pregunta…"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  disabled={loading}
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          size="small"
+                          color="primary"
+                          onClick={handleSend}
+                          disabled={loading || draft.trim().length === 0}
+                          aria-label="Enviar"
+                        >
+                          <SendIcon fontSize="small" />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              </Box>
+            </>
+          )}
+
+          {showHistory && (
+            <ConversationHistory
+              conversations={conversations}
+              loading={loadingConversations}
+              activeId={conversationId}
+              onOpen={handleLoadConversation}
+              onDelete={handleDeleteConversation}
             />
-          </Box>
+          )}
         </Box>
       </Drawer>
     </>
   );
 };
+
+
+// ---------------------------------------------------------------------------
+// Subcomponents
+// ---------------------------------------------------------------------------
+
 
 const MessageBubble: React.FC<{ message: Message }> = ({ message }) => {
   const isUser = message.role === 'user';
@@ -289,6 +435,89 @@ const MessageBubble: React.FC<{ message: Message }> = ({ message }) => {
         </Typography>
       )}
     </Paper>
+  );
+};
+
+
+interface ConversationHistoryProps {
+  conversations: AssistantConversationSummary[];
+  loading: boolean;
+  activeId: string | null;
+  onOpen: (id: string) => void;
+  onDelete: (id: string, e: React.MouseEvent) => void;
+}
+
+const ConversationHistory: React.FC<ConversationHistoryProps> = ({
+  conversations,
+  loading,
+  activeId,
+  onOpen,
+  onDelete,
+}) => {
+  if (loading && conversations.length === 0) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flex: 1 }}>
+        <CircularProgress size={20} />
+      </Box>
+    );
+  }
+  if (conversations.length === 0) {
+    return (
+      <Box sx={{ p: 3, textAlign: 'center', color: 'text.secondary' }}>
+        <Typography variant="body2">Aún no tienes conversaciones guardadas.</Typography>
+      </Box>
+    );
+  }
+  return (
+    <Box sx={{ flex: 1, overflowY: 'auto' }}>
+      <List dense>
+        {conversations.map((c, idx) => (
+          <React.Fragment key={c.conversation_id}>
+            {idx > 0 && <Divider component="li" />}
+            <ListItemButton
+              selected={activeId === c.conversation_id}
+              onClick={() => onOpen(c.conversation_id)}
+              sx={{ alignItems: 'flex-start' }}
+            >
+              <ListItemText
+                primary={c.title}
+                secondary={
+                  <Stack direction="row" spacing={1} sx={{ color: 'text.secondary' }}>
+                    <Typography variant="caption">
+                      {c.last_activity
+                        ? new Date(c.last_activity).toLocaleString('es-MX', {
+                            dateStyle: 'short',
+                            timeStyle: 'short',
+                          })
+                        : '—'}
+                    </Typography>
+                    {c.current_patient_id != null && (
+                      <Typography variant="caption">· Paciente #{c.current_patient_id}</Typography>
+                    )}
+                  </Stack>
+                }
+                primaryTypographyProps={{
+                  sx: {
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                  },
+                }}
+              />
+              <IconButton
+                size="small"
+                edge="end"
+                aria-label="Borrar conversación"
+                onClick={(e) => onDelete(c.conversation_id, e)}
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </ListItemButton>
+          </React.Fragment>
+        ))}
+      </List>
+    </Box>
   );
 };
 

@@ -102,13 +102,20 @@ class DoctorAssistant:
     ) -> Dict[str, Any]:
         """Handle one user turn. Returns a dict with the reply + metadata."""
         conv = self.state.get_or_create(
+            db=self.db,
             doctor_id=doctor.id,
             conversation_id=conversation_id,
             current_patient_id=current_patient_id,
         )
         if self.sandbox_mode:
             reply = self._sandbox_reply(message, current_patient_id or conv.current_patient_id)
-            self.state.append_turn(doctor.id, conv.conversation_id, message, reply)
+            self.state.append_turn(
+                db=self.db,
+                doctor_id=doctor.id,
+                conversation_id=conv.conversation_id,
+                user_message=message,
+                model_response=reply,
+            )
             return {
                 "reply": reply,
                 "conversation_id": conv.conversation_id,
@@ -122,7 +129,14 @@ class DoctorAssistant:
             message=message,
             current_patient_id=current_patient_id or conv.current_patient_id,
         )
-        self.state.append_turn(doctor.id, conv.conversation_id, message, reply)
+        self.state.append_turn(
+            db=self.db,
+            doctor_id=doctor.id,
+            conversation_id=conv.conversation_id,
+            user_message=message,
+            model_response=reply,
+            tool_calls=tool_calls,
+        )
         return {
             "reply": reply,
             "conversation_id": conv.conversation_id,

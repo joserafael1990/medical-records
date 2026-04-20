@@ -111,3 +111,155 @@ def test_chat_503_when_agent_runtime_error(client, monkeypatch):
     finally:
         _clear()
     assert r.status_code == 503
+
+
+# ---------------------------------------------------------------------------
+# GET /api/assistant/conversations
+# ---------------------------------------------------------------------------
+
+
+def test_list_conversations_requires_doctor(client):
+    _override(_patient_user())
+    try:
+        r = client.get("/api/assistant/conversations")
+    finally:
+        _clear()
+    assert r.status_code == 403
+
+
+def test_list_conversations_returns_summaries(client, monkeypatch):
+    _override(_doctor())
+
+    summaries = [
+        {
+            "conversation_id": "10",
+            "title": "Resumen de Juan",
+            "current_patient_id": 42,
+            "created_at": "2026-04-20T10:00:00",
+            "last_activity": "2026-04-20T10:05:00",
+        },
+        {
+            "conversation_id": "9",
+            "title": "¿qué tengo hoy?",
+            "current_patient_id": None,
+            "created_at": "2026-04-19T09:00:00",
+            "last_activity": "2026-04-19T09:02:00",
+        },
+    ]
+    monkeypatch.setattr(
+        assistant_route.session_state,
+        "list_recent",
+        lambda db, doctor_id, limit=20: summaries,
+    )
+
+    try:
+        r = client.get("/api/assistant/conversations")
+    finally:
+        _clear()
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["conversations"]) == 2
+    assert body["conversations"][0]["conversation_id"] == "10"
+
+
+# ---------------------------------------------------------------------------
+# GET /api/assistant/conversations/{id}
+# ---------------------------------------------------------------------------
+
+
+def test_get_conversation_404_when_not_owned(client, monkeypatch):
+    _override(_doctor())
+    monkeypatch.setattr(
+        assistant_route.session_state,
+        "get_full",
+        lambda db, doctor_id, conversation_id: None,
+    )
+    try:
+        r = client.get("/api/assistant/conversations/999")
+    finally:
+        _clear()
+    assert r.status_code == 404
+
+
+def test_get_conversation_returns_messages(client, monkeypatch):
+    _override(_doctor())
+
+    payload = {
+        "conversation_id": "7",
+        "title": "Consulta de Juan",
+        "current_patient_id": 42,
+        "created_at": "2026-04-20T10:00:00",
+        "last_activity": "2026-04-20T10:05:00",
+        "messages": [
+            {
+                "role": "user",
+                "content": "Resume a Juan",
+                "tool_calls": None,
+                "created_at": "2026-04-20T10:00:10",
+            },
+            {
+                "role": "model",
+                "content": "Juan Pérez, última visita el 15 de abril.",
+                "tool_calls": [{"name": "get_patient_summary", "args": {"patient_id": 42}}],
+                "created_at": "2026-04-20T10:00:12",
+            },
+        ],
+    }
+    monkeypatch.setattr(
+        assistant_route.session_state,
+        "get_full",
+        lambda db, doctor_id, conversation_id: payload,
+    )
+
+    try:
+        r = client.get("/api/assistant/conversations/7")
+    finally:
+        _clear()
+    assert r.status_code == 200
+    body = r.json()
+    assert body["conversation_id"] == "7"
+    assert len(body["messages"]) == 2
+    assert body["messages"][1]["tool_calls"][0]["name"] == "get_patient_summary"
+
+
+# ---------------------------------------------------------------------------
+# DELETE /api/assistant/conversations/{id}
+# ---------------------------------------------------------------------------
+
+
+def test_delete_conversation_404_when_not_owned(client, monkeypatch):
+    _override(_doctor())
+    monkeypatch.setattr(
+        assistant_route.session_state,
+        "delete",
+        lambda db, doctor_id, conversation_id: False,
+    )
+    try:
+        r = client.delete("/api/assistant/conversations/999")
+    finally:
+        _clear()
+    assert r.status_code == 404
+
+
+def test_delete_conversation_happy_path(client, monkeypatch):
+    _override(_doctor())
+    monkeypatch.setattr(
+        assistant_route.session_state,
+        "delete",
+        lambda db, doctor_id, conversation_id: True,
+    )
+    try:
+        r = client.delete("/api/assistant/conversations/7")
+    finally:
+        _clear()
+    assert r.status_code == 200
+    assert r.json() == {"deleted": True}
+
+
+def test_delete_conversation_requires_doctor(client):
+    _override(_patient_user())
+    try:
+        r = client.delete("/api/assistant/conversations/7")
+    finally:
+        _clear()
+    assert r.status_code == 403
