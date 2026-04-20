@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ThemeProvider,
   createTheme,
@@ -128,6 +128,14 @@ const AppLayoutInner: React.FC<AppLayoutProps> = ({
     handleUserMenuClose();
     navigateToView('profile');
   };
+
+  const handleNavigateToPatient = useCallback((patientId: number) => {
+    const patient = patientManagement.patients.find((p) => p.id === patientId);
+    navigateToView('patients');
+    if (patient) {
+      patientManagement.openPatientDialog(patient);
+    }
+  }, [patientManagement, navigateToView]);
 
   const handleToggleMobileNav = () => {
     setMobileNavOpen(prev => !prev);
@@ -401,6 +409,7 @@ const AppLayoutInner: React.FC<AppLayoutProps> = ({
       {(user?.doctor?.person_type === 'doctor' || user?.doctor?.person_type === 'admin') && (
         <AssistantPanel
           currentPatientId={patientManagement.selectedPatient?.id ?? null}
+          onNavigateToPatient={handleNavigateToPatient}
         />
       )}
 
