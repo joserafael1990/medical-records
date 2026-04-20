@@ -8,6 +8,7 @@ import {
   Fab,
   IconButton,
   InputAdornment,
+  Link,
   List,
   ListItemButton,
   ListItemText,
@@ -37,6 +38,8 @@ import { logger } from '../../utils/logger';
 interface AssistantPanelProps {
   /** Patient currently open in the main view, if any — passed as context to the bot. */
   currentPatientId?: number | null;
+  /** Called when the user clicks a [[PATIENT:id:name]] link in a bot reply. */
+  onNavigateToPatient?: (patientId: number) => void;
 }
 
 type Role = 'user' | 'assistant' | 'system';
@@ -50,7 +53,10 @@ interface Message {
 const DISCLAIMER =
   'Asistente informativo. Verifica siempre con el expediente. No ofrece recomendaciones clínicas.';
 
-export const AssistantPanel: React.FC<AssistantPanelProps> = ({ currentPatientId = null }) => {
+export const AssistantPanel: React.FC<AssistantPanelProps> = ({
+  currentPatientId = null,
+  onNavigateToPatient,
+}) => {
   const [open, setOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -336,7 +342,7 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ currentPatientId
                   </Typography>
                 )}
                 {messages.map((m, idx) => (
-                  <MessageBubble key={idx} message={m} />
+                  <MessageBubble key={idx} message={m} onNavigateToPatient={onNavigateToPatient} />
                 ))}
                 {loading && (
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary' }}>
@@ -402,8 +408,46 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ currentPatientId
 // Subcomponents
 // ---------------------------------------------------------------------------
 
+const PATIENT_LINK_RE = /\[\[PATIENT:(\d+):([^\]]+)\]\]/g;
 
-const MessageBubble: React.FC<{ message: Message }> = ({ message }) => {
+function renderWithLinks(
+  text: string,
+  onNavigateToPatient?: (id: number) => void,
+): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  PATIENT_LINK_RE.lastIndex = 0;
+  while ((match = PATIENT_LINK_RE.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(text.slice(lastIndex, match.index));
+    }
+    const patientId = parseInt(match[1], 10);
+    const name = match[2];
+    nodes.push(
+      <Link
+        key={match.index}
+        component="button"
+        variant="body2"
+        underline="always"
+        onClick={() => onNavigateToPatient?.(patientId)}
+        sx={{ fontWeight: 600, cursor: 'pointer', verticalAlign: 'baseline' }}
+      >
+        {name}
+      </Link>,
+    );
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex));
+  }
+  return nodes;
+}
+
+const MessageBubble: React.FC<{
+  message: Message;
+  onNavigateToPatient?: (patientId: number) => void;
+}> = ({ message, onNavigateToPatient }) => {
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
   return (
@@ -424,7 +468,9 @@ const MessageBubble: React.FC<{ message: Message }> = ({ message }) => {
       }}
     >
       <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-        {message.text}
+        {isUser || isSystem
+          ? message.text
+          : renderWithLinks(message.text, onNavigateToPatient)}
       </Typography>
       {message.toolCalls && message.toolCalls.length > 0 && (
         <Typography
