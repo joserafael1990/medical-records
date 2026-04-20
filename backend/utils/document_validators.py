@@ -91,34 +91,22 @@ def validate_curp_format(curp: str) -> Tuple[bool, Optional[str]]:
     return True, None
 
 
+CEDULA_PROFESIONAL_RE = re.compile(r"^\d{7,8}$")
+
+
 def validate_professional_license_format(license: str) -> Tuple[bool, Optional[str]]:
     """
-    Valida formato de cédula profesional mexicana
-    Formato: Máximo 8 dígitos numéricos
-    
-    Args:
-        license: Número de cédula profesional
-        
-    Returns:
-        tuple: (es_válido, mensaje_error)
+    Valida formato de cédula profesional mexicana (NOM-024-SSA3-2012).
+    Formato: 7 u 8 dígitos numéricos (Registro Nacional de Profesionistas).
     """
     if not license:
         return False, "Cédula profesional no puede estar vacía"
-    
+
     license_clean = license.strip()
-    
-    # Validar longitud máxima
-    if len(license_clean) > 8:
-        return False, f"Cédula profesional no puede tener más de 8 dígitos (tiene {len(license_clean)})"
-    
-    # Validar que sean solo dígitos
-    if not license_clean.isdigit():
-        return False, "Cédula profesional solo puede contener dígitos numéricos"
-    
-    # Validar longitud mínima (normalmente 7 u 8 dígitos, pero permitimos desde 1 para flexibilidad)
-    if len(license_clean) < 1:
-        return False, "Cédula profesional no puede estar vacía"
-    
+
+    if not CEDULA_PROFESIONAL_RE.fullmatch(license_clean):
+        return False, "La cédula profesional debe contener 7 u 8 dígitos numéricos"
+
     return True, None
 
 
