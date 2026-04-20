@@ -30,7 +30,19 @@ steps:
       - 'push'
       - 'us-central1-docker.pkg.dev/${PROJECT_ID}/cortex-repo/backend:latest'
 
-  # Step 3: Deploy to Cloud Run
+  # Step 3: Run DB migrations before rolling out new code
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: bash
+    args:
+      - '-c'
+      - >-
+        gcloud run jobs update cortex-migrate
+        --image=us-central1-docker.pkg.dev/${PROJECT_ID}/cortex-repo/backend:${SHORT_SHA}
+        --region=${_REGION}
+        &&
+        gcloud run jobs execute cortex-migrate --region=${_REGION} --wait
+
+  # Step 4: Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
