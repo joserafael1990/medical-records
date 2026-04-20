@@ -123,7 +123,7 @@ class DoctorAssistant:
                 "sandbox": True,
             }
 
-        reply, tool_calls = self._run_live_turn(
+        reply, tool_calls, tool_results = self._run_live_turn(
             doctor=doctor,
             history=conv.history,
             message=message,
@@ -136,6 +136,7 @@ class DoctorAssistant:
             user_message=message,
             model_response=reply,
             tool_calls=tool_calls,
+            tool_results=tool_results,
         )
         return {
             "reply": reply,
@@ -168,6 +169,21 @@ class DoctorAssistant:
             for p in parts:
                 if isinstance(p, str):
                     part_objs.append(Part.from_text(p))
+                elif isinstance(p, dict):
+                    ptype = p.get("type")
+                    if ptype == "function_call":
+                        part_objs.append(
+                            Part.from_dict({
+                                "function_call": {"name": p["name"], "args": p.get("args", {})}
+                            })
+                        )
+                    elif ptype == "function_response":
+                        part_objs.append(
+                            Part.from_function_response(
+                                name=p["name"],
+                                response={"result": p.get("result", {})},
+                            )
+                        )
             if part_objs:
                 out.append(Content(role=role, parts=part_objs))
         return out
@@ -178,8 +194,12 @@ class DoctorAssistant:
         history: List[Dict[str, Any]],
         message: str,
         current_patient_id: Optional[int],
-    ) -> tuple[str, List[Dict[str, Any]]]:
-        """Run one user turn against Gemini, resolving any function calls."""
+    ) -> tuple[str, List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """Run one user turn against Gemini, resolving any function calls.
+
+        Returns (reply_text, tool_calls, tool_results) so callers can
+        persist results alongside calls for multi-turn context.
+        """
         if self.model is None:
             raise RuntimeError("Model not initialised")
         chat_history = self._build_history_contents(history)
@@ -189,6 +209,7 @@ class DoctorAssistant:
         )
         prompt = self._wrap_with_context(message, current_patient_id)
         tool_calls: List[Dict[str, Any]] = []
+        tool_results: List[Dict[str, Any]] = []
         response = chat.send_message(prompt)
 
         for _turn in range(MAX_FUNCTION_CALL_TURNS):
@@ -200,13 +221,14 @@ class DoctorAssistant:
             args = dict(getattr(fc, "args", {}) or {})
             tool_calls.append({"name": name, "args": args})
             result = execute_tool(self.db, doctor, name, args)
+            tool_results.append({"name": name, "result": result})
             response = chat.send_message([
                 Part.from_function_response(name=name, response={"result": result})
             ])
         reply_text = self._extract_text(response) or (
             "No pude generar una respuesta. Intenta reformular la pregunta."
         )
-        return reply_text, tool_calls
+        return reply_text, tool_calls, tool_results
 
     @staticmethod
     def _wrap_with_context(message: str, patient_id: Optional[int]) -> str:
