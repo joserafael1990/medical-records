@@ -120,7 +120,9 @@ export function useConsultationManagement(
     setSelectedConsultation(null);
     setIsEditingConsultation(false);
     setConsultationFormData({
-      patient_id: 0,
+      // ConsultationFormData typed with `patient_id: string`; empty string
+      // signals "no patient yet" (the Select still filters it out).
+      patient_id: '',
       date: new Date().toISOString().split('T')[0],
       chief_complaint: '',
       history_present_illness: '',
@@ -183,7 +185,7 @@ export function useConsultationManagement(
       : window.confirm(message);
     if (!confirmed) return;
     try {
-      await apiService.deleteConsultation(consultation.id.toString());
+      await apiService.consultations.deleteConsultation(consultation.id.toString());
 
       // Track consultation deletion in Amplitude
       const { AmplitudeService } = await import('../../services/analytics/AmplitudeService');

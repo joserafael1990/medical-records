@@ -403,7 +403,118 @@ class AuditService:
             affected_patient_name=patient_name,
             security_level='INFO'
         )
+
+    @staticmethod
+    def log_consultation_list_access(
+        db: Session,
+        user: Optional[Person],
+        request: Request,
+        result_count: int,
+        filters: Optional[Dict] = None,
+    ):
+        """Log de acceso a listado de consultas (NOM-004 requiere trazabilidad de lectura)."""
+        AuditService.log_action(
+            db=db,
+            action="READ",
+            user=user,
+            request=request,
+            table_name="medical_records",
+            operation_type="consultation_list_access",
+            metadata={"result_count": result_count, "filters": filters or {}},
+            security_level='INFO',
+        )
+
+    @staticmethod
+    def log_patient_access(
+        db: Session,
+        user: Optional[Person],
+        patient_id: int,
+        patient_name: Optional[str],
+        request: Request,
+    ):
+        """Log de acceso a expediente de paciente individual (NOM-004, LFPDPPP)."""
+        AuditService.log_action(
+            db=db,
+            action="READ",
+            user=user,
+            request=request,
+            table_name="persons",
+            record_id=patient_id,
+            operation_type="patient_access",
+            affected_patient_id=patient_id,
+            affected_patient_name=patient_name,
+            security_level='INFO',
+        )
+
+    @staticmethod
+    def log_patient_list_access(
+        db: Session,
+        user: Optional[Person],
+        request: Request,
+        result_count: int,
+        filters: Optional[Dict] = None,
+    ):
+        """Log de acceso a listado de pacientes (bulk read of PHI)."""
+        AuditService.log_action(
+            db=db,
+            action="READ",
+            user=user,
+            request=request,
+            table_name="persons",
+            operation_type="patient_list_access",
+            metadata={"result_count": result_count, "filters": filters or {}},
+            security_level='INFO',
+        )
+
+    @staticmethod
+    def log_prescription_access(
+        db: Session,
+        user: Optional[Person],
+        consultation_id: int,
+        request: Request,
+        result_count: int,
+    ):
+        """Log de acceso a recetas asociadas a una consulta."""
+        AuditService.log_action(
+            db=db,
+            action="READ",
+            user=user,
+            request=request,
+            table_name="prescriptions",
+            record_id=consultation_id,
+            operation_type="prescription_list_access",
+            metadata={"result_count": result_count, "consultation_id": consultation_id},
+            security_level='INFO',
+        )
     
+    @staticmethod
+    def log_arco_export(
+        db: Session,
+        user: Optional[Person],
+        patient_id: int,
+        patient_name: Optional[str],
+        request: Request,
+        counts: Optional[Dict] = None,
+    ):
+        """Log ARCO access export (LFPDPPP Art. 15).
+
+        Security-critical — must leave an indelible trail whenever PHI is
+        bulk-exported to a third party.
+        """
+        AuditService.log_action(
+            db=db,
+            action="EXPORT",
+            user=user,
+            request=request,
+            table_name="persons",
+            record_id=patient_id,
+            affected_patient_id=patient_id,
+            affected_patient_name=patient_name,
+            operation_type="arco_export",
+            metadata={"counts": counts or {}},
+            security_level='CRITICAL',
+        )
+
     @staticmethod
     def log_patient_create(
         db: Session,

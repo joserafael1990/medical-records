@@ -2,13 +2,14 @@
 Prescription management endpoints for consultations
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import List
 
 from database import get_db, Person, ConsultationPrescription, MedicalRecord, Medication
 from dependencies import get_current_user
 from logger import get_logger
+from audit_service import audit_service
 
 api_logger = get_logger("medical_records.api")
 
@@ -18,6 +19,7 @@ router = APIRouter(prefix="/api", tags=["prescriptions"])
 @router.get("/consultations/{consultation_id}/prescriptions")
 async def get_consultation_prescriptions(
     consultation_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
@@ -27,16 +29,16 @@ async def get_consultation_prescriptions(
         MedicalRecord.id == consultation_id,
         MedicalRecord.doctor_id == current_user.id
     ).first()
-    
+
     if not consultation:
         raise HTTPException(status_code=404, detail="Consultation not found")
-    
+
     # Get prescriptions
     prescriptions = db.query(ConsultationPrescription).filter(
         ConsultationPrescription.consultation_id == consultation_id
     ).all()
-    
-    return [
+
+    result = [
         {
             "id": rx.id,
             "consultation_id": rx.consultation_id,
@@ -52,6 +54,18 @@ async def get_consultation_prescriptions(
         }
         for rx in prescriptions
     ]
+    # NOM-004 audit: prescription lists are PHI (diagnosis hint + treatment).
+    try:
+        audit_service.log_prescription_access(
+            db=db,
+            user=current_user,
+            consultation_id=consultation_id,
+            request=request,
+            result_count=len(result),
+        )
+    except Exception as audit_err:
+        api_logger.warning("Failed to audit prescription access: %s", audit_err)
+    return result
 
 
 @router.post("/consultations/{consultation_id}/prescriptions")
