@@ -703,7 +703,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
       try {
         // Only load if country_id has actually changed and is valid
         if (patientEditData.address_country_id) {
-          const countryId = parseInt(patientEditData.address_country_id);
+          const countryId = parseInt(String(patientEditData.address_country_id));
           if (!isNaN(countryId) && countryId > 0) {
             try {
               const addressStatesData = await apiService.catalogs.getStates(countryId);
@@ -720,7 +720,7 @@ export const useConsultationForm = (props: UseConsultationFormProps): UseConsult
         }
 
         if (patientEditData.birth_country_id) {
-          const countryId = parseInt(patientEditData.birth_country_id);
+          const countryId = parseInt(String(patientEditData.birth_country_id));
           if (!isNaN(countryId) && countryId > 0) {
             try {
               const birthStatesData = await apiService.catalogs.getStates(countryId);

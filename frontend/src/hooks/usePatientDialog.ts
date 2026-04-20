@@ -117,8 +117,9 @@ export const usePatientDialog = ({
   const [states, setStates] = useState<Array<{id: number, name: string}>>([]);
   const [birthStates, setBirthStates] = useState<Array<{id: number, name: string}>>([]);
   
-  // Auto-scroll to error when it appears
-  const { errorRef } = useScrollToError(error);
+  // Auto-scroll to error when it appears.
+  // `useScrollToError` returns the ref directly (not an object); do not destructure.
+  const errorRef = useScrollToError(error);
   
   // Load initial data
   useEffect(() => {
@@ -149,15 +150,19 @@ export const usePatientDialog = ({
   useEffect(() => {
     const loadStatesForCountries = async () => {
       try {
-        // Load states for address country
+        // Load states for address country. The form field can hold either
+        // a number (from newer flows) or a stringified int (legacy forms),
+        // so we normalize to a number before the API call.
         if (formData.address_country_id) {
-          const addressStatesData = await apiService.getStates(parseInt(formData.address_country_id));
+          const addressCountryId = Number(formData.address_country_id);
+          const addressStatesData = await apiService.catalogs.getStates(addressCountryId);
           setStates(addressStatesData);
         }
-        
-        // Load states for birth country
+
+        // Load states for birth country.
         if (formData.birth_country_id) {
-          const birthStatesData = await apiService.getStates(parseInt(formData.birth_country_id));
+          const birthCountryId = Number(formData.birth_country_id);
+          const birthStatesData = await apiService.catalogs.getStates(birthCountryId);
           setBirthStates(birthStatesData);
         }
       } catch (error) {
@@ -186,11 +191,12 @@ export const usePatientDialog = ({
         address_city: patient.address_city || '',
         city: patient.address_city || '',
         address_state_id: patient.address_state_id || '',
-        state: patient.address_state_id || '',
+        // Legacy alias fields expect `string`. Coerce the numeric FK.
+        state: patient.address_state_id ? String(patient.address_state_id) : '',
         address_postal_code: patient.address_postal_code || '',
         zip_code: patient.address_postal_code || '',
         address_country_id: patient.address_country_id || '',
-        country: patient.address_country_id || '',
+        country: patient.address_country_id ? String(patient.address_country_id) : '',
         birth_city: patient.birth_city || '',
         birth_state_id: patient.birth_state_id || '',
         birth_country_id: patient.birth_country_id || '',
@@ -327,6 +333,10 @@ export const usePatientDialog = ({
   // Handle reset
   const handleReset = useCallback(() => {
     setFormData({
+      // `name` is required on PatientFormData; the form builds it by
+      // concatenating first_name + surnames on submit, but the state
+      // still needs a seed string here to satisfy the type.
+      name: '',
       first_name: '',
       paternal_surname: '',
       maternal_surname: '',
@@ -369,10 +379,10 @@ export const usePatientDialog = ({
     handleReset();
   }, [handleReset]);
   
-  // Load states for specific country
-  const loadStatesForCountry = useCallback(async (countryId: string, type: 'address' | 'birth') => {
+  // Load states for specific country. Accepts string or number; we coerce.
+  const loadStatesForCountry = useCallback(async (countryId: string | number, type: 'address' | 'birth') => {
     try {
-      const statesData = await apiService.getStates(parseInt(countryId));
+      const statesData = await apiService.catalogs.getStates(Number(countryId));
       if (type === 'address') {
         setStates(statesData);
       } else {

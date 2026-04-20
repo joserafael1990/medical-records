@@ -100,10 +100,10 @@ export const useScheduleConfigForm = (
       logger.debug('Weekly schedule loaded', { schedule: mergedSchedule }, 'api');
       setWeeklySchedule(mergedSchedule);
       
-      const hasSchedule = Object.values(mergedSchedule).some(schedule => 
-        schedule !== null && 
-        schedule.time_blocks && 
-        schedule.time_blocks.some(block => block.start_time && block.end_time)
+      const hasSchedule = Object.values(mergedSchedule).some((schedule: any) =>
+        schedule !== null &&
+        schedule.time_blocks &&
+        schedule.time_blocks.some((block: any) => block.start_time && block.end_time)
       );
       setHasExistingSchedule(hasSchedule);
       
@@ -126,10 +126,10 @@ export const useScheduleConfigForm = (
       
       setWeeklySchedule(response.data);
       
-      const hasSchedule = Object.values(response.data).some(schedule => 
-        schedule !== null && 
-        schedule.time_blocks && 
-        schedule.time_blocks.some(block => block.start_time && block.end_time)
+      const hasSchedule = Object.values(response.data).some((schedule: any) =>
+        schedule !== null &&
+        schedule.time_blocks &&
+        schedule.time_blocks.some((block: any) => block.start_time && block.end_time)
       );
       setHasExistingSchedule(hasSchedule);
       
