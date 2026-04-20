@@ -111,9 +111,16 @@ class AssistantSessionState:
         user_message: str,
         model_response: str,
         tool_calls: Optional[List[Dict[str, Any]]] = None,
+        tool_results: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
         """Persist the user + model exchange. Silently no-op if the
-        conversation doesn't belong to this doctor."""
+        conversation doesn't belong to this doctor.
+
+        `tool_calls`   — list of {name, args}
+        `tool_results` — parallel list of {name, result}; merged into
+                         the stored tool_calls so history can be fully
+                         reconstructed on the next turn.
+        """
         row = self._find_for_doctor(db, doctor_id, conversation_id)
         if row is None:
             return
@@ -125,12 +132,20 @@ class AssistantSessionState:
                 tool_calls=None,
             )
         )
+        # Merge results into the calls so history contains full context.
+        merged: Optional[List[Dict[str, Any]]] = None
+        if tool_calls:
+            results_by_name = {r["name"]: r.get("result") for r in (tool_results or [])}
+            merged = [
+                {**tc, "result": results_by_name.get(tc["name"])}
+                for tc in tool_calls
+            ]
         db.add(
             AssistantMessage(
                 conversation_id=row.id,
                 role="model",
                 content=model_response,
-                tool_calls=tool_calls or None,
+                tool_calls=merged,
             )
         )
         row.last_activity = datetime.utcnow()
@@ -251,10 +266,22 @@ class AssistantSessionState:
         )
         # Fetched newest-first for the limit; reverse back to chrono order.
         messages.reverse()
-        history = [
-            {"role": m.role, "parts": [m.content]}
-            for m in messages
-        ]
+        history: List[Dict[str, Any]] = []
+        for m in messages:
+            if m.role == "model" and m.tool_calls:
+                # Reconstruct function_call + function_response turns so
+                # Gemini has full context on the next turn.
+                for tc in m.tool_calls:
+                    history.append({
+                        "role": "model",
+                        "parts": [{"type": "function_call", "name": tc["name"], "args": tc.get("args", {})}],
+                    })
+                    if tc.get("result") is not None:
+                        history.append({
+                            "role": "user",
+                            "parts": [{"type": "function_response", "name": tc["name"], "result": tc["result"]}],
+                        })
+            history.append({"role": m.role, "parts": [m.content]})
         return Conversation(
             doctor_id=row.doctor_id,
             conversation_id=str(row.id),
