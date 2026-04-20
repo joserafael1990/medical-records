@@ -469,6 +469,10 @@ app.include_router(internal.router)
 from routes.assistant import router as assistant_router
 app.include_router(assistant_router)
 
+# Include FHIR R4 interoperability routes (NOM-024-SSA3-2012)
+from routes.fhir import router as fhir_router
+app.include_router(fhir_router)
+
 # ============================================================================
 # TEMPORARY DEBUG ENDPOINT
 # ============================================================================
