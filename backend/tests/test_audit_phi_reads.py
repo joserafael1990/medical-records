@@ -115,6 +115,65 @@ def test_log_prescription_access_targets_prescriptions_table():
     assert kwargs["metadata"]["consultation_id"] == 7
 
 
+def test_log_clinical_studies_access_patient_scope():
+    db = MagicMock()
+    req = _fake_request()
+    with patch.object(AuditService, "log_action") as log:
+        AuditService.log_clinical_studies_access(
+            db=db, user=_fake_user(), request=req,
+            result_count=5, patient_id=42,
+        )
+    kwargs = log.call_args.kwargs
+    assert kwargs["action"] == "READ"
+    assert kwargs["table_name"] == "clinical_studies"
+    assert kwargs["record_id"] == 42
+    assert kwargs["affected_patient_id"] == 42
+    assert kwargs["operation_type"] == "clinical_studies_access"
+    assert kwargs["metadata"]["scope"] == "patient"
+    assert kwargs["metadata"]["result_count"] == 5
+
+
+def test_log_clinical_studies_access_consultation_scope():
+    db = MagicMock()
+    req = _fake_request()
+    with patch.object(AuditService, "log_action") as log:
+        AuditService.log_clinical_studies_access(
+            db=db, user=_fake_user(), request=req,
+            result_count=2, consultation_id=13,
+        )
+    kwargs = log.call_args.kwargs
+    assert kwargs["record_id"] == 13
+    assert kwargs["metadata"]["scope"] == "consultation"
+    assert kwargs["metadata"]["consultation_id"] == 13
+
+
+def test_log_vital_signs_access_consultation_scope():
+    db = MagicMock()
+    req = _fake_request()
+    with patch.object(AuditService, "log_action") as log:
+        AuditService.log_vital_signs_access(
+            db=db, user=_fake_user(), request=req,
+            result_count=4, consultation_id=7,
+        )
+    kwargs = log.call_args.kwargs
+    assert kwargs["table_name"] == "consultation_vital_signs"
+    assert kwargs["operation_type"] == "vital_signs_access"
+    assert kwargs["metadata"]["scope"] == "consultation"
+
+
+def test_log_vital_signs_access_patient_history_scope():
+    db = MagicMock()
+    req = _fake_request()
+    with patch.object(AuditService, "log_action") as log:
+        AuditService.log_vital_signs_access(
+            db=db, user=_fake_user(), request=req,
+            result_count=11, patient_id=99,
+        )
+    kwargs = log.call_args.kwargs
+    assert kwargs["affected_patient_id"] == 99
+    assert kwargs["metadata"]["scope"] == "patient_history"
+
+
 def test_log_methods_accept_none_user_for_system_reads():
     """Ensure the helpers don't crash when user is None (e.g., system job reads)."""
     db = MagicMock()

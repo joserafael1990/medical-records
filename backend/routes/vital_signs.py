@@ -3,7 +3,7 @@ Vital signs management endpoints
 Migrated from main_clean_english.py to improve code organization
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, Request
 from sqlalchemy.orm import Session, joinedload, load_only
 from typing import Optional
 from datetime import datetime
@@ -12,6 +12,7 @@ from database import get_db, Person, VitalSign, ConsultationVitalSign, MedicalRe
 from utils.datetime_utils import utc_now
 from dependencies import get_current_user
 from logger import get_logger
+from audit_service import audit_service
 
 router = APIRouter(prefix="/api", tags=["vital-signs"])
 api_logger = get_logger("medical_records.api")
@@ -48,6 +49,7 @@ async def get_vital_signs(
 @router.get("/consultations/{consultation_id}/vital-signs")
 async def get_consultation_vital_signs(
     consultation_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
@@ -103,9 +105,16 @@ async def get_consultation_vital_signs(
                 "updated_at": cv_sign.updated_at.isoformat() if cv_sign.updated_at else None
             }
             vital_signs_data.append(vital_sign_data)
-        
+
+        try:
+            audit_service.log_vital_signs_access(
+                db=db, user=current_user, request=request,
+                result_count=len(vital_signs_data), consultation_id=consultation_id,
+            )
+        except Exception as audit_err:
+            api_logger.warning("Failed to audit consultation vital signs access: %s", audit_err)
         return vital_signs_data
-        
+
     except Exception as e:
         api_logger.error(
             "Error getting consultation vital signs",
@@ -310,6 +319,7 @@ async def delete_consultation_vital_sign(
 @router.get("/patients/{patient_id}/vital-signs/history")
 async def get_patient_vital_signs_history(
     patient_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
@@ -421,12 +431,19 @@ async def get_patient_vital_signs_history(
             vital_signs_count=len(vital_signs_history)
         )
         
+        try:
+            audit_service.log_vital_signs_access(
+                db=db, user=current_user, request=request,
+                result_count=len(vital_signs_history), patient_id=patient_id,
+            )
+        except Exception as audit_err:
+            api_logger.warning("Failed to audit vital signs history access: %s", audit_err)
         return {
             "patient_id": patient_id,
             "patient_name": patient.name or "Paciente",
             "vital_signs_history": vital_signs_history
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
