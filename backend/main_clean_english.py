@@ -469,6 +469,18 @@ app.include_router(internal.router)
 from routes.expediente import router as expediente_router
 app.include_router(expediente_router)
 
+# Include pre-consultation intake questionnaire routes
+from routes.intake import router as intake_router
+app.include_router(intake_router)
+
+# Include doctor assistant routes (read-only chatbot for authenticated doctors)
+from routes.assistant import router as assistant_router
+app.include_router(assistant_router)
+
+# Include FHIR R4 interoperability routes (NOM-024-SSA3-2012)
+from routes.fhir import router as fhir_router
+app.include_router(fhir_router)
+
 # ============================================================================
 # TEMPORARY DEBUG ENDPOINT
 # ============================================================================
