@@ -20,9 +20,12 @@ interface PreviousClinicalStudiesSectionProps {
   selectedPatient: any;
   patientPreviousStudies: ClinicalStudy[];
   loadingPreviousStudies: boolean;
-  onUploadStudyFile: (studyId: number, file: File) => void;
-  onUpdateStudyStatus: (studyId: number, status: string) => void;
-  onViewStudyFile: (studyId: number) => void;
+  // `ClinicalStudy.id` is typed as string in `types/index.ts`. Accept both
+  // to avoid forcing every caller to cast; implementations usually wrap
+  // it in `Number(...)` before hitting the API.
+  onUploadStudyFile: (studyId: number | string, file: File) => void;
+  onUpdateStudyStatus: (studyId: number | string, status: string) => void;
+  onViewStudyFile: (studyId: number | string) => void;
 }
 
 export const PreviousClinicalStudiesSection: React.FC<PreviousClinicalStudiesSectionProps> = ({

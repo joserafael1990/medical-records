@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect } from 'react';
-import { Box } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import { trackAmplitudePageView, trackAmplitudeEvent } from '../../utils/amplitudeHelper';
 import {
   DashboardView,
