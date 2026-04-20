@@ -40,6 +40,12 @@ export interface AuthResponse {
     first_name: string;
     paternal_surname: string;
     maternal_surname: string;
+    // Derived fields the backend may populate depending on the login
+    // path — kept optional so legacy responses still type-check.
+    name?: string;
+    full_name?: string;
+    specialty?: string;
+    professional_license?: string;
   };
 }
 

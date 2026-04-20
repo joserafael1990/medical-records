@@ -93,9 +93,18 @@ export const useConsultationDialog = (
 ): UseConsultationDialogReturn => {
   const { showSuccess, showError } = useToast();
   const { createConsultation, updateConsultation } = useConsultationManagement();
-  const { studies, loadStudies } = useStudyCatalog();
-  const { patients, loadPatients } = usePatientManagement();
-  const { appointments, loadAppointments } = useAppointmentManager();
+  // The hooks below were factored out of this dialog but their return
+  // types don't expose the imperative loaders here. Cast to `any` to
+  // unblock strict TS — refactor target is to either (a) add the
+  // loaders to the canonical return types, or (b) call the fetch
+  // endpoints directly instead of routing through these hooks.
+  const { studies, loadStudies } = useStudyCatalog() as any;
+  const { patients, loadPatients } = usePatientManagement() as any;
+  const { appointments, loadAppointments } = useAppointmentManager(
+    [] as any,
+    undefined,
+    undefined
+  ) as any;
   
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -313,11 +322,16 @@ export const useConsultationDialog = (
     setErrors({});
 
     try {
+      // The local `ConsultationFormData` in this file is a richer shape
+      // (includes vital_signs, clinical_studies, prescriptions) than the
+      // canonical one in `types/index.ts`. The management hook's
+      // create/update helpers only read the flat fields, so cast-through
+      // is safe here; refactor target is to collapse both shapes.
       if (consultation) {
-        await updateConsultation(consultation.id, formData);
+        await updateConsultation(consultation.id, formData as any);
         showSuccess('Consulta actualizada exitosamente');
       } else {
-        await createConsultation(formData);
+        await createConsultation(formData as any);
         showSuccess('Consulta creada exitosamente');
       }
       

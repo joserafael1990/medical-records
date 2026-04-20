@@ -30,9 +30,11 @@ export interface OfficeFormData {
   country_id: number | null;
   phone: string;
   maps_url: string;
-  virtual_url: string;
-  is_virtual: boolean;
   timezone: string;
+  // Virtual-office fields are only populated when the doctor opts in;
+  // the dialog leaves them unset for plain physical offices.
+  virtual_url?: string;
+  is_virtual?: boolean;
 }
 
 export const useOfficeManagement = (doctorId?: number) => {

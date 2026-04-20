@@ -16,8 +16,16 @@ export const DoctorProfileView = lazy(() => import('../views/DoctorProfileView')
 // Lazy load auth components
 export const RegisterView = lazy(() => import('../auth/RegisterView'));
 
-// Lazy load heavy common components
-export const SmartTable = lazy(() => import('../common/SmartTable'));
+// Lazy load heavy common components. These files expose named exports
+// (no default), so we wrap each in `{ default: ... }` so `React.lazy`
+// gets the shape it expects.
+export const SmartTable = lazy(() =>
+  import('../common/SmartTable').then((m) => ({ default: m.SmartTable }))
+);
 export const EnhancedErrorDisplay = lazy(() => import('../common/EnhancedErrorDisplay'));
-export const IntelligentSearch = lazy(() => import('../common/IntelligentSearch'));
-export const SmartLoadingState = lazy(() => import('../common/SmartLoadingState'));
+export const IntelligentSearch = lazy(() =>
+  import('../common/IntelligentSearch').then((m) => ({ default: m.IntelligentSearch }))
+);
+export const SmartLoadingState = lazy(() =>
+  import('../common/SmartLoadingState').then((m) => ({ default: m.SmartLoadingState }))
+);

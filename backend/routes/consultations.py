@@ -19,6 +19,7 @@ from services.consultation_service import (
     sign_medical_document,
 )
 from services.consultations.security import verify_medical_document_signature
+from audit_service import audit_service
 
 api_logger = get_logger("medical_records.api")
 
@@ -27,6 +28,7 @@ router = APIRouter(prefix="/api", tags=["consultations"])
 
 @router.get("/consultations")
 async def get_consultations(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user),
     skip: int = Query(0),
@@ -58,6 +60,17 @@ async def get_consultations(
                 "result_is_list": isinstance(result, list)
             }
         )
+        # NOM-004 audit: record bulk PHI read.
+        try:
+            audit_service.log_consultation_list_access(
+                db=db,
+                user=current_user,
+                request=request,
+                result_count=len(result) if result else 0,
+                filters={"skip": skip, "limit": limit},
+            )
+        except Exception as audit_err:
+            api_logger.warning("Failed to audit consultation list access: %s", audit_err)
         return result
     except Exception as e:
         api_logger.error(
@@ -74,16 +87,35 @@ async def get_consultations(
 @router.get("/consultations/{consultation_id}")
 async def get_consultation(
     consultation_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
     """Get specific consultation by ID"""
-    return ConsultationService.get_consultation_by_id(
+    result = ConsultationService.get_consultation_by_id(
         db=db,
         consultation_id=consultation_id,
         doctor_id=current_user.id,
         decrypt_sensitive_data_fn=decrypt_sensitive_data
     )
+    # NOM-004 audit: record that a specific expediente was read, including
+    # patient name if available in the service response.
+    try:
+        patient_name = None
+        if isinstance(result, dict):
+            patient_name = result.get("patient_name") or (
+                result.get("patient", {}).get("name") if isinstance(result.get("patient"), dict) else None
+            )
+        audit_service.log_consultation_access(
+            db=db,
+            user=current_user,
+            consultation_id=consultation_id,
+            patient_name=patient_name or "",
+            request=request,
+        )
+    except Exception as audit_err:
+        api_logger.warning("Failed to audit consultation access: %s", audit_err)
+    return result
 
 
 @router.post("/consultations")

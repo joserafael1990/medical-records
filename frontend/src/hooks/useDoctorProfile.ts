@@ -370,7 +370,7 @@ export const useDoctorProfile = (): UseDoctorProfileReturn => {
         professional_license: doctorProfile.professional_license || '',
         specialty_license: doctorProfile.specialty_license || '',
         university: doctorProfile.university || '',
-        graduation_year: doctorProfile.graduation_year || '',
+        graduation_year: String(doctorProfile.graduation_year || ''),
         specialty: doctorProfile.specialty_name || '',
         subspecialty: doctorProfile.subspecialty || '',
         professional_email: doctorProfile.professional_email || '',
