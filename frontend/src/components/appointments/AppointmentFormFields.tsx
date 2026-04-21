@@ -51,9 +51,14 @@ export const AppointmentFormFields: React.FC<AppointmentFormFieldsProps> = ({
                     MenuProps={getMediumSelectMenuProps()}
                 >
                     <MenuItem value=""><em>Seleccione un tipo</em></MenuItem>
-                    <MenuItem value="Primera vez">Primera vez</MenuItem>
-                    <MenuItem value="Seguimiento">Seguimiento</MenuItem>
+                    <MenuItem value="Primera vez">Primera vez — paciente que nunca ha consultado contigo</MenuItem>
+                    <MenuItem value="Seguimiento">Seguimiento — paciente con historial previo contigo</MenuItem>
                 </Select>
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, px: 0.5 }}>
+                    {formData.consultation_type === 'Primera vez' && 'Podrás registrar al paciente como nuevo o seleccionarlo si ya existe en el sistema.'}
+                    {formData.consultation_type === 'Seguimiento' && 'Se buscará al paciente entre quienes ya tienen expediente contigo.'}
+                    {!formData.consultation_type && 'Elige el tipo para que el sistema te guíe con el paciente correcto.'}
+                </Typography>
             </FormControl>
 
             {/* 2. CONSULTORIO */}

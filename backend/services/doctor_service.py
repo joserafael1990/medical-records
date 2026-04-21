@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import text
 from fastapi import HTTPException, status
 from typing import Dict, Any, List, Optional
 import traceback
@@ -100,6 +101,28 @@ class DoctorService:
         
         avatar_payload = avatar_service.get_current_avatar_payload(user_with_relations)
 
+        # Build weekly_schedule from schedule_templates so the frontend
+        # profile-completion check can verify the doctor has active slots.
+        day_names = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+        weekly_schedule = {d: None for d in day_names}
+        try:
+            schedule_rows = db.execute(text(
+                "SELECT day_of_week, start_time, end_time, is_active, time_blocks "
+                "FROM schedule_templates WHERE doctor_id = :did ORDER BY day_of_week"
+            ), {"did": user_with_relations.id}).fetchall()
+            for row in schedule_rows:
+                if row.is_active and 0 <= row.day_of_week <= 6:
+                    time_blocks = row.time_blocks if isinstance(row.time_blocks, list) else []
+                    if not time_blocks and row.start_time and row.end_time:
+                        time_blocks = [{"start_time": row.start_time.strftime("%H:%M"),
+                                        "end_time": row.end_time.strftime("%H:%M")}]
+                    weekly_schedule[day_names[row.day_of_week]] = {
+                        "is_active": True,
+                        "time_blocks": time_blocks,
+                    }
+        except Exception:
+            pass  # schedule is optional; don't break profile load on error
+
         return {
             "id": user_with_relations.id,
             "person_code": user_with_relations.person_code,
@@ -129,6 +152,7 @@ class DoctorService:
             "professional_license": professional_license,
             "professional_documents": professional_documents,
             "personal_documents": personal_documents,
+            "weekly_schedule": weekly_schedule,
             "specialty_id": user_with_relations.specialty_id,
             "specialty_name": specialty_name,
             "specialty_license": None,

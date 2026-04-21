@@ -156,7 +156,7 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
         )}
 
         {/* Profile Information Cards */}
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 3 }}>
+        <Box id="cedula" sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 3, scrollMarginTop: 24 }}>
           <PersonalInfoCard doctorProfile={doctorProfile} />
           <ProfessionalInfoCard doctorProfile={doctorProfile} />
         </Box>

@@ -17,12 +17,14 @@ import {
   CircularProgress,
   useMediaQuery,
   useTheme,
+  DialogContentText,
 } from '@mui/material';
 import { Office, OfficeCreate, OfficeUpdate } from '../../types';
 import { apiService } from '../../services';
 import { getSmallSelectMenuProps, getMediumSelectMenuProps, getLargeSelectMenuProps } from '../../utils/selectMenuProps';
 import { useSimpleToast } from '../common/ToastNotification';
 import { preventBackdropClose } from '../../utils/dialogHelpers';
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
 
 interface OfficeDialogProps {
   open: boolean;
@@ -60,14 +62,22 @@ const OfficeDialog: React.FC<OfficeDialogProps> = ({
   });
 
   const [loading, setLoading] = useState(false);
+  const [catalogsLoading, setCatalogsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  
+
   // Hook para notificaciones de éxito
   const toast = useSimpleToast();
   const [states, setStates] = useState<any[]>([]);
   const [countries, setCountries] = useState<any[]>([]);
+
+  // Guard: warn before closing with unsaved data (only for new offices)
+  const isDirty = !isEditing && formData.name.trim() !== '';
+  const { confirmDialogOpen, requestClose, confirmClose, cancelClose } = useUnsavedChangesGuard({
+    isDirty,
+    onConfirmedClose: onClose
+  });
 
   useEffect(() => {
     if (open) {
@@ -111,6 +121,7 @@ const OfficeDialog: React.FC<OfficeDialogProps> = ({
   }, [open, isEditing, office, countries]);
 
   const loadCatalogs = async () => {
+    setCatalogsLoading(true);
     try {
       const [statesData, countriesData] = await Promise.all([
         apiService.catalogs.getStates(),
@@ -119,7 +130,9 @@ const OfficeDialog: React.FC<OfficeDialogProps> = ({
       setStates(statesData);
       setCountries(countriesData);
     } catch (err) {
-      console.error('Error loading catalogs:', err);
+      toast.error('No se pudieron cargar los catálogos de país/estado. Recarga la página si el problema persiste.');
+    } finally {
+      setCatalogsLoading(false);
     }
   };
 
@@ -204,10 +217,11 @@ const OfficeDialog: React.FC<OfficeDialogProps> = ({
   };
 
   return (
-    <Dialog 
-      open={open} 
-      onClose={preventBackdropClose(onClose)} 
-      maxWidth="sm" 
+    <>
+    <Dialog
+      open={open}
+      onClose={preventBackdropClose(requestClose)}
+      maxWidth="sm"
       fullWidth
       fullScreen={isMobile}
       sx={{
@@ -469,8 +483,8 @@ const OfficeDialog: React.FC<OfficeDialogProps> = ({
           gap: { xs: 1, sm: 0 }
         }}
       >
-        <Button 
-          onClick={onClose} 
+        <Button
+          onClick={requestClose}
           disabled={loading}
           fullWidth={isMobile}
           size="large"
@@ -492,6 +506,20 @@ const OfficeDialog: React.FC<OfficeDialogProps> = ({
         </Button>
       </DialogActions>
     </Dialog>
+
+    <Dialog open={confirmDialogOpen} onClose={cancelClose} maxWidth="xs" fullWidth>
+      <DialogTitle>¿Descartar este consultorio?</DialogTitle>
+      <DialogContent>
+        <DialogContentText>
+          Escribiste un nombre para el consultorio. Si cierras ahora se perderá.
+        </DialogContentText>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={cancelClose} color="inherit">Seguir editando</Button>
+        <Button onClick={confirmClose} color="error" variant="contained">Descartar</Button>
+      </DialogActions>
+    </Dialog>
+    </>
   );
 };
 

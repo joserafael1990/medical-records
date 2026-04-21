@@ -12,7 +12,9 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem
+  MenuItem,
+  Divider,
+  DialogContentText
 } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -27,6 +29,7 @@ import { NewPatientForm } from '../appointments/NewPatientForm';
 import { AppointmentFormFields } from '../appointments/AppointmentFormFields';
 import { useAppointmentReminders } from '../../hooks/useAppointmentReminders';
 import { useProfileCompletion } from '../../hooks/useProfileCompletion';
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
 import { DoctorIntakePanel } from '../intake/DoctorIntakePanel';
 
 interface AppointmentDialogMultiOfficeProps {
@@ -131,6 +134,15 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
   // Hook para scroll automático a errores
   const { errorRef } = useScrollToErrorInDialog(currentError);
 
+  // Guard: warn before closing if the user has made meaningful selections
+  const isDirtyAppointment = !isEditing && !!(
+    currentFormData?.appointment_date || currentFormData?.patient_id || newPatientData?.name
+  );
+  const { confirmDialogOpen: apptConfirmOpen, requestClose: requestApptClose, confirmClose: confirmApptClose, cancelClose: cancelApptClose } = useUnsavedChangesGuard({
+    isDirty: isDirtyAppointment,
+    onConfirmedClose: onClose
+  });
+
   // Track appointment form opened
   useEffect(() => {
     if (open) {
@@ -189,9 +201,10 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
   };
 
   return (
+    <>
     <Dialog
       open={open}
-      onClose={preventBackdropClose(onClose)}
+      onClose={preventBackdropClose(requestApptClose)}
       maxWidth="sm"
       fullWidth
       fullScreen={window.innerWidth < 600}
@@ -249,7 +262,17 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
 
-            {/* 1-3. APPOINTMENT FIELDS (Type, Office, Date, Time) */}
+            {/* ── Paso 1 · Tipo y horario ─────────────────────────────── */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ width: 22, height: 22, borderRadius: '50%', bgcolor: 'primary.main', color: 'primary.contrastText', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1 }}>1</Typography>
+              </Box>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Tipo y horario
+              </Typography>
+              <Divider sx={{ flex: 1 }} />
+            </Box>
+
             <AppointmentFormFields
               formData={currentFormData}
               offices={offices}
@@ -263,8 +286,17 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
               disabled={currentLoading}
             />
 
-            {/* 4. PATIENT SELECTION LOGIC */}
-            
+            {/* ── Paso 2 · Paciente ───────────────────────────────────── */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ width: 22, height: 22, borderRadius: '50%', bgcolor: 'primary.main', color: 'primary.contrastText', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1 }}>2</Typography>
+              </Box>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Paciente
+              </Typography>
+              <Divider sx={{ flex: 1 }} />
+            </Box>
+
             {/* For "Primera vez" - Show patient type selector when not yet selected */}
             {!isEditing && currentFormData.consultation_type === 'Primera vez' && isExistingPatient === null && (
               <FormControl fullWidth sx={{ mt: 2 }}>
@@ -351,7 +383,19 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
               />
             )}
 
-            {/* 5. REMINDERS CONFIG */}
+            {/* ── Paso 3 · Recordatorios ─────────────────────────────── */}
+            {selectedDate && selectedTime && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box sx={{ width: 22, height: 22, borderRadius: '50%', bgcolor: 'primary.main', color: 'primary.contrastText', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1 }}>3</Typography>
+                </Box>
+                <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Recordatorios
+                </Typography>
+                <Divider sx={{ flex: 1 }} />
+              </Box>
+            )}
+
             {selectedDate && selectedTime && (
               <Box sx={{ mt: 2 }}>
                 <RemindersConfig
@@ -379,7 +423,7 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
       </DialogContent>
 
       <DialogActions>
-        <Button onClick={onClose} disabled={currentLoading}>
+        <Button onClick={requestApptClose} disabled={currentLoading}>
           Cerrar
         </Button>
         <Button
@@ -395,6 +439,20 @@ const AppointmentDialogMultiOffice: React.FC<AppointmentDialogMultiOfficeProps> 
         </Button>
       </DialogActions>
     </Dialog>
+
+    <Dialog open={apptConfirmOpen} onClose={cancelApptClose} maxWidth="xs" fullWidth>
+      <DialogTitle>¿Descartar esta cita?</DialogTitle>
+      <DialogContent>
+        <DialogContentText>
+          Ya seleccionaste fecha o paciente. Si cierras ahora se perderán los datos ingresados.
+        </DialogContentText>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={cancelApptClose} color="inherit">Seguir editando</Button>
+        <Button onClick={confirmApptClose} color="error" variant="contained">Descartar</Button>
+      </DialogActions>
+    </Dialog>
+    </>
   );
 };
 

@@ -78,34 +78,43 @@ const ProfileCompletionBanner: React.FC<ProfileCompletionBannerProps> = ({
       key={item.id}
       sx={{
         display: 'flex',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         gap: 1,
         py: 0.5
       }}
     >
-      {item.done ? (
-        <CheckCircleIcon fontSize="small" color="success" />
-      ) : (
-        <UncheckedIcon fontSize="small" sx={{ color: 'text.disabled' }} />
-      )}
-      <Typography
-        variant="body2"
-        sx={{
-          flex: 1,
-          color: item.done ? 'text.secondary' : 'text.primary',
-          textDecoration: item.done ? 'line-through' : 'none'
-        }}
-      >
-        {item.label}
-      </Typography>
+      <Box sx={{ pt: 0.25 }}>
+        {item.done ? (
+          <CheckCircleIcon fontSize="small" color="success" />
+        ) : (
+          <UncheckedIcon fontSize="small" sx={{ color: 'text.disabled' }} />
+        )}
+      </Box>
+      <Box sx={{ flex: 1 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: item.done ? 'text.secondary' : 'text.primary',
+            textDecoration: item.done ? 'line-through' : 'none'
+          }}
+        >
+          {item.label}
+        </Typography>
+        {!item.done && item.hint && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+            {item.hint}
+          </Typography>
+        )}
+      </Box>
       {!item.done && item.blocking && (
-        <Chip label="Requerido" size="small" color="warning" variant="outlined" />
+        <Chip label="Requerido" size="small" color="warning" variant="outlined" sx={{ flexShrink: 0 }} />
       )}
       {!item.done && (
         <IconButton
           size="small"
           onClick={() => onNavigateToProfile?.(item.target)}
           aria-label={`Ir a configurar: ${item.label}`}
+          sx={{ flexShrink: 0 }}
         >
           <ArrowForwardIcon fontSize="small" />
         </IconButton>

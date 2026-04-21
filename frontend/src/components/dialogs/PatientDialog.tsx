@@ -9,7 +9,8 @@ import {
   IconButton,
   Typography,
   Box,
-  Divider
+  Divider,
+  DialogContentText
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -20,6 +21,7 @@ import { PrivacyConsentDialog } from './PrivacyConsentDialog';
 import { ARCORequestDialog } from './ARCORequestDialog';
 import { useScrollToErrorInDialog } from '../../hooks/useScrollToError';
 import { usePatientForm } from '../../hooks/usePatientForm';
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
 import { preventBackdropClose } from '../../utils/dialogHelpers';
 import { BasicInformationSection } from '../patient/BasicInformationSection';
 import { ContactInformationSection } from '../patient/ContactInformationSection';
@@ -67,6 +69,7 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
     states,
     birthStates,
     handleChange,
+    handleBlur,
     handleCountryChange,
     handlePhoneChange,
     handleSubmit,
@@ -79,6 +82,13 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
 
   // Auto-scroll to error when it appears
   const { errorRef } = useScrollToErrorInDialog(error);
+
+  // Consider form dirty if the user has typed the patient name or a phone number
+  const isDirty = !isEditing && (formData.name.trim() !== '' || phoneNumber.trim() !== '');
+  const { confirmDialogOpen, requestClose, confirmClose, cancelClose } = useUnsavedChangesGuard({
+    isDirty,
+    onConfirmedClose: handleClose
+  });
 
   // Track form opened
   React.useEffect(() => {
@@ -111,7 +121,8 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
   }, [errors]);
 
   return (
-    <Dialog open={open} onClose={preventBackdropClose(handleClose)} maxWidth="lg" fullWidth>
+    <>
+    <Dialog open={open} onClose={preventBackdropClose(requestClose)} maxWidth="lg" fullWidth>
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
           <PersonIcon color="primary" />
@@ -120,7 +131,7 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
           </Typography>
           {isEditing && <IncompleteProfileChip patient={patient} />}
         </Box>
-        <IconButton aria-label="Cerrar" onClick={handleClose} size="small">
+        <IconButton aria-label="Cerrar" onClick={requestClose} size="small">
           <CloseIcon />
         </IconButton>
       </DialogTitle>
@@ -152,6 +163,7 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
             formData={formData}
             errors={errors}
             onChange={handleChange}
+            onBlur={handleBlur}
           />
 
           {/* Contact Information Section */}
@@ -219,9 +231,9 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
 
         {/* Action buttons */}
         <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', width: '100%' }}>
-          <Button 
-            onClick={handleClose} 
-            color="inherit" 
+          <Button
+            onClick={requestClose}
+            color="inherit"
             disabled={loading}
             type="button"
           >
@@ -251,6 +263,21 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
         patient={patient || null}
       />
     </Dialog>
+
+    {/* Unsaved-changes confirmation */}
+    <Dialog open={confirmDialogOpen} onClose={cancelClose} maxWidth="xs" fullWidth>
+      <DialogTitle>¿Descartar cambios?</DialogTitle>
+      <DialogContent>
+        <DialogContentText>
+          Tienes datos ingresados que no se han guardado. Si cierras ahora se perderán.
+        </DialogContentText>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={cancelClose} color="inherit">Seguir editando</Button>
+        <Button onClick={confirmClose} color="error" variant="contained">Descartar</Button>
+      </DialogActions>
+    </Dialog>
+    </>
   );
 };
 

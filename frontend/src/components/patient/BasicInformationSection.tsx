@@ -13,12 +13,14 @@ interface BasicInformationSectionProps {
     };
     errors: { [key: string]: string };
     onChange: (field: string) => (event: any) => void;
+    onBlur?: (field: string) => () => void;
 }
 
 export const BasicInformationSection: React.FC<BasicInformationSectionProps> = ({
     formData,
     errors,
-    onChange
+    onChange,
+    onBlur
 }) => {
     return (
         <Box>
@@ -32,6 +34,7 @@ export const BasicInformationSection: React.FC<BasicInformationSectionProps> = (
                     name="name"
                     value={formData.name}
                     onChange={onChange('name')}
+                    onBlur={onBlur?.('name')}
                     size="small"
                     required
                     placeholder="Ingresa el nombre completo (nombre y apellidos)"

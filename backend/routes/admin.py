@@ -9,10 +9,6 @@ from database import get_db
 from dependencies import get_current_user
 from config import settings
 
-# Temporary authentication bypass for development
-def get_current_user_dev():
-    """Temporary function to bypass authentication during development"""
-    return None
 from encryption import get_encryption_service
 from logger import get_logger
 from data_retention_service import get_retention_stats, get_expiring_records
@@ -25,7 +21,7 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 @router.get("/encryption-status")
 async def get_encryption_status(
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_dev)
+    current_user = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
     Get encryption status and configuration
@@ -114,7 +110,7 @@ async def get_doctors(
 @router.get("/catalog-status")
 async def get_catalog_status(
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_dev)
+    current_user = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
     Get catalog status and compliance information
@@ -173,7 +169,7 @@ async def get_catalog_status(
 @router.get("/system-status")
 async def get_system_status(
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_dev)
+    current_user = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
     Get overall system status including encryption and catalog compliance
@@ -215,7 +211,7 @@ async def get_system_status(
 async def get_retention_status(
     doctor_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_dev)
+    current_user = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
     Get data retention status and statistics

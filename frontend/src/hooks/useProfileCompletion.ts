@@ -16,6 +16,8 @@ export interface CompletionItem {
    * table (this hook doesn't know about react-router).
    */
   target?: string;
+  /** Short explanation of why this item blocks core workflows. */
+  hint?: string;
 }
 
 export interface ProfileCompletionResult {
@@ -29,23 +31,24 @@ export interface ProfileCompletionResult {
 
 const hasActiveSchedule = (schedule: any): boolean => {
   if (!schedule) return false;
+  // A day is considered scheduled if is_active is true — same logic as useScheduleData.
+  // Do NOT require time_blocks.length > 0: the DB may store schedule via start_time/end_time columns
+  // rather than a time_blocks JSON array.
   if (Array.isArray(schedule)) {
-    return schedule.some((day: any) => day?.is_active && day?.time_blocks?.length);
+    return schedule.some((day: any) => !!day?.is_active);
   }
   if (typeof schedule === 'object') {
-    return Object.values(schedule).some(
-      (day: any) => day?.is_active && Array.isArray(day?.time_blocks) && day.time_blocks.length > 0
-    );
+    return Object.values(schedule).some((day: any) => !!day?.is_active);
   }
   return false;
 };
 
 const hasCedula = (documents: any[] | undefined): boolean => {
   if (!Array.isArray(documents)) return false;
+  // Accept any professional document with a non-empty value (cédula, colegiatura, matrícula, etc.)
   return documents.some((d: any) => {
-    const name = (d?.document_name || d?.type_name || d?.name || '').toString().toLowerCase();
     const value = (d?.document_value || d?.value || '').toString().trim();
-    return value.length > 0 && (name.includes('cédula') || name.includes('cedula'));
+    return value.length > 0;
   });
 };
 
@@ -62,7 +65,9 @@ export const useProfileCompletion = (doctorProfile: any): ProfileCompletionResul
       ? doctorProfile.documents
       : Array.isArray(doctorProfile?.person_documents)
         ? doctorProfile.person_documents
-        : [];
+        : Array.isArray(doctorProfile?.professional_documents)
+          ? doctorProfile.professional_documents
+          : [];
     const schedule = doctorProfile?.schedule || doctorProfile?.weekly_schedule || null;
 
     const items: CompletionItem[] = [
@@ -71,46 +76,50 @@ export const useProfileCompletion = (doctorProfile: any): ProfileCompletionResul
         label: 'Especialidad médica',
         done: !!doctorProfile?.specialty_id || !!doctorProfile?.specialty?.id,
         blocking: true,
-        target: 'profile'
+        target: 'profile',
+        hint: 'Requerido por NOM-004 para emitir recetas y expedientes clínicos válidos.'
       },
       {
         id: 'cedula',
         label: 'Cédula profesional',
-        done: hasCedula(documents),
+        done: !!doctorProfile?.professional_license || hasCedula(documents),
         blocking: true,
-        target: 'profile'
+        target: 'cedula',
+        hint: 'Obligatoria para acreditar tu ejercicio profesional ante la SSA y en cada expediente.'
       },
       {
         id: 'office',
         label: 'Al menos un consultorio',
         done: offices.length > 0,
-        blocking: true, // can't create appointments without an office
-        target: 'profile#offices'
+        blocking: true,
+        target: 'offices',
+        hint: 'Sin consultorio no puedes agendar citas — las citas siempre se asocian a un lugar físico o virtual.'
       },
       {
         id: 'schedule',
         label: 'Horarios de atención',
         done: hasActiveSchedule(schedule),
-        blocking: true, // can't let patients book without a schedule
-        target: 'profile#schedule'
+        blocking: true,
+        target: 'schedule',
+        hint: 'El sistema bloquea fechas sin horario activo para que no lleguen citas fuera de tu disponibilidad.'
       },
       {
         id: 'phone',
         label: 'Teléfono de contacto',
         done: !!(doctorProfile?.primary_phone || doctorProfile?.phone)?.toString().trim(),
-        target: 'profile'
+        target: undefined
       },
       {
         id: 'address',
         label: 'Dirección del consultorio',
         done: offices.some((o: any) => !!(o?.address || o?.office_address)),
-        target: 'profile#offices'
+        target: 'offices'
       },
       {
         id: 'appointment_duration',
         label: 'Duración de la consulta',
         done: !!doctorProfile?.appointment_duration,
-        target: 'profile'
+        target: undefined
       }
     ];
 

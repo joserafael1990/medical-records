@@ -9,7 +9,6 @@ from sqlalchemy import text, func
 from datetime import datetime, date, timedelta, time
 from typing import Optional
 import json
-import psycopg2
 
 from database import get_db, Person, Appointment, Office
 from dependencies import get_current_user
@@ -423,6 +422,7 @@ async def update_schedule_template(
 @router.get("/schedule/available-times")
 async def get_available_times(
     date: str,
+    db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
     """Get available appointment times for a specific date based on doctor's schedule and existing appointments"""
@@ -435,23 +435,15 @@ async def get_available_times(
         target_date = datetime.strptime(date, "%Y-%m-%d").date()
         day_of_week = target_date.weekday()  # 0=Monday, 6=Sunday
         
-        # Get doctor's schedule for this day
-        conn = psycopg2.connect(
-            host='postgres-db',
-            database='historias_clinicas',
-            user='historias_user',
-            password='historias_pass'
-        )
-        cursor = conn.cursor()
-        
         # Get schedule template for this day
-        cursor.execute("""
-            SELECT start_time, end_time, time_blocks
-            FROM schedule_templates 
-            WHERE doctor_id = %s AND day_of_week = %s AND is_active = true
-        """, (doctor_id, day_of_week))
-        
-        schedule_result = cursor.fetchone()
+        schedule_result = db.execute(
+            text("""
+                SELECT start_time, end_time, time_blocks
+                FROM schedule_templates
+                WHERE doctor_id = :doctor_id AND day_of_week = :day_of_week AND is_active = true
+            """),
+            {"doctor_id": doctor_id, "day_of_week": day_of_week}
+        ).fetchone()
         if not schedule_result:
             api_logger.info("No schedule found for this day", doctor_id=doctor_id, day_of_week=day_of_week)
             return {"available_times": []}
@@ -483,13 +475,10 @@ async def get_available_times(
         api_logger.debug("Final time_blocks", doctor_id=current_user.id, count=len(time_blocks) if time_blocks else 0)
         
         # Get doctor's appointment duration (from persons table)
-        cursor.execute("""
-            SELECT appointment_duration 
-            FROM persons 
-            WHERE id = %s
-        """, (doctor_id,))
-        
-        doctor_result = cursor.fetchone()
+        doctor_result = db.execute(
+            text("SELECT appointment_duration FROM persons WHERE id = :id"),
+            {"id": doctor_id}
+        ).fetchone()
         consultation_duration = doctor_result[0] if doctor_result and doctor_result[0] else 30
         
         if not time_blocks:
@@ -497,28 +486,27 @@ async def get_available_times(
             return {"available_times": []}
         
         # Get doctor's timezone from offices table
-        cursor.execute("""
-            SELECT timezone 
-            FROM offices 
-            WHERE doctor_id = %s AND is_active = TRUE
-            LIMIT 1
-        """, (doctor_id,))
-        
-        timezone_result = cursor.fetchone()
+        timezone_result = db.execute(
+            text("""
+                SELECT timezone FROM offices
+                WHERE doctor_id = :doctor_id AND is_active = TRUE
+                LIMIT 1
+            """),
+            {"doctor_id": doctor_id}
+        ).fetchone()
         doctor_timezone = timezone_result[0] if timezone_result and timezone_result[0] else 'America/Mexico_City'
-        
+
         # Get existing appointments for this date
-        # Since appointments are stored in CDMX timezone (without tzinfo), 
-        # we can query them directly without timezone conversion
-        cursor.execute("""
-            SELECT appointment_date, end_time 
-            FROM appointments 
-            WHERE doctor_id = %s 
-            AND DATE(appointment_date) = %s 
-            AND status IN ('confirmada', 'por_confirmar')
-        """, (doctor_id, date))
-        
-        existing_appointments = cursor.fetchall()
+        existing_appointments = db.execute(
+            text("""
+                SELECT appointment_date, end_time
+                FROM appointments
+                WHERE doctor_id = :doctor_id
+                AND DATE(appointment_date) = :date
+                AND status IN ('confirmada', 'por_confirmar')
+            """),
+            {"doctor_id": doctor_id, "date": date}
+        ).fetchall()
         
         # Convert existing appointments to time ranges
         # Since appointments are stored in CDMX timezone (without tzinfo),
@@ -566,9 +554,6 @@ async def get_available_times(
                 
                 # Move to next slot (30 minutes)
                 current_time = (datetime.combine(target_date, current_time) + timedelta(minutes=consultation_duration)).time()
-        
-        cursor.close()
-        conn.close()
         
         preview_slots = [
             {"time": slot["time"], "duration": slot["duration_minutes"]}
