@@ -38,7 +38,23 @@ class DocumentFolioService:
 
     @staticmethod
     def _table_exists(db: Session, table_name: str) -> bool:
-        """Check if a table exists in the database"""
+        """Check if a table exists in the database.
+
+        Inlined logic (no debug payload): PR #24 accidentally stripped the
+        real body when it removed the `# #region agent log` wrapper that
+        leaked PII. The check itself was never supposed to be removed — it
+        guards callers from hitting tables that the repair migration
+        `b1c2d3e4f5a6` creates on demand.
+        """
+        try:
+            inspector = inspect(engine)
+            return table_name in inspector.get_table_names()
+        except Exception as exc:
+            api_logger.error(
+                "DocumentFolioService._table_exists failed",
+                extra={"table_name": table_name, "error": str(exc)},
+            )
+            return False
 
     @staticmethod
     def get_or_create_folio(
