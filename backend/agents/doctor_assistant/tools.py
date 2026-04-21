@@ -72,13 +72,26 @@ def search_patients(
     limit = max(1, min(limit, MAX_SEARCH_LIMIT))
 
     like = f"%{q}%"
-    rows: List[Person] = (
-        db.query(Person)
-        .filter(Person.person_type == "patient", Person.name.ilike(like))
-        .order_by(Person.name.asc())
-        .limit(limit)
-        .all()
-    )
+    try:
+        rows: List[Person] = (
+            db.query(Person)
+            .filter(
+                Person.person_type == "patient",
+                func.unaccent(Person.name).ilike(func.unaccent(like)),
+            )
+            .order_by(Person.name.asc())
+            .limit(limit)
+            .all()
+        )
+    except Exception:
+        # unaccent extension not available — fall back to plain ilike
+        rows = (
+            db.query(Person)
+            .filter(Person.person_type == "patient", Person.name.ilike(like))
+            .order_by(Person.name.asc())
+            .limit(limit)
+            .all()
+        )
 
     visible = [p for p in rows if doctor_can_read_patient(db, doctor, p)]
     patients = [_serialize_patient_brief(p) for p in visible]
