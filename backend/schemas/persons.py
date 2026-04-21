@@ -10,24 +10,48 @@ from .documents import PersonDocumentCreate
 from .office import Office, OfficeCreate
 
 
+# Canonical gender is a single-letter code: M / F / O. Legacy callers and
+# older rows use full Spanish/English words; the normalizer below accepts
+# those and coerces to the canonical code so the DB stays consistent.
+GenderCode = Literal['M', 'F', 'O']
+
+_GENDER_ALIASES = {
+    'm': 'M', 'masculino': 'M', 'male': 'M', 'hombre': 'M',
+    'f': 'F', 'femenino': 'F', 'female': 'F', 'mujer': 'F',
+    'o': 'O', 'otro': 'O', 'other': 'O',
+}
+
+
+def normalize_gender(v: Any) -> Optional[str]:
+    """Coerce any accepted gender input to the canonical M/F/O code.
+
+    Returns None for None/empty; raises ValueError for unknown values so
+    Pydantic surfaces a 422 instead of silently writing garbage.
+    """
+    if v is None:
+        return None
+    s = str(v).strip()
+    if not s:
+        return None
+    code = _GENDER_ALIASES.get(s.lower())
+    if code is None:
+        raise ValueError(f"gender inválido: '{v}' (valores aceptados: M, F, O, Masculino, Femenino, Otro)")
+    return code
+
+
 class PersonBase(BaseSchema):
     person_type: Literal['doctor', 'patient', 'admin']
     title: Optional[str] = None
     name: str
     birth_date: Optional[date] = None
-    gender: Optional[str] = None  # Optional: can be null for first-time appointments
+    gender: Optional[GenderCode] = None
     civil_status: Optional[str] = None
     birth_city: Optional[str] = None
 
-    @model_validator(mode='before')
+    @field_validator('gender', mode='before')
     @classmethod
-    def validate_gender_allow_none(cls, data: Any) -> Any:
-        # Ensure gender can be None in response validation
-        if isinstance(data, dict) and 'gender' in data:
-            # Explicitly allow None - convert empty string to None
-            if data['gender'] is None or data['gender'] == '':
-                data['gender'] = None
-        return data
+    def _normalize_gender(cls, v: Any) -> Any:
+        return normalize_gender(v)
 
     @field_validator('name')
     @classmethod
@@ -121,10 +145,15 @@ class DoctorUpdate(BaseSchema):
     primary_phone_country_code: Optional[str] = None
     primary_phone_number: Optional[str] = None
     birth_date: Optional[date] = None
-    gender: Optional[Literal['M', 'F', 'O']] = None
+    gender: Optional[GenderCode] = None
     civil_status: Optional[str] = None
     birth_city: Optional[str] = None
     birth_state_id: Optional[int] = None
+
+    @field_validator('gender', mode='before')
+    @classmethod
+    def _normalize_gender(cls, v: Any) -> Any:
+        return normalize_gender(v)
 
     # Personal address
     home_address: Optional[str] = None
@@ -164,7 +193,7 @@ class DoctorUpdate(BaseSchema):
 # Medical data for patients
 class PatientCreate(PersonBase):
     person_type: Literal['patient'] = 'patient'
-    gender: Optional[str] = None  # Optional for first-time appointments
+    gender: Optional[GenderCode] = None  # Optional for first-time appointments
 
     # Medical data
     insurance_provider: Optional[str] = None
@@ -179,9 +208,14 @@ class PersonUpdate(BaseSchema):
     title: Optional[str] = None
     name: Optional[str] = None
     birth_date: Optional[date] = None
-    gender: Optional[str] = None
+    gender: Optional[GenderCode] = None
     civil_status: Optional[str] = None
     birth_city: Optional[str] = None
+
+    @field_validator('gender', mode='before')
+    @classmethod
+    def _normalize_gender(cls, v: Any) -> Any:
+        return normalize_gender(v)
 
     # Birth location
     birth_state_id: Optional[int] = None

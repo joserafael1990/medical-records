@@ -4,6 +4,7 @@ import { Person as PersonIcon } from '@mui/icons-material';
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
+import { GENDER_CODE_OPTIONS } from '../../utils/gender';
 
 interface BasicInformationSectionProps {
     formData: {
@@ -77,9 +78,9 @@ export const BasicInformationSection: React.FC<BasicInformationSectionProps> = (
                         sx={{ minWidth: 120 }}
                     >
                         <MenuItem value=""><em>Seleccione</em></MenuItem>
-                        <MenuItem value="Masculino">Masculino</MenuItem>
-                        <MenuItem value="Femenino">Femenino</MenuItem>
-                        <MenuItem value="Otro">Otro</MenuItem>
+                        {GENDER_CODE_OPTIONS.map(opt => (
+                            <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+                        ))}
                     </Select>
                     {errors.gender && <FormHelperText>{errors.gender}</FormHelperText>}
                 </FormControl>

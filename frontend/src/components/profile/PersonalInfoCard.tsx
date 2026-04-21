@@ -19,6 +19,7 @@ import {
     Favorite as CivilIcon,
     Home as HomeIcon
 } from '@mui/icons-material';
+import { formatGenderLabel } from '../../utils/gender';
 
 interface PersonalInfoCardProps {
     doctorProfile: {
@@ -47,11 +48,6 @@ const formatDate = (dateStr?: string) => {
     } catch {
         return dateStr;
     }
-};
-
-const GENDER_LABELS: Record<string, string> = {
-    M: 'Masculino', F: 'Femenino', O: 'Otro',
-    male: 'Masculino', female: 'Femenino', other: 'Otro'
 };
 
 export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({ doctorProfile }) => {
@@ -104,7 +100,7 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({ doctorProfil
                         <ListItemIcon><GenderIcon color="action" /></ListItemIcon>
                         <ListItemText
                             primary="Género"
-                            secondary={GENDER_LABELS[doctorProfile.gender ?? ''] || doctorProfile.gender || 'No especificado'}
+                            secondary={formatGenderLabel(doctorProfile.gender, 'No especificado')}
                         />
                     </ListItem>
 

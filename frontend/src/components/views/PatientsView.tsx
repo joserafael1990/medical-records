@@ -34,6 +34,7 @@ import {
 } from '@mui/icons-material';
 import { Patient, Consultation } from '../../types';
 import { calculateAge } from '../../utils';
+import { formatGenderLabel, normalizeGenderCode } from '../../utils/gender';
 import { ErrorRibbon } from '../common/ErrorRibbon';
 import { useMemoizedSearch } from '../../hooks/useMemoizedSearch';
 import { IntelligentSearch, useIntelligentSearch } from '../common/IntelligentSearch';
@@ -164,9 +165,10 @@ const PatientsView: React.FC<PatientsViewProps> = ({
       });
     }
 
-    // Aplicar filtro de género
+    // Aplicar filtro de género (normaliza ambos lados para tolerar filas legacy
+    // con valores mixtos hasta que la migración de datos corra).
     if (filters.gender !== 'all') {
-      filtered = filtered.filter((patient: any) => patient.gender === filters.gender);
+      filtered = filtered.filter((patient: any) => normalizeGenderCode(patient.gender) === filters.gender);
     }
 
     // Aplicar filtro de fecha de creación
@@ -426,7 +428,7 @@ const PatientsView: React.FC<PatientsViewProps> = ({
                           })()}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          {patient.gender}
+                          {formatGenderLabel(patient.gender, '')}
                         </Typography>
                       </Box>
                     </Box>
