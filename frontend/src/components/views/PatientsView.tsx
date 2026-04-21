@@ -419,7 +419,11 @@ const PatientsView: React.FC<PatientsViewProps> = ({
                       </Avatar>
                       <Box>
                         <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                          {patient.name} ({calculateAge(patient.birth_date)})
+                          {patient.name}
+                          {(() => {
+                            const age = calculateAge(patient.birth_date);
+                            return age !== null ? ` (${age})` : '';
+                          })()}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
                           {patient.gender}

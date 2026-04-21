@@ -301,9 +301,9 @@ export class BasePDFGenerator {
         this.doc.text(formattedDate, 15, currentY);
 
         // Age value (right side)
-        const ageText = patient.dateOfBirth ? calculateAge(patient.dateOfBirth) : '';
-        if (ageText) {
-            this.doc.text(ageText, edadX, currentY);
+        const age = patient.dateOfBirth ? calculateAge(patient.dateOfBirth) : null;
+        if (age !== null) {
+            this.doc.text(String(age), edadX, currentY);
         }
 
         // Folio next to date if available

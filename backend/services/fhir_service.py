@@ -90,11 +90,14 @@ def build_doctor_view(db: Session, person: Any) -> SimpleNamespace:
         # contact
         email=person.email,
         phone=getattr(person, "primary_phone", None),
-        # office (flattened for FHIR Address)
-        office_address=office.address if office else None,
-        office_city=office.city if office else None,
-        office_state=getattr(office, "state_name", None) if office else None,
-        office_postal_code=getattr(office, "postal_code", None) if office else None,
+        # office (flattened for FHIR Address).
+        # FHIRAddress requires string city/state/postal_code — fall back to ""
+        # when the office is absent or fields are null so the adapter can build
+        # a valid (if minimal) Address block instead of raising 422.
+        office_address=(office.address if office else None) or "",
+        office_city=(office.city if office else None) or "",
+        office_state=(getattr(office, "state_name", None) if office else None) or "",
+        office_postal_code=(getattr(office, "postal_code", None) if office else None) or "",
         # specialty
         specialty=specialty,
     )
