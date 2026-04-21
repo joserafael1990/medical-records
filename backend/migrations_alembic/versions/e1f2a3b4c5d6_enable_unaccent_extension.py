@@ -15,8 +15,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.execute("CREATE EXTENSION IF NOT EXISTS unaccent")
+    op.execute("""
+DO $$ BEGIN
+    CREATE EXTENSION unaccent;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+""")
 
 
 def downgrade() -> None:
-    op.execute("DROP EXTENSION IF EXISTS unaccent")
+    pass
