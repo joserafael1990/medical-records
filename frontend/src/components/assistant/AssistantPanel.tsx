@@ -78,7 +78,7 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({
 
   // Hide Sentry feedback widget while panel is open so it doesn't overlap the input.
   useEffect(() => {
-    const el = document.querySelector('sentry-feedback') as HTMLElement | null;
+    const el = document.getElementById('sentry-feedback');
     if (el) el.style.display = open ? 'none' : '';
   }, [open]);
 
