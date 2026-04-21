@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Date, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from .base import Base, utc_now
@@ -58,6 +59,16 @@ class Person(Base):
     emergency_contact_phone = Column(String(20))
     emergency_contact_relationship = Column(String(20), ForeignKey("emergency_relationships.code"))
     
+    # INTAKE PREFERENCES (doctors only)
+    # List of `INTAKE_QUESTIONS` ids the doctor has opted OUT of.
+    # See services/intake/questions.py. JSONB array, default [].
+    intake_excluded_questions = Column(
+        JSONB,
+        nullable=False,
+        server_default='[]',
+        default=list,
+    )
+
     # AUTHENTICATION
     hashed_password = Column(String(255))
     

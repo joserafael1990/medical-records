@@ -2,8 +2,9 @@
  * Public Pre-Consultation Intake Form
  *
  * Reached via a tokenised WhatsApp link: /public/intake/:token
- * Unauthenticated. Renders the 8 hardcoded questions, posts answers back,
- * and shows a thank-you state on success.
+ * Unauthenticated. Renders the (possibly filtered) question set grouped
+ * by NOM-004 section, posts answers back, and shows a thank-you state
+ * on success.
  *
  * Keeps the UI minimal and mobile-first — most patients will open this
  * on a phone from a WhatsApp push notification.
@@ -16,8 +17,8 @@ import {
   Button,
   Card,
   CardContent,
-  CircularProgress,
   Container,
+  Divider,
   FormControl,
   FormControlLabel,
   FormLabel,
@@ -99,18 +100,30 @@ export const PublicIntakeForm: React.FC = () => {
     // Client-side required check — mirrors server validation for better UX.
     const errs: string[] = [];
     state.payload.questions.forEach((q) => {
-      if (!q.required) return;
-      const v = answers[q.id];
-      if (v === undefined || v === null || (typeof v === 'string' && v.trim() === '')) {
-        errs.push(`Falta: ${q.label}`);
+      if (q.required) {
+        const v = answers[q.id];
+        if (
+          v === undefined ||
+          v === null ||
+          (typeof v === 'string' && v.trim() === '')
+        ) {
+          errs.push(`Falta: ${q.label}`);
+          return;
+        }
+      }
+      // Generic yes_no + followup: if answered "yes", the {qid}_detail
+      // field is required.
+      if (q.type === 'yes_no' && q.followup && answers[q.id] === true) {
+        const detail = answers[`${q.id}_detail`];
+        if (
+          detail === undefined ||
+          detail === null ||
+          (typeof detail === 'string' && detail.trim() === '')
+        ) {
+          errs.push(`Falta: ${q.followup.label}`);
+        }
       }
     });
-    if (answers.q7_recent_procedures === true) {
-      const followup = answers.q7_recent_procedures_detail;
-      if (!followup || (typeof followup === 'string' && followup.trim() === '')) {
-        errs.push('Falta el detalle de cirugías/hospitalizaciones.');
-      }
-    }
     if (errs.length > 0) {
       setValidationErrors(errs);
       return;
@@ -172,6 +185,15 @@ export const PublicIntakeForm: React.FC = () => {
   const { payload } = state;
   if (!payload) return null;
 
+  // Group questions by section, falling back to a single "default" bucket if
+  // the backend didn't ship section metadata. Preserves the intended order
+  // from `section_order`; any unknown section id at the end.
+  const groups = groupQuestionsBySection(
+    payload.questions,
+    payload.section_order,
+    payload.section_labels
+  );
+
   return (
     <Container maxWidth="sm" sx={{ py: 3 }}>
       <Stack spacing={2}>
@@ -212,23 +234,33 @@ export const PublicIntakeForm: React.FC = () => {
           <Alert severity="error">{state.errorMessage}</Alert>
         )}
 
-        {payload.questions.map((q) => (
-          <QuestionField
-            key={q.id}
-            question={q}
-            value={answers[q.id]}
-            onChange={setAnswer}
-            followupValue={
-              q.id === 'q7_recent_procedures'
-                ? (answers.q7_recent_procedures_detail ?? '')
-                : undefined
-            }
-            onFollowupChange={
-              q.id === 'q7_recent_procedures'
-                ? (v) => setAnswer('q7_recent_procedures_detail', v)
-                : undefined
-            }
-          />
+        {groups.map((group) => (
+          <Box key={group.id}>
+            {group.label && (
+              <>
+                <Typography
+                  variant="overline"
+                  color="text.secondary"
+                  sx={{ display: 'block', mt: 1, fontWeight: 700 }}
+                >
+                  {group.label}
+                </Typography>
+                <Divider sx={{ mb: 1 }} />
+              </>
+            )}
+            <Stack spacing={2}>
+              {group.questions.map((q) => (
+                <QuestionField
+                  key={q.id}
+                  question={q}
+                  value={answers[q.id]}
+                  onChange={setAnswer}
+                  followupValue={answers[`${q.id}_detail`] ?? ''}
+                  onFollowupChange={(v) => setAnswer(`${q.id}_detail`, v)}
+                />
+              ))}
+            </Stack>
+          </Box>
         ))}
 
         <Button
@@ -246,6 +278,56 @@ export const PublicIntakeForm: React.FC = () => {
       </Stack>
     </Container>
   );
+};
+
+
+interface QuestionGroup {
+  id: string;
+  label: string;
+  questions: IntakeQuestion[];
+}
+
+function groupQuestionsBySection(
+  questions: IntakeQuestion[],
+  orderHint?: string[],
+  labels?: Record<string, string>
+): QuestionGroup[] {
+  // If no questions carry section metadata, render flat (no labels).
+  const hasSections = questions.some((q) => !!q.section);
+  if (!hasSections) {
+    return [{ id: '_flat', label: '', questions }];
+  }
+  const buckets = new Map<string, IntakeQuestion[]>();
+  questions.forEach((q) => {
+    const key = q.section || '_other';
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key)!.push(q);
+  });
+  const order: string[] = [];
+  (orderHint || []).forEach((s) => {
+    if (buckets.has(s)) order.push(s);
+  });
+  // Append any section present in questions but not in orderHint.
+  buckets.forEach((_, key) => {
+    if (!order.includes(key)) order.push(key);
+  });
+  return order.map((id) => ({
+    id,
+    label: (labels && labels[id]) || SECTION_LABELS_FALLBACK[id] || '',
+    questions: buckets.get(id) || [],
+  }));
+}
+
+// Fallback labels in case the backend didn't ship `section_labels`. The
+// backend is the source of truth; these are only a safety net so the UI
+// renders gracefully if the endpoint is behind a version.
+const SECTION_LABELS_FALLBACK: Record<string, string> = {
+  current_condition: 'Motivo de consulta',
+  pathological_history: 'Antecedentes médicos',
+  non_pathological_history: 'Hábitos',
+  family_history: 'Antecedentes familiares',
+  gynecological: 'Antecedentes gineco-obstétricos',
+  other: 'Otros',
 };
 
 
