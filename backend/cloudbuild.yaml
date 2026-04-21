@@ -69,8 +69,8 @@ steps:
       # on each of these secrets (already granted to the compute default SA).
       - '--set-secrets=DATABASE_URL=cortex-database-url:latest,SECRET_KEY=cortex-secret-key:latest,JWT_SECRET_KEY=cortex-jwt-secret-key:latest,MEDICAL_ENCRYPTION_KEY=cortex-medical-encryption-key:latest,META_WHATSAPP_TOKEN=cortex-meta-whatsapp-token:latest,META_WHATSAPP_VERIFY_TOKEN=cortex-meta-whatsapp-verify-token:latest,META_WHATSAPP_APP_SECRET=cortex-meta-whatsapp-app-secret:latest,GOOGLE_CLIENT_SECRET=cortex-google-client-secret:latest'
 
-# Build timeout (10 minutes)
-timeout: 600s
+# Build timeout — migration can take ~8 min, deploy ~3 min; 20 min is safe
+timeout: 1200s
 
 # Substitutions (can be overridden)
 # _GOOGLE_CLIENT_ID and _META_WHATSAPP_PHONE_ID are non-secret identifiers
