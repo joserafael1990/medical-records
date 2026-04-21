@@ -315,6 +315,10 @@ export const useAppointmentMultiOfficeForm = (
   // Initialize form data when dialog opens
   useEffect(() => {
     if (open && !hasInitializedRef.current) {
+      if (isEditing && !externalFormData) {
+        // externalFormData not yet available — wait for next render
+        return;
+      }
       hasInitializedRef.current = true;
       isInitializingRef.current = true;
 
@@ -627,7 +631,15 @@ export const useAppointmentMultiOfficeForm = (
         }
       } else {
         // isExistingPatient es null - el usuario no ha seleccionado
-        if (currentFormData.consultation_type === 'Seguimiento') {
+        if (isEditing) {
+          // Al editar siempre es paciente existente, aunque el state no se haya inicializado
+          if (!currentFormData.patient_id || currentFormData.patient_id === 0) {
+            setError('Seleccione un paciente existente');
+            setLoading(false);
+            return;
+          }
+          finalPatientId = currentFormData.patient_id;
+        } else if (currentFormData.consultation_type === 'Seguimiento') {
           // Para consultas de seguimiento, asumir paciente existente
           if (!currentFormData.patient_id) {
             setError('Seleccione un paciente para la consulta de seguimiento');
