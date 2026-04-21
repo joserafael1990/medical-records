@@ -17,6 +17,7 @@ import { BasePDFGenerator } from './BaseGenerator';
 import type { DoctorInfo, OfficeInfo } from '../../../types/pdf';
 import { PDF_CONSTANTS } from '../constants';
 import { formatDateToDDMMYYYY } from '../utils';
+import { formatGenderLabel } from '../../../utils/gender';
 
 export interface ExpedientePatient {
   id: number;
@@ -221,7 +222,7 @@ export class ExpedienteCompletoGenerator extends BasePDFGenerator {
     const rows: [string, string][] = [
       ['Nombre', p.name],
       ['Fecha de nacimiento', fmtDate(p.birth_date)],
-      ['Género', p.gender || '—'],
+      ['Género', formatGenderLabel(p.gender)],
       ['CURP', p.curp || '—'],
       ['RFC', p.rfc || '—'],
       ['Teléfono', p.phone || '—'],

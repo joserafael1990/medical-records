@@ -28,6 +28,7 @@ import {
 import { Close as CloseIcon } from '@mui/icons-material';
 import { apiService } from '../../../services/ApiService';
 import type { PatientsByDiagnosisResponse } from '../../../services/practiceAnalytics/PracticeAnalyticsService';
+import { formatGenderLabel } from '../../../utils/gender';
 import { logger } from '../../../utils/logger';
 
 interface DiagnosisCohortDialogProps {
@@ -135,7 +136,7 @@ export const DiagnosisCohortDialog: React.FC<DiagnosisCohortDialogProps> = ({
                       {p.gender && (
                         <Chip
                           size="small"
-                          label={p.gender}
+                          label={formatGenderLabel(p.gender)}
                           variant="outlined"
                           sx={{ height: 18, fontSize: 10 }}
                         />

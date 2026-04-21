@@ -2,6 +2,7 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 import { API_CONFIG, ERROR_MESSAGES, FEATURE_FLAGS } from '../../constants';
 import { logger } from '../../utils/logger';
 import { trackAmplitudeUXError, trackAmplitudeEvent } from '../../utils/amplitudeHelper';
+import { normalizeGenderCode } from '../../utils/gender';
 
 export interface ApiResponse<T = any> {
   data: T;
@@ -422,34 +423,19 @@ export class ApiBase {
     };
   }
 
-  // Helper method to map frontend gender values to backend format
+  // Backend stores gender as canonical single-letter codes M/F/O. The schema
+  // validator also accepts legacy words but we normalize here so the wire
+  // format is always the code — keeps the DB consistent and the Pydantic
+  // validator happy.
   protected mapGenderToBackend(gender: string): string | null {
-    if (!gender || gender.trim() === '') {
-      return null;
-    }
-    const genderMap: { [key: string]: string } = {
-      'Masculino': 'Masculino',
-      'Femenino': 'Femenino',
-      'M': 'Masculino',
-      'F': 'Femenino',
-      'masculino': 'Masculino',
-      'femenino': 'Femenino'
-    };
-    return genderMap[gender] || gender;
+    return normalizeGenderCode(gender);
   }
 
-  // Helper method to map backend gender values to frontend format
+  // Backend always returns the canonical code, so this is effectively a
+  // pass-through normalizer kept for callers that may still hold legacy
+  // values in cached state.
   protected mapGenderToFrontend(gender: string): string {
-    if (!gender || gender.trim() === '') {
-      return '';
-    }
-    const genderMap: { [key: string]: string } = {
-      'Masculino': 'M',
-      'Femenino': 'F',
-      'masculino': 'M',
-      'femenino': 'F'
-    };
-    return genderMap[gender] || gender;
+    return normalizeGenderCode(gender) ?? '';
   }
 
   async withRetry<T>(operation: () => Promise<T>, maxRetries = 3): Promise<T> {

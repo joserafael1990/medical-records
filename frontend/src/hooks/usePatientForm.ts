@@ -6,17 +6,13 @@ import { logger } from '../utils/logger';
 import { extractCountryCode } from '../utils/countryCodes';
 import { disablePaymentDetection } from '../utils/disablePaymentDetection';
 import { AmplitudeService } from '../services/analytics/AmplitudeService';
+import { normalizeGenderCode } from '../utils/gender';
 
-// The DB stores gender as short codes (M/F/O) but the Select dropdown in
-// BasicInformationSection expects the Spanish labels (Masculino/Femenino/Otro).
-// Without this mapping the dropdown renders empty for existing patients.
+// Form Selects use the canonical M/F/O codes. Coerce any legacy representation
+// (full Spanish words, English aliases, mixed case) back to a code so existing
+// patients render the correct option when their record is loaded.
 const normalizeGenderForForm = (raw: string | null | undefined): string => {
-  if (!raw) return '';
-  const v = String(raw).trim().toLowerCase();
-  if (v === 'm' || v === 'masculino' || v === 'male') return 'Masculino';
-  if (v === 'f' || v === 'femenino' || v === 'female') return 'Femenino';
-  if (v === 'o' || v === 'otro' || v === 'other') return 'Otro';
-  return '';
+  return normalizeGenderCode(raw) ?? '';
 };
 
 export interface EmergencyRelationship {

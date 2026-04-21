@@ -24,10 +24,11 @@ import {
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
+import { formatGenderLabel, GENDER_CODE_OPTIONS } from '../../utils/gender';
 
 export interface PatientFilters {
   status: 'all' | 'active' | 'inactive';
-  gender: 'all' | 'Masculino' | 'Femenino' | 'Otro';
+  gender: 'all' | 'M' | 'F' | 'O';
   createdFrom?: string;
   createdTo?: string;
 }
@@ -127,9 +128,9 @@ const PatientFiltersDialog: React.FC<PatientFiltersDialogProps> = ({
               label="Género"
             >
               <MenuItem value="all">Todos</MenuItem>
-              <MenuItem value="Masculino">Masculino</MenuItem>
-              <MenuItem value="Femenino">Femenino</MenuItem>
-              <MenuItem value="Otro">Otro</MenuItem>
+              {GENDER_CODE_OPTIONS.map(opt => (
+                <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+              ))}
             </Select>
           </FormControl>
 
@@ -186,7 +187,7 @@ const PatientFiltersDialog: React.FC<PatientFiltersDialogProps> = ({
                 )}
                 {localFilters.gender !== 'all' && (
                   <Chip
-                    label={`Género: ${localFilters.gender}`}
+                    label={`Género: ${formatGenderLabel(localFilters.gender)}`}
                     size="small"
                     onDelete={() => handleFilterChange('gender', 'all')}
                   />
