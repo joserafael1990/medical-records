@@ -14,12 +14,13 @@ from __future__ import annotations
 import os
 import secrets
 from datetime import datetime
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Iterable, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
 from database import Appointment, IntakeQuestionnaireResponse, Person
 from logger import get_logger
+from services.intake.questions import all_question_ids
 
 api_logger = get_logger("medical_records.intake")
 
@@ -126,7 +127,9 @@ class IntakeService:
     def load_for_patient(self, token: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Load an intake by token for the patient-facing form.
 
-        Returns (payload, error_code). `error_code` is one of:
+        Returns (payload, error_code). Payload includes the doctor's
+        `excluded_ids` so the public endpoint can hide them. error_code
+        is one of:
         - "not_found"
         - "already_submitted"
         - "appointment_closed"
@@ -145,6 +148,11 @@ class IntakeService:
             return None, "appointment_closed"
 
         patient = self._patient(response.patient_id)
+        doctor = (
+            self.db.query(Person)
+            .filter(Person.id == appointment.doctor_id)
+            .first()
+        )
         return (
             {
                 "patient_first_name": (patient.name.split()[0] if patient and patient.name else ""),
@@ -152,6 +160,9 @@ class IntakeService:
                     appointment.appointment_date.isoformat()
                     if appointment.appointment_date
                     else None
+                ),
+                "excluded_ids": list(
+                    getattr(doctor, "intake_excluded_questions", None) or []
                 ),
             },
             None,
@@ -184,6 +195,65 @@ class IntakeService:
         response.submitted_at = datetime.utcnow()
         self.db.commit()
         return True, None
+
+    def excluded_ids_for_appointment(self, appointment_id: int) -> list[str]:
+        """Fetch the doctor's excluded_ids for a given appointment.
+
+        Used by the public submit endpoint to skip required-check on
+        questions the doctor opted out of.
+        """
+        appointment = self._appointment_or_none(appointment_id)
+        if appointment is None:
+            return []
+        doctor = (
+            self.db.query(Person)
+            .filter(Person.id == appointment.doctor_id)
+            .first()
+        )
+        return list(getattr(doctor, "intake_excluded_questions", None) or [])
+
+    def excluded_ids_by_token(self, token: str) -> list[str]:
+        """Lookup the doctor's excluded_ids via an intake token (public flow)."""
+        response = (
+            self.db.query(IntakeQuestionnaireResponse)
+            .filter(IntakeQuestionnaireResponse.token == token)
+            .first()
+        )
+        if response is None:
+            return []
+        return self.excluded_ids_for_appointment(response.appointment_id)
+
+    # ------------------------------------------------------------------
+    # Doctor preferences (question exclusion)
+    # ------------------------------------------------------------------
+
+    def get_doctor_excluded_ids(self, doctor: Person) -> list[str]:
+        return list(getattr(doctor, "intake_excluded_questions", None) or [])
+
+    def set_doctor_excluded_ids(
+        self,
+        doctor: Person,
+        excluded_ids: Iterable[str],
+    ) -> Tuple[bool, Optional[str], list[str]]:
+        """Persist the list of excluded question ids for a doctor.
+
+        Returns (ok, error_code, normalized_ids). Unknown ids are
+        silently dropped (so the UI can evolve without breaking stored
+        preferences). Duplicates are deduped while preserving input
+        order.
+        """
+        known = all_question_ids()
+        seen: set[str] = set()
+        normalized: list[str] = []
+        for raw in excluded_ids:
+            if not isinstance(raw, str):
+                continue
+            if raw in known and raw not in seen:
+                normalized.append(raw)
+                seen.add(raw)
+        doctor.intake_excluded_questions = normalized
+        self.db.commit()
+        return True, None, normalized
 
     # ------------------------------------------------------------------
     # Doctor-side read

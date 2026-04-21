@@ -28,7 +28,13 @@ from audit_service import audit_service
 from database import Person, get_db
 from dependencies import get_current_user
 from logger import get_logger
-from services.intake.questions import INTAKE_QUESTIONS, validate_answers
+from services.intake.questions import (
+    INTAKE_QUESTIONS,
+    SECTION_LABELS,
+    SECTION_ORDER,
+    validate_answers,
+    visible_questions,
+)
 from services.intake.service import IntakeService
 
 api_logger = get_logger("medical_records.intake_route")
@@ -50,6 +56,8 @@ class SendIntakeResponse(BaseModel):
 
 class PublicIntakePayload(BaseModel):
     questions: list
+    section_labels: Dict[str, str]
+    section_order: list
     patient_first_name: str
     appointment_date: Optional[str] = None
 
@@ -68,7 +76,20 @@ class AppointmentIntakeResponse(BaseModel):
     submitted_at: Optional[str] = None
     answers: Optional[Dict[str, Any]] = None
     questions: list
+    section_labels: Dict[str, str] = Field(default_factory=lambda: dict(SECTION_LABELS))
+    section_order: list = Field(default_factory=lambda: list(SECTION_ORDER))
     token: Optional[str] = None  # Doctor can re-share the link from the UI.
+
+
+class IntakePreferencesResponse(BaseModel):
+    excluded_ids: list
+    questions: list  # Full catalog so the UI can render the checkbox list.
+    section_labels: Dict[str, str]
+    section_order: list
+
+
+class IntakePreferencesUpdate(BaseModel):
+    excluded_ids: list = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -120,11 +141,13 @@ async def get_intake_for_appointment(
     if current_user.person_type not in ("doctor", "admin"):
         raise HTTPException(status_code=403, detail="No autorizado.")
     service = IntakeService(db=db)
+    excluded = service.get_doctor_excluded_ids(current_user)
+    questions = visible_questions(excluded)
     response = service.get_for_appointment(
         appointment_id=appointment_id, doctor=current_user
     )
     if response is None:
-        return AppointmentIntakeResponse(has_response=False, questions=INTAKE_QUESTIONS)
+        return AppointmentIntakeResponse(has_response=False, questions=questions)
     _audit_best_effort(
         db,
         current_user,
@@ -139,8 +162,62 @@ async def get_intake_for_appointment(
         submitted=response.submitted_at is not None,
         submitted_at=response.submitted_at.isoformat() if response.submitted_at else None,
         answers=response.answers or None,
-        questions=INTAKE_QUESTIONS,
+        questions=questions,
         token=response.token,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Doctor preferences endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get("/preferences", response_model=IntakePreferencesResponse)
+async def get_intake_preferences(
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user),
+) -> IntakePreferencesResponse:
+    if current_user.person_type not in ("doctor", "admin"):
+        raise HTTPException(status_code=403, detail="No autorizado.")
+    service = IntakeService(db=db)
+    excluded = service.get_doctor_excluded_ids(current_user)
+    return IntakePreferencesResponse(
+        excluded_ids=excluded,
+        questions=INTAKE_QUESTIONS,
+        section_labels=dict(SECTION_LABELS),
+        section_order=list(SECTION_ORDER),
+    )
+
+
+@router.put("/preferences", response_model=IntakePreferencesResponse)
+async def update_intake_preferences(
+    payload: IntakePreferencesUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user),
+) -> IntakePreferencesResponse:
+    if current_user.person_type not in ("doctor", "admin"):
+        raise HTTPException(status_code=403, detail="No autorizado.")
+    service = IntakeService(db=db)
+    ok, error, normalized = service.set_doctor_excluded_ids(
+        doctor=current_user, excluded_ids=payload.excluded_ids
+    )
+    if not ok:
+        raise HTTPException(status_code=400, detail=error or "invalid_preferences")
+    _audit_best_effort(
+        db,
+        current_user,
+        request,
+        action="UPDATE",
+        table_name="persons",
+        operation_type="intake_preferences_update",
+        metadata={"excluded_count": len(normalized)},
+    )
+    return IntakePreferencesResponse(
+        excluded_ids=normalized,
+        questions=INTAKE_QUESTIONS,
+        section_labels=dict(SECTION_LABELS),
+        section_order=list(SECTION_ORDER),
     )
 
 
@@ -162,8 +239,11 @@ async def load_public_intake(
         # Use 410 Gone — the resource existed but is no longer available.
         raise HTTPException(status_code=410, detail=error)
     assert payload is not None
+    excluded = payload.get("excluded_ids") or []
     return PublicIntakePayload(
-        questions=INTAKE_QUESTIONS,
+        questions=visible_questions(excluded),
+        section_labels=dict(SECTION_LABELS),
+        section_order=list(SECTION_ORDER),
         patient_first_name=payload["patient_first_name"],
         appointment_date=payload.get("appointment_date"),
     )
@@ -175,10 +255,11 @@ async def submit_public_intake(
     payload: SubmitIntakeRequest,
     db: Session = Depends(get_db),
 ) -> SubmitIntakeResponse:
-    ok_val, errors = validate_answers(payload.answers)
+    service = IntakeService(db=db)
+    excluded = service.excluded_ids_by_token(token)
+    ok_val, errors = validate_answers(payload.answers, excluded_ids=excluded)
     if not ok_val:
         raise HTTPException(status_code=422, detail={"errors": errors})
-    service = IntakeService(db=db)
     ok, error = service.submit(token=token, answers=payload.answers)
     if error == "not_found":
         raise HTTPException(status_code=404, detail="Cuestionario no encontrado.")

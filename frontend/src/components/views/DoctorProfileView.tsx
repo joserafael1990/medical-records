@@ -31,6 +31,7 @@ import { PersonalInfoCard } from '../profile/PersonalInfoCard';
 import { ProfessionalInfoCard } from '../profile/ProfessionalInfoCard';
 import { OfficeCard } from '../profile/OfficeCard';
 import { ScheduleCard } from '../profile/ScheduleCard';
+import IntakePreferencesPanel from '../profile/IntakePreferencesPanel';
 
 interface DoctorProfileViewProps {
   doctorProfile: any;
@@ -293,6 +294,9 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
             </Box>
           </CardContent>
         </Card>
+
+        {/* Intake questionnaire preferences */}
+        <IntakePreferencesPanel />
 
         {/* Google Calendar Integration */}
         <Box sx={{ mt: 3 }}>

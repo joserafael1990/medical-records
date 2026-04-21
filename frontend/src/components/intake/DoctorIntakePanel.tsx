@@ -10,6 +10,9 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Box,
   Button,
@@ -28,6 +31,7 @@ import {
   AssignmentInd as FormIcon,
   AccessTime as PendingIcon,
   CheckCircle as DoneIcon,
+  ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { apiService } from '../../services/ApiService';
 import type {
@@ -142,6 +146,16 @@ export const DoctorIntakePanel: React.FC<DoctorIntakePanelProps> = ({
           </Alert>
         )}
 
+        {questions.length > 0 && (
+          <Box sx={{ mb: 1 }}>
+            <QuestionsPreview
+              questions={questions}
+              sectionLabels={state?.section_labels}
+              sectionOrder={state?.section_order}
+            />
+          </Box>
+        )}
+
         {!state?.has_response && (
           <Stack spacing={1}>
             <Typography variant="body2" color="text.secondary">
@@ -187,6 +201,168 @@ export const DoctorIntakePanel: React.FC<DoctorIntakePanelProps> = ({
     </Card>
   );
 };
+
+
+const TYPE_LABELS: Record<IntakeQuestion['type'], string> = {
+  text: 'Texto corto',
+  textarea: 'Texto largo',
+  select: 'Opciones',
+  yes_no: 'Sí / No',
+  scale_1_10: 'Escala 1-10',
+};
+
+
+const SECTION_LABELS_FALLBACK: Record<string, string> = {
+  current_condition: 'Motivo de consulta',
+  pathological_history: 'Antecedentes médicos',
+  non_pathological_history: 'Hábitos',
+  family_history: 'Antecedentes familiares',
+  gynecological: 'Antecedentes gineco-obstétricos',
+  other: 'Otros',
+};
+
+
+const QuestionsPreview: React.FC<{
+  questions: IntakeQuestion[];
+  sectionLabels?: Record<string, string>;
+  sectionOrder?: string[];
+}> = ({ questions, sectionLabels, sectionOrder }) => {
+  const required = questions.filter((q) => q.required).length;
+  const groups = groupBySection(questions, sectionOrder);
+  const labels = sectionLabels || SECTION_LABELS_FALLBACK;
+  let running = 0;
+  return (
+    <Accordion
+      disableGutters
+      elevation={0}
+      square
+      sx={{
+        bgcolor: 'transparent',
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: 1,
+        '&:before': { display: 'none' },
+      }}
+    >
+      <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ minHeight: 40 }}>
+        <Typography variant="body2" color="text.secondary">
+          Ver las {questions.length} preguntas que recibirá el paciente
+          {' · '}
+          {required} obligatorias, {questions.length - required} opcional
+          {questions.length - required === 1 ? '' : 'es'}
+        </Typography>
+      </AccordionSummary>
+      <AccordionDetails>
+        <Stack spacing={1.5}>
+          {groups.map((group) => (
+            <Box key={group.id}>
+              {group.id !== '_flat' && (
+                <Typography
+                  variant="overline"
+                  color="text.secondary"
+                  sx={{ display: 'block', fontWeight: 700 }}
+                >
+                  {labels[group.id] || SECTION_LABELS_FALLBACK[group.id] || ''}
+                </Typography>
+              )}
+              <Stack spacing={1.25} divider={<Divider flexItem />}>
+                {group.questions.map((q) => {
+                  running += 1;
+                  return (
+                    <Box key={q.id}>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: 0.75,
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <Typography
+                          variant="body2"
+                          sx={{ fontWeight: 500, flexGrow: 1 }}
+                        >
+                          {running}. {q.label}
+                        </Typography>
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={TYPE_LABELS[q.type]}
+                        />
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          color={q.required ? 'primary' : 'default'}
+                          label={q.required ? 'Obligatoria' : 'Opcional'}
+                        />
+                      </Box>
+                      {q.help_text && (
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ display: 'block', mt: 0.25 }}
+                        >
+                          {q.help_text}
+                        </Typography>
+                      )}
+                      {q.type === 'select' && q.options && (
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ display: 'block', mt: 0.25 }}
+                        >
+                          Opciones: {q.options.map((o) => o.label).join(' · ')}
+                        </Typography>
+                      )}
+                      {q.followup && (
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ display: 'block', mt: 0.25, fontStyle: 'italic' }}
+                        >
+                          Si responde sí → {q.followup.label}
+                        </Typography>
+                      )}
+                    </Box>
+                  );
+                })}
+              </Stack>
+            </Box>
+          ))}
+        </Stack>
+      </AccordionDetails>
+    </Accordion>
+  );
+};
+
+
+interface PreviewGroup {
+  id: string;
+  questions: IntakeQuestion[];
+}
+
+function groupBySection(
+  questions: IntakeQuestion[],
+  orderHint?: string[]
+): PreviewGroup[] {
+  if (!questions.some((q) => !!q.section)) {
+    return [{ id: '_flat', questions }];
+  }
+  const buckets = new Map<string, IntakeQuestion[]>();
+  questions.forEach((q) => {
+    const key = q.section || '_other';
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key)!.push(q);
+  });
+  const order: string[] = [];
+  (orderHint || []).forEach((s) => {
+    if (buckets.has(s)) order.push(s);
+  });
+  buckets.forEach((_, key) => {
+    if (!order.includes(key)) order.push(key);
+  });
+  return order.map((id) => ({ id, questions: buckets.get(id) || [] }));
+}
 
 
 const SendButton: React.FC<{
@@ -266,8 +442,9 @@ function formatAnswer(
 ): string {
   if (q.type === 'yes_no') {
     const base = value === true ? 'Sí' : 'No';
-    if (q.id === 'q7_recent_procedures' && value === true) {
-      const detail = allAnswers.q7_recent_procedures_detail;
+    // Generic convention: followup answer lives at `{qid}_detail`.
+    if (q.followup && value === true) {
+      const detail = allAnswers[`${q.id}_detail`];
       return detail ? `${base} — ${detail}` : base;
     }
     return base;

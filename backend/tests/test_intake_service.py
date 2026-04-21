@@ -3,8 +3,8 @@ Unit tests for `services.intake.service.IntakeService` and the
 hardcoded questionnaire validator.
 
 DB is mocked — we only verify the service's logic (token minting,
-status checks, WhatsApp dispatch). The Alembic migration file is
-validated by applying it in the Docker smoke test, not here.
+status checks, WhatsApp dispatch, exclusion behaviour). Alembic
+migrations are validated by applying them in the Docker smoke test.
 """
 
 from __future__ import annotations
@@ -15,7 +15,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from services.intake.questions import INTAKE_QUESTIONS, validate_answers
+from services.intake.questions import (
+    INTAKE_QUESTIONS,
+    SECTION_LABELS,
+    SECTION_ORDER,
+    all_question_ids,
+    validate_answers,
+    visible_questions,
+)
 from services.intake.service import IntakeService
 
 
@@ -24,8 +31,14 @@ from services.intake.service import IntakeService
 # ---------------------------------------------------------------------------
 
 
-def _doctor(id: int = 1, person_type: str = "doctor"):
-    return SimpleNamespace(id=id, person_type=person_type, name="Dr Test", title="Dr.")
+def _doctor(id: int = 1, person_type: str = "doctor", excluded=None):
+    return SimpleNamespace(
+        id=id,
+        person_type=person_type,
+        name="Dr Test",
+        title="Dr.",
+        intake_excluded_questions=list(excluded) if excluded else [],
+    )
 
 
 def _patient(id: int = 10, phone: str = "5551234567", name: str = "Juan Pérez"):
@@ -72,68 +85,126 @@ def _failing_whatsapp(err: str = "rate_limited"):
     )
 
 
+def _valid_full_answers():
+    """All 14 questions answered validly."""
+    return {
+        "q1_chief_complaint": "Dolor torácico desde ayer",
+        "q2_symptoms": "Dolor opresivo irradiado hace 2 días",
+        "q3_pain_scale": 6,
+        "q4_allergies": False,
+        "q5_chronic_conditions": True,
+        "q5_chronic_conditions_detail": "Hipertensión desde 2020",
+        "q6_current_meds": True,
+        "q6_current_meds_detail": "Losartán 50mg diario",
+        "q7_surgeries": False,
+        "q8_smoking": "no",
+        "q9_alcohol": "occasional",
+        "q10_exercise": "light",
+    }
+
+
 # ---------------------------------------------------------------------------
-# Question validator
+# Question catalog
 # ---------------------------------------------------------------------------
 
 
 def test_hardcoded_questions_have_stable_ids():
     ids = [q["id"] for q in INTAKE_QUESTIONS]
     assert len(ids) == len(set(ids)), "question ids must be unique"
-    assert len(ids) == 8
+    assert len(ids) == 14
+
+
+def test_every_question_has_a_known_section():
+    for q in INTAKE_QUESTIONS:
+        assert q["section"] in SECTION_LABELS, f"unknown section on {q['id']}"
+        assert q["section"] in SECTION_ORDER
+
+
+def test_visible_questions_filters_excluded_ids():
+    out = visible_questions(["q14_additional", "q11_family_history"])
+    ids = {q["id"] for q in out}
+    assert "q14_additional" not in ids
+    assert "q11_family_history" not in ids
+    assert "q1_chief_complaint" in ids
+    assert len(out) == 12
+
+
+def test_visible_questions_ignores_unknown_ids():
+    out = visible_questions(["totally_bogus_id"])
+    assert len(out) == 14
+
+
+def test_all_question_ids_matches_catalog():
+    assert all_question_ids() == {q["id"] for q in INTAKE_QUESTIONS}
+
+
+# ---------------------------------------------------------------------------
+# Validator
+# ---------------------------------------------------------------------------
 
 
 def test_validate_answers_happy_path():
-    answers = {
-        "q1_chief_complaint": "Dolor torácico desde ayer",
-        "q2_onset": "last_days",
-        "q3_symptoms": "Dolor opresivo irradiado",
-        "q4_pain_scale": 6,
-        "q5_current_meds": "losartán 50mg",
-        "q6_allergies": "ninguna",
-        "q7_recent_procedures": False,
-        "q8_additional_context": "",
-    }
-    ok, errors = validate_answers(answers)
+    ok, errors = validate_answers(_valid_full_answers())
     assert ok, errors
     assert errors == []
 
 
-def test_validate_answers_missing_required_field():
-    answers = {"q1_chief_complaint": "", "q2_onset": "today"}
+def test_validate_answers_missing_required_chief_complaint():
+    answers = _valid_full_answers()
+    answers["q1_chief_complaint"] = ""
     ok, errors = validate_answers(answers)
     assert not ok
     assert any("motivo principal" in e.lower() for e in errors)
 
 
 def test_validate_answers_select_rejects_unknown_option():
-    answers = {"q2_onset": "yesterday"}
+    answers = _valid_full_answers()
+    answers["q8_smoking"] = "sometimes"
     ok, errors = validate_answers(answers)
     assert not ok
-    assert any("q2_onset" in e for e in errors)
+    assert any("q8_smoking" in e for e in errors)
 
 
 def test_validate_answers_scale_must_be_in_range():
-    answers = {"q4_pain_scale": 15}
+    answers = _valid_full_answers()
+    answers["q3_pain_scale"] = 15
     ok, errors = validate_answers(answers)
     assert not ok
-    assert any("q4_pain_scale" in e for e in errors)
+    assert any("q3_pain_scale" in e for e in errors)
 
 
 def test_validate_answers_yes_no_requires_followup_when_yes():
-    answers = {
-        "q1_chief_complaint": "x",
-        "q2_onset": "today",
-        "q3_symptoms": "x",
-        "q4_pain_scale": 1,
-        "q5_current_meds": "ninguno",
-        "q6_allergies": "ninguna",
-        "q7_recent_procedures": True,
-        # missing the detail follow-up
-    }
+    answers = _valid_full_answers()
+    answers["q7_surgeries"] = True
+    # Missing q7_surgeries_detail
     ok, errors = validate_answers(answers)
     assert not ok
     assert any("cirug" in e.lower() or "hospital" in e.lower() for e in errors)
+
+
+def test_validate_answers_followup_when_no_is_not_required():
+    answers = _valid_full_answers()
+    # q4_allergies is False → q4_allergies_detail not required
+    assert answers["q4_allergies"] is False
+    ok, errors = validate_answers(answers)
+    assert ok, errors
+
+
+def test_validate_answers_skips_required_when_excluded():
+    # Doctor excluded the current-meds question; even if unanswered it's OK.
+    answers = _valid_full_answers()
+    del answers["q6_current_meds"]
+    del answers["q6_current_meds_detail"]
+    ok, errors = validate_answers(answers, excluded_ids=["q6_current_meds"])
+    assert ok, errors
+
+
+def test_validate_answers_still_catches_type_errors_on_included_questions():
+    answers = _valid_full_answers()
+    answers["q3_pain_scale"] = "not a number"
+    ok, errors = validate_answers(answers, excluded_ids=["q6_current_meds"])
+    assert not ok
+    assert any("q3_pain_scale" in e for e in errors)
 
 
 # ---------------------------------------------------------------------------
@@ -254,10 +325,12 @@ def test_load_for_patient_happy_path():
     )
     appointment = _appointment()
     patient = _patient()
+    doctor = _doctor(excluded=["q14_additional"])
     db = _mock_db(
         _chain(first=response),
         _chain(first=appointment),
         _chain(first=patient),
+        _chain(first=doctor),
     )
     service = IntakeService(db=db)
 
@@ -266,6 +339,28 @@ def test_load_for_patient_happy_path():
     assert err is None
     assert payload["patient_first_name"] == "Juan"
     assert payload["appointment_date"]
+    assert payload["excluded_ids"] == ["q14_additional"]
+
+
+def test_load_for_patient_returns_empty_excluded_when_doctor_has_none():
+    response = SimpleNamespace(
+        id=1, appointment_id=100, patient_id=10, token="tok", submitted_at=None
+    )
+    appointment = _appointment()
+    patient = _patient()
+    doctor = _doctor()  # defaults to []
+    db = _mock_db(
+        _chain(first=response),
+        _chain(first=appointment),
+        _chain(first=patient),
+        _chain(first=doctor),
+    )
+    service = IntakeService(db=db)
+
+    payload, err = service.load_for_patient(token="tok")
+
+    assert err is None
+    assert payload["excluded_ids"] == []
 
 
 def test_load_for_patient_not_found():
@@ -391,3 +486,94 @@ def test_get_for_appointment_denies_other_doctor():
     out = service.get_for_appointment(appointment_id=100, doctor=_doctor(id=1))
 
     assert out is None
+
+
+# ---------------------------------------------------------------------------
+# Doctor preferences (exclusions)
+# ---------------------------------------------------------------------------
+
+
+def test_get_doctor_excluded_ids_defaults_to_empty():
+    doctor = _doctor()
+    service = IntakeService(db=MagicMock())
+    assert service.get_doctor_excluded_ids(doctor) == []
+
+
+def test_get_doctor_excluded_ids_returns_stored_list():
+    doctor = _doctor(excluded=["q12_gyn_pregnancies", "q13_gyn_lmp"])
+    service = IntakeService(db=MagicMock())
+    assert service.get_doctor_excluded_ids(doctor) == [
+        "q12_gyn_pregnancies",
+        "q13_gyn_lmp",
+    ]
+
+
+def test_set_doctor_excluded_ids_filters_unknown_and_dedupes():
+    doctor = _doctor()
+    db = MagicMock()
+    service = IntakeService(db=db)
+
+    ok, err, normalized = service.set_doctor_excluded_ids(
+        doctor,
+        ["q14_additional", "bogus_id", "q14_additional", "q11_family_history"],
+    )
+
+    assert ok is True
+    assert err is None
+    assert normalized == ["q14_additional", "q11_family_history"]
+    assert doctor.intake_excluded_questions == [
+        "q14_additional",
+        "q11_family_history",
+    ]
+    db.commit.assert_called()
+
+
+def test_set_doctor_excluded_ids_accepts_empty_list():
+    doctor = _doctor(excluded=["q14_additional"])
+    db = MagicMock()
+    service = IntakeService(db=db)
+
+    ok, err, normalized = service.set_doctor_excluded_ids(doctor, [])
+
+    assert ok is True
+    assert err is None
+    assert normalized == []
+    assert doctor.intake_excluded_questions == []
+
+
+def test_excluded_ids_for_appointment_pulls_from_doctor():
+    appointment = _appointment()
+    doctor = _doctor(excluded=["q11_family_history"])
+    db = _mock_db(
+        _chain(first=appointment),
+        _chain(first=doctor),
+    )
+    service = IntakeService(db=db)
+
+    assert service.excluded_ids_for_appointment(100) == ["q11_family_history"]
+
+
+def test_excluded_ids_for_appointment_handles_missing_appointment():
+    db = _mock_db(_chain(first=None))
+    service = IntakeService(db=db)
+    assert service.excluded_ids_for_appointment(9999) == []
+
+
+def test_excluded_ids_by_token_traverses_response_to_doctor():
+    response = SimpleNamespace(id=1, appointment_id=100, patient_id=10, token="tok")
+    appointment = _appointment()
+    doctor = _doctor(excluded=["q14_additional"])
+    db = _mock_db(
+        _chain(first=response),     # response lookup by token
+        _chain(first=appointment),  # appointment lookup
+        _chain(first=doctor),       # doctor lookup
+    )
+    service = IntakeService(db=db)
+
+    assert service.excluded_ids_by_token("tok") == ["q14_additional"]
+
+
+def test_excluded_ids_by_token_returns_empty_for_unknown_token():
+    db = _mock_db(_chain(first=None))
+    service = IntakeService(db=db)
+    assert service.excluded_ids_by_token("bogus") == []

@@ -17,6 +17,7 @@ export interface IntakeQuestion {
   id: string;
   label: string;
   type: IntakeQuestionType;
+  section?: string;
   required?: boolean;
   max_length?: number;
   help_text?: string;
@@ -30,6 +31,8 @@ export interface IntakeQuestion {
 
 export interface PublicIntakePayload {
   questions: IntakeQuestion[];
+  section_labels?: Record<string, string>;
+  section_order?: string[];
   patient_first_name: string;
   appointment_date?: string | null;
 }
@@ -40,6 +43,8 @@ export interface IntakeAppointmentResponse {
   submitted_at?: string | null;
   answers?: Record<string, unknown> | null;
   questions: IntakeQuestion[];
+  section_labels?: Record<string, string>;
+  section_order?: string[];
   token?: string | null;
 }
 
@@ -48,6 +53,13 @@ export interface SendIntakeResponse {
   response_id?: number | null;
   message_id?: string | null;
   error?: string | null;
+}
+
+export interface IntakePreferencesResponse {
+  excluded_ids: string[];
+  questions: IntakeQuestion[];
+  section_labels: Record<string, string>;
+  section_order: string[];
 }
 
 export class IntakeService extends ApiBase {
@@ -91,5 +103,32 @@ export class IntakeService extends ApiBase {
       { answers }
     );
     return response.data;
+  }
+
+  async getPreferences(): Promise<IntakePreferencesResponse> {
+    try {
+      const response = await this.api.get<IntakePreferencesResponse>(
+        '/api/intake/preferences'
+      );
+      return response.data;
+    } catch (error) {
+      logger.error('Error fetching intake preferences', error, 'api');
+      throw error;
+    }
+  }
+
+  async updatePreferences(
+    excludedIds: string[]
+  ): Promise<IntakePreferencesResponse> {
+    try {
+      const response = await this.api.put<IntakePreferencesResponse>(
+        '/api/intake/preferences',
+        { excluded_ids: excludedIds }
+      );
+      return response.data;
+    } catch (error) {
+      logger.error('Error updating intake preferences', error, 'api');
+      throw error;
+    }
   }
 }
