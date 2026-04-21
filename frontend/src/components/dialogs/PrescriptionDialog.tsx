@@ -3,6 +3,7 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogContentText,
   DialogActions,
   Button,
   TextField,
@@ -24,6 +25,7 @@ import {
 } from '@mui/icons-material';
 import { Medication, CreatePrescriptionData } from '../../types';
 import { preventBackdropClose } from '../../utils/dialogHelpers';
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
 
 interface PrescriptionDialogProps {
   open: boolean;
@@ -57,6 +59,12 @@ const PrescriptionDialog: React.FC<PrescriptionDialogProps> = ({
   const [medicationInputValue, setMedicationInputValue] = useState('');
   const [selectedMedication, setSelectedMedication] = useState<Medication | null>(null);
   const [creatingMedication, setCreatingMedication] = useState(false);
+
+  const isDirty = !isEditing && medicationInputValue.trim() !== '';
+  const { confirmDialogOpen, requestClose, confirmClose, cancelClose } = useUnsavedChangesGuard({
+    isDirty,
+    onConfirmedClose: onClose
+  });
 
   // Load medications on mount
   useEffect(() => {
@@ -129,7 +137,8 @@ const PrescriptionDialog: React.FC<PrescriptionDialogProps> = ({
     formData.duration.trim() !== '';
 
   return (
-    <Dialog open={open} onClose={preventBackdropClose(onClose)} maxWidth="md" fullWidth>
+    <>
+    <Dialog open={open} onClose={preventBackdropClose(requestClose)} maxWidth="md" fullWidth>
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <MedicationIcon color="primary" />
@@ -137,7 +146,7 @@ const PrescriptionDialog: React.FC<PrescriptionDialogProps> = ({
             {isEditing ? 'Editar Medicamento' : 'Agregar Medicamento'}
           </Typography>
         </Box>
-        <IconButton aria-label="Cerrar" onClick={onClose} size="small">
+        <IconButton aria-label="Cerrar" onClick={requestClose} size="small">
           <CloseIcon />
         </IconButton>
       </DialogTitle>
@@ -313,7 +322,7 @@ const PrescriptionDialog: React.FC<PrescriptionDialogProps> = ({
       </DialogContent>
 
       <DialogActions sx={{ p: 2 }}>
-        <Button onClick={onClose} color="inherit" disabled={isSubmitting}>
+        <Button onClick={requestClose} color="inherit" disabled={isSubmitting}>
           Cancelar
         </Button>
         <Button
@@ -325,6 +334,20 @@ const PrescriptionDialog: React.FC<PrescriptionDialogProps> = ({
         </Button>
       </DialogActions>
     </Dialog>
+
+    <Dialog open={confirmDialogOpen} onClose={cancelClose} maxWidth="xs" fullWidth>
+      <DialogTitle>¿Descartar este medicamento?</DialogTitle>
+      <DialogContent>
+        <DialogContentText>
+          Empezaste a agregar un medicamento. Si cierras ahora se perderán los datos.
+        </DialogContentText>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={cancelClose} color="inherit">Seguir editando</Button>
+        <Button onClick={confirmClose} color="error" variant="contained">Descartar</Button>
+      </DialogActions>
+    </Dialog>
+    </>
   );
 };
 

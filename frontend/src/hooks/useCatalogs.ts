@@ -14,51 +14,55 @@ interface State {
   is_active: boolean;
 }
 
+// Module-level cache — survives remounts, cleared on page reload
+let _cachedCountries: Country[] | null = null;
+let _cachedStates: State[] | null = null;
+let _fetchPromise: Promise<void> | null = null;
+
 export const useCatalogs = () => {
-  const [countries, setCountries] = useState<Country[]>([]);
-  const [allStates, setAllStates] = useState<State[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [countries, setCountries] = useState<Country[]>(_cachedCountries ?? []);
+  const [allStates, setAllStates] = useState<State[]>(_cachedStates ?? []);
+  const [loading, setLoading] = useState(_cachedCountries === null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchCatalogs = async () => {
-      setLoading(true);
-      setError(null);
-      
-      try {
-        // Fetch all catalogs in parallel using new CatalogService
-        const [countriesData, statesData] = await Promise.all([
-          apiService.catalogs.getCountries(),
-          apiService.catalogs.getStates()
-        ]);
+    if (_cachedCountries !== null && _cachedStates !== null) return;
 
-        // Filter active countries and states, ensure they're arrays
-        const activeCountries = Array.isArray(countriesData) 
-          ? countriesData.filter(c => c.is_active !== false)
-          : [];
-        const activeStates = Array.isArray(statesData)
-          ? statesData.filter(s => s.is_active !== false)
-          : [];
+    if (!_fetchPromise) {
+      _fetchPromise = (async () => {
+        try {
+          const [countriesData, statesData] = await Promise.all([
+            apiService.catalogs.getCountries(),
+            apiService.catalogs.getStates()
+          ]);
 
-        logger.debug('Catalogs loaded', {
-          countries: activeCountries.length,
-          states: activeStates.length,
-          totalCountries: countriesData?.length || 0,
-          totalStates: statesData?.length || 0
-        }, 'api');
+          _cachedCountries = Array.isArray(countriesData)
+            ? countriesData.filter(c => c.is_active !== false)
+            : [];
+          _cachedStates = Array.isArray(statesData)
+            ? statesData.filter(s => s.is_active !== false)
+            : [];
 
-        setCountries(activeCountries);
-        setAllStates(activeStates);
+          logger.debug('Catalogs loaded', {
+            countries: _cachedCountries.length,
+            states: _cachedStates.length,
+          }, 'api');
+        } catch (err) {
+          _fetchPromise = null; // allow retry
+          logger.error('Error fetching catalogs', err, 'api');
+          throw err;
+        }
+      })();
+    }
 
-      } catch (err) {
-        setError('Error al cargar catálogos');
-        logger.error('Error fetching catalogs', err, 'api');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchCatalogs();
+    setLoading(true);
+    _fetchPromise
+      .then(() => {
+        setCountries(_cachedCountries!);
+        setAllStates(_cachedStates!);
+      })
+      .catch(() => setError('Error al cargar catálogos'))
+      .finally(() => setLoading(false));
   }, []);
 
   // Function to get states filtered by country

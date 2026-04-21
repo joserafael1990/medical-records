@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -17,7 +17,8 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Autocomplete
+  Autocomplete,
+  DialogContentText
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -31,6 +32,7 @@ import { DocumentSelector } from '../common/DocumentSelector';
 import { logger } from '../../utils/logger';
 import { extractCountryCode } from '../../utils/countryCodes';
 import { preventBackdropClose } from '../../utils/dialogHelpers';
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
 import { DoctorFormData } from '../../types';
 
 interface DoctorProfileDialogProps {
@@ -220,9 +222,15 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
     }
   };
 
-  const handleClose = () => {
-    onClose();
-  };
+  const isDirty = !isEditing && formData.name.trim() !== '';
+  const { confirmDialogOpen, requestClose, confirmClose, cancelClose } = useUnsavedChangesGuard({
+    isDirty,
+    onConfirmedClose: onClose
+  });
+
+  const handleClose = useCallback(() => {
+    requestClose();
+  }, [requestClose]);
 
   const handleSubmit = () => {
     // Construir teléfono completo antes de enviar
@@ -259,8 +267,9 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
     onSubmit(docsToSend);
   };
   return (
-    <Dialog 
-      open={open} 
+    <>
+    <Dialog
+      open={open}
       onClose={preventBackdropClose(handleClose)}
       maxWidth="md"
       fullWidth
@@ -568,6 +577,20 @@ const DoctorProfileDialog: React.FC<DoctorProfileDialogProps> = ({
                 </Button>
       </DialogActions>
     </Dialog>
+
+    <Dialog open={confirmDialogOpen} onClose={cancelClose} maxWidth="xs" fullWidth>
+      <DialogTitle>¿Descartar este perfil?</DialogTitle>
+      <DialogContent>
+        <DialogContentText>
+          Empezaste a llenar el perfil profesional. Si cierras ahora se perderán los datos.
+        </DialogContentText>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={cancelClose} color="inherit">Seguir editando</Button>
+        <Button onClick={confirmClose} color="error" variant="contained">Descartar</Button>
+      </DialogActions>
+    </Dialog>
+    </>
   );
 };
 

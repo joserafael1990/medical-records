@@ -11,7 +11,8 @@ import {
   Chip,
   Paper,
   LinearProgress,
-  Stack
+  Stack,
+  Skeleton
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -42,6 +43,7 @@ interface DashboardViewProps {
   onNavigateToAgenda?: () => void;
   doctorProfile?: any;
   onNavigateToProfile?: (anchor?: string) => void;
+  isLoading?: boolean;
 }
 
 const DashboardView: React.FC<DashboardViewProps> = ({
@@ -53,7 +55,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   onNewPatient,
   onNavigateToAgenda,
   doctorProfile,
-  onNavigateToProfile
+  onNavigateToProfile,
+  isLoading = false
 }) => {
   const { user } = useAuth();
 
@@ -196,7 +199,18 @@ const DashboardView: React.FC<DashboardViewProps> = ({
       {alerts.length > 0 && (
         <Stack spacing={2} sx={{ mb: 3 }}>
           {alerts.map((alert, i) => (
-            <Alert key={i} severity={alert.severity} icon={<BadgeIcon fontSize="inherit" />}>
+            <Alert
+              key={i}
+              severity={alert.severity}
+              icon={<BadgeIcon fontSize="inherit" />}
+              action={
+                onNavigateToProfile ? (
+                  <Button color="inherit" size="small" onClick={() => onNavigateToProfile('cedula')}>
+                    Ir a mi perfil
+                  </Button>
+                ) : undefined
+              }
+            >
               <AlertTitle>{alert.title}</AlertTitle>
               {alert.body}
             </Alert>
@@ -273,9 +287,13 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           }}>
             <CardContent sx={{ textAlign: 'center', py: 3 }}>
               <TrendingIcon sx={{ fontSize: 40, mb: 1, color: 'success.main' }} />
-              <Typography variant="h2" sx={{ mb: 1, color: 'text.primary' }}>
-                {confirmedAppointments.length}
-              </Typography>
+              {isLoading ? (
+                <Skeleton variant="text" width={60} height={72} sx={{ mx: 'auto', mb: 1 }} />
+              ) : (
+                <Typography variant="h2" sx={{ mb: 1, color: 'text.primary' }}>
+                  {confirmedAppointments.length}
+                </Typography>
+              )}
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 Citas Confirmadas
               </Typography>
@@ -292,9 +310,13 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           }}>
             <CardContent sx={{ textAlign: 'center', py: 3 }}>
               <HospitalIcon sx={{ fontSize: 40, mb: 1, color: 'primary.main' }} />
-              <Typography variant="h2" sx={{ mb: 1, color: 'text.primary' }}>
-                {consultationsThisWeek}
-              </Typography>
+              {isLoading ? (
+                <Skeleton variant="text" width={60} height={72} sx={{ mx: 'auto', mb: 1 }} />
+              ) : (
+                <Typography variant="h2" sx={{ mb: 1, color: 'text.primary' }}>
+                  {consultationsThisWeek}
+                </Typography>
+              )}
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 Consultas esta semana
               </Typography>
@@ -311,9 +333,13 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           }}>
             <CardContent sx={{ textAlign: 'center', py: 3 }}>
               <PersonIcon sx={{ fontSize: 40, mb: 1, color: 'info.main' }} />
-              <Typography variant="h2" sx={{ mb: 1, color: 'text.primary' }}>
-                {newPatientsThisWeek}
-              </Typography>
+              {isLoading ? (
+                <Skeleton variant="text" width={60} height={72} sx={{ mx: 'auto', mb: 1 }} />
+              ) : (
+                <Typography variant="h2" sx={{ mb: 1, color: 'text.primary' }}>
+                  {newPatientsThisWeek}
+                </Typography>
+              )}
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 Pacientes nuevos esta semana
               </Typography>
@@ -342,12 +368,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 size="large"
                 color={action.color as any}
                 startIcon={action.icon}
-                onClick={(e) => {
-                  if (action.action) {
-                    action.action();
-                  } else {
-                  }
-                }}
+                disabled={!action.action}
+              onClick={() => action.action?.()}
                 sx={{
                   py: 2,
                   px: 3,

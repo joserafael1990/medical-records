@@ -63,6 +63,7 @@ export interface UsePatientFormReturn {
   handleChange: (field: keyof PatientFormData) => (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | { name?: string; value: unknown }>
   ) => void;
+  handleBlur: (field: keyof PatientFormData) => () => void;
   handleCountryChange: (field: 'address_country_id' | 'birth_country_id', countryId: string) => Promise<void>;
   handlePhoneChange: (code: string, number: string) => void;
   handleSubmit: () => Promise<void>;
@@ -139,26 +140,29 @@ export const usePatientForm = (props: UsePatientFormProps): UsePatientFormReturn
 
   // Load emergency relationships, countries and states when dialog opens
   useEffect(() => {
+    if (!open) return;
+    const controller = new AbortController();
+
     const loadData = async () => {
-      if (open) {
-        // Disable payment detection for insurance fields
-        setTimeout(() => {
-          disablePaymentDetection();
-        }, 100);
-        try {
-          const [relationships, countriesData] = await Promise.all([
-            apiService.catalogs.getEmergencyRelationships(),
-            apiService.catalogs.getCountries()
-          ]);
-          logger.debug('Countries loaded', { count: countriesData.length }, 'api');
-          setEmergencyRelationships(relationships);
-          setCountries(countriesData);
-        } catch (error) {
+      setTimeout(() => { disablePaymentDetection(); }, 100);
+      try {
+        const [relationships, countriesData] = await Promise.all([
+          apiService.catalogs.getEmergencyRelationships(),
+          apiService.catalogs.getCountries()
+        ]);
+        if (controller.signal.aborted) return;
+        logger.debug('Countries loaded', { count: countriesData.length }, 'api');
+        setEmergencyRelationships(relationships);
+        setCountries(countriesData);
+      } catch (error) {
+        if (!controller.signal.aborted) {
           logger.error('Error loading data', error, 'api');
         }
       }
     };
+
     loadData();
+    return () => controller.abort();
   }, [open]);
 
   // Load states when formData has country IDs
@@ -361,6 +365,17 @@ export const usePatientForm = (props: UsePatientFormProps): UsePatientFormReturn
     }
   }, [errors]);
 
+  const handleBlur = useCallback((field: keyof PatientFormData) => () => {
+    const value = formData[field];
+    const str = typeof value === 'string' ? value : String(value ?? '');
+    if (field === 'name' && !str.trim()) {
+      setErrors(prev => ({ ...prev, name: 'El nombre completo es obligatorio' }));
+    }
+    if (field === 'gender' && !str.trim()) {
+      setErrors(prev => ({ ...prev, gender: 'El género es obligatorio' }));
+    }
+  }, [formData]);
+
   const handleCountryChange = useCallback(async (field: 'address_country_id' | 'birth_country_id', countryId: string) => {
     setFormData(prev => ({ ...prev, [field]: countryId }));
     
@@ -546,6 +561,7 @@ export const usePatientForm = (props: UsePatientFormProps): UsePatientFormReturn
     
     // Handlers
     handleChange,
+    handleBlur,
     handleCountryChange,
     handlePhoneChange,
     handleSubmit,

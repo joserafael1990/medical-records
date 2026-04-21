@@ -68,6 +68,7 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
             onNavigateToAgenda={navigateToView ? () => navigateToView('agenda') : undefined}
             doctorProfile={doctorProfile}
             onNavigateToProfile={onNavigateToProfile}
+            isLoading={appointmentManager.isLoading || consultationManagement.isLoading}
           />
         </Suspense>
       )}
@@ -83,6 +84,7 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
             setSuccessMessage={() => {}}
             handleNewPatient={() => patientManagement.openPatientDialog()}
             handleEditPatient={(patient) => patientManagement.openPatientDialog(patient)}
+            isLoading={patientManagement.isLoading}
           />
         </Suspense>
       )}
@@ -106,7 +108,7 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
           <ConsultationDetailView
             consultation={consultationManagement.selectedConsultation}
             onBack={consultationManagement.handleBackFromConsultationDetail}
-            onEdit={() => {}}
+            onEdit={(c) => consultationManagement.handleEditConsultation(c)}
             doctorName={doctorProfile?.full_name || `${doctorProfile?.title || 'Dr.'} Usuario Sistema`}
           />
         </Suspense>

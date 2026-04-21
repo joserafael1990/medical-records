@@ -3,6 +3,7 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogContentText,
   DialogActions,
   Button,
   TextField,
@@ -27,6 +28,8 @@ import {
 } from '@mui/icons-material';
 import { CreateClinicalStudyData, StudyType, StudyStatus, UrgencyLevel } from '../../types';
 import { STUDY_TYPES, STUDY_STATUS_OPTIONS, URGENCY_LEVELS } from '../../constants';
+import { preventBackdropClose } from '../../utils/dialogHelpers';
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
 
 interface ClinicalStudyDialogProps {
   open: boolean;
@@ -51,6 +54,12 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
 }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string }>({});
+
+  const isDirty = !isEditing && formData.study_name.trim() !== '';
+  const { confirmDialogOpen, requestClose, confirmClose, cancelClose } = useUnsavedChangesGuard({
+    isDirty,
+    onConfirmedClose: onClose
+  });
 
   // Reset form when dialog opens/closes
   useEffect(() => {
@@ -123,9 +132,10 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
   };
 
   return (
+    <>
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={preventBackdropClose(requestClose)}
       maxWidth="lg"
       fullWidth
       aria-labelledby="clinical-study-dialog-title"
@@ -144,7 +154,7 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
             {isEditing ? 'Editar Estudio Clínico' : 'Nuevo Estudio Clínico'}
           </Typography>
         </Box>
-        <IconButton onClick={onClose} size="small" aria-label="Cerrar">
+        <IconButton onClick={requestClose} size="small" aria-label="Cerrar">
           <CloseIcon />
         </IconButton>
       </DialogTitle>
@@ -445,7 +455,7 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
       <Divider />
 
       <DialogActions sx={{ p: 2 }}>
-        <Button onClick={onClose} color="inherit" disabled={isSubmitting}>
+        <Button onClick={requestClose} color="inherit" disabled={isSubmitting}>
           Cancelar
         </Button>
         <Button
@@ -458,6 +468,20 @@ const ClinicalStudyDialog: React.FC<ClinicalStudyDialogProps> = ({
         </Button>
       </DialogActions>
     </Dialog>
+
+    <Dialog open={confirmDialogOpen} onClose={cancelClose} maxWidth="xs" fullWidth>
+      <DialogTitle>¿Descartar este estudio?</DialogTitle>
+      <DialogContent>
+        <DialogContentText>
+          Ingresaste un nombre para el estudio. Si cierras ahora se perderán los datos.
+        </DialogContentText>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={cancelClose} color="inherit">Seguir editando</Button>
+        <Button onClick={confirmClose} color="error" variant="contained">Descartar</Button>
+      </DialogActions>
+    </Dialog>
+    </>
   );
 };
 

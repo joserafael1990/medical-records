@@ -301,6 +301,17 @@ export const useAppointmentMultiOfficeForm = (
     loadData();
   }, [open, externalPatients, doctorProfile?.id]);
 
+  // Auto-select office when only one exists
+  useEffect(() => {
+    if (offices.length === 1 && !isEditing) {
+      setFormData(prev => {
+        if (prev.office_id && prev.office_id !== 0) return prev;
+        const appointmentTypeId = offices[0].is_virtual ? 2 : 1;
+        return { ...prev, office_id: offices[0].id, appointment_type_id: appointmentTypeId };
+      });
+    }
+  }, [offices, isEditing]);
+
   // Initialize form data when dialog opens
   useEffect(() => {
     if (open && !hasInitializedRef.current) {

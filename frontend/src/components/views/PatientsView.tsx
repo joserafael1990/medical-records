@@ -1,4 +1,6 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
+import { formatDistanceToNow } from 'date-fns';
+import { es } from 'date-fns/locale';
 import {
   Box,
   Typography,
@@ -14,7 +16,8 @@ import {
   Avatar,
   Chip,
   IconButton,
-  Fade
+  Fade,
+  Skeleton
 } from '@mui/material';
 import {
   PersonAdd as PersonAddIcon,
@@ -25,7 +28,9 @@ import {
   Phone as PhoneIcon,
   Email as EmailIcon,
   CalendarMonth as CalendarIcon,
-  People as PeopleIcon
+  People as PeopleIcon,
+  ArrowUpward as ArrowUpwardIcon,
+  ArrowDownward as ArrowDownwardIcon
 } from '@mui/icons-material';
 import { Patient, Consultation } from '../../types';
 import { calculateAge } from '../../utils';
@@ -44,6 +49,7 @@ interface PatientsViewProps {
   setSuccessMessage: (message: string) => void;
   handleNewPatient: () => void;
   handleEditPatient: (patient: Patient) => void;
+  isLoading?: boolean;
 }
 
 const PatientsView: React.FC<PatientsViewProps> = ({
@@ -54,7 +60,8 @@ const PatientsView: React.FC<PatientsViewProps> = ({
   successMessage,
   setSuccessMessage,
   handleNewPatient,
-  handleEditPatient
+  handleEditPatient,
+  isLoading = false
 }) => {
   const patientConsultationSummary = useMemo(() => {
     const summary = new Map<number, { lastTimestamp: number; reason: string }>();
@@ -107,11 +114,7 @@ const PatientsView: React.FC<PatientsViewProps> = ({
       return null;
     }
 
-    return date.toLocaleDateString('es-MX', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+    return formatDistanceToNow(date, { addSuffix: true, locale: es });
   }, [patientConsultationSummary]);
 
   // Estado para filtros
@@ -202,11 +205,39 @@ const PatientsView: React.FC<PatientsViewProps> = ({
     });
   };
 
-  const hasActiveFilters = 
+  const hasActiveFilters =
     filters.status !== 'all' ||
     filters.gender !== 'all' ||
     filters.createdFrom ||
     filters.createdTo;
+
+  type SortField = 'name' | 'lastVisit';
+  type SortDir = 'asc' | 'desc';
+  const [sortField, setSortField] = useState<SortField>('name');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDir('asc');
+    }
+  };
+
+  const sortedPatients = useMemo(() => {
+    return [...filteredPatients].sort((a, b) => {
+      let cmp = 0;
+      if (sortField === 'name') {
+        cmp = (a.name || '').localeCompare(b.name || '', 'es');
+      } else {
+        const ta = patientConsultationSummary.get(Number(a.id))?.lastTimestamp ?? 0;
+        const tb = patientConsultationSummary.get(Number(b.id))?.lastTimestamp ?? 0;
+        cmp = ta - tb;
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [filteredPatients, sortField, sortDir, patientConsultationSummary]);
 
   return (
     <Box sx={{ p: 3 }}>
@@ -313,20 +344,64 @@ const PatientsView: React.FC<PatientsViewProps> = ({
       </Paper>
 
       {/* Patients Table */}
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+        <Typography variant="body2" color="text.secondary">
+          {isLoading
+            ? 'Cargando pacientes…'
+            : (patientSearchTerm || hasActiveFilters)
+              ? `${filteredPatients.length} de ${patients.length} pacientes`
+              : `${patients.length} paciente${patients.length !== 1 ? 's' : ''} en total`}
+        </Typography>
+      </Box>
       <Paper>
         <TableContainer>
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell sx={{ fontWeight: 600 }}>Paciente</TableCell>
+                <TableCell
+                  sx={{ fontWeight: 600, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                  onClick={() => handleSort('name')}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    Paciente
+                    {sortField === 'name' && (sortDir === 'asc' ? <ArrowUpwardIcon sx={{ fontSize: 16 }} /> : <ArrowDownwardIcon sx={{ fontSize: 16 }} />)}
+                  </Box>
+                </TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Contacto</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Última Visita</TableCell>
+                <TableCell
+                  sx={{ fontWeight: 600, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                  onClick={() => handleSort('lastVisit')}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    Última Visita
+                    {sortField === 'lastVisit' && (sortDir === 'asc' ? <ArrowUpwardIcon sx={{ fontSize: 16 }} /> : <ArrowDownwardIcon sx={{ fontSize: 16 }} />)}
+                  </Box>
+                </TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Motivo de la consulta</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Estado</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredPatients && Array.isArray(filteredPatients) && filteredPatients.map((patient) => {
+              {isLoading && patients.length === 0 && (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={`skeleton-${i}`}>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Skeleton variant="circular" width={40} height={40} />
+                        <Box>
+                          <Skeleton variant="text" width={160} />
+                          <Skeleton variant="text" width={60} />
+                        </Box>
+                      </Box>
+                    </TableCell>
+                    <TableCell><Skeleton variant="text" width={120} /></TableCell>
+                    <TableCell><Skeleton variant="text" width={80} /></TableCell>
+                    <TableCell><Skeleton variant="text" width={140} /></TableCell>
+                    <TableCell><Skeleton variant="rectangular" width={60} height={22} sx={{ borderRadius: 1 }} /></TableCell>
+                  </TableRow>
+                ))
+              )}
+              {!isLoading && sortedPatients.map((patient) => {
                 const lastVisit = getFormattedLastVisit(patient.id);
                 const latestReason = getLatestConsultationReason(patient.id);
 
@@ -401,15 +476,15 @@ const PatientsView: React.FC<PatientsViewProps> = ({
                   </TableRow>
                 );
               })}
-              {(!filteredPatients || !Array.isArray(filteredPatients) || filteredPatients.length === 0) && (
+              {!isLoading && sortedPatients.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
                     <Typography variant="body1" color="text.secondary">
                       {patientSearchTerm || hasActiveFilters
                         ? 'No se encontraron pacientes que coincidan con los criterios de búsqueda'
-                        : 'No hay pacientes registrados'}
+                        : 'Aún no tienes pacientes registrados'}
                     </Typography>
-                    {(patientSearchTerm || hasActiveFilters) && (
+                    {(patientSearchTerm || hasActiveFilters) ? (
                       <Button
                         variant="outlined"
                         size="small"
@@ -420,6 +495,15 @@ const PatientsView: React.FC<PatientsViewProps> = ({
                         sx={{ mt: 2 }}
                       >
                         Limpiar búsqueda y filtros
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="contained"
+                        startIcon={<PersonAddIcon />}
+                        onClick={handleNewPatient}
+                        sx={{ mt: 2 }}
+                      >
+                        Agregar primer paciente
                       </Button>
                     )}
                   </TableCell>

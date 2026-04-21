@@ -186,33 +186,40 @@ export const useConsultationManagement = (onNavigate?: (view: string) => void): 
   // localStorage functions removed - backend-only approach
 
   // Fetch consultations from API
+  const isMountedRef = useRef(true);
+  useEffect(() => { return () => { isMountedRef.current = false; }; }, []);
+
   const fetchConsultations = useCallback(async () => {
     try {
       setIsLoading(true);
       const data = await apiService.consultations.getConsultations();
-      
+
+      if (!isMountedRef.current) return;
+
       if (!data || !Array.isArray(data)) {
         logger.warn('API returned invalid data format', { data }, 'api');
         setConsultations([]);
         setIsLoading(false);
         return;
       }
-      
+
       // Transform consultation data
       const transformedData = data.map((consultation: any) => ({
         ...consultation,
-        patient_name: consultation.patient_name || 
+        patient_name: consultation.patient_name ||
                     (consultation.patient ? (consultation.patient.name || consultation.patient.full_name || 'Paciente sin nombre') : 'Paciente no encontrado'),
         date: consultation.date || consultation.consultation_date,
         id: consultation.id || consultation.consultation_id
       }));
-      
+
       setConsultations(transformedData);
     } catch (error: any) {
-      logger.error('Error fetching consultations', error, 'api');
-      setConsultations([]);
+      if (isMountedRef.current) {
+        logger.error('Error fetching consultations', error, 'api');
+        setConsultations([]);
+      }
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) setIsLoading(false);
     }
   }, []);
 

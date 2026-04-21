@@ -40,6 +40,7 @@ import { format, isSameDay, isSameMonth, isPast } from 'date-fns';
 import { formatTime, parseBackendDate } from '../../utils/formatters';
 import { es } from 'date-fns/locale';
 import { useAgendaView } from '../../hooks/useAgendaView';
+import { useSimpleToast } from '../common/ToastNotification';
 
 interface AgendaViewProps {
   appointments?: any[];
@@ -66,6 +67,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({
   refreshAppointments,
   forceRefresh
 }) => {
+  const toast = useSimpleToast();
   const [appointmentToCancel, setAppointmentToCancel] = useState<any | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
 
@@ -85,6 +87,8 @@ const AgendaView: React.FC<AgendaViewProps> = ({
     try {
       setIsCancelling(true);
       await cancelAppointment(appointmentToCancel.id);
+    } catch {
+      toast.error('No se pudo cancelar la cita. Inténtalo de nuevo.');
     } finally {
       setIsCancelling(false);
       setAppointmentToCancel(null);
@@ -219,9 +223,26 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                         );
                       })}
                       {dayAppointments.length === 0 && (
-                        <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 2 }}>
-                          Sin citas
-                        </Typography>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 2, gap: 1 }}>
+                          <Typography variant="body2" color="text.disabled" sx={{ textAlign: 'center' }}>
+                            Sin citas
+                          </Typography>
+                          {handleNewAppointment && (
+                            <Button
+                              size="small"
+                              variant="text"
+                              startIcon={<AddIcon />}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedDate?.(day);
+                                handleNewAppointment();
+                              }}
+                              sx={{ fontSize: '0.7rem', minWidth: 0, px: 1, py: 0.25, color: 'text.disabled', '&:hover': { color: 'primary.main' } }}
+                            >
+                              Nueva
+                            </Button>
+                          )}
+                        </Box>
                       )}
                       {dayAppointments.length > 0 && (
                         <Typography variant="caption" color="primary" sx={{ 
@@ -270,34 +291,46 @@ const AgendaView: React.FC<AgendaViewProps> = ({
                   const isTodayDate = isSameDay(day, new Date());
                   
                   return (
-                    <TableCell 
-                      key={day.toISOString()} 
-                      sx={{ 
-                        verticalAlign: 'top', 
+                    <TableCell
+                      key={day.toISOString()}
+                      sx={{
+                        verticalAlign: 'top',
                         minHeight: 100,
                         opacity: isCurrentMonth ? 1 : 0.3,
                         bgcolor: isTodayDate ? 'primary.light' : 'transparent',
-                        cursor: dayAppointments.length > 0 ? 'pointer' : 'default',
-                        '&:hover': dayAppointments.length > 0 ? {
+                        cursor: 'pointer',
+                        '&:hover': {
                           bgcolor: isTodayDate ? 'primary.main' : 'action.hover'
-                        } : {}
+                        },
+                        '&:hover .monthly-add-btn': { opacity: 1 }
                       }}
                       onClick={() => {
                         if (dayAppointments.length > 0 && setSelectedDate && setAgendaView) {
                           setSelectedDate(day);
                           setAgendaView('daily');
+                        } else if (dayAppointments.length === 0 && isCurrentMonth && handleNewAppointment) {
+                          setSelectedDate?.(day);
+                          handleNewAppointment();
                         }
                       }}
                     >
-                      <Typography 
-                        variant="body2" 
-                        sx={{ 
-                          fontWeight: isTodayDate ? 'bold' : 'normal',
-                          color: isTodayDate ? 'primary.contrastText' : 'text.primary'
-                        }}
-                      >
-                        {format(day, 'd')}
-                      </Typography>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: isTodayDate ? 'bold' : 'normal',
+                            color: isTodayDate ? 'primary.contrastText' : 'text.primary'
+                          }}
+                        >
+                          {format(day, 'd')}
+                        </Typography>
+                        {isCurrentMonth && handleNewAppointment && dayAppointments.length === 0 && (
+                          <AddIcon
+                            className="monthly-add-btn"
+                            sx={{ fontSize: 14, opacity: 0, color: 'text.disabled', transition: 'opacity 0.15s' }}
+                          />
+                        )}
+                      </Box>
                       <Box sx={{ mt: 0.5 }}>
                         {dayAppointments.slice(0, 2).map((appointment, index) => {
                           const isPast = isAppointmentPast(appointment);
