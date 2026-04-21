@@ -6,6 +6,14 @@
 # substitutions — the Cloud Build history retains them permanently.
 
 steps:
+  # Step 0: Fail fast if the alembic DAG has > 1 head. Without this the
+  # migrate step later explodes with "Multiple head revisions are present"
+  # AFTER building the Docker image, wasting ~5 min per failed build.
+  # Pure stdlib so we just need a plain python image.
+  - name: 'python:3.11-alpine'
+    entrypoint: python
+    args: ['backend/scripts/check_alembic_heads.py']
+
   # Step 1: Build the Docker image
   - name: 'gcr.io/cloud-builders/docker'
     args:
@@ -69,8 +77,20 @@ steps:
       # on each of these secrets (already granted to the compute default SA).
       - '--set-secrets=DATABASE_URL=cortex-database-url:latest,SECRET_KEY=cortex-secret-key:latest,JWT_SECRET_KEY=cortex-jwt-secret-key:latest,MEDICAL_ENCRYPTION_KEY=cortex-medical-encryption-key:latest,META_WHATSAPP_TOKEN=cortex-meta-whatsapp-token:latest,META_WHATSAPP_VERIFY_TOKEN=cortex-meta-whatsapp-verify-token:latest,META_WHATSAPP_APP_SECRET=cortex-meta-whatsapp-app-secret:latest,GOOGLE_CLIENT_SECRET=cortex-google-client-secret:latest'
 
-# Build timeout — migration can take ~8 min, deploy ~3 min; 20 min is safe
-timeout: 1200s
+  # Step 5: Smoke test. Hit the handful of endpoints whose handlers
+  # executed without auth-gated dependencies on the 2026-04-21 demo —
+  # any 5xx here means the deploy is broken even if the container
+  # started and Cloud Run reports READY. Exit non-zero fails the build
+  # so the incident is visible.
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: bash
+    args:
+      - 'backend/scripts/prod_smoke_test.sh'
+    env:
+      - 'BASE_URL=https://cortex-backend-246017659362.us-central1.run.app'
+
+# Build timeout — migration can take ~8 min, deploy ~3 min, smoke <1 min; 22 min is safe
+timeout: 1320s
 
 # Substitutions (can be overridden)
 # _GOOGLE_CLIENT_ID and _META_WHATSAPP_PHONE_ID are non-secret identifiers
