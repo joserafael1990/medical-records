@@ -68,7 +68,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({
       case 'dashboard': return 'Dashboard';
       case 'patients': return 'Gestión de Pacientes';
       case 'consultations': return 'Consultas Médicas';
-      case 'agenda': return 'Citas';
+      case 'agenda': return 'Agenda';
       case 'profile': return 'Perfil del Médico';
       default: return 'Historias Clínicas';
     }

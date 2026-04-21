@@ -41,7 +41,7 @@ export const MAIN_NAVIGATION_ITEMS: NavigationItem[] = [
   },
   {
     id: 'agenda',
-    label: 'Citas',
+    label: 'Agenda',
     icon: <CalendarIcon />
   },
   {
