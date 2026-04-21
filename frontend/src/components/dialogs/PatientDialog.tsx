@@ -83,6 +83,27 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
   // Auto-scroll to error when it appears
   const { errorRef } = useScrollToErrorInDialog(error);
 
+  // The /api/patients list endpoint returns the patient without the
+  // `documents` relation, so the completeness checker keeps flagging CURP as
+  // missing even after usePatientForm fetched it. Surface the already-loaded
+  // documents (and in-progress gender) here so IncompleteProfileChip agrees
+  // with the form fields the user can actually see.
+  const patientForChip = React.useMemo(() => {
+    if (!patient) return patient;
+    return {
+      ...patient,
+      documents: personalDocuments
+        .filter(d => d.document_id && d.document_value?.trim())
+        .map(d => ({
+          document_id: d.document_id,
+          document_value: d.document_value,
+          document_name: d.document_name,
+          is_active: true,
+        })),
+      gender: (patient as any).gender || formData.gender || undefined,
+    } as typeof patient;
+  }, [patient, personalDocuments, formData.gender]);
+
   // Consider form dirty if the user has typed the patient name or a phone number
   const isDirty = !isEditing && (formData.name.trim() !== '' || phoneNumber.trim() !== '');
   const { confirmDialogOpen, requestClose, confirmClose, cancelClose } = useUnsavedChangesGuard({
@@ -129,7 +150,7 @@ const PatientDialog: React.FC<PatientDialogProps> = ({
           <Typography variant="h6">
             {isEditing ? 'Editar Paciente' : 'Nuevo Paciente'}
           </Typography>
-          {isEditing && <IncompleteProfileChip patient={patient} />}
+          {isEditing && <IncompleteProfileChip patient={patientForChip} />}
         </Box>
         <IconButton aria-label="Cerrar" onClick={requestClose} size="small">
           <CloseIcon />

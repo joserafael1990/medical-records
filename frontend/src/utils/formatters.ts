@@ -15,7 +15,7 @@ export const formatPatientNameWithAge = (patient: Patient): string => {
   // Patient type has 'name' field as complete name, not separate fields
   const fullName = patient.name || 'Paciente';
   const age = calculateAge(patient.birth_date);
-  return `${fullName} (${age} años)`;
+  return age !== null ? `${fullName} (${age} años)` : fullName;
 };
 
 /**

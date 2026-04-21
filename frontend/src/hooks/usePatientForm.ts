@@ -7,6 +7,18 @@ import { extractCountryCode } from '../utils/countryCodes';
 import { disablePaymentDetection } from '../utils/disablePaymentDetection';
 import { AmplitudeService } from '../services/analytics/AmplitudeService';
 
+// The DB stores gender as short codes (M/F/O) but the Select dropdown in
+// BasicInformationSection expects the Spanish labels (Masculino/Femenino/Otro).
+// Without this mapping the dropdown renders empty for existing patients.
+const normalizeGenderForForm = (raw: string | null | undefined): string => {
+  if (!raw) return '';
+  const v = String(raw).trim().toLowerCase();
+  if (v === 'm' || v === 'masculino' || v === 'male') return 'Masculino';
+  if (v === 'f' || v === 'femenino' || v === 'female') return 'Femenino';
+  if (v === 'o' || v === 'otro' || v === 'other') return 'Otro';
+  return '';
+};
+
 export interface EmergencyRelationship {
   code: string;
   name: string;
@@ -40,11 +52,13 @@ export interface UsePatientFormReturn {
     document_id: number | null;
     document_value: string;
     id?: number;
+    document_name?: string;
   }>;
   setPersonalDocuments: React.Dispatch<React.SetStateAction<Array<{
     document_id: number | null;
     document_value: string;
     id?: number;
+    document_name?: string;
   }>>>;
   
   // Dialog states
@@ -87,6 +101,7 @@ export const usePatientForm = (props: UsePatientFormProps): UsePatientFormReturn
     document_id: number | null;
     document_value: string;
     id?: number;
+    document_name?: string;
   }>>([{ document_id: null, document_value: '' }]);
 
   const [formData, setFormData] = useState<PatientFormData>({
@@ -211,7 +226,10 @@ export const usePatientForm = (props: UsePatientFormProps): UsePatientFormReturn
             .map(doc => ({
               id: doc.id,
               document_id: doc.document_id,
-              document_value: doc.document_value
+              document_value: doc.document_value,
+              // Preserve the document name so IncompleteProfileChip can detect
+              // CURP presence without re-fetching the documents relation.
+              document_name: doc.document?.name
             }));
           
           setPersonalDocuments(personalDocs.length > 0 ? personalDocs : [{ document_id: null, document_value: '' }]);
@@ -220,7 +238,7 @@ export const usePatientForm = (props: UsePatientFormProps): UsePatientFormReturn
             name: decryptedPatient.name || '',
             birth_date: decryptedPatient.birth_date || '',
             date_of_birth: decryptedPatient.birth_date || '',
-            gender: decryptedPatient.gender || '',
+            gender: normalizeGenderForForm(decryptedPatient.gender),
             email: decryptedPatient.email || '',
             primary_phone: decryptedPatient.primary_phone || '',
             phone: decryptedPatient.primary_phone || '',

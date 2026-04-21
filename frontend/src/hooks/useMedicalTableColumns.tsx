@@ -42,11 +42,13 @@ export const useMedicalTableColumns = () => {
       width: '10%',
       render: (value: Patient[keyof Patient], patient: Patient, index: number) => {
         const age = calculateAge(patient.birth_date);
+        const color: 'secondary' | 'warning' | 'default' =
+          age === null ? 'default' : age < 18 ? 'secondary' : age > 65 ? 'warning' : 'default';
         return (
-          <Chip 
-            label={`${age} años`} 
-            size="small" 
-            color={age < 18 ? 'secondary' : age > 65 ? 'warning' : 'default'}
+          <Chip
+            label={age !== null ? `${age} años` : '—'}
+            size="small"
+            color={color}
             variant="outlined"
           />
         );
@@ -246,7 +248,7 @@ export const useMedicalTableColumns = () => {
       align: 'center',
       render: (value: Patient[keyof Patient], patient: Patient, index: number) => {
         const age = calculateAge(patient.birth_date);
-        return <Typography variant="body2">{age} años</Typography>;
+        return <Typography variant="body2">{age !== null ? `${age} años` : '—'}</Typography>;
       }
     },
     {
