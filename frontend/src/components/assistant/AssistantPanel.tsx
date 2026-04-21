@@ -76,6 +76,12 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
+  // Hide Sentry feedback widget while panel is open so it doesn't overlap the input.
+  useEffect(() => {
+    const el = document.querySelector('sentry-feedback') as HTMLElement | null;
+    if (el) el.style.display = open ? 'none' : '';
+  }, [open]);
+
   // Context greeting: when the panel is opened on an empty conversation
   // with a patient in scope, show a welcome line so the doctor knows the
   // bot already has context.
