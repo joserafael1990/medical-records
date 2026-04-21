@@ -222,4 +222,55 @@ describe('useProfileCompletion', () => {
     const missingIds = result.current.missing.map(m => m.id).sort();
     expect(missingIds).toEqual(['address', 'appointment_duration', 'phone']);
   });
+
+  // ─── Regression: bugs fixed 2026-04-20 ─────────────────────────────────
+
+  it('[regression] accepts "Número de Colegiatura" — any professional document name with a value counts', () => {
+    // Previously only "cédula"/"cedula" in the document name was accepted.
+    // Doctors who stored their license as "Número de Colegiatura" triggered a false positive.
+    const { result } = renderHook(() =>
+      useProfileCompletion({
+        ...fullProfile,
+        documents: undefined,
+        professional_documents: [{ document_name: 'Número de Colegiatura', document_value: '995' }]
+      })
+    );
+    expect(result.current.items.find(i => i.id === 'cedula')?.done).toBe(true);
+  });
+
+  it('[regression] accepts professional_license string even when professional_documents is absent', () => {
+    const { result } = renderHook(() =>
+      useProfileCompletion({
+        ...fullProfile,
+        documents: undefined,
+        professional_license: 'LIC-001'
+      })
+    );
+    expect(result.current.items.find(i => i.id === 'cedula')?.done).toBe(true);
+  });
+
+  it('[regression] schedule with is_active:true and time_blocks:[] is treated as configured', () => {
+    // Previously hasActiveSchedule required time_blocks.length > 0.
+    // Doctors whose DB row uses start_time/end_time columns (not time_blocks JSON)
+    // received a false "missing schedule" warning.
+    const { result } = renderHook(() =>
+      useProfileCompletion({
+        ...fullProfile,
+        weekly_schedule: { monday: { is_active: true, time_blocks: [] } },
+        schedule: undefined
+      })
+    );
+    expect(result.current.items.find(i => i.id === 'schedule')?.done).toBe(true);
+  });
+
+  it('[regression] navigation targets use short anchor names, not "profile#*" prefix', () => {
+    // Previously targets were "profile#offices" / "profile#schedule" which
+    // broke the scroll-to logic in DoctorProfileView (getElementById gets the full
+    // string, not just the anchor part).
+    const { result } = renderHook(() => useProfileCompletion(fullProfile));
+    const byId = Object.fromEntries(result.current.items.map(i => [i.id, i.target]));
+    expect(byId['office']).toBe('offices');
+    expect(byId['schedule']).toBe('schedule');
+    expect(byId['cedula']).toBe('cedula');
+  });
 });

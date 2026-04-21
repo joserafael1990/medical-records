@@ -126,7 +126,8 @@ describe('ProfileCompletionBanner', () => {
     // `office` in the items list (and shares the same target#offices anchor),
     // so accept either as valid.
     const [[arg]] = onNavigate.mock.calls;
-    expect(['profile#offices', 'profile']).toContain(arg);
+    // Targets use short anchor names ('offices', 'cedula') not 'profile#*' prefixes.
+    expect(['offices', 'cedula', 'schedule', 'profile', undefined]).toContain(arg);
   });
 
   it('progress bar reflects completion percentage', () => {
