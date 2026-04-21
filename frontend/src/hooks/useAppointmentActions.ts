@@ -20,6 +20,8 @@ interface UseAppointmentActionsProps {
     showSuccessMessage: (message: string) => void;
     appointmentFormData: AppointmentFormData;
     selectedAppointment: Appointment | null;
+    setSelectedAppointment: (appointment: Appointment | null) => void;
+    setIsEditingAppointment: (editing: boolean) => void;
     onNavigate?: (view: string) => void;
 }
 
@@ -37,7 +39,9 @@ export const useAppointmentActions = ({
     setAppointmentDialogOpen,
     showSuccessMessage,
     appointmentFormData,
-    selectedAppointment
+    selectedAppointment,
+    setSelectedAppointment,
+    setIsEditingAppointment
 }: UseAppointmentActionsProps) => {
 
     // Function to create appointment directly without using form state
@@ -138,7 +142,7 @@ export const useAppointmentActions = ({
                     doctorDuration
                 );
 
-                await apiService.appointments.createAgendaAppointment(createData);
+                const newAppointment = await apiService.appointments.createAgendaAppointment(createData);
 
                 // Track appointment creation in Amplitude
                 const { AmplitudeService } = await import('../services/analytics/AmplitudeService');
@@ -150,11 +154,22 @@ export const useAppointmentActions = ({
                 });
 
                 showSuccessMessage('Cita agendada correctamente');
+
+                // Transition the dialog to edit mode so the intake questionnaire panel appears
+                if (newAppointment?.id) {
+                    setSelectedAppointment(newAppointment);
+                    setIsEditingAppointment(true);
+                    refreshAppointments();
+                } else {
+                    setAppointmentDialogOpen(false);
+                    await refreshAppointments();
+                }
+                return;
             }
 
             setAppointmentDialogOpen(false);
 
-            // Refresh appointments to show the new/updated one
+            // Refresh appointments to show the updated one
             await refreshAppointments();
 
         } catch (error: any) {
@@ -190,6 +205,8 @@ export const useAppointmentActions = ({
         setFormErrorMessage,
         showSuccessMessage,
         setAppointmentDialogOpen,
+        setSelectedAppointment,
+        setIsEditingAppointment,
         refreshAppointments
     ]);
 

@@ -111,6 +111,8 @@ export const useAppointmentManager = (
     showSuccessMessage,
     appointmentFormData,
     selectedAppointment,
+    setSelectedAppointment,
+    setIsEditingAppointment,
     onNavigate
   });
 
