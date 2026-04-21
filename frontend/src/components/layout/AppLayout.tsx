@@ -272,7 +272,7 @@ const AppLayoutInner: React.FC<AppLayoutProps> = ({
               sx={{
                 width: 32,
                 height: 32,
-                bgcolor: resolvedHeaderAvatarUrl ? 'transparent' : 'rgba(255,255,255,0.25)',
+                bgcolor: resolvedHeaderAvatarUrl ? 'transparent' : 'primary.main',
                 color: 'white',
                 fontSize: '0.875rem',
                 border: '2px solid rgba(255,255,255,0.6)'
