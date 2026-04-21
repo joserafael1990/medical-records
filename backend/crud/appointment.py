@@ -49,8 +49,9 @@ def create_appointment(db: Session, appointment_data: Union[schemas.AppointmentC
         tz = pytz.timezone(doctor_timezone)
         data['appointment_date'] = parsed_date_utc.astimezone(tz).replace(tzinfo=None)
     
-    # Calculate end_time if not provided
-    if 'end_time' not in data:
+    # Calculate end_time if not provided (Pydantic emits end_time=None, so
+    # key-membership is not enough — must also treat None/empty as missing).
+    if not data.get('end_time'):
         start_time = data.get('appointment_date')
         if start_time:
             # Get doctor's appointment duration
