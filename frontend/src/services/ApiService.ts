@@ -19,6 +19,7 @@ import { PracticeAnalyticsService } from './practiceAnalytics/PracticeAnalyticsS
 import { ExpedienteService } from './expediente/ExpedienteService';
 import { IntakeService } from './intake/IntakeService';
 import { AssistantService } from './assistant/AssistantService';
+import { CfdiService } from './cfdi/CfdiService';
 import { logger } from '../utils/logger';
 
 /**
@@ -47,6 +48,7 @@ export class ApiService {
   public expediente: ExpedienteService;
   public intake: IntakeService;
   public assistant: AssistantService;
+  public cfdi: CfdiService;
 
   constructor() {
     this.auth = new AuthService();
@@ -70,6 +72,7 @@ export class ApiService {
     this.expediente = new ExpedienteService();
     this.intake = new IntakeService();
     this.assistant = new AssistantService();
+    this.cfdi = new CfdiService();
   }
 
   // Convenience methods for common operations
@@ -147,6 +150,13 @@ export { PracticeAnalyticsService } from './practiceAnalytics/PracticeAnalyticsS
 export { ExpedienteService } from './expediente/ExpedienteService';
 export { IntakeService } from './intake/IntakeService';
 export { AssistantService } from './assistant/AssistantService';
+export { CfdiService } from './cfdi/CfdiService';
+export type {
+  CfdiIssuer,
+  CfdiIssuerInput,
+  CfdiInvoice,
+  CfdiInvoiceInput,
+} from './cfdi/CfdiService';
 export type { DashboardMetrics } from './analytics/AnalyticsService';
 export type { ExpedienteCompletoPayload } from './pdf/generators/ExpedienteCompletoGenerator';
 export type {

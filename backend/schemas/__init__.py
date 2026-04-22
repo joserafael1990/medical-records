@@ -74,6 +74,15 @@ from .studies import (
     StudySearchFilters,
 )
 from .vital_signs import VitalSigns, VitalSignsBase, VitalSignsCreate, VitalSignsUpdate
+from .cfdi import (
+    IssuerBase,
+    IssuerCreate,
+    IssuerUpdate,
+    IssuerResponse,
+    InvoiceCreate,
+    InvoiceCancel,
+    InvoiceResponse,
+)
 
 __all__ = [
     # base

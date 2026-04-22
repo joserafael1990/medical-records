@@ -21,6 +21,7 @@ from models import (
     WhatsAppSession,
     IntakeQuestionnaireResponse,
     AssistantConversation, AssistantMessage,
+    CfdiIssuer, CfdiInvoice,
 )
 
 # Re-export logger for compatibility if it was used
