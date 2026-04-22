@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import QRCode from 'qrcode';
 import {
     PatientInfo,
     DoctorInfo,
@@ -19,6 +20,7 @@ export class BasePDFGenerator {
     protected doc: jsPDF;
     protected avatarCache = new Map<string, string>();
     protected signatureInfo: SignatureInfo | null = null;
+    protected signatureQrDataUrl: string | null = null;
 
     constructor() {
         this.doc = new jsPDF();
@@ -30,6 +32,34 @@ export class BasePDFGenerator {
      */
     public setSignatureInfo(info: SignatureInfo | null | undefined): void {
         this.signatureInfo = info ?? null;
+        this.signatureQrDataUrl = null; // reset; will be (re)generated on demand
+    }
+
+    /**
+     * Pre-generates the QR code PNG data URL for the current signatureInfo.
+     * Must be awaited before addFooter() since jsPDF.addImage is sync.
+     * Concrete generators (PrescriptionGenerator, MedicalOrderGenerator) call
+     * this inside their async generate() pipeline.
+     */
+    protected async prepareSignatureQr(): Promise<void> {
+        if (!this.signatureInfo) {
+            this.signatureQrDataUrl = null;
+            return;
+        }
+        const url =
+            this.signatureInfo.verification_url ||
+            `https://cortex-backend-246017659362.us-central1.run.app/api/verify/${this.signatureInfo.verification_uuid}`;
+        try {
+            this.signatureQrDataUrl = await QRCode.toDataURL(url, {
+                errorCorrectionLevel: 'M',
+                margin: 0,
+                width: 128,
+                color: { dark: '#000000', light: '#FFFFFF' },
+            });
+        } catch (err) {
+            console.warn('QR generation failed, rendering signature block without QR', err);
+            this.signatureQrDataUrl = null;
+        }
     }
 
     /**
@@ -64,7 +94,9 @@ export class BasePDFGenerator {
         if (signedAt) {
             this.doc.text(`Fecha: ${signedAt} (CDMX)`, 15, y + 15);
         }
-        if (info.verification_url) {
+        // Print verification URL textually only when we couldn't render a QR
+        // (avoids redundancy and keeps the block tidy).
+        if (info.verification_url && !this.signatureQrDataUrl) {
             this.doc.setTextColor(...PDF_CONSTANTS.COLORS.PRIMARY);
             this.doc.text(
                 `Verificar: ${info.verification_url}`,
@@ -72,6 +104,28 @@ export class BasePDFGenerator {
                 y + 4,
                 { align: 'right' }
             );
+        }
+
+        // QR of the verification URL (if pre-generated via prepareSignatureQr()).
+        // Size 18x18 mm, anchored at the right side of the signature block.
+        if (this.signatureQrDataUrl) {
+            try {
+                const qrSize = 18;
+                const qrX = pageWidth - 15 - qrSize;
+                const qrY = y + 6;
+                this.doc.addImage(
+                    this.signatureQrDataUrl,
+                    'PNG',
+                    qrX,
+                    qrY,
+                    qrSize,
+                    qrSize,
+                    undefined,
+                    'FAST'
+                );
+            } catch (err) {
+                console.warn('Could not render QR in PDF', err);
+            }
         }
 
         // Legal notice — firma electrónica simple según Art. 89-bis C. de Com.

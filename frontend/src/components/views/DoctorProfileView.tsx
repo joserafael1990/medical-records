@@ -32,6 +32,7 @@ import { ProfessionalInfoCard } from '../profile/ProfessionalInfoCard';
 import { OfficeCard } from '../profile/OfficeCard';
 import { ScheduleCard } from '../profile/ScheduleCard';
 import IntakePreferencesPanel from '../profile/IntakePreferencesPanel';
+import SignatureProfileSection from './SignatureProfileSection';
 
 interface DoctorProfileViewProps {
   doctorProfile: any;
@@ -294,6 +295,9 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
             </Box>
           </CardContent>
         </Card>
+
+        {/* Signature identity (cédula, RFC, CURP) */}
+        <SignatureProfileSection />
 
         {/* Intake questionnaire preferences */}
         <IntakePreferencesPanel />

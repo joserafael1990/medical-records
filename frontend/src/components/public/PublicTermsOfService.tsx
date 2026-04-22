@@ -80,14 +80,38 @@ export const PublicTermsOfService: React.FC = () => {
           en la LFPDPPP y su Reglamento.
         </Section>
 
-        <Section title="5. Propiedad intelectual">
+        <Section title="5. Firma electrónica">
+          Las firmas electrónicas generadas por CORTEX corresponden al supuesto
+          del <strong>Art. 89-bis del Código de Comercio</strong> (firma
+          electrónica simple): un hash SHA-256 del contenido del documento
+          acompañado de un código de autenticación mensaje (HMAC) emitido por
+          la Plataforma, validable públicamente mediante folio UUID. Se emite
+          vinculada a la cédula profesional del Usuario emisor y tiene valor
+          probatorio equivalente a la firma autógrafa digitalizada para los
+          efectos de la Ley General de Salud Art. 240 y su Reglamento de
+          Insumos Art. 50 (receta médica electrónica).
+          <br /><br />
+          Para documentos que requieran <strong>firma electrónica avanzada</strong>
+          (FEA) con e.firma SAT o <strong>conservación con NOM-151-SCFI-2016</strong>
+          mediante Prestador de Servicios de Certificación acreditado, consulte
+          nuestros planes Premium. CORTEX no garantiza que la firma simple sea
+          aceptada por todas las autoridades, farmacias, laboratorios o
+          instituciones bancarias que puedan requerir FEA.
+          <br /><br />
+          El Usuario es el único responsable de la custodia de sus credenciales
+          de acceso. Una firma generada desde una cuenta comprometida conserva
+          su validez técnica; el Usuario debe notificar de inmediato cualquier
+          uso no autorizado para revocación y bitácora de no repudio.
+        </Section>
+
+        <Section title="6. Propiedad intelectual">
           Los contenidos, marcas y código fuente de la Plataforma pertenecen a
           [[Nombre legal del operador]]. El Usuario conserva la titularidad de
           los datos clínicos que registra. La Plataforma recibe una licencia
           limitada y no exclusiva sobre esos datos para operar el servicio.
         </Section>
 
-        <Section title="6. Disponibilidad y limitación de responsabilidad">
+        <Section title="7. Disponibilidad y limitación de responsabilidad">
           CORTEX se ofrece bajo un modelo de mejor esfuerzo ("best effort"). No
           garantizamos disponibilidad ininterrumpida y recomendamos al Usuario
           respaldar periódicamente la información clínica crítica. En ningún
@@ -96,7 +120,7 @@ export const PublicTermsOfService: React.FC = () => {
           imposibilidad de uso de la Plataforma.
         </Section>
 
-        <Section title="7. Cancelación de cuenta">
+        <Section title="8. Cancelación de cuenta">
           El Usuario puede solicitar la cancelación de su cuenta en cualquier
           momento a través del centro de ayuda o ejerciendo los derechos ARCO
           descritos en el Aviso de Privacidad. La información clínica se
@@ -104,21 +128,21 @@ export const PublicTermsOfService: React.FC = () => {
           antes de ser anonimizada o suprimida.
         </Section>
 
-        <Section title="8. Modificaciones">
+        <Section title="9. Modificaciones">
           Podremos actualizar estos Términos para reflejar cambios operativos o
           regulatorios. Notificaremos al Usuario con al menos 30 días de
           anticipación cuando los cambios sean materiales. El uso continuado de
           la Plataforma después de la fecha efectiva constituye aceptación.
         </Section>
 
-        <Section title="9. Ley aplicable y jurisdicción">
+        <Section title="10. Ley aplicable y jurisdicción">
           Estos Términos se rigen por las leyes de los Estados Unidos Mexicanos.
           Las controversias se someterán a los tribunales competentes de
           [[Ciudad, Entidad Federativa]], con renuncia expresa a cualquier otro
           fuero.
         </Section>
 
-        <Section title="10. Contacto">
+        <Section title="11. Contacto">
           Para preguntas o ejercicio de derechos: [[correo de contacto]].
         </Section>
 
