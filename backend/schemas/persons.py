@@ -1,4 +1,5 @@
 """Person schemas (unified for doctors, patients, admins)."""
+import unicodedata
 from datetime import date, datetime
 from typing import Any, List, Literal, Optional
 
@@ -8,6 +9,26 @@ from .base import BaseSchema
 from .catalogs import Specialty, State
 from .documents import PersonDocumentCreate
 from .office import Office, OfficeCreate
+
+
+def normalize_relationship_code(v: Any) -> Optional[str]:
+    """Coerce emergency-contact relationship input to the canonical DB code.
+
+    The `emergency_relationships` catalog stores uppercase ASCII codes with
+    `Ñ` expanded to `NI` (e.g. CUÑADA → CUNIADA, TÍA → TIA, PADRE → PADRE).
+    Frontends historically send the display label ("Padre", "Cuñada"), which
+    triggers a FK violation on persons.emergency_contact_relationship. This
+    normalizer bridges both forms so the insert stops 500'ing.
+    """
+    if v is None:
+        return None
+    s = str(v).strip()
+    if not s:
+        return None
+    s = s.upper().replace('Ñ', 'NI')
+    # Strip remaining combining marks (accents) after NFKD decomposition.
+    s = ''.join(c for c in unicodedata.normalize('NFKD', s) if not unicodedata.combining(c))
+    return s or None
 
 
 # Canonical gender is a single-letter code: M / F / O. Legacy callers and
@@ -97,6 +118,11 @@ class PersonBase(BaseSchema):
             raise ValueError('Email inválido')
         return v.strip().lower()
 
+    @field_validator('emergency_contact_relationship', mode='before')
+    @classmethod
+    def _normalize_emergency_contact_relationship(cls, v: Any) -> Any:
+        return normalize_relationship_code(v)
+
 
 # Professional data for doctors
 class DoctorCreate(PersonBase):
@@ -184,6 +210,11 @@ class DoctorUpdate(BaseSchema):
     emergency_contact_phone: Optional[str] = None
     emergency_contact_relationship: Optional[str] = None
 
+    @field_validator('emergency_contact_relationship', mode='before')
+    @classmethod
+    def _normalize_emergency_contact_relationship(cls, v: Any) -> Any:
+        return normalize_relationship_code(v)
+
     # Avatar configuration
     avatar_type: Optional[Literal['initials', 'preloaded', 'custom']] = None
     avatar_template_key: Optional[str] = None
@@ -249,6 +280,11 @@ class PersonUpdate(BaseSchema):
     emergency_contact_name: Optional[str] = None
     emergency_contact_phone: Optional[str] = None
     emergency_contact_relationship: Optional[str] = None
+
+    @field_validator('emergency_contact_relationship', mode='before')
+    @classmethod
+    def _normalize_emergency_contact_relationship(cls, v: Any) -> Any:
+        return normalize_relationship_code(v)
 
 
 class Person(PersonBase):
