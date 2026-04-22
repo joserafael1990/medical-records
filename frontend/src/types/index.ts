@@ -319,6 +319,11 @@ export interface ClinicalStudy {
   created_by: string;
   created_at: string;
   updated_at: string;
+  // Firma electrónica (Fase 1, Prescrypto-style)
+  signature_hash?: string | null;
+  verification_uuid?: string | null;
+  signed_at?: string | null;
+  signer_person_id?: number | null;
 }
 
 export interface CreateClinicalStudyData {
@@ -503,6 +508,11 @@ export interface ConsultationPrescription {
   via_administracion?: string;
   created_at?: string;
   updated_at?: string;
+  // Firma electrónica (Fase 1, Prescrypto-style)
+  signature_hash?: string | null;
+  verification_uuid?: string | null;
+  signed_at?: string | null;
+  signer_person_id?: number | null;
 }
 
 export interface DocumentFolio {

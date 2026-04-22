@@ -3,7 +3,8 @@ import {
     PatientInfo,
     DoctorInfo,
     ConsultationInfo,
-    OfficeInfo
+    OfficeInfo,
+    SignatureInfo
 } from '../../../types/pdf';
 import { PDF_CONSTANTS } from '../constants';
 import {
@@ -17,9 +18,61 @@ import {
 export class BasePDFGenerator {
     protected doc: jsPDF;
     protected avatarCache = new Map<string, string>();
+    protected signatureInfo: SignatureInfo | null = null;
 
     constructor() {
         this.doc = new jsPDF();
+    }
+
+    /**
+     * Attach electronic signature metadata so addFooter() can render the
+     * verification block. Call before generate().
+     */
+    public setSignatureInfo(info: SignatureInfo | null | undefined): void {
+        this.signatureInfo = info ?? null;
+    }
+
+    /**
+     * Draws the electronic signature verification block: hash, folio, and
+     * public verification URL. Used in prescriptions and clinical study orders
+     * per LGS Art. 240 / NOM-004. Called from addFooter when signatureInfo is set.
+     */
+    protected drawSignatureVerificationBlock(info: SignatureInfo, startY: number): void {
+        const pageWidth = this.doc.internal.pageSize.width;
+        const pageHeight = this.doc.internal.pageSize.height;
+        // Clamp above the bottom line so it doesn't collide with "Generado el..."
+        const y = Math.min(startY, pageHeight - 40);
+
+        this.doc.setDrawColor(...PDF_CONSTANTS.COLORS.BORDER);
+        this.doc.setLineWidth(0.3);
+        this.doc.line(15, y, pageWidth - 15, y);
+
+        this.doc.setFontSize(8);
+        this.doc.setTextColor(...PDF_CONSTANTS.COLORS.PRIMARY);
+        this.doc.setFont(PDF_CONSTANTS.FONTS.PRIMARY, 'bold');
+        this.doc.text('Firmado electrónicamente', 15, y + 4);
+
+        this.doc.setFontSize(7);
+        this.doc.setTextColor(...PDF_CONSTANTS.COLORS.TEXT_DARK);
+        this.doc.setFont(PDF_CONSTANTS.FONTS.PRIMARY, 'normal');
+        const hashShort = (info.signature_hash || '').slice(0, 32);
+        const signedAt = info.signed_at
+            ? new Date(info.signed_at).toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })
+            : '';
+        this.doc.text(`Folio: ${info.verification_uuid}`, 15, y + 8);
+        this.doc.text(`Hash SHA-256: ${hashShort}…`, 15, y + 11.5);
+        if (signedAt) {
+            this.doc.text(`Fecha: ${signedAt} (CDMX)`, 15, y + 15);
+        }
+        if (info.verification_url) {
+            this.doc.setTextColor(...PDF_CONSTANTS.COLORS.PRIMARY);
+            this.doc.text(
+                `Verificar: ${info.verification_url}`,
+                pageWidth - 15,
+                y + 4,
+                { align: 'right' }
+            );
+        }
     }
 
     protected async loadDoctorAvatarDataUrl(doctor: DoctorInfo): Promise<string | null> {
@@ -486,6 +539,11 @@ export class BasePDFGenerator {
         this.doc.setFont(PDF_CONSTANTS.FONTS.PRIMARY, 'bold');
         this.doc.text('Sello', sealX + 15, sealY + 9, { align: 'center' });
         this.doc.text('Profesional', sealX + 15, sealY + 13, { align: 'center' });
+
+        // Electronic signature verification block (below footer, above bottom line)
+        if (this.signatureInfo) {
+            this.drawSignatureVerificationBlock(this.signatureInfo, footerY + 6);
+        }
 
         if (drawBottomLine) {
             const bottomMargin = 28;

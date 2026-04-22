@@ -86,7 +86,11 @@ async def get_clinical_studies_by_patient(
                 "file_size": study.file_size,
                 "created_by": str(study.created_by) if study.created_by else None,
                 "created_at": study.created_at.isoformat() if study.created_at else None,
-                "updated_at": study.updated_at.isoformat() if study.updated_at else None
+                "updated_at": study.updated_at.isoformat() if study.updated_at else None,
+                "signature_hash": study.signature_hash,
+                "verification_uuid": study.verification_uuid,
+                "signed_at": study.signed_at.isoformat() if study.signed_at else None,
+                "signer_person_id": study.signer_person_id,
             }
             studies_data.append(study_data)
         
@@ -155,7 +159,11 @@ async def get_clinical_studies_by_consultation(
                 "file_size": study.file_size,
                 "created_by": str(study.created_by) if study.created_by else None,
                 "created_at": study.created_at.isoformat() if study.created_at else None,
-                "updated_at": study.updated_at.isoformat() if study.updated_at else None
+                "updated_at": study.updated_at.isoformat() if study.updated_at else None,
+                "signature_hash": study.signature_hash,
+                "verification_uuid": study.verification_uuid,
+                "signed_at": study.signed_at.isoformat() if study.signed_at else None,
+                "signer_person_id": study.signer_person_id,
             }
             studies_data.append(study_data)
         
@@ -274,7 +282,11 @@ async def create_clinical_study(
             "file_size": new_study.file_size,
             "created_by": str(new_study.created_by) if new_study.created_by else None,
             "created_at": new_study.created_at.isoformat() if new_study.created_at else None,
-            "updated_at": new_study.updated_at.isoformat() if new_study.updated_at else None
+            "updated_at": new_study.updated_at.isoformat() if new_study.updated_at else None,
+            "signature_hash": new_study.signature_hash,
+            "verification_uuid": new_study.verification_uuid,
+            "signed_at": new_study.signed_at.isoformat() if new_study.signed_at else None,
+            "signer_person_id": new_study.signer_person_id,
         }
         
         api_logger.info("Clinical study created successfully", study_id=new_study.id, consultation_id=study_data.get('consultation_id'))
@@ -393,7 +405,11 @@ async def update_clinical_study(
             "file_size": study.file_size,
             "created_by": str(study.created_by) if study.created_by else None,
             "created_at": study.created_at.isoformat() if study.created_at else None,
-            "updated_at": study.updated_at.isoformat() if study.updated_at else None
+            "updated_at": study.updated_at.isoformat() if study.updated_at else None,
+            "signature_hash": study.signature_hash,
+            "verification_uuid": study.verification_uuid,
+            "signed_at": study.signed_at.isoformat() if study.signed_at else None,
+            "signer_person_id": study.signer_person_id,
         }
         
         api_logger.info("Clinical study updated successfully", study_id=study.id)

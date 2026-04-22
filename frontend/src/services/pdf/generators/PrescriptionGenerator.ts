@@ -4,7 +4,8 @@ import {
     DoctorInfo,
     ConsultationInfo,
     MedicationInfo,
-    OfficeInfo
+    OfficeInfo,
+    SignatureInfo
 } from '../../../types/pdf';
 import { PDF_CONSTANTS } from '../constants';
 
@@ -14,8 +15,11 @@ export class PrescriptionGenerator extends BasePDFGenerator {
         doctor: DoctorInfo,
         consultation: ConsultationInfo,
         medications: MedicationInfo[],
-        officeInfo?: OfficeInfo
+        officeInfo?: OfficeInfo,
+        signatureInfo?: SignatureInfo | null
     ): Promise<void> {
+        this.setSignatureInfo(signatureInfo);
+
         // Add header
         let currentY = await this.addHeader(patient, doctor, consultation, officeInfo);
 
