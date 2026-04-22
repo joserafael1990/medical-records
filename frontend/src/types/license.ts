@@ -1,4 +1,4 @@
-export type LicenseType = 'trial' | 'basic' | 'premium';
+export type LicenseType = 'trial' | 'premium';
 export type LicenseStatus = 'active' | 'inactive' | 'expired' | 'suspended';
 
 export interface License {

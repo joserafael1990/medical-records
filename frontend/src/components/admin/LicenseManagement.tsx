@@ -162,7 +162,6 @@ export const LicenseManagement: React.FC = () => {
             >
               <MenuItem value="">Todos</MenuItem>
               <MenuItem value="trial">Trial</MenuItem>
-              <MenuItem value="basic">Básica</MenuItem>
               <MenuItem value="premium">Premium</MenuItem>
             </Select>
           </FormControl>

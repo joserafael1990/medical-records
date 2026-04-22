@@ -188,7 +188,7 @@ class License(Base):
     
     id = Column(Integer, primary_key=True)
     doctor_id = Column(Integer, ForeignKey("persons.id", ondelete="CASCADE"), nullable=False)
-    license_type = Column(String(50), nullable=False)  # 'trial', 'basic', 'premium'
+    license_type = Column(String(50), nullable=False)  # 'trial', 'premium'
     start_date = Column(Date, nullable=False)
     expiration_date = Column(Date, nullable=False)
     payment_date = Column(Date, nullable=True)
