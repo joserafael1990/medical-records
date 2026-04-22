@@ -51,7 +51,9 @@ class Person(Base):
     graduation_year = Column(Integer)
 
     # PROFESSIONAL IDENTITY (NOM-004 §7.1, required on prescription signature)
-    professional_license = Column(String(20))  # Cédula profesional SEP (6-10 dígitos)
+    # Nota: professional_license ya existía en el bootstrap SQL como VARCHAR(50);
+    # respetamos ese ancho para no forzar un downsize destructivo.
+    professional_license = Column(String(50))  # Cédula profesional SEP (6-10 dígitos)
     rfc = Column(String(13))                   # RFC persona física
     curp = Column(String(18))                  # CURP
     
