@@ -19,6 +19,7 @@ export class PrescriptionGenerator extends BasePDFGenerator {
         signatureInfo?: SignatureInfo | null
     ): Promise<void> {
         this.setSignatureInfo(signatureInfo);
+        await this.prepareSignatureQr();
 
         // Add header
         let currentY = await this.addHeader(patient, doctor, consultation, officeInfo);

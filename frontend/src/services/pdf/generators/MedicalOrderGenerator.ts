@@ -20,6 +20,7 @@ export class MedicalOrderGenerator extends BasePDFGenerator {
         signatureInfo?: SignatureInfo | null
     ): Promise<void> {
         this.setSignatureInfo(signatureInfo);
+        await this.prepareSignatureQr();
         const pageWidth = this.doc.internal.pageSize.width;
 
         // Add header
