@@ -20,7 +20,9 @@ import {
   Medication as MedicationIcon,
   LocalPharmacy as PharmacyIcon,
   Search as SearchIcon,
-  Add as AddIcon
+  Add as AddIcon,
+  Draw as DrawIcon,
+  VerifiedUser as VerifiedIcon
 } from '@mui/icons-material';
 import { ConsultationPrescription, Medication, CreatePrescriptionData } from '../../types';
 import { logger } from '../../utils/logger';
@@ -32,6 +34,7 @@ interface PrescriptionsSectionProps {
   onAddPrescription: (prescriptionData: CreatePrescriptionData) => Promise<void>;
   onEditPrescription?: (prescription: ConsultationPrescription, prescriptionData: CreatePrescriptionData) => Promise<void>;
   onDeletePrescription: (prescriptionId: number) => void;
+  onSignPrescription?: (prescriptionId: number) => Promise<ConsultationPrescription | void>;
   medications?: Medication[];
   onFetchMedications?: (search?: string) => Promise<void>;
   onCreateMedication?: (name: string) => Promise<Medication>;
@@ -44,10 +47,22 @@ const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
   onAddPrescription,
   onEditPrescription,
   onDeletePrescription,
+  onSignPrescription,
   medications = [],
   onFetchMedications,
   onCreateMedication
 }) => {
+  const [signingId, setSigningId] = useState<number | null>(null);
+
+  const handleSign = async (prescriptionId: number) => {
+    if (!onSignPrescription) return;
+    try {
+      setSigningId(prescriptionId);
+      await onSignPrescription(prescriptionId);
+    } finally {
+      setSigningId(null);
+    }
+  };
   const [selectedMedication, setSelectedMedication] = useState<Medication | null>(null);
   const [medicationSearch, setMedicationSearch] = useState('');
   const [isCreatingMedication, setIsCreatingMedication] = useState(false);
@@ -399,15 +414,47 @@ const PrescriptionsSection: React.FC<PrescriptionsSectionProps> = ({
                     </Box>
                   )}
                 </CardContent>
-                <CardContent sx={{ p: 1, pt: 0, display: 'flex', justifyContent: 'flex-end' }}>
-                  <Tooltip title="Eliminar">
-                    <IconButton aria-label="Eliminar"
-                      size="small"
-                      onClick={() => onDeletePrescription(prescription.id)}
-                      sx={{ color: '#f44336' }}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
+                <CardContent sx={{ p: 1, pt: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                  {/* Signature status — left side */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minHeight: 28 }}>
+                    {prescription.signed_at ? (
+                      <Tooltip title={`Firmada ${new Date(prescription.signed_at).toLocaleString('es-MX')}  ·  Folio ${prescription.verification_uuid}`}>
+                        <Chip
+                          icon={<VerifiedIcon />}
+                          label="Firmada"
+                          color="success"
+                          size="small"
+                          variant="outlined"
+                        />
+                      </Tooltip>
+                    ) : onSignPrescription && consultationId !== 'temp_consultation' ? (
+                      <Tooltip title="Firmar electrónicamente">
+                        <span>
+                          <Button
+                            size="small"
+                            startIcon={<DrawIcon fontSize="small" />}
+                            onClick={() => handleSign(prescription.id)}
+                            disabled={signingId === prescription.id}
+                            sx={{ textTransform: 'none' }}
+                          >
+                            {signingId === prescription.id ? 'Firmando…' : 'Firmar'}
+                          </Button>
+                        </span>
+                      </Tooltip>
+                    ) : null}
+                  </Box>
+                  {/* Delete button — right side. Disabled once signed to preserve integrity. */}
+                  <Tooltip title={prescription.signed_at ? 'No se puede eliminar una receta firmada' : 'Eliminar'}>
+                    <span>
+                      <IconButton aria-label="Eliminar"
+                        size="small"
+                        onClick={() => onDeletePrescription(prescription.id)}
+                        disabled={!!prescription.signed_at}
+                        sx={{ color: prescription.signed_at ? 'text.disabled' : '#f44336' }}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </span>
                   </Tooltip>
                 </CardContent>
               </Card>

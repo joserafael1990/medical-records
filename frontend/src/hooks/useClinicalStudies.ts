@@ -6,6 +6,7 @@ import { useState, useCallback } from 'react';
 import { ClinicalStudy, CreateClinicalStudyData, UpdateClinicalStudyData } from '../types';
 import { apiService } from '../services';
 import { logger } from '../utils/logger';
+import { useToast } from '../components/common/ToastNotification';
 
 export interface UseClinicalStudiesReturn {
   // State
@@ -24,6 +25,7 @@ export interface UseClinicalStudiesReturn {
   createStudy: (studyData: CreateClinicalStudyData) => Promise<ClinicalStudy>;
   updateStudy: (studyId: string, studyData: UpdateClinicalStudyData) => Promise<ClinicalStudy>;
   deleteStudy: (studyId: string) => Promise<void>;
+  signStudy: (studyId: string) => Promise<void>;
 
   // Dialog management
   openAddDialog: (consultationId: string, patientId: string, doctorName: string) => void;
@@ -52,6 +54,7 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
   const [isEditingClinicalStudy, setIsEditingClinicalStudy] = useState(false);
   const [selectedClinicalStudy, setSelectedClinicalStudy] = useState<ClinicalStudy | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { showSuccess, showError } = useToast();
 
   // Form data with default values
   const [clinicalStudyFormData, setClinicalStudyFormData] = useState<CreateClinicalStudyData>({
@@ -198,6 +201,34 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
       throw err;
     }
   }, []);
+
+  // Sign a clinical study (electronic signature Fase 1)
+  const signStudy = useCallback(async (studyId: string) => {
+    if (studyId.startsWith('temp_')) {
+      showError('Debes guardar la orden antes de firmarla');
+      return;
+    }
+    try {
+      const response = await apiService.consultations.api.post(`/api/clinical-studies/${studyId}/sign`);
+      const manifest = response.data;
+      setStudies(prev => prev.map(s =>
+        String(s.id) === String(studyId)
+          ? {
+              ...s,
+              signature_hash: manifest.signature_hash,
+              verification_uuid: manifest.verification_uuid,
+              signed_at: manifest.signed_at,
+            }
+          : s
+      ));
+      showSuccess('Orden firmada electrónicamente', `Folio: ${manifest.verification_uuid}`);
+    } catch (err: any) {
+      logger.error('Error signing clinical study', err, 'api');
+      const detail = err?.response?.data?.detail || 'No se pudo firmar la orden';
+      showError(detail);
+      throw err;
+    }
+  }, [showSuccess, showError]);
 
   // Dialog management
   const openAddDialog = useCallback((consultationId: string, patientId: string, doctorName: string) => {
@@ -400,6 +431,7 @@ export const useClinicalStudies = (): UseClinicalStudiesReturn => {
     createStudy,
     updateStudy,
     deleteStudy,
+    signStudy,
 
     // Dialog management
     openAddDialog,

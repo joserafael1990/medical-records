@@ -26,7 +26,9 @@ import {
   CalendarToday as CalendarIcon,
   Person as PersonIcon,
   Business as BusinessIcon,
-  Search as SearchIcon
+  Search as SearchIcon,
+  Draw as DrawIcon,
+  VerifiedUser as VerifiedIcon
 } from '@mui/icons-material';
 import { ClinicalStudy, StudyStatus, CreateClinicalStudyData, StudyCatalog } from '../../types';
 import { STUDY_STATUS_OPTIONS, STUDY_TYPES, API_CONFIG } from '../../constants';
@@ -42,6 +44,7 @@ interface ClinicalStudiesSectionProps {
   onAddStudy: (studyData: CreateClinicalStudyData) => Promise<void>;
   onEditStudy?: (study: ClinicalStudy) => void;
   onRemoveStudy: (studyId: string) => void;
+  onSignStudy?: (studyId: string) => Promise<void>;
   onViewFile?: (fileUrl: string) => void;
   onDownloadFile?: (fileUrl: string, fileName: string) => void;
   doctorName?: string;
@@ -55,10 +58,22 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
   onAddStudy,
   onEditStudy,
   onRemoveStudy,
+  onSignStudy,
   onViewFile,
   onDownloadFile,
   doctorName = ''
 }) => {
+  const [signingStudyId, setSigningStudyId] = useState<string | null>(null);
+
+  const handleSignStudy = async (studyId: string) => {
+    if (!onSignStudy) return;
+    try {
+      setSigningStudyId(studyId);
+      await onSignStudy(studyId);
+    } finally {
+      setSigningStudyId(null);
+    }
+  };
   const [filteredStudies, setFilteredStudies] = useState<ClinicalStudy[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const { studies: catalogStudies, fetchStudies, searchStudies, isLoading: isCatalogLoading } = useStudyCatalog();
@@ -657,18 +672,51 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
                 <Divider />
                 
                 <CardActions sx={{ px: 2, py: 1, justifyContent: 'space-between' }}>
-                  <Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, minWidth: 0 }}>
                     {study.performed_date && (
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" color="text.secondary" noWrap>
                         Realizado: {formatDate(study.performed_date)}
                       </Typography>
                     )}
+                    {(study as any).signed_at ? (
+                      <Tooltip title={`Firmada ${new Date((study as any).signed_at).toLocaleString('es-MX')}  ·  Folio ${(study as any).verification_uuid}`}>
+                        <Chip
+                          icon={<VerifiedIcon />}
+                          label="Firmada"
+                          color="success"
+                          size="small"
+                          variant="outlined"
+                        />
+                      </Tooltip>
+                    ) : onSignStudy && !String(study.id).startsWith('temp_') ? (
+                      <Tooltip title="Firmar electrónicamente">
+                        <span>
+                          <Button
+                            size="small"
+                            startIcon={<DrawIcon fontSize="small" />}
+                            onClick={() => handleSignStudy(String(study.id))}
+                            disabled={signingStudyId === String(study.id)}
+                            sx={{ textTransform: 'none' }}
+                          >
+                            {signingStudyId === String(study.id) ? 'Firmando…' : 'Firmar'}
+                          </Button>
+                        </span>
+                      </Tooltip>
+                    ) : null}
                   </Box>
                   <Box sx={{ display: 'flex', gap: 0.5 }}>
-                    <Tooltip title="Eliminar estudio">
-                      <IconButton aria-label="Eliminar" size="small" color="error" onClick={() => onRemoveStudy(study.id)}>
-                        <DeleteIcon sx={{ fontSize: 16 }} />
-                      </IconButton>
+                    <Tooltip title={(study as any).signed_at ? 'No se puede eliminar una orden firmada' : 'Eliminar estudio'}>
+                      <span>
+                        <IconButton
+                          aria-label="Eliminar"
+                          size="small"
+                          color="error"
+                          onClick={() => onRemoveStudy(study.id)}
+                          disabled={!!(study as any).signed_at}
+                        >
+                          <DeleteIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </span>
                     </Tooltip>
                   </Box>
                 </CardActions>

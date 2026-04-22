@@ -31,6 +31,7 @@ interface ConsultationSectionsProps {
   medications: Medication[];
   onAddPrescription: (prescriptionData: any) => Promise<void>;
   onDeletePrescription: (prescriptionId: number) => void;
+  onSignPrescription?: (prescriptionId: number) => Promise<any>;
   onFetchMedications: (search?: string) => Promise<void>;
   onCreateMedication: (name: string) => Promise<Medication>;
   treatmentPlan: string;
@@ -43,6 +44,7 @@ interface ConsultationSectionsProps {
   studiesLoading: boolean;
   onAddStudy: (studyData: CreateClinicalStudyData) => Promise<void>;
   onDeleteStudy: (studyId: string) => Promise<void>;
+  onSignStudy?: (studyId: string) => Promise<void>;
   onViewStudyFile: (studyId: number) => void;
   onDownloadStudyFile: (studyId: number) => void;
   doctorName: string;
@@ -70,6 +72,7 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
   medications,
   onAddPrescription,
   onDeletePrescription,
+  onSignPrescription,
   onFetchMedications,
   onCreateMedication,
   treatmentPlan,
@@ -80,6 +83,7 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
   studiesLoading,
   onAddStudy,
   onDeleteStudy,
+  onSignStudy,
   onViewStudyFile,
   onDownloadStudyFile,
   doctorName,
@@ -256,6 +260,7 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
         isLoading={prescriptionsLoading}
         onAddPrescription={onAddPrescription}
         onDeletePrescription={onDeletePrescription}
+        onSignPrescription={onSignPrescription}
         medications={medications}
         onFetchMedications={onFetchMedications}
         onCreateMedication={onCreateMedication}
@@ -310,6 +315,7 @@ export const ConsultationSections: React.FC<ConsultationSectionsProps> = ({
           isLoading={studiesLoading}
           onAddStudy={onAddStudy}
           onRemoveStudy={onDeleteStudy}
+          onSignStudy={onSignStudy}
           onViewFile={(fileUrl: string) => {
             // Find study by fileUrl and call onViewStudyFile with studyId
             const study = studies.find(s => (s as any).file_url === fileUrl || (s as any).file_path === fileUrl);

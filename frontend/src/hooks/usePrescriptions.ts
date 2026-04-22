@@ -26,6 +26,7 @@ export interface UsePrescriptionsReturn {
   createPrescription: (prescriptionData: CreatePrescriptionData, consultationId: string) => Promise<ConsultationPrescription>;
   updatePrescription: (prescriptionId: number, consultationId: string, prescriptionData: UpdatePrescriptionData) => Promise<ConsultationPrescription>;
   deletePrescription: (prescriptionId: number, consultationId: string) => Promise<void>;
+  signPrescription: (prescriptionId: number) => Promise<ConsultationPrescription>;
   createMedication: (medicationName: string) => Promise<Medication>;
   
   // Dialog management
@@ -222,6 +223,34 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
       throw err;
     }
   }, []);
+
+  // Sign a prescription (electronic signature Fase 1)
+  const signPrescription = useCallback(async (prescriptionId: number): Promise<ConsultationPrescription> => {
+    try {
+      const response = await apiService.consultations.api.post(
+        `/api/prescriptions/${prescriptionId}/sign`
+      );
+      const manifest = response.data;
+      setPrescriptions(prev => prev.map(p =>
+        p.id === prescriptionId
+          ? {
+              ...p,
+              signature_hash: manifest.signature_hash,
+              verification_uuid: manifest.verification_uuid,
+              signed_at: manifest.signed_at,
+            }
+          : p
+      ));
+      showSuccess('Receta firmada electrónicamente', `Folio: ${manifest.verification_uuid}`);
+      const updated = { ...(prescriptions.find(p => p.id === prescriptionId) as ConsultationPrescription), ...manifest };
+      return updated;
+    } catch (err: any) {
+      logger.error('Error signing prescription', err, 'api');
+      const detail = err?.response?.data?.detail || 'No se pudo firmar la receta';
+      showError(detail);
+      throw err;
+    }
+  }, [prescriptions, showSuccess, showError]);
 
   // Create a new medication
   const createMedication = useCallback(async (medicationName: string): Promise<Medication> => {
@@ -484,6 +513,7 @@ export const usePrescriptions = (): UsePrescriptionsReturn => {
     createPrescription,
     updatePrescription,
     deletePrescription,
+    signPrescription,
     createMedication,
     
     // Dialog management
