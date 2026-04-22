@@ -416,6 +416,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
                 prescriptionsHook.deletePrescription(prescriptionId, "temp_consultation");
               }
             }}
+            onSignPrescription={prescriptionsHook.signPrescription}
             onFetchMedications={prescriptionsHook.fetchMedications}
             onCreateMedication={prescriptionsHook.createMedication}
             treatmentPlan={formHook.formData.treatment_plan}
@@ -426,6 +427,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
             studiesLoading={clinicalStudiesHook.isLoading}
             onAddStudy={clinicalStudiesManager.handleAddStudy}
             onDeleteStudy={clinicalStudiesManager.handleDeleteStudy}
+            onSignStudy={clinicalStudiesHook.signStudy}
             onViewStudyFile={(studyId: number) => {
               const study = clinicalStudiesHook.studies.find(s => String(s.id) === String(studyId));
               if (study && (study as any).file_url) {

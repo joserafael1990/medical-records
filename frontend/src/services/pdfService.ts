@@ -6,7 +6,8 @@ import {
   MedicationInfo,
   StudyInfo,
   CertificateInfo,
-  OfficeInfo
+  OfficeInfo,
+  SignatureInfo
 } from '../types/pdf';
 import { selectBestOfficeForPDF } from './pdf/utils';
 import { PrescriptionGenerator } from './pdf/generators/PrescriptionGenerator';
@@ -61,7 +62,8 @@ class PDFService {
     patient: PatientInfo,
     doctor: DoctorInfo,
     consultation: ConsultationInfo,
-    medications: MedicationInfo[]
+    medications: MedicationInfo[],
+    signatureInfo?: SignatureInfo | null
   ): Promise<void> {
     console.log('PDFService.generatePrescription (Refactored) called with:', {
       patient: patient?.name,
@@ -78,7 +80,7 @@ class PDFService {
       // The BaseGenerator constructor creates a new jsPDF instance.
       // So we should instantiate a new generator for each request to avoid state pollution.
       const generator = new PrescriptionGenerator();
-      await generator.generate(patient, doctor, consultation, medications, officeInfo || undefined);
+      await generator.generate(patient, doctor, consultation, medications, officeInfo || undefined, signatureInfo ?? undefined);
 
       // Track PDF download in Amplitude
       try {
@@ -103,13 +105,14 @@ class PDFService {
     patient: PatientInfo,
     doctor: DoctorInfo,
     consultation: ConsultationInfo,
-    studies: StudyInfo[]
+    studies: StudyInfo[],
+    signatureInfo?: SignatureInfo | null
   ): Promise<void> {
     try {
       const officeInfo = await this.getOfficeInfo(doctor);
 
       const generator = new MedicalOrderGenerator();
-      await generator.generate(patient, doctor, consultation, studies, officeInfo || undefined);
+      await generator.generate(patient, doctor, consultation, studies, officeInfo || undefined, signatureInfo ?? undefined);
 
       // Track PDF download in Amplitude
       try {

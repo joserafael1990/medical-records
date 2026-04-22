@@ -73,6 +73,20 @@ export class BasePDFGenerator {
                 { align: 'right' }
             );
         }
+
+        // Legal notice — firma electrónica simple según Art. 89-bis C. de Com.
+        // Necesaria para que el receptor (farmacia, laboratorio, paciente)
+        // sepa que no es firma electrónica avanzada (e.firma SAT) ni lleva
+        // Constancia NOM-151-SCFI-2016. Fase 2 agregará FEA vía PSC.
+        this.doc.setFontSize(6);
+        this.doc.setTextColor(120, 120, 120);
+        this.doc.setFont(PDF_CONSTANTS.FONTS.PRIMARY, 'italic');
+        this.doc.text(
+            'Firma electrónica simple conforme al Art. 89-bis del Código de Comercio. No constituye firma electrónica avanzada ni conservación NOM-151-SCFI-2016.',
+            15,
+            y + 19,
+            { maxWidth: pageWidth - 30 }
+        );
     }
 
     protected async loadDoctorAvatarDataUrl(doctor: DoctorInfo): Promise<string | null> {

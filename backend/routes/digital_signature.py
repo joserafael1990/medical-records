@@ -32,6 +32,17 @@ from services import digital_signature as dsvc
 api_logger = get_logger("cortex.signature")
 router = APIRouter(prefix="/api", tags=["digital-signature"])
 
+# Aviso legal requerido en toda salida que contenga firma generada por CORTEX.
+# La firma es electrónica SIMPLE (Art. 89-bis Código de Comercio), no avanzada.
+# Evita que farmacias, laboratorios o pacientes asuman equivalencia con e.firma
+# SAT o con documentos protegidos por Constancia NOM-151-SCFI-2016.
+LEGAL_NOTICE = (
+    "Las firmas electrónicas generadas por CORTEX corresponden al supuesto del "
+    "Art. 89-bis del Código de Comercio (firma electrónica simple). Para "
+    "documentos que requieran firma electrónica avanzada o conservación con "
+    "NOM-151-SCFI-2016, consulte nuestros planes Premium."
+)
+
 
 # ---- Signer profile -----------------------------------------------------------
 
@@ -192,6 +203,7 @@ async def sign_prescription(
         "signature_hash": manifest["signature_hash"],
         "signer_cedula": manifest["signer_cedula"],
         "algorithm": manifest["algorithm"],
+        "legal_notice": LEGAL_NOTICE,
     }
 
 
@@ -284,6 +296,7 @@ async def sign_clinical_study(
         "signature_hash": manifest["signature_hash"],
         "signer_cedula": manifest["signer_cedula"],
         "algorithm": manifest["algorithm"],
+        "legal_notice": LEGAL_NOTICE,
     }
 
 
@@ -333,6 +346,7 @@ async def verify_public(verification_uuid: str, db: Session = Depends(get_db)):
             "signed_at": rx.signed_at.isoformat() if rx.signed_at else None,
             "medication": rx.medication.name if rx.medication else None,
             "signature_hash": rx.signature_hash,
+            "legal_notice": LEGAL_NOTICE,
         }
 
     study = (
@@ -352,6 +366,7 @@ async def verify_public(verification_uuid: str, db: Session = Depends(get_db)):
             "signed_at": study.signed_at.isoformat() if study.signed_at else None,
             "study_name": study.study_name,
             "signature_hash": study.signature_hash,
+            "legal_notice": LEGAL_NOTICE,
         }
 
     raise HTTPException(status_code=404, detail="Documento no encontrado")
