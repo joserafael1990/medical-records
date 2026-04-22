@@ -48,8 +48,12 @@ steps:
       - '--cpu=1'
       - '--set-env-vars=NODE_ENV=production,REACT_APP_API_URL=https://cortex-backend-246017659362.us-central1.run.app'
 
-# Build timeout (10 minutes)
-timeout: 600s
+# Build timeout. Raised from 600s → 1200s after build f16ce95f on commit
+# 373a459 (PR #74) timed out at 10:24 — all four steps succeeded but the
+# whole pipeline was 24s over the limit. React build alone is ~4min, Docker
+# push ~40s, gcloud run deploy ~5min — no slack at 600s. 1200s matches the
+# order of magnitude of backend/cloudbuild.yaml (1320s).
+timeout: 1200s
 
 # Substitutions (can be overridden)
 # These can be set in Cloud Build trigger configuration or via --substitutions flag
