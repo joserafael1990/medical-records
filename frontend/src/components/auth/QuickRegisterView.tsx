@@ -174,12 +174,14 @@ const QuickRegisterView: React.FC<QuickRegisterViewProps> = ({
         specialty_id: parseInt(specialtyId, 10),
         documents,
         // Stub values backend can accept/ignore under quick_registration=true.
+        // Non-string Optional fields (date/int) must be null, not '' — Pydantic v2
+        // does not coerce empty strings for date/int and raises "input is too short".
         title: 'Dr.',
         gender: '',
-        birth_date: '',
+        birth_date: null,
         primary_phone: '',
         university: '',
-        graduation_year: '',
+        graduation_year: null,
         office_name: '',
         office_address: '',
         office_city: '',

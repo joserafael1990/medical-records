@@ -185,6 +185,11 @@ describe('QuickRegisterView', () => {
     // deserializing) but empty.
     expect(payload.office_name).toBe('');
     expect(payload.schedule_data).toEqual({});
+
+    // Non-string Optional fields (date/int) must be null, not '' — Pydantic v2
+    // rejects '' for Optional[date] / Optional[int] with "input is too short".
+    expect(payload.birth_date).toBeNull();
+    expect(payload.graduation_year).toBeNull();
   });
 
   it('submits with empty documents when the cédula type is not in the catalog', async () => {

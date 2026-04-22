@@ -60,6 +60,20 @@ def normalize_gender(v: Any) -> Optional[str]:
     return code
 
 
+def empty_str_to_none(v: Any) -> Any:
+    """Coerce '' → None for Optional[non-str] fields.
+
+    Frontends (quick register, profile dialogs, patient forms) send '' as a
+    stub for unfilled dates/numbers. Pydantic v2 does not coerce empty
+    strings into date/int/None and raises "input is too short" or
+    "unable to parse string as an integer", so normalize here before the
+    type validators run.
+    """
+    if isinstance(v, str) and v.strip() == '':
+        return None
+    return v
+
+
 class PersonBase(BaseSchema):
     person_type: Literal['doctor', 'patient', 'admin']
     title: Optional[str] = None
@@ -73,6 +87,17 @@ class PersonBase(BaseSchema):
     @classmethod
     def _normalize_gender(cls, v: Any) -> Any:
         return normalize_gender(v)
+
+    @field_validator('birth_date', mode='before')
+    @classmethod
+    def _empty_birth_date_to_none(cls, v: Any) -> Any:
+        return empty_str_to_none(v)
+
+    @field_validator('birth_state_id', 'birth_country_id', 'address_state_id',
+                     'address_country_id', mode='before')
+    @classmethod
+    def _empty_int_to_none(cls, v: Any) -> Any:
+        return empty_str_to_none(v)
 
     @field_validator('name')
     @classmethod
@@ -146,6 +171,15 @@ class DoctorCreate(PersonBase):
     university: Optional[str] = None
     graduation_year: Optional[int] = None
 
+    # Coerce '' → None for Optional[int] fields that frontends send as empty
+    # string stubs (RegisterView, DoctorProfileDialog). Without this,
+    # Pydantic raises int_parsing on the empty value.
+    @field_validator('graduation_year', 'specialty_id', 'appointment_duration',
+                     'office_state_id', mode='before')
+    @classmethod
+    def _empty_int_to_none(cls, v: Any) -> Any:
+        return empty_str_to_none(v)
+
     # Documents (normalized)
     documents: List[PersonDocumentCreate] = []
 
@@ -181,6 +215,11 @@ class DoctorUpdate(BaseSchema):
     def _normalize_gender(cls, v: Any) -> Any:
         return normalize_gender(v)
 
+    @field_validator('birth_date', mode='before')
+    @classmethod
+    def _empty_birth_date_to_none(cls, v: Any) -> Any:
+        return empty_str_to_none(v)
+
     # Personal address
     home_address: Optional[str] = None
     address_city: Optional[str] = None
@@ -199,6 +238,13 @@ class DoctorUpdate(BaseSchema):
     specialty_id: Optional[int] = None
     university: Optional[str] = None
     graduation_year: Optional[int] = None
+
+    @field_validator('graduation_year', 'specialty_id', 'appointment_duration',
+                     'address_state_id', 'address_country_id', 'birth_state_id',
+                     mode='before')
+    @classmethod
+    def _empty_int_to_none(cls, v: Any) -> Any:
+        return empty_str_to_none(v)
 
     # Documents (normalized) - accept both formats for flexibility
     documents: List[PersonDocumentCreate] = []
@@ -248,6 +294,11 @@ class PersonUpdate(BaseSchema):
     def _normalize_gender(cls, v: Any) -> Any:
         return normalize_gender(v)
 
+    @field_validator('birth_date', mode='before')
+    @classmethod
+    def _empty_birth_date_to_none(cls, v: Any) -> Any:
+        return empty_str_to_none(v)
+
     # Birth location
     birth_state_id: Optional[int] = None
     birth_country_id: Optional[int] = None
@@ -268,6 +319,13 @@ class PersonUpdate(BaseSchema):
     specialty_id: Optional[int] = None
     university: Optional[str] = None
     graduation_year: Optional[int] = None
+
+    @field_validator('graduation_year', 'specialty_id', 'appointment_duration',
+                     'birth_state_id', 'birth_country_id', 'address_state_id',
+                     'address_country_id', mode='before')
+    @classmethod
+    def _empty_int_to_none(cls, v: Any) -> Any:
+        return empty_str_to_none(v)
 
     # Documents (normalized)
     documents: List[PersonDocumentCreate] = []
