@@ -15,6 +15,7 @@ cédula, fecha, tipo, medicamento/estudio). NO expone PHI del paciente ni
 detalles clínicos — eso violaría LFPDPPP.
 """
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from database import (
@@ -107,6 +108,16 @@ LEGAL_NOTICE = (
     "documentos que requieran firma electrónica avanzada o conservación con "
     "NOM-151-SCFI-2016, consulte nuestros planes Premium."
 )
+
+
+def _utf8_json(content: dict) -> JSONResponse:
+    """
+    Force Content-Type: application/json; charset=utf-8 so non-browser
+    clients (mobile QR scanners, older HTTP libs) don't interpret the UTF-8
+    bytes as latin-1. Without the explicit charset, the legal_notice text
+    (with ó, ú, é) renders as mojibake ("electrÃ³nicas") in some apps.
+    """
+    return JSONResponse(content=content, media_type="application/json; charset=utf-8")
 
 
 # ---- Signer profile -----------------------------------------------------------
@@ -275,7 +286,7 @@ async def sign_prescription(
             "verification_uuid": manifest["verification_uuid"],
         },
     )
-    return {
+    return _utf8_json({
         "prescription_id": rx.id,
         "signed_at": manifest["signed_at"],
         "verification_uuid": manifest["verification_uuid"],
@@ -283,7 +294,7 @@ async def sign_prescription(
         "signer_cedula": manifest["signer_cedula"],
         "algorithm": manifest["algorithm"],
         "legal_notice": LEGAL_NOTICE,
-    }
+    })
 
 
 @router.get("/prescriptions/{prescription_id}/verify")
@@ -368,7 +379,7 @@ async def sign_clinical_study(
             "verification_uuid": manifest["verification_uuid"],
         },
     )
-    return {
+    return _utf8_json({
         "study_id": study.id,
         "signed_at": manifest["signed_at"],
         "verification_uuid": manifest["verification_uuid"],
@@ -376,7 +387,7 @@ async def sign_clinical_study(
         "signer_cedula": manifest["signer_cedula"],
         "algorithm": manifest["algorithm"],
         "legal_notice": LEGAL_NOTICE,
-    }
+    })
 
 
 @router.get("/clinical-studies/{study_id}/verify")
@@ -426,7 +437,7 @@ async def verify_public(verification_uuid: str, db: Session = Depends(get_db)):
             cedula = _resolve_signing_identity(db, doctor).get("professional_license")
         payload = _prescription_payload(db, rx)
         valid = dsvc.verify_payload(payload, rx.digital_signature)
-        return {
+        return _utf8_json({
             "document_type": "prescription",
             "valid": valid,
             "doctor_name": doctor.full_name if doctor else None,
@@ -435,7 +446,7 @@ async def verify_public(verification_uuid: str, db: Session = Depends(get_db)):
             "medication": rx.medication.name if rx.medication else None,
             "signature_hash": rx.signature_hash,
             "legal_notice": LEGAL_NOTICE,
-        }
+        })
 
     study = (
         db.query(ClinicalStudy)
@@ -451,7 +462,7 @@ async def verify_public(verification_uuid: str, db: Session = Depends(get_db)):
             cedula = _resolve_signing_identity(db, doctor).get("professional_license")
         payload = _study_payload(db, study)
         valid = dsvc.verify_payload(payload, study.digital_signature)
-        return {
+        return _utf8_json({
             "document_type": "clinical_study",
             "valid": valid,
             "doctor_name": doctor.full_name if doctor else None,
@@ -460,6 +471,6 @@ async def verify_public(verification_uuid: str, db: Session = Depends(get_db)):
             "study_name": study.study_name,
             "signature_hash": study.signature_hash,
             "legal_notice": LEGAL_NOTICE,
-        }
+        })
 
     raise HTTPException(status_code=404, detail="Documento no encontrado")

@@ -74,6 +74,37 @@ def empty_str_to_none(v: Any) -> Any:
     return v
 
 
+class PrivacyConsentPayload(BaseSchema):
+    """LFPDPPP Art. 16 privacy-notice acceptance metadata.
+
+    Must be acknowledged on quick_registration (the frontend cannot defer
+    consent to the profile view because the doctor is created — and PHI is
+    written — before then). `accepted=False` is rejected at parse time so the
+    backend never ends up persisting an explicit refusal as if it were a
+    valid consent record.
+    """
+
+    accepted: bool
+    accepted_at: Optional[datetime] = None
+    notice_version: Optional[str] = None
+    user_agent: Optional[str] = None
+    timezone: Optional[str] = None
+
+    @field_validator('accepted')
+    @classmethod
+    def _reject_unaccepted(cls, v: bool) -> bool:
+        if v is not True:
+            raise ValueError(
+                'El aviso de privacidad debe aceptarse para completar el registro (LFPDPPP Art. 16)'
+            )
+        return v
+
+    @field_validator('notice_version', 'user_agent', 'timezone', mode='before')
+    @classmethod
+    def _empty_str_to_none(cls, v: Any) -> Any:
+        return empty_str_to_none(v)
+
+
 class PersonBase(BaseSchema):
     person_type: Literal['doctor', 'patient', 'admin']
     title: Optional[str] = None
@@ -193,6 +224,16 @@ class DoctorCreate(PersonBase):
     office_state_id: Optional[int] = None
     office_phone: Optional[str] = None
     office_maps_url: Optional[str] = None
+
+    # Quick registration (NOM-004/024 + LFPDPPP minimum).
+    # When True, routes/auth.register_doctor bypasses the personal-document
+    # requirement and defers office/schedule to profile completion. Omitting
+    # this field here causes Pydantic v2's default extra='ignore' to drop
+    # it silently, which flips the backend into full-mode validation and
+    # rejects the quick register flow with "Se requiere al menos un
+    # documento personal" even though the user only needs to submit cédula.
+    quick_registration: bool = False
+    privacy_consent: Optional[PrivacyConsentPayload] = None
 
 
 # Professional data for doctor updates (optional fields for partial updates)
