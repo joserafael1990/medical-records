@@ -4,7 +4,8 @@ import {
 } from '@mui/material';
 import { PrintButtons } from '../../common/PrintButtons';
 import type { ConsultationVitalSign, ConsultationFormData } from '../../../types';
-import { getPatientDisplayName } from '../../../constants';
+import type { SignatureInfo } from '../../../types/pdf';
+import { getPatientDisplayName, API_CONFIG } from '../../../constants';
 
 interface PrintButtonsSectionProps {
   // Show condition
@@ -188,6 +189,40 @@ export const PrintButtonsSection: React.FC<PrintButtonsSectionProps> = ({
     return 'Paciente';
   }, [selectedPatient, consultation?.patient_name]);
 
+  // Extract signature metadata for PDFs. If any prescription or study is
+  // signed, pick the most recent one as the "document signature".
+  // NOTE: with multiple prescriptions each having its own signature, the PDF
+  // currently shows only the most recent. Each individual receta remains
+  // verifiable by its own /api/verify/{uuid} though; follow-up ticket should
+  // switch to a per-document (not per-line) signing model if needed.
+  const prescriptionSignature = useMemo<SignatureInfo | null>(() => {
+    const signed = (prescriptions || []).filter((p: any) => p?.signed_at && p?.verification_uuid);
+    if (signed.length === 0) return null;
+    const latest = signed.reduce((a: any, b: any) =>
+      new Date(a.signed_at).getTime() >= new Date(b.signed_at).getTime() ? a : b
+    );
+    return {
+      verification_uuid: latest.verification_uuid,
+      signature_hash: latest.signature_hash || '',
+      signed_at: latest.signed_at,
+      verification_url: `${API_CONFIG.BASE_URL}/api/verify/${latest.verification_uuid}`,
+    };
+  }, [prescriptions]);
+
+  const studyOrderSignature = useMemo<SignatureInfo | null>(() => {
+    const signed = (studies || []).filter((s: any) => s?.signed_at && s?.verification_uuid);
+    if (signed.length === 0) return null;
+    const latest = signed.reduce((a: any, b: any) =>
+      new Date(a.signed_at).getTime() >= new Date(b.signed_at).getTime() ? a : b
+    );
+    return {
+      verification_uuid: latest.verification_uuid,
+      signature_hash: latest.signature_hash || '',
+      signed_at: latest.signed_at,
+      verification_url: `${API_CONFIG.BASE_URL}/api/verify/${latest.verification_uuid}`,
+    };
+  }, [studies]);
+
   // Guard moved here so all hooks above run on every render.
   if (!show) {
     return null;
@@ -295,6 +330,8 @@ export const PrintButtonsSection: React.FC<PrintButtonsSectionProps> = ({
           instructions: study.study_name || 'Seguir indicaciones del laboratorio',
           urgency: study.urgency || 'Rutina'
         }))}
+        prescriptionSignature={prescriptionSignature}
+        studyOrderSignature={studyOrderSignature}
         variant="outlined"
         size="small"
         direction="row"
