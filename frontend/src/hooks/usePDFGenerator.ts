@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { pdfService, PatientInfo, DoctorInfo, ConsultationInfo, MedicationInfo, StudyInfo, CertificateInfo } from '../services/pdfService';
+import type { SignatureInfo } from '../types/pdf';
 import { apiService } from '../services';
 import { AmplitudeService } from '../services/analytics/AmplitudeService';
 import type { DocumentFolio } from '../types';
@@ -42,7 +43,8 @@ export const usePDFGenerator = () => {
     doctor: DoctorInfo,
     consultation: ConsultationInfo,
     medications: MedicationInfo[],
-    nextAppointmentDate?: string | null
+    nextAppointmentDate?: string | null,
+    signatureInfo?: SignatureInfo | null
   ) => {
     try {
       const folio = await fetchDocumentFolio(consultation?.id, 'prescription');
@@ -54,7 +56,7 @@ export const usePDFGenerator = () => {
         nextAppointmentDate: nextAppointmentDate || consultation?.nextAppointmentDate || null
       };
 
-      await pdfService.generatePrescription(patient, doctor, consultationWithFolio, medications);
+      await pdfService.generatePrescription(patient, doctor, consultationWithFolio, medications, signatureInfo);
       
       // Track PDF generation in Amplitude
       try {
@@ -80,7 +82,8 @@ export const usePDFGenerator = () => {
     doctor: DoctorInfo,
     consultation: ConsultationInfo,
     studies: StudyInfo[],
-    nextAppointmentDate?: string | null
+    nextAppointmentDate?: string | null,
+    signatureInfo?: SignatureInfo | null
   ) => {
     try {
       const folio = await fetchDocumentFolio(consultation?.id, 'study_order');
@@ -92,7 +95,7 @@ export const usePDFGenerator = () => {
         nextAppointmentDate: nextAppointmentDate || consultation?.nextAppointmentDate || null
       };
 
-      await pdfService.generateMedicalOrder(patient, doctor, consultationWithFolio, studies);
+      await pdfService.generateMedicalOrder(patient, doctor, consultationWithFolio, studies, signatureInfo);
       
       // Track PDF generation in Amplitude
       try {

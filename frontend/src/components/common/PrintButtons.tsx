@@ -3,6 +3,7 @@ import { Box, Stack, Divider } from '@mui/material';
 import { PrintPrescriptionButton } from './PrintPrescriptionButton';
 import { PrintMedicalOrderButton } from './PrintMedicalOrderButton';
 import { PatientInfo, DoctorInfo, ConsultationInfo, MedicationInfo, StudyInfo } from '../../services/pdfService';
+import type { SignatureInfo } from '../../types/pdf';
 
 interface PrintButtonsProps {
   patient: PatientInfo;
@@ -10,6 +11,8 @@ interface PrintButtonsProps {
   consultation: ConsultationInfo;
   medications: MedicationInfo[];
   studies: StudyInfo[];
+  prescriptionSignature?: SignatureInfo | null;
+  studyOrderSignature?: SignatureInfo | null;
   disabled?: boolean;
   variant?: 'contained' | 'outlined' | 'text';
   size?: 'small' | 'medium' | 'large';
@@ -24,6 +27,8 @@ export const PrintButtons: React.FC<PrintButtonsProps> = ({
   consultation,
   medications,
   studies,
+  prescriptionSignature,
+  studyOrderSignature,
   disabled = false,
   variant = 'outlined',
   size = 'medium',
@@ -47,17 +52,19 @@ export const PrintButtons: React.FC<PrintButtonsProps> = ({
           doctor={doctor}
           consultation={consultation}
           medications={medications}
+          signatureInfo={prescriptionSignature}
           disabled={disabled}
           variant={variant}
           size={size}
           fullWidth={direction === 'column'}
         />
-        
+
         <PrintMedicalOrderButton
           patient={patient}
           doctor={doctor}
           consultation={consultation}
           studies={studies}
+          signatureInfo={studyOrderSignature}
           disabled={disabled}
           variant={variant}
           size={size}

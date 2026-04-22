@@ -3,6 +3,7 @@ import { Button, Tooltip } from '@mui/material';
 import { Print as PrintIcon } from '@mui/icons-material';
 import { usePDFGenerator } from '../../hooks/usePDFGenerator';
 import { PatientInfo, DoctorInfo, ConsultationInfo, MedicationInfo } from '../../services/pdfService';
+import type { SignatureInfo } from '../../types/pdf';
 import { useToast } from './ToastNotification';
 
 interface PrintPrescriptionButtonProps {
@@ -10,6 +11,7 @@ interface PrintPrescriptionButtonProps {
   doctor: DoctorInfo;
   consultation: ConsultationInfo;
   medications: MedicationInfo[];
+  signatureInfo?: SignatureInfo | null;
   disabled?: boolean;
   variant?: 'contained' | 'outlined' | 'text';
   size?: 'small' | 'medium' | 'large';
@@ -21,6 +23,7 @@ export const PrintPrescriptionButton: React.FC<PrintPrescriptionButtonProps> = (
   doctor,
   consultation,
   medications,
+  signatureInfo,
   disabled = false,
   variant = 'outlined',
   size = 'medium',
@@ -46,7 +49,8 @@ export const PrintPrescriptionButton: React.FC<PrintPrescriptionButtonProps> = (
       doctor,
       consultation,
       medications,
-      consultation?.nextAppointmentDate
+      consultation?.nextAppointmentDate,
+      signatureInfo
     );
     
     if (result.success) {
