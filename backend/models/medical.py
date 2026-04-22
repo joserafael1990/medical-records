@@ -109,7 +109,7 @@ class ConsultationPrescription(Base):
     frequency = Column(String(255), nullable=False)
     duration = Column(String(255), nullable=False)
     instructions = Column(Text)
-    quantity = Column(Integer)
+    quantity = Column(String(100))
     via_administracion = Column(String(100))
     created_at = Column(DateTime, default=utc_now)
     
