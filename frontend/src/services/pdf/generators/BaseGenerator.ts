@@ -50,10 +50,12 @@ export class BasePDFGenerator {
             this.signatureInfo.verification_url ||
             `https://cortex-backend-246017659362.us-central1.run.app/api/verify/${this.signatureInfo.verification_uuid}`;
         try {
+            // High error correction + 400px bitmap keeps the QR scannable even
+            // after print → scan → low-end phone cameras.
             this.signatureQrDataUrl = await QRCode.toDataURL(url, {
-                errorCorrectionLevel: 'M',
-                margin: 0,
-                width: 128,
+                errorCorrectionLevel: 'H',
+                margin: 1,
+                width: 400,
                 color: { dark: '#000000', light: '#FFFFFF' },
             });
         } catch (err) {
@@ -70,8 +72,12 @@ export class BasePDFGenerator {
     protected drawSignatureVerificationBlock(info: SignatureInfo, startY: number): void {
         const pageWidth = this.doc.internal.pageSize.width;
         const pageHeight = this.doc.internal.pageSize.height;
-        // Clamp above the bottom line so it doesn't collide with "Generado el..."
-        const y = Math.min(startY, pageHeight - 40);
+        // Vertical budget: professional seal ends around pageHeight - 55
+        // (sealY + radius*2). Bottom line with "Generado el…" sits at
+        // pageHeight - 28. Clamp so the legal notice (at y+19) lands at
+        // pageHeight - 33 — leaves 5mm gap before the bottom line, and
+        // 3mm above the seal.
+        const y = Math.min(startY, pageHeight - 52);
 
         this.doc.setDrawColor(...PDF_CONSTANTS.COLORS.BORDER);
         this.doc.setLineWidth(0.3);
@@ -107,12 +113,15 @@ export class BasePDFGenerator {
         }
 
         // QR of the verification URL (if pre-generated via prepareSignatureQr()).
-        // Size 18x18 mm, anchored at the right side of the signature block.
+        // Size 20×20 mm at 400px bitmap → ~20 px/mm, enough for reliable phone-
+        // camera scans of a 36-char UUID path with H-level error correction.
+        // Anchored top-right so it doesn't overlap the professional seal on
+        // its left, and ends ~2mm above the bottom line.
         if (this.signatureQrDataUrl) {
             try {
-                const qrSize = 18;
+                const qrSize = 20;
                 const qrX = pageWidth - 15 - qrSize;
-                const qrY = y + 6;
+                const qrY = y + 2;
                 this.doc.addImage(
                     this.signatureQrDataUrl,
                     'PNG',

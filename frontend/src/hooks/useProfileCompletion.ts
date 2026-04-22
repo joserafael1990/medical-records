@@ -27,6 +27,10 @@ export interface ProfileCompletionResult {
   percentage: number;
   isComplete: boolean;
   hasBlockingGap: boolean;
+  /** True once the profile has enough data loaded to be evaluated.
+   *  Callers should render nothing while hydrated=false to avoid the
+   *  "Falta cédula" flash while documents load from a secondary call. */
+  hydrated: boolean;
 }
 
 const hasActiveSchedule = (schedule: any): boolean => {
@@ -61,6 +65,15 @@ const hasCedula = (documents: any[] | undefined): boolean => {
 export const useProfileCompletion = (doctorProfile: any): ProfileCompletionResult => {
   return useMemo<ProfileCompletionResult>(() => {
     const offices: any[] = Array.isArray(doctorProfile?.offices) ? doctorProfile.offices : [];
+    // hydrated = at least one document-bearing array is present. Distinguishes
+    // "profile not fetched yet" (undefined) from "fetched and empty" ([]).
+    // Without this, banners flash "Falta cédula" during the 1-3s window while
+    // the profile loads from /api/me and the documents arrive from a later call.
+    const hydrated =
+      !!doctorProfile &&
+      (Array.isArray(doctorProfile?.documents) ||
+        Array.isArray(doctorProfile?.person_documents) ||
+        Array.isArray(doctorProfile?.professional_documents));
     const documents: any[] = Array.isArray(doctorProfile?.documents)
       ? doctorProfile.documents
       : Array.isArray(doctorProfile?.person_documents)
@@ -133,7 +146,8 @@ export const useProfileCompletion = (doctorProfile: any): ProfileCompletionResul
       completed,
       percentage,
       isComplete: missing.length === 0,
-      hasBlockingGap: missing.some(i => i.blocking)
+      hasBlockingGap: missing.some(i => i.blocking),
+      hydrated
     };
   }, [doctorProfile]);
 };
