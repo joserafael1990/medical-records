@@ -179,10 +179,22 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   ];
 
   // Compliance alerts (NOM-004 requires cédula profesional on every signed record).
-  const missingLicense = !doctorProfile?.professional_license
+  // Only evaluate once we know the profile's document arrays were fetched,
+  // otherwise we flash "Falta cédula" while the secondary call loads them.
+  const profileHydrated =
+    !!doctorProfile &&
+    (Array.isArray(doctorProfile?.documents) ||
+      Array.isArray(doctorProfile?.person_documents) ||
+      Array.isArray(doctorProfile?.professional_documents));
+  const missingLicense = profileHydrated
+    && !doctorProfile?.professional_license
     && !user?.person?.professional_license
     && !(Array.isArray(doctorProfile?.professional_documents)
       && doctorProfile.professional_documents.some((d: any) =>
+        (d?.document_value || '').toString().trim().length > 0
+      ))
+    && !(Array.isArray(doctorProfile?.person_documents)
+      && doctorProfile.person_documents.some((d: any) =>
         (d?.document_value || '').toString().trim().length > 0
       ));
   const alerts: { severity: 'warning' | 'error' | 'info'; title: string; body: React.ReactNode }[] = [];

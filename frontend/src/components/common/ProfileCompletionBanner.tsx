@@ -39,7 +39,7 @@ const ProfileCompletionBanner: React.FC<ProfileCompletionBannerProps> = ({
   doctorProfile,
   onNavigateToProfile
 }) => {
-  const { percentage, items, missing, isComplete, hasBlockingGap } =
+  const { percentage, items, missing, isComplete, hasBlockingGap, hydrated } =
     useProfileCompletion(doctorProfile);
   const [expanded, setExpanded] = useState(false);
   const [dismissed, setDismissed] = useState(() => {
@@ -52,10 +52,14 @@ const ProfileCompletionBanner: React.FC<ProfileCompletionBannerProps> = ({
   });
 
   const visible = useMemo(() => {
+    // Don't render anything until the profile has enough data loaded. Prevents
+    // the "Falta cédula" flash on initial load for doctors who actually have
+    // their credentials captured via the legacy PersonDocument flow.
+    if (!hydrated) return false;
     if (isComplete) return false;
     if (hasBlockingGap) return true; // blocking gaps bypass dismissal
     return !dismissed;
-  }, [isComplete, hasBlockingGap, dismissed]);
+  }, [hydrated, isComplete, hasBlockingGap, dismissed]);
 
   if (!visible) return null;
 
