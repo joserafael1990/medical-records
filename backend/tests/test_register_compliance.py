@@ -232,3 +232,70 @@ def test_frontend_full_register_payload_keeps_quick_flag_false() -> None:
     doctor = DoctorCreate.model_validate(payload)
     assert doctor.quick_registration is False
     assert doctor.privacy_consent is None
+
+
+# ---------------------------------------------------------------------------
+# crud.create_doctor_safe exclude-set integrity.
+#
+# The CRUD builds `Person(**doctor_data.dict(exclude={...}))`. Any schema
+# field that is NOT a Person ORM column must be in `exclude` or the Person
+# constructor raises `TypeError: 'X' is an invalid keyword argument`.
+#
+# This check caught the 2026-04-22 prod follow-up bug: adding
+# `quick_registration` and `privacy_consent` to DoctorCreate flipped those
+# from "silently dropped" to "silently included", and create_doctor_safe
+# kept forwarding them blindly to Person(...). The first real sign-up
+# after deploy returned HTTP 500 even though the schema-level fix worked.
+# ---------------------------------------------------------------------------
+
+def test_doctor_create_exclude_set_covers_every_non_person_field() -> None:
+    from sqlalchemy.inspection import inspect as sa_inspect
+    from models.person import Person
+
+    person_columns = {c.key for c in sa_inspect(Person).mapper.column_attrs}
+
+    # Build a maximal payload so DoctorCreate populates every optional
+    # field — we want `.dict()` to surface all declared keys, not just
+    # the required ones.
+    full_payload = dict(BASE_QUICK_PAYLOAD)
+    full_payload.update({
+        "username": "dra.garcia",
+        "online_consultation_url": "https://meet.example.com/x",
+        "appointment_duration": 30,
+        "avatar_type": "initials",
+        "avatar_template_key": None,
+        "avatar_file_path": None,
+        "university": "UNAM",
+        "graduation_year": 2010,
+        "schedule_data": {},
+        "office_name": "",
+        "office_address": "",
+        "office_city": "",
+        "office_state_id": None,
+        "office_phone": "",
+        "office_maps_url": "",
+    })
+    doctor = DoctorCreate.model_validate(full_payload)
+    all_fields = set(doctor.dict().keys())
+
+    # Match crud.create_doctor_safe's exclude set verbatim so the test fails
+    # if someone adds a schema-only field to DoctorCreate without mirroring
+    # the exclude set, which would re-introduce the TypeError at runtime.
+    exclude = {
+        'person_type', 'password', 'schedule_data', 'username',
+        'online_consultation_url',
+        'office_name', 'office_address', 'office_city', 'office_state_id',
+        'office_phone', 'office_maps_url',
+        'documents',
+        'quick_registration', 'privacy_consent',
+    }
+
+    would_be_forwarded = all_fields - exclude
+    extras = would_be_forwarded - person_columns
+
+    assert not extras, (
+        "crud.create_doctor_safe would forward these fields to Person(**kwargs) "
+        f"but they are not columns on the ORM model: {sorted(extras)}. "
+        "Add them to the exclude set in crud/person.py::create_doctor_safe "
+        "or map them to Person columns before the insert."
+    )

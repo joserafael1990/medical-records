@@ -76,11 +76,15 @@ def create_doctor_safe(db: Session, doctor_data: schemas.DoctorCreate) -> Person
     # Generate doctor code
     person_code = generate_person_code(db, 'doctor')
     
-    # Extract password and hash it, excluding fields that are not Person fields
+    # Extract password and hash it, excluding fields that are not Person fields.
+    # When adding schema-only fields to DoctorCreate, also add them here or the
+    # Person(**doctor_dict) call raises TypeError: 'X' is an invalid keyword
+    # argument (no column with that name on the ORM model).
     doctor_dict = doctor_data.dict(exclude={
         'person_type', 'password', 'schedule_data', 'username', 'online_consultation_url',
         'office_name', 'office_address', 'office_city', 'office_state_id', 'office_phone', 'office_maps_url',
-        'documents'  # Documents are handled separately
+        'documents',  # Documents are handled separately
+        'quick_registration', 'privacy_consent',  # Schema-level flags, not columns
     })
     hashed_password = hash_password(doctor_data.password) if doctor_data.password else None
     
