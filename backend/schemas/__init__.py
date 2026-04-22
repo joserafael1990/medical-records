@@ -63,6 +63,7 @@ from .persons import (
     Person,
     PersonBase,
     PersonUpdate,
+    PrivacyConsentPayload,
 )
 from .studies import (
     StudyCatalog,
@@ -93,6 +94,7 @@ __all__ = [
     "DoctorCreate", "DoctorUpdate",
     "PatientCreate",
     "Person", "PersonBase", "PersonUpdate",
+    "PrivacyConsentPayload",
     # medical
     "MedicalRecord", "MedicalRecordBase",
     "MedicalRecordCreate", "MedicalRecordUpdate",
