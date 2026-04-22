@@ -61,7 +61,13 @@ COPY --from=builder /app/entrypoint.sh /app/entrypoint.sh
 RUN cp -r /app/.venv /opt/.venv_backup
 ENV PATH="/app/.venv/bin:$PATH"
 
-RUN chown -R appuser:appuser /app && \
+# /app/uploads must exist before Starlette mounts StaticFiles on it; the
+# mount hits the directory on every request, so a missing dir surfaces as
+# a 500 (not just a 404). Cloud Run's FS is ephemeral — actual persistence
+# for avatars/assets lives in GCS via services/storage_service.py — but
+# keeping the dir present prevents the mount from crashing on cached URLs.
+RUN mkdir -p /app/uploads && \
+    chown -R appuser:appuser /app && \
     chown -R appuser:appuser /opt/.venv_backup && \
     chmod +x /app/entrypoint.sh
 
