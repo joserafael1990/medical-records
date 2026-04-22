@@ -1,6 +1,6 @@
 """License management schemas."""
 from datetime import date, datetime
-from typing import Any, Dict, Literal, Optional
+from typing import Literal, Optional
 
 from pydantic import ConfigDict
 
@@ -32,11 +32,18 @@ class LicenseUpdate(BaseSchema):
     notes: Optional[str] = None
 
 
+class LicenseDoctorInfo(BaseSchema):
+    id: int
+    name: str
+    email: Optional[str] = None
+    person_type: str
+
+
 class LicenseResponse(LicenseBase):
     id: int
     created_at: datetime
     updated_at: datetime
     created_by: Optional[int] = None
-    doctor: Optional[Dict[str, Any]] = None  # Will include name, email, etc.
+    doctor: Optional[LicenseDoctorInfo] = None
 
     model_config = ConfigDict(from_attributes=True)
