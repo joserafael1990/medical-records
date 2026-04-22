@@ -689,7 +689,7 @@ const ClinicalStudiesSection: React.FC<ClinicalStudiesSectionProps> = ({
                         />
                       </Tooltip>
                     ) : onSignStudy && !String(study.id).startsWith('temp_') ? (
-                      <Tooltip title="Firmar electrónicamente">
+                      <Tooltip title="Firma electrónica simple (Art. 89-bis Código de Comercio). No equivale a firma electrónica avanzada ni a NOM-151.">
                         <span>
                           <Button
                             size="small"
