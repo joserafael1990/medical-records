@@ -1,11 +1,10 @@
 /**
- * SignatureProfileSection — tarjeta en el perfil del doctor para capturar
- * cédula profesional, RFC y CURP. Son los datos que la firma electrónica
- * incluye en el payload y el endpoint POST /sign exige (sin cédula válida,
- * el backend devuelve 400 "Registra tu cédula profesional...").
- *
- * Consume GET/PUT /api/doctor/signature-profile. Independiente de
- * DoctorProfileDialog para evitar tocar ese formulario grande.
+ * SignatureProfileSection — status card que muestra si el doctor está listo
+ * para firmar recetas y órdenes. NO captura datos (eso se hace en el flujo
+ * tradicional de Documentos profesionales / DoctorProfileDialog). Solo lee
+ * GET /api/doctor/signature-profile, que resuelve cédula/CURP/RFC con
+ * fallback a PersonDocument legacy — por eso aparece "Listo para firmar"
+ * aunque el doctor nunca haya tocado esta sección.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -14,13 +13,10 @@ import {
   CardContent,
   Box,
   Typography,
-  TextField,
-  Button,
   Alert,
   Chip,
   CircularProgress,
-  Stack,
-  Divider,
+  Link,
 } from '@mui/material';
 import {
   Draw as DrawIcon,
@@ -28,7 +24,6 @@ import {
   WarningAmber as WarningIcon,
 } from '@mui/icons-material';
 import { apiService } from '../../services';
-import { useToast } from '../common/ToastNotification';
 import { logger } from '../../utils/logger';
 
 interface SignatureProfile {
@@ -39,38 +34,18 @@ interface SignatureProfile {
   rfc_valid: boolean;
   curp_valid: boolean;
   can_sign: boolean;
+  source: 'direct' | 'legacy_documents';
 }
 
-const EMPTY_PROFILE: SignatureProfile = {
-  professional_license: '',
-  rfc: '',
-  curp: '',
-  cedula_valid: false,
-  rfc_valid: false,
-  curp_valid: false,
-  can_sign: false,
-};
-
 export const SignatureProfileSection: React.FC = () => {
-  const { showSuccess, showError } = useToast();
-  const [profile, setProfile] = useState<SignatureProfile>(EMPTY_PROFILE);
+  const [profile, setProfile] = useState<SignatureProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [editing, setEditing] = useState(false);
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
       const res = await apiService.consultations.api.get('/api/doctor/signature-profile');
-      setProfile({
-        professional_license: res.data.professional_license ?? '',
-        rfc: res.data.rfc ?? '',
-        curp: res.data.curp ?? '',
-        cedula_valid: !!res.data.cedula_valid,
-        rfc_valid: !!res.data.rfc_valid,
-        curp_valid: !!res.data.curp_valid,
-        can_sign: !!res.data.can_sign,
-      });
+      setProfile(res.data);
     } catch (err) {
       logger.error('Error loading signature profile', err, 'api');
     } finally {
@@ -82,33 +57,6 @@ export const SignatureProfileSection: React.FC = () => {
     load();
   }, [load]);
 
-  const handleSave = async () => {
-    try {
-      setSaving(true);
-      const res = await apiService.consultations.api.put('/api/doctor/signature-profile', {
-        professional_license: profile.professional_license || null,
-        rfc: profile.rfc || null,
-        curp: profile.curp || null,
-      });
-      setProfile({
-        professional_license: res.data.professional_license ?? '',
-        rfc: res.data.rfc ?? '',
-        curp: res.data.curp ?? '',
-        cedula_valid: !!res.data.cedula_valid,
-        rfc_valid: !!res.data.rfc_valid,
-        curp_valid: !!res.data.curp_valid,
-        can_sign: !!res.data.can_sign,
-      });
-      setEditing(false);
-      showSuccess('Datos de firma guardados');
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail || 'No se pudieron guardar los datos';
-      showError(detail);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   if (loading) {
     return (
       <Card id="signature" sx={{ mt: 3, scrollMarginTop: 24 }}>
@@ -119,121 +67,65 @@ export const SignatureProfileSection: React.FC = () => {
     );
   }
 
+  if (!profile) return null;
+
+  const maskedCedula = profile.professional_license || '—';
+  const canSign = profile.can_sign;
+
   return (
     <Card id="signature" sx={{ mt: 3, scrollMarginTop: 24 }}>
       <CardContent>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <DrawIcon color="primary" />
-            Identidad profesional para firma electrónica
+            Firma electrónica
           </Typography>
-          {profile.can_sign ? (
+          {canSign ? (
             <Chip icon={<VerifiedIcon />} label="Listo para firmar" color="success" size="small" />
           ) : (
             <Chip icon={<WarningIcon />} label="Falta cédula" color="warning" size="small" />
           )}
         </Box>
 
-        <Alert severity="info" icon={false} sx={{ mb: 2, fontSize: '0.8rem' }}>
-          Estos datos aparecen en la firma de recetas y órdenes médicas.
-          La <strong>cédula profesional</strong> es obligatoria para poder firmar
-          (requisito LGS Art. 240). RFC y CURP son opcionales pero recomendados
-          para cumplir NOM-004 §7.1.
-          <br />
-          <Typography component="span" variant="caption" color="text.secondary">
-            Firma electrónica simple conforme al Art. 89-bis del Código de
-            Comercio. No equivale a firma electrónica avanzada (e.firma SAT).
-          </Typography>
-        </Alert>
-
-        <Divider sx={{ mb: 2 }} />
-
-        <Stack spacing={2}>
-          <TextField
-            label="Cédula profesional (SEP)"
-            value={profile.professional_license ?? ''}
-            onChange={(e) =>
-              setProfile((p) => ({ ...p, professional_license: e.target.value.replace(/\D/g, '') }))
-            }
-            placeholder="7-8 dígitos"
-            size="small"
-            fullWidth
-            disabled={!editing}
-            helperText={
-              profile.professional_license && !profile.cedula_valid
-                ? 'Formato inválido — debe ser 6 a 10 dígitos numéricos.'
-                : 'Número de registro ante la Dirección General de Profesiones (SEP).'
-            }
-            error={!!profile.professional_license && !profile.cedula_valid}
-            inputProps={{ maxLength: 10 }}
-          />
-
-          <TextField
-            label="RFC (persona física)"
-            value={profile.rfc ?? ''}
-            onChange={(e) =>
-              setProfile((p) => ({ ...p, rfc: e.target.value.toUpperCase() }))
-            }
-            placeholder="XAXX010101XXX"
-            size="small"
-            fullWidth
-            disabled={!editing}
-            helperText={
-              profile.rfc && !profile.rfc_valid
-                ? 'RFC inválido — formato: 4 letras + 6 dígitos + 3 alfanuméricos.'
-                : 'Opcional. Facilita validación cruzada con SAT en auditoría.'
-            }
-            error={!!profile.rfc && !profile.rfc_valid}
-            inputProps={{ maxLength: 13 }}
-          />
-
-          <TextField
-            label="CURP"
-            value={profile.curp ?? ''}
-            onChange={(e) =>
-              setProfile((p) => ({ ...p, curp: e.target.value.toUpperCase() }))
-            }
-            placeholder="XAXX010101HDFRRR00"
-            size="small"
-            fullWidth
-            disabled={!editing}
-            helperText={
-              profile.curp && !profile.curp_valid
-                ? 'CURP inválido — 18 caracteres, formato estándar RENAPO.'
-                : 'Opcional. Requerido por NOM-004 §7.1 en el expediente.'
-            }
-            error={!!profile.curp && !profile.curp_valid}
-            inputProps={{ maxLength: 18 }}
-          />
-        </Stack>
-
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 3 }}>
-          {editing ? (
-            <>
-              <Button
-                onClick={() => {
-                  setEditing(false);
-                  load();
+        {canSign ? (
+          <Alert severity="success" icon={false} sx={{ mb: 0 }}>
+            <Typography variant="body2" sx={{ mb: 0.5 }}>
+              Estás listo para firmar recetas y órdenes de estudios. La firma
+              se emitirá con tu cédula profesional <strong>{maskedCedula}</strong>
+              {profile.curp_valid && <> y tu CURP.</>}
+              {!profile.curp_valid && '.'}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Firma electrónica simple conforme al Art. 89-bis del Código de
+              Comercio. No equivale a firma electrónica avanzada (e.firma SAT)
+              ni a conservación NOM-151-SCFI-2016.
+            </Typography>
+          </Alert>
+        ) : (
+          <Alert severity="warning" icon={false}>
+            <Typography variant="body2" sx={{ mb: 0.5 }}>
+              Aún no puedes firmar documentos. Agrega tu{' '}
+              <strong>cédula profesional</strong> en{' '}
+              <Link
+                component="button"
+                variant="body2"
+                onClick={(e) => {
+                  e.preventDefault();
+                  // DoctorProfileDialog se abre desde "Editar Datos" en el header;
+                  // si el user hace scroll arriba lo encuentra.
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
-                disabled={saving}
               >
-                Cancelar
-              </Button>
-              <Button
-                variant="contained"
-                onClick={handleSave}
-                disabled={saving}
-                startIcon={saving ? <CircularProgress size={16} /> : undefined}
-              >
-                {saving ? 'Guardando…' : 'Guardar'}
-              </Button>
-            </>
-          ) : (
-            <Button variant="outlined" onClick={() => setEditing(true)}>
-              Editar
-            </Button>
-          )}
-        </Box>
+                Editar Datos
+              </Link>{' '}
+              (sección "Documentos profesionales"). Una vez guardada, esta
+              tarjeta cambiará a "Listo para firmar" automáticamente.
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Requisito LGS Art. 240 para emitir recetas médicas electrónicas.
+            </Typography>
+          </Alert>
+        )}
       </CardContent>
     </Card>
   );

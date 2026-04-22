@@ -23,6 +23,8 @@ from database import (
     ConsultationPrescription,
     ClinicalStudy,
     MedicalRecord,
+    Document,
+    PersonDocument,
 )
 from dependencies import get_current_user
 from audit_service import audit_service
@@ -31,6 +33,69 @@ from services import digital_signature as dsvc
 
 api_logger = get_logger("cortex.signature")
 router = APIRouter(prefix="/api", tags=["digital-signature"])
+
+# Nombres de Document (catálogo) que representan cédula/identidad profesional.
+# Coincide con la resolución legacy que ya usa auth.py:249-256; si agregas un
+# sinónimo ahí, agrégalo aquí también.
+_CEDULA_DOC_NAMES = (
+    "Cédula Profesional",
+    "Número de Registro Profesional",
+    "Número de Colegiación",
+    "Matrícula Nacional",
+)
+_CURP_DOC_NAMES = ("CURP",)
+_RFC_DOC_NAMES = ("RFC",)
+
+
+def _resolve_signing_identity(db: Session, person: Person) -> dict:
+    """
+    Resuelve cédula/RFC/CURP priorizando las columnas directas de `persons`
+    (alimentadas por PUT /signature-profile) y haciendo fallback a
+    `PersonDocument` legacy cuando las columnas están vacías.
+
+    Así un médico que capturó su cédula hace un año en el flujo viejo
+    (Documentos profesionales) puede firmar sin re-capturar nada.
+    """
+    cedula = (person.professional_license or "").strip() or None
+    rfc = (person.rfc or "").strip() or None
+    curp = (person.curp or "").strip() or None
+
+    if cedula and curp and rfc:
+        return {"professional_license": cedula, "rfc": rfc, "curp": curp}
+
+    # Fallback: construir mapa {doc_name → value} desde PersonDocument activos.
+    rows = (
+        db.query(PersonDocument)
+        .join(Document)
+        .filter(
+            PersonDocument.person_id == person.id,
+            PersonDocument.is_active.is_(True),
+        )
+        .all()
+    )
+    doc_map: dict[str, str] = {}
+    for row in rows:
+        name = row.document.name if row.document else None
+        if name and row.document_value:
+            doc_map.setdefault(name, row.document_value.strip())
+
+    if not cedula:
+        for name in _CEDULA_DOC_NAMES:
+            if name in doc_map:
+                cedula = doc_map[name]
+                break
+    if not curp:
+        for name in _CURP_DOC_NAMES:
+            if name in doc_map:
+                curp = doc_map[name]
+                break
+    if not rfc:
+        for name in _RFC_DOC_NAMES:
+            if name in doc_map:
+                rfc = doc_map[name]
+                break
+
+    return {"professional_license": cedula, "rfc": rfc, "curp": curp}
 
 # Aviso legal requerido en toda salida que contenga firma generada por CORTEX.
 # La firma es electrónica SIMPLE (Art. 89-bis Código de Comercio), no avanzada.
@@ -46,21 +111,31 @@ LEGAL_NOTICE = (
 
 # ---- Signer profile -----------------------------------------------------------
 
-def _profile_payload(user: Person) -> dict:
+def _profile_payload(db: Session, user: Person) -> dict:
+    ident = _resolve_signing_identity(db, user)
+    cedula = ident["professional_license"]
+    rfc = ident["rfc"]
+    curp = ident["curp"]
     return {
-        "professional_license": user.professional_license,
-        "rfc": user.rfc,
-        "curp": user.curp,
-        "cedula_valid": dsvc.validate_cedula_format(user.professional_license),
-        "rfc_valid": dsvc.validate_rfc_format(user.rfc),
-        "curp_valid": dsvc.validate_curp_format(user.curp),
-        "can_sign": dsvc.validate_cedula_format(user.professional_license),
+        "professional_license": cedula,
+        "rfc": rfc,
+        "curp": curp,
+        "cedula_valid": dsvc.validate_cedula_format(cedula),
+        "rfc_valid": dsvc.validate_rfc_format(rfc),
+        "curp_valid": dsvc.validate_curp_format(curp),
+        "can_sign": dsvc.validate_cedula_format(cedula),
+        # source: 'direct' si salió de persons.*, 'legacy_documents' si del fallback.
+        # Útil para decidir si mostrar en UI el CTA "migrar a nuevo flujo".
+        "source": "direct" if user.professional_license else "legacy_documents",
     }
 
 
 @router.get("/doctor/signature-profile")
-async def get_signature_profile(current_user: Person = Depends(get_current_user)):
-    return _profile_payload(current_user)
+async def get_signature_profile(
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user),
+):
+    return _profile_payload(db, current_user)
 
 
 @router.put("/doctor/signature-profile")
@@ -99,17 +174,21 @@ async def update_signature_profile(
         record_id=current_user.id,
         operation_type="signature_profile_update",
     )
-    return _profile_payload(current_user)
+    return _profile_payload(db, current_user)
 
 
 # ---- Helpers ------------------------------------------------------------------
 
-def _require_signer_ready(user: Person) -> None:
-    if not dsvc.validate_cedula_format(user.professional_license):
+def _require_signer_ready(db: Session, user: Person) -> str:
+    """Devuelve la cédula efectiva (persons.* o PersonDocument fallback) o 400."""
+    ident = _resolve_signing_identity(db, user)
+    cedula = ident["professional_license"]
+    if not dsvc.validate_cedula_format(cedula):
         raise HTTPException(
             status_code=400,
             detail="Registra tu cédula profesional antes de firmar documentos",
         )
+    return cedula
 
 
 def _apply_signature(obj, manifest: dict, user: Person) -> None:
@@ -160,14 +239,14 @@ async def sign_prescription(
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user),
 ):
-    _require_signer_ready(current_user)
+    cedula = _require_signer_ready(db, current_user)
     rx = _load_prescription(db, prescription_id, current_user)
 
     if rx.digital_signature:
         raise HTTPException(status_code=409, detail="La receta ya está firmada")
 
     payload = _prescription_payload(db, rx)
-    manifest = dsvc.sign_payload(payload, current_user.id, current_user.professional_license)
+    manifest = dsvc.sign_payload(payload, current_user.id, cedula)
     _apply_signature(rx, manifest, current_user)
     db.commit()
     db.refresh(rx)
@@ -255,13 +334,13 @@ async def sign_clinical_study(
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user),
 ):
-    _require_signer_ready(current_user)
+    cedula = _require_signer_ready(db, current_user)
     study = _load_study(db, study_id, current_user)
     if study.digital_signature:
         raise HTTPException(status_code=409, detail="La orden ya está firmada")
 
     payload = _study_payload(db, study)
-    manifest = dsvc.sign_payload(payload, current_user.id, current_user.professional_license)
+    manifest = dsvc.sign_payload(payload, current_user.id, cedula)
     _apply_signature(study, manifest, current_user)
     db.commit()
     db.refresh(study)
