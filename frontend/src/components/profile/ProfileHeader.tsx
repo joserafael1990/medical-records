@@ -1,12 +1,7 @@
 import React from 'react';
-import { Box, Typography, Avatar, Button, Chip } from '@mui/material';
+import { Box, Typography, Avatar, Button } from '@mui/material';
 import { Edit as EditIcon } from '@mui/icons-material';
 import { useAvatarUrl, getInitials } from '../../hooks/useAvatarUrl';
-
-interface ProfessionalDocument {
-    document_name?: string;
-    document_value?: string;
-}
 
 interface ProfileHeaderProps {
     doctorProfile: {
@@ -22,7 +17,6 @@ interface ProfileHeaderProps {
         avatar_file_path?: string;
         avatar_template_key?: string;
         updated_at?: string;
-        professional_documents?: ProfessionalDocument[];
     };
     onEdit: () => void;
 }
@@ -71,22 +65,9 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ doctorProfile, onE
                             : doctorProfile.name || 'Usuario'}
                     </Typography>
 
-                    <Typography variant="h6" color="text.secondary" gutterBottom>
+                    <Typography variant="h6" color="text.secondary">
                         {doctorProfile.specialty_name || 'Especialidad no especificada'}
                     </Typography>
-
-                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                        <Chip size="small" />
-                        {doctorProfile.professional_documents?.map((doc, index) => (
-                            <Chip
-                                key={index}
-                                label={`${doc.document_name || 'Documento'}: ${doc.document_value || ''}`}
-                                color="primary"
-                                variant="outlined"
-                                size="small"
-                            />
-                        ))}
-                    </Box>
                 </Box>
             </Box>
 
