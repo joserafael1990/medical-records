@@ -539,7 +539,8 @@ const RegisterView: React.FC<{ onBackToLogin: () => void }> = ({ onBackToLogin }
         // Required fields
         specialty_id: parseInt(formData.specialty) || null,
         university: formData.university,
-        graduation_year: formData.graduation_year,
+        // Pydantic rejects '' for Optional[int]; coerce to int or null.
+        graduation_year: formData.graduation_year ? parseInt(formData.graduation_year, 10) : null,
         office_name: formData.office_name,
         office_address: formData.office_address,
         office_city: formData.office_city,
