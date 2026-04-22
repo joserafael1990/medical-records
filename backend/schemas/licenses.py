@@ -9,7 +9,7 @@ from .base import BaseSchema
 
 class LicenseBase(BaseSchema):
     doctor_id: int
-    license_type: Literal['trial', 'basic', 'premium']
+    license_type: Literal['trial', 'premium']
     start_date: date
     expiration_date: date
     payment_date: Optional[date] = None
@@ -23,7 +23,7 @@ class LicenseCreate(LicenseBase):
 
 
 class LicenseUpdate(BaseSchema):
-    license_type: Optional[Literal['trial', 'basic', 'premium']] = None
+    license_type: Optional[Literal['trial', 'premium']] = None
     start_date: Optional[date] = None
     expiration_date: Optional[date] = None
     payment_date: Optional[date] = None
