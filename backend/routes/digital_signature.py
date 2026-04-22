@@ -415,13 +415,22 @@ async def verify_public(verification_uuid: str, db: Session = Depends(get_db)):
     )
     if rx:
         doctor = db.query(Person).filter(Person.id == rx.signer_person_id).first() if rx.signer_person_id else None
+        # Prefer signer_cedula frozen in the manifest (immutable since signing);
+        # fall back to live resolution via _resolve_signing_identity (handles
+        # PersonDocument legacy). doctor.professional_license alone misses
+        # doctors whose cédula lives in PersonDocument only.
+        cedula = None
+        if isinstance(rx.digital_signature, dict):
+            cedula = rx.digital_signature.get("signer_cedula")
+        if not cedula and doctor:
+            cedula = _resolve_signing_identity(db, doctor).get("professional_license")
         payload = _prescription_payload(db, rx)
         valid = dsvc.verify_payload(payload, rx.digital_signature)
         return {
             "document_type": "prescription",
             "valid": valid,
             "doctor_name": doctor.full_name if doctor else None,
-            "professional_license": doctor.professional_license if doctor else None,
+            "professional_license": cedula,
             "signed_at": rx.signed_at.isoformat() if rx.signed_at else None,
             "medication": rx.medication.name if rx.medication else None,
             "signature_hash": rx.signature_hash,
@@ -435,13 +444,18 @@ async def verify_public(verification_uuid: str, db: Session = Depends(get_db)):
     )
     if study:
         doctor = db.query(Person).filter(Person.id == study.signer_person_id).first() if study.signer_person_id else None
+        cedula = None
+        if isinstance(study.digital_signature, dict):
+            cedula = study.digital_signature.get("signer_cedula")
+        if not cedula and doctor:
+            cedula = _resolve_signing_identity(db, doctor).get("professional_license")
         payload = _study_payload(db, study)
         valid = dsvc.verify_payload(payload, study.digital_signature)
         return {
             "document_type": "clinical_study",
             "valid": valid,
             "doctor_name": doctor.full_name if doctor else None,
-            "professional_license": doctor.professional_license if doctor else None,
+            "professional_license": cedula,
             "signed_at": study.signed_at.isoformat() if study.signed_at else None,
             "study_name": study.study_name,
             "signature_hash": study.signature_hash,

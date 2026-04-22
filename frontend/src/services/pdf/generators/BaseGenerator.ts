@@ -72,12 +72,11 @@ export class BasePDFGenerator {
     protected drawSignatureVerificationBlock(info: SignatureInfo, startY: number): void {
         const pageWidth = this.doc.internal.pageSize.width;
         const pageHeight = this.doc.internal.pageSize.height;
-        // Vertical budget: professional seal ends around pageHeight - 55
-        // (sealY + radius*2). Bottom line with "Generado el…" sits at
-        // pageHeight - 28. Clamp so the legal notice (at y+19) lands at
-        // pageHeight - 33 — leaves 5mm gap before the bottom line, and
-        // 3mm above the seal.
-        const y = Math.min(startY, pageHeight - 52);
+        // With the manuscript signature skipped when electronic signing is on,
+        // the block owns the whole footer zone. Safety clamp: never paint
+        // below pageHeight - 50, so the legal notice (at y+19) stays above
+        // the bottom line at pageHeight - 28.
+        const y = Math.min(startY, pageHeight - 50);
 
         this.doc.setDrawColor(...PDF_CONSTANTS.COLORS.BORDER);
         this.doc.setLineWidth(0.3);
@@ -572,54 +571,61 @@ export class BasePDFGenerator {
             footerY += 5;
         }
 
-        // === DOCTOR SIGNATURE SECTION ===
-        footerY = pageHeight - 80;
-
-        // Signature line
-        const signatureLineY = footerY + 18;
-        this.doc.setDrawColor(...PDF_CONSTANTS.COLORS.TEXT_LIGHTER);
-        this.doc.setLineWidth(0.5);
-        this.doc.line(15, signatureLineY, 100, signatureLineY);
-
-        // Doctor info below signature
-        footerY = signatureLineY + 5;
-
-        this.doc.setFontSize(9);
-        this.doc.setTextColor(...PDF_CONSTANTS.COLORS.TEXT_DARK);
-        this.doc.setFont(PDF_CONSTANTS.FONTS.PRIMARY, 'bold');
-        const doctorNameForFooter = doctor.name || 'Médico';
-        this.doc.text(`${doctor.title || 'Dr.'} ${doctorNameForFooter}`, 15, footerY);
-
-        footerY += 4;
-
-        this.doc.setFontSize(8);
-        this.doc.setTextColor(...PDF_CONSTANTS.COLORS.SECONDARY);
-        this.doc.setFont(PDF_CONSTANTS.FONTS.PRIMARY, 'normal');
-        if (doctor.specialty) {
-            this.doc.text(doctor.specialty, 15, footerY);
-            footerY += 3.5;
-        }
-        if (doctor.license) {
-            this.doc.text(`Cédula Profesional: ${doctor.license}`, 15, footerY);
-        }
-
-        // Professional seal (right side)
-        const sealX = pageWidth - 60;
-        const sealY = signatureLineY - 15;
-
-        this.doc.setDrawColor(...PDF_CONSTANTS.COLORS.PRIMARY);
-        this.doc.setLineWidth(1);
-        this.doc.circle(sealX + 15, sealY + 10, 12, 'S');
-
-        this.doc.setFontSize(7);
-        this.doc.setTextColor(...PDF_CONSTANTS.COLORS.PRIMARY);
-        this.doc.setFont(PDF_CONSTANTS.FONTS.PRIMARY, 'bold');
-        this.doc.text('Sello', sealX + 15, sealY + 9, { align: 'center' });
-        this.doc.text('Profesional', sealX + 15, sealY + 13, { align: 'center' });
-
-        // Electronic signature verification block (below footer, above bottom line)
+        // === SIGNATURE FOOTER ===
+        // If we have electronic signature, skip the manuscript stub entirely
+        // (line + name + cédula + "Sello Profesional" circle) and let the
+        // electronic verification block own the whole footer zone. The doctor's
+        // name and cédula already appear in the header, so there's no info loss.
         if (this.signatureInfo) {
-            this.drawSignatureVerificationBlock(this.signatureInfo, footerY + 6);
+            // Anchor the electronic signature block ~58mm from the bottom — the
+            // block occupies ~20mm (incl. QR) so the legal notice lands around
+            // pageHeight-39, leaving ~10mm of breathing room before the
+            // "Generado el..." footer line at pageHeight-28.
+            this.drawSignatureVerificationBlock(this.signatureInfo, pageHeight - 58);
+        } else {
+            footerY = pageHeight - 80;
+
+            // Signature line
+            const signatureLineY = footerY + 18;
+            this.doc.setDrawColor(...PDF_CONSTANTS.COLORS.TEXT_LIGHTER);
+            this.doc.setLineWidth(0.5);
+            this.doc.line(15, signatureLineY, 100, signatureLineY);
+
+            // Doctor info below signature
+            footerY = signatureLineY + 5;
+
+            this.doc.setFontSize(9);
+            this.doc.setTextColor(...PDF_CONSTANTS.COLORS.TEXT_DARK);
+            this.doc.setFont(PDF_CONSTANTS.FONTS.PRIMARY, 'bold');
+            const doctorNameForFooter = doctor.name || 'Médico';
+            this.doc.text(`${doctor.title || 'Dr.'} ${doctorNameForFooter}`, 15, footerY);
+
+            footerY += 4;
+
+            this.doc.setFontSize(8);
+            this.doc.setTextColor(...PDF_CONSTANTS.COLORS.SECONDARY);
+            this.doc.setFont(PDF_CONSTANTS.FONTS.PRIMARY, 'normal');
+            if (doctor.specialty) {
+                this.doc.text(doctor.specialty, 15, footerY);
+                footerY += 3.5;
+            }
+            if (doctor.license) {
+                this.doc.text(`Cédula Profesional: ${doctor.license}`, 15, footerY);
+            }
+
+            // Professional seal (right side)
+            const sealX = pageWidth - 60;
+            const sealY = signatureLineY - 15;
+
+            this.doc.setDrawColor(...PDF_CONSTANTS.COLORS.PRIMARY);
+            this.doc.setLineWidth(1);
+            this.doc.circle(sealX + 15, sealY + 10, 12, 'S');
+
+            this.doc.setFontSize(7);
+            this.doc.setTextColor(...PDF_CONSTANTS.COLORS.PRIMARY);
+            this.doc.setFont(PDF_CONSTANTS.FONTS.PRIMARY, 'bold');
+            this.doc.text('Sello', sealX + 15, sealY + 9, { align: 'center' });
+            this.doc.text('Profesional', sealX + 15, sealY + 13, { align: 'center' });
         }
 
         if (drawBottomLine) {
