@@ -17,6 +17,13 @@ export { AnalyticsService } from './analytics/AnalyticsService';
 export { AmplitudeService } from './analytics/AmplitudeService';
 export { AvatarService } from './avatars/AvatarService';
 export { GoogleCalendarService } from './google-calendar/GoogleCalendarService';
+export { CfdiService } from './cfdi/CfdiService';
+export type {
+  CfdiIssuer,
+  CfdiIssuerInput,
+  CfdiInvoice,
+  CfdiInvoiceInput,
+} from './cfdi/CfdiService';
 export type { DashboardMetrics } from './analytics/AnalyticsService';
 export type { GoogleCalendarStatus } from './google-calendar/GoogleCalendarService';
 

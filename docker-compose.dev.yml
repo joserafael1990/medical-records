@@ -24,6 +24,11 @@ services:
       - DATABASE_URL=${DATABASE_URL:-postgresql://historias_user:historias_pass@postgres-db:5432/historias_clinicas}
       - LOG_LEVEL=debug
       - ENABLE_DEBUG_LOGGING=true
+      # CFDI / Facturama (sandbox por defecto)
+      - FACTURAMA_API_USER=${FACTURAMA_API_USER:-}
+      - FACTURAMA_API_PASSWORD=${FACTURAMA_API_PASSWORD:-}
+      - FACTURAMA_ENV=${FACTURAMA_ENV:-sandbox}
+      - MEDICAL_ENCRYPTION_KEY=${MEDICAL_ENCRYPTION_KEY:-dev-encryption-key-change-in-prod-please-32b}
     volumes:
       # ✅ OPTIMIZACIÓN: Montar código como volumen para hot-reload (opcional)
       # Descomenta si quieres que los cambios se reflejen sin rebuild:

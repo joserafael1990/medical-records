@@ -56,6 +56,10 @@ class Person(Base):
     professional_license = Column(String(50))  # Cédula profesional SEP (6-10 dígitos)
     rfc = Column(String(13))                   # RFC persona física
     curp = Column(String(18))                  # CURP
+
+    # FISCAL (CFDI 4.0) — aplica a doctor-emisor y paciente-receptor
+    tax_regime = Column(String(3))             # Régimen fiscal SAT (ej. '612')
+    cfdi_default_use = Column(String(3))       # Uso CFDI preferido (ej. 'D01')
     
     # MEDICAL DATA (patients only)
     insurance_provider = Column(String(100))

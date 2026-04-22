@@ -25,6 +25,7 @@ import DoctorProfileDialog from '../dialogs/DoctorProfileDialog';
 import ScheduleConfigDialog from '../dialogs/ScheduleConfigDialog';
 import OfficeDialog from '../dialogs/OfficeDialog';
 import GoogleCalendarSettings from '../settings/GoogleCalendarSettings';
+import CfdiSettings from '../settings/CfdiSettings';
 import { useDoctorProfileView } from '../../hooks/useDoctorProfileView';
 import { ProfileHeader } from '../profile/ProfileHeader';
 import { PersonalInfoCard } from '../profile/PersonalInfoCard';
@@ -306,6 +307,9 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
         <Box sx={{ mt: 3 }}>
           <GoogleCalendarSettings doctorId={doctorProfile?.id} />
         </Box>
+
+        {/* CFDI invoicing (Facturama) */}
+        <CfdiSettings />
       </Box>
 
       {/* Schedule Configuration Dialog */}

@@ -28,6 +28,7 @@ import {
   ArrowBack as ArrowBackIcon,
   Edit as EditIcon,
   Print as PrintIcon,
+  Receipt as ReceiptIcon,
   Person as PersonIcon,
   LocalHospital as HospitalIcon,
   Assignment as AssignmentIcon,
@@ -47,6 +48,7 @@ import { ClinicalStudy } from '../../types';
 import { formatDateTime } from '../../utils';
 import ClinicalStudiesSection from '../common/ClinicalStudiesSection';
 import ClinicalStudyDialog from '../dialogs/ClinicalStudyDialog';
+import InvoiceDialog from '../dialogs/InvoiceDialog';
 import { useClinicalStudies } from '../../hooks/useClinicalStudies';
 
 interface ConsultationDetailViewProps {
@@ -89,6 +91,7 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
 
   const [studyToDeleteId, setStudyToDeleteId] = useState<string | null>(null);
   const [isDeletingStudy, setIsDeletingStudy] = useState(false);
+  const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
 
   const handleDeleteStudy = async (studyId: string) => {
     setStudyToDeleteId(studyId);
@@ -156,6 +159,14 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
             sx={{ borderRadius: '8px' }}
           >
             Imprimir
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<ReceiptIcon />}
+            onClick={() => setInvoiceDialogOpen(true)}
+            sx={{ borderRadius: '8px' }}
+          >
+            Facturar
           </Button>
           <Button
             variant="contained"
@@ -500,6 +511,16 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* CFDI invoice dialog */}
+      <InvoiceDialog
+        open={invoiceDialogOpen}
+        onClose={() => setInvoiceDialogOpen(false)}
+        consultationId={consultation?.id}
+        patientId={consultation?.patient_id}
+        patientName={consultation?.patient_name}
+        patientRfc={consultation?.patient_rfc ?? null}
+      />
     </Box>
   );
 };
