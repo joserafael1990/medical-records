@@ -49,6 +49,11 @@ class Person(Base):
     specialty_id = Column(Integer, ForeignKey("medical_specialties.id"))
     university = Column(String(200))
     graduation_year = Column(Integer)
+
+    # PROFESSIONAL IDENTITY (NOM-004 §7.1, required on prescription signature)
+    professional_license = Column(String(20))  # Cédula profesional SEP (6-10 dígitos)
+    rfc = Column(String(13))                   # RFC persona física
+    curp = Column(String(18))                  # CURP
     
     # MEDICAL DATA (patients only)
     insurance_provider = Column(String(100))

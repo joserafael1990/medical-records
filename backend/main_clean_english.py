@@ -437,6 +437,10 @@ app.include_router(consultations_router)
 from routes.prescriptions import router as prescriptions_router
 app.include_router(prescriptions_router)
 
+# Include digital signature routes (firma electrónica Fase 1)
+from routes.digital_signature import router as digital_signature_router
+app.include_router(digital_signature_router)
+
 # Include analytics routes
 from routes.analytics import router as analytics_router
 app.include_router(analytics_router)

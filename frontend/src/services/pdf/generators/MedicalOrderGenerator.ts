@@ -5,7 +5,8 @@ import {
     DoctorInfo,
     ConsultationInfo,
     StudyInfo,
-    OfficeInfo
+    OfficeInfo,
+    SignatureInfo
 } from '../../../types/pdf';
 import { PDF_CONSTANTS } from '../constants';
 
@@ -15,8 +16,10 @@ export class MedicalOrderGenerator extends BasePDFGenerator {
         doctor: DoctorInfo,
         consultation: ConsultationInfo,
         studies: StudyInfo[],
-        officeInfo?: OfficeInfo
+        officeInfo?: OfficeInfo,
+        signatureInfo?: SignatureInfo | null
     ): Promise<void> {
+        this.setSignatureInfo(signatureInfo);
         const pageWidth = this.doc.internal.pageSize.width;
 
         // Add header

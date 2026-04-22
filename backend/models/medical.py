@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy import desc
 from .base import Base, utc_now
@@ -112,7 +113,15 @@ class ConsultationPrescription(Base):
     quantity = Column(String(100))
     via_administracion = Column(String(100))
     created_at = Column(DateTime, default=utc_now)
-    
+
+    # DIGITAL SIGNATURE (Fase 1 — firma electrónica simple Prescrypto-style)
+    digital_signature = Column(JSONB, nullable=True)
+    signature_hash = Column(String(64), nullable=True)
+    verification_uuid = Column(String(36), nullable=True, unique=True, index=True)
+    signed_at = Column(DateTime(timezone=True), nullable=True)
+    signer_person_id = Column(Integer, ForeignKey("persons.id"), nullable=True)
+
     # Relationships
     consultation = relationship("MedicalRecord")
     medication = relationship("Medication", back_populates="consultation_prescriptions")
+    signer = relationship("Person", foreign_keys=[signer_person_id])

@@ -50,7 +50,11 @@ async def get_consultation_prescriptions(
             "instructions": rx.instructions,
             "quantity": rx.quantity,
             "via_administracion": rx.via_administracion,
-            "created_at": rx.created_at.isoformat() if rx.created_at else None
+            "created_at": rx.created_at.isoformat() if rx.created_at else None,
+            "signature_hash": rx.signature_hash,
+            "verification_uuid": rx.verification_uuid,
+            "signed_at": rx.signed_at.isoformat() if rx.signed_at else None,
+            "signer_person_id": rx.signer_person_id,
         }
         for rx in prescriptions
     ]
@@ -128,7 +132,11 @@ async def create_consultation_prescription(
         "instructions": prescription.instructions,
         "quantity": prescription.quantity,
         "via_administracion": prescription.via_administracion,
-        "created_at": prescription.created_at.isoformat() if prescription.created_at else None
+        "created_at": prescription.created_at.isoformat() if prescription.created_at else None,
+        "signature_hash": prescription.signature_hash,
+        "verification_uuid": prescription.verification_uuid,
+        "signed_at": prescription.signed_at.isoformat() if prescription.signed_at else None,
+        "signer_person_id": prescription.signer_person_id,
     }
 
 
@@ -189,7 +197,11 @@ async def update_consultation_prescription(
         "instructions": prescription.instructions,
         "quantity": prescription.quantity,
         "via_administracion": prescription.via_administracion,
-        "created_at": prescription.created_at.isoformat() if prescription.created_at else None
+        "created_at": prescription.created_at.isoformat() if prescription.created_at else None,
+        "signature_hash": prescription.signature_hash,
+        "verification_uuid": prescription.verification_uuid,
+        "signed_at": prescription.signed_at.isoformat() if prescription.signed_at else None,
+        "signer_person_id": prescription.signer_person_id,
     }
 
 

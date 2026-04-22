@@ -103,3 +103,17 @@ export interface CertificateInfo {
     content: string;
     title?: string;
 }
+
+/**
+ * Datos de firma electrónica Fase 1 (Prescrypto-style) para imprimir
+ * el bloque de verificación en el PDF. Cuando un Rx u orden está firmada,
+ * los generadores reciben este objeto y añaden hash + folio + URL pública.
+ */
+export interface SignatureInfo {
+    verification_uuid: string;
+    signature_hash: string;
+    signed_at: string;
+    signer_cedula?: string;
+    algorithm?: string;
+    verification_url?: string;
+}

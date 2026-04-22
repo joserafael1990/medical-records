@@ -135,14 +135,34 @@ async def _check_nom004_compliance(db: Session, doctor_id: Optional[int]) -> Dic
     
     required_fields_compliant = records_with_missing_fields == 0
     required_fields_percentage = ((total_records - records_with_missing_fields) / total_records * 100) if total_records > 0 else 100.0
-    
-    # TODO: Verificar firmas digitales (implementar cuando esté disponible en BD)
-    digital_signatures_compliant = True  # Placeholder
-    digital_signatures_percentage = 100.0  # Placeholder
-    
+
+    # Firmas digitales: % de recetas y órdenes con firma electrónica (Fase 1).
+    # NOM-004 pide firma del emisor del documento médico. El expediente como
+    # bloque único no se firma aún; sí sus documentos derivados (rx, órdenes).
+    from database import ConsultationPrescription, ClinicalStudy
+    rx_query = db.query(ConsultationPrescription)
+    study_query = db.query(ClinicalStudy)
+    if doctor_id:
+        rx_query = rx_query.join(MedicalRecord, ConsultationPrescription.consultation_id == MedicalRecord.id).filter(MedicalRecord.doctor_id == doctor_id)
+        study_query = study_query.filter(ClinicalStudy.doctor_id == doctor_id)
+
+    total_signable = rx_query.count() + study_query.count()
+    signed = (
+        rx_query.filter(ConsultationPrescription.signature_hash.isnot(None)).count()
+        + study_query.filter(ClinicalStudy.signature_hash.isnot(None)).count()
+    )
+    if total_signable == 0:
+        digital_signatures_percentage = 100.0
+        digital_signatures_compliant = True
+    else:
+        digital_signatures_percentage = signed / total_signable * 100
+        digital_signatures_compliant = digital_signatures_percentage == 100.0
+
     issues = []
     if not required_fields_compliant:
         issues.append(f"{records_with_missing_fields} registros con campos obligatorios faltantes")
+    if not digital_signatures_compliant:
+        issues.append(f"{total_signable - signed} recetas/órdenes sin firma electrónica")
     
     compliance_percentage = (required_fields_percentage + digital_signatures_percentage) / 2
     
