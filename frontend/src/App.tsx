@@ -16,7 +16,7 @@ import { ToastProvider } from './components/common/ToastNotification';
 import { SnackbarProvider } from './contexts/SnackbarContext';
 import { twitterTheme } from './themes/twitterTheme';
 import { PublicPrivacyNotice } from './components/public/PublicPrivacyNotice';
-import { PublicTermsOfService } from './components/public/PublicTermsOfService';
+import { PublicLegalDocument } from './components/public/PublicLegalDocument';
 import { LandingPage } from './components/public/LandingPage';
 import { PublicIntakeForm } from './components/public/PublicIntakeForm';
 
@@ -37,10 +37,17 @@ const AppWithAuth: React.FC = () => {
     return <PublicPrivacyNotice />;
   }
 
-  // Public terms of service — linked from QuickRegisterView consent footer.
+  // Public terms of service — servido desde legal_documents (doc_type='tos').
   const isTermsPage = currentPath === '/terms' || currentPath === '/terminos';
   if (isTermsPage) {
-    return <PublicTermsOfService />;
+    return <PublicLegalDocument docType="tos" />;
+  }
+
+  // Contrato de Encargo del Tratamiento (DPA) — linked en el clickwrap del signup.
+  // Es el documento que convierte a CORTEX en Encargado y no en Corresponsable.
+  const isDpaPage = currentPath === '/dpa' || currentPath === '/contrato-encargo';
+  if (isDpaPage) {
+    return <PublicLegalDocument docType="dpa" />;
   }
 
   // Pre-consultation intake form — public, token in the URL, no auth.

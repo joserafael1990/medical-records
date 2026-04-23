@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from pydantic import BaseModel
 from datetime import datetime
+from typing import Optional
 import uuid
 import os
 
@@ -15,6 +16,7 @@ from database import (
     get_db, Person, PrivacyNotice, PrivacyConsent, ARCORequest,
     MedicalRecord, ClinicalStudy, ConsultationPrescription,
     ConsultationVitalSign, PersonDocument,
+    LegalDocument,
 )
 from utils.datetime_utils import utc_now
 from dependencies import get_current_user
@@ -30,6 +32,10 @@ from services.arco_export_service import (
     serialize_privacy_consent,
     serialize_vital_sign,
 )
+from services.privacy_template import (
+    MissingDoctorLegalDataError,
+    render_active_notice,
+)
 
 api_logger = get_logger("api")
 
@@ -41,31 +47,46 @@ class SendPrivacyNoticeRequest(BaseModel):
     method: str = "whatsapp_button"
 
 
+class GenerateConsentLinkRequest(BaseModel):
+    patient_id: int
+
+
+class AcceptPublicConsentRequest(BaseModel):
+    consent_id: int
+    # SHA-256 del aviso que se le mostró al paciente. El backend exige que
+    # coincida con `PrivacyConsent.rendered_content_hash` para bloquear dos
+    # ataques: (a) reemitir con texto stale tras actualizar la plantilla;
+    # (b) aceptar un consent que pertenece a otro flujo.
+    content_hash: str
+
+
 @router.get("/privacy/active-notice")
 async def get_active_privacy_notice(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user),
 ):
-    """
-    Get current active privacy notice (public endpoint)
+    """Retorna el aviso de privacidad RENDERIZADO con los datos del doctor
+    autenticado. Útil para previsualización antes de enviarlo a un paciente.
+
+    Si el médico no tiene los campos legales completos (domicilio, email
+    ARCO, cédula), devuelve 400 con la lista de campos faltantes en vez
+    de renderizar con placeholders.
     """
     try:
-        notice = db.query(PrivacyNotice).filter(
-            PrivacyNotice.is_active == True
-        ).order_by(PrivacyNotice.effective_date.desc()).first()
-        
-        if not notice:
-            raise HTTPException(status_code=404, detail="No active privacy notice found")
-        
+        rendered = render_active_notice(db, current_user)
         return {
-            "id": notice.id,
-            "version": notice.version,
-            "title": notice.title,
-            "content": notice.content,
-            "short_summary": notice.short_summary,
-            "effective_date": notice.effective_date.isoformat()
+            "id": rendered.notice_id,
+            "version": rendered.version,
+            "title": rendered.title,
+            "content": rendered.content,
+            "short_summary": rendered.short_summary,
+            "effective_date": rendered.effective_date,
+            "content_hash": rendered.content_hash,
         }
-    except HTTPException:
-        raise
+    except MissingDoctorLegalDataError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -129,39 +150,46 @@ async def send_whatsapp_privacy_notice(
         # Log del número que se va a usar
         api_logger.info(f"📞 Sending WhatsApp to patient phone: {patient_phone_decrypted}")
         
-        # Verificar si ya tiene un consentimiento
+        # Verificar si ya tiene un consentimiento aceptado CON ESTE MÉDICO.
+        # Scope por doctor: el consent del paciente con el Dr. A no aplica
+        # al Dr. B (son Responsables distintos bajo LFPDPPP).
         existing_consent = db.query(PrivacyConsent).filter(
             PrivacyConsent.patient_id == request_data.patient_id,
-            PrivacyConsent.consent_given == True
+            PrivacyConsent.doctor_id == current_user.id,
+            PrivacyConsent.consent_given == True,
         ).order_by(PrivacyConsent.created_at.desc()).first()
-        
+
         if existing_consent:
                 return {
                     "success": False,
-                    "message": "El paciente ya aceptó el aviso de privacidad",
+                    "message": "El paciente ya aceptó el aviso de privacidad con este médico",
                     "consent_id": existing_consent.id,
                     "accepted_at": existing_consent.consent_date.isoformat() if existing_consent.consent_date else None
                 }
-        
-        # Obtener aviso de privacidad activo
-        privacy_notice = db.query(PrivacyNotice).filter(
-            PrivacyNotice.is_active == True
-        ).order_by(PrivacyNotice.effective_date.desc()).first()
-        
-        if not privacy_notice:
-            raise HTTPException(status_code=404, detail="No hay aviso de privacidad activo. Por favor, contacta al administrador del sistema.")
-        
-        # URL del aviso de privacidad público
-        privacy_url = "https://cortexclinico.com/privacy"
-        
-        # Crear registro de consentimiento PRIMERO (para tener el ID)
+
+        # Renderizar aviso con datos del doctor actual como Responsable.
+        # Si faltan campos legales del doctor, abortar con 400 en vez de
+        # emitir un aviso inválido que nos exponga.
+        try:
+            rendered = render_active_notice(db, current_user)
+        except MissingDoctorLegalDataError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except LookupError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+
+        # URL del aviso de privacidad público, con slug del doctor para
+        # que el paciente vea el aviso con los datos del Responsable real.
+        privacy_url = f"https://cortexclinico.com/privacy?doctor={current_user.person_code}"
+
         consent = PrivacyConsent(
             patient_id=request_data.patient_id,
-            notice_id=privacy_notice.id,
+            doctor_id=current_user.id,
+            notice_id=rendered.notice_id,
             consent_given=False,  # Pendiente hasta que el paciente responda
-            consent_date=utc_now()
+            consent_date=utc_now(),
+            rendered_content_hash=rendered.content_hash,
         )
-        
+
         db.add(consent)
         db.commit()
         db.refresh(consent)
@@ -263,6 +291,218 @@ async def send_whatsapp_privacy_notice(
         )
 
 
+# ---------------------------------------------------------------------------
+# Web-form acceptance flow — alternativa a WhatsApp.
+# ---------------------------------------------------------------------------
+# Motivación: el botón interactivo de WhatsApp depende de (a) aprobación
+# del template en Meta, y (b) ventana de conversación de 24h. En producción
+# hoy ambas son frágiles, lo que bloquea el consentimiento para pacientes
+# nuevos. El flujo de aceptación web desacopla el canal (SMS, email, QR,
+# WhatsApp manual) de la captura del consentimiento.
+#
+# Flujo:
+#   1. Doctor llama POST /api/privacy/generate-link {patient_id}
+#      → crea PrivacyConsent pendiente y retorna URL compartible.
+#   2. Doctor comparte la URL por el canal que prefiera.
+#   3. Paciente abre la página, lee el aviso renderizado, toca "Acepto".
+#   4. Frontend llama POST /api/privacy/accept-public {consent_id, content_hash}.
+#   5. Backend valida hash y flip consent_given=True.
+# ---------------------------------------------------------------------------
+
+@router.post("/privacy/generate-link")
+async def generate_consent_link(
+    request_data: GenerateConsentLinkRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user),
+):
+    """Crea un consent pendiente y retorna la URL pública compartible.
+
+    Scope por doctor: el consent se ancla al médico autenticado. Si el
+    paciente ya aceptó CON ESTE MÉDICO, retorna el consent existente en
+    vez de duplicar (idempotente).
+    """
+    # Verificar paciente + acceso del doctor (mismo patrón que send-whatsapp)
+    patient = db.query(Person).filter(
+        Person.id == request_data.patient_id,
+        Person.person_type == 'patient',
+    ).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Paciente no encontrado")
+
+    has_consultation = db.query(MedicalRecord).filter(
+        MedicalRecord.patient_id == request_data.patient_id,
+        MedicalRecord.doctor_id == current_user.id,
+    ).first() is not None
+    is_creator = patient.created_by == current_user.id
+    if not has_consultation and not is_creator and current_user.person_type != 'admin':
+        raise HTTPException(status_code=403, detail="No tiene acceso a este paciente")
+
+    # ¿Consent ya aceptado con este doctor? idempotente
+    existing_accepted = db.query(PrivacyConsent).filter(
+        PrivacyConsent.patient_id == request_data.patient_id,
+        PrivacyConsent.doctor_id == current_user.id,
+        PrivacyConsent.consent_given.is_(True),
+    ).order_by(PrivacyConsent.created_at.desc()).first()
+    if existing_accepted:
+        return {
+            "success": False,
+            "already_accepted": True,
+            "message": "El paciente ya aceptó el aviso con este médico",
+            "consent_id": existing_accepted.id,
+            "accepted_at": existing_accepted.consent_date.isoformat() if existing_accepted.consent_date else None,
+        }
+
+    # Renderizar para capturar el hash del contenido que se le mostrará.
+    try:
+        rendered = render_active_notice(db, current_user)
+    except MissingDoctorLegalDataError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    # ¿Hay consent pendiente previo con este mismo hash? reutilizarlo.
+    pending = db.query(PrivacyConsent).filter(
+        PrivacyConsent.patient_id == request_data.patient_id,
+        PrivacyConsent.doctor_id == current_user.id,
+        PrivacyConsent.consent_given.is_(False),
+        PrivacyConsent.rendered_content_hash == rendered.content_hash,
+    ).order_by(PrivacyConsent.created_at.desc()).first()
+
+    if pending:
+        consent = pending
+    else:
+        consent = PrivacyConsent(
+            patient_id=request_data.patient_id,
+            doctor_id=current_user.id,
+            notice_id=rendered.notice_id,
+            consent_given=False,
+            consent_date=utc_now(),
+            rendered_content_hash=rendered.content_hash,
+        )
+        db.add(consent)
+        db.commit()
+        db.refresh(consent)
+
+    # La URL pública incluye doctor_slug (para que la página renderice el
+    # aviso correcto) y consent_id (para que el botón Acepto sepa qué
+    # consent flipear).
+    base_url = os.getenv("PUBLIC_FRONTEND_URL", "https://cortexclinico.com")
+    public_url = (
+        f"{base_url}/privacy"
+        f"?doctor={current_user.person_code}"
+        f"&consent={consent.id}"
+    )
+
+    audit_service.log_action(
+        db=db,
+        action="PRIVACY_CONSENT_LINK_GENERATED",
+        user=current_user,
+        request=request,
+        operation_type="generate_privacy_link",
+        affected_patient_id=request_data.patient_id,
+        affected_patient_name=patient.name or "Paciente",
+        new_values={
+            "consent_id": consent.id,
+            "rendered_content_hash": rendered.content_hash,
+        },
+        security_level='INFO',
+    )
+
+    return {
+        "success": True,
+        "consent_id": consent.id,
+        "url": public_url,
+        "content_hash": rendered.content_hash,
+    }
+
+
+@router.post("/privacy/accept-public")
+async def accept_public_consent(
+    request_data: AcceptPublicConsentRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Aceptación del aviso desde la página pública, sin autenticación.
+
+    Seguridad / evidencia legal:
+      - El consent ya existe (el doctor lo creó vía generate-link),
+        anclado a un patient_id y doctor_id específicos — no creamos
+        pacientes desde endpoint público.
+      - El hash del contenido debe coincidir con el que se le mostró:
+        bloquea aceptar una versión distinta a la presentada.
+      - Capturamos IP + user-agent del *servidor* (no del cliente) para
+        valor probatorio.
+      - Idempotente: si ya está aceptado, retorna OK sin re-marcar.
+    """
+    consent = db.query(PrivacyConsent).filter(
+        PrivacyConsent.id == request_data.consent_id
+    ).first()
+    if not consent:
+        raise HTTPException(status_code=404, detail="Consent no encontrado")
+
+    # Validar hash — bloquea replay con contenido obsoleto.
+    if consent.rendered_content_hash != request_data.content_hash:
+        api_logger.warning(
+            "Rechazo accept-public por hash mismatch",
+            consent_id=consent.id,
+            expected=consent.rendered_content_hash,
+            got=request_data.content_hash,
+        )
+        raise HTTPException(
+            status_code=409,
+            detail="El aviso mostrado ya no es la versión vigente. Recarga la página.",
+        )
+
+    # Idempotencia: si ya está aceptado, responder OK sin cambios.
+    if consent.consent_given:
+        return {
+            "success": True,
+            "already_accepted": True,
+            "consent_id": consent.id,
+            "accepted_at": consent.consent_date.isoformat() if consent.consent_date else None,
+        }
+
+    # Capturar IP real (proxy/LB) + user-agent del servidor
+    forwarded = request.headers.get('x-forwarded-for') if request and request.headers else None
+    ip = (forwarded.split(',')[0].strip() if forwarded else (request.client.host if request and request.client else None))
+    user_agent = request.headers.get('user-agent') if request and request.headers else None
+
+    consent.consent_given = True
+    consent.consent_date = utc_now()
+    consent.ip_address = ip
+    consent.user_agent = user_agent
+    db.commit()
+    db.refresh(consent)
+
+    # Audit log CRÍTICO para defensa ante IFAI.
+    patient = db.query(Person).filter(Person.id == consent.patient_id).first()
+    audit_service.log_action(
+        db=db,
+        action="PRIVACY_CONSENT_ACCEPTED",
+        user=None,  # paciente, no usuario del sistema
+        request=request,
+        operation_type="web_form_consent",
+        affected_patient_id=consent.patient_id,
+        affected_patient_name=(patient.name if patient else None) or "Paciente",
+        new_values={
+            "consent_id": consent.id,
+            "doctor_id": consent.doctor_id,
+            "rendered_content_hash": consent.rendered_content_hash,
+            "method": "web_form",
+            "ip": ip,
+        },
+        security_level='INFO',
+    )
+
+    return {
+        "success": True,
+        "already_accepted": False,
+        "consent_id": consent.id,
+        "accepted_at": consent.consent_date.isoformat() if consent.consent_date else None,
+    }
+
+
 @router.get("/privacy/consent-status/{patient_id}")
 async def get_patient_consent_status(
     patient_id: int,
@@ -311,9 +551,11 @@ async def get_patient_consent_status(
             )
             raise HTTPException(status_code=403, detail="Solo doctores pueden acceder al estado de consentimiento")
         
-        # Buscar consentimiento más reciente
+        # Buscar consentimiento más reciente con el doctor autenticado.
+        # Scope por doctor_id: cada médico es Responsable independiente.
         consent = db.query(PrivacyConsent).filter(
-            PrivacyConsent.patient_id == patient_id
+            PrivacyConsent.patient_id == patient_id,
+            PrivacyConsent.doctor_id == current_user.id,
         ).order_by(PrivacyConsent.created_at.desc()).first()
         
         if not consent:
@@ -429,9 +671,11 @@ async def revoke_consent(
             if not has_consultation and not is_patient_creator:
                 raise HTTPException(status_code=403, detail="No tiene acceso a este paciente")
         
-        # Buscar consentimiento más reciente (no revocado, es decir, consent_given puede ser True o False pero debe existir)
+        # Buscar consentimiento más reciente del médico actual con este paciente.
+        # Scope por doctor_id: cada médico solo puede revocar sus propios consents.
         consent = db.query(PrivacyConsent).filter(
-            PrivacyConsent.patient_id == patient_id
+            PrivacyConsent.patient_id == patient_id,
+            PrivacyConsent.doctor_id == current_user.id,
         ).order_by(PrivacyConsent.created_at.desc()).first()
         
         if not consent:
@@ -533,13 +777,14 @@ async def create_arco_request(
             if not has_consultation and not is_patient_creator:
                 raise HTTPException(status_code=403, detail="No tiene acceso a este paciente")
         
-        # Crear solicitud ARCO
+        # Crear solicitud ARCO scoped al doctor actual (Responsable).
         arco_request = ARCORequest(
             patient_id=patient_id,
+            doctor_id=current_user.id,
             request_type=request_type,
-            description=description,  # En BD es "description"
+            description=description,
             status='pending',
-            processed_by=current_user.id,  # En BD es "processed_by"
+            processed_by=current_user.id,
             created_at=utc_now()
         )
         
@@ -624,9 +869,11 @@ async def get_arco_requests(
             if not has_consultation and not is_patient_creator:
                 raise HTTPException(status_code=403, detail="No tiene acceso a este paciente")
         
-        # Obtener solicitudes ARCO
+        # Obtener solicitudes ARCO del doctor actual con este paciente.
+        # Scope por doctor_id: cada médico responde sus propios ARCOs.
         arco_requests = db.query(ARCORequest).filter(
-            ARCORequest.patient_id == patient_id
+            ARCORequest.patient_id == patient_id,
+            ARCORequest.doctor_id == current_user.id,
         ).order_by(ARCORequest.created_at.desc()).all()
         
         return {
@@ -677,11 +924,14 @@ async def update_arco_request(
         if status not in ['pending', 'in_progress', 'resolved', 'rejected']:
             raise HTTPException(status_code=400, detail="status inválido")
         
-        # Obtener solicitud ARCO
+        # Obtener solicitud ARCO del doctor actual.
+        # Scope por doctor_id: un médico solo puede actualizar los ARCO
+        # de sus propios pacientes (no ver/modificar los de otros doctores).
         arco_request = db.query(ARCORequest).filter(
-            ARCORequest.id == request_id
+            ARCORequest.id == request_id,
+            ARCORequest.doctor_id == current_user.id,
         ).first()
-        
+
         if not arco_request:
             raise HTTPException(status_code=404, detail="Solicitud ARCO no encontrada")
         
@@ -873,32 +1123,105 @@ async def export_patient_arco(
 
 
 @router.get("/privacy/public-notice")
-async def get_public_privacy_notice(db: Session = Depends(get_db)):
+async def get_public_privacy_notice(
+    doctor: Optional[str] = None,
+    consent: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
     """
-    Obtener el aviso de privacidad público (sin autenticación)
-    Para mostrar en página pública
+    Aviso de privacidad público (sin autenticación).
+
+    Modos:
+      - `?doctor=<person_code>` — renderiza el aviso del médico específico.
+      - `?doctor=<person_code>&consent=<id>` — además incluye el estado
+        del consent (ya aceptado / pendiente) para que la UI decida si
+        mostrar el botón "Acepto" o la confirmación.
+      - sin parámetros — retorna el **Aviso de Privacidad de la Plataforma
+        CORTEX**, que cubre a CORTEX como Responsable del usuario-médico.
+
+    Nunca retorna la plantilla sin hidratar.
     """
     try:
-        # Obtener aviso activo
-        notice = db.query(PrivacyNotice).filter(
-            PrivacyNotice.is_active == True
-        ).order_by(PrivacyNotice.effective_date.desc()).first()
-        
-        if not notice:
-            raise HTTPException(status_code=404, detail="No hay aviso de privacidad activo")
-        
+        if doctor:
+            doctor_person = db.query(Person).filter(
+                Person.person_code == doctor,
+                Person.person_type == 'doctor',
+                Person.is_active.is_(True),
+            ).first()
+            if not doctor_person:
+                raise HTTPException(status_code=404, detail="Médico no encontrado")
+
+            try:
+                rendered = render_active_notice(db, doctor_person)
+            except MissingDoctorLegalDataError as e:
+                raise HTTPException(status_code=409, detail=str(e))
+            except LookupError as e:
+                raise HTTPException(status_code=404, detail=str(e))
+
+            response_body = {
+                "kind": "doctor_patient_notice",
+                "id": rendered.notice_id,
+                "version": rendered.version,
+                "title": rendered.title,
+                "content": rendered.content,
+                "short_summary": rendered.short_summary,
+                "effective_date": rendered.effective_date,
+                "content_hash": rendered.content_hash,
+                "doctor_slug": doctor,
+            }
+
+            if consent is not None:
+                consent_row = db.query(PrivacyConsent).filter(
+                    PrivacyConsent.id == consent,
+                    PrivacyConsent.doctor_id == doctor_person.id,
+                ).first()
+                if consent_row:
+                    # El frontend usa esto para decidir si mostrar
+                    # el botón "Acepto" o el estado "Ya aceptaste".
+                    # NO exponemos patient_id ni otros datos PHI.
+                    response_body["consent_state"] = {
+                        "id": consent_row.id,
+                        "already_accepted": bool(consent_row.consent_given),
+                        "accepted_at": (
+                            consent_row.consent_date.isoformat()
+                            if consent_row.consent_given and consent_row.consent_date
+                            else None
+                        ),
+                        # Si el hash del consent no coincide con lo que
+                        # estamos mostrando ahora, la página debe avisar.
+                        "hash_matches": consent_row.rendered_content_hash == rendered.content_hash,
+                    }
+                else:
+                    response_body["consent_state"] = {"id": consent, "not_found": True}
+
+            return response_body
+
+        # Sin slug: aviso de CORTEX (la plataforma) al usuario-médico.
+        platform_doc = (
+            db.query(LegalDocument)
+            .filter(
+                LegalDocument.doc_type == 'platform_privacy',
+                LegalDocument.is_active.is_(True),
+            )
+            .order_by(LegalDocument.effective_date.desc())
+            .first()
+        )
+        if not platform_doc:
+            raise HTTPException(status_code=404, detail="No hay aviso de privacidad de la plataforma activo")
+
         return {
-            "id": notice.id,
-            "version": notice.version,
-            "title": notice.title,
-            "content": notice.content,
-            "short_summary": notice.short_summary,
-            "effective_date": notice.effective_date.isoformat(),
-            # expiration_date removed - not needed, expiration is calculated from consent_date + 365 days
-            "is_active": notice.is_active,
-            "created_at": notice.created_at.isoformat()  # updated_at removed - column doesn't exist in database table
+            "kind": "platform_privacy",
+            "id": platform_doc.id,
+            "version": platform_doc.version,
+            "title": platform_doc.title,
+            "content": platform_doc.content.replace(
+                "{{effective_date}}", platform_doc.effective_date.isoformat()
+            ),
+            "short_summary": None,
+            "effective_date": platform_doc.effective_date.isoformat(),
+            "is_active": platform_doc.is_active,
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:

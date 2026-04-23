@@ -109,51 +109,109 @@ class PrivacyNotice(Base):
 
 class PrivacyConsent(Base):
     """
-    Registro de consentimientos de privacidad de pacientes
-    Soporta múltiples métodos: WhatsApp, papel, tablet, portal web
+    Registro de consentimientos de privacidad de pacientes.
+    Scoped por doctor: un mismo paciente puede tener consent separado con
+    cada médico tratante (cada médico es Responsable distinto bajo LFPDPPP).
     """
     __tablename__ = "privacy_consents"
-    
+
     id = Column(Integer, primary_key=True)
     patient_id = Column(Integer, ForeignKey("persons.id", ondelete="CASCADE"))
+    doctor_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), index=True)
     notice_id = Column(Integer, ForeignKey("privacy_notices.id"))
     consent_given = Column(Boolean, nullable=False)
     consent_date = Column(DateTime, nullable=False)
+    # SHA-256 del texto exacto renderizado que el paciente aceptó. Permite
+    # probar ante IFAI qué contenido se aceptó aun si la plantilla cambia.
+    rendered_content_hash = Column(String(64))
     ip_address = Column(String(45))
     user_agent = Column(Text)
     created_at = Column(DateTime, default=utc_now)
-    
+
     # Relationships
     patient = relationship("Person", foreign_keys=[patient_id], backref="privacy_consents")
+    doctor = relationship("Person", foreign_keys=[doctor_id])
     privacy_notice = relationship("PrivacyNotice", foreign_keys=[notice_id], back_populates="consents")
 
 class ARCORequest(Base):
     """
     Solicitudes de derechos ARCO (Acceso, Rectificación, Cancelación, Oposición)
-    Compliance: LFPDPPP Art. 28-34
+    Compliance: LFPDPPP Art. 28-34. Scoped por doctor — cada médico recibe
+    y responde los ARCO de sus propios pacientes.
     """
     __tablename__ = "arco_requests"
-    
+
     id = Column(Integer, primary_key=True)
     patient_id = Column(Integer, ForeignKey("persons.id", ondelete="CASCADE"))
+    doctor_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), index=True)
     request_type = Column(String(20), nullable=False)  # 'access', 'rectification', 'cancellation', 'opposition'
-    
+
     # Detalles de la solicitud
     description = Column(Text)
-    
+
     # Estado
     status = Column(String(20), default='pending')  # 'pending', 'in_progress', 'completed', 'rejected'
     processed_by = Column(Integer, ForeignKey("persons.id"))
-    
+
     # Respuesta
     response = Column(Text)
     processed_at = Column(DateTime)
-    
+
     created_at = Column(DateTime, default=utc_now)
-    
+
     # Relationships
     patient = relationship("Person", foreign_keys=[patient_id])
+    doctor = relationship("Person", foreign_keys=[doctor_id])
     processed_by_person = relationship("Person", foreign_keys=[processed_by])
+
+
+# ============================================================================
+# LEGAL FRAMEWORK (CORTEX PLATFORM)
+# ============================================================================
+
+class LegalDocument(Base):
+    """
+    Versiones de los documentos legales que CORTEX (como plataforma) exige
+    al médico aceptar en el signup:
+      - platform_privacy: Aviso de Privacidad de CORTEX (doctor-usuario)
+      - tos:              Términos y Condiciones de Uso
+      - dpa:              Contrato de Encargo del Tratamiento (LFPDPPP Art. 49)
+
+    NO se confunde con `privacy_notices`, que es el aviso que el MÉDICO
+    le extiende al PACIENTE (doctor como Responsable).
+    """
+    __tablename__ = "legal_documents"
+
+    id = Column(Integer, primary_key=True)
+    doc_type = Column(String(30), nullable=False)  # platform_privacy | tos | dpa
+    version = Column(String(20), nullable=False)
+    title = Column(String(200), nullable=False)
+    content = Column(Text, nullable=False)
+    effective_date = Column(Date, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=utc_now)
+
+    acceptances = relationship("LegalAcceptance", back_populates="document")
+
+
+class LegalAcceptance(Base):
+    """
+    Registro de aceptación por parte del médico de un documento legal.
+    Se captura al signup (clickwrap). Con IP y user-agent del servidor
+    para valor probatorio.
+    """
+    __tablename__ = "legal_acceptances"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("persons.id", ondelete="CASCADE"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("legal_documents.id", ondelete="RESTRICT"), nullable=False)
+    accepted_at = Column(DateTime, nullable=False)
+    ip_address = Column(String(45))
+    user_agent = Column(Text)
+    created_at = Column(DateTime, default=utc_now)
+
+    user = relationship("Person", foreign_keys=[user_id])
+    document = relationship("LegalDocument", back_populates="acceptances")
 
 # ============================================================================
 # GOOGLE CALENDAR INTEGRATION

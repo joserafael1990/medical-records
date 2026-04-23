@@ -14,7 +14,7 @@ from psycopg2.extras import Json
 from database import get_db, Person, Office, Specialty, DocumentType, Document, PersonDocument
 from dependencies import get_current_user
 from logger import get_logger
-from models.system import PrivacyConsent, PrivacyNotice
+from models.system import PrivacyConsent, PrivacyNotice, LegalDocument, LegalAcceptance
 from utils.document_validators import (
     CURP_DOCUMENT_NAME,
     PROFESSIONAL_LICENSE_DOCUMENT_NAME,
@@ -190,44 +190,69 @@ async def register_doctor(
         db.commit()
         api_logger.info(f"Doctor {doctor.id} created successfully")
 
-        # Persist LFPDPPP privacy consent with server-captured IP (never trust client IP).
+        # Persist clickwrap: Aviso-Plataforma + ToS + DPA (Contrato de Encargo).
+        # Estos son los 3 documentos que el médico acepta AL REGISTRARSE con
+        # CORTEX. NO son el aviso al paciente — ese se renderiza por doctor
+        # cuando el médico atiende a un paciente.
+        #
+        # Art. 16 LFPDPPP + Art. 49 Reglamento: la aceptación del DPA es lo
+        # que convierte a CORTEX formalmente en Encargado del médico, en vez
+        # de corresponsable del expediente clínico.
         if doctor_data.privacy_consent and doctor_data.privacy_consent.accepted:
             try:
-                notice = None
-                requested_version = (doctor_data.privacy_consent.notice_version or '').strip()
-                if requested_version:
-                    notice = db.query(PrivacyNotice).filter(
-                        PrivacyNotice.version == requested_version
-                    ).first()
-                if notice is None:
-                    notice = db.query(PrivacyNotice).filter(
-                        PrivacyNotice.is_active.is_(True)
-                    ).order_by(PrivacyNotice.effective_date.desc()).first()
-
                 consent_ip = _client_ip(request)
                 user_agent = doctor_data.privacy_consent.user_agent or (
                     request.headers.get('user-agent') if request and request.headers else None
                 )
                 accepted_at = doctor_data.privacy_consent.accepted_at or __import__('datetime').datetime.utcnow()
 
-                consent = PrivacyConsent(
-                    patient_id=doctor.id,  # persons.id is unified across doctor/patient
-                    notice_id=notice.id if notice else None,
-                    consent_given=True,
-                    consent_date=accepted_at,
-                    ip_address=consent_ip,
-                    user_agent=user_agent,
-                )
-                db.add(consent)
+                # Obtener la versión activa de cada documento.
+                active_docs = {}
+                for doc_type in ('platform_privacy', 'tos', 'dpa'):
+                    doc = (
+                        db.query(LegalDocument)
+                        .filter(
+                            LegalDocument.doc_type == doc_type,
+                            LegalDocument.is_active.is_(True),
+                        )
+                        .order_by(LegalDocument.effective_date.desc())
+                        .first()
+                    )
+                    if doc:
+                        active_docs[doc_type] = doc
+
+                # Registrar aceptación para cada documento presente. Si algún
+                # documento está ausente (schema incompleto), loggear pero no
+                # bloquear el signup — el usuario puede firmarlo después.
+                accepted_types = []
+                for doc_type, doc in active_docs.items():
+                    acceptance = LegalAcceptance(
+                        user_id=doctor.id,
+                        document_id=doc.id,
+                        accepted_at=accepted_at,
+                        ip_address=consent_ip,
+                        user_agent=user_agent,
+                    )
+                    db.add(acceptance)
+                    accepted_types.append(doc_type)
+
                 db.commit()
                 api_logger.info(
-                    "Privacy consent recorded",
+                    "Legal clickwrap recorded at signup",
                     doctor_id=doctor.id,
-                    notice_version=notice.version if notice else None,
+                    accepted=accepted_types,
                 )
+
+                missing = [t for t in ('platform_privacy', 'tos', 'dpa') if t not in active_docs]
+                if missing:
+                    api_logger.warning(
+                        "Some legal documents missing — doctor may need to re-sign later",
+                        doctor_id=doctor.id,
+                        missing=missing,
+                    )
             except Exception as consent_error:
                 api_logger.error(
-                    "Failed to persist privacy consent (doctor registration continues)",
+                    "Failed to persist legal acceptances (doctor registration continues)",
                     doctor_id=doctor.id,
                     error=str(consent_error),
                 )

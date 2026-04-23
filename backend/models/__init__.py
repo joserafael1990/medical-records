@@ -1,8 +1,9 @@
 from .base import Base, engine, SessionLocal, get_db, utc_now, DATABASE_URL
 from .location import Country, State, Office
 from .system import (
-    Specialty, EmergencyRelationship, AuditLog, 
-    PrivacyNotice, PrivacyConsent, ARCORequest, 
+    Specialty, EmergencyRelationship, AuditLog,
+    PrivacyNotice, PrivacyConsent, ARCORequest,
+    LegalDocument, LegalAcceptance,
     GoogleCalendarToken, License
 )
 from .document import (
