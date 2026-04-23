@@ -5,6 +5,7 @@ import {
   DialogContent,
   DialogActions,
   Box,
+  Button,
   Typography,
   IconButton,
   Divider,
@@ -12,7 +13,9 @@ import {
 import {
   Close as CloseIcon,
   LocalHospital as HospitalIcon,
+  Receipt as ReceiptIcon,
 } from '@mui/icons-material';
+import InvoiceDialog from './InvoiceDialog';
 import { Patient } from '../../types';
 import { useClinicalStudies } from '../../hooks/useClinicalStudies';
 import { useVitalSigns } from '../../hooks/useVitalSigns';
@@ -141,6 +144,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   // they fill the whole form. Only fires for NEW consultations — editing
   // an existing signed expediente keeps whatever was captured at the time.
   const [showIncompleteGuard, setShowIncompleteGuard] = useState(false);
+  const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
   useEffect(() => {
     if (!open) {
       setShowIncompleteGuard(false);
@@ -454,6 +458,18 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       <Divider />
 
       <DialogActions sx={{ p: 2, flexDirection: 'column', gap: 2 }}>
+        {/* Facturar (sólo si consulta ya guardada) */}
+        {formHook.isEditing && (formHook.currentConsultationId || consultation?.id) && (
+          <Button
+            fullWidth
+            variant="outlined"
+            startIcon={<ReceiptIcon />}
+            onClick={() => setInvoiceDialogOpen(true)}
+          >
+            Facturar
+          </Button>
+        )}
+
         {/* Print buttons */}
         <PrintButtonsSection
           show={((prescriptionsHook.prescriptions && prescriptionsHook.prescriptions.length > 0) ||
@@ -496,6 +512,19 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
           onClose();
         }}
         onCompleteNow={handleGuardCompleteNow}
+      />
+
+      {/* CFDI invoice dialog — disponible desde el modal de edición */}
+      <InvoiceDialog
+        open={invoiceDialogOpen}
+        onClose={() => setInvoiceDialogOpen(false)}
+        consultationId={
+          formHook.currentConsultationId ||
+          (consultation?.id ? Number(consultation.id) : undefined)
+        }
+        patientId={formHook.selectedPatient?.id ? Number(formHook.selectedPatient.id) : undefined}
+        patientName={(formHook.selectedPatient as any)?.full_name || (formHook.selectedPatient as any)?.name}
+        patientRfc={(formHook.selectedPatient as any)?.rfc ?? null}
       />
     </Dialog>
   );
