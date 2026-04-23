@@ -16,6 +16,7 @@ import {
   Receipt as ReceiptIcon,
 } from '@mui/icons-material';
 import InvoiceDialog from './InvoiceDialog';
+import { useConsultationInvoice } from '../../hooks/useConsultationInvoice';
 import { Patient } from '../../types';
 import { useClinicalStudies } from '../../hooks/useClinicalStudies';
 import { useVitalSigns } from '../../hooks/useVitalSigns';
@@ -145,6 +146,12 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
   // an existing signed expediente keeps whatever was captured at the time.
   const [showIncompleteGuard, setShowIncompleteGuard] = useState(false);
   const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
+
+  // Consulta si ya hay factura emitida para esta consulta.
+  const invoiceHook = useConsultationInvoice(
+    formHook?.currentConsultationId ||
+      (consultation?.id ? Number(consultation.id) : null),
+  );
   useEffect(() => {
     if (!open) {
       setShowIncompleteGuard(false);
@@ -458,16 +465,29 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       <Divider />
 
       <DialogActions sx={{ p: 2, flexDirection: 'column', gap: 2 }}>
-        {/* Facturar (sólo si consulta ya guardada) */}
+        {/* Facturar / Ver factura (sólo si consulta ya guardada) */}
         {formHook.isEditing && (formHook.currentConsultationId || consultation?.id) && (
-          <Button
-            fullWidth
-            variant="outlined"
-            startIcon={<ReceiptIcon />}
-            onClick={() => setInvoiceDialogOpen(true)}
-          >
-            Facturar
-          </Button>
+          invoiceHook.invoice ? (
+            <Button
+              fullWidth
+              variant="outlined"
+              color="success"
+              startIcon={<ReceiptIcon />}
+              onClick={invoiceHook.openPdf}
+              disabled={invoiceHook.openingPdf}
+            >
+              {invoiceHook.openingPdf ? 'Abriendo…' : 'Ver factura (PDF)'}
+            </Button>
+          ) : (
+            <Button
+              fullWidth
+              variant="outlined"
+              startIcon={<ReceiptIcon />}
+              onClick={() => setInvoiceDialogOpen(true)}
+            >
+              Facturar
+            </Button>
+          )
         )}
 
         {/* Print buttons */}
@@ -525,6 +545,7 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
         patientId={formHook.selectedPatient?.id ? Number(formHook.selectedPatient.id) : undefined}
         patientName={(formHook.selectedPatient as any)?.full_name || (formHook.selectedPatient as any)?.name}
         patientRfc={(formHook.selectedPatient as any)?.rfc ?? null}
+        onEmitted={() => invoiceHook.refresh()}
       />
     </Dialog>
   );
