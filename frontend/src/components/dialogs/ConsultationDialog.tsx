@@ -45,6 +45,7 @@ import { useClinicalStudiesManager } from '../../hooks/useClinicalStudiesManager
 import { usePreviousStudiesLoader } from '../../hooks/usePreviousStudiesLoader';
 import { useFollowUpAppointments } from '../../hooks/useFollowUpAppointments';
 import { logger } from '../../utils/logger';
+import { FEATURE_FLAGS } from '../../constants';
 
 export interface ConsultationDialogProps {
   open: boolean;
@@ -465,8 +466,8 @@ const ConsultationDialog: React.FC<ConsultationDialogProps> = ({
       <Divider />
 
       <DialogActions sx={{ p: 2, flexDirection: 'column', gap: 2 }}>
-        {/* Facturar / Ver factura (sólo si consulta ya guardada) */}
-        {formHook.isEditing && (formHook.currentConsultationId || consultation?.id) && (
+        {/* Facturar / Ver factura (sólo si consulta ya guardada) — gated por REACT_APP_CFDI_ENABLED */}
+        {FEATURE_FLAGS.ENABLE_CFDI && formHook.isEditing && (formHook.currentConsultationId || consultation?.id) && (
           invoiceHook.invoice ? (
             <Button
               fullWidth

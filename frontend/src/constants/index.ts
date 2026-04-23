@@ -235,11 +235,16 @@ export const STUDY_TYPES = [
 ] as const;
 
 // Feature Flags
+// CFDI (Facturama) invoicing is disabled by default because it is still in
+// testing. Set REACT_APP_CFDI_ENABLED=true in the frontend env to turn it on.
+const CFDI_ENABLED = String(process.env.REACT_APP_CFDI_ENABLED ?? '').toLowerCase() === 'true';
+
 export const FEATURE_FLAGS = {
   ENABLE_NOTIFICATIONS: true,
   ENABLE_ANALYTICS: true, // Analytics interno habilitado
   ENABLE_BETA_FEATURES: false,
-  ENABLE_DEBUG_MODE: process.env.NODE_ENV === 'development'
+  ENABLE_DEBUG_MODE: process.env.NODE_ENV === 'development',
+  ENABLE_CFDI: CFDI_ENABLED
 };
 
 // Environment
