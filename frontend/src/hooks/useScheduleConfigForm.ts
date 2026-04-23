@@ -90,27 +90,39 @@ export const useScheduleConfigForm = (
   const [hasExistingSchedule, setHasExistingSchedule] = useState(false);
 
   const loadWeeklySchedule = useCallback(async () => {
+    // Guard: never fetch with an unresolved office. A request with no
+    // office_id falls back to the doctor's oldest office on the backend;
+    // if that response races with a later office-specific fetch, the
+    // dialog ends up showing the WRONG office's schedule (the user
+    // "edits" it and silently overwrites templates from another office).
+    if (!officeId) {
+      setWeeklySchedule(getDefaultSchedule());
+      setHasExistingSchedule(false);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
-      
+
       logger.debug('Loading weekly schedule', { officeId }, 'api');
       const response = await apiService.appointments.api.get(`/api/schedule/templates/weekly${officeQuery}`);
-      
+
       const responseData = response.data || response;
       const defaultSchedule = getDefaultSchedule();
       const mergedSchedule = { ...defaultSchedule, ...responseData };
-      
+
       logger.debug('Weekly schedule loaded', { schedule: mergedSchedule }, 'api');
       setWeeklySchedule(mergedSchedule);
-      
+
       const hasSchedule = Object.values(mergedSchedule).some((schedule: any) =>
         schedule !== null &&
         schedule.time_blocks &&
         schedule.time_blocks.some((block: any) => block.start_time && block.end_time)
       );
       setHasExistingSchedule(hasSchedule);
-      
+
     } catch (err: any) {
       logger.error('Error loading weekly schedule', err, 'api');
       setError('Error cargando configuración de horarios');
@@ -121,10 +133,14 @@ export const useScheduleConfigForm = (
   }, [officeQuery, officeId, showError]);
 
   const generateDefaultSchedule = useCallback(async () => {
+    if (!officeId) {
+      setError('Selecciona primero el consultorio destino');
+      return;
+    }
     try {
       setSaving(true);
       setError(null);
-      
+
       logger.debug('Generating default schedule', { officeId }, 'api');
       const response = await apiService.appointments.api.post(`/api/schedule/generate-weekly-template${officeQuery}`);
       
@@ -197,10 +213,17 @@ export const useScheduleConfigForm = (
     scheduleData: Partial<ScheduleTemplate>,
     shouldReload: boolean = false
   ) => {
+    // Guard: if we don't know which office we're editing, refuse to send
+    // PUT/POST — a blind write can hit the wrong office's template ids.
+    if (!officeId) {
+      setError('No se pudo determinar el consultorio. Cierra y vuelve a abrir.');
+      return;
+    }
+
     try {
-      logger.debug('Updating day schedule', { dayIndex, scheduleData }, 'api');
+      logger.debug('Updating day schedule', { dayIndex, scheduleData, officeId }, 'api');
       setError(null);
-      
+
       const dayKey = DAYS_OF_WEEK[dayIndex].key as keyof WeeklySchedule;
       const existingSchedule = weeklySchedule[dayKey];
       
@@ -231,8 +254,11 @@ export const useScheduleConfigForm = (
             }
           ],
           is_active: true,
-          ...(officeId ? { office_id: officeId } : {}),
-          ...scheduleData
+          ...scheduleData,
+          // office_id wins — we've already guarded officeId above, and we
+          // don't want an accidental override from scheduleData to land
+          // templates on the wrong consultorio.
+          office_id: officeId,
         };
 
         const response = await apiService.appointments.api.post('/api/schedule/templates', newSchedule);
@@ -256,7 +282,7 @@ export const useScheduleConfigForm = (
       setError(errorMessage);
       showError(errorMessage);
     }
-  }, [weeklySchedule, loadWeeklySchedule, onScheduleUpdated, showSuccess, showError]);
+  }, [officeId, weeklySchedule, loadWeeklySchedule, onScheduleUpdated, showSuccess, showError]);
 
   const addTimeBlock = useCallback(async (dayIndex: number) => {
     try {
