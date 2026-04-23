@@ -106,83 +106,154 @@ async def get_calendar_appointments(
 async def get_available_times_for_booking(
     date: str,
     db: Session,
-    current_user: Person
+    current_user: Person,
+    office_id: Optional[int] = None,
 ):
-    """Get available appointment times for booking on a specific date"""
-    # This function is kept here for backward compatibility
-    # The actual route is defined in main_clean_english.py
-    # TODO: Move this logic to AppointmentService if needed
-    from datetime import datetime, timedelta
-    import pytz
-    from database import Appointment
-    from sqlalchemy import func
-    
+    """Get available appointment times for booking on a specific date.
+
+    Slots are derived from the doctor's `schedule_templates` entry for the
+    given office on the weekday of `date`. Conflicts are checked against
+    active appointments for the same office on that day.
+    """
+    from datetime import datetime, timedelta, time as dtime
+    import json
+    from sqlalchemy import text
+    from database import Appointment, Office
+
     try:
-        # Parse the date
         target_date = datetime.fromisoformat(date).date()
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
-    
-    # Get doctor's timezone (default to CDMX)
-    doctor_tz = pytz.timezone('America/Mexico_City')
-    
-    # Get doctor's appointment duration from persons table
-    slot_duration = current_user.appointment_duration if current_user.appointment_duration else 30  # minutes, fallback to 30
-    
-    # Define working hours (9 AM to 6 PM)
-    working_start = 9
-    working_end = 18
-    
-    # Get existing appointments for the day
-    start_of_day = doctor_tz.localize(datetime.combine(target_date, datetime.min.time()))
-    end_of_day = doctor_tz.localize(datetime.combine(target_date, datetime.max.time()))
-    
-    # Convert to UTC for database query
-    utc_start = start_of_day.astimezone(pytz.utc)
-    utc_end = end_of_day.astimezone(pytz.utc)
-    
-    existing_appointments = db.query(Appointment).filter(
-        Appointment.doctor_id == current_user.id,
-        Appointment.appointment_date >= utc_start,
-        Appointment.appointment_date <= utc_end,
-        Appointment.status != 'cancelled'
-    ).all()
-    
-    # Generate all possible time slots
-    available_slots = []
-    current_time = start_of_day.replace(hour=working_start, minute=0)
-    end_time = start_of_day.replace(hour=working_end, minute=0)
-    
-    while current_time < end_time:
-        # Check if slot is available
-        is_available = True
-        for apt in existing_appointments:
-            apt_time = apt.appointment_date
-            if apt_time.tzinfo is None:
-                apt_time = doctor_tz.localize(apt_time)
-            else:
-                apt_time = apt_time.astimezone(doctor_tz)
-            
-            # Check if there's overlap
-            if abs((current_time - apt_time).total_seconds()) < slot_duration * 60:
-                is_available = False
-                break
-        
-        if is_available:
-            time_str = current_time.strftime("%H:%M")
-            available_slots.append({
-                "time": time_str,
-                "display": time_str,
-                "datetime": current_time.isoformat(),
-                "duration_minutes": slot_duration
-            })
-        
-        current_time += timedelta(minutes=slot_duration)
-    
+
+    slot_duration = current_user.appointment_duration or 30
+
+    # Resolve target office: explicit param wins, else doctor's oldest
+    # active office (preserves pre-existing behavior for callers that
+    # don't yet send office_id).
+    if office_id is not None:
+        office = db.query(Office).filter(
+            Office.id == office_id,
+            Office.doctor_id == current_user.id,
+            Office.is_active == True,
+        ).first()
+        if not office:
+            raise HTTPException(status_code=404, detail="Office not found for this doctor")
+        resolved_office_id = office.id
+    else:
+        first_office = (
+            db.query(Office)
+            .filter(Office.doctor_id == current_user.id, Office.is_active == True)
+            .order_by(Office.created_at.asc(), Office.id.asc())
+            .first()
+        )
+        resolved_office_id = first_office.id if first_office else None
+
+    if not resolved_office_id:
+        return {"date": date, "available_times": [], "slot_duration_minutes": slot_duration}
+
+    day_of_week = target_date.weekday()
+
+    template_row = db.execute(
+        text(
+            """
+            SELECT start_time, end_time, time_blocks
+            FROM schedule_templates
+            WHERE doctor_id = :doctor_id
+              AND office_id = :office_id
+              AND day_of_week = :day_of_week
+              AND is_active = TRUE
+            LIMIT 1
+            """
+        ),
+        {
+            "doctor_id": current_user.id,
+            "office_id": resolved_office_id,
+            "day_of_week": day_of_week,
+        },
+    ).fetchone()
+
+    if not template_row:
+        return {"date": date, "available_times": [], "slot_duration_minutes": slot_duration}
+
+    time_blocks = []
+    raw_blocks = template_row[2]
+    if raw_blocks:
+        if isinstance(raw_blocks, list):
+            time_blocks = raw_blocks
+        elif isinstance(raw_blocks, str):
+            time_blocks = json.loads(raw_blocks)
+
+    if not time_blocks and template_row[0] and template_row[1]:
+        time_blocks = [{
+            "start_time": template_row[0].strftime("%H:%M"),
+            "end_time": template_row[1].strftime("%H:%M"),
+        }]
+
+    if not time_blocks:
+        return {"date": date, "available_times": [], "slot_duration_minutes": slot_duration}
+
+    # Existing appointments in the same office on this date. Conflicts
+    # between offices are not enforced here — a separate booking-layer
+    # check owns that.
+    existing = db.execute(
+        text(
+            """
+            SELECT appointment_date, end_time
+            FROM appointments
+            WHERE doctor_id = :doctor_id
+              AND office_id = :office_id
+              AND DATE(appointment_date) = :date
+              AND status IN ('confirmada', 'por_confirmar')
+            """
+        ),
+        {
+            "doctor_id": current_user.id,
+            "office_id": resolved_office_id,
+            "date": target_date,
+        },
+    ).fetchall()
+
+    booked = [
+        {"start": row[0].time(), "end": row[1].time() if row[1] else row[0].time()}
+        for row in existing
+    ]
+
+    available_slots: list[dict] = []
+    for block in time_blocks:
+        start_str = block.get("start_time")
+        end_str = block.get("end_time")
+        if not start_str or not end_str:
+            continue
+        block_start = datetime.strptime(start_str, "%H:%M").time()
+        block_end = datetime.strptime(end_str, "%H:%M").time()
+
+        cursor = datetime.combine(target_date, block_start)
+        block_end_dt = datetime.combine(target_date, block_end)
+
+        while cursor + timedelta(minutes=slot_duration) <= block_end_dt:
+            slot_start = cursor.time()
+            slot_end = (cursor + timedelta(minutes=slot_duration)).time()
+
+            overlaps = any(
+                slot_start < b["end"] and slot_end > b["start"]
+                for b in booked
+            )
+            if not overlaps:
+                time_str = slot_start.strftime("%H:%M")
+                available_slots.append({
+                    "time": time_str,
+                    "display": time_str,
+                    "datetime": cursor.isoformat(),
+                    "duration_minutes": slot_duration,
+                    "available": True,
+                })
+
+            cursor += timedelta(minutes=slot_duration)
+
     return {
         "date": date,
         "available_times": available_slots,
-        "slot_duration_minutes": slot_duration
+        "slot_duration_minutes": slot_duration,
     }
 
 

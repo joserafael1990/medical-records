@@ -400,12 +400,13 @@ from dependencies import get_current_user
 @app.get("/api/appointments/available-times")
 async def get_available_times_for_booking_endpoint(
     date: str = Query(..., description="Date in YYYY-MM-DD format"),
+    office_id: Optional[int] = Query(None, description="Office whose schedule defines availability"),
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
     """Get available appointment times for booking on a specific date - Defined in main to avoid route conflicts"""
     from routes.appointments import get_available_times_for_booking as get_available_times_impl
-    return await get_available_times_impl(date, db, current_user)
+    return await get_available_times_impl(date, db, current_user, office_id=office_id)
 
 app.include_router(appointments_router)
 

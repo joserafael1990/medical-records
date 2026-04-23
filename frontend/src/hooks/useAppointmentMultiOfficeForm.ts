@@ -225,10 +225,16 @@ export const useAppointmentMultiOfficeForm = (
   const currentLoading = loading;
   const currentError = formErrorMessage || error;
 
-  // Function to load available times for a specific date
-  const loadAvailableTimes = useCallback(async (date: string) => {
+  // Function to load available times for a specific date at a given office
+  const loadAvailableTimes = useCallback(async (date: string, officeId?: number | null) => {
     if (!date) {
       logger.debug('No date provided for loading available times', undefined, 'api');
+      setAvailableTimes([]);
+      return [];
+    }
+
+    if (!officeId) {
+      logger.debug('No office selected — cannot load available times', undefined, 'api');
       setAvailableTimes([]);
       return [];
     }
@@ -238,25 +244,23 @@ export const useAppointmentMultiOfficeForm = (
 
     try {
       setLoadingTimes(true);
-      logger.debug('Loading available times for date', { date: dateOnly, originalDate: date }, 'api');
+      logger.debug('Loading available times', { date: dateOnly, officeId }, 'api');
 
-      const response = await apiService.appointments.getAvailableTimesForBooking(dateOnly);
+      const response = await apiService.appointments.getAvailableTimesForBooking(dateOnly, officeId);
       const times = response?.available_times || [];
 
-      logger.debug('Available times loaded', { date: dateOnly, count: times.length, times: times.slice(0, 3) }, 'api');
+      logger.debug('Available times loaded', { date: dateOnly, officeId, count: times.length }, 'api');
 
-      // Always update availableTimes, even if empty
       setAvailableTimes(times);
 
-      // Update lastLoadedDateRef after successful load
-      lastLoadedDateRef.current = dateOnly;
+      // Track the (date, office) pair so date-change can tell when a reload is needed
+      lastLoadedDateRef.current = `${dateOnly}|${officeId}`;
 
       return times;
     } catch (error) {
       logger.error('Error loading available times', error, 'api');
       setAvailableTimes([]);
-      // Reset lastLoadedDateRef on error so it can be retried
-      if (lastLoadedDateRef.current === date.split('T')[0]) {
+      if (lastLoadedDateRef.current === `${date.split('T')[0]}|${officeId}`) {
         lastLoadedDateRef.current = '';
       }
       return [];
@@ -336,9 +340,9 @@ export const useAppointmentMultiOfficeForm = (
           setSelectedTime(timeString);
           setSelectedDate(externalFormData.appointment_date);
 
-          // Load available times for the appointment date
+          // Load available times for the appointment date at this appointment's office
           const dateOnly = externalFormData.appointment_date.split('T')[0];
-          loadAvailableTimes(dateOnly).then(() => {
+          loadAvailableTimes(dateOnly, externalFormData.office_id).then(() => {
             isInitializingRef.current = false;
           });
         } else {
@@ -368,60 +372,55 @@ export const useAppointmentMultiOfficeForm = (
     }
   }, [open, isEditing, externalFormData, loadAvailableTimes]); // Keep dependencies but use ref to prevent re-execution
 
-  // Load available times for default date when dialog opens
-  // This runs after the form is initialized
+  // Seed selectedDate to today when the dialog opens for a new appointment.
+  // The actual availability fetch is owned by the effect below.
   useEffect(() => {
     if (!open || isEditing || hasLoadedDefaultTimesRef.current || !hasInitializedRef.current) {
       if (!open) {
-        // Reset when dialog closes
         hasLoadedDefaultTimesRef.current = false;
         lastLoadedDateRef.current = '';
       }
       return;
     }
 
-    // Mark as loaded immediately to prevent re-execution
     hasLoadedDefaultTimesRef.current = true;
 
     const today = new Date();
     const mexicoTimeString = today.toLocaleString("sv-SE", { timeZone: "America/Mexico_City" });
     const todayString = mexicoTimeString.split(' ')[0];
 
-    logger.debug('Loading times for default date', { date: todayString, hasInitialized: hasInitializedRef.current }, 'ui');
-
-    // Set selected date first
     setSelectedDate(todayString);
-
-    // Reset lastLoadedDateRef to ensure fresh load
-    lastLoadedDateRef.current = '';
-
     const mexicoDate = new Date(mexicoTimeString);
+    setFormData((prevFormData) => ({
+      ...prevFormData,
+      appointment_date: mexicoDate.toISOString(),
+    }));
 
-    // Use functional update to avoid stale closure issues
-    setFormData((prevFormData) => {
-      return {
-        ...prevFormData,
-        appointment_date: mexicoDate.toISOString()
-      };
-    });
+    isInitializingRef.current = false;
+  }, [open, isEditing]);
 
-    // Clear available times first to show loading state
+  // Single source of truth for fetching available times. Re-runs whenever
+  // the selected date OR the selected office changes, so switching
+  // consultorio reloads slots against that office's weekly schedule.
+  useEffect(() => {
+    if (!open) return;
+
+    const officeId = currentFormData.office_id;
+    if (!selectedDate || !officeId) {
+      setAvailableTimes([]);
+      lastLoadedDateRef.current = '';
+      return;
+    }
+
+    const dateOnly = selectedDate.includes('T') ? selectedDate.split('T')[0] : selectedDate;
+    const loadKey = `${dateOnly}|${officeId}`;
+    if (lastLoadedDateRef.current === loadKey) return;
+
     setAvailableTimes([]);
-
-    // Load available times - use requestAnimationFrame to ensure DOM is ready
-    requestAnimationFrame(() => {
-      setTimeout(() => {
-        logger.debug('Executing default date times load', { date: todayString }, 'ui');
-        loadAvailableTimes(todayString).then((times) => {
-          logger.debug('Default date times loaded successfully', { date: todayString, count: times?.length || 0 }, 'ui');
-          isInitializingRef.current = false;
-        }).catch((error) => {
-          logger.error('Error loading default date times', error, 'api');
-          isInitializingRef.current = false;
-        });
-      }, 100);
+    loadAvailableTimes(dateOnly, officeId).catch((error) => {
+      logger.error('Error loading available times in effect', error, 'api');
     });
-  }, [open, isEditing, onFormDataChange, loadAvailableTimes]);
+  }, [open, selectedDate, currentFormData.office_id, loadAvailableTimes]);
 
   // Handle consultation type changes
   // For "Seguimiento" -> always existing patient
@@ -462,7 +461,8 @@ export const useAppointmentMultiOfficeForm = (
     }
   }, [open]);
 
-  // Handle date change and load available times
+  // Handle date change — the actual availability fetch happens in the
+  // useEffect below, which also reacts to office_id changes.
   const handleDateChange = useCallback((newDate: string) => {
     if (!newDate) {
       setSelectedDate('');
@@ -472,47 +472,10 @@ export const useAppointmentMultiOfficeForm = (
       return;
     }
 
-    // Normalize date to YYYY-MM-DD format (remove time component if present)
     const dateOnly = newDate.includes('T') ? newDate.split('T')[0] : newDate;
-
-    // Check if this is the same date that was last loaded
-    const isSameAsLastLoaded = dateOnly === lastLoadedDateRef.current;
-
-    logger.debug('Date change triggered', {
-      newDate,
-      dateOnly,
-      currentSelectedDate: selectedDate,
-      lastLoadedDate: lastLoadedDateRef.current,
-      isSameAsLastLoaded,
-      willReload: true // Always reload
-    }, 'ui');
-
-    // Always update selectedDate and clear selectedTime
     setSelectedDate(dateOnly);
     setSelectedTime('');
-
-    // Always clear availableTimes first to force UI update
-    // This ensures the loading state is visible even if it's the same date
-    setAvailableTimes([]);
-
-    // Always load available times for the selected date, even if it's the same date
-    // This ensures times are refreshed when user returns to today after selecting another date
-    // Update the last loaded date ref after starting the load
-    lastLoadedDateRef.current = dateOnly;
-
-    // Use requestAnimationFrame to ensure state updates are processed before API call
-    requestAnimationFrame(() => {
-      loadAvailableTimes(dateOnly).then((times) => {
-        logger.debug('Times loaded successfully', { date: dateOnly, count: times?.length || 0 }, 'ui');
-      }).catch((error) => {
-        logger.error('Error loading available times in handleDateChange', error, 'api');
-        // Reset last loaded date on error so it can be retried
-        if (lastLoadedDateRef.current === dateOnly) {
-          lastLoadedDateRef.current = '';
-        }
-      });
-    });
-  }, [loadAvailableTimes, selectedDate]);
+  }, []);
 
   // Handle time selection
   const handleTimeChange = useCallback((time: string) => {

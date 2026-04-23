@@ -155,11 +155,16 @@ export class AppointmentService extends ApiBase {
   }
 
   /**
-   * Get available times for booking on a specific date
+   * Get available times for booking on a specific date at a specific office.
+   * When officeId is omitted the backend falls back to the doctor's oldest
+   * active office for legacy callers, but new UI flows should always pass
+   * the selected office so the returned slots match its weekly schedule.
    */
-  async getAvailableTimesForBooking(date: string): Promise<any> {
+  async getAvailableTimesForBooking(date: string, officeId?: number | null): Promise<any> {
     try {
-      const response = await this.api.get<any>(`/api/appointments/available-times?date=${date}`);
+      const params = new URLSearchParams({ date });
+      if (officeId) params.set('office_id', String(officeId));
+      const response = await this.api.get<any>(`/api/appointments/available-times?${params.toString()}`);
       return response.data;
     } catch (error: any) {
       logger.error('Failed to fetch available times for booking', error, 'api');
