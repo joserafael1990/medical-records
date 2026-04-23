@@ -23,7 +23,6 @@ import { Office } from '../../types';
 import {
   Schedule as ScheduleIcon,
   AccessTime as TimeIcon,
-  Save as SaveIcon,
   Refresh as RefreshIcon,
   Close as CloseIcon,
   Add as AddIcon
@@ -91,7 +90,6 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
     loading,
     saving,
     error,
-    success,
     weeklySchedule,
     hasExistingSchedule,
     loadWeeklySchedule,
@@ -424,12 +422,6 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
           </Box>
         )}
 
-        {success && (
-          <Alert severity="success" sx={{ mb: 2 }}>
-            {success}
-          </Alert>
-        )}
-
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px' }}>
             <Typography>Cargando horarios...</Typography>
@@ -485,11 +477,10 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
         </Button>
         <Button
           variant="contained"
-          startIcon={<SaveIcon />}
           onClick={finalHandleSave}
           disabled={loading || saving}
         >
-          Guardar y Cerrar
+          Listo
         </Button>
       </DialogActions>
     </Dialog>

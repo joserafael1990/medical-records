@@ -269,10 +269,12 @@ export const useScheduleConfigForm = (
           [dayKey]: responseData
         }));
       }
-      
-      setSuccess('Horario actualizado exitosamente');
-      showSuccess('Horario actualizado exitosamente');
-      
+
+      // NOTE: no toast here on purpose. This runs on every onBlur of a
+      // TimePicker, every toggle and every block add/remove — one toast
+      // per call produces a flood. The dialog's internal `setSuccess` is
+      // enough feedback; the final explicit "Guardar y Cerrar" surfaces
+      // the user-visible toast.
       if (onScheduleUpdated) {
         onScheduleUpdated();
       }
@@ -282,7 +284,7 @@ export const useScheduleConfigForm = (
       setError(errorMessage);
       showError(errorMessage);
     }
-  }, [officeId, weeklySchedule, loadWeeklySchedule, onScheduleUpdated, showSuccess, showError]);
+  }, [officeId, weeklySchedule, loadWeeklySchedule, onScheduleUpdated, showError]);
 
   const addTimeBlock = useCallback(async (dayIndex: number) => {
     try {
@@ -436,16 +438,17 @@ export const useScheduleConfigForm = (
         }
       }
       
-      setSuccess('Horarios guardados exitosamente');
-      showSuccess('Horarios guardados exitosamente');
-      
+      // No success toast: edits are autosaved as the user interacts with
+      // the dialog, so a final "guardado" toast on close is redundant and
+      // noisy. Errors still surface below.
+
     } catch (err: any) {
       logger.error('Error saving schedules', err, 'api');
       const errorMessage = 'Error al guardar los horarios';
       setError(errorMessage);
       showError(errorMessage);
     }
-  }, [weeklySchedule, updateDaySchedule, showSuccess, showError]);
+  }, [weeklySchedule, updateDaySchedule, showError]);
 
   const handleClose = useCallback(() => {
     setError(null);
