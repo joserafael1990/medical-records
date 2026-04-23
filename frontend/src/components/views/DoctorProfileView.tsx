@@ -16,7 +16,6 @@ import {
 } from '@mui/material';
 import {
   Person as PersonIcon,
-  Schedule as ScheduleIcon,
   Add as AddIcon,
   Edit as EditIcon,
   LocationOn as LocationIcon
@@ -31,7 +30,6 @@ import { ProfileHeader } from '../profile/ProfileHeader';
 import { PersonalInfoCard } from '../profile/PersonalInfoCard';
 import { ProfessionalInfoCard } from '../profile/ProfessionalInfoCard';
 import { OfficeCard } from '../profile/OfficeCard';
-import { OfficeSchedulePanel } from '../profile/OfficeSchedulePanel';
 import IntakePreferencesPanel from '../profile/IntakePreferencesPanel';
 import SignatureProfileSection from './SignatureProfileSection';
 
@@ -217,51 +215,18 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
                 </Button>
               </Box>
             ) : (
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(auto-fit, minmax(300px, 1fr))' }, gap: 2 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(auto-fit, minmax(320px, 1fr))' }, gap: 2 }}>
                 {offices.map((office) => (
                   <OfficeCard
                     key={office.id}
                     office={office}
                     onEdit={handleEditOffice}
                     onDelete={handleDeleteOffice}
+                    onEditSchedule={(officeId) => openScheduleDialogFor(officeId)}
+                    scheduleRefreshKey={scheduleRefreshTick}
                   />
                 ))}
               </Box>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Schedule Management — one panel per office so it's always clear
-            which weekly schedule belongs to which consultorio. */}
-        <Card id="schedule" sx={{ mt: 3, scrollMarginTop: 24 }}>
-          <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <ScheduleIcon color="primary" />
-                Horarios por consultorio
-              </Typography>
-            </Box>
-
-            {officesLoading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-                <CircularProgress />
-              </Box>
-            ) : offices.length === 0 ? (
-              <Box sx={{ textAlign: 'center', p: 3 }}>
-                <Typography variant="body1" color="text.secondary" gutterBottom>
-                  Primero agrega un consultorio para poder configurar horarios.
-                </Typography>
-              </Box>
-            ) : (
-              <>
-                {offices.map((office: any) => (
-                  <OfficeSchedulePanel
-                    key={`${office.id}:${scheduleRefreshTick}`}
-                    office={office}
-                    onEdit={(officeId) => openScheduleDialogFor(officeId)}
-                  />
-                ))}
-              </>
             )}
           </CardContent>
         </Card>
@@ -294,9 +259,9 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
           setScheduleDialogOfficeId(null);
         }}
         onScheduleUpdated={() => {
-          // Bumping forces every OfficeSchedulePanel to remount and refetch,
-          // so the UI reflects the saved schedule immediately for all
-          // offices (the edited one and any copy-source).
+          // Bumping remounts every OfficeCard so each useScheduleData refetches
+          // and the UI reflects the saved schedule immediately for all offices
+          // (the edited one and any copy-source).
           setScheduleRefreshTick((t) => t + 1);
           refetchSchedule();
         }}

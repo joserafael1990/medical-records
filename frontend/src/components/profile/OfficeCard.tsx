@@ -10,15 +10,30 @@ import {
     ListItem,
     ListItemIcon,
     ListItemText,
-    Button
+    Button,
+    Divider,
+    CircularProgress
 } from '@mui/material';
 import {
     LocationOn as LocationIcon,
     Phone as PhoneIcon,
     Delete as DeleteIcon,
     Language as LanguageIcon,
-    AccessTime as AccessTimeIcon
+    AccessTime as AccessTimeIcon,
+    Schedule as ScheduleIcon,
+    Edit as EditIcon
 } from '@mui/icons-material';
+import { useScheduleData } from '../../hooks/useScheduleData';
+
+const DAY_LABELS: Record<string, string> = {
+    monday: 'Lun',
+    tuesday: 'Mar',
+    wednesday: 'Mié',
+    thursday: 'Jue',
+    friday: 'Vie',
+    saturday: 'Sáb',
+    sunday: 'Dom',
+};
 
 interface Office {
     id: number;
@@ -36,9 +51,30 @@ interface OfficeCardProps {
     office: Office;
     onEdit: (office: Office) => void;
     onDelete: (office: Office) => void;
+    onEditSchedule?: (officeId: number) => void;
+    /** Bumped by the parent after a schedule save to force a refetch here. */
+    scheduleRefreshKey?: number;
 }
 
-export const OfficeCard: React.FC<OfficeCardProps> = ({ office, onEdit, onDelete }) => {
+export const OfficeCard: React.FC<OfficeCardProps> = ({ office, onEdit, onDelete, onEditSchedule, scheduleRefreshKey }) => {
+    return (
+        <OfficeCardInner
+            key={`${office.id}:${scheduleRefreshKey ?? 0}`}
+            office={office}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onEditSchedule={onEditSchedule}
+        />
+    );
+};
+
+const OfficeCardInner: React.FC<Omit<OfficeCardProps, 'scheduleRefreshKey'>> = ({ office, onEdit, onDelete, onEditSchedule }) => {
+    const { scheduleData, loading: scheduleLoading } = useScheduleData(office.id);
+    const activeDays = scheduleData
+        ? (Object.entries(scheduleData) as [string, any][])
+              .filter(([, day]) => day && day.is_active)
+              .map(([key, day]) => ({ key, day }))
+        : [];
     return (
         <Card
             variant="outlined"
@@ -184,6 +220,70 @@ export const OfficeCard: React.FC<OfficeCardProps> = ({ office, onEdit, onDelete
                     />
                 </ListItem>
             </List>
+
+            {onEditSchedule && (
+                <>
+                    <Divider sx={{ my: 1.5 }} />
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, gap: 1, flexWrap: 'wrap' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <ScheduleIcon color="primary" fontSize="small" />
+                            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                Horario
+                            </Typography>
+                        </Box>
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<EditIcon />}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onEditSchedule(office.id);
+                            }}
+                        >
+                            Editar horario
+                        </Button>
+                    </Box>
+
+                    {scheduleLoading ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
+                            <CircularProgress size={20} />
+                        </Box>
+                    ) : activeDays.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary" sx={{ pl: 0.5 }}>
+                            Sin horarios configurados.
+                        </Typography>
+                    ) : (
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                            {activeDays.map(({ key, day }) => {
+                                const blocks: { start_time: string; end_time: string }[] =
+                                    (day.time_blocks && day.time_blocks.length > 0)
+                                        ? day.time_blocks
+                                        : (day.start_time && day.end_time
+                                            ? [{ start_time: day.start_time, end_time: day.end_time }]
+                                            : []);
+                                return (
+                                    <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                        <Typography variant="body2" sx={{ minWidth: 36, fontWeight: 600 }}>
+                                            {DAY_LABELS[key] ?? key}
+                                        </Typography>
+                                        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                                            {blocks.map((b, i) => (
+                                                <Chip
+                                                    key={i}
+                                                    label={`${b.start_time} – ${b.end_time}`}
+                                                    size="small"
+                                                    variant="outlined"
+                                                    sx={{ backgroundColor: 'background.paper' }}
+                                                />
+                                            ))}
+                                        </Box>
+                                    </Box>
+                                );
+                            })}
+                        </Box>
+                    )}
+                </>
+            )}
         </Card>
     );
 };
