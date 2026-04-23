@@ -32,6 +32,7 @@ import {
 import { ApiService } from '../../services/ApiService';
 import { License, LicenseStatus, DoctorLicenseRow } from '../../types/license';
 import { LicenseForm } from './LicenseForm';
+import { DoctorDetailsDialog } from './DoctorDetailsDialog';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { TableSkeleton } from '../common/TableSkeleton';
 import { formatDateOnly } from '../../utils/dateHelpers';
@@ -49,6 +50,7 @@ export const LicenseManagement: React.FC = () => {
     status?: string;
     license_type?: string;
   }>({});
+  const [detailsDoctorId, setDetailsDoctorId] = useState<number | null>(null);
 
   const loadRows = async () => {
     setLoading(true);
@@ -200,8 +202,27 @@ export const LicenseManagement: React.FC = () => {
               rows.map(({ doctor, license }) => (
                 <TableRow key={doctor.id}>
                   <TableCell>
-                    <Typography variant="body2">{doctor.name}</Typography>
-                    <Typography variant="caption" color="text.secondary">{doctor.email}</Typography>
+                    <Tooltip title="Ver datos del doctor">
+                      <Typography
+                        variant="body2"
+                        component="button"
+                        onClick={() => setDetailsDoctorId(doctor.id)}
+                        sx={{
+                          background: 'none',
+                          border: 'none',
+                          p: 0,
+                          m: 0,
+                          textAlign: 'left',
+                          color: 'primary.main',
+                          cursor: 'pointer',
+                          font: 'inherit',
+                          '&:hover': { textDecoration: 'underline' }
+                        }}
+                      >
+                        {doctor.name}
+                      </Typography>
+                    </Tooltip>
+                    <Typography variant="caption" color="text.secondary" display="block">{doctor.email}</Typography>
                   </TableCell>
                   <TableCell>{formatDateTime(doctor.last_login)}</TableCell>
                   {license ? (
@@ -295,6 +316,12 @@ export const LicenseManagement: React.FC = () => {
           />
         </DialogContent>
       </Dialog>
+
+      <DoctorDetailsDialog
+        open={detailsDoctorId !== null}
+        doctorId={detailsDoctorId}
+        onClose={() => setDetailsDoctorId(null)}
+      />
     </Box>
   );
 };

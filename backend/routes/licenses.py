@@ -14,6 +14,7 @@ from logger import get_logger
 import crud
 import schemas
 from services.license_service import LicenseService
+from services.doctor_service import DoctorService
 
 api_logger = get_logger("medical_records.api")
 router = APIRouter(prefix="/api/licenses", tags=["licenses"])
@@ -183,11 +184,29 @@ def get_doctor_license(
 ):
     """Get current license for a specific doctor"""
     license = LicenseService.get_current_license(db, doctor_id)
-    
+
     if not license:
         raise HTTPException(status_code=404, detail="No active license found for this doctor")
-    
+
     return license
+
+
+@router.get("/doctor/{doctor_id}/profile")
+def get_doctor_profile_for_license_admin(
+    doctor_id: int,
+    db: Session = Depends(get_db),
+    current_user: Person = Depends(get_current_user)
+):
+    """Full profile of a doctor, to display from the License Management grid."""
+    doctor = db.query(Person).filter(
+        Person.id == doctor_id,
+        Person.person_type == 'doctor'
+    ).first()
+
+    if not doctor:
+        raise HTTPException(status_code=404, detail="Doctor not found")
+
+    return DoctorService.get_doctor_profile(db, doctor_id)
 
 @router.put("/{license_id}", response_model=schemas.LicenseResponse)
 def update_license(
