@@ -19,6 +19,7 @@ import { LicenseService } from '../../services/licenses/LicenseService';
 import { License, LicenseCreate, LicenseUpdate, LicenseType, LicenseStatus } from '../../types/license';
 import { parseApiError } from '../../utils/errorHandling';
 import { useSnackbar } from '../../contexts/SnackbarContext';
+import { parseDateOnly, toDateOnlyString } from '../../utils/dateHelpers';
 
 const apiService = new ApiService();
 const licenseService = new LicenseService();
@@ -208,8 +209,8 @@ export const LicenseForm: React.FC<LicenseFormProps> = ({
           <Grid size={{ xs: 12, sm: 6, md: license ? 3 : 2.4 }}>
             <DatePicker
               label="Fecha de Inicio *"
-              value={formData.start_date ? new Date(formData.start_date) : null}
-              onChange={(date) => setFormData({ ...formData, start_date: date?.toISOString().split('T')[0] || '' })}
+              value={parseDateOnly(formData.start_date)}
+              onChange={(date) => setFormData({ ...formData, start_date: toDateOnlyString(date) })}
               slotProps={{
                 textField: {
                   fullWidth: true,
@@ -222,8 +223,8 @@ export const LicenseForm: React.FC<LicenseFormProps> = ({
           <Grid size={{ xs: 12, sm: 6, md: license ? 3 : 2.4 }}>
             <DatePicker
               label="Fecha de Expiración *"
-              value={formData.expiration_date ? new Date(formData.expiration_date) : null}
-              onChange={(date) => setFormData({ ...formData, expiration_date: date?.toISOString().split('T')[0] || '' })}
+              value={parseDateOnly(formData.expiration_date)}
+              onChange={(date) => setFormData({ ...formData, expiration_date: toDateOnlyString(date) })}
               slotProps={{
                 textField: {
                   fullWidth: true,
@@ -237,8 +238,8 @@ export const LicenseForm: React.FC<LicenseFormProps> = ({
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <DatePicker
               label="Fecha de Pago"
-              value={formData.payment_date ? new Date(formData.payment_date) : null}
-              onChange={(date) => setFormData({ ...formData, payment_date: date?.toISOString().split('T')[0] || null })}
+              value={parseDateOnly(formData.payment_date)}
+              onChange={(date) => setFormData({ ...formData, payment_date: toDateOnlyString(date) || null })}
               slotProps={{
                 textField: {
                   fullWidth: true

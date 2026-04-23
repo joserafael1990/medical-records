@@ -5,6 +5,7 @@ import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
 import { GENDER_CODE_OPTIONS } from '../../utils/gender';
+import { parseDateOnly, toDateOnlyString } from '../../utils/dateHelpers';
 
 interface BasicInformationSectionProps {
     formData: {
@@ -47,14 +48,10 @@ export const BasicInformationSection: React.FC<BasicInformationSectionProps> = (
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
                     <DatePicker
                         label="Fecha de Nacimiento - opcional"
-                        value={formData.birth_date ? new Date(formData.birth_date) : null}
+                        value={parseDateOnly(formData.birth_date)}
                         onChange={(newValue) => {
-                            if (newValue) {
-                                const formattedDate = newValue.toISOString().split('T')[0];
-                                onChange('birth_date')({ target: { value: formattedDate } } as any);
-                            } else {
-                                onChange('birth_date')({ target: { value: '' } } as any);
-                            }
+                            const formattedDate = toDateOnlyString(newValue);
+                            onChange('birth_date')({ target: { value: formattedDate } } as any);
                         }}
                         slotProps={{
                             textField: {

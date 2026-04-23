@@ -13,6 +13,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
 import { DocumentSelector } from '../../common/DocumentSelector';
 import { PhoneNumberInput } from '../../common/PhoneNumberInput';
+import { parseDateOnly, toDateOnlyString } from '../../../utils/dateHelpers';
 
 interface PersonalInfoStepProps {
   name: string;
@@ -94,15 +95,10 @@ export const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({
           <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
             <DatePicker
               label="Fecha de Nacimiento *"
-              value={birthDate ? new Date(birthDate) : null}
+              value={parseDateOnly(birthDate)}
               maxDate={new Date()}
               onChange={(newValue) => {
-                if (newValue) {
-                  const dateValue = newValue.toISOString().split('T')[0];
-                  onBirthDateChange(dateValue);
-                } else {
-                  onBirthDateChange('');
-                }
+                onBirthDateChange(toDateOnlyString(newValue));
               }}
               slotProps={{
                 textField: {
