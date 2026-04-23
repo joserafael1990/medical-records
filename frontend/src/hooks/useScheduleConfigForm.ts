@@ -38,6 +38,7 @@ export const DAYS_OF_WEEK = [
 
 export interface UseScheduleConfigFormProps {
   open: boolean;
+  officeId?: number | null;
   onScheduleUpdated?: () => void;
 }
 
@@ -50,6 +51,7 @@ export interface UseScheduleConfigFormReturn {
   hasExistingSchedule: boolean;
   loadWeeklySchedule: () => Promise<void>;
   generateDefaultSchedule: () => Promise<void>;
+  copyScheduleFromOffice: (sourceOfficeId: number) => Promise<void>;
   updateDaySchedule: (dayIndex: number, scheduleData: Partial<ScheduleTemplate>, shouldReload?: boolean) => Promise<void>;
   addTimeBlock: (dayIndex: number) => Promise<void>;
   removeTimeBlock: (dayIndex: number, blockIndex: number) => Promise<void>;
@@ -75,8 +77,10 @@ const getDefaultSchedule = (): WeeklySchedule => ({
 export const useScheduleConfigForm = (
   props: UseScheduleConfigFormProps
 ): UseScheduleConfigFormReturn => {
-  const { open, onScheduleUpdated } = props;
+  const { open, officeId, onScheduleUpdated } = props;
   const { showSuccess, showError } = useToast();
+
+  const officeQuery = officeId ? `?office_id=${officeId}` : '';
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -90,8 +94,8 @@ export const useScheduleConfigForm = (
       setLoading(true);
       setError(null);
       
-      logger.debug('Loading weekly schedule', undefined, 'api');
-      const response = await apiService.appointments.api.get('/api/schedule/templates/weekly');
+      logger.debug('Loading weekly schedule', { officeId }, 'api');
+      const response = await apiService.appointments.api.get(`/api/schedule/templates/weekly${officeQuery}`);
       
       const responseData = response.data || response;
       const defaultSchedule = getDefaultSchedule();
@@ -114,15 +118,15 @@ export const useScheduleConfigForm = (
     } finally {
       setLoading(false);
     }
-  }, [showError]);
+  }, [officeQuery, officeId, showError]);
 
   const generateDefaultSchedule = useCallback(async () => {
     try {
       setSaving(true);
       setError(null);
       
-      logger.debug('Generating default schedule', undefined, 'api');
-      const response = await apiService.appointments.api.post('/api/schedule/generate-weekly-template');
+      logger.debug('Generating default schedule', { officeId }, 'api');
+      const response = await apiService.appointments.api.post(`/api/schedule/generate-weekly-template${officeQuery}`);
       
       setWeeklySchedule(response.data);
       
@@ -143,7 +147,50 @@ export const useScheduleConfigForm = (
     } finally {
       setSaving(false);
     }
-  }, [showSuccess, showError]);
+  }, [officeQuery, officeId, showSuccess, showError]);
+
+  const copyScheduleFromOffice = useCallback(async (sourceOfficeId: number) => {
+    if (!officeId) {
+      setError('Primero selecciona un consultorio destino');
+      return;
+    }
+    if (sourceOfficeId === officeId) return;
+
+    try {
+      setSaving(true);
+      setError(null);
+
+      const response = await apiService.appointments.api.get(
+        `/api/schedule/templates/weekly?office_id=${sourceOfficeId}`
+      );
+      const sourceSchedule = response.data || response;
+
+      // POST each day into the target office. The backend upserts on
+      // (doctor, office, day), so this overwrites anything previously set.
+      for (const dayKey of Object.keys(sourceSchedule)) {
+        const day = sourceSchedule[dayKey];
+        if (!day || !day.is_active) continue;
+
+        await apiService.appointments.api.post('/api/schedule/templates', {
+          office_id: officeId,
+          day_of_week: day.day_of_week,
+          time_blocks: day.time_blocks || [],
+          is_active: true,
+        });
+      }
+
+      await loadWeeklySchedule();
+      setSuccess('Horario copiado correctamente');
+      showSuccess('Horario copiado correctamente');
+      if (onScheduleUpdated) onScheduleUpdated();
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.detail || 'Error copiando horario';
+      setError(errorMessage);
+      showError(errorMessage);
+    } finally {
+      setSaving(false);
+    }
+  }, [officeId, loadWeeklySchedule, onScheduleUpdated, showSuccess, showError]);
 
   const updateDaySchedule = useCallback(async (
     dayIndex: number,
@@ -174,7 +221,7 @@ export const useScheduleConfigForm = (
           await loadWeeklySchedule();
         }
       } else {
-        logger.debug('Creating new schedule', { dayIndex }, 'api');
+        logger.debug('Creating new schedule', { dayIndex, officeId }, 'api');
         const newSchedule = {
           day_of_week: dayIndex,
           time_blocks: [
@@ -184,9 +231,10 @@ export const useScheduleConfigForm = (
             }
           ],
           is_active: true,
+          ...(officeId ? { office_id: officeId } : {}),
           ...scheduleData
         };
-        
+
         const response = await apiService.appointments.api.post('/api/schedule/templates', newSchedule);
         const responseData = response.data || response;
         
@@ -382,7 +430,7 @@ export const useScheduleConfigForm = (
     if (open) {
       loadWeeklySchedule();
     }
-  }, [open, loadWeeklySchedule]);
+  }, [open, officeId, loadWeeklySchedule]);
 
   return {
     loading,
@@ -393,6 +441,7 @@ export const useScheduleConfigForm = (
     hasExistingSchedule,
     loadWeeklySchedule,
     generateDefaultSchedule,
+    copyScheduleFromOffice,
     updateDaySchedule,
     addTimeBlock,
     removeTimeBlock,

@@ -182,10 +182,12 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
     }
   }, [patientId, doctorProfile?.id]);
 
-  // Load available times when date is selected
+  // Load available times when date or office changes — slots are scoped
+  // to the selected office's weekly schedule.
   useEffect(() => {
     const loadTimes = async () => {
-      if (!selectedDate) {
+      const officeId = appointmentFormData.office_id;
+      if (!selectedDate || !officeId) {
         setAvailableTimes([]);
         return;
       }
@@ -193,7 +195,7 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
       try {
         setLoadingTimes(true);
         const dateOnly = selectedDate.split('T')[0];
-        const response = await apiService.appointments.getAvailableTimesForBooking(dateOnly);
+        const response = await apiService.appointments.getAvailableTimesForBooking(dateOnly, officeId);
         setAvailableTimes(response.available_times || []);
       } catch (err) {
         logger.error('Error loading available times', err, 'api');
@@ -204,7 +206,7 @@ const ScheduleAppointmentSection: React.FC<ScheduleAppointmentSectionProps> = ({
     };
 
     loadTimes();
-  }, [selectedDate]);
+  }, [selectedDate, appointmentFormData.office_id]);
 
   const handleSave = async () => {
     if (!patientId || patientId === 0) {

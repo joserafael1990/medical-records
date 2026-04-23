@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -11,9 +11,15 @@ import {
   CardContent,
   Alert,
   Chip,
-  IconButton
+  IconButton,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import { Grid } from '@mui/material';
+import { apiService } from '../../services';
+import { Office } from '../../types';
 import {
   Schedule as ScheduleIcon,
   AccessTime as TimeIcon,
@@ -43,8 +49,38 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
   onSave,
   onScheduleUpdated
 }) => {
+  const [offices, setOffices] = useState<Office[]>([]);
+  const [selectedOfficeId, setSelectedOfficeId] = useState<number | null>(null);
+  const [officesError, setOfficesError] = useState<string | null>(null);
+
+  // Load doctor's offices when the dialog opens so the user can pick which
+  // consultorio to configure. Falls back to the first one if none is
+  // selected yet.
+  useEffect(() => {
+    if (!open) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await apiService.offices.getOffices();
+        if (cancelled) return;
+        const list = (data as Office[]) || [];
+        setOffices(list);
+        setOfficesError(null);
+        setSelectedOfficeId((prev) => prev ?? (list.length > 0 ? list[0].id : null));
+      } catch (err) {
+        if (!cancelled) setOfficesError('Error al cargar consultorios');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
   const formHook = useScheduleConfigForm({
     open,
+    officeId: selectedOfficeId,
     onScheduleUpdated
   });
 
@@ -57,6 +93,7 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
     hasExistingSchedule,
     loadWeeklySchedule,
     generateDefaultSchedule,
+    copyScheduleFromOffice,
     addTimeBlock,
     removeTimeBlock,
     updateTimeBlock,
@@ -67,6 +104,15 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
     handleSave,
     handleClose
   } = formHook;
+
+  // Offices the user could copy from: any other office that already has
+  // at least one active day configured. We don't know that from here alone,
+  // so we offer all other offices and let the copy operation no-op if the
+  // source is empty.
+  const otherOffices = useMemo(
+    () => offices.filter((o) => o.id !== selectedOfficeId),
+    [offices, selectedOfficeId]
+  );
 
   // Auto-scroll to error when it appears
   const { errorRef } = useScrollToErrorInDialog(error);
@@ -347,6 +393,28 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
       </DialogTitle>
 
       <DialogContent>
+        {offices.length > 1 && (
+          <FormControl fullWidth sx={{ mb: 2 }} size="small">
+            <InputLabel id="schedule-office-select-label">Consultorio</InputLabel>
+            <Select
+              labelId="schedule-office-select-label"
+              label="Consultorio"
+              value={selectedOfficeId ?? ''}
+              onChange={(e) => setSelectedOfficeId(Number(e.target.value))}
+            >
+              {offices.map((office) => (
+                <MenuItem key={office.id} value={office.id}>
+                  {office.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )}
+
+        {officesError && (
+          <Alert severity="error" sx={{ mb: 2 }}>{officesError}</Alert>
+        )}
+
         {error && (
           <Box ref={errorRef} sx={{ mb: 2, p: 2, bgcolor: 'error.main', borderRadius: 1 }}>
             <Typography color="white">{error}</Typography>
@@ -368,19 +436,32 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
             {!hasExistingSchedule && (
               <Alert severity="info" sx={{ mb: 3 }}>
                 <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>No tienes horarios configurados aún.</strong>
+                  <strong>Este consultorio no tiene horarios configurados aún.</strong>
                 </Typography>
                 <Typography variant="body2" sx={{ mb: 2 }}>
-                  Puedes generar un horario por defecto o configurar manualmente cada día de la semana.
+                  Elige cómo empezar:
                 </Typography>
-                <Button
-                  variant="contained"
-                  size="small"
-                  onClick={generateDefaultSchedule}
-                  disabled={saving}
-                >
-                  Generar Horario por Defecto
-                </Button>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    onClick={generateDefaultSchedule}
+                    disabled={saving}
+                  >
+                    Generar horario por defecto (L–V 9–18)
+                  </Button>
+                  {otherOffices.map((office) => (
+                    <Button
+                      key={office.id}
+                      variant="outlined"
+                      size="small"
+                      onClick={() => copyScheduleFromOffice(office.id)}
+                      disabled={saving}
+                    >
+                      Copiar horario de {office.name}
+                    </Button>
+                  ))}
+                </Box>
               </Alert>
             )}
 

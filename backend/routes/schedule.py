@@ -3,7 +3,7 @@ Schedule management endpoints
 Migrated from main_clean_english.py to improve code organization
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
 from datetime import datetime, date, timedelta, time
@@ -27,30 +27,57 @@ def now_cdmx():
 router = APIRouter(prefix="/api", tags=["schedule"])
 
 
+def _resolve_target_office_id(db: Session, doctor_id: int, requested_office_id: Optional[int]) -> Optional[int]:
+    """Resolve which office a schedule operation should target.
+
+    When the caller specifies an office, validate ownership and return it.
+    Otherwise fall back to the doctor's oldest active office so legacy
+    callers that don't yet pass office_id keep working.
+    """
+    if requested_office_id is not None:
+        row = db.execute(
+            text("""
+                SELECT id FROM offices
+                WHERE id = :office_id AND doctor_id = :doctor_id AND is_active = TRUE
+                LIMIT 1
+            """),
+            {"office_id": requested_office_id, "doctor_id": doctor_id},
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Office not found for this doctor")
+        return row[0]
+
+    row = db.execute(
+        text("""
+            SELECT id FROM offices
+            WHERE doctor_id = :doctor_id AND is_active = TRUE
+            ORDER BY created_at ASC, id ASC
+            LIMIT 1
+        """),
+        {"doctor_id": doctor_id},
+    ).fetchone()
+    return row[0] if row else None
+
+
 @router.post("/schedule/generate-weekly-template")
 async def generate_weekly_template(
+    office_id: Optional[int] = Query(None, description="Office to scope the template to"),
     current_user: Person = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Generate default weekly schedule template for doctor"""
     try:
-        api_logger.info("Generating default weekly schedule template", doctor_id=current_user.id)
-        
-        # Get doctor's first active office (or create one if none exists)
-        office_result = db.execute(text("""
-            SELECT id FROM offices 
-            WHERE doctor_id = :doctor_id AND is_active = TRUE 
-            LIMIT 1
-        """), {'doctor_id': current_user.id})
-        office_row = office_result.fetchone()
-        office_id = office_row[0] if office_row else None
-        
-        # If no office exists, create a default one
-        if not office_id:
-            # Get office data from doctor or use defaults
+        api_logger.info("Generating default weekly schedule template", doctor_id=current_user.id, office_id=office_id)
+
+        # Resolve target office (validates ownership if caller supplied one).
+        resolved_office_id = _resolve_target_office_id(db, current_user.id, office_id)
+
+        # If no office exists yet, create a default one so the rest of the
+        # flow has a valid FK to attach templates to.
+        if not resolved_office_id:
             office_name = getattr(current_user, 'office_name', 'Consultorio Principal') or 'Consultorio Principal'
             office_address = getattr(current_user, 'office_address', '') or ''
-            
+
             office_insert = db.execute(text("""
                 INSERT INTO offices (doctor_id, name, address, is_active, created_at, updated_at)
                 VALUES (:doctor_id, :name, :address, TRUE, NOW(), NOW())
@@ -60,9 +87,11 @@ async def generate_weekly_template(
                 'name': office_name,
                 'address': office_address
             })
-            office_id = office_insert.fetchone()[0]
+            resolved_office_id = office_insert.fetchone()[0]
             db.commit()
-            api_logger.info("Created default office for schedule", doctor_id=current_user.id, office_id=office_id)
+            api_logger.info("Created default office for schedule", doctor_id=current_user.id, office_id=resolved_office_id)
+
+        office_id = resolved_office_id
         
         # Default schedule: Monday to Friday 9:00-18:00 with one time block
         default_time_blocks = [{"start_time": "09:00", "end_time": "18:00"}]
@@ -74,12 +103,12 @@ async def generate_weekly_template(
         for day_index in range(5):  # 0-4 = Monday to Friday
             day_name = day_names[day_index]
             
-            # Check if schedule already exists for this day
+            # Check if schedule already exists for this (doctor, office, day)
             existing = db.execute(text("""
-                SELECT id FROM schedule_templates 
-                WHERE doctor_id = :doctor_id 
-                AND day_of_week = :day_of_week 
-                AND (office_id = :office_id OR office_id IS NULL)
+                SELECT id FROM schedule_templates
+                WHERE doctor_id = :doctor_id
+                  AND day_of_week = :day_of_week
+                  AND office_id = :office_id
                 LIMIT 1
             """), {
                 'doctor_id': current_user.id,
@@ -169,21 +198,32 @@ async def get_schedule_templates(current_user: Person = Depends(get_current_user
 
 @router.get("/schedule/templates/weekly")
 async def get_weekly_schedule_templates(
+    office_id: Optional[int] = Query(None, description="Office whose weekly schedule to load"),
     current_user: Person = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get doctor's weekly schedule templates"""
     try:
-        api_logger.info("Getting weekly schedule templates", doctor_id=current_user.id)
-        
-        # Query templates from database using SQL
+        api_logger.info("Getting weekly schedule templates", doctor_id=current_user.id, office_id=office_id)
+
+        resolved_office_id = _resolve_target_office_id(db, current_user.id, office_id)
+
+        if not resolved_office_id:
+            return {
+                "monday": None, "tuesday": None, "wednesday": None,
+                "thursday": None, "friday": None, "saturday": None, "sunday": None,
+            }
+
+        # Query templates for this specific office. With the per-office
+        # uniqueness migration each (doctor, office, day) yields at most
+        # one row.
         result = db.execute(text("""
             SELECT id, day_of_week, start_time, end_time, is_active, time_blocks
-            FROM schedule_templates 
-            WHERE doctor_id = :doctor_id
+            FROM schedule_templates
+            WHERE doctor_id = :doctor_id AND office_id = :office_id
             ORDER BY day_of_week
-        """), {"doctor_id": current_user.id})
-        
+        """), {"doctor_id": current_user.id, "office_id": resolved_office_id})
+
         templates = result.fetchall()
         
         # Transform to frontend format
@@ -252,19 +292,23 @@ async def create_schedule_template(
     """Create or update schedule template"""
     try:
         api_logger.info("Creating schedule template", doctor_id=current_user.id, template_data=template_data)
-        
-        # Get doctor's first office (required for schedule template)
-        office = db.query(Office).filter(
-            Office.doctor_id == current_user.id,
-            Office.is_active == True
-        ).first()
-        
-        if not office:
+
+        # Resolve office: prefer payload's office_id, fall back to doctor's
+        # oldest active office for legacy clients that still omit it.
+        requested_office_id = template_data.get('office_id')
+        resolved_office_id = _resolve_target_office_id(
+            db, current_user.id,
+            int(requested_office_id) if requested_office_id else None,
+        )
+
+        if not resolved_office_id:
             raise HTTPException(
                 status_code=400,
                 detail="Doctor must have at least one active office to create schedule templates"
             )
-        
+
+        office = db.query(Office).filter(Office.id == resolved_office_id).first()
+
         # Extract data
         day_of_week = template_data.get('day_of_week', 0)
         is_active = template_data.get('is_active', True)
@@ -284,12 +328,20 @@ async def create_schedule_template(
         
         # Prepare time_blocks JSONB
         time_blocks_json = json.dumps(time_blocks) if time_blocks else '[]'
-        
-        # Create template in database
+
+        # Upsert on (doctor, office, day) so repeated POSTs from the UI
+        # simply update the existing row instead of hitting the unique
+        # index.
         result = db.execute(text("""
-            INSERT INTO schedule_templates 
+            INSERT INTO schedule_templates
             (doctor_id, office_id, day_of_week, start_time, end_time, is_active, time_blocks, created_at, updated_at)
             VALUES (:doctor_id, :office_id, :day_of_week, :start_time, :end_time, :is_active, :time_blocks, NOW(), NOW())
+            ON CONFLICT (doctor_id, office_id, day_of_week) DO UPDATE SET
+                start_time = EXCLUDED.start_time,
+                end_time = EXCLUDED.end_time,
+                is_active = EXCLUDED.is_active,
+                time_blocks = EXCLUDED.time_blocks,
+                updated_at = NOW()
             RETURNING id
         """), {
             "doctor_id": current_user.id,
@@ -300,7 +352,7 @@ async def create_schedule_template(
             "is_active": is_active,
             "time_blocks": time_blocks_json
         })
-        
+
         template_id = result.fetchone()[0]
         db.commit()
         
@@ -422,6 +474,7 @@ async def update_schedule_template(
 @router.get("/schedule/available-times")
 async def get_available_times(
     date: str,
+    office_id: Optional[int] = Query(None, description="Office whose schedule defines availability"),
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user)
 ):
@@ -429,20 +482,27 @@ async def get_available_times(
     try:
         # Use current user's doctor_id
         doctor_id = current_user.id
-        api_logger.info("Getting available times", doctor_id=doctor_id, date=date)
-        
+        api_logger.info("Getting available times", doctor_id=doctor_id, date=date, office_id=office_id)
+
+        resolved_office_id = _resolve_target_office_id(db, doctor_id, office_id)
+        if not resolved_office_id:
+            return {"available_times": []}
+
         # Parse the date and get day of week (0=Monday, 6=Sunday)
         target_date = datetime.strptime(date, "%Y-%m-%d").date()
         day_of_week = target_date.weekday()  # 0=Monday, 6=Sunday
-        
-        # Get schedule template for this day
+
+        # Get schedule template for this day scoped to the target office
         schedule_result = db.execute(
             text("""
                 SELECT start_time, end_time, time_blocks
                 FROM schedule_templates
-                WHERE doctor_id = :doctor_id AND day_of_week = :day_of_week AND is_active = true
+                WHERE doctor_id = :doctor_id
+                  AND office_id = :office_id
+                  AND day_of_week = :day_of_week
+                  AND is_active = true
             """),
-            {"doctor_id": doctor_id, "day_of_week": day_of_week}
+            {"doctor_id": doctor_id, "office_id": resolved_office_id, "day_of_week": day_of_week}
         ).fetchone()
         if not schedule_result:
             api_logger.info("No schedule found for this day", doctor_id=doctor_id, day_of_week=day_of_week)
@@ -485,27 +545,27 @@ async def get_available_times(
             api_logger.info("No time blocks configured for this day", doctor_id=doctor_id, day_of_week=day_of_week)
             return {"available_times": []}
         
-        # Get doctor's timezone from offices table
+        # Get doctor's timezone from the target office
         timezone_result = db.execute(
             text("""
                 SELECT timezone FROM offices
-                WHERE doctor_id = :doctor_id AND is_active = TRUE
-                LIMIT 1
+                WHERE id = :office_id
             """),
-            {"doctor_id": doctor_id}
+            {"office_id": resolved_office_id}
         ).fetchone()
         doctor_timezone = timezone_result[0] if timezone_result and timezone_result[0] else 'America/Mexico_City'
 
-        # Get existing appointments for this date
+        # Get existing appointments in the same office for this date
         existing_appointments = db.execute(
             text("""
                 SELECT appointment_date, end_time
                 FROM appointments
                 WHERE doctor_id = :doctor_id
-                AND DATE(appointment_date) = :date
-                AND status IN ('confirmada', 'por_confirmar')
+                  AND office_id = :office_id
+                  AND DATE(appointment_date) = :date
+                  AND status IN ('confirmada', 'por_confirmar')
             """),
-            {"doctor_id": doctor_id, "date": date}
+            {"doctor_id": doctor_id, "office_id": resolved_office_id, "date": date}
         ).fetchall()
         
         # Convert existing appointments to time ranges
