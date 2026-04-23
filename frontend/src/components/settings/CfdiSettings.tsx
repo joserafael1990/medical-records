@@ -28,6 +28,7 @@ import { apiService } from '../../services';
 import type { CfdiIssuer, CfdiIssuerInput } from '../../services';
 import { logger } from '../../utils/logger';
 import { useSimpleToast } from '../common/ToastNotification';
+import InvoiceHistoryTable from '../cfdi/InvoiceHistoryTable';
 
 // Catálogo mínimo de regímenes SAT (los más comunes para médicos)
 const TAX_REGIMES: { code: string; label: string }[] = [
@@ -378,6 +379,9 @@ const CfdiSettings: React.FC = () => {
             </Grid>
           </Grid>
         )}
+
+        {/* Historial de facturas emitidas (sólo si ya hay CSD activo) */}
+        {issuer?.is_active && <InvoiceHistoryTable />}
       </CardContent>
     </Card>
   );

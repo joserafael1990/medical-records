@@ -116,6 +116,7 @@ export class CfdiService extends ApiBase {
     limit?: number;
     offset?: number;
     status?: string;
+    consultation_id?: number;
   }): Promise<CfdiInvoice[]> {
     const resp = await this.api.get<CfdiInvoice[]>('/api/cfdi/invoices', { params });
     return resp.data;

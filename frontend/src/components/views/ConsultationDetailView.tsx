@@ -50,6 +50,7 @@ import ClinicalStudiesSection from '../common/ClinicalStudiesSection';
 import ClinicalStudyDialog from '../dialogs/ClinicalStudyDialog';
 import InvoiceDialog from '../dialogs/InvoiceDialog';
 import { useClinicalStudies } from '../../hooks/useClinicalStudies';
+import { useConsultationInvoice } from '../../hooks/useConsultationInvoice';
 
 interface ConsultationDetailViewProps {
   consultation: any;
@@ -92,6 +93,7 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
   const [studyToDeleteId, setStudyToDeleteId] = useState<string | null>(null);
   const [isDeletingStudy, setIsDeletingStudy] = useState(false);
   const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
+  const invoiceHook = useConsultationInvoice(consultation?.id);
 
   const handleDeleteStudy = async (studyId: string) => {
     setStudyToDeleteId(studyId);
@@ -160,14 +162,27 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
           >
             Imprimir
           </Button>
-          <Button
-            variant="outlined"
-            startIcon={<ReceiptIcon />}
-            onClick={() => setInvoiceDialogOpen(true)}
-            sx={{ borderRadius: '8px' }}
-          >
-            Facturar
-          </Button>
+          {invoiceHook.invoice ? (
+            <Button
+              variant="outlined"
+              color="success"
+              startIcon={<ReceiptIcon />}
+              onClick={invoiceHook.openPdf}
+              disabled={invoiceHook.openingPdf}
+              sx={{ borderRadius: '8px' }}
+            >
+              {invoiceHook.openingPdf ? 'Abriendo…' : 'Ver factura'}
+            </Button>
+          ) : (
+            <Button
+              variant="outlined"
+              startIcon={<ReceiptIcon />}
+              onClick={() => setInvoiceDialogOpen(true)}
+              sx={{ borderRadius: '8px' }}
+            >
+              Facturar
+            </Button>
+          )}
           <Button
             variant="contained"
             startIcon={<EditIcon />}
@@ -520,6 +535,7 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
         patientId={consultation?.patient_id}
         patientName={consultation?.patient_name}
         patientRfc={consultation?.patient_rfc ?? null}
+        onEmitted={() => invoiceHook.refresh()}
       />
     </Box>
   );

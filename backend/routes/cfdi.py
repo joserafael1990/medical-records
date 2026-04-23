@@ -323,6 +323,7 @@ async def list_invoices(
     limit: int = 50,
     offset: int = 0,
     status: Optional[str] = None,
+    consultation_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: Person = Depends(get_current_user),
 ):
@@ -330,6 +331,8 @@ async def list_invoices(
     q = db.query(CfdiInvoice).filter(CfdiInvoice.doctor_id == current_user.id)
     if status:
         q = q.filter(CfdiInvoice.status == status)
+    if consultation_id is not None:
+        q = q.filter(CfdiInvoice.consultation_id == consultation_id)
     q = q.order_by(CfdiInvoice.created_at.desc()).limit(min(limit, 200)).offset(offset)
     return [_invoice_to_dict(inv) for inv in q.all()]
 
