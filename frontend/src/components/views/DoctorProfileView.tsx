@@ -32,6 +32,7 @@ import { ProfessionalInfoCard } from '../profile/ProfessionalInfoCard';
 import { OfficeCard } from '../profile/OfficeCard';
 import IntakePreferencesPanel from '../profile/IntakePreferencesPanel';
 import SignatureProfileSection from './SignatureProfileSection';
+import { FEATURE_FLAGS } from '../../constants';
 
 interface DoctorProfileViewProps {
   doctorProfile: any;
@@ -242,8 +243,8 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
           <GoogleCalendarSettings doctorId={doctorProfile?.id} />
         </Box>
 
-        {/* CFDI invoicing (Facturama) */}
-        <CfdiSettings />
+        {/* CFDI invoicing (Facturama) — gated behind REACT_APP_CFDI_ENABLED */}
+        {FEATURE_FLAGS.ENABLE_CFDI && <CfdiSettings />}
       </Box>
 
       {/* Schedule Configuration Dialog */}

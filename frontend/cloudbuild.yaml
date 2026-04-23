@@ -21,6 +21,8 @@ steps:
       - 'REACT_APP_SENTRY_ENVIRONMENT=${_REACT_APP_SENTRY_ENVIRONMENT}'
       - '--build-arg'
       - 'REACT_APP_AMPLITUDE_API_KEY=${_REACT_APP_AMPLITUDE_API_KEY}'
+      - '--build-arg'
+      - 'REACT_APP_CFDI_ENABLED=${_REACT_APP_CFDI_ENABLED}'
     dir: 'frontend'
 
   # Step 2: Push the image to Artifact Registry
@@ -61,6 +63,9 @@ substitutions:
   _REACT_APP_SENTRY_DSN: ''  # Set in Cloud Build trigger secrets
   _REACT_APP_SENTRY_ENVIRONMENT: 'production'
   _REACT_APP_AMPLITUDE_API_KEY: ''  # Set in Cloud Build trigger secrets
+  # CFDI (Facturama) feature flag. OFF in prod hasta que se valide. Para
+  # encenderlo: cambiar a 'true' en el trigger de Cloud Build y re-desplegar.
+  _REACT_APP_CFDI_ENABLED: 'false'
 
 # Images to be pushed to Artifact Registry
 images:

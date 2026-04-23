@@ -51,6 +51,7 @@ import ClinicalStudyDialog from '../dialogs/ClinicalStudyDialog';
 import InvoiceDialog from '../dialogs/InvoiceDialog';
 import { useClinicalStudies } from '../../hooks/useClinicalStudies';
 import { useConsultationInvoice } from '../../hooks/useConsultationInvoice';
+import { FEATURE_FLAGS } from '../../constants';
 
 interface ConsultationDetailViewProps {
   consultation: any;
@@ -162,26 +163,28 @@ const ConsultationDetailView: React.FC<ConsultationDetailViewProps> = ({
           >
             Imprimir
           </Button>
-          {invoiceHook.invoice ? (
-            <Button
-              variant="outlined"
-              color="success"
-              startIcon={<ReceiptIcon />}
-              onClick={invoiceHook.openPdf}
-              disabled={invoiceHook.openingPdf}
-              sx={{ borderRadius: '8px' }}
-            >
-              {invoiceHook.openingPdf ? 'Abriendo…' : 'Ver factura'}
-            </Button>
-          ) : (
-            <Button
-              variant="outlined"
-              startIcon={<ReceiptIcon />}
-              onClick={() => setInvoiceDialogOpen(true)}
-              sx={{ borderRadius: '8px' }}
-            >
-              Facturar
-            </Button>
+          {FEATURE_FLAGS.ENABLE_CFDI && (
+            invoiceHook.invoice ? (
+              <Button
+                variant="outlined"
+                color="success"
+                startIcon={<ReceiptIcon />}
+                onClick={invoiceHook.openPdf}
+                disabled={invoiceHook.openingPdf}
+                sx={{ borderRadius: '8px' }}
+              >
+                {invoiceHook.openingPdf ? 'Abriendo…' : 'Ver factura'}
+              </Button>
+            ) : (
+              <Button
+                variant="outlined"
+                startIcon={<ReceiptIcon />}
+                onClick={() => setInvoiceDialogOpen(true)}
+                sx={{ borderRadius: '8px' }}
+              >
+                Facturar
+              </Button>
+            )
           )}
           <Button
             variant="contained"
