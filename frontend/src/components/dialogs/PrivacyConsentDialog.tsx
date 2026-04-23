@@ -38,7 +38,9 @@ import {
   Visibility as VisibilityIcon,
   DoneAll as DoneAllIcon,
   Security as SecurityIcon,
-  Info as InfoIcon
+  Info as InfoIcon,
+  Link as LinkIcon,
+  ContentCopy as ContentCopyIcon
 } from '@mui/icons-material';
 import { usePrivacyConsent } from '../../hooks/usePrivacyConsent';
 import { useConsentExpirationCheck } from '../../hooks/useConsentExpirationCheck';
@@ -64,6 +66,7 @@ export const PrivacyConsentDialog: React.FC<PrivacyConsentDialogProps> = ({
     error,
     fetchConsentStatus,
     sendWhatsAppNotice,
+    generateShareableLink,
     revokeConsent,
     clearError,
     startPolling,
@@ -78,6 +81,8 @@ export const PrivacyConsentDialog: React.FC<PrivacyConsentDialogProps> = ({
   
   const [showRevokeDialog, setShowRevokeDialog] = React.useState(false);
   const [revocationReason, setRevocationReason] = React.useState('');
+  const [shareableUrl, setShareableUrl] = React.useState<string | null>(null);
+  const [isGeneratingLink, setIsGeneratingLink] = React.useState(false);
 
   // Fetch consent status when dialog opens and patient changes
   useEffect(() => {
@@ -160,6 +165,47 @@ export const PrivacyConsentDialog: React.FC<PrivacyConsentDialogProps> = ({
       
     } catch (err: any) {
       showError(err?.detail || 'Error al enviar el aviso de privacidad');
+    }
+  };
+
+  /**
+   * Generate shareable link that works on any channel (SMS, email, QR,
+   * WhatsApp manual). No WhatsApp API call; no Meta-template dependency.
+   */
+  const handleGenerateLink = async () => {
+    if (!patient?.id) {
+      showError('No se pudo identificar al paciente');
+      return;
+    }
+    setIsGeneratingLink(true);
+    try {
+      const res = await generateShareableLink(patient.id);
+      if (res.already_accepted) {
+        showSuccess('El paciente ya aceptó el aviso con este médico.');
+        // Refrescar estado visible
+        await fetchConsentStatus(patient.id);
+        return;
+      }
+      setShareableUrl(res.url);
+      // Polling para cuando el paciente acepte desde el link.
+      const cleanup = startPolling(patient.id, 5000);
+      const timeout = setTimeout(cleanup, 10 * 60 * 1000);
+      (window as any).consentPollingCleanup = cleanup;
+      (window as any).consentPollingTimeout = timeout;
+    } catch (err: any) {
+      showError(err?.response?.data?.detail || err?.message || 'Error al generar el link');
+    } finally {
+      setIsGeneratingLink(false);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (!shareableUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareableUrl);
+      showSuccess('Link copiado al portapapeles');
+    } catch {
+      showError('No se pudo copiar; selecciona el texto y copia manualmente.');
     }
   };
 
@@ -436,6 +482,18 @@ export const PrivacyConsentDialog: React.FC<PrivacyConsentDialogProps> = ({
           </Button>
         )}
         
+        {(!consent || consent.consent_status !== 'accepted') && (
+          <Button
+            onClick={handleGenerateLink}
+            variant="outlined"
+            color="primary"
+            startIcon={isGeneratingLink ? <CircularProgress size={16} /> : <LinkIcon />}
+            disabled={isLoading || isGeneratingLink}
+          >
+            Generar link
+          </Button>
+        )}
+
         {patient?.primary_phone && (!consent || consent.consent_status !== 'accepted') && (
           <Button
             onClick={handleSendWhatsApp}
@@ -447,6 +505,46 @@ export const PrivacyConsentDialog: React.FC<PrivacyConsentDialogProps> = ({
             {consent ? 'Reenviar por WhatsApp' : 'Enviar por WhatsApp'}
           </Button>
         )}
+      </DialogActions>
+    </Dialog>
+
+    {/* Shareable-link dialog — se abre tras generate-link exitoso */}
+    <Dialog
+      open={!!shareableUrl}
+      onClose={() => setShareableUrl(null)}
+      maxWidth="sm"
+      fullWidth
+    >
+      <DialogTitle>
+        <Box display="flex" alignItems="center" gap={1}>
+          <LinkIcon color="primary" />
+          <Typography variant="h6">Link de consentimiento listo</Typography>
+        </Box>
+      </DialogTitle>
+      <DialogContent>
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Comparte este link con el paciente por SMS, email, WhatsApp manual o QR.
+          Al abrirlo verá el aviso de privacidad con tus datos y podrá aceptarlo
+          tocando un botón. Se actualizará este dialog automáticamente cuando lo haga.
+        </Alert>
+        <TextField
+          value={shareableUrl || ''}
+          fullWidth
+          multiline
+          maxRows={3}
+          InputProps={{ readOnly: true, sx: { fontFamily: 'monospace', fontSize: '0.85rem' } }}
+          onFocus={(e) => e.target.select()}
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setShareableUrl(null)}>Cerrar</Button>
+        <Button
+          variant="contained"
+          startIcon={<ContentCopyIcon />}
+          onClick={handleCopyLink}
+        >
+          Copiar link
+        </Button>
       </DialogActions>
     </Dialog>
 
