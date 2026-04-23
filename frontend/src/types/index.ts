@@ -568,6 +568,39 @@ export interface PrivacyNotice {
   is_active: boolean;
   created_at: string;
   updated_at?: string; // Optional, may not exist in DB
+  // New per-doctor rendering fields (public-notice endpoint)
+  kind?: 'platform_privacy' | 'doctor_patient_notice';
+  content_hash?: string;
+  doctor_slug?: string;
+  // Included when ?consent=<id> is passed to public-notice
+  consent_state?: {
+    id: number;
+    already_accepted?: boolean;
+    accepted_at?: string | null;
+    hash_matches?: boolean;
+    not_found?: boolean;
+  };
+}
+
+// CORTEX platform legal documents (Aviso-Plataforma / ToS / DPA).
+// Separado de PrivacyNotice: estos documentos los firma el médico como
+// usuario de CORTEX, no el paciente.
+export type LegalDocumentType = 'platform_privacy' | 'tos' | 'dpa';
+
+export interface LegalDocument {
+  id: number;
+  doc_type: LegalDocumentType;
+  version: string;
+  title: string;
+  content: string;
+  effective_date: string;
+  is_active: boolean;
+}
+
+export interface LegalCurrentDocuments {
+  platform_privacy?: LegalDocument;
+  tos?: LegalDocument;
+  dpa?: LegalDocument;
 }
 
 export interface PrivacyConsent {

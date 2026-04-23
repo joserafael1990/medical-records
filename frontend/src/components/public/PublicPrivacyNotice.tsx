@@ -8,6 +8,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Box,
+  Button,
   Container,
   Typography,
   Card,
@@ -21,36 +22,80 @@ import {
 import {
   Security as SecurityIcon,
   Gavel as GavelIcon,
-  Info as InfoIcon
+  Info as InfoIcon,
+  CheckCircle as CheckCircleIcon
 } from '@mui/icons-material';
 import { apiService } from '../../services';
 import type { PrivacyNotice } from '../../types';
+
+// Parse once at module load — no need to re-run on re-render.
+const urlParams = new URLSearchParams(window.location.search);
+const CONSENT_ID_FROM_URL = urlParams.get('consent');
+
+type AcceptanceState =
+  | { kind: 'idle' }
+  | { kind: 'submitting' }
+  | { kind: 'accepted'; at: string | null }
+  | { kind: 'error'; message: string };
 
 export const PublicPrivacyNotice: React.FC = () => {
   const [notice, setNotice] = useState<PrivacyNotice | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [acceptance, setAcceptance] = useState<AcceptanceState>({ kind: 'idle' });
 
   useEffect(() => {
     fetchPublicNotice();
   }, []);
+
+  const handleAccept = async () => {
+    if (!notice || !notice.content_hash || !CONSENT_ID_FROM_URL) return;
+    setAcceptance({ kind: 'submitting' });
+    try {
+      const response = await apiService.patients.api.post('/api/privacy/accept-public', {
+        consent_id: Number(CONSENT_ID_FROM_URL),
+        content_hash: notice.content_hash,
+      });
+      const data = response.data;
+      if (data?.success) {
+        setAcceptance({ kind: 'accepted', at: data.accepted_at || null });
+      } else {
+        setAcceptance({ kind: 'error', message: 'No se pudo registrar tu aceptación.' });
+      }
+    } catch (err: any) {
+      setAcceptance({
+        kind: 'error',
+        message:
+          err?.response?.data?.detail ||
+          err?.message ||
+          'Error al registrar aceptación.',
+      });
+    }
+  };
 
   const fetchPublicNotice = async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      // This endpoint doesn't require authentication
-      const response = await apiService.patients.api.get('/api/privacy/public-notice');
-      
-      // ApiBase returns AxiosResponse, extract data property
+      // Soporte de slug por-doctor (?doctor=PERSON_CODE): si está presente
+      // renderiza el aviso del médico específico al paciente; si no, el
+      // backend devuelve el aviso propio de la plataforma CORTEX.
+      const params = new URLSearchParams(window.location.search);
+      const doctorSlug = params.get('doctor');
+      const consentId = params.get('consent');
+      const qs: string[] = [];
+      if (doctorSlug) qs.push(`doctor=${encodeURIComponent(doctorSlug)}`);
+      if (consentId) qs.push(`consent=${encodeURIComponent(consentId)}`);
+      const url = '/api/privacy/public-notice' + (qs.length ? `?${qs.join('&')}` : '');
+
+      const response = await apiService.patients.api.get(url);
       const noticeData = response.data;
-      
+
       if (!noticeData) {
         throw new Error('No data received from API');
       }
-      
-      // Ensure all fields are properly mapped
+
       const mappedNotice: PrivacyNotice = {
         id: noticeData.id,
         version: noticeData.version || '',
@@ -60,15 +105,32 @@ export const PublicPrivacyNotice: React.FC = () => {
         effective_date: noticeData.effective_date || '',
         expiration_date: noticeData.expiration_date,
         is_active: noticeData.is_active !== undefined ? noticeData.is_active : true,
-        created_at: noticeData.created_at || '',
-        updated_at: noticeData.updated_at
+        created_at: noticeData.created_at || noticeData.effective_date || '',
+        updated_at: noticeData.updated_at,
+        kind: noticeData.kind,
+        content_hash: noticeData.content_hash,
+        doctor_slug: noticeData.doctor_slug,
+        consent_state: noticeData.consent_state,
       };
-      
+
       setNotice(mappedNotice);
+
+      // Si el consent ya fue aceptado previamente, reflejarlo sin
+      // esperar al click del botón.
+      if (noticeData.consent_state?.already_accepted) {
+        setAcceptance({
+          kind: 'accepted',
+          at: noticeData.consent_state.accepted_at || null,
+        });
+      }
     } catch (err: any) {
-      const errorMsg = err?.detail || err?.message || 'Error al cargar el aviso de privacidad';
-      console.error('❌ Error loading public notice:', errorMsg);
-      console.error('❌ Full error:', err);
+      // Axios wraps HTTP errors: el detail real está en err.response.data.detail
+      const errorMsg =
+        err?.response?.data?.detail ||
+        err?.detail ||
+        err?.message ||
+        'Error al cargar el aviso de privacidad';
+      console.error('Error loading public notice:', errorMsg);
       setError(errorMsg);
     } finally {
       setIsLoading(false);
@@ -127,7 +189,9 @@ export const PublicPrivacyNotice: React.FC = () => {
               {notice.title}
             </Typography>
             <Typography variant="subtitle1">
-              Sistema de Historias Clínicas Electrónicas
+              {notice.kind === 'platform_privacy'
+                ? 'Plataforma CORTEX — Aviso para usuarios médicos'
+                : 'Aviso del médico responsable al paciente'}
             </Typography>
           </Box>
         </Box>
@@ -185,6 +249,76 @@ export const PublicPrivacyNotice: React.FC = () => {
           </Typography>
         </CardContent>
       </Card>
+
+      {/* Web-form acceptance block — solo si venimos con ?consent=<id>
+          en la URL y la respuesta del backend nos dio consent_state. */}
+      {CONSENT_ID_FROM_URL && notice.consent_state && notice.kind === 'doctor_patient_notice' && (
+        <Card
+          variant="outlined"
+          sx={{
+            mb: 3,
+            borderColor: acceptance.kind === 'accepted' ? 'success.main' : 'primary.main',
+            borderWidth: 2,
+          }}
+        >
+          <CardContent>
+            {notice.consent_state.not_found ? (
+              <Alert severity="error">
+                Este enlace de consentimiento no es válido o ha expirado. Solicite uno
+                nuevo a su médico.
+              </Alert>
+            ) : acceptance.kind === 'accepted' ? (
+              <Box display="flex" alignItems="center" gap={2}>
+                <CheckCircleIcon color="success" sx={{ fontSize: 40 }} />
+                <Box>
+                  <Typography variant="h6" fontWeight={600} color="success.main">
+                    Consentimiento registrado
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {acceptance.at
+                      ? `Aceptado el ${formatDate(acceptance.at)}`
+                      : 'Gracias por aceptar.'}
+                  </Typography>
+                </Box>
+              </Box>
+            ) : notice.consent_state.hash_matches === false ? (
+              <Alert severity="warning">
+                El aviso que está viendo corresponde a una versión distinta a la enviada
+                por su médico. Recargue la página o solicite un enlace nuevo.
+              </Alert>
+            ) : (
+              <Box>
+                <Typography variant="body1" sx={{ mb: 2 }}>
+                  Al presionar "Acepto", usted confirma que leyó y acepta este aviso de
+                  privacidad conforme al artículo 8 de la LFPDPPP.
+                </Typography>
+                {acceptance.kind === 'error' && (
+                  <Alert severity="error" sx={{ mb: 2 }}>
+                    {acceptance.message}
+                  </Alert>
+                )}
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="large"
+                  fullWidth
+                  disabled={acceptance.kind === 'submitting'}
+                  startIcon={
+                    acceptance.kind === 'submitting' ? (
+                      <CircularProgress size={18} color="inherit" />
+                    ) : (
+                      <CheckCircleIcon />
+                    )
+                  }
+                  onClick={handleAccept}
+                >
+                  {acceptance.kind === 'submitting' ? 'Registrando…' : 'Acepto'}
+                </Button>
+              </Box>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* ARCO Rights Info */}
       <Card variant="outlined" sx={{ mb: 3, bgcolor: 'info.lighter' }}>

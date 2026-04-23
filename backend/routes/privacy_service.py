@@ -14,6 +14,10 @@ from utils.datetime_utils import utc_now
 from whatsapp_service import get_whatsapp_service
 from encryption import EncryptionService
 from logger import get_logger
+from services.privacy_template import (
+    MissingDoctorLegalDataError,
+    render_active_notice,
+)
 
 api_logger = get_logger("api")
 security_logger = get_logger("security")
@@ -53,25 +57,22 @@ def check_if_first_consultation(db: Session, patient_id: int, doctor_id: int, cu
         return False
 
 
-def check_if_has_consent(db: Session, patient_id: int) -> bool:
+def check_if_has_consent(db: Session, patient_id: int, doctor_id: int) -> bool:
     """
-    Check if patient has an accepted privacy consent
-    
-    Args:
-        db: Database session
-        patient_id: Patient ID
-        
-    Returns:
-        True if patient has accepted consent, False otherwise
+    Check if patient has an accepted privacy consent WITH THIS DOCTOR.
+
+    Scope por doctor: cada médico es Responsable independiente bajo
+    LFPDPPP. El consent con el Dr. A no cuenta para el Dr. B.
     """
     try:
         existing_consent = db.query(PrivacyConsent).filter(
             PrivacyConsent.patient_id == patient_id,
-            PrivacyConsent.consent_given == True
+            PrivacyConsent.doctor_id == doctor_id,
+            PrivacyConsent.consent_given == True,
         ).order_by(PrivacyConsent.created_at.desc()).first()
-        
+
         return existing_consent is not None
-        
+
     except Exception as e:
         api_logger.error(f"Error checking consent: {str(e)}", exc_info=True)
         return False
@@ -154,12 +155,12 @@ async def send_privacy_notice_automatically(
             api_logger.debug(f"🔍 Skipping privacy notice: consultation_type='{consultation_type}', is_first_appointment={is_first_appointment}")
             return None
         
-        # Check if patient already has consent
-        if check_if_has_consent(db, patient_id):
-            api_logger.debug(f"✅ Patient {patient_id} already has privacy consent, skipping auto-send")
+        # Check if patient already has consent with THIS doctor
+        if check_if_has_consent(db, patient_id, doctor.id):
+            api_logger.debug(f"✅ Patient {patient_id} already has privacy consent with doctor {doctor.id}, skipping auto-send")
             return {
                 "success": False,
-                "message": "Patient already has privacy consent",
+                "message": "Patient already has privacy consent with this doctor",
                 "skipped": True
             }
         
@@ -189,24 +190,36 @@ async def send_privacy_notice_automatically(
         except Exception:
             patient_phone_decrypted = patient.primary_phone
         
-        # Get active privacy notice
-        privacy_notice = db.query(PrivacyNotice).filter(
-            PrivacyNotice.is_active == True
-        ).order_by(PrivacyNotice.effective_date.desc()).first()
-        
-        if not privacy_notice:
-            api_logger.warning("⚠️ No active privacy notice found, cannot send automatically")
+        # Renderizar aviso con los datos del doctor como Responsable.
+        # Si faltan campos legales (domicilio, email ARCO, cédula) NO
+        # emitir — mejor no mandar aviso que mandar uno inválido que
+        # exponga a CORTEX.
+        try:
+            rendered = render_active_notice(db, doctor)
+        except MissingDoctorLegalDataError as e:
+            api_logger.warning(
+                f"⚠️ Doctor {doctor.id} incomplete legal profile, skipping auto-send: {e}"
+            )
+            return {
+                "success": False,
+                "message": f"Perfil legal del médico incompleto: {e}",
+                "skipped": True,
+            }
+        except LookupError as e:
+            api_logger.warning(f"⚠️ {e}")
             return None
-        
-        # URL del aviso de privacidad público
-        privacy_url = "https://cortexclinico.com/privacy"
-        
-        # Create consent record
+
+        # URL del aviso con slug del doctor para que el paciente vea el
+        # aviso del médico específico renderizado.
+        privacy_url = f"https://cortexclinico.com/privacy?doctor={doctor.person_code}"
+
         consent = PrivacyConsent(
             patient_id=patient_id,
-            notice_id=privacy_notice.id,
+            doctor_id=doctor.id,
+            notice_id=rendered.notice_id,
             consent_given=False,  # Pending until patient accepts
-            consent_date=utc_now()
+            consent_date=utc_now(),
+            rendered_content_hash=rendered.content_hash,
         )
         
         db.add(consent)

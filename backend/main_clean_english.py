@@ -429,6 +429,10 @@ app.include_router(auth_router)
 from routes.privacy import router as privacy_router
 app.include_router(privacy_router)
 
+# Include legal documents (platform privacy, ToS, DPA) routes
+from routes.legal import router as legal_router
+app.include_router(legal_router)
+
 # Include consultations routes
 from routes.consultations import router as consultations_router
 app.include_router(consultations_router)

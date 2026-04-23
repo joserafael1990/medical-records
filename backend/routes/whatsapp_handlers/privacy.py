@@ -35,10 +35,15 @@ async def process_privacy_consent(consent_id: int, from_phone: str, timestamp: s
         db.commit()
         db.refresh(consent)
         
-        # Enviar confirmación
+        # Enviar confirmación. Usa el doctor DEL CONSENT (no "cualquier
+        # doctor de la BD"): cada consent pertenece a un médico específico
+        # bajo LFPDPPP, y el paciente esperaba ver ese nombre en la
+        # confirmación.
         whatsapp = get_whatsapp_service()
-        doctor = db.query(Person).filter(Person.person_type == 'doctor').first()
-        
+        doctor = None
+        if consent.doctor_id:
+            doctor = db.query(Person).filter(Person.id == consent.doctor_id).first()
+
         if doctor:
             doctor_name = f"{doctor.title or 'Dr.'} {doctor.name}" if doctor.name else "Doctor"
             patient_first_name = patient.name.split()[0] if patient.name else 'Paciente'
@@ -60,7 +65,10 @@ async def process_privacy_consent(consent_id: int, from_phone: str, timestamp: s
             new_values={
                 "button_id": f"accept_privacy_{consent_id}",
                 "consent_id": consent_id,
-                "method": "whatsapp_button"
+                "doctor_id": consent.doctor_id,
+                "rendered_content_hash": consent.rendered_content_hash,
+                "method": "whatsapp_button",
+                "source_phone": from_phone,
             },
             security_level='INFO'
         )

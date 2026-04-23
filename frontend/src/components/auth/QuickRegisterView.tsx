@@ -70,7 +70,15 @@ const QuickRegisterView: React.FC<QuickRegisterViewProps> = ({
   const [name, setName] = useState('');
   const [specialtyId, setSpecialtyId] = useState<string>('');
   const [cedula, setCedula] = useState('');
-  const [consent, setConsent] = useState(false);
+  // Clickwrap bajo LFPDPPP Art. 16 + Reglamento Art. 49: el médico debe
+  // aceptar independientemente (i) el Aviso de Privacidad de CORTEX como
+  // Responsable del doctor-usuario, (ii) los T&C de uso, y (iii) el
+  // Contrato de Encargo que convierte a CORTEX en Encargado del
+  // expediente clínico. Firmar los 3 es obligatorio — sin el DPA, CORTEX
+  // quedaría legalmente como corresponsable del expediente.
+  const [consentPrivacy, setConsentPrivacy] = useState(false);
+  const [consentTos, setConsentTos] = useState(false);
+  const [consentDpa, setConsentDpa] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const [specialties, setSpecialties] = useState<any[]>([]);
@@ -122,6 +130,8 @@ const QuickRegisterView: React.FC<QuickRegisterViewProps> = ({
   const trimmedCedula = cedula.trim();
   const cedulaLooksValid = /^\d{7,8}$/.test(trimmedCedula); // NOM-024 format (7-8 digits)
 
+  const allLegalAccepted = consentPrivacy && consentTos && consentDpa;
+
   const canSubmit =
     emailValid &&
     isPasswordStrong &&
@@ -129,7 +139,7 @@ const QuickRegisterView: React.FC<QuickRegisterViewProps> = ({
     name.trim().length >= 2 &&
     !!specialtyId &&
     cedulaLooksValid &&
-    consent &&
+    allLegalAccepted &&
     !isSubmitting;
 
   const firstError = (): string | null => {
@@ -141,7 +151,10 @@ const QuickRegisterView: React.FC<QuickRegisterViewProps> = ({
     if (!specialtyId) return 'Selecciona tu especialidad';
     if (!cedulaLooksValid)
       return 'La cédula profesional debe tener 7 u 8 dígitos (formato NOM-024)';
-    if (!consent) return 'Debes aceptar el aviso de privacidad para continuar';
+    if (!consentPrivacy) return 'Debes aceptar el Aviso de Privacidad de la plataforma';
+    if (!consentTos) return 'Debes aceptar los Términos y Condiciones de Uso';
+    if (!consentDpa)
+      return 'Debes aceptar el Contrato de Encargo del Tratamiento (LFPDPPP Art. 49)';
     return null;
   };
 
@@ -390,29 +403,76 @@ const QuickRegisterView: React.FC<QuickRegisterViewProps> = ({
               sx={{ mb: 2 }}
             />
 
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={consent}
-                  onChange={(e) => setConsent(e.target.checked)}
-                  required
-                />
-              }
-              label={
-                <Typography variant="body2">
-                  He leído y acepto el{' '}
-                  <Link href="/privacy" target="_blank" rel="noopener noreferrer">
-                    Aviso de Privacidad
-                  </Link>{' '}
-                  y los{' '}
-                  <Link href="/terms" target="_blank" rel="noopener noreferrer">
-                    Términos y Condiciones
-                  </Link>{' '}
-                  (LFPDPPP Art. 16).
-                </Typography>
-              }
-              sx={{ alignItems: 'flex-start', mb: 2 }}
-            />
+            <Box sx={{ mb: 2, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1.5 }}>
+                Marco legal (obligatorio)
+              </Typography>
+
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={consentPrivacy}
+                    onChange={(e) => setConsentPrivacy(e.target.checked)}
+                    required
+                    size="small"
+                  />
+                }
+                label={
+                  <Typography variant="body2">
+                    He leído y acepto el{' '}
+                    <Link href="/privacy" target="_blank" rel="noopener noreferrer">
+                      Aviso de Privacidad de CORTEX
+                    </Link>{' '}
+                    (LFPDPPP Art. 16).
+                  </Typography>
+                }
+                sx={{ alignItems: 'flex-start', mb: 0.5, display: 'flex' }}
+              />
+
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={consentTos}
+                    onChange={(e) => setConsentTos(e.target.checked)}
+                    required
+                    size="small"
+                  />
+                }
+                label={
+                  <Typography variant="body2">
+                    Acepto los{' '}
+                    <Link href="/terms" target="_blank" rel="noopener noreferrer">
+                      Términos y Condiciones de Uso
+                    </Link>
+                    .
+                  </Typography>
+                }
+                sx={{ alignItems: 'flex-start', mb: 0.5, display: 'flex' }}
+              />
+
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={consentDpa}
+                    onChange={(e) => setConsentDpa(e.target.checked)}
+                    required
+                    size="small"
+                  />
+                }
+                label={
+                  <Typography variant="body2">
+                    Acepto el{' '}
+                    <Link href="/dpa" target="_blank" rel="noopener noreferrer">
+                      Contrato de Encargo del Tratamiento
+                    </Link>{' '}
+                    (Art. 49 Reglamento LFPDPPP). Este contrato designa a CORTEX
+                    como Encargado de los datos clínicos de mis pacientes; yo sigo
+                    siendo el Responsable.
+                  </Typography>
+                }
+                sx={{ alignItems: 'flex-start', display: 'flex' }}
+              />
+            </Box>
 
             <Button
               type="submit"

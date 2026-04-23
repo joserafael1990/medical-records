@@ -60,6 +60,12 @@ class Person(Base):
     # FISCAL (CFDI 4.0) — aplica a doctor-emisor y paciente-receptor
     tax_regime = Column(String(3))             # Régimen fiscal SAT (ej. '612')
     cfdi_default_use = Column(String(3))       # Uso CFDI preferido (ej. 'D01')
+
+    # LFPDPPP RESPONSABLE (doctors only) — datos visibles en el aviso del
+    # doctor al paciente. Art. 16 fracc. I exige domicilio; fracc. II
+    # exige medio para ejercer ARCO.
+    legal_address = Column(Text)                # Domicilio legal del Responsable
+    arco_contact_email = Column(String(100))    # Email para ARCOs; fallback a `email` si NULL
     
     # MEDICAL DATA (patients only)
     insurance_provider = Column(String(100))
