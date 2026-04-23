@@ -20,6 +20,7 @@ import {
     Home as HomeIcon
 } from '@mui/icons-material';
 import { formatGenderLabel } from '../../utils/gender';
+import { formatDateOnly } from '../../utils/dateHelpers';
 
 interface PersonalInfoCardProps {
     doctorProfile: {
@@ -41,13 +42,7 @@ interface PersonalInfoCardProps {
 
 const formatDate = (dateStr?: string) => {
     if (!dateStr) return 'No especificado';
-    try {
-        return new Date(dateStr).toLocaleDateString('es-MX', {
-            year: 'numeric', month: 'long', day: 'numeric'
-        });
-    } catch {
-        return dateStr;
-    }
+    return formatDateOnly(dateStr) || 'No especificado';
 };
 
 export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({ doctorProfile }) => {

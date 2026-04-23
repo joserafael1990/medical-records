@@ -34,6 +34,7 @@ import { License, LicenseStatus, DoctorLicenseRow } from '../../types/license';
 import { LicenseForm } from './LicenseForm';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { TableSkeleton } from '../common/TableSkeleton';
+import { formatDateOnly } from '../../utils/dateHelpers';
 
 const apiService = new ApiService();
 
@@ -111,7 +112,7 @@ export const LicenseManagement: React.FC = () => {
 
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('es-MX');
+    return formatDateOnly(dateString, { day: '2-digit', month: '2-digit', year: 'numeric' }) || '-';
   };
 
   const formatDateTime = (dateString: string | null | undefined) => {

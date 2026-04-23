@@ -23,6 +23,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
 import { DocumentSelector } from '../../common/DocumentSelector';
 import { GENDER_CODE_OPTIONS } from '../../../utils/gender';
+import { parseDateOnly } from '../../../utils/dateHelpers';
 
 interface PatientDocumentValue {
   document_id: number | null;
@@ -106,9 +107,16 @@ export const PatientDataSection: React.FC<PatientDataSectionProps> = ({
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
               <DatePicker
                 label="Fecha de Nacimiento - opcional"
-                value={getPatientData('birth_date') ? new Date(getPatientData('birth_date')) : null}
+                value={parseDateOnly(getPatientData('birth_date'))}
                 onChange={(newValue: any) => {
-                  const dateStr = newValue ? newValue.toISOString().split('T')[0] : '';
+                  let dateStr = '';
+                  if (newValue) {
+                    // Use local Y/M/D — toISOString() converts to UTC and can shift the day.
+                    const yyyy = newValue.getFullYear();
+                    const mm = String(newValue.getMonth() + 1).padStart(2, '0');
+                    const dd = String(newValue.getDate()).padStart(2, '0');
+                    dateStr = `${yyyy}-${mm}-${dd}`;
+                  }
                   handlePatientDataChangeWrapper('birth_date', dateStr);
                 }}
                 slotProps={{
