@@ -18,6 +18,7 @@ import {
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
+import { parseDateOnly } from '../../../utils/dateHelpers';
 
 interface PersonalInfoSectionProps {
   formData: {
@@ -53,8 +54,11 @@ export const PersonalInfoSection: React.FC<PersonalInfoSectionProps> = ({
 }) => {
   const handleDateChange = (date: any) => {
     if (date) {
-      const dateString = date.toISOString().split('T')[0];
-      onInputChange('birth_date', dateString);
+      // Use local Y/M/D — toISOString() converts to UTC and can shift the day.
+      const yyyy = date.getFullYear();
+      const mm = String(date.getMonth() + 1).padStart(2, '0');
+      const dd = String(date.getDate()).padStart(2, '0');
+      onInputChange('birth_date', `${yyyy}-${mm}-${dd}`);
     }
   };
 
@@ -86,7 +90,7 @@ export const PersonalInfoSection: React.FC<PersonalInfoSectionProps> = ({
           <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
             <DatePicker
               label="Fecha de Nacimiento"
-              value={formData.birth_date ? new Date(formData.birth_date) : null}
+              value={parseDateOnly(formData.birth_date)}
               onChange={handleDateChange}
               maxDate={new Date()}
               slotProps={{

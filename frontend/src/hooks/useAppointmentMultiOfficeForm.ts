@@ -5,6 +5,7 @@ import { useToast } from '../components/common/ToastNotification';
 import { logger } from '../utils/logger';
 import { extractCountryCode } from '../utils/countryCodes';
 import { PLACEHOLDER_TEXT } from '../constants';
+import { parseDateOnly } from '../utils/dateHelpers';
 
 export interface UseAppointmentMultiOfficeFormProps {
   open: boolean;
@@ -77,8 +78,8 @@ const calculateAge = (birthDate?: string | Date | null): number | null => {
     return null;
   }
 
-  const birth = new Date(birthDate);
-  if (Number.isNaN(birth.getTime())) {
+  const birth = parseDateOnly(birthDate);
+  if (!birth) {
     return null;
   }
 

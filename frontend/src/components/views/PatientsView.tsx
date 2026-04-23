@@ -34,6 +34,7 @@ import {
 } from '@mui/icons-material';
 import { Patient, Consultation } from '../../types';
 import { calculateAge } from '../../utils';
+import { parseDateOnly } from '../../utils/dateHelpers';
 import { formatGenderLabel, normalizeGenderCode } from '../../utils/gender';
 import { ErrorRibbon } from '../common/ErrorRibbon';
 import { useMemoizedSearch } from '../../hooks/useMemoizedSearch';
@@ -171,12 +172,16 @@ const PatientsView: React.FC<PatientsViewProps> = ({
       filtered = filtered.filter((patient: any) => normalizeGenderCode(patient.gender) === filters.gender);
     }
 
-    // Aplicar filtro de fecha de creación
+    // Aplicar filtro de fecha de creación. createdFrom/createdTo llegan como
+    // "YYYY-MM-DD" — hay que interpretarlas como fechas locales, no UTC, para que
+    // el rango cubra el día calendario seleccionado en CDMX.
     if (filters.createdFrom) {
       filtered = filtered.filter((patient: any) => {
         if (!patient.created_at) return false;
         const createdDate = new Date(patient.created_at);
-        const fromDate = new Date(filters.createdFrom!);
+        const fromDate = parseDateOnly(filters.createdFrom!);
+        if (!fromDate) return true;
+        fromDate.setHours(0, 0, 0, 0);
         return createdDate >= fromDate;
       });
     }
@@ -185,8 +190,9 @@ const PatientsView: React.FC<PatientsViewProps> = ({
       filtered = filtered.filter((patient: any) => {
         if (!patient.created_at) return false;
         const createdDate = new Date(patient.created_at);
-        const toDate = new Date(filters.createdTo!);
-        toDate.setHours(23, 59, 59, 999); // Incluir todo el día
+        const toDate = parseDateOnly(filters.createdTo!);
+        if (!toDate) return true;
+        toDate.setHours(23, 59, 59, 999);
         return createdDate <= toDate;
       });
     }

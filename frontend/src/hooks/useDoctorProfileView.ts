@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { useOfficeManagement } from './useOfficeManagement';
 import { useScheduleData } from './useScheduleData';
 import { logger } from '../utils/logger';
+import { formatDateOnly } from '../utils/dateHelpers';
 
 export interface UseDoctorProfileViewProps {
   doctorProfileId?: number;
@@ -124,11 +125,7 @@ export const useDoctorProfileView = (
   // Utility functions
   const formatDate = useCallback((dateString: string): string => {
     if (!dateString) return 'No especificada';
-    try {
-      return new Date(dateString).toLocaleDateString('es-ES');
-    } catch {
-      return 'Fecha inválida';
-    }
+    return formatDateOnly(dateString, { day: '2-digit', month: '2-digit', year: 'numeric' }) || 'Fecha inválida';
   }, []);
 
   return {

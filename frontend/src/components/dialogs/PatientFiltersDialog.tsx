@@ -25,6 +25,7 @@ import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
 import { formatGenderLabel, GENDER_CODE_OPTIONS } from '../../utils/gender';
+import { formatDateOnly } from '../../utils/dateHelpers';
 
 export interface PatientFilters {
   status: 'all' | 'active' | 'inactive';
@@ -194,14 +195,14 @@ const PatientFiltersDialog: React.FC<PatientFiltersDialogProps> = ({
                 )}
                 {localFilters.createdFrom && (
                   <Chip
-                    label={`Desde: ${new Date(localFilters.createdFrom).toLocaleDateString('es-MX')}`}
+                    label={`Desde: ${formatDateOnly(localFilters.createdFrom, { day: '2-digit', month: '2-digit', year: 'numeric' })}`}
                     size="small"
                     onDelete={() => handleFilterChange('createdFrom', undefined)}
                   />
                 )}
                 {localFilters.createdTo && (
                   <Chip
-                    label={`Hasta: ${new Date(localFilters.createdTo).toLocaleDateString('es-MX')}`}
+                    label={`Hasta: ${formatDateOnly(localFilters.createdTo, { day: '2-digit', month: '2-digit', year: 'numeric' })}`}
                     size="small"
                     onDelete={() => handleFilterChange('createdTo', undefined)}
                   />
