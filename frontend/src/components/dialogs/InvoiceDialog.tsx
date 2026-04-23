@@ -34,6 +34,31 @@ const FORMA_PAGO_OPTIONS = [
   { code: '99', label: '99 — Por definir' },
 ];
 
+// Claves SAT de servicios médicos más comunes (catálogo c_ClaveProdServ).
+// Cubren ~95% de los casos de consulta médica en México. "Otro" abre input libre.
+const SAT_SERVICE_CODES = [
+  { code: '85121501', label: '85121501 — Medicina general' },
+  { code: '85121502', label: '85121502 — Pediatría' },
+  { code: '85121503', label: '85121503 — Geriatría' },
+  { code: '85121504', label: '85121504 — Medicina familiar' },
+  { code: '85121601', label: '85121601 — Dermatología' },
+  { code: '85121602', label: '85121602 — Gastroenterología' },
+  { code: '85121603', label: '85121603 — Oftalmología' },
+  { code: '85121608', label: '85121608 — Cardiología' },
+  { code: '85121609', label: '85121609 — Endocrinología' },
+  { code: '85121610', label: '85121610 — Ginecología y obstetricia' },
+  { code: '85121611', label: '85121611 — Neurología' },
+  { code: '85121613', label: '85121613 — Ortopedia' },
+  { code: '85121614', label: '85121614 — Psiquiatría' },
+  { code: '85121615', label: '85121615 — Urología' },
+  { code: '85121616', label: '85121616 — Anestesiología' },
+  { code: '85121700', label: '85121700 — Servicios de cirugía' },
+  { code: '85121800', label: '85121800 — Servicios hospitalarios' },
+  { code: '85121900', label: '85121900 — Servicios de laboratorio clínico' },
+  { code: '86101700', label: '86101700 — Servicios de psicología' },
+  { code: '__other__', label: 'Otro (escribir manualmente)' },
+];
+
 // Régimen fiscal SAT del RECEPTOR (paciente o empresa que recibe la factura).
 // Incluye los que aplican típicamente a pacientes particulares (605, 612, 626)
 // y a empresas/aseguradoras (601, 603). Fuente: catálogo c_RegimenFiscal SAT.
@@ -115,10 +140,19 @@ const InvoiceDialog: React.FC<Props> = ({
     try {
       setEmitting(true);
       setError(null);
+      // Limpiar cadenas vacías a undefined: Pydantic con Optional + min_length
+      // rechaza "" (string vacío cumple tipo str pero falla min_length). None/undefined
+      // lo acepta y deja que el backend aplique defaults.
+      const clean = (v?: string | null) => (v && v.trim()) ? v.trim() : undefined;
       const payload: CfdiInvoiceInput = {
         ...form,
-        receptor_rfc: form.receptor_rfc?.trim().toUpperCase() || undefined,
-        cfdi_use: isPublic ? 'S01' : form.cfdi_use,
+        receptor_rfc: clean(form.receptor_rfc)?.toUpperCase(),
+        receptor_name: clean(form.receptor_name),
+        receptor_postal_code: clean(form.receptor_postal_code),
+        receptor_tax_regime: clean(form.receptor_tax_regime),
+        cfdi_use: isPublic ? 'S01' : clean(form.cfdi_use),
+        sat_product_code: clean(form.sat_product_code) || '85121501',
+        sat_unit_code: clean(form.sat_unit_code) || 'E48',
       };
       const invoice = await apiService.cfdi.createInvoice(payload);
       onEmitted?.(invoice);
@@ -291,16 +325,49 @@ const InvoiceDialog: React.FC<Props> = ({
               <MenuItem value="PPD">PPD — Pago en parcialidades o diferido</MenuItem>
             </TextField>
           </Grid>
-          <Grid size={{ xs: 6, sm: 4 }}>
+          <Grid size={{ xs: 12, sm: 8 }}>
             <TextField
+              select
               fullWidth
               size="small"
-              label="Clave SAT del servicio"
-              value={form.sat_product_code || '85121501'}
-              onChange={(e) => setForm({ ...form, sat_product_code: e.target.value })}
-              helperText="85121501 = Medicina general"
-            />
+              label="Clave SAT del servicio (especialidad)"
+              value={
+                SAT_SERVICE_CODES.some((c) => c.code === form.sat_product_code)
+                  ? form.sat_product_code
+                  : (form.sat_product_code ? '__other__' : '85121501')
+              }
+              onChange={(e) => {
+                if (e.target.value === '__other__') {
+                  // Usuario eligió "Otro" — deja el valor actual como manual si existía,
+                  // sino pone string vacío para que capture a mano.
+                  setForm({ ...form, sat_product_code: form.sat_product_code && !SAT_SERVICE_CODES.some((c) => c.code === form.sat_product_code) ? form.sat_product_code : '' });
+                } else {
+                  setForm({ ...form, sat_product_code: e.target.value });
+                }
+              }}
+              helperText="Elige la especialidad más cercana al servicio facturado"
+            >
+              {SAT_SERVICE_CODES.map((s) => (
+                <MenuItem key={s.code} value={s.code}>
+                  {s.label}
+                </MenuItem>
+              ))}
+            </TextField>
           </Grid>
+          {form.sat_product_code !== undefined &&
+            !SAT_SERVICE_CODES.some((c) => c.code === form.sat_product_code) && (
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Clave SAT personalizada"
+                  value={form.sat_product_code || ''}
+                  onChange={(e) => setForm({ ...form, sat_product_code: e.target.value })}
+                  inputProps={{ maxLength: 10 }}
+                  helperText="8 dígitos (ej. 85121501)"
+                />
+              </Grid>
+            )}
         </Grid>
 
         <Box sx={{ mt: 3, p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
