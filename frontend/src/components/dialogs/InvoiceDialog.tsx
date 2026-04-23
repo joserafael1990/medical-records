@@ -34,6 +34,23 @@ const FORMA_PAGO_OPTIONS = [
   { code: '99', label: '99 — Por definir' },
 ];
 
+// Régimen fiscal SAT del RECEPTOR (paciente o empresa que recibe la factura).
+// Incluye los que aplican típicamente a pacientes particulares (605, 612, 626)
+// y a empresas/aseguradoras (601, 603). Fuente: catálogo c_RegimenFiscal SAT.
+const TAX_REGIMES_RECEPTOR = [
+  { code: '601', label: '601 — General de Ley Personas Morales' },
+  { code: '603', label: '603 — Personas Morales con Fines no Lucrativos' },
+  { code: '605', label: '605 — Sueldos y Salarios (asalariados)' },
+  { code: '606', label: '606 — Arrendamiento' },
+  { code: '608', label: '608 — Demás ingresos' },
+  { code: '612', label: '612 — Personas Físicas con Actividades Empresariales y Profesionales' },
+  { code: '614', label: '614 — Ingresos por intereses' },
+  { code: '616', label: '616 — Sin obligaciones fiscales' },
+  { code: '621', label: '621 — Incorporación Fiscal' },
+  { code: '625', label: '625 — Plataformas Tecnológicas' },
+  { code: '626', label: '626 — Régimen Simplificado de Confianza (RESICO PF)' },
+];
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -170,19 +187,32 @@ const InvoiceDialog: React.FC<Props> = ({
               helperText={isPublic ? 'Usará el C.P. del emisor' : ''}
             />
           </Grid>
-          <Grid size={{ xs: 6, sm: 3 }}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
+              select
               fullWidth
               size="small"
-              label="Régimen fiscal"
-              value={form.receptor_tax_regime || ''}
+              label="Régimen fiscal del receptor"
+              value={isPublic ? '616' : (form.receptor_tax_regime || '')}
               onChange={(e) =>
                 setForm({ ...form, receptor_tax_regime: e.target.value })
               }
-              inputProps={{ maxLength: 3 }}
               disabled={isPublic}
-              helperText={isPublic ? '616 automático' : 'Ej. 612, 605, 626'}
-            />
+              helperText={
+                isPublic
+                  ? '616 automático (público en general)'
+                  : 'Debe coincidir con la Constancia Fiscal del paciente'
+              }
+            >
+              <MenuItem value="">
+                <em>Selecciona…</em>
+              </MenuItem>
+              {TAX_REGIMES_RECEPTOR.map((tr) => (
+                <MenuItem key={tr.code} value={tr.code}>
+                  {tr.label}
+                </MenuItem>
+              ))}
+            </TextField>
           </Grid>
           <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
