@@ -1179,9 +1179,19 @@ async def get_public_privacy_notice(
                     PrivacyConsent.doctor_id == doctor_person.id,
                 ).first()
                 if consent_row:
-                    # El frontend usa esto para decidir si mostrar
-                    # el botón "Acepto" o el estado "Ya aceptaste".
-                    # NO exponemos patient_id ni otros datos PHI.
+                    # Mostrar el primer nombre del paciente en la UI de
+                    # aceptación refuerza la identificación subjetiva
+                    # ("Al hacer clic, Juan acepta…") y la evidencia
+                    # ante IFAI sin exponer el apellido completo en un
+                    # endpoint sin auth.
+                    patient_first_name = None
+                    if consent_row.patient_id:
+                        patient_row = db.query(Person).filter(
+                            Person.id == consent_row.patient_id
+                        ).first()
+                        if patient_row and patient_row.name:
+                            patient_first_name = patient_row.name.strip().split()[0]
+
                     response_body["consent_state"] = {
                         "id": consent_row.id,
                         "already_accepted": bool(consent_row.consent_given),
@@ -1193,6 +1203,7 @@ async def get_public_privacy_notice(
                         # Si el hash del consent no coincide con lo que
                         # estamos mostrando ahora, la página debe avisar.
                         "hash_matches": consent_row.rendered_content_hash == rendered.content_hash,
+                        "patient_first_name": patient_first_name,
                     }
                 else:
                     response_body["consent_state"] = {"id": consent, "not_found": True}

@@ -216,3 +216,60 @@ def test_unknown_slug_returns_404(client_with_db):
     resp = client.get("/api/privacy/public-notice?doctor=NO-EXISTE")
     assert resp.status_code == 404
     assert "no encontrado" in resp.json()["detail"].lower()
+
+
+def test_consent_state_includes_patient_first_name(client_with_db):
+    """Con ?consent=<id>, el response debe incluir el primer nombre del
+    paciente para que la UI muestre "Hola Juan, al marcar la casilla…".
+    El apellido completo NO se expone en este endpoint sin auth.
+    """
+    client, db = client_with_db
+
+    doctor = _complete_doctor()
+    patient = SimpleNamespace(id=99, name="Juan Alberto García López")
+    consent_row = SimpleNamespace(
+        id=42,
+        patient_id=99,
+        doctor_id=7,
+        consent_given=False,
+        consent_date=None,
+        rendered_content_hash="a" * 64,
+    )
+
+    # Primera query a Person (por person_code) → doctor
+    # Segunda query a Person (por id) → patient (desde consent_state)
+    # Una sola instancia de MagicMock para Person, compartida entre llamadas,
+    # para que side_effect avance correctamente.
+    person_q = MagicMock()
+    person_q.filter.return_value.first.side_effect = [doctor, patient]
+
+    def query_factory(model):
+        name = getattr(model, "__name__", str(model))
+        if name == "Person":
+            return person_q
+        q = MagicMock()
+        if name == "PrivacyNotice":
+            q.filter.return_value.order_by.return_value.first.return_value = _fake_template()
+        elif name == "Specialty":
+            q.filter.return_value.first.return_value = SimpleNamespace(name="Med Interna")
+        elif name == "PrivacyConsent":
+            q.filter.return_value.first.return_value = consent_row
+        elif name == "Office":
+            q.filter.return_value.order_by.return_value.first.return_value = None
+        elif name == "PersonDocument":
+            q.join.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        else:
+            q.filter.return_value.first.return_value = None
+            q.filter.return_value.order_by.return_value.first.return_value = None
+        return q
+
+    db.query.side_effect = query_factory
+
+    resp = client.get("/api/privacy/public-notice?doctor=DOC-7&consent=42")
+    assert resp.status_code == 200
+    cs = resp.json().get("consent_state") or {}
+    assert cs.get("id") == 42
+    assert cs.get("already_accepted") is False
+    assert cs.get("patient_first_name") == "Juan"
+    # No exponer apellidos
+    assert "García" not in str(cs.get("patient_first_name"))
