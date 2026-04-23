@@ -278,6 +278,16 @@ const InvoiceDialog: React.FC<Props> = ({
             Total a facturar: <strong>${(form.subtotal || 0).toFixed(2)} MXN</strong>
           </Typography>
         </Box>
+
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: 'block', mt: 2, lineHeight: 1.5 }}
+        >
+          Al emitir certificas que los datos (RFC y datos fiscales del receptor, uso CFDI, monto,
+          clave SAT del servicio) son correctos. CORTEX timbra lo que capturas; no valida tu
+          régimen fiscal ni declara impuestos por ti. Consulta a tu contador si tienes dudas.
+        </Typography>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={emitting}>
