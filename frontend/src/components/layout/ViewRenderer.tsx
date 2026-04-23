@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect } from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box } from '@mui/material';
 import { trackAmplitudePageView, trackAmplitudeEvent } from '../../utils/amplitudeHelper';
 import {
   DashboardView,
@@ -53,6 +53,20 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
       view_name: activeView
     });
   }, [activeView]);
+
+  // Bounce non-admins out of admin-only views instead of showing a dead-end
+  // "Acceso Denegado" screen. Triggers when a stale URL (bookmark, old link)
+  // lands a doctor/patient on `?view=licenses`.
+  useEffect(() => {
+    if (
+      activeView === 'licenses' &&
+      personType &&
+      personType !== 'admin' &&
+      navigateToView
+    ) {
+      navigateToView('dashboard');
+    }
+  }, [activeView, personType, navigateToView]);
 
   return (
     <Box sx={{ width: { xs: '100%', md: '75%' } }}>
@@ -164,17 +178,6 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
         <Suspense fallback={<LoadingFallback message="Cargando licencias..." />}>
           <LicenseManagement />
         </Suspense>
-      )}
-      
-      {activeView === 'licenses' && personType !== 'admin' && (
-        <Box sx={{ p: 3, textAlign: 'center' }}>
-          <Typography variant="h5" color="error" gutterBottom>
-            Acceso Denegado
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            No tienes permisos para acceder a esta sección.
-          </Typography>
-        </Box>
       )}
     </Box>
   );
