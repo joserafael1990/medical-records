@@ -29,6 +29,7 @@ import {
 } from '@mui/icons-material';
 import { apiService } from '../../services';
 import type { PrivacyNotice } from '../../types';
+import { formatDateOnly } from '../../utils/dateHelpers';
 
 // Parse once at module load — no need to re-run on re-render.
 const urlParams = new URLSearchParams(window.location.search);
@@ -144,17 +145,22 @@ export const PublicPrivacyNotice: React.FC = () => {
   };
 
   /**
-   * Format date for display
+   * Format date for display. Handles both date-only (effective_date, expiration_date)
+   * and timestamp values (created_at, acceptance.at) — date-only values must NOT be
+   * parsed via `new Date(str)` because it treats them as UTC and shifts the day.
    */
   const formatDate = (dateStr: string | undefined) => {
     if (!dateStr) return '-';
-    
+    const isDateOnly = /^\d{4}-\d{2}-\d{2}(T00:00:00(\.0+)?Z?)?$/.test(dateStr);
+    if (isDateOnly) {
+      return formatDateOnly(dateStr) || '-';
+    }
     try {
-      const date = new Date(dateStr);
-      return date.toLocaleDateString('es-MX', {
+      return new Date(dateStr).toLocaleDateString('es-MX', {
         year: 'numeric',
         month: 'long',
-        day: 'numeric'
+        day: 'numeric',
+        timeZone: 'America/Mexico_City'
       });
     } catch {
       return '-';
@@ -299,7 +305,7 @@ export const PublicPrivacyNotice: React.FC = () => {
                     <Box component="span" sx={{ fontWeight: 700 }}>
                       {notice.consent_state.patient_name}
                     </Box>
-                    , al marcar la casilla y presionar "Acepto" confirmas que
+                    , al marcar la casilla y presionar "Acepto" confirma que
                     es quien otorga este consentimiento.
                   </Typography>
                 )}
