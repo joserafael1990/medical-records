@@ -179,7 +179,7 @@ async def send_whatsapp_privacy_notice(
 
         # URL del aviso de privacidad público, con slug del doctor para
         # que el paciente vea el aviso con los datos del Responsable real.
-        privacy_url = f"https://cortexclinico.com/privacy?doctor={current_user.person_code}"
+        privacy_url = f"https://sistema.cortexclinico.com/privacy?doctor={current_user.person_code}"
 
         consent = PrivacyConsent(
             patient_id=request_data.patient_id,
@@ -387,7 +387,10 @@ async def generate_consent_link(
     # La URL pública incluye doctor_slug (para que la página renderice el
     # aviso correcto) y consent_id (para que el botón Acepto sepa qué
     # consent flipear).
-    base_url = os.getenv("PUBLIC_FRONTEND_URL", "https://cortexclinico.com")
+    # cortexclinico.com sirve la landing comercial; el app (con la página
+    # pública del aviso) vive en sistema.cortexclinico.com. Sobrescribir vía
+    # PUBLIC_FRONTEND_URL si el dominio del app cambia.
+    base_url = os.getenv("PUBLIC_FRONTEND_URL", "https://sistema.cortexclinico.com")
     public_url = (
         f"{base_url}/privacy"
         f"?doctor={current_user.person_code}"
@@ -600,7 +603,7 @@ async def get_patient_consent_status(
         consent_method = 'whatsapp_button'  # Default, ya que el sistema principal usa WhatsApp
         
         # URL del aviso de privacidad
-        privacy_notice_url = 'https://cortexclinico.com/privacy'
+        privacy_notice_url = 'https://sistema.cortexclinico.com/privacy'
         
         return {
             "has_consent": has_consent,

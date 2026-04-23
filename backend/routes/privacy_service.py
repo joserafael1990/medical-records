@@ -211,7 +211,7 @@ async def send_privacy_notice_automatically(
 
         # URL del aviso con slug del doctor para que el paciente vea el
         # aviso del médico específico renderizado.
-        privacy_url = f"https://cortexclinico.com/privacy?doctor={doctor.person_code}"
+        privacy_url = f"https://sistema.cortexclinico.com/privacy?doctor={doctor.person_code}"
 
         consent = PrivacyConsent(
             patient_id=patient_id,
