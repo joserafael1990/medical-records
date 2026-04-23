@@ -579,6 +579,7 @@ export interface PrivacyNotice {
     accepted_at?: string | null;
     hash_matches?: boolean;
     not_found?: boolean;
+    patient_first_name?: string | null;
   };
 }
 

@@ -9,12 +9,14 @@ import React, { useEffect, useState } from 'react';
 import {
   Box,
   Button,
+  Checkbox,
   Container,
   Typography,
   Card,
   CardContent,
   Chip,
   Divider,
+  FormControlLabel,
   CircularProgress,
   Alert,
   Paper
@@ -43,6 +45,10 @@ export const PublicPrivacyNotice: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [acceptance, setAcceptance] = useState<AcceptanceState>({ kind: 'idle' });
+  // Doble acto afirmativo bajo LFPDPPP Art. 9 (datos sensibles): el checkbox
+  // obligatorio ANTES del botón Acepto refuerza la prueba de voluntad
+  // ("leí" + "acepto" = dos actos separados).
+  const [hasReadNotice, setHasReadNotice] = useState(false);
 
   useEffect(() => {
     fetchPublicNotice();
@@ -288,10 +294,36 @@ export const PublicPrivacyNotice: React.FC = () => {
               </Alert>
             ) : (
               <Box>
-                <Typography variant="body1" sx={{ mb: 2 }}>
-                  Al presionar "Acepto", usted confirma que leyó y acepta este aviso de
-                  privacidad conforme al artículo 8 de la LFPDPPP.
+                {notice.consent_state.patient_first_name && (
+                  <Typography variant="body1" sx={{ mb: 1 }}>
+                    Hola{' '}
+                    <Box component="span" sx={{ fontWeight: 700 }}>
+                      {notice.consent_state.patient_first_name}
+                    </Box>
+                    , al marcar la casilla y presionar "Acepto" confirmas que
+                    eres tú quien otorga este consentimiento.
+                  </Typography>
+                )}
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Conforme al artículo 8 y 9 de la LFPDPPP (datos sensibles),
+                  se requiere manifestación expresa de voluntad.
                 </Typography>
+
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={hasReadNotice}
+                      onChange={(e) => setHasReadNotice(e.target.checked)}
+                    />
+                  }
+                  label={
+                    <Typography variant="body2">
+                      He leído y entiendo el aviso de privacidad
+                    </Typography>
+                  }
+                  sx={{ mb: 2, alignItems: 'flex-start', display: 'flex' }}
+                />
+
                 {acceptance.kind === 'error' && (
                   <Alert severity="error" sx={{ mb: 2 }}>
                     {acceptance.message}
@@ -302,7 +334,7 @@ export const PublicPrivacyNotice: React.FC = () => {
                   color="primary"
                   size="large"
                   fullWidth
-                  disabled={acceptance.kind === 'submitting'}
+                  disabled={!hasReadNotice || acceptance.kind === 'submitting'}
                   startIcon={
                     acceptance.kind === 'submitting' ? (
                       <CircularProgress size={18} color="inherit" />
