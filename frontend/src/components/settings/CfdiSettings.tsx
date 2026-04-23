@@ -9,6 +9,8 @@ import {
   CircularProgress,
   Divider,
   Grid,
+  IconButton,
+  InputAdornment,
   MenuItem,
   TextField,
   Typography,
@@ -19,6 +21,8 @@ import {
   Warning as WarningIcon,
   CloudUpload as UploadIcon,
   DeleteForever as DeleteIcon,
+  Visibility as VisibilityIcon,
+  VisibilityOff as VisibilityOffIcon,
 } from '@mui/icons-material';
 import { apiService } from '../../services';
 import type { CfdiIssuer, CfdiIssuerInput } from '../../services';
@@ -54,6 +58,7 @@ const CfdiSettings: React.FC = () => {
   const [cerFile, setCerFile] = useState<File | null>(null);
   const [keyFile, setKeyFile] = useState<File | null>(null);
   const [csdPassword, setCsdPassword] = useState('');
+  const [showCsdPassword, setShowCsdPassword] = useState(false);
   const [uploadingCsd, setUploadingCsd] = useState(false);
 
   const toast = useSimpleToast();
@@ -336,10 +341,24 @@ const CfdiSettings: React.FC = () => {
               <TextField
                 fullWidth
                 size="small"
-                type="password"
+                type={showCsdPassword ? 'text' : 'password'}
                 label="Contraseña del CSD"
                 value={csdPassword}
                 onChange={(e) => setCsdPassword(e.target.value)}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        size="small"
+                        edge="end"
+                        aria-label={showCsdPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                        onClick={() => setShowCsdPassword((v) => !v)}
+                      >
+                        {showCsdPassword ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
