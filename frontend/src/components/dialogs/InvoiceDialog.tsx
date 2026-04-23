@@ -17,6 +17,7 @@ import { Receipt as ReceiptIcon } from '@mui/icons-material';
 import { apiService } from '../../services';
 import type { CfdiInvoice, CfdiInvoiceInput } from '../../services';
 import { logger } from '../../utils/logger';
+import { useSimpleToast } from '../common/ToastNotification';
 
 const USO_CFDI_OPTIONS = [
   { code: 'D01', label: 'D01 — Honorarios médicos, dentales y gastos hospitalarios' },
@@ -113,6 +114,7 @@ const InvoiceDialog: React.FC<Props> = ({
   });
   const [emitting, setEmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const toast = useSimpleToast();
 
   // Reset al abrir
   useEffect(() => {
@@ -155,11 +157,21 @@ const InvoiceDialog: React.FC<Props> = ({
         sat_unit_code: clean(form.sat_unit_code) || 'E48',
       };
       const invoice = await apiService.cfdi.createInvoice(payload);
+      const uuid = invoice.uuid_sat || invoice.facturama_id || '';
+      toast.success(
+        uuid
+          ? `Factura timbrada. UUID: ${uuid.slice(0, 8)}…`
+          : 'Factura timbrada correctamente',
+      );
       onEmitted?.(invoice);
       onClose();
     } catch (err: any) {
       logger.error('Error emitiendo CFDI', err, 'api');
-      setError(err?.message || 'No se pudo emitir la factura');
+      const msg = err?.message || 'No se pudo emitir la factura';
+      setError(msg);
+      // Toast además del Alert para que sea visible aunque el usuario esté
+      // al fondo del modal y no vea el Alert arriba.
+      toast.error(msg);
     } finally {
       setEmitting(false);
     }
