@@ -294,14 +294,13 @@ export const PublicPrivacyNotice: React.FC = () => {
               </Alert>
             ) : (
               <Box>
-                {notice.consent_state.patient_first_name && (
+                {notice.consent_state.patient_name && (
                   <Typography variant="body1" sx={{ mb: 1 }}>
-                    Hola{' '}
                     <Box component="span" sx={{ fontWeight: 700 }}>
-                      {notice.consent_state.patient_first_name}
+                      {notice.consent_state.patient_name}
                     </Box>
                     , al marcar la casilla y presionar "Acepto" confirmas que
-                    eres tú quien otorga este consentimiento.
+                    es quien otorga este consentimiento.
                   </Typography>
                 )}
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>

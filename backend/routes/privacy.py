@@ -1179,18 +1179,20 @@ async def get_public_privacy_notice(
                     PrivacyConsent.doctor_id == doctor_person.id,
                 ).first()
                 if consent_row:
-                    # Mostrar el primer nombre del paciente en la UI de
+                    # Mostrar el nombre completo del paciente en la UI de
                     # aceptación refuerza la identificación subjetiva
-                    # ("Al hacer clic, Juan acepta…") y la evidencia
-                    # ante IFAI sin exponer el apellido completo en un
-                    # endpoint sin auth.
-                    patient_first_name = None
+                    # ("Juan Alberto García López, al marcar la casilla…"),
+                    # lo cual fortalece la prueba de voluntad ante IFAI.
+                    # Riesgo de PHI: el link solo lo tiene el paciente al
+                    # que el médico se lo compartió — no hay más PHI
+                    # en el endpoint que el nombre propio.
+                    patient_name = None
                     if consent_row.patient_id:
                         patient_row = db.query(Person).filter(
                             Person.id == consent_row.patient_id
                         ).first()
                         if patient_row and patient_row.name:
-                            patient_first_name = patient_row.name.strip().split()[0]
+                            patient_name = patient_row.name.strip()
 
                     response_body["consent_state"] = {
                         "id": consent_row.id,
@@ -1203,7 +1205,7 @@ async def get_public_privacy_notice(
                         # Si el hash del consent no coincide con lo que
                         # estamos mostrando ahora, la página debe avisar.
                         "hash_matches": consent_row.rendered_content_hash == rendered.content_hash,
-                        "patient_first_name": patient_first_name,
+                        "patient_name": patient_name,
                     }
                 else:
                     response_body["consent_state"] = {"id": consent, "not_found": True}
