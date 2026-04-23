@@ -1,4 +1,4 @@
-import React, { memo, useEffect } from 'react';
+import React, { memo, useEffect, useState } from 'react';
 import {
   Box,
   Typography,
@@ -31,7 +31,7 @@ import { ProfileHeader } from '../profile/ProfileHeader';
 import { PersonalInfoCard } from '../profile/PersonalInfoCard';
 import { ProfessionalInfoCard } from '../profile/ProfessionalInfoCard';
 import { OfficeCard } from '../profile/OfficeCard';
-import { ScheduleCard } from '../profile/ScheduleCard';
+import { OfficeSchedulePanel } from '../profile/OfficeSchedulePanel';
 import IntakePreferencesPanel from '../profile/IntakePreferencesPanel';
 import SignatureProfileSection from './SignatureProfileSection';
 
@@ -93,12 +93,22 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
     handleDeleteOffice,
     confirmDeleteOffice,
     handleSaveOffice,
-    scheduleData,
-    scheduleLoading,
-    scheduleError,
     refetchSchedule,
     formatDate
   } = viewHook;
+
+  // Which office should the schedule dialog focus when opened from a
+  // per-office "Editar horario" button. `null` means "let the dialog
+  // pick its default" (first office).
+  const [scheduleDialogOfficeId, setScheduleDialogOfficeId] = useState<number | null>(null);
+  // Bumping this after a save remounts the panels so each useScheduleData
+  // call refetches and reflects the just-edited schedule.
+  const [scheduleRefreshTick, setScheduleRefreshTick] = useState(0);
+
+  const openScheduleDialogFor = (officeId: number | null) => {
+    setScheduleDialogOfficeId(officeId);
+    setScheduleConfigDialogOpen(true);
+  };
 
   // When ProfileCompletionBanner (or any deep link) navigates here with
   // `#offices` / `#schedule`, scroll the matching section into view after
@@ -221,79 +231,38 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
           </CardContent>
         </Card>
 
-        {/* Schedule Management */}
+        {/* Schedule Management — one panel per office so it's always clear
+            which weekly schedule belongs to which consultorio. */}
         <Card id="schedule" sx={{ mt: 3, scrollMarginTop: 24 }}>
           <CardContent>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <ScheduleIcon color="primary" />
-                Horarios
+                Horarios por consultorio
               </Typography>
             </Box>
 
-            {scheduleLoading ? (
+            {officesLoading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
                 <CircularProgress />
               </Box>
-            ) : scheduleError ? (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                Error al cargar horarios: {scheduleError}
-              </Alert>
-            ) : scheduleData && Object.values(scheduleData).some(day => day && day.is_active) ? (
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(auto-fit, minmax(200px, 1fr))' }, gap: 2 }}>
-                {Object.entries(scheduleData).map(([day, schedule]: [string, any]) => {
-                  if (!schedule || !schedule.is_active) return null;
-
-                  return (
-                    <ScheduleCard
-                      key={day}
-                      day={day}
-                      schedule={schedule}
-                      onClick={() => setScheduleConfigDialogOpen(true)}
-                    />
-                  );
-                })}
-              </Box>
-            ) : scheduleData ? (
+            ) : offices.length === 0 ? (
               <Box sx={{ textAlign: 'center', p: 3 }}>
                 <Typography variant="body1" color="text.secondary" gutterBottom>
-                  No hay horarios configurados
+                  Primero agrega un consultorio para poder configurar horarios.
                 </Typography>
-                <Button
-                  variant="outlined"
-                  startIcon={<ScheduleIcon />}
-                  onClick={() => setScheduleConfigDialogOpen(true)}
-                  sx={{ mt: 1 }}
-                >
-                  Configurar Horarios
-                </Button>
               </Box>
             ) : (
-              <Box sx={{ textAlign: 'center', p: 3 }}>
-                <Typography variant="body1" color="text.secondary" gutterBottom>
-                  No hay horarios configurados
-                </Typography>
-                <Button
-                  variant="outlined"
-                  startIcon={<ScheduleIcon />}
-                  onClick={() => setScheduleConfigDialogOpen(true)}
-                  sx={{ mt: 1 }}
-                >
-                  Configurar Horarios
-                </Button>
-              </Box>
+              <>
+                {offices.map((office: any) => (
+                  <OfficeSchedulePanel
+                    key={`${office.id}:${scheduleRefreshTick}`}
+                    office={office}
+                    onEdit={(officeId) => openScheduleDialogFor(officeId)}
+                  />
+                ))}
+              </>
             )}
-
-            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
-              <Button
-                variant="contained"
-                startIcon={<EditIcon />}
-                onClick={() => setScheduleConfigDialogOpen(true)}
-                sx={{ borderRadius: '8px' }}
-              >
-                {scheduleData ? 'Editar Horarios' : 'Configurar Horarios'}
-              </Button>
-            </Box>
           </CardContent>
         </Card>
 
@@ -315,9 +284,20 @@ const DoctorProfileView: React.FC<DoctorProfileViewProps> = ({
       {/* Schedule Configuration Dialog */}
       <ScheduleConfigDialog
         open={scheduleConfigDialogOpen}
-        onClose={() => setScheduleConfigDialogOpen(false)}
-        onSave={() => setScheduleConfigDialogOpen(false)}
+        initialOfficeId={scheduleDialogOfficeId}
+        onClose={() => {
+          setScheduleConfigDialogOpen(false);
+          setScheduleDialogOfficeId(null);
+        }}
+        onSave={() => {
+          setScheduleConfigDialogOpen(false);
+          setScheduleDialogOfficeId(null);
+        }}
         onScheduleUpdated={() => {
+          // Bumping forces every OfficeSchedulePanel to remount and refetch,
+          // so the UI reflects the saved schedule immediately for all
+          // offices (the edited one and any copy-source).
+          setScheduleRefreshTick((t) => t + 1);
           refetchSchedule();
         }}
       />

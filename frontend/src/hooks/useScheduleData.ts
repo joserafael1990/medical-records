@@ -30,7 +30,7 @@ interface WeeklySchedule {
   sunday: ScheduleTemplate | null;
 }
 
-export const useScheduleData = () => {
+export const useScheduleData = (officeId?: number | null) => {
   const [scheduleData, setScheduleData] = useState<WeeklySchedule | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +45,8 @@ export const useScheduleData = () => {
         throw new Error('No authentication token found');
       }
 
-      const response = await fetch(`${API_CONFIG.BASE_URL}/api/schedule/templates/weekly`, {
+      const query = officeId ? `?office_id=${officeId}` : '';
+      const response = await fetch(`${API_CONFIG.BASE_URL}/api/schedule/templates/weekly${query}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -110,7 +111,7 @@ export const useScheduleData = () => {
 
   useEffect(() => {
     fetchScheduleData();
-  }, []);
+  }, [officeId]);
 
   return {
     scheduleData,

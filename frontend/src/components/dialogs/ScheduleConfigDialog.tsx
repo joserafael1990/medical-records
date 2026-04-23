@@ -41,23 +41,26 @@ interface ScheduleConfigDialogProps {
   onClose: () => void;
   onSave?: () => void;
   onScheduleUpdated?: () => void;
+  /** Pre-select this office when the dialog opens. Falls back to the first office. */
+  initialOfficeId?: number | null;
 }
 
 const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
   open,
   onClose,
   onSave,
-  onScheduleUpdated
+  onScheduleUpdated,
+  initialOfficeId
 }) => {
   const [offices, setOffices] = useState<Office[]>([]);
   const [selectedOfficeId, setSelectedOfficeId] = useState<number | null>(null);
   const [officesError, setOfficesError] = useState<string | null>(null);
 
-  // Load doctor's offices when the dialog opens so the user can pick which
-  // consultorio to configure. Falls back to the first one if none is
-  // selected yet.
+  // Reset selection every time the dialog opens so callers can change the
+  // targeted office between openings.
   useEffect(() => {
     if (!open) return;
+    setSelectedOfficeId(initialOfficeId ?? null);
 
     let cancelled = false;
     (async () => {
@@ -76,7 +79,7 @@ const ScheduleConfigDialog: React.FC<ScheduleConfigDialogProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, initialOfficeId]);
 
   const formHook = useScheduleConfigForm({
     open,
