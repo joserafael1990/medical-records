@@ -75,6 +75,22 @@ export const formatDateTimeShort = (date: string | Date) => {
   });
 };
 
+/**
+ * Serializes a Date instance (typically from a MUI DatePicker onChange) to a
+ * "YYYY-MM-DD" string using LOCAL calendar fields. Avoids the
+ * `date.toISOString().split('T')[0]` pitfall that shifts the day in positive
+ * UTC offsets (e.g. a Date representing midnight local in UTC+5 becomes the
+ * previous day when serialized via toISOString). Pair with parseDateOnly when
+ * reading DATE-typed columns from the backend.
+ */
+export const toDateOnlyString = (date: Date | null | undefined): string => {
+  if (!date || !(date instanceof Date) || isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export const calculateAge = (birthDate: string | Date | null | undefined): number | null => {
   if (!birthDate) return null;
   const birth = parseDateOnly(birthDate);
@@ -97,6 +113,7 @@ export const isValidDate = (date: any) => {
 export default {
   parseDateOnly,
   formatDateOnly,
+  toDateOnlyString,
   formatDate,
   formatDateTime,
   formatDateTimeShort,

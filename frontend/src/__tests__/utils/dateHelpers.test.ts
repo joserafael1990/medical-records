@@ -1,4 +1,4 @@
-import { parseDateOnly, formatDateOnly, calculateAge } from '../../utils/dateHelpers';
+import { parseDateOnly, formatDateOnly, toDateOnlyString, calculateAge } from '../../utils/dateHelpers';
 
 describe('dateHelpers (date-only)', () => {
   describe('parseDateOnly', () => {
@@ -51,6 +51,29 @@ describe('dateHelpers (date-only)', () => {
       expect(out).toContain('15');
       expect(out).toContain('01');
       expect(out).toContain('2026');
+    });
+  });
+
+  describe('toDateOnlyString', () => {
+    it('serializes a local Date to YYYY-MM-DD using local calendar fields', () => {
+      const d = new Date(1991, 10, 11, 0, 0, 0); // Nov 11 1991 local midnight
+      expect(toDateOnlyString(d)).toBe('1991-11-11');
+    });
+
+    it('round-trips with parseDateOnly without day drift', () => {
+      const parsed = parseDateOnly('1991-11-11');
+      expect(toDateOnlyString(parsed)).toBe('1991-11-11');
+    });
+
+    it('returns empty string for null, undefined, or invalid Date', () => {
+      expect(toDateOnlyString(null)).toBe('');
+      expect(toDateOnlyString(undefined)).toBe('');
+      expect(toDateOnlyString(new Date('invalid'))).toBe('');
+    });
+
+    it('pads single-digit month and day', () => {
+      const d = new Date(2026, 0, 5, 12, 0, 0); // Jan 5 2026
+      expect(toDateOnlyString(d)).toBe('2026-01-05');
     });
   });
 
