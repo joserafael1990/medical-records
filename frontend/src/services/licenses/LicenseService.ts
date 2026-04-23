@@ -65,6 +65,19 @@ export class LicenseService extends ApiBase {
   }
 
   /**
+   * Get full profile of a doctor (for the License Management details view).
+   */
+  async getDoctorProfile(doctorId: number): Promise<any> {
+    try {
+      const response = await this.api.get<any>(`/api/licenses/doctor/${doctorId}/profile`);
+      return response.data;
+    } catch (error) {
+      logger.error('Error getting doctor profile from licenses admin', error, 'api');
+      throw error;
+    }
+  }
+
+  /**
    * Create a new license
    */
   async createLicense(data: LicenseCreate): Promise<License> {
