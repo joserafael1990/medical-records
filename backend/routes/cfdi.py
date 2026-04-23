@@ -48,6 +48,17 @@ from services.cfdi.cfdi_service import (
 api_logger = get_logger("cortex.cfdi")
 router = APIRouter(prefix="/api/cfdi", tags=["cfdi"])
 
+# Aviso legal reutilizable. Mismo patrón que LEGAL_NOTICE en digital_signature.py.
+# Documenta que CORTEX no asesora fiscalmente — mitiga que un médico alegue
+# "el sistema me dijo que usara X régimen o clave SAT".
+CFDI_LEGAL_NOTICE = (
+    "CORTEX emite CFDIs conforme a los datos capturados y los transmite al SAT "
+    "a través de Facturama (PAC autorizado). No sustituye asesoría contable ni "
+    "fiscal. El emisor es responsable de régimen fiscal, claves SAT, uso CFDI y "
+    "obligaciones accesorias (ISR, DIOT, declaraciones). CORTEX no declara "
+    "impuestos ni asume la responsabilidad fiscal de los comprobantes emitidos."
+)
+
 
 def _require_doctor(user: Person) -> None:
     if user.person_type != "doctor":

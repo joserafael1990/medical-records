@@ -185,6 +185,19 @@ const CfdiSettings: React.FC = () => {
           Los CSDs se almacenan cifrados y sólo se usan para sellar CFDIs.
         </Typography>
 
+        <Alert severity="info" icon={false} sx={{ mb: 2 }}>
+          <Typography variant="caption" sx={{ display: 'block', fontWeight: 600, mb: 0.5 }}>
+            Aviso importante
+          </Typography>
+          <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.5 }}>
+            CORTEX emite CFDIs conforme a los datos que captures y los transmite al SAT a través
+            de Facturama (PAC autorizado). <strong>No sustituye asesoría contable o fiscal.</strong>
+            {' '}Tú eres responsable de verificar régimen fiscal, clave SAT, uso CFDI y cumplimiento
+            de obligaciones accesorias (declaraciones ISR, DIOT, etc.) con tu contador. CORTEX
+            no declara impuestos ni asume la responsabilidad fiscal de tus comprobantes.
+          </Typography>
+        </Alert>
+
         {error && (
           <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
             {error}
@@ -205,6 +218,8 @@ const CfdiSettings: React.FC = () => {
               value={form.rfc}
               onChange={(e) => setForm({ ...form, rfc: e.target.value.toUpperCase() })}
               inputProps={{ maxLength: 13 }}
+              placeholder="XAXX010101000"
+              helperText="13 caracteres. Debe coincidir con el RFC de tu CSD."
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 8 }}>
@@ -214,6 +229,7 @@ const CfdiSettings: React.FC = () => {
               label="Razón social"
               value={form.legal_name}
               onChange={(e) => setForm({ ...form, legal_name: e.target.value })}
+              helperText="Nombre legal tal como aparece en tu Constancia de Situación Fiscal (sin 'SA de CV' ni régimen)."
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6 }}>
@@ -224,6 +240,7 @@ const CfdiSettings: React.FC = () => {
               label="Régimen fiscal"
               value={form.tax_regime}
               onChange={(e) => setForm({ ...form, tax_regime: e.target.value })}
+              helperText="El que el SAT te asignó. Médicos típicamente usan 612 o 626 (RESICO)."
             >
               {TAX_REGIMES.map((tr) => (
                 <MenuItem key={tr.code} value={tr.code}>
@@ -232,7 +249,7 @@ const CfdiSettings: React.FC = () => {
               ))}
             </TextField>
           </Grid>
-          <Grid size={{ xs: 6, sm: 3 }}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               fullWidth
               size="small"
@@ -240,18 +257,12 @@ const CfdiSettings: React.FC = () => {
               value={form.postal_code}
               onChange={(e) => setForm({ ...form, postal_code: e.target.value })}
               inputProps={{ maxLength: 5 }}
+              helperText="C.P. de tu domicilio fiscal (Constancia SAT)."
             />
           </Grid>
-          <Grid size={{ xs: 6, sm: 3 }}>
-            <TextField
-              fullWidth
-              size="small"
-              label="Serie"
-              value={form.invoice_series || ''}
-              onChange={(e) => setForm({ ...form, invoice_series: e.target.value.toUpperCase() })}
-              inputProps={{ maxLength: 25 }}
-            />
-          </Grid>
+          {/* "Serie" es un concepto fiscal confuso para médicos. El backend
+              guarda "CORTEX" por default y eso basta para el 99% de los casos.
+              Si algún día se necesita, se expone detrás de "Configuración avanzada". */}
         </Grid>
 
         <Box sx={{ mt: 2 }}>
