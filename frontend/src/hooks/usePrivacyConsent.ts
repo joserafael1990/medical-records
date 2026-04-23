@@ -17,6 +17,12 @@ interface UsePrivacyConsentReturn {
   // Actions
   fetchConsentStatus: (patientId: number) => Promise<void>;
   sendWhatsAppNotice: (patientId: number, patientPhone: string) => Promise<any>;
+  generateShareableLink: (patientId: number) => Promise<{
+    url: string;
+    consent_id: number;
+    already_accepted?: boolean;
+    accepted_at?: string | null;
+  }>;
   revokeConsent: (patientId: number, reason: string) => Promise<any>;
   clearError: () => void;
   
@@ -110,6 +116,50 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
       setIsLoading(false);
     }
   }, []);
+
+  /**
+   * Generate a shareable consent URL (no WhatsApp send).
+   *
+   * El doctor puede copiar la URL y compartirla por cualquier canal
+   * (SMS, email, QR, WhatsApp manual). El paciente abre el link, lee el
+   * aviso renderizado con los datos del médico y toca "Acepto".
+   *
+   * Idempotente: si ya hay un consent pendiente con el mismo hash lo
+   * reutiliza; si el paciente ya aceptó con este médico, retorna
+   * `already_accepted=true` con la URL apuntando al consent existente.
+   */
+  const generateShareableLink = useCallback(
+    async (patientId: number) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const response = await apiService.patients.api.post(
+          '/api/privacy/generate-link',
+          { patient_id: patientId },
+        );
+        const data = response.data;
+        if (!data?.url || !data?.consent_id) {
+          throw new Error('Respuesta inválida del servidor');
+        }
+        return {
+          url: data.url as string,
+          consent_id: data.consent_id as number,
+          already_accepted: !!data.already_accepted,
+          accepted_at: data.accepted_at ?? null,
+        };
+      } catch (err: any) {
+        const errorMsg = extractErrorMessage(
+          err,
+          'Error al generar el link de consentimiento',
+        );
+        setError(errorMsg);
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [],
+  );
 
   /**
    * Revoke consent
@@ -278,6 +328,7 @@ export const usePrivacyConsent = (): UsePrivacyConsentReturn => {
     error,
     fetchConsentStatus,
     sendWhatsAppNotice,
+    generateShareableLink,
     revokeConsent,
     clearError,
     startPolling,
