@@ -218,10 +218,12 @@ def test_unknown_slug_returns_404(client_with_db):
     assert "no encontrado" in resp.json()["detail"].lower()
 
 
-def test_consent_state_includes_patient_first_name(client_with_db):
-    """Con ?consent=<id>, el response debe incluir el primer nombre del
-    paciente para que la UI muestre "Hola Juan, al marcar la casilla…".
-    El apellido completo NO se expone en este endpoint sin auth.
+def test_consent_state_includes_patient_name(client_with_db):
+    """Con ?consent=<id>, el response debe incluir el nombre completo
+    del paciente para la UI de aceptación:
+    "Juan Alberto García López, al marcar la casilla…".
+    Riesgo aceptado: el link solo lo tiene el paciente al que el médico
+    se lo compartió — la exposición del nombre es proporcional al uso.
     """
     client, db = client_with_db
 
@@ -270,6 +272,6 @@ def test_consent_state_includes_patient_first_name(client_with_db):
     cs = resp.json().get("consent_state") or {}
     assert cs.get("id") == 42
     assert cs.get("already_accepted") is False
-    assert cs.get("patient_first_name") == "Juan"
-    # No exponer apellidos
-    assert "García" not in str(cs.get("patient_first_name"))
+    # Nombre completo, trimmed — la UI lo muestra para identificación
+    # subjetiva del paciente antes del consent.
+    assert cs.get("patient_name") == "Juan Alberto García López"
