@@ -1,44 +1,39 @@
-// Service Worker for caching optimization
-const CACHE_NAME = 'historias-clinicas-v1';
-const urlsToCache = [
-  '/',
-  '/static/js/bundle.js',
-  '/static/css/main.css',
-  '/manifest.json'
-];
+// Kill-switch service worker.
+//
+// Prior versions used an aggressive cache-first strategy with a hardcoded
+// CACHE_NAME, which trapped users on stale bundles after every deploy.
+// CORTEX is online-first (every meaningful operation needs the backend),
+// so we don't need a service worker at all.
+//
+// This worker exists only to undo itself for users who still have the old
+// one registered:
+//   1. skipWaiting so the new SW activates immediately.
+//   2. Delete every Cache Storage entry.
+//   3. Unregister this SW.
+//   4. Reload each controlled tab once so it drops the stale bundles it's
+//      been serving.
+//
+// No fetch handler is registered — the network serves everything directly.
 
-// Install event - cache resources
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        return cache.addAll(urlsToCache);
-      })
-  );
+  event.waitUntil(self.skipWaiting());
 });
 
-// Fetch event - serve from cache when possible
-self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Return cached version or fetch from network
-        return response || fetch(event.request);
-      })
-  );
-});
-
-// Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
-  );
+  event.waitUntil((async () => {
+    const cacheNames = await caches.keys();
+    await Promise.all(cacheNames.map((name) => caches.delete(name)));
+
+    await self.registration.unregister();
+
+    const clients = await self.clients.matchAll({ type: 'window' });
+    for (const client of clients) {
+      try {
+        await client.navigate(client.url);
+      } catch {
+        // navigate() can fail when the client is a cross-origin redirect
+        // or otherwise uncontrolled. Swallow — worst case the user reloads.
+      }
+    }
+  })());
 });
